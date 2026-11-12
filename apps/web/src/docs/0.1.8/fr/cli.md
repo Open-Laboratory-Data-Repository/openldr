@@ -35,6 +35,68 @@ pnpm openldr <command>
 
 La plupart des commandes de lecture acceptent `--json` pour une sortie lisible par une machine. Dans une pile déployée, les étapes courantes du cycle de vie (migration du schéma et chargement des données de départ) s'exécutent automatiquement au démarrage. Les actions d'administration et de la zone dangereuse sont aussi disponibles dans l'interface Studio, sous Paramètres.
 
+### Choisir le véritable dossier d'installation
+
+Exécutez la CLI installée sur l'ordinateur hébergeant OpenLDR. À distance, utilisez l'accès SSH ou le terminal distant que vous avez configuré. Ouvrir Studio avec Tailscale n'ouvre pas un terminal sur cet ordinateur.
+
+Si vous avez téléchargé et installé OpenLDR dans `~/Downloads/openldr_ce` sous Linux ou macOS :
+
+```sh
+cd ~/Downloads/openldr_ce
+ls
+./openldr --help
+./openldr ingest --help
+```
+
+Si vous l'avez installé dans `C:\openldr_ce` sous Windows, ouvrez PowerShell et exécutez :
+
+```powershell
+cd C:\openldr_ce
+Get-ChildItem -Name
+.\openldr.ps1 --help
+.\openldr.ps1 ingest --help
+```
+
+Remplacez ce dossier d'exemple par le vôtre. Il contient `docker-compose.yml`, `data` et le lanceur. Exécutez une commande à la fois. Les commandes d'aide ne modifient aucun dossier. Le guide **Commencer ici** de l'application illustre chaque étape.
+
+### Utiliser une copie du code source
+
+Utilisez la racine du dépôt, qui contient `package.json`, `pnpm-workspace.yaml`, `apps` et `packages`. Les mêmes chemins d'exemple s'appliquent au code source. Sous Linux ou macOS :
+
+```sh
+cd ~/Downloads/openldr_ce
+pnpm openldr --help
+pnpm openldr ingest --help
+```
+
+Sous Windows, utilisez `cd C:\openldr_ce`, puis les mêmes commandes `pnpm openldr`. Configurez d'abord les dépendances et `.env`, comme indiqué dans [Développement](/docs/development).
+
+La CLI source s'exécute sur l'ordinateur et utilise les bases et le stockage de `.env`. Ces services doivent être démarrés pour importer. Les serveurs de développement Studio et API ne sont pas nécessaires. La CLI source lit les fichiers locaux hors du dossier partagé `data`. Pour votre fichier JSON FHIR valide dans `files/my-file.json` :
+
+```sh
+pnpm openldr fhir validate files/my-file.json
+```
+
+Cette validation n'importe rien. Pour écrire le fichier dans la base de développement, vérifiez `.env`, puis exécutez :
+
+```sh
+pnpm openldr ingest files/my-file.json
+pnpm openldr pipeline status
+```
+
+L'essai Linux a importé une ressource Organization et indiqué un lot terminé. Votre identifiant et votre nombre de ressources dépendent du fichier.
+
+## Corriger une erreur de la CLI installée
+
+Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritable CLI dans une installation isolée. Windows et macOS n'ont pas été testés nativement. Commencez dans votre dossier d'installation et identifiez l'erreur.
+
+| Erreur | Correction vérifiée pendant l'essai |
+| --- | --- |
+| `./openldr: not found` ou `no configuration file provided: not found` | Revenez dans le véritable dossier d'installation, puis exécutez `./openldr --help`. Vérifiez la présence du lanceur et du fichier Compose. |
+| `failed to connect to the docker API` avec une adresse `DOCKER_HOST` incorrecte | Exécutez `docker info`. Si cette valeur forcée est incorrecte, retirez-la avec `unset DOCKER_HOST`, puis réessayez `docker info` et l'aide CLI. Sous PowerShell : `$env:DOCKER_HOST = $null`. Cela ne démarre pas Docker. |
+| `service "api" is not running` | Vérifiez `docker compose ps -a api`, exécutez `docker compose up -d api`, puis réessayez l'aide. L'essai prouve la reprise du lanceur, pas le démarrage HTTP complet de l'application. |
+| `ingest failed: ENOENT` avec un fichier à côté du lanceur | Déplacez le fichier dans le dossier `data` de l'installation. Exécutez `./openldr fhir validate data/my-file.json`, puis importez ce chemin si vous le souhaitez. La CLI de développement lit les chemins locaux ordinaires. |
+
 ## Groupes de commandes
 
 | Groupe | Ce qu'il fait |

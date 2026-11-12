@@ -1615,11 +1615,6 @@ html>body{padding:0}</style>
  <h2 id="dg-create">Create a dashboard</h2>
  <p>Create an empty dashboard for the information you want to follow. You can add widgets to it afterward.</p>
  <p>You need permission to create and edit dashboards.</p>
- <div class="fc-preview-controls" role="group" aria-label="Screenshot comparison">
-  <span>Screenshot preview</span>
-  <button type="button" class="cursor-interaction" data-focus-mode="focused" aria-pressed="true">Focused</button>
-  <button type="button" class="cursor-interaction" data-focus-mode="clear" aria-pressed="false">Unblurred</button>
- </div>
  <p class="fc-preview-note">Each image keeps the whole screen visible. Select an image to enlarge the unblurred original.</p>
  <section class="dg-step" id="dg-open-dashboard">
   <h3><span class="dg-number">1.</span>Open Dashboard</h3>
@@ -1760,20 +1755,9 @@ html>body{padding:0}</style>
 #dashboard-create-focus-guide .fc-preview-controls button { color:var(--dg-text); padding:5px 10px; background:var(--dg-pane); border:1px solid var(--dg-border); border-radius:5px; }
 #dashboard-create-focus-guide .fc-preview-controls button[aria-pressed="true"] { border-color:var(--dg-brand); background:var(--dg-wash); }
 #dashboard-create-focus-guide .fc-preview-note { color:var(--dg-muted); font-size:12px; }
-#dashboard-create-focus-guide.fc-clear .fc-background { filter:none; opacity:1; }
-#dashboard-create-focus-guide.fc-clear .fc-sharp { visibility:hidden; }
 @media(pointer:coarse) { #dashboard-create-focus-guide .fc-preview-controls button { min-height:44px; } }
 </style>
-<script>
-(() => {
- const root=document.getElementById('dashboard-create-focus-guide');
- root.querySelectorAll('[data-focus-mode]').forEach(button=>button.addEventListener('click',()=>{
-  const clear=button.dataset.focusMode==='clear';
-  root.classList.toggle('fc-clear',clear);
-  root.querySelectorAll('[data-focus-mode]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
- }));
-})();
-</script>
+
 
 <script src="https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js"></script>
 <script src="https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js"></script>

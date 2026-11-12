@@ -78,11 +78,34 @@ The article and step HTML files are the editable content.
 Original full screenshots are under create-dashboard-focus/raw and evidence.
 Terminal scenes and their manifest are under terminal-illustrations.
 The existing standalone HTML pages can be opened immediately.
-Some earlier build scripts reference the optional Codex visualization renderer.
-A portable rebuild script will replace that dependency in the next checkpoint.
+Rebuild both active pages from any directory with Python 3:
+
+```sh
+python3 docs/review/user-guide/build.py
+```
+
+The builder needs only the Python standard library and this checkout.
+The earlier build scripts are retained as reference. Use build.py for portable rebuilds.
+Browser capture scripts need the repository dependencies and a Playwright browser.
+Set PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH only if Playwright must use a custom browser binary.
+The old capture image comparisons remain archived. Their original files are also in Git history.
 
 ## Source integration
 
-Approved Start here and Create a dashboard will be moved into the latest in-app docs in English, French, and Portuguese.
-The rest of Dashboard remains pending review. Do not discard its existing source content.
+Approved Start here and Create a dashboard are now in apps/studio/src/docs/0.1.8 in English, French, and Portuguese.
+The website CLI reference in apps/web/src/docs/0.1.8 has matching installed and source examples.
+FocusedScreenshot.tsx applies the approved crop and blur to the four new Create captures.
+The browser lightbox opens the untouched full image. PDF and Word exports show the original full images.
+CLI exports use the default Linux walkthrough. Platform buttons affect the browser view.
+The rest of the app Dashboard guide keeps its earlier content pending review.
+The full Dashboard preview applies the new treatment to all 32 screenshot placements.
+Its widget and sample instructions still need task-by-task review.
+Do not confuse the reviewed Create task with those remaining drafts.
 No merge, deployment, or release changelog update is part of this review branch.
+
+
+## Checks for this checkpoint
+
+See verification/checks.md for commands, outputs, and limits.
+The browser checked all three guide languages and all three CLI platform choices.
+No merge or deployment was performed. No release changelog was generated because the branch has not merged to main.

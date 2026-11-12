@@ -1,126 +1,316 @@
 # Commencer ici
 
-OpenLDR Studio est l'endroit où se rejoignent les résultats d'un laboratoire. Vous les lisez dans des tableaux de bord et des rapports, vous les interrogez, et vous réglez la façon dont les données arrivent. Cette page vous fait faire le tour et vous propose une première heure sur une nouvelle installation, avec les données d'exemple chargées.
+OpenLDR Studio est l'application web pour les dossiers de votre laboratoire. Utilisez les tableaux de bord, les rapports et les formulaires.
 
-Sélectionnez une image ou un clip pour l'agrandir.
+Ouvrez d'abord Studio. Si un guide vous demande d'exécuter une commande, suivez les instructions ci-dessous. Aucune donnée d'exemple n'est nécessaire.
 
-![Studio après la connexion. 1 Menu principal. 2 Notifications. 3 Clair ou sombre. 4 Votre menu utilisateur. 5 Replier le menu.](start-here-tour.png)
+## Ouvrir Studio
 
-1. **Menu principal.** Une entrée par domaine. Vous ne voyez que les domaines permis par votre rôle.
-2. **Notifications.** La cloche ouvre vos dernières notifications.
-3. **Clair ou sombre.** Change le thème de couleurs.
-4. **Menu utilisateur.** Votre nom, en bas à gauche. Il contient **Langue**, **Paramètres** et **Se déconnecter**.
-5. **Replier le menu.** Réduit le menu principal à des icônes, pour laisser plus de place aux pages.
+Ouvrez l'adresse Studio de votre installation dans votre navigateur, puis connectez-vous avec votre compte.
 
-Le bouclier jaune à côté de la cloche n'apparaît que sur une installation de test où la connexion est désactivée. Une vraie installation ne l'affiche pas.
+Vous pouvez ouvrir Studio depuis un autre ordinateur ou un téléphone. Connectez-vous d'abord à Tailscale ou au VPN si votre organisation l'exige.
 
-## Le menu principal
+Vous pouvez ensuite [consulter le guide des tableaux de bord](/docs/dashboard), ou découvrir la ligne de commande ci-dessous.
 
-| Entrée du menu | À quoi elle sert | Guide |
-| --- | --- | --- |
-| Tableau de bord | Des graphiques et des chiffres qui se mettent à jour seuls | [Tableaux de bord](/docs/dashboard) |
-| Rapports | Des rapports imprimables à exécuter, exporter et planifier | [Rapports](/docs/reports) |
-| Concepteur de rapports | Les modèles de ces rapports | [Concepteur de rapports](/docs/report-designer) |
-| Requête | Parcourir l'entrepôt et écrire du SQL | [Requêtes personnalisées](/docs/query) |
-| Flux de travail | Comment les données arrivent, sont vérifiées et enregistrées | [Flux de travail](/docs/workflows) |
-| Terminologie | Les systèmes de codes, comme LOINC, et vos correspondances | [Terminologie](/docs/terminology) |
-| Établissements | Le registre des établissements de santé | [Établissements](/docs/facilities) |
-| Catalogue des examens | La liste nationale des examens, et ceux que ce laboratoire fait | [Catalogue des examens](/docs/test-catalog) |
-| Patients | Trouver un patient et où il a été testé | [Patients](/docs/patients) |
-| Formulaires | Saisir des données à la main, et créer les formulaires | [Formulaires](/docs/forms) |
-| Utilisateurs | Qui peut se connecter, et avec quels rôles | [Utilisateurs et rôles](/docs/users) |
-| Audit | Qui a changé quoi, et quand | [Audit](/docs/audit) |
-| Activité | Chaque envoi de données pendant son traitement | [Activité](/docs/activity) |
-| Documentation | Ce manuel | Cette page |
+## Utiliser la ligne de commande
 
-**Paramètres** est dans le menu utilisateur, pas dans le menu principal. Voir [Paramètres](/docs/settings).
+L'interface en ligne de commande, ou CLI, exécute des tâches OpenLDR à partir de commandes saisies dans un terminal.
 
-Une entrée manquante veut dire que votre rôle ne la comprend pas. Demandez à un administrateur.
+Utilisez-la pour importer des fichiers et entretenir votre installation. Si vous utilisez le code source, passez aux [instructions de développement](#exemple-1-utiliser-la-cli-dans-un-environnement-de-developpement).
 
-## Votre première heure
+Vous allez ouvrir un terminal et demander de l'aide à OpenLDR. Ces commandes d'aide ne modifient aucun dossier.
 
-Faites-le sur une installation de test. Chaque étape renvoie au guide complet.
+### Avant de commencer
 
-1. **Chargez les données d'exemple.** Une nouvelle installation n'a presque pas de données de laboratoire, donc chaque chiffre vaut 0. Chargez le fichier d'exemple. Voir [Charger les données d'exemple](/docs/dashboard#charger-les-donnees-d-exemple).
-2. **Lisez le tableau de bord d'exemple.** Ouvrez **Tableau de bord**. Total Orders affiche 60. Filtrez-le sur octobre 2026. Voir [Tableaux de bord](/docs/dashboard).
-3. **Exécutez un rapport.** Ouvrez **Rapports** et exécutez **Test Volume Over Time** pour septembre et octobre 2026. Voir [Rapports](/docs/reports).
-4. **Regardez les données brutes.** Ouvrez **Requête** et parcourez `lab_requests`. Voir [Requêtes personnalisées](/docs/query).
-5. **Construisez quelque chose.** Créez votre propre tableau de bord avec un graphique en barres. Voir [Tableaux de bord](/docs/dashboard#exemple-2-creer-un-tableau-de-bord-et-un-graphique-en-barres).
+Utilisez l'ordinateur hébergeant OpenLDR et son véritable dossier d'installation. Ce dossier contient `docker-compose.yml` et le fichier de commande OpenLDR. Docker et OpenLDR doivent être démarrés. Votre compte doit pouvoir utiliser Docker.
 
-## Exemple 1 : changer de langue
+Si vous travaillez à distance, connectez-vous à cet ordinateur avant d'exécuter les commandes.
 
-Studio parle anglais, français et portugais.
+### Se connecter à un serveur distant
 
-![Ouvrir le menu utilisateur, puis Langue, puis Français.](start-here-language.mp4)
+Tailscale permet d'ouvrir Studio dans le navigateur. Pour les commandes, utilisez votre accès SSH ou votre terminal distant habituel.
 
-1. Sélectionnez votre nom en bas à gauche.
-2. Sélectionnez **Langue**.
-3. Choisissez **English**, **Français** ou **Português**.
+SSH ouvre un terminal sécurisé sur un autre ordinateur. Utilisez l'adresse, le compte et le mode de connexion que vous avez configurés. Par exemple :
 
-**Résultat attendu :** le menu et la plupart des écrans changent tout de suite. Certains libellés ne sont pas encore traduits et restent en anglais. Les guides écrivent chaque libellé tel qu'il s'affiche à l'écran. La documentation passe aussi dans cette langue. Une page pas encore traduite s'affiche en anglais, avec une note en haut.
+```sh
+ssh username@server-address
+```
 
-Votre choix est gardé dans ce navigateur.
+Remplacez `username` et `server-address` par vos informations. Suivez ensuite les instructions du système du serveur.
 
-## Exemple 2 : trouver une réponse dans la documentation
+<!-- cli-platform -->
 
-![Chercher sample data dans la documentation, ouvrir Tableaux de bord et sauter à une section.](start-here-docs.mp4)
+Si vous avez téléchargé et installé OpenLDR dans `~/Downloads/openldr_ce`, les commandes suivantes utilisent cet emplacement.
 
-1. Ouvrez **Documentation**.
-2. Tapez dans la zone de recherche, par exemple `sample data`. La liste de gauche se réduit aux guides qui correspondent.
-3. Sélectionnez un guide. Les guides longs listent leurs sections à droite, sous **On this page**. Sélectionnez-en une pour y aller.
+Remplacez ce chemin d'exemple par votre véritable dossier dans tout le guide.
 
-Sur un écran étroit, la liste des sections est un bouton avec une icône de liste, en haut à droite de la page.
+<!-- cli:linux -->Le symbole ~ désigne votre dossier personnel. Le dossier openldr_ce de cet exemple se trouve dans Downloads.<!-- /cli -->
+<!-- cli:mac -->Le symbole ~ désigne votre dossier personnel. Le dossier openldr_ce de cet exemple se trouve dans Downloads.<!-- /cli -->
+<!-- cli:windows -->C:\openldr_ce désigne le dossier openldr_ce à la racine du disque C:.<!-- /cli -->
 
-### Télécharger la documentation
+Les images sont des illustrations. Les commandes et les invites utilisent le même emplacement d'exemple. Sélectionnez une image pour l'agrandir.
 
-![Le menu de téléchargement : cette page ou toute la documentation.](start-here-docs-download.png)
+### 1. Ouvrir un terminal
 
-Le bouton de téléchargement en haut à droite enregistre **This page** ou **All docs** en **Markdown**, **PDF** ou **Word**. Les clips s'impriment comme une image fixe en PDF et en Word.
+<!-- cli:linux -->Appuyez sur Super, souvent la touche portant le logo Windows. Recherchez Terminal dans les applications, puis ouvrez-le. Les illustrations Linux utilisent Ubuntu.<!-- /cli -->
+<!-- cli:mac -->Appuyez sur Commande et Espace pour ouvrir Spotlight. Saisissez Terminal, puis appuyez sur Retour.<!-- /cli -->
+<!-- cli:windows -->Appuyez sur la touche Windows. Recherchez PowerShell, sélectionnez Windows PowerShell, puis Ouvrir.<!-- /cli -->
 
-**Version**, à côté, affiche la documentation d'une version plus ancienne.
+La ligne terminée par <!-- cli:linux -->`$`<!-- /cli --><!-- cli:mac -->`%`<!-- /cli --><!-- cli:windows -->`>`<!-- /cli --> est l'invite. Le trait vertical est le curseur. Saisissez votre commande après l'invite, sans recopier celle-ci.
 
-## Filtrer n'importe quel tableau
+![Illustration d'un terminal ouvert, avec son invite et son curseur.](terminal-linux-ready.png)
 
-La plupart des listes ont la même barre d'outils.
+Votre nom et celui de l'ordinateur peuvent différer. Utilisez Retour arrière pour corriger une faute avant d'appuyer sur Entrée.
 
-- **Rechercher** trouve au fil de la frappe.
-- **Filtrer** permet de choisir une colonne, un opérateur et une valeur, puis **Appliquer**.
-- **Trier** change l'ordre.
-- **Colonnes** masque et affiche des colonnes.
-- Retirez une pastille de filtre pour effacer une règle, ou utilisez **Tout effacer**.
+### 2. Aller dans le dossier d'installation
 
-Chaque tableau a une pagination en bas, avec le nombre de lignes par page.
+Ouvrir un terminal ne vous place pas automatiquement dans le dossier OpenLDR. Cet exemple utilise `~/Downloads/openldr_ce`.
 
-## Les actions sont dans le menu à trois points
+![Illustration du dossier d'installation et de ses fichiers.](terminal-linux-folder.png)
 
-Studio range les actions dans un menu marqué de trois points, pas dans des boutons isolés. Cherchez-le en haut à droite d'une page, sur chaque ligne d'un tableau, et en haut d'un panneau latéral. **Enregistrer** dans un panneau latéral est en général dans ce menu aussi.
+Le véritable dossier doit contenir les fichiers créés par votre installation.
 
-## Sur un téléphone
+La commande `cd` change de dossier. Saisissez la commande suivante et appuyez sur Entrée. Adaptez le chemin à votre installation.
 
-Des personnes utilisent Studio sur leur téléphone. Le menu principal est replié derrière le bouton de menu en haut à gauche.
+```sh
+cd ~/Downloads/openldr_ce
+```
 
-![Le menu principal ouvert sur un téléphone.](start-here-phone-menu.png)
+![Illustration de la commande cd avant son exécution.](terminal-linux-cd.png)
 
-1. Sélectionnez le bouton de menu en haut à gauche.
-2. Choisissez une page. Le menu se ferme.
+Laissez une espace après `cd`. Le reste est le chemin du dossier.
 
-Les pages avec une liste latérale, comme **Rapports** et **Requête**, commencent avec cette liste repliée. La section **Sur un téléphone** de chaque guide explique comment l'ouvrir.
+Une nouvelle invite apparaît généralement sans message de réussite. Si une erreur apparaît, vérifiez le chemin avant de continuer.
+
+![Illustration de l'invite après le changement de dossier.](terminal-linux-changed.png)
+
+Vérifiez maintenant les fichiers du dossier.
+
+### 3. Vérifier le dossier
+
+Saisissez cette commande et appuyez sur Entrée :
+
+```sh
+ls
+```
+
+![Illustration de la liste des fichiers nécessaires à l'installation.](terminal-linux-files.png)
+
+Vérifiez la présence de `docker-compose.yml`, du dossier `data` et de `openldr`. Votre dossier peut contenir d'autres fichiers. Si ces éléments manquent, retrouvez le dossier créé par l'installateur.
+
+### 4. Demander de l'aide à OpenLDR
+
+Restez dans le dossier vérifié à l'étape 3. Exécutez votre première commande OpenLDR :
+
+```sh
+./openldr --help
+```
+
+Appuyez sur Entrée. Conservez l'espace avant `--help` et les deux traits d'union.
+
+![Illustration de la commande d'aide, prête à être exécutée.](terminal-linux-help.png)
+
+**Résultat attendu :** le terminal affiche l'utilisation, les options et les commandes disponibles.
+
+![Illustration d'un extrait de l'aide OpenLDR.](terminal-linux-help-result.png)
+
+Faites défiler le terminal pour lire toute l'aide. Quand l'invite revient, vous pouvez saisir une autre commande.
+
+### 5. Consulter l'aide d'une commande
+
+La commande `ingest` importe un fichier. Ajoutez `--help` pour lire ses instructions sans rien importer.
+
+```sh
+./openldr ingest --help
+```
+
+Saisissez la commande et appuyez sur Entrée.
+
+![Illustration de la commande ingest --help.](terminal-linux-ingest.png)
+
+**Résultat attendu :** la ligne d'utilisation indique `ingest`. Les options suivantes concernent cette commande.
+
+![Illustration de l'aide de la commande ingest.](terminal-linux-ingest-result.png)
+
+`<file>` désigne un chemin obligatoire. `[options]` désigne des paramètres facultatifs. Ne saisissez pas ces crochets. Aucun fichier n'a été importé pendant ces étapes.
+
+Pour ouvrir un terminal : [Ubuntu](https://ubuntu.com/desktop/docs/en/26.04/tutorial/the-linux-command-line-for-beginners/), [Spotlight sur macOS](https://support.apple.com/guide/mac-help/mchlp1008/mac), [Windows PowerShell](https://learn.microsoft.com/en-us/powershell/scripting/windows-powershell/starting-windows-powershell).
+
+## Exemple 1 : utiliser la CLI dans un environnement de développement
+
+Ces étapes concernent une copie du code source. Vous utiliserez `pnpm` pour demander de l'aide, vérifier un fichier et l'importer lorsque vous le souhaitez.
+
+Les dépendances et le fichier `.env` doivent déjà être configurés. Les commandes ont été vérifiées avec Node.js 24 et pnpm 11.22.0, la version indiquée par le dépôt.
+
+La CLI de développement utilise les bases de données et le stockage configurés dans `.env`. Les serveurs de développement Studio et API n'ont pas besoin d'être démarrés.
+
+Le choix du système ci-dessus modifie aussi les chemins et les illustrations de cette section.
+
+### 1. Ouvrir le dossier du code source
+
+L'exemple utilise `~/Downloads/openldr_ce`. Remplacez-le par le dossier où vous avez cloné le dépôt.
+
+```sh
+cd ~/Downloads/openldr_ce
+```
+
+Ce dossier contient `package.json`, `pnpm-workspace.yaml`, `apps` et `packages`. Exécutez les commandes suivantes depuis cette racine du dépôt.
+
+![Illustration du terminal dans le dossier du code source.](terminal-linux-dev-root.png)
+
+### 2. Exécuter la CLI de développement
+
+Exécutez les commandes l'une après l'autre :
+
+```sh
+pnpm openldr --help
+pnpm openldr ingest --help
+```
+
+![Illustration de l'aide de la CLI de développement.](terminal-linux-dev-help.png)
+
+Ces commandes affichent l'aide sans importer de données. Le préfixe `pnpm openldr` exécute `packages/cli/dev.mjs` depuis ce dépôt. Conservez ce préfixe pendant le développement.
+
+### 3. Vérifier un fichier local
+
+La CLI de développement lit les chemins locaux ordinaires. Le dossier partagé `data` de Docker n'est pas obligatoire.
+
+Si votre fichier JSON FHIR se trouve dans `~/Downloads/openldr_ce/files/my-file.json`, vérifiez-le depuis la racine du dépôt :
+
+```sh
+pnpm openldr fhir validate files/my-file.json
+```
+
+![Illustration de la validation d'un fichier local en développement.](terminal-linux-dev-file.png)
+
+Le fichier testé était valide. Votre résultat dépend du contenu de votre fichier. Cette validation n'importe rien.
+
+### 4. Importer dans la base de développement
+
+Exécutez cette étape lorsque vous voulez importer le fichier. Vérifiez que `.env` désigne vos bases et votre stockage de développement. Ces services doivent être démarrés.
+
+```sh
+pnpm openldr ingest files/my-file.json
+pnpm openldr pipeline status
+```
+
+![Illustration d'un import et du statut du lot en développement.](terminal-linux-dev-import.png)
+
+Le fichier testé a créé un lot terminé contenant une ressource. Votre identifiant de lot et votre nombre de ressources différeront. Pour les autres commandes, conservez `pnpm openldr` et utilisez les chemins de votre ordinateur.
+
+## Utiliser les chemins dans une installation
+
+Cet exemple explique le chemin du fichier. Remplacez le nom par celui de votre fichier réel :
+
+```sh
+./openldr ingest data/my-file.json
+```
+
+- `openldr` lance la CLI installée.
+- `ingest` importe le fichier.
+- `data/my-file.json` désigne le fichier à importer.
+
+Placez-le dans le dossier d'installation utilisé précédemment :
+
+```text
+~/Downloads/openldr_ce/
+  docker-compose.yml
+  openldr
+  data/
+    my-file.json
+```
+
+Exécutez la commande depuis `~/Downloads/openldr_ce`. Gardez le préfixe `data/`, car le chemin est relatif à ce dossier.
+
+La CLI installée s'exécute dans le conteneur API. Le dossier `data` est partagé avec ce conteneur. Sur un serveur distant, placez le fichier dans le dossier de ce serveur. Un fichier enregistré sur votre portable n'y est pas automatiquement copié.
+
+Utilisez également `data/` pour les fichiers de sortie. Mettez les chemins contenant des espaces entre guillemets, comme `"data/my file.json"`. Chaque guide explique le format attendu. Exécuter un import écrit des dossiers.
 
 ## Dépannage
 
-- **Une page manque dans le menu.** Votre rôle ne la comprend pas. Demandez à un administrateur de vérifier vos autorisations.
-- **Chaque chiffre vaut 0.** L'installation n'a pas encore de données de laboratoire. Voir [Charger les données d'exemple](/docs/dashboard#charger-les-donnees-d-exemple).
-- **Un bouton est grisé.** Il lui manque quelque chose, souvent un filtre obligatoire ou un choix dans une liste.
-- **Certains libellés sont en anglais après avoir choisi le français.** Ces libellés ne sont pas encore traduits.
-- **Une image est trop petite.** Sélectionnez-la pour l'agrandir.
-- **La recherche trouve trop de choses.** Cherchez la tâche, ou le texte exact de l'erreur.
+Commencez dans votre véritable dossier d'installation. Les erreurs et les corrections suivantes ont été reproduites sous Linux. Les images illustrent ces essais. Les messages peuvent différer sous Windows et macOS.
 
-## Déployer et faire tourner OpenLDR
+### Le lanceur ou la configuration Compose est introuvable
 
-L'installation, la configuration, les mises à jour et la ligne de commande sont décrites sur le site web d'OpenLDR. Voir [Documentation de déploiement et de développement](/docs/advanced-docs).
+Vous pouvez voir `./openldr: not found` ou `no configuration file provided: not found`.
+
+La première erreur indique que le lanceur manque dans le dossier courant. La seconde s'est produite en lançant la commande depuis un autre dossier, où Compose ne trouvait pas la configuration.
+
+Revenez dans votre dossier d'installation. Dans cet exemple :
+
+```sh
+cd ~/Downloads/openldr_ce
+./openldr --help
+```
+
+L'aide confirme que le lanceur s'est exécuté. Si le problème persiste, listez les fichiers comme à l'étape 3 et cherchez `openldr` et `docker-compose.yml`.
+
+![Transcription illustrée du retour au bon dossier et de l'aide obtenue.](proof-wrong-folder.png)
+
+### Docker utilise une adresse de connexion inaccessible
+
+L'essai a renvoyé `failed to connect to the docker API`. La variable `DOCKER_HOST` désignait un socket inexistant. OpenLDR n'avait pas encore démarré.
+
+Exécutez `docker info` et lisez l'adresse indiquée dans l'erreur. Si vous avez défini `DOCKER_HOST` et que sa valeur est incorrecte, retirez cette valeur du terminal courant :
+
+```sh
+unset DOCKER_HOST
+```
+
+Cela retire uniquement cette valeur forcée. Cela ne démarre pas Docker. Utilisez cette correction seulement si cette variable cause le problème.
+
+```sh
+docker info
+./openldr --help
+```
+
+![Transcription illustrée de l'adresse Docker incorrecte et de sa correction.](proof-docker.png)
+
+L'essai a réussi après le retrait de l'adresse incorrecte. Si `docker info` échoue encore, lisez son erreur avant de réessayer OpenLDR.
+
+### Docker indique que le service api est arrêté
+
+L'erreur testée était `service "api" is not running`. Docker était accessible, mais le conteneur API était arrêté. La CLI installée s'exécute dans ce conteneur.
+
+Depuis le dossier d'installation, vérifiez le conteneur et redémarrez-le :
+
+```sh
+docker compose ps -a api
+docker compose up -d api
+```
+
+Réessayez ensuite :
+
+```sh
+./openldr --help
+```
+
+![Transcription illustrée du redémarrage du conteneur API et de l'aide obtenue.](proof-api.png)
+
+L'essai a retrouvé l'aide après le démarrage du conteneur. Il n'a pas vérifié le démarrage HTTP complet de l'application.
+
+### L'import indique ENOENT pour mon fichier
+
+L'erreur testée était `ingest failed: ENOENT: no such file or directory, open 'my-file.json'`.
+
+Le fichier existait à côté du lanceur. Le conteneur ne pouvait pas le lire, car seul le dossier `data` était partagé.
+
+Déplacez-le dans `~/Downloads/openldr_ce/data/my-file.json`. Vérifiez-le sans l'importer :
+
+```sh
+./openldr fhir validate data/my-file.json
+```
+
+Pour un fichier JSON FHIR valide, la sortie contient `all valid`. Si vous souhaitez l'importer, utilisez le chemin partagé :
+
+```sh
+./openldr ingest data/my-file.json
+```
+
+![Transcription illustrée du déplacement du fichier, de sa validation et de son import.](proof-file.png)
+
+Cette règle concerne le lanceur Docker installé. La CLI de développement lit les chemins locaux ordinaires.
 
 ## Guides associés
 
-- [Tableaux de bord](/docs/dashboard)
-- [Rapports](/docs/reports)
-- [Documentation de déploiement et de développement](/docs/advanced-docs)
+Le [guide des tableaux de bord](/docs/dashboard) explique comment créer un tableau et ajouter des widgets avec vos propres données. Les exercices facultatifs viennent ensuite.

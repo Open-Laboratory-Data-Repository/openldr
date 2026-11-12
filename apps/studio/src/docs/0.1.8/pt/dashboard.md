@@ -1,18 +1,38 @@
 # Painéis
 
-Um painel é uma página de gráficos, números e tabelas. Cada bloco é um **widget**. Um widget executa uma consulta ao armazém do laboratório e desenha a resposta. Os filtros no topo da página mudam o que os widgets contam.
+Um painel reúne gráficos, tabelas e totais numa página. Cada elemento é um widget.
+Crie um painel para os dados do seu laboratório. Pode configurar os widgets antes de chegarem registos.
+Os exercícios com dados de exemplo abaixo são opcionais.
 
-Este guia leva cerca de 45 minutos. Carrega um pequeno conjunto de dados de laboratório fictícios, explora o painel de exemplo e depois constrói o seu próprio painel com quatro widgets. Cada passo tem uma imagem ou um clip curto. Selecione uma imagem ou um clip para o ampliar.
+## Criar um painel
 
-Algumas partes da interface ainda estão em inglês. Este guia escreve cada rótulo tal como aparece no ecrã.
+Crie um painel vazio para a informação que pretende acompanhar. Acrescente os widgets depois.
+Precisa das permissões para criar e editar painéis.
 
-![O painel de exemplo. 1 Seletor. 2 Atualizar. 3 Menu do painel. 4 Filtros. 5 Um widget.](dashboard-tour.png)
+### 1. Abrir Painel
 
-1. **Seletor.** Muda entre os painéis que pode ver.
-2. **Atualizar.** Volta a executar todos os widgets agora.
-3. **Menu do painel.** O menu de três pontos. Tem todas as ações: criar, editar, adicionar widget, filtros, exportar, importar, eliminar.
-4. **Filtros.** Limitam o painel a um período, um exame ou uma prioridade.
-5. **Um widget.** Uma consulta e uma imagem da sua resposta.
+Selecione **Painel** perto do topo do menu principal à esquerda.
+
+![Painel perto do topo do menu principal.](dashboard-create-open.png)
+
+### 2. Abrir o menu do painel
+
+Selecione o **menu de três pontos** à direita da barra de ferramentas, junto ao botão de atualização.
+
+![O menu de três pontos junto ao botão de atualização.](dashboard-create-menu.png)
+
+### 3. Escolher Novo painel
+
+Selecione **Novo painel**, a primeira opção do menu aberto.
+
+![Novo painel é a primeira opção do menu aberto.](dashboard-create-new.png)
+
+**Resultado esperado:** abre um painel vazio no modo de edição. O nome começa por **Novo painel**.
+Se esse nome já existir, o OpenLDR acrescenta um número. Pode agora acrescentar widgets.
+
+![O novo painel está selecionado e a sua grelha de edição está vazia.](dashboard-create-result.png)
+
+Selecione uma imagem para ver o ecrã completo. Estas capturas mostram a interface em inglês.
 
 ## Quem pode fazer o quê
 
@@ -34,6 +54,8 @@ Duas definições também contam. São para administradores e estão descritas e
 
 ## Carregar os dados de exemplo
 
+Estes exercícios usam registos fictícios e totais conhecidos. Pode ignorá-los se usa os seus dados. Veja [Comece aqui](/docs/start-here#usar-a-linha-de-comandos) para a CLI instalada ou os [passos de desenvolvimento](/docs/start-here#exemplo-1-usar-a-cli-num-ambiente-de-desenvolvimento).
+
 Uma instalação nova tem o painel de exemplo, **Lab Overview (Sample)**, mas quase nenhum dado de laboratório. Cada número mostra 0 e cada gráfico mostra **No data**. Os exemplos deste guia precisam de dados. Carregue primeiro o ficheiro de exemplo.
 
 O ficheiro é um Bundle FHIR do tipo transação, com atividade fictícia. Tem 24 pacientes e 60 pedidos de exame em cinco exames, vindos de três unidades, com as suas amostras, resultados e relatórios. Todas as datas caem em setembro e outubro de 2026. O mesmo ficheiro dá sempre os mesmos números, por isso o seu ecrã deve coincidir com este guia.
@@ -43,15 +65,17 @@ O ficheiro é um Bundle FHIR do tipo transação, com atividade fictícia. Tem 2
 **Numa instalação feita com o instalador de uma linha**, execute estes comandos a partir da pasta de instalação. O comando `openldr` corre dentro do contentor `api`, que só vê a pasta `data`. Por isso o ficheiro tem de ficar lá.
 
 ```bash
+cd ~/Downloads/openldr_ce
 curl -L -o data/openldr-sample-lab-data.json https://openldr.online/docs-samples/openldr-sample-lab-data.json
 ./openldr ingest data/openldr-sample-lab-data.json
 ```
 
-No Windows, transfira o mesmo ficheiro para `data` e depois execute `.\openldr.ps1 ingest data/openldr-sample-lab-data.json`.
+No Windows, transfira o mesmo ficheiro para `data` e depois execute `cd C:\openldr_ce`, depois `.\openldr.ps1 ingest data/openldr-sample-lab-data.json`.
 
 **A partir de uma cópia do código-fonte**, o ficheiro já está no repositório:
 
 ```bash
+cd ~/Downloads/openldr_ce
 pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-lab-data.json
 ```
 
