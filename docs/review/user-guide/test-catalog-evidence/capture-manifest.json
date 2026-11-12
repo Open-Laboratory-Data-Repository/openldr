@@ -1,0 +1,1693 @@
+{
+  "capturedAt": "2026-11-12T08:36:13.300Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5186/studio/test-catalog",
+  "steps": [
+    {
+      "id": "open-page",
+      "label": "Test catalog is in the main menu on the left.",
+      "path": "test-catalog-evidence/open-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 336,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "tests-tab",
+      "label": "Tests contains the catalog available to this installation.",
+      "path": "test-catalog-evidence/tests-tab.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 49,
+          "width": 56.6875,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "page-actions",
+      "label": "Open the Tests page dots menu.",
+      "path": "test-catalog-evidence/page-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 93,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "add-menu",
+      "label": "Choose Add test to enter one test by hand.",
+      "path": "test-catalog-evidence/add-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 134,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "test-code",
+      "label": "Use the stable code from your catalog. This example uses EXAMPLE-ALPHA.",
+      "path": "test-catalog-evidence/test-code.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 763.390625,
+          "y": 196.53125,
+          "width": 492.609375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "test-name",
+      "label": "Enter the test name people should see.",
+      "path": "test-catalog-evidence/test-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 763.390625,
+          "y": 264.53125,
+          "width": 492.609375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "test-short-name",
+      "label": "A short name is optional.",
+      "path": "test-catalog-evidence/test-short-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 763.390625,
+          "y": 312.53125,
+          "width": 492.609375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "category-option",
+      "label": "Choose a category from the configured list.",
+      "path": "test-catalog-evidence/category-option.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 768.5,
+          "y": 433.5,
+          "width": 122.5,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "specimen",
+      "label": "Tick the specimen types this test accepts.",
+      "path": "test-catalog-evidence/specimen.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 763.390625,
+          "y": 476.53125,
+          "width": 492.609375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "loinc",
+      "label": "LOINC is optional. If the dictionary is absent, this installation checks typed code format only.",
+      "path": "test-catalog-evidence/loinc.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 763.390625,
+          "y": 408.53125,
+          "width": 492.609375,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "sheet-actions",
+      "label": "The test sheet has its own dots menu.",
+      "path": "test-catalog-evidence/sheet-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 139.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "save-menu",
+      "label": "Save creates the test. This lab can be configured afterward.",
+      "path": "test-catalog-evidence/save-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "created",
+      "label": "The test appears in Tests. It starts Off at this lab.",
+      "path": "test-catalog-evidence/created.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416.453125,
+          "y": 192.5,
+          "width": 176.890625,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "row-actions",
+      "label": "Use the test row dots menu for local availability.",
+      "path": "test-catalog-evidence/row-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 186.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "enable-menu",
+      "label": "Switch on at this lab makes this test available here.",
+      "path": "test-catalog-evidence/enable-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 259.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "enabled",
+      "label": "The local availability column now reads On.",
+      "path": "test-catalog-evidence/enabled.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1053,
+          "y": 174,
+          "width": 163,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "edit-menu",
+      "label": "Edit opens the catalog and local settings.",
+      "path": "test-catalog-evidence/edit-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 227.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "fixed-code",
+      "label": "An existing test keeps its code. Use its name and other editable fields for corrections.",
+      "path": "test-catalog-evidence/fixed-code.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 763.390625,
+          "y": 196.53125,
+          "width": 492.609375,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "local-enabled",
+      "label": "This lab settings control whether this installation offers the test.",
+      "path": "test-catalog-evidence/local-enabled.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 763.390625,
+          "y": 698.53125,
+          "width": 36,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "local-specimen",
+      "label": "This lab can narrow the catalog specimen choices.",
+      "path": "test-catalog-evidence/local-specimen.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 763.390625,
+          "y": 730.53125,
+          "width": 492.609375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "local-name",
+      "label": "A local name changes how this lab presents the test.",
+      "path": "test-catalog-evidence/local-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 763.390625,
+          "y": 763.53125,
+          "width": 492.609375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "local-save",
+      "label": "Save stores the local settings alongside the existing test.",
+      "path": "test-catalog-evidence/local-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 165.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "search",
+      "label": "Search can find a test by its catalog or local name.",
+      "path": "test-catalog-evidence/search.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 93,
+          "width": 240,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "search-result",
+      "label": "The matching test remains visible under its catalog name.",
+      "path": "test-catalog-evidence/search-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416.0625,
+          "y": 186.5,
+          "width": 178.765625,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "export",
+      "label": "Export CSV downloads active catalog tests in an importable format.",
+      "path": "test-catalog-evidence/export.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 198,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "result-fields-tab",
+      "label": "Result fields lists fields from the installed result dictionary.",
+      "path": "test-catalog-evidence/result-fields-tab.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 316.6875,
+          "y": 50,
+          "width": 100.265625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-menu",
+      "label": "Import opens the file review wizard.",
+      "path": "test-catalog-evidence/import-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 166,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-file",
+      "label": "Choose your own CSV or XLSX file. Nothing is written before Apply.",
+      "path": "test-catalog-evidence/import-file.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 632,
+          "y": 195.53125,
+          "width": 1,
+          "height": 1
+        }
+      ]
+    },
+    {
+      "id": "import-columns",
+      "label": "Check the suggested column assignments. Name is required.",
+      "path": "test-catalog-evidence/import-columns.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 748.609375,
+          "y": 288.53125,
+          "width": 507.390625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "import-missing-column",
+      "label": "Not in the file leaves an existing field unchanged. An empty cell in a mapped column clears it.",
+      "path": "test-catalog-evidence/import-missing-column.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 748.609375,
+          "y": 384.53125,
+          "width": 507.390625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "import-next-actions",
+      "label": "Next is in the import sheet dots menu.",
+      "path": "test-catalog-evidence/import-next-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 139.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "import-next",
+      "label": "Next checks category and specimen values.",
+      "path": "test-catalog-evidence/import-next.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 208.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-unknown",
+      "label": "Unrecognised category text needs a decision before its row can be imported.",
+      "path": "test-catalog-evidence/import-unknown.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 818.484375,
+          "y": 282.53125,
+          "width": 437.515625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "import-new-category",
+      "label": "Choose an existing category, or Add as a new category when the meaning is new.",
+      "path": "test-catalog-evidence/import-new-category.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 823.5,
+          "y": 515.5,
+          "width": 182.421875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-category-code",
+      "label": "Check the suggested code before adding the category.",
+      "path": "test-catalog-evidence/import-category-code.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 818.484375,
+          "y": 326.53125,
+          "width": 437.515625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "import-values-next",
+      "label": "Next builds the reviewed counts with your value decisions.",
+      "path": "test-catalog-evidence/import-values-next.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 208.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-review",
+      "label": "Read the new, changed, unchanged and refused counts, plus any categories to add.",
+      "path": "test-catalog-evidence/import-review.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 180.53125,
+          "width": 671,
+          "height": 208
+        }
+      ]
+    },
+    {
+      "id": "import-apply",
+      "label": "Apply writes only after you have reviewed the import.",
+      "path": "test-catalog-evidence/import-apply.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 208.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-result",
+      "label": "Imported tests appear in Tests and start Off at this lab.",
+      "path": "test-catalog-evidence/import-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 405.109375,
+          "y": 253.5,
+          "width": 179.625,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "repeat-review",
+      "label": "The identical file is recognised as unchanged rather than creating duplicate tests.",
+      "path": "test-catalog-evidence/repeat-review.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 180.53125,
+          "width": 671,
+          "height": 204
+        }
+      ]
+    },
+    {
+      "id": "parameter-choice",
+      "label": "Tick the result fields that this test produces. Choices come from your result dictionary.",
+      "path": "test-catalog-evidence/parameter-choice.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 763.390625,
+          "y": 576.53125,
+          "width": 492.609375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "parameter-type",
+      "label": "Choose Numeric, Coded or Text for the result field.",
+      "path": "test-catalog-evidence/parameter-type.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 795.390625,
+          "y": 614.53125,
+          "width": 144,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "parameter-actions",
+      "label": "Numeric fields have their own range actions.",
+      "path": "test-catalog-evidence/parameter-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 947.390625,
+          "y": 614.53125,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "add-range",
+      "label": "Add a range creates one reference band for this result field.",
+      "path": "test-catalog-evidence/add-range.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 824.5,
+          "y": 655.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "range-name",
+      "label": "Name the reference band. This fictional band is for documentation only.",
+      "path": "test-catalog-evidence/range-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 869.078125,
+          "y": 665.53125,
+          "width": 341.921875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "range-bounds",
+      "label": "Use the lower and upper bounds approved for your actual method. The numbers here are fictional.",
+      "path": "test-catalog-evidence/range-bounds.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 869.078125,
+          "y": 705.53125,
+          "width": 141.609375,
+          "height": 32
+        },
+        {
+          "x": 1069.390625,
+          "y": 705.53125,
+          "width": 141.609375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "range-unit",
+      "label": "Set the unit used by this reference band.",
+      "path": "test-catalog-evidence/range-unit.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 869.078125,
+          "y": 745.53125,
+          "width": 141.609375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "range-context",
+      "label": "Sex and age limits restrict who this band applies to. Leave them open only for an unrestricted band.",
+      "path": "test-catalog-evidence/range-context.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1069.390625,
+          "y": 745.53125,
+          "width": 141.609375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "parameter-save",
+      "label": "Save stores the selected result fields and reference bands.",
+      "path": "test-catalog-evidence/parameter-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "observed-tab",
+      "label": "Observed lists test and result codes received from your data sources.",
+      "path": "test-catalog-evidence/observed-tab.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 420.953125,
+          "y": 50,
+          "width": 84.703125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "observed-test-row",
+      "label": "Each source code shows its current catalog mapping.",
+      "path": "test-catalog-evidence/observed-test-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 182,
+          "width": 141.890625,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "observed-row-actions",
+      "label": "Open the dots on the source-code row.",
+      "path": "test-catalog-evidence/observed-row-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 194.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "map-test-menu",
+      "label": "Map to catalog test opens the destination picker.",
+      "path": "test-catalog-evidence/map-test-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 235.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "map-picker",
+      "label": "Choose a catalog test is the destination selector.",
+      "path": "test-catalog-evidence/map-picker.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 883.71875,
+          "y": 260.53125,
+          "width": 372.28125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "map-search",
+      "label": "Search for the catalog test that this source code actually means.",
+      "path": "test-catalog-evidence/map-search.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 892.75,
+          "y": 309.5,
+          "width": 354.28125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "map-target",
+      "label": "Select the matching catalog test.",
+      "path": "test-catalog-evidence/map-target.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 888.75,
+          "y": 357.5,
+          "width": 362.28125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "map-actions",
+      "label": "The mapping sheet has its own dots menu.",
+      "path": "test-catalog-evidence/map-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 139.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "map-save",
+      "label": "Save writes the mapping used by reports.",
+      "path": "test-catalog-evidence/map-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "mapped-test",
+      "label": "The source code now shows its catalog test.",
+      "path": "test-catalog-evidence/mapped-test.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 684.421875,
+          "y": 194.5,
+          "width": 185.203125,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "results-toggle",
+      "label": "Results switches Observed from test codes to result codes.",
+      "path": "test-catalog-evidence/results-toggle.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 646.6875,
+          "y": 97,
+          "width": 70.6875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "result-code-row",
+      "label": "Result codes are separate from test codes.",
+      "path": "test-catalog-evidence/result-code-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 182,
+          "width": 157,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "observed-actions",
+      "label": "Open the Observed dots menu to match result codes.",
+      "path": "test-catalog-evidence/observed-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 97,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "match-menu",
+      "label": "Map matching codes checks exact matches against your result dictionary.",
+      "path": "test-catalog-evidence/match-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1089.75,
+          "y": 234,
+          "width": 169.328125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "match-system",
+      "label": "Choose the lab system whose result codes you want to match.",
+      "path": "test-catalog-evidence/match-system.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 880.59375,
+          "y": 212.53125,
+          "width": 375.40625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "match-preview",
+      "label": "Read the proposed exact-code matches before applying them.",
+      "path": "test-catalog-evidence/match-preview.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 769,
+          "y": 264.53125,
+          "width": 511,
+          "height": 53
+        }
+      ]
+    },
+    {
+      "id": "match-actions",
+      "label": "Open Matching actions after checking the list.",
+      "path": "test-catalog-evidence/match-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 155.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "match-apply",
+      "label": "Map these codes applies the proposed matches.",
+      "path": "test-catalog-evidence/match-apply.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 192.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "matched-result",
+      "label": "The received result code now names its result field.",
+      "path": "test-catalog-evidence/matched-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 675.625,
+          "y": 194.5,
+          "width": 187.453125,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "rebuild-menu",
+      "label": "Rebuild warehouse copy retries publishing mappings when the page reports a stale copy.",
+      "path": "test-catalog-evidence/rebuild-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1089.75,
+          "y": 202,
+          "width": 169.328125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "result-field-row",
+      "label": "Result fields shows the dictionary code, role, units and LOINC link.",
+      "path": "test-catalog-evidence/result-field-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 453.734375,
+          "y": 182,
+          "width": 286.859375,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "result-field-actions",
+      "label": "Open the result-field row dots menu.",
+      "path": "test-catalog-evidence/result-field-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 194.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "loinc-link-menu",
+      "label": "Link LOINC opens the field link editor.",
+      "path": "test-catalog-evidence/loinc-link-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 235.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "loinc-input",
+      "label": "Enter the confirmed LOINC code for your real result field. A typed code is checked only for format when LOINC is not loaded.",
+      "path": "test-catalog-evidence/loinc-input.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 851.796875,
+          "y": 324.53125,
+          "width": 404.203125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "loinc-actions",
+      "label": "Use the LOINC link dots menu to save.",
+      "path": "test-catalog-evidence/loinc-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 139.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "loinc-save",
+      "label": "Save stores the link. Check the meaning against your own terminology before using it.",
+      "path": "test-catalog-evidence/loinc-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "loinc-result",
+      "label": "The result-field row now shows the saved LOINC code.",
+      "path": "test-catalog-evidence/loinc-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1104.59375,
+          "y": 205.5,
+          "width": 43.21875,
+          "height": 14
+        }
+      ]
+    },
+    {
+      "id": "result-export",
+      "label": "Export CSV downloads the dictionary links for review or editing.",
+      "path": "test-catalog-evidence/result-export.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 138,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-tests",
+      "label": "Tests, Result fields and Observed remain at the top on a phone.",
+      "path": "test-catalog-evidence/phone-tests.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 16,
+          "y": 49,
+          "width": 56.6875,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "phone-actions",
+      "label": "The Tests dots menu stays beside the search and table controls.",
+      "path": "test-catalog-evidence/phone-actions.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 327,
+          "y": 97,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-results",
+      "label": "Use Results to work with received result codes on a phone.",
+      "path": "test-catalog-evidence/phone-results.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 78.6875,
+          "y": 137,
+          "width": 70.6875,
+          "height": 32
+        }
+      ]
+    }
+  ]
+}

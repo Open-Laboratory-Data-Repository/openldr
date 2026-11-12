@@ -1,0 +1,646 @@
+{
+  "title": "Test catalog",
+  "meta": [
+    "System setup",
+    "Browse or manage terminology",
+    "About 30 minutes"
+  ],
+  "intro": [
+    "Keep a shared list of tests, decide which ones this lab offers, and link the codes received from your data sources. A catalog test and a result field are different things. One test can produce several result fields.",
+    "<strong>This setup is optional.</strong> OpenLDR can receive and process lab data before you configure it. We strongly recommend setting it up during use. The Lab order form offers the tests enabled at this lab.",
+    "Use your own test codes, names, specimens and files. The screenshots use fictional examples. No documentation sample data is required. <a href=\"#dg-practice\">Optional practice files</a> are at the end.",
+    "Reading needs <strong>Browse terminology</strong>. Changes need <strong>Manage terminology</strong>. When the catalog comes from central, this lab can change local availability, specimens and names. It cannot change the shared test definitions.",
+    "The screenshots use an installation that owns its catalog. Result-field examples also use a small fictional result dictionary. Reference-band numbers are for documentation only. Use the ranges and code meanings approved for your actual tests."
+  ],
+  "tasks": [
+    {
+      "id": "add",
+      "title": "Add a test to your catalog",
+      "intro": [
+        "Use this for one new test when this installation owns its catalog. Search for an existing test before adding another code."
+      ],
+      "steps": [
+        [
+          "Open Test catalog",
+          "Select <strong>Test catalog</strong> in the main menu on the left.",
+          [
+            "open-page"
+          ]
+        ],
+        [
+          "Open the Tests actions",
+          "Select <strong>Tests</strong>, then open the dots beside its search and table controls.",
+          [
+            "tests-tab",
+            "page-actions"
+          ]
+        ],
+        [
+          "Choose Add test",
+          "Select <strong>Add test</strong>. The test sheet opens.",
+          [
+            "add-menu"
+          ]
+        ],
+        [
+          "Enter the code",
+          "Enter the stable code from your own catalog. The fictional example uses <code>EXAMPLE-ALPHA</code>. Leave it empty only if the LOINC code should become the code. A saved code cannot be changed.",
+          [
+            "test-code"
+          ]
+        ],
+        [
+          "Enter the name",
+          "Enter the name people should see. A short name is optional. The example uses <code>Example panel Alpha</code> and <code>Example Alpha</code>.",
+          [
+            "test-name",
+            "test-short-name"
+          ]
+        ],
+        [
+          "Choose the category",
+          "Select the category that fits this test from the configured list. Categories come from Terminology.",
+          [
+            "category-option"
+          ]
+        ],
+        [
+          "Choose accepted specimens",
+          "Tick the specimen types this test accepts. Use the configured choices for your actual test.",
+          [
+            "specimen"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "save",
+      "title": "Finish and save the test",
+      "intro": [
+        "Continue in the open test sheet. You can configure this lab and result fields after saving the shared definition."
+      ],
+      "steps": [
+        [
+          "Check the LOINC field",
+          "Enter a confirmed LOINC code if you have one, or leave it blank. When LOINC is loaded, search and select a term. Here it is not loaded, so typed codes are checked for format only.",
+          [
+            "loinc"
+          ]
+        ],
+        [
+          "Open the sheet actions",
+          "Select the dots in the test sheet, below its heading.",
+          [
+            "sheet-actions"
+          ]
+        ],
+        [
+          "Choose Save",
+          "Select <strong>Save</strong>. New tests use Save too.",
+          [
+            "save-menu"
+          ]
+        ]
+      ],
+      "result": "The sheet closes and the new test appears in Tests. It starts Off at this lab unless you enabled it in the sheet.",
+      "resultShots": [
+        "created"
+      ]
+    },
+    {
+      "id": "enable",
+      "title": "Make a test available at this lab",
+      "intro": [
+        "Enable the tests this lab actually performs. This changes local availability, which the Lab order form uses."
+      ],
+      "steps": [
+        [
+          "Open the test row actions",
+          "Select the dots at the right end of the test row.",
+          [
+            "row-actions"
+          ]
+        ],
+        [
+          "Choose Switch on at this lab",
+          "Select <strong>Switch on at this lab</strong>. The same action becomes Switch off at this lab for an enabled test.",
+          [
+            "enable-menu"
+          ]
+        ]
+      ],
+      "result": "On at this lab reads On. Imported tests do not become enabled automatically.",
+      "resultShots": [
+        "enabled"
+      ]
+    },
+    {
+      "id": "local",
+      "title": "Set this lab's name and specimen choices",
+      "intro": [
+        "Use local settings when this lab uses a different display name or accepts fewer specimens. A lab receiving the catalog from central can still change these settings."
+      ],
+      "steps": [
+        [
+          "Choose Edit",
+          "Open the row dots menu and select <strong>Edit</strong>. The saved code is shown without an editable input.",
+          [
+            "edit-menu",
+            "fixed-code"
+          ]
+        ],
+        [
+          "Check local availability",
+          "Under <strong>This lab</strong>, use <strong>On at this lab</strong> to choose whether this lab offers the test.",
+          [
+            "local-enabled"
+          ]
+        ],
+        [
+          "Check local specimens",
+          "Keep the specimen types this lab accepts. The local choices can narrow the catalog list. Keeping every specimen follows the catalog list.",
+          [
+            "local-specimen"
+          ]
+        ],
+        [
+          "Enter a local name if needed",
+          "Enter the local display name in the local-name field, or leave it blank to use the catalog name. The example uses <code>Alpha at this lab</code>.",
+          [
+            "local-name"
+          ]
+        ],
+        [
+          "Save the local settings",
+          "Open the sheet dots menu and select <strong>Save</strong>.",
+          [
+            "local-save"
+          ]
+        ]
+      ],
+      "result": "The lab settings are saved without changing the test code.",
+      "resultShots": []
+    },
+    {
+      "id": "find",
+      "title": "Find and export tests",
+      "intro": [
+        "Search before creating another test. You can also export active catalog tests for review or later import."
+      ],
+      "steps": [
+        [
+          "Search by code or name",
+          "Use <strong>Search code or name</strong>. Search also matches short and local names. The example finds the test using its local name.",
+          [
+            "search"
+          ]
+        ],
+        [
+          "Read the matching row",
+          "Check the code and catalog name before editing. The test keeps its catalog name even when a local name matched your search.",
+          [
+            "search-result"
+          ]
+        ],
+        [
+          "Choose Export CSV when you need a file",
+          "Clear the search if you no longer need it. Open the Tests dots menu and select <strong>Export CSV</strong> to download active catalog tests. A central-managed lab can export too.",
+          [
+            "export"
+          ]
+        ]
+      ],
+      "result": "The browser downloads a CSV in the columns the import wizard understands. Export contains active catalog tests, not just a visible row.",
+      "resultShots": []
+    },
+    {
+      "id": "import",
+      "title": "Choose and map your test-list file",
+      "intro": [
+        "Use an import when you have a list in CSV or Excel .xlsx format. Tests match by code. An import does not retire tests absent from the file or change local lab settings."
+      ],
+      "steps": [
+        [
+          "Choose Import",
+          "On Tests, open the page dots menu and select <strong>Import</strong>.",
+          [
+            "page-actions",
+            "import-menu"
+          ]
+        ],
+        [
+          "Choose your file",
+          "Select the file area and choose your own CSV or XLSX file. The wizard reads it and opens <strong>Step 2 of 4: Columns</strong>.",
+          [
+            "import-file"
+          ]
+        ],
+        [
+          "Check the Name column",
+          "Check every suggested column. Name is required. Correct a field using its selector beside the label.",
+          [
+            "import-columns"
+          ]
+        ],
+        [
+          "Check absent and empty columns",
+          "<strong>Not in the file</strong> leaves an existing field unchanged. An empty cell in a selected column clears that field. Do not map an empty column unless that is intended.",
+          [
+            "import-missing-column"
+          ]
+        ],
+        [
+          "Continue to Values",
+          "Open the import sheet dots menu and select <strong>Next</strong>.",
+          [
+            "import-next-actions",
+            "import-next"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "values",
+      "title": "Resolve values and review the import",
+      "intro": [
+        "The Values step lists category or specimen text that matched no configured choice. Decide what each text means before applying the file."
+      ],
+      "steps": [
+        [
+          "Find unrecognised values",
+          "Read the text and affected row count. A value left <strong>Not chosen</strong> causes its row to be refused. This example has an unrecognised category.",
+          [
+            "import-unknown"
+          ]
+        ],
+        [
+          "Choose the correct category",
+          "Select an existing category with the same meaning. Choose <strong>Add as a new category</strong> only when a new category is intended.",
+          [
+            "import-new-category"
+          ]
+        ],
+        [
+          "Check a new category code",
+          "When adding a category, check or change its generated code. This example adds a fictional category. Resolve unmatched specimens through their choices too.",
+          [
+            "import-category-code"
+          ]
+        ],
+        [
+          "Continue to Review",
+          "Open the sheet dots menu and select <strong>Next</strong>.",
+          [
+            "import-values-next"
+          ]
+        ],
+        [
+          "Read the counts and warnings",
+          "Check New, Changed, Unchanged and Refused, any refusal reasons, and Categories to add. Use Back in the dots menu if you need to correct the file decisions.",
+          [
+            "import-review"
+          ]
+        ],
+        [
+          "Choose Apply",
+          "When the review matches your intention, open the sheet dots menu and select <strong>Apply</strong>. Nothing is written before this action.",
+          [
+            "import-apply"
+          ]
+        ]
+      ],
+      "result": "The sheet closes and imported tests appear. They start Off at this lab. Importing the identical file again reports unchanged rows, without duplicates.",
+      "resultShots": [
+        "import-result",
+        "repeat-review"
+      ]
+    },
+    {
+      "id": "parameters",
+      "title": "Choose the result fields for a test",
+      "intro": [
+        "Do this when people will enter results through this test. Choices come from the installed result dictionary. If none are available, import your system's dictionary first. <a href=\"terminology-review.html\">Terminology</a> explains code lists and <a href=\"start-here-review.html\">Start here</a> explains the CLI. Optional practice includes a fictional dictionary."
+      ],
+      "steps": [
+        [
+          "Open the test and choose its result fields",
+          "Choose Edit from the test row menu. Tick the fields this test produces under its result parameters.",
+          [
+            "edit-menu",
+            "parameter-choice"
+          ]
+        ],
+        [
+          "Choose each result type",
+          "Choose <strong>Numeric</strong>, <strong>Coded</strong> or <strong>Text</strong> for each selected result field. A coded field also needs its configured value set. The example uses Numeric.",
+          [
+            "parameter-type"
+          ]
+        ],
+        [
+          "Open the numeric field actions",
+          "For a numeric field needing a reference band, select the dots beside its result-type selector.",
+          [
+            "parameter-actions"
+          ]
+        ],
+        [
+          "Choose Add a range",
+          "Select <strong>Add a range</strong>. A reference-band form appears below the result field.",
+          [
+            "add-range"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "ranges",
+      "title": "Set the reference band and save",
+      "intro": [
+        "Use the bounds approved for your test, method and population. The example band and numbers are fictional and must not be used as clinical ranges."
+      ],
+      "steps": [
+        [
+          "Name the band",
+          "Enter a name that identifies this reference band. The example uses <code>Example band only</code>.",
+          [
+            "range-name"
+          ]
+        ],
+        [
+          "Enter the approved bounds",
+          "Enter the lower and upper bounds for your actual test. Blank bounds are open. The screenshot's 1 and 10 are documentation values only.",
+          [
+            "range-bounds"
+          ]
+        ],
+        [
+          "Enter the unit",
+          "Set the unit used by this band. Use the same meaning and scale as the actual result.",
+          [
+            "range-unit"
+          ]
+        ],
+        [
+          "Check sex and age restrictions",
+          "Set any sex or age limits that apply. An unrestricted band should have no such restriction.",
+          [
+            "range-context"
+          ]
+        ],
+        [
+          "Save the test",
+          "Open the test sheet dots menu and select <strong>Save</strong>.",
+          [
+            "parameter-save"
+          ]
+        ]
+      ],
+      "result": "The selected fields, result types and reference bands are saved with the test.",
+      "resultShots": []
+    },
+    {
+      "id": "map",
+      "title": "Link a received test code to the catalog",
+      "intro": [
+        "Do this after your normal lab data has arrived. If Observed is empty, you can build the catalog now and return later. Enabling a test at this lab and mapping a received code are separate actions."
+      ],
+      "steps": [
+        [
+          "Open Observed",
+          "Select <strong>Observed</strong> at the top. Tests lists the codes received with orders.",
+          [
+            "observed-tab",
+            "observed-test-row"
+          ]
+        ],
+        [
+          "Choose Map to catalog test",
+          "Open the received-code row dots menu and select <strong>Map to catalog test</strong>.",
+          [
+            "observed-row-actions",
+            "map-test-menu"
+          ]
+        ],
+        [
+          "Open the destination selector",
+          "Select <strong>Choose a catalog test</strong>.",
+          [
+            "map-picker"
+          ]
+        ],
+        [
+          "Search the catalog",
+          "In <strong>Search catalog tests</strong>, search for the test this source code actually represents.",
+          [
+            "map-search"
+          ]
+        ],
+        [
+          "Select the correct test",
+          "Choose the matching catalog test. Check its code as well as its name.",
+          [
+            "map-target"
+          ]
+        ],
+        [
+          "Save the mapping",
+          "Open the mapping sheet dots menu and select <strong>Save</strong>.",
+          [
+            "map-actions",
+            "map-save"
+          ]
+        ]
+      ],
+      "result": "The received code shows its Catalog test. Reports can count the source code through this catalog identity.",
+      "resultShots": [
+        "mapped-test"
+      ]
+    },
+    {
+      "id": "match",
+      "title": "Match received result codes to the dictionary",
+      "intro": [
+        "Result codes identify individual results. They are different from test codes. Exact-code matching is useful when the source and your result dictionary use the same codes. Existing mappings and ambiguous codes are left alone."
+      ],
+      "steps": [
+        [
+          "Choose Results in Observed",
+          "Select <strong>Results</strong> to see received result codes.",
+          [
+            "results-toggle",
+            "result-code-row"
+          ]
+        ],
+        [
+          "Choose Map matching codes",
+          "Open the Observed dots menu and select <strong>Map matching codes</strong>.",
+          [
+            "observed-actions",
+            "match-menu"
+          ]
+        ],
+        [
+          "Choose the lab system",
+          "Choose the source system whose result codes you want to match. If only one exists, it is selected automatically.",
+          [
+            "match-system"
+          ]
+        ],
+        [
+          "Read the proposed matches",
+          "Check each code, destination name and result count. Matching names do not replace checking the actual code meanings.",
+          [
+            "match-preview"
+          ]
+        ],
+        [
+          "Open Matching actions",
+          "Select the dots in the matching sheet.",
+          [
+            "match-actions"
+          ]
+        ],
+        [
+          "Apply the matches",
+          "Select <strong>Map these codes</strong>. For different codes, use Map to result field on the received-code row instead.",
+          [
+            "match-apply"
+          ]
+        ]
+      ],
+      "result": "The matched code names its Result field. If the page reports a stale warehouse copy, its dots menu offers Rebuild warehouse copy.",
+      "resultShots": [
+        "matched-result",
+        "rebuild-menu"
+      ]
+    },
+    {
+      "id": "loinc",
+      "title": "Link a result field to LOINC",
+      "intro": [
+        "Use a confirmed code for the meaning of your real field. The fictional example only demonstrates the editor. Its illustrative LOINC entry is not a recommendation for your field. A lab receiving the dictionary from central cannot change these links."
+      ],
+      "steps": [
+        [
+          "Open Result fields",
+          "Select <strong>Result fields</strong>. Find the dictionary code and check its role and units.",
+          [
+            "result-fields-tab",
+            "result-field-row"
+          ]
+        ],
+        [
+          "Choose Link LOINC",
+          "Open the field row dots menu and select <strong>Link LOINC</strong>.",
+          [
+            "result-field-actions",
+            "loinc-link-menu"
+          ]
+        ],
+        [
+          "Enter or select the confirmed LOINC",
+          "When LOINC is loaded, search and select it. Otherwise enter your confirmed code. This installation checks typed code format only. It does not prove the clinical meaning.",
+          [
+            "loinc-input"
+          ]
+        ],
+        [
+          "Save the link",
+          "Open the LOINC link dots menu and select <strong>Save</strong>.",
+          [
+            "loinc-actions",
+            "loinc-save"
+          ]
+        ]
+      ],
+      "result": "The field row shows its LOINC code. Export CSV in the Result fields menu downloads the links.",
+      "resultShots": [
+        "loinc-result",
+        "result-export"
+      ]
+    },
+    {
+      "id": "phone",
+      "title": "Use Test catalog on a phone",
+      "intro": [
+        "The same tabs and actions remain available on a phone. Wide tables can scroll horizontally."
+      ],
+      "steps": [
+        [
+          "Choose the tab",
+          "Use Tests, Result fields or Observed at the top of the page.",
+          [
+            "phone-tests"
+          ]
+        ],
+        [
+          "Open the relevant actions",
+          "In Tests, the page dots menu is beside the search and table controls. Each row still has its own menu.",
+          [
+            "phone-actions"
+          ]
+        ],
+        [
+          "Choose received result codes",
+          "In Observed, choose Results when you want received result codes rather than test codes.",
+          [
+            "phone-results"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "practice",
+      "title": "Optional practice with fictional data",
+      "paragraphs": [
+        "Every task above can use your own data. Use these files only in a test installation. A test can be retired, but cannot be deleted. Do not import fictional tests into a live catalog."
+      ],
+      "html": [
+        "<ul><li><a href=\"test-catalog-evidence/example-tests.csv\" download>Download a two-test CSV</a> for the import task.</li><li><a href=\"test-catalog-evidence/example-result-fields.json\" download>Download a one-field result dictionary</a> for the result-field tasks.</li><li><a href=\"test-catalog-evidence/example-lab-data.json\" download>Download four fictional lab resources</a> to populate Observed.</li></ul>",
+        "<p>To follow the pictures exactly, add EXAMPLE-ALPHA manually first. Importing the CSV alone creates Beta and Gamma. Use your own matching names instead if you skip the practice files.</p>",
+        "<p>For the optional dictionary and lab-data bundle, first follow <a href=\"start-here-review.html\">Start here</a>. Put the downloaded files in the installation's <code>data</code> folder. From an example development checkout:</p>",
+        "<pre><code>cd ~/Downloads/openldr_ce\npnpm openldr terminology import parameters data/example-result-fields.json\npnpm openldr ingest data/example-lab-data.json</code></pre>",
+        "<p>For an installed Linux or macOS copy, use <code>./openldr</code> instead of <code>pnpm openldr</code>. On Windows, use <code>.\\openldr.ps1</code> from your installation folder, such as <code>C:\\openldr_ce</code>. Replace the example folder with your real folder. Start here shows the full platform steps.</p>"
+      ]
+    },
+    {
+      "id": "limits",
+      "title": "Before changing shared catalog data",
+      "paragraphs": [
+        "A catalog received from central has read-only shared definitions. Local availability, local specimen choices and local names remain this lab's settings.",
+        "Import accepts at most 5,000 rows and 5 MB. Excel import reads the first worksheet. Tests match by code. A file does not retire tests absent from it or change local settings.",
+        "Retiring a test hides it from the default active list. It can be restored. Catalog tests cannot be deleted. Use the Status filter when looking for retired tests."
+      ]
+    },
+    {
+      "id": "help",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>Add test or Import is missing.</strong> Check whether the catalog comes from central and whether your account can manage terminology. Read the ownership message above the table.",
+        "<strong>A new test is absent from Lab order.</strong> Check On at this lab. Creating or importing a test does not automatically enable it.",
+        "<strong>The import refuses rows.</strong> Read each row's reason in Review. Return to Values for unchosen category or specimen text. Check Name and the code or LOINC that supplies its identity.",
+        "<strong>No result parameters appear.</strong> This installation has no usable result fields in its dictionary. Load the dictionary for your system first. The optional practice dictionary is only an example.",
+        "<strong>A code is still unmapped.</strong> Check whether you selected Tests or Results. Mapping one level does not map the other.",
+        "<strong>The page reports a stale warehouse copy.</strong> Open Observed actions and choose Rebuild warehouse copy. The page reports a failure if it cannot rebuild."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "<a href=\"terminology-review.html\">Terminology</a> explains configured code lists. <a href=\"facilities-review.html\">Facilities</a> explains facility codes. <a href=\"start-here-review.html\">Start here</a> explains installed and development CLI use."
+      ]
+    }
+  ]
+}

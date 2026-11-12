@@ -1,0 +1,134 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>System setup</span><span>Browse or manage terminology</span><span>About 30 minutes</span></div>
+<h1>Test catalog</h1>
+<p>Keep a shared list of tests, decide which ones this lab offers, and link the codes received from your data sources. A catalog test and a result field are different things. One test can produce several result fields.</p>
+<p><strong>This setup is optional.</strong> OpenLDR can receive and process lab data before you configure it. We strongly recommend setting it up during use. The Lab order form offers the tests enabled at this lab.</p>
+<p>Use your own test codes, names, specimens and files. The screenshots use fictional examples. No documentation sample data is required. <a href="#dg-practice">Optional practice files</a> are at the end.</p>
+<p>Reading needs <strong>Browse terminology</strong>. Changes need <strong>Manage terminology</strong>. When the catalog comes from central, this lab can change local availability, specimens and names. It cannot change the shared test definitions.</p>
+<p>The screenshots use an installation that owns its catalog. Result-field examples also use a small fictional result dictionary. Reference-band numbers are for documentation only. Use the ranges and code meanings approved for your actual tests.</p>
+<h2 id="dg-add">Add a test to your catalog</h2>
+<p>Use this for one new test when this installation owns its catalog. Search for an existing test before adding another code.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Test catalog</h3><p>Select <strong>Test catalog</strong> in the main menu on the left.</p>__SHOT:open-page:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the Tests actions</h3><p>Select <strong>Tests</strong>, then open the dots beside its search and table controls.</p>__SHOT:tests-tab:2____SHOT:page-actions:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose Add test</h3><p>Select <strong>Add test</strong>. The test sheet opens.</p>__SHOT:add-menu:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Enter the code</h3><p>Enter the stable code from your own catalog. The fictional example uses <code>EXAMPLE-ALPHA</code>. Leave it empty only if the LOINC code should become the code. A saved code cannot be changed.</p>__SHOT:test-code:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Enter the name</h3><p>Enter the name people should see. A short name is optional. The example uses <code>Example panel Alpha</code> and <code>Example Alpha</code>.</p>__SHOT:test-name:5____SHOT:test-short-name:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Choose the category</h3><p>Select the category that fits this test from the configured list. Categories come from Terminology.</p>__SHOT:category-option:6__</section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Choose accepted specimens</h3><p>Tick the specimen types this test accepts. Use the configured choices for your actual test.</p>__SHOT:specimen:7__</section>
+<h2 id="dg-save">Finish and save the test</h2>
+<p>Continue in the open test sheet. You can configure this lab and result fields after saving the shared definition.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Check the LOINC field</h3><p>Enter a confirmed LOINC code if you have one, or leave it blank. When LOINC is loaded, search and select a term. Here it is not loaded, so typed codes are checked for format only.</p>__SHOT:loinc:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the sheet actions</h3><p>Select the dots in the test sheet, below its heading.</p>__SHOT:sheet-actions:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose Save</h3><p>Select <strong>Save</strong>. New tests use Save too.</p>__SHOT:save-menu:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The sheet closes and the new test appears in Tests. It starts Off at this lab unless you enabled it in the sheet.</p></div>
+__SHOT:created:0__
+<h2 id="dg-enable">Make a test available at this lab</h2>
+<p>Enable the tests this lab actually performs. This changes local availability, which the Lab order form uses.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the test row actions</h3><p>Select the dots at the right end of the test row.</p>__SHOT:row-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Switch on at this lab</h3><p>Select <strong>Switch on at this lab</strong>. The same action becomes Switch off at this lab for an enabled test.</p>__SHOT:enable-menu:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> On at this lab reads On. Imported tests do not become enabled automatically.</p></div>
+__SHOT:enabled:0__
+<h2 id="dg-local">Set this lab&#x27;s name and specimen choices</h2>
+<p>Use local settings when this lab uses a different display name or accepts fewer specimens. A lab receiving the catalog from central can still change these settings.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Edit</h3><p>Open the row dots menu and select <strong>Edit</strong>. The saved code is shown without an editable input.</p>__SHOT:edit-menu:1____SHOT:fixed-code:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check local availability</h3><p>Under <strong>This lab</strong>, use <strong>On at this lab</strong> to choose whether this lab offers the test.</p>__SHOT:local-enabled:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check local specimens</h3><p>Keep the specimen types this lab accepts. The local choices can narrow the catalog list. Keeping every specimen follows the catalog list.</p>__SHOT:local-specimen:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Enter a local name if needed</h3><p>Enter the local display name in the local-name field, or leave it blank to use the catalog name. The example uses <code>Alpha at this lab</code>.</p>__SHOT:local-name:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Save the local settings</h3><p>Open the sheet dots menu and select <strong>Save</strong>.</p>__SHOT:local-save:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The lab settings are saved without changing the test code.</p></div>
+<h2 id="dg-find">Find and export tests</h2>
+<p>Search before creating another test. You can also export active catalog tests for review or later import.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Search by code or name</h3><p>Use <strong>Search code or name</strong>. Search also matches short and local names. The example finds the test using its local name.</p>__SHOT:search:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read the matching row</h3><p>Check the code and catalog name before editing. The test keeps its catalog name even when a local name matched your search.</p>__SHOT:search-result:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose Export CSV when you need a file</h3><p>Clear the search if you no longer need it. Open the Tests dots menu and select <strong>Export CSV</strong> to download active catalog tests. A central-managed lab can export too.</p>__SHOT:export:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The browser downloads a CSV in the columns the import wizard understands. Export contains active catalog tests, not just a visible row.</p></div>
+<h2 id="dg-import">Choose and map your test-list file</h2>
+<p>Use an import when you have a list in CSV or Excel .xlsx format. Tests match by code. An import does not retire tests absent from the file or change local lab settings.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Import</h3><p>On Tests, open the page dots menu and select <strong>Import</strong>.</p>__SHOT:page-actions:1____SHOT:import-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose your file</h3><p>Select the file area and choose your own CSV or XLSX file. The wizard reads it and opens <strong>Step 2 of 4: Columns</strong>.</p>__SHOT:import-file:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check the Name column</h3><p>Check every suggested column. Name is required. Correct a field using its selector beside the label.</p>__SHOT:import-columns:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check absent and empty columns</h3><p><strong>Not in the file</strong> leaves an existing field unchanged. An empty cell in a selected column clears that field. Do not map an empty column unless that is intended.</p>__SHOT:import-missing-column:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Continue to Values</h3><p>Open the import sheet dots menu and select <strong>Next</strong>.</p>__SHOT:import-next-actions:5____SHOT:import-next:5__</section>
+<h2 id="dg-values">Resolve values and review the import</h2>
+<p>The Values step lists category or specimen text that matched no configured choice. Decide what each text means before applying the file.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Find unrecognised values</h3><p>Read the text and affected row count. A value left <strong>Not chosen</strong> causes its row to be refused. This example has an unrecognised category.</p>__SHOT:import-unknown:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the correct category</h3><p>Select an existing category with the same meaning. Choose <strong>Add as a new category</strong> only when a new category is intended.</p>__SHOT:import-new-category:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check a new category code</h3><p>When adding a category, check or change its generated code. This example adds a fictional category. Resolve unmatched specimens through their choices too.</p>__SHOT:import-category-code:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Continue to Review</h3><p>Open the sheet dots menu and select <strong>Next</strong>.</p>__SHOT:import-values-next:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Read the counts and warnings</h3><p>Check New, Changed, Unchanged and Refused, any refusal reasons, and Categories to add. Use Back in the dots menu if you need to correct the file decisions.</p>__SHOT:import-review:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Choose Apply</h3><p>When the review matches your intention, open the sheet dots menu and select <strong>Apply</strong>. Nothing is written before this action.</p>__SHOT:import-apply:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The sheet closes and imported tests appear. They start Off at this lab. Importing the identical file again reports unchanged rows, without duplicates.</p></div>
+__SHOT:import-result:0__
+__SHOT:repeat-review:0__
+<h2 id="dg-parameters">Choose the result fields for a test</h2>
+<p>Do this when people will enter results through this test. Choices come from the installed result dictionary. If none are available, import your system's dictionary first. <a href="terminology-review.html">Terminology</a> explains code lists and <a href="start-here-review.html">Start here</a> explains the CLI. Optional practice includes a fictional dictionary.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the test and choose its result fields</h3><p>Choose Edit from the test row menu. Tick the fields this test produces under its result parameters.</p>__SHOT:edit-menu:1____SHOT:parameter-choice:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose each result type</h3><p>Choose <strong>Numeric</strong>, <strong>Coded</strong> or <strong>Text</strong> for each selected result field. A coded field also needs its configured value set. The example uses Numeric.</p>__SHOT:parameter-type:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open the numeric field actions</h3><p>For a numeric field needing a reference band, select the dots beside its result-type selector.</p>__SHOT:parameter-actions:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose Add a range</h3><p>Select <strong>Add a range</strong>. A reference-band form appears below the result field.</p>__SHOT:add-range:4__</section>
+<h2 id="dg-ranges">Set the reference band and save</h2>
+<p>Use the bounds approved for your test, method and population. The example band and numbers are fictional and must not be used as clinical ranges.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Name the band</h3><p>Enter a name that identifies this reference band. The example uses <code>Example band only</code>.</p>__SHOT:range-name:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Enter the approved bounds</h3><p>Enter the lower and upper bounds for your actual test. Blank bounds are open. The screenshot's 1 and 10 are documentation values only.</p>__SHOT:range-bounds:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Enter the unit</h3><p>Set the unit used by this band. Use the same meaning and scale as the actual result.</p>__SHOT:range-unit:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check sex and age restrictions</h3><p>Set any sex or age limits that apply. An unrestricted band should have no such restriction.</p>__SHOT:range-context:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Save the test</h3><p>Open the test sheet dots menu and select <strong>Save</strong>.</p>__SHOT:parameter-save:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The selected fields, result types and reference bands are saved with the test.</p></div>
+<h2 id="dg-map">Link a received test code to the catalog</h2>
+<p>Do this after your normal lab data has arrived. If Observed is empty, you can build the catalog now and return later. Enabling a test at this lab and mapping a received code are separate actions.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Observed</h3><p>Select <strong>Observed</strong> at the top. Tests lists the codes received with orders.</p>__SHOT:observed-tab:1____SHOT:observed-test-row:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Map to catalog test</h3><p>Open the received-code row dots menu and select <strong>Map to catalog test</strong>.</p>__SHOT:observed-row-actions:2____SHOT:map-test-menu:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open the destination selector</h3><p>Select <strong>Choose a catalog test</strong>.</p>__SHOT:map-picker:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Search the catalog</h3><p>In <strong>Search catalog tests</strong>, search for the test this source code actually represents.</p>__SHOT:map-search:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Select the correct test</h3><p>Choose the matching catalog test. Check its code as well as its name.</p>__SHOT:map-target:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Save the mapping</h3><p>Open the mapping sheet dots menu and select <strong>Save</strong>.</p>__SHOT:map-actions:6____SHOT:map-save:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The received code shows its Catalog test. Reports can count the source code through this catalog identity.</p></div>
+__SHOT:mapped-test:0__
+<h2 id="dg-match">Match received result codes to the dictionary</h2>
+<p>Result codes identify individual results. They are different from test codes. Exact-code matching is useful when the source and your result dictionary use the same codes. Existing mappings and ambiguous codes are left alone.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Results in Observed</h3><p>Select <strong>Results</strong> to see received result codes.</p>__SHOT:results-toggle:1____SHOT:result-code-row:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Map matching codes</h3><p>Open the Observed dots menu and select <strong>Map matching codes</strong>.</p>__SHOT:observed-actions:2____SHOT:match-menu:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose the lab system</h3><p>Choose the source system whose result codes you want to match. If only one exists, it is selected automatically.</p>__SHOT:match-system:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Read the proposed matches</h3><p>Check each code, destination name and result count. Matching names do not replace checking the actual code meanings.</p>__SHOT:match-preview:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Open Matching actions</h3><p>Select the dots in the matching sheet.</p>__SHOT:match-actions:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Apply the matches</h3><p>Select <strong>Map these codes</strong>. For different codes, use Map to result field on the received-code row instead.</p>__SHOT:match-apply:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The matched code names its Result field. If the page reports a stale warehouse copy, its dots menu offers Rebuild warehouse copy.</p></div>
+__SHOT:matched-result:0__
+__SHOT:rebuild-menu:0__
+<h2 id="dg-loinc">Link a result field to LOINC</h2>
+<p>Use a confirmed code for the meaning of your real field. The fictional example only demonstrates the editor. Its illustrative LOINC entry is not a recommendation for your field. A lab receiving the dictionary from central cannot change these links.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Result fields</h3><p>Select <strong>Result fields</strong>. Find the dictionary code and check its role and units.</p>__SHOT:result-fields-tab:1____SHOT:result-field-row:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Link LOINC</h3><p>Open the field row dots menu and select <strong>Link LOINC</strong>.</p>__SHOT:result-field-actions:2____SHOT:loinc-link-menu:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Enter or select the confirmed LOINC</h3><p>When LOINC is loaded, search and select it. Otherwise enter your confirmed code. This installation checks typed code format only. It does not prove the clinical meaning.</p>__SHOT:loinc-input:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Save the link</h3><p>Open the LOINC link dots menu and select <strong>Save</strong>.</p>__SHOT:loinc-actions:4____SHOT:loinc-save:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The field row shows its LOINC code. Export CSV in the Result fields menu downloads the links.</p></div>
+__SHOT:loinc-result:0__
+__SHOT:result-export:0__
+<h2 id="dg-phone">Use Test catalog on a phone</h2>
+<p>The same tabs and actions remain available on a phone. Wide tables can scroll horizontally.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose the tab</h3><p>Use Tests, Result fields or Observed at the top of the page.</p>__SHOT:phone-tests:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the relevant actions</h3><p>In Tests, the page dots menu is beside the search and table controls. Each row still has its own menu.</p>__SHOT:phone-actions:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose received result codes</h3><p>In Observed, choose Results when you want received result codes rather than test codes.</p>__SHOT:phone-results:3__</section>
+<h2 id="dg-practice">Optional practice with fictional data</h2>
+<p>Every task above can use your own data. Use these files only in a test installation. A test can be retired, but cannot be deleted. Do not import fictional tests into a live catalog.</p>
+<ul><li><a href="test-catalog-evidence/example-tests.csv" download>Download a two-test CSV</a> for the import task.</li><li><a href="test-catalog-evidence/example-result-fields.json" download>Download a one-field result dictionary</a> for the result-field tasks.</li><li><a href="test-catalog-evidence/example-lab-data.json" download>Download four fictional lab resources</a> to populate Observed.</li></ul>
+<p>To follow the pictures exactly, add EXAMPLE-ALPHA manually first. Importing the CSV alone creates Beta and Gamma. Use your own matching names instead if you skip the practice files.</p>
+<p>For the optional dictionary and lab-data bundle, first follow <a href="start-here-review.html">Start here</a>. Put the downloaded files in the installation's <code>data</code> folder. From an example development checkout:</p>
+<pre><code>cd ~/Downloads/openldr_ce
+pnpm openldr terminology import parameters data/example-result-fields.json
+pnpm openldr ingest data/example-lab-data.json</code></pre>
+<p>For an installed Linux or macOS copy, use <code>./openldr</code> instead of <code>pnpm openldr</code>. On Windows, use <code>.\openldr.ps1</code> from your installation folder, such as <code>C:\openldr_ce</code>. Replace the example folder with your real folder. Start here shows the full platform steps.</p>
+<h2 id="dg-limits">Before changing shared catalog data</h2>
+<p>A catalog received from central has read-only shared definitions. Local availability, local specimen choices and local names remain this lab's settings.</p>
+<p>Import accepts at most 5,000 rows and 5 MB. Excel import reads the first worksheet. Tests match by code. A file does not retire tests absent from it or change local settings.</p>
+<p>Retiring a test hides it from the default active list. It can be restored. Catalog tests cannot be deleted. Use the Status filter when looking for retired tests.</p>
+<h2 id="dg-help">Troubleshooting</h2>
+<p><strong>Add test or Import is missing.</strong> Check whether the catalog comes from central and whether your account can manage terminology. Read the ownership message above the table.</p>
+<p><strong>A new test is absent from Lab order.</strong> Check On at this lab. Creating or importing a test does not automatically enable it.</p>
+<p><strong>The import refuses rows.</strong> Read each row's reason in Review. Return to Values for unchosen category or specimen text. Check Name and the code or LOINC that supplies its identity.</p>
+<p><strong>No result parameters appear.</strong> This installation has no usable result fields in its dictionary. Load the dictionary for your system first. The optional practice dictionary is only an example.</p>
+<p><strong>A code is still unmapped.</strong> Check whether you selected Tests or Results. Mapping one level does not map the other.</p>
+<p><strong>The page reports a stale warehouse copy.</strong> Open Observed actions and choose Rebuild warehouse copy. The page reports a failure if it cannot rebuild.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="terminology-review.html">Terminology</a> explains configured code lists. <a href="facilities-review.html">Facilities</a> explains facility codes. <a href="start-here-review.html">Start here</a> explains installed and development CLI use.</p>
+</article>

@@ -1,0 +1,1828 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/charts/; img-src 'self' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Test catalog guide preview</title>
+<style>:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 16px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans:
+    -apple-system-body, ui-sans-serif, -apple-system, system-ui, "Segoe UI",
+    Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji",
+    "Segoe UI Symbol";
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 8px);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 2);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'%3E%3Cpath d='M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z'/%3E%3C/svg%3E");
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html > body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-weight: var(--font-weight-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+  text-underline-offset: 2px;
+  font-weight: inherit;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+li,
+.table {
+  font-family: var(--font-sans);
+}
+
+h1 {
+  font-size: calc(var(--font-size-base) * 1.5);
+  line-height: 1.3333333333;
+}
+
+h2 {
+  font-size: calc(var(--font-size-base) * 1.25);
+  line-height: 1.4;
+}
+h3 {
+  font-size: calc(var(--font-size-base) * 1.125);
+  line-height: 1.5555555556;
+}
+h4 {
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+h5,
+h6 {
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+b,
+strong,
+th {
+  font-weight: 600;
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+pre,
+pre code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: calc(var(--font-size-base) * 0.875);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-family: var(--font-sans);
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.table :is(th, td):not(:last-child) {
+  padding-inline-end: calc(var(--font-size-base) * 1.5);
+}
+
+.table-responsive > .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead :is(th, td) {
+  border-bottom-color: var(--border-strong, var(--input));
+  padding-block: calc(var(--font-size-base) / 2);
+  line-height: var(--font-size-base);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+.table tbody :is(th, td) {
+  padding-block: calc(var(--font-size-base) * 0.625);
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 8px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align="right"]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align="center"]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+.widget {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  box-shadow: 0 0 0 0.5px var(--border-strong, var(--border));
+  color: var(--foreground);
+  background: var(--background);
+}
+
+#widget > :not(.card, .widget, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  border: 1px solid var(--border);
+  corner-shape: var(--corner-shape);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-sans);
+  padding: 5px 12px;
+  border-color: color-mix(
+    in oklab,
+    light-dark(var(--primary-foreground), var(--foreground)) 5%,
+    transparent
+  );
+  border-radius: var(--radius-2xl);
+  color: light-dark(var(--primary-foreground), var(--foreground));
+  background: light-dark(var(--foreground), var(--popover));
+  box-shadow: 0 8px 18px rgb(15 23 42 / 20%);
+  letter-spacing: -0.15px;
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted-foreground));
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-family: var(--font-sans);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1;
+}
+
+small,
+.text-small {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls > .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls > .form-label > :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+/* Match inline alignment without overriding a containing flex or grid layout. */
+.btn,
+.nav-link,
+.form-control,
+.form-select,
+.form-range,
+.form-check {
+  vertical-align: middle;
+}
+
+.btn,
+.nav-link {
+  --btn-size: calc(12px + 2 * var(--control-spacing, 12px));
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: inherit;
+  font-family: var(--font-sans);
+  height: fit-content;
+  min-height: var(--btn-size);
+  padding-inline: var(--control-spacing, 12px);
+  border-color: transparent;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.btn {
+  border-color: var(--border);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+}
+
+/* Codex Button size="compact"; appearance stays with the button variant. */
+.btn-sm {
+  --btn-size: 24px;
+  padding-inline: 8px;
+  font-size: calc(var(--font-size-base) * 12 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 12 / 16), 1px);
+  line-height: 16px;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-link:not(:disabled):not([aria-disabled="true"]):hover {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.btn-primary {
+  border-color: var(--border);
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: border-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: border-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--muted-foreground);
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+/* Shared preview chrome; product styles stay inside each variant. */
+.viz-dotted-background {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--foreground) 14%, transparent) 0.8px,
+    transparent 0.8px
+  );
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+.viz-carousel {
+  position: relative;
+  min-width: 0;
+}
+
+.viz-carousel:has(> .viz-carousel-controls) {
+  min-height: calc(60px + var(--viz-carousel-picker-height, 0px));
+  padding-bottom: 60px;
+}
+
+.viz-carousel > [data-variant][hidden] {
+  display: none !important;
+}
+
+.viz-carousel > [data-variant] {
+  isolation: isolate;
+}
+
+.viz-carousel-controls {
+  --viz-carousel-hover: light-dark(
+    color-mix(in srgb, var(--foreground) 5.4%, transparent),
+    color-mix(in srgb, var(--foreground) 7.8%, transparent)
+  );
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  /* Leave room for the host's design-controls launcher at the trailing edge. */
+  max-width: calc(100% - 96px);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+  /* Match the settings dropdown chrome independently of the content font size. */
+  font-size: 13px;
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+/* Keep authored mockup button styles out of the shared carousel chrome. */
+.viz-carousel-controls button,
+.viz-carousel-picker > summary {
+  display: flex !important;
+  height: auto !important;
+  min-height: 30px;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px;
+  padding: 0 6px !important;
+  -webkit-app-region: no-drag;
+  border: 0 !important;
+  border-radius: 14px !important;
+  color: inherit !important;
+  background: transparent !important;
+  font: inherit !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-picker > summary {
+  position: relative;
+  isolation: isolate;
+}
+
+.viz-carousel-controls > button {
+  --icon-size: 16px;
+  width: 30px !important;
+  padding: 0 !important;
+}
+
+.viz-carousel-picker > summary {
+  padding-inline: 12px !important;
+}
+
+.viz-carousel-controls .viz-carousel-caret {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin: 0;
+  color: inherit;
+  transform: rotate(180deg);
+}
+
+.viz-carousel-controls > button > svg,
+.viz-carousel-controls .viz-carousel-caret,
+.viz-carousel-count {
+  opacity: 0.5;
+}
+
+.viz-carousel-controls > button::before,
+.viz-carousel-picker > summary::before {
+  position: absolute;
+  z-index: -1;
+  inset: 3px;
+  border-radius: 12px;
+  content: "";
+  pointer-events: none;
+}
+
+.viz-carousel-controls > button:hover::before,
+.viz-carousel-picker > summary:hover::before {
+  background: var(--viz-carousel-hover);
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-controls [data-lucide],
+.viz-carousel-controls .lucide {
+  flex-shrink: 0;
+}
+
+.viz-carousel-picker {
+  min-width: 0;
+}
+
+.viz-carousel-picker > summary {
+  min-width: 0;
+  list-style: none;
+}
+
+.viz-carousel-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.viz-carousel-count {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.viz-carousel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-carousel-options {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: 0 4px 12px light-dark(rgb(0 0 0 / 6%), rgb(0 0 0 / 25%));
+}
+
+.viz-carousel-options > button {
+  border-radius: max(0px, calc(var(--radius-lg) - 5px)) !important;
+  width: 100% !important;
+  min-height: 28px;
+  justify-content: flex-start !important;
+  padding: 4px 8px !important;
+  font-size: var(--font-size-small) !important;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.viz-carousel-options > [aria-current="true"],
+.viz-carousel-options > button:hover {
+  background: var(--viz-carousel-hover) !important;
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding-inline: calc(4px + var(--control-spacing, 12px) / 2);
+  border-color: var(--input);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--popover) 96%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.4285714286;
+}
+.form-control:is(
+  [type="file"],
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"],
+  [type="color"]
+) {
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  line-height: 18px;
+}
+.form-control:is(
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"]
+) {
+  padding-inline: var(--control-spacing, 12px);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type="file"] {
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+  padding: 0;
+}
+
+.form-control[type="file"]::file-selector-button {
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+  min-height: calc(10px + 2 * var(--control-spacing, 12px));
+  padding-inline: var(--control-spacing, 12px);
+  margin-inline-end: var(--control-spacing, 12px);
+}
+
+.form-control[type="file"]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type="color"] {
+  width: 40px;
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  resize: vertical;
+  min-height: 96px;
+  padding: 8px 10px;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: none;
+}
+.form-control:disabled {
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  opacity: 1;
+}
+.form-control[aria-invalid="true"] {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 20%, transparent);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: fit-content;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  margin: 0;
+  /* The secondary icon role is 14px at compact density and 16px at web density. */
+  --icon-size: calc(10px + var(--control-spacing, 12px) / 2);
+  /* Settings dropdowns retain a 12px inset and a 4px text-to-chevron gap. */
+  padding: 0 calc(16px + var(--icon-size)) 0 12px;
+  outline: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    );
+  background-position:
+    calc(100% - 12px - var(--icon-size) / 2) 50%,
+    calc(100% - 12px - var(--icon-size) * 0.18) 50%;
+  background-repeat: no-repeat;
+  background-size: calc(var(--icon-size) * 0.32) calc(var(--icon-size) * 0.32);
+  cursor: var(--cursor-interaction, default);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.form-select :is(option, optgroup) {
+  color: var(--popover-foreground);
+  background-color: var(--popover);
+}
+
+.form-select :is(option, optgroup):disabled {
+  color: var(--muted-foreground);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.form-select:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.form-select:disabled {
+  opacity: 0.4;
+}
+
+.form-check {
+  display: flex;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+  corner-shape: round;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  width: calc(10px + var(--control-spacing, 12px) / 2);
+  height: calc(10px + var(--control-spacing, 12px) / 2);
+  border-color: var(--border-strong, var(--input));
+  border-radius: calc(var(--radius-sm) / 2);
+  background-color: transparent;
+  color: var(--foreground);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:is(:checked, :indeterminate) {
+  border-color: var(--border-strong, var(--input));
+  background-color: color-mix(in srgb, var(--popover) 96%, transparent);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: "";
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+  background-color: var(--foreground);
+}
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:indeterminate::before {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 65%;
+  height: 6.65%;
+  margin: auto;
+  border-radius: var(--radius-full);
+  background: var(--foreground);
+  mask: none;
+  content: "";
+}
+
+.form-check-input[type="radio"] {
+  border-radius: var(--radius-full);
+  width: 16px;
+  height: 16px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--input);
+}
+
+.form-check-input[type="radio"]:checked {
+  border: 0;
+  background: radial-gradient(
+    circle,
+    var(--primary-foreground) 0 3px,
+    var(--foreground) 3px
+  );
+  box-shadow: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.form-check:not(.form-switch) .form-check-input[type="checkbox"]:focus-visible {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+.form-check:not(.form-switch) .form-check-input[type="radio"]:disabled,
+.form-check:not(.form-switch)
+  .form-check-input[type="radio"]:disabled
+  + .form-check-label {
+  opacity: 0.5;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  content: "";
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+  border-color: #fff;
+  background: #fff;
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--blue);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+  outline: none;
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--primary);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  outline: none;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: transparent;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  margin-top: -9px;
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Outline the native track and thumb, preserving the larger input hit area. */
+.form-range:focus-visible::-webkit-slider-runnable-track {
+  outline: 2px auto Highlight;
+  outline-color: -webkit-focus-ring-color;
+}
+
+.form-range::-moz-range-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+.form-range:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed="true"],
+  [aria-selected="true"],
+  .is-selected
+) {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--blue);
+}
+
+.btn.viz-tile:is([aria-pressed="true"], [aria-selected="true"], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.viz-carousel-controls :is(button, summary):focus-visible {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Web recipes are the default, including on renderers without inline style queries. */
+@supports (border-radius: if(style(--corner-shape: round): 1px; else: 2px)) {
+  /* Match the host's proportional text-sm scale at every text preference. */
+  .tooltip,
+  .viz-badge,
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 14 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 13 / 14), 1px)
+    );
+  }
+
+  .btn-sm {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 12 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 12 / 14), 1px)
+    );
+  }
+
+  .btn,
+  .nav-link,
+  .form-select {
+    border-radius: if(
+      style(--corner-shape: round): var(--radius-full); else: var(--radius-lg)
+    );
+  }
+
+  .form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+    border-radius: if(
+      style(--corner-shape: round): calc(var(--radius-sm) / 2);
+        else: calc(var(--radius-lg) * 0.4)
+    );
+  }
+
+  .tooltip {
+    font-weight: if(
+      style(--corner-shape: round): 600; else: var(--font-weight-normal)
+    );
+  }
+}
+
+@media (pointer: coarse) {
+  .viz-carousel:has(> .viz-carousel-controls) {
+    min-height: calc(76px + var(--viz-carousel-picker-height, 0px));
+    padding-bottom: 76px;
+  }
+
+  .btn,
+  .nav-link,
+  .viz-carousel-controls button,
+  .viz-carousel-picker > summary,
+  .form-control,
+  .form-select {
+    --btn-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+  .form-control:is(
+    [type="file"],
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="week"],
+    [type="time"],
+    [type="color"]
+  ) {
+    height: 44px;
+    min-height: 44px;
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+
+  .form-control[type="file"]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type="color"] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="time"],
+    [type="week"]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: "";
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget > svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html>body{padding:0}
+:root{--guide-preview-height:100dvh}</style>
+</head>
+<body>
+<style>
+#test-catalog-evidence-guide { --dg-bg:light-dark(#fff,#171717); --dg-pane:light-dark(#fafafa,#1a1a1a); --dg-text:light-dark(#18181b,#fafafa); --dg-muted:light-dark(#71717a,#a0a0a0); --dg-border:light-dark(#e4e4e7,#2e2e2e); --dg-rule:light-dark(#eee,#242424); --dg-brand:#4682b4; --dg-link:light-dark(#276594,#73a9d5); --dg-wash:light-dark(#eaf0f6,#1e2a32); color:var(--dg-text); font:14px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color-scheme:light dark; }
+#test-catalog-evidence-guide * { box-sizing:border-box; }
+#test-catalog-evidence-guide .dg-app { display:flex; flex-direction:column; height:var(--guide-preview-height,840px); min-height:0; border:1px solid var(--dg-border); background:var(--dg-bg); }
+#test-catalog-evidence-guide .dg-head { display:flex; align-items:center; gap:16px; height:48px; padding:0 18px; flex-shrink:0; border-bottom:1px solid var(--dg-border); }
+#test-catalog-evidence-guide .dg-head strong { font-size:16px; font-weight:600; }
+#test-catalog-evidence-guide .dg-review { margin-left:12px; color:var(--dg-muted); font-size:12px; }
+#test-catalog-evidence-guide .dg-head-icons { margin-left:auto; display:flex; align-items:center; gap:20px; color:var(--dg-muted); padding-right:80px; }
+#test-catalog-evidence-guide .dg-main { display:flex; min-height:0; flex:1; }
+#test-catalog-evidence-guide .dg-sidebar { width:256px; flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid var(--dg-border); }
+#test-catalog-evidence-guide .dg-search { height:48px; display:flex; align-items:center; gap:8px; padding:0 10px; border-bottom:1px solid var(--dg-border); flex-shrink:0; }
+#test-catalog-evidence-guide .dg-search input { min-width:0; width:100%; border:1px solid var(--dg-border); border-radius:6px; padding:7px 10px; background:transparent; color:var(--dg-text); font:inherit; }
+#test-catalog-evidence-guide .dg-docnav { overflow:auto; min-height:0; padding:4px 0 16px; }
+#test-catalog-evidence-guide .dg-group { margin-top:5px; padding-top:8px; border-top:1px solid var(--dg-border); }
+#test-catalog-evidence-guide .dg-group:first-child { border:0; margin:0; }
+#test-catalog-evidence-guide .dg-group-label { display:block; padding:4px 12px; text-transform:uppercase; font-size:10px; color:var(--dg-muted); font-weight:600; letter-spacing:.03em; }
+#test-catalog-evidence-guide .dg-navitem { display:block; padding:8px 12px; color:var(--dg-text); text-decoration:none; }
+#test-catalog-evidence-guide .dg-selected { border-left:2px solid var(--dg-brand); background:var(--dg-wash); color:var(--dg-link); padding-left:10px; }
+#test-catalog-evidence-guide .dg-content { min-width:0; flex:1; display:flex; flex-direction:column; }
+#test-catalog-evidence-guide .dg-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:12px; height:48px; flex-shrink:0; border-bottom:1px solid var(--dg-border); padding:0 12px; }
+#test-catalog-evidence-guide .dg-version { font-size:12px; border:1px solid var(--dg-border); border-radius:6px; padding:4px 9px; color:var(--dg-muted); }
+#test-catalog-evidence-guide .dg-version b { color:var(--dg-text); font-weight:500; }
+#test-catalog-evidence-guide button { font:inherit; color:inherit; cursor:inherit; }
+#test-catalog-evidence-guide .dg-iconbtn { border:0; background:none; padding:5px; display:inline-flex; align-items:center; border-radius:4px; color:var(--dg-muted); }
+#test-catalog-evidence-guide .dg-iconbtn:hover { background:var(--dg-wash); }
+#test-catalog-evidence-guide .dg-scroll { min-height:0; flex:1; overflow:auto; padding:24px; scroll-behavior:smooth; }
+#test-catalog-evidence-guide .dg-columns { display:grid; grid-template-columns:minmax(0,1fr) 224px; gap:32px; align-items:start; }
+#test-catalog-evidence-guide .dg-article { min-width:0; }
+#test-catalog-evidence-guide h1 { font-size:24px; line-height:1.3; margin:0 0 12px; font-weight:600; }
+#test-catalog-evidence-guide h2 { font-size:18px; font-weight:600; margin:30px 0 10px; padding-bottom:5px; border-bottom:1px solid var(--dg-rule); scroll-margin-top:12px; }
+#test-catalog-evidence-guide h3 { font-size:15px; font-weight:500; margin:0 0 8px; }
+#test-catalog-evidence-guide p { margin:8px 0; }
+#test-catalog-evidence-guide .dg-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; color:var(--dg-muted); }
+#test-catalog-evidence-guide .dg-meta span { border:1px solid var(--dg-border); border-radius:5px; padding:1px 7px; font-size:11px; }
+#test-catalog-evidence-guide .dg-intro { color:var(--dg-muted); }
+#test-catalog-evidence-guide .dg-example { border-left:2px solid var(--dg-brand); padding-left:12px; margin:18px 0; }
+#test-catalog-evidence-guide .dg-example p { margin:4px 0; }
+#test-catalog-evidence-guide .dg-onpage { position:sticky; top:0; color:var(--dg-muted); font-size:12px; }
+#test-catalog-evidence-guide .dg-onpage > p { text-transform:uppercase; font-size:10px; letter-spacing:.03em; margin:5px 0 12px; }
+#test-catalog-evidence-guide .dg-onpage a { display:block; color:inherit; text-decoration:none; padding:6px 0 6px 12px; border-left:2px solid transparent; }
+#test-catalog-evidence-guide .dg-onpage a:hover,#test-catalog-evidence-guide .dg-onpage a[aria-current] { color:var(--dg-link); border-color:var(--dg-brand); }
+#test-catalog-evidence-guide .dg-onpage small { display:block; font-size:11px; margin:24px 0 0 12px; }
+#test-catalog-evidence-guide .dg-loop { margin:14px 0 22px; max-width:500px; }
+#test-catalog-evidence-guide .dg-loop video { width:100%; display:block; border:1px solid var(--dg-border); border-radius:6px; background:#171717; }
+#test-catalog-evidence-guide .dg-loop-control { display:flex; justify-content:space-between; align-items:center; gap:12px; color:var(--dg-muted); font-size:11px; margin-top:5px; }
+#test-catalog-evidence-guide .dg-loop-control button { border:0; padding:3px 0; color:var(--dg-link); background:none; }
+#test-catalog-evidence-guide .dg-step { padding:17px 0 18px; border-bottom:1px solid var(--dg-rule); }
+#test-catalog-evidence-guide .dg-step:last-child { border-bottom:0; }
+#test-catalog-evidence-guide .dg-number { color:var(--dg-muted); display:inline-block; min-width:22px; font-variant-numeric:tabular-nums; }
+#test-catalog-evidence-guide .dg-step p { margin:4px 0 10px 22px; }
+#test-catalog-evidence-guide .dg-shot { margin:10px 0 0 22px; max-width:500px; }
+#test-catalog-evidence-guide .dg-shot button { display:block; width:100%; padding:0; border:1px solid var(--dg-border); border-radius:6px; overflow:hidden; background:#171717; }
+#test-catalog-evidence-guide .dg-shot img { display:block; width:100%; max-height:300px; object-fit:contain; object-position:left center; }
+#test-catalog-evidence-guide figcaption { color:var(--dg-muted); font-size:11px; margin-top:6px; }
+#test-catalog-evidence-guide .dg-result { padding:12px 14px; border-left:2px solid var(--dg-brand); background:var(--dg-pane); margin:18px 0; }
+#test-catalog-evidence-guide .dg-result p { margin:3px 0; }
+#test-catalog-evidence-guide code { display:inline-block; max-width:100%; box-sizing:border-box; overflow-wrap:anywhere; font:12px/1.6 ui-monospace,monospace; background:var(--dg-pane); padding:2px 5px; border:1px solid var(--dg-border); border-radius:4px; }
+#test-catalog-evidence-guide pre { margin:12px 0; padding:12px; background:var(--dg-pane); border:1px solid var(--dg-border); border-radius:6px; white-space:pre-wrap; overflow-wrap:anywhere; }
+#test-catalog-evidence-guide pre code { background:none; border:0; padding:0; }
+#test-catalog-evidence-guide .dg-config { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 18px; margin:14px 0; }
+#test-catalog-evidence-guide .dg-config dt { color:var(--dg-muted); }
+#test-catalog-evidence-guide .dg-config dd { margin:0; }
+#test-catalog-evidence-guide .dg-onpage .dg-subtoc { padding-left:24px; }
+#test-catalog-evidence-guide details { padding:12px 0; border-bottom:1px solid var(--dg-rule); }
+#test-catalog-evidence-guide summary { font-weight:500; cursor:inherit; }
+#test-catalog-evidence-guide details p { color:var(--dg-muted); }
+#test-catalog-evidence-guide .dg-return { color:var(--dg-link); text-decoration:none; display:inline-block; margin-top:22px; }
+#test-catalog-evidence-guide .dg-lightbox { position:absolute; inset:0; z-index:20; background:rgba(0,0,0,.92); display:flex; align-items:center; justify-content:center; padding:40px 16px 16px; }
+#test-catalog-evidence-guide .dg-lightbox img { max-width:100%; max-height:100%; object-fit:contain; }
+#test-catalog-evidence-guide .dg-lightbox button { position:absolute; right:14px; top:8px; background:#242424; color:#fff; border:1px solid #555; border-radius:5px; padding:5px 10px; }
+#test-catalog-evidence-guide .dg-app { position:relative; }
+#test-catalog-evidence-guide [hidden] { display:none !important; }
+#test-catalog-evidence-guide.dg-folded .dg-sidebar { display:none; }
+@media(max-width:1279px) { #test-catalog-evidence-guide .dg-columns { grid-template-columns:minmax(0,1fr); } #test-catalog-evidence-guide .dg-onpage { display:none; } }
+@media(max-width:600px) { #test-catalog-evidence-guide .dg-sidebar { display:none; } #test-catalog-evidence-guide .dg-scroll { padding:18px; } #test-catalog-evidence-guide .dg-head { padding:0 12px; } #test-catalog-evidence-guide .dg-head-icons { padding-right:0; gap:12px; } #test-catalog-evidence-guide .dg-review { display:none; } #test-catalog-evidence-guide .dg-shot { margin-left:0; } #test-catalog-evidence-guide .dg-step p { margin-left:0; } }
+@media(prefers-reduced-motion:reduce) { #test-catalog-evidence-guide .dg-scroll { scroll-behavior:auto; } }
+</style>
+<div id="test-catalog-evidence-guide" aria-label="Facilities user guide preview">
+ <div class="dg-app">
+  <header class="dg-head"><strong>Documentation</strong><span class="dg-review">Test catalog guide preview</span><div class="dg-head-icons"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-right" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M15 3v18"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bell" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg><button type="button" class="dg-iconbtn cursor-interaction" data-theme-toggle aria-label="Switch preview theme"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></button></div></header>
+  <div class="dg-main">
+   <aside class="dg-sidebar">
+    <div class="dg-search"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Collapse documentation sidebar" data-collapse><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-close" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m16 15-3-3 3-3"></path></svg></button><input type="search" placeholder="Search…" aria-label="Search documentation" data-search></div>
+    <nav class="dg-docnav" aria-label="Documentation sections"><div class="dg-group"><span class="dg-group-label">Start here</span><a class="dg-navitem" href="start-here-review.html">Start Here</a></div><div class="dg-group"><span class="dg-group-label">Set up your system</span><a class="dg-navitem" href="terminology-review.html">Terminology</a><a class="dg-navitem" href="facilities-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Facilities</a><a class="dg-navitem dg-selected" href="#dg-top" aria-current="page" title="Optional setup. Strongly recommended as you use OpenLDR.">Test catalog</a><span class="dg-navitem" title="Optional setup. Strongly recommended as you use OpenLDR.">Patients</span><span class="dg-navitem">Forms</span><span class="dg-navitem">Workflows</span></div><div class="dg-group"><span class="dg-group-label">Daily work</span><a class="dg-navitem" href="dashboard-review.html">Dashboards</a><span class="dg-navitem">Reports</span><span class="dg-navitem">Activity</span></div><div class="dg-group"><span class="dg-group-label">Build and manage</span><span class="dg-navitem">Scheduled reports with workflows</span><span class="dg-navitem">Custom Queries</span><span class="dg-navitem">Report Designer</span></div><div class="dg-group"><span class="dg-group-label">Administration</span><span class="dg-navitem">Layouts</span><span class="dg-navitem">Users and Roles</span><span class="dg-navitem">Roles</span><span class="dg-navitem">Audit</span><span class="dg-navitem">Settings</span><span class="dg-navitem">Setup checks</span><span class="dg-navitem">Laboratory</span><span class="dg-navitem">Data exposure</span><span class="dg-navitem">Distributed Sync</span><span class="dg-navitem">Connectors</span><span class="dg-navitem">Connect to SQL Server and diagnose a connection</span><span class="dg-navitem">Import from OpenLDR v1</span><span class="dg-navitem">Marketplace</span><span class="dg-navitem">Plugin cards and side panels</span><span class="dg-navitem">Authentication providers</span><span class="dg-navitem">Environment Variables</span><span class="dg-navitem">Planned upgrades</span></div><div class="dg-group"><span class="dg-group-label">Personal settings</span><a class="dg-navitem" href="preferences-review.html">Your preferences</a></div><div class="dg-group"><span class="dg-group-label">More</span><span class="dg-navitem">Deployment &amp; Developer Docs</span></div></nav>
+   </aside>
+   <section class="dg-content">
+    <div class="dg-toolbar"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Show documentation sidebar" data-expand hidden><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-open" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m14 9 3 3-3 3"></path></svg></button><span class="dg-version">Version <b>0.1.8</b></span><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg></div>
+    <div class="dg-scroll" data-reading-pane>
+     <div class="dg-columns">
+      <article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>System setup</span><span>Browse or manage terminology</span><span>About 30 minutes</span></div>
+<h1>Test catalog</h1>
+<p>Keep a shared list of tests, decide which ones this lab offers, and link the codes received from your data sources. A catalog test and a result field are different things. One test can produce several result fields.</p>
+<p><strong>This setup is optional.</strong> OpenLDR can receive and process lab data before you configure it. We strongly recommend setting it up during use. The Lab order form offers the tests enabled at this lab.</p>
+<p>Use your own test codes, names, specimens and files. The screenshots use fictional examples. No documentation sample data is required. <a href="#dg-practice">Optional practice files</a> are at the end.</p>
+<p>Reading needs <strong>Browse terminology</strong>. Changes need <strong>Manage terminology</strong>. When the catalog comes from central, this lab can change local availability, specimens and names. It cannot change the shared test definitions.</p>
+<p>The screenshots use an installation that owns its catalog. Result-field examples also use a small fictional result dictionary. Reference-band numbers are for documentation only. Use the ranges and code meanings approved for your actual tests.</p>
+<h2 id="dg-add">Add a test to your catalog</h2>
+<p>Use this for one new test when this installation owns its catalog. Search for an existing test before adding another code.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Test catalog</h3><p>Select <strong>Test catalog</strong> in the main menu on the left.</p><figure class="dg-shot dg-context-shot" data-shot-id="open-page"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Test catalog is in the main menu on the left."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:0.0%;top:-68.0%"><img class="fc-background" data-evidence="open-page" alt="Test catalog is in the main menu on the left."><img class="fc-sharp" data-evidence="open-page" alt="" aria-hidden="true" style="clip-path:inset(42.0% 81.953125% 53.5% 0.625%)"><span class="fc-ring" aria-hidden="true" style="left:0.625%;top:42.0%;width:17.421875%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Test catalog is in the main menu on the left.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the Tests actions</h3><p>Select <strong>Tests</strong>, then open the dots beside its search and table controls.</p><figure class="dg-shot dg-context-shot" data-shot-id="tests-tab"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Tests contains the catalog available to this installation."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-9.23828125%;top:0.0%"><img class="fc-background" data-evidence="tests-tab" alt="Tests contains the catalog available to this installation."><img class="fc-sharp" data-evidence="tests-tab" alt="" aria-hidden="true" style="clip-path:inset(6.125% 75.5712890625% 89.625% 20.0%)"><span class="fc-ring" aria-hidden="true" style="left:20.0%;top:6.125%;width:4.4287109375%;height:4.25%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Tests contains the catalog available to this installation.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="page-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the Tests page dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="page-actions" alt="Open the Tests page dots menu."><img class="fc-sharp" data-evidence="page-actions" alt="" aria-hidden="true" style="clip-path:inset(11.625% 1.25% 84.375% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:11.625%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Open the Tests page dots menu.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose Add test</h3><p>Select <strong>Add test</strong>. The test sheet opens.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Add test to enter one test by hand."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="add-menu" alt="Choose Add test to enter one test by hand."><img class="fc-sharp" data-evidence="add-menu" alt="" aria-hidden="true" style="clip-path:inset(16.75% 1.640625% 79.25% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:16.75%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">3</span></span></span></span></button><figcaption>Choose Add test to enter one test by hand.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Enter the code</h3><p>Enter the stable code from your own catalog. The fictional example uses <code>EXAMPLE-ALPHA</code>. Leave it empty only if the LOINC code should become the code. A saved code cannot be changed.</p><figure class="dg-shot dg-context-shot" data-shot-id="test-code"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use the stable code from your catalog. This example uses EXAMPLE-ALPHA."><span class="fc-screenshot"><span class="fc-scene" style="width:235.89714055345982%;height:235.89714055345982%;left:-135.89714055345985%;top:-13.259135542949291%"><img class="fc-background" data-evidence="test-code" alt="Use the stable code from your catalog. This example uses EXAMPLE-ALPHA."><img class="fc-sharp" data-evidence="test-code" alt="" aria-hidden="true" style="clip-path:inset(24.56640625% 1.875% 70.93359375% 59.639892578125%)"><span class="fc-ring" aria-hidden="true" style="left:59.639892578125%;top:24.56640625%;width:38.485107421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:4px">4</span></span></span></span></button><figcaption>Use the stable code from your catalog. This example uses EXAMPLE-ALPHA.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Enter the name</h3><p>Enter the name people should see. A short name is optional. The example uses <code>Example panel Alpha</code> and <code>Example Alpha</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="test-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Enter the test name people should see."><span class="fc-screenshot"><span class="fc-scene" style="width:235.89714055345982%;height:235.89714055345982%;left:-135.89714055345985%;top:-33.310392489993376%"><img class="fc-background" data-evidence="test-name" alt="Enter the test name people should see."><img class="fc-sharp" data-evidence="test-name" alt="" aria-hidden="true" style="clip-path:inset(33.06640625% 1.875% 62.43359375000001% 59.639892578125%)"><span class="fc-ring" aria-hidden="true" style="left:59.639892578125%;top:33.06640625%;width:38.485107421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:4px">5</span></span></span></span></button><figcaption>Enter the test name people should see.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="test-short-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge A short name is optional."><span class="fc-screenshot"><span class="fc-scene" style="width:235.89714055345982%;height:235.89714055345982%;left:-135.89714055345985%;top:-47.46422092320097%"><img class="fc-background" data-evidence="test-short-name" alt="A short name is optional."><img class="fc-sharp" data-evidence="test-short-name" alt="" aria-hidden="true" style="clip-path:inset(39.06640625% 1.875% 56.43359375% 59.639892578125%)"><span class="fc-ring" aria-hidden="true" style="left:59.639892578125%;top:39.06640625%;width:38.485107421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:4px">5</span></span></span></span></button><figcaption>A short name is optional.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Choose the category</h3><p>Select the category that fits this test from the configured list. Categories come from Terminology.</p><figure class="dg-shot dg-context-shot" data-shot-id="category-option"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose a category from the configured list."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-122.86458333333334%;top:-99.83333333333333%"><img class="fc-background" data-evidence="category-option" alt="Choose a category from the configured list."><img class="fc-sharp" data-evidence="category-option" alt="" aria-hidden="true" style="clip-path:inset(54.1875% 30.390625% 41.8125% 60.03906249999999%)"><span class="fc-ring" aria-hidden="true" style="left:60.03906249999999%;top:54.1875%;width:9.5703125%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Choose a category from the configured list.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Choose accepted specimens</h3><p>Tick the specimen types this test accepts. Use the configured choices for your actual test.</p><figure class="dg-shot dg-context-shot" data-shot-id="specimen"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Tick the specimen types this test accepts."><span class="fc-screenshot"><span class="fc-scene" style="width:235.89714055345982%;height:235.89714055345982%;left:-135.89714055345985%;top:-95.23339188527659%"><img class="fc-background" data-evidence="specimen" alt="Tick the specimen types this test accepts."><img class="fc-sharp" data-evidence="specimen" alt="" aria-hidden="true" style="clip-path:inset(59.56640625% 1.875% 36.43359375% 59.639892578125%)"><span class="fc-ring" aria-hidden="true" style="left:59.639892578125%;top:59.56640625%;width:38.485107421875%;height:4.0%"><span class="fc-marker" style="left:auto;right:4px">7</span></span></span></span></button><figcaption>Tick the specimen types this test accepts.</figcaption></figure></section>
+<h2 id="dg-save">Finish and save the test</h2>
+<p>Continue in the open test sheet. You can configure this lab and result fields after saving the shared definition.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Check the LOINC field</h3><p>Enter a confirmed LOINC code if you have one, or leave it blank. When LOINC is loaded, search and select a term. Here it is not loaded, so typed codes are checked for format only.</p><figure class="dg-shot dg-context-shot" data-shot-id="loinc"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge LOINC is optional. If the dictionary is absent, this installation checks typed code format only."><span class="fc-screenshot"><span class="fc-scene" style="width:235.89714055345982%;height:235.89714055345982%;left:-135.89714055345985%;top:-78.72059204653439%"><img class="fc-background" data-evidence="loinc" alt="LOINC is optional. If the dictionary is absent, this installation checks typed code format only."><img class="fc-sharp" data-evidence="loinc" alt="" aria-hidden="true" style="clip-path:inset(51.06640624999999% 1.875% 41.93359375% 59.639892578125%)"><span class="fc-ring" aria-hidden="true" style="left:59.639892578125%;top:51.06640624999999%;width:38.485107421875%;height:7.000000000000001%"><span class="fc-marker" style="left:auto;right:4px">1</span></span></span></span></button><figcaption>LOINC is optional. If the dictionary is absent, this installation checks typed code format only.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the sheet actions</h3><p>Select the dots in the test sheet, below its heading.</p><figure class="dg-shot dg-context-shot" data-shot-id="sheet-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The test sheet has its own dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-1.1770833333333333%"><img class="fc-background" data-evidence="sheet-actions" alt="The test sheet has its own dots menu."><img class="fc-sharp" data-evidence="sheet-actions" alt="" aria-hidden="true" style="clip-path:inset(17.44140625% 1.875% 79.05859375% 95.9375%)"><span class="fc-ring" aria-hidden="true" style="left:95.9375%;top:17.44140625%;width:2.1875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>The test sheet has its own dots menu.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose Save</h3><p>Select <strong>Save</strong>. New tests use Save too.</p><figure class="dg-shot dg-context-shot" data-shot-id="save-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Save creates the test. This lab can be configured afterward."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-14.166666666666666%"><img class="fc-background" data-evidence="save-menu" alt="Save creates the test. This lab can be configured afterward."><img class="fc-sharp" data-evidence="save-menu" alt="" aria-hidden="true" style="clip-path:inset(22.0625% 2.265625% 73.9375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:22.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Save creates the test. This lab can be configured afterward.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The sheet closes and the new test appears in Tests. It starts Off at this lab unless you enabled it in the sheet.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="created"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The test appears in Tests. It starts Off at this lab."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-55.187174479166664%;top:-17.5%"><img class="fc-background" data-evidence="created" alt="The test appears in Tests. It starts Off at this lab."><img class="fc-sharp" data-evidence="created" alt="" aria-hidden="true" style="clip-path:inset(24.0625% 53.64501953125001% 73.4375% 32.535400390625%)"><span class="fc-ring" aria-hidden="true" style="left:32.535400390625%;top:24.0625%;width:13.819580078124998%;height:2.5%"></span></span></span></button><figcaption>The test appears in Tests. It starts Off at this lab.</figcaption></figure>
+<h2 id="dg-enable">Make a test available at this lab</h2>
+<p>Enable the tests this lab actually performs. This changes local availability, which the Lab order form uses.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the test row actions</h3><p>Select the dots at the right end of the test row.</p><figure class="dg-shot dg-context-shot" data-shot-id="row-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use the test row dots menu for local availability."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-17.5%"><img class="fc-background" data-evidence="row-actions" alt="Use the test row dots menu for local availability."><img class="fc-sharp" data-evidence="row-actions" alt="" aria-hidden="true" style="clip-path:inset(23.3125% 1.25% 72.6875% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:23.3125%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Use the test row dots menu for local availability.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Switch on at this lab</h3><p>Select <strong>Switch on at this lab</strong>. The same action becomes Switch off at this lab for an enabled test.</p><figure class="dg-shot dg-context-shot" data-shot-id="enable-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Switch on at this lab makes this test available here."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-41.833333333333336%"><img class="fc-background" data-evidence="enable-menu" alt="Switch on at this lab makes this test available here."><img class="fc-sharp" data-evidence="enable-menu" alt="" aria-hidden="true" style="clip-path:inset(32.4375% 1.640625% 63.5625% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:32.4375%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Switch on at this lab makes this test available here.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> On at this lab reads On. Imported tests do not become enabled automatically.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="enabled"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The local availability column now reads On."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-17.5%"><img class="fc-background" data-evidence="enabled" alt="The local availability column now reads On."><img class="fc-sharp" data-evidence="enabled" alt="" aria-hidden="true" style="clip-path:inset(21.75% 5.0% 71.125% 82.265625%)"><span class="fc-ring" aria-hidden="true" style="left:82.265625%;top:21.75%;width:12.734375%;height:7.124999999999999%"></span></span></span></button><figcaption>The local availability column now reads On.</figcaption></figure>
+<h2 id="dg-local">Set this lab&#x27;s name and specimen choices</h2>
+<p>Use local settings when this lab uses a different display name or accepts fewer specimens. A lab receiving the catalog from central can still change these settings.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Edit</h3><p>Open the row dots menu and select <strong>Edit</strong>. The saved code is shown without an editable input.</p><figure class="dg-shot dg-context-shot" data-shot-id="edit-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Edit opens the catalog and local settings."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-31.166666666666664%"><img class="fc-background" data-evidence="edit-menu" alt="Edit opens the catalog and local settings."><img class="fc-sharp" data-evidence="edit-menu" alt="" aria-hidden="true" style="clip-path:inset(28.4375% 1.640625% 67.5625% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:28.4375%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Edit opens the catalog and local settings.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="fixed-code"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge An existing test keeps its code. Use its name and other editable fields for corrections."><span class="fc-screenshot"><span class="fc-scene" style="width:235.89714055345982%;height:235.89714055345982%;left:-135.89714055345985%;top:-10.310421286031042%"><img class="fc-background" data-evidence="fixed-code" alt="An existing test keeps its code. Use its name and other editable fields for corrections."><img class="fc-sharp" data-evidence="fixed-code" alt="" aria-hidden="true" style="clip-path:inset(24.56640625% 1.875% 73.43359375% 59.639892578125%)"><span class="fc-ring" aria-hidden="true" style="left:59.639892578125%;top:24.56640625%;width:38.485107421875%;height:2.0%"><span class="fc-marker" style="left:auto;right:4px">1</span></span></span></span></button><figcaption>An existing test keeps its code. Use its name and other editable fields for corrections.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check local availability</h3><p>Under <strong>This lab</strong>, use <strong>On at this lab</strong> to choose whether this lab offers the test.</p><figure class="dg-shot dg-context-shot" data-shot-id="local-enabled"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge This lab settings control whether this installation offers the test."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-112.78971354166667%;top:-166.66666666666669%"><img class="fc-background" data-evidence="local-enabled" alt="This lab settings control whether this installation offers the test."><img class="fc-sharp" data-evidence="local-enabled" alt="" aria-hidden="true" style="clip-path:inset(87.31640625% 37.547607421875% 10.18359375% 59.639892578125%)"><span class="fc-ring" aria-hidden="true" style="left:59.639892578125%;top:87.31640625%;width:2.8125%;height:2.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>This lab settings control whether this installation offers the test.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check local specimens</h3><p>Keep the specimen types this lab accepts. The local choices can narrow the catalog list. Keeping every specimen follows the catalog list.</p><figure class="dg-shot dg-context-shot" data-shot-id="local-specimen"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge This lab can narrow the catalog specimen choices."><span class="fc-screenshot"><span class="fc-scene" style="width:235.89714055345982%;height:235.89714055345982%;left:-135.89714055345985%;top:-135.89714055345985%"><img class="fc-background" data-evidence="local-specimen" alt="This lab can narrow the catalog specimen choices."><img class="fc-sharp" data-evidence="local-specimen" alt="" aria-hidden="true" style="clip-path:inset(91.31640625% 1.875% 4.68359375% 59.639892578125%)"><span class="fc-ring" aria-hidden="true" style="left:59.639892578125%;top:91.31640625%;width:38.485107421875%;height:4.0%"><span class="fc-marker" style="left:auto;right:4px">3</span></span></span></span></button><figcaption>This lab can narrow the catalog specimen choices.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Enter a local name if needed</h3><p>Enter the local display name in the local-name field, or leave it blank to use the catalog name. The example uses <code>Alpha at this lab</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="local-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge A local name changes how this lab presents the test."><span class="fc-screenshot"><span class="fc-scene" style="width:235.89714055345982%;height:235.89714055345982%;left:-135.89714055345985%;top:-135.89714055345985%"><img class="fc-background" data-evidence="local-name" alt="A local name changes how this lab presents the test."><img class="fc-sharp" data-evidence="local-name" alt="" aria-hidden="true" style="clip-path:inset(95.44140625% 1.875% 0.05859375% 59.639892578125%)"><span class="fc-ring" aria-hidden="true" style="left:59.639892578125%;top:95.44140625%;width:38.485107421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:4px">4</span></span></span></span></button><figcaption>A local name changes how this lab presents the test.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Save the local settings</h3><p>Open the sheet dots menu and select <strong>Save</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="local-save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Save stores the local settings alongside the existing test."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-10.5%"><img class="fc-background" data-evidence="local-save" alt="Save stores the local settings alongside the existing test."><img class="fc-sharp" data-evidence="local-save" alt="" aria-hidden="true" style="clip-path:inset(20.6875% 2.265625% 75.3125% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:20.6875%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Save stores the local settings alongside the existing test.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The lab settings are saved without changing the test code.</p></div>
+<h2 id="dg-find">Find and export tests</h2>
+<p>Search before creating another test. You can also export active catalog tests for review or later import.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Search by code or name</h3><p>Use <strong>Search code or name</strong>. Search also matches short and local names. The example finds the test using its local name.</p><figure class="dg-shot dg-context-shot" data-shot-id="search"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Search can find a test by its catalog or local name."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-28.333333333333332%;top:0.0%"><img class="fc-background" data-evidence="search" alt="Search can find a test by its catalog or local name."><img class="fc-sharp" data-evidence="search" alt="" aria-hidden="true" style="clip-path:inset(11.625% 61.25000000000001% 84.375% 20.0%)"><span class="fc-ring" aria-hidden="true" style="left:20.0%;top:11.625%;width:18.75%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Search can find a test by its catalog or local name.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read the matching row</h3><p>Check the code and catalog name before editing. The test keeps its catalog name even when a local name matched your search.</p><figure class="dg-shot dg-context-shot" data-shot-id="search-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The matching test remains visible under its catalog name."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-55.30110677083333%;top:-15.5%"><img class="fc-background" data-evidence="search-result" alt="The matching test remains visible under its catalog name."><img class="fc-sharp" data-evidence="search-result" alt="" aria-hidden="true" style="clip-path:inset(23.3125% 53.52905273437501% 74.1875% 32.5048828125%)"><span class="fc-ring" aria-hidden="true" style="left:32.5048828125%;top:23.3125%;width:13.966064453124998%;height:2.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>The matching test remains visible under its catalog name.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose Export CSV when you need a file</h3><p>Clear the search if you no longer need it. Open the Tests dots menu and select <strong>Export CSV</strong> to download active catalog tests. A central-managed lab can export too.</p><figure class="dg-shot dg-context-shot" data-shot-id="export"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Export CSV downloads active catalog tests in an importable format."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-21.333333333333336%"><img class="fc-background" data-evidence="export" alt="Export CSV downloads active catalog tests in an importable format."><img class="fc-sharp" data-evidence="export" alt="" aria-hidden="true" style="clip-path:inset(24.75% 1.640625% 71.25% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:24.75%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">3</span></span></span></span></button><figcaption>Export CSV downloads active catalog tests in an importable format.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The browser downloads a CSV in the columns the import wizard understands. Export contains active catalog tests, not just a visible row.</p></div>
+<h2 id="dg-import">Choose and map your test-list file</h2>
+<p>Use an import when you have a list in CSV or Excel .xlsx format. Tests match by code. An import does not retire tests absent from the file or change local lab settings.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Import</h3><p>On Tests, open the page dots menu and select <strong>Import</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="page-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the Tests page dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="page-actions" alt="Open the Tests page dots menu."><img class="fc-sharp" data-evidence="page-actions" alt="" aria-hidden="true" style="clip-path:inset(11.625% 1.25% 84.375% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:11.625%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Open the Tests page dots menu.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="import-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Import opens the file review wizard."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-10.666666666666668%"><img class="fc-background" data-evidence="import-menu" alt="Import opens the file review wizard."><img class="fc-sharp" data-evidence="import-menu" alt="" aria-hidden="true" style="clip-path:inset(20.75% 1.640625% 75.25% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:20.75%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Import opens the file review wizard.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose your file</h3><p>Select the file area and choose your own CSV or XLSX file. The wizard reads it and opens <strong>Step 2 of 4: Columns</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-file"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose your own CSV or XLSX file. Nothing is written before Apply."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-81.77083333333334%;top:-15.34375%"><img class="fc-background" data-evidence="import-file" alt="Choose your own CSV or XLSX file. Nothing is written before Apply."><img class="fc-sharp" data-evidence="import-file" alt="" aria-hidden="true" style="clip-path:inset(24.44140625% 50.546875% 75.43359375% 49.375%)"><span class="fc-ring" aria-hidden="true" style="left:49.375%;top:24.44140625%;width:0.078125%;height:0.125%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Choose your own CSV or XLSX file. Nothing is written before Apply.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check the Name column</h3><p>Check every suggested column. Name is required. Correct a field using its selector beside the label.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-columns"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Check the suggested column assignments. Name is required."><span class="fc-screenshot"><span class="fc-scene" style="width:229.64146553415748%;height:229.64146553415748%;left:-129.6414655341575%;top:-37.990356852521515%"><img class="fc-background" data-evidence="import-columns" alt="Check the suggested column assignments. Name is required."><img class="fc-sharp" data-evidence="import-columns" alt="" aria-hidden="true" style="clip-path:inset(36.06640625% 1.875% 59.43359375% 58.48510742187501%)"><span class="fc-ring" aria-hidden="true" style="left:58.48510742187501%;top:36.06640625%;width:39.639892578125%;height:4.5%"><span class="fc-marker" style="left:auto;right:4px">3</span></span></span></span></button><figcaption>Check the suggested column assignments. Name is required.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check absent and empty columns</h3><p><strong>Not in the file</strong> leaves an existing field unchanged. An empty cell in a selected column clears that field. Do not map an empty column unless that is intended.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-missing-column"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Not in the file leaves an existing field unchanged. An empty cell in a mapped column clears it."><span class="fc-screenshot"><span class="fc-scene" style="width:229.64146553415748%;height:229.64146553415748%;left:-129.6414655341575%;top:-65.54733271662042%"><img class="fc-background" data-evidence="import-missing-column" alt="Not in the file leaves an existing field unchanged. An empty cell in a mapped column clears it."><img class="fc-sharp" data-evidence="import-missing-column" alt="" aria-hidden="true" style="clip-path:inset(48.06640625% 1.875% 47.43359375% 58.48510742187501%)"><span class="fc-ring" aria-hidden="true" style="left:58.48510742187501%;top:48.06640625%;width:39.639892578125%;height:4.5%"><span class="fc-marker" style="left:auto;right:4px">4</span></span></span></span></button><figcaption>Not in the file leaves an existing field unchanged. An empty cell in a mapped column clears it.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Continue to Values</h3><p>Open the import sheet dots menu and select <strong>Next</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-next-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Next is in the import sheet dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-1.1770833333333333%"><img class="fc-background" data-evidence="import-next-actions" alt="Next is in the import sheet dots menu."><img class="fc-sharp" data-evidence="import-next-actions" alt="" aria-hidden="true" style="clip-path:inset(17.44140625% 1.875% 79.05859375% 95.9375%)"><span class="fc-ring" aria-hidden="true" style="left:95.9375%;top:17.44140625%;width:2.1875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Next is in the import sheet dots menu.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="import-next"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Next checks category and specimen values."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-24.833333333333332%"><img class="fc-background" data-evidence="import-next" alt="Next checks category and specimen values."><img class="fc-sharp" data-evidence="import-next" alt="" aria-hidden="true" style="clip-path:inset(26.0625% 2.265625% 69.9375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:26.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Next checks category and specimen values.</figcaption></figure></section>
+<h2 id="dg-values">Resolve values and review the import</h2>
+<p>The Values step lists category or specimen text that matched no configured choice. Decide what each text means before applying the file.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Find unrecognised values</h3><p>Read the text and affected row count. A value left <strong>Not chosen</strong> causes its row to be refused. This example has an unrecognised category.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-unknown"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Unrecognised category text needs a decision before its row can be imported."><span class="fc-screenshot"><span class="fc-scene" style="width:262.55568731771416%;height:262.55568731771416%;left:-162.55568731771416%;top:-48.63273613025223%"><img class="fc-background" data-evidence="import-unknown" alt="Unrecognised category text needs a decision before its row can be imported."><img class="fc-sharp" data-evidence="import-unknown" alt="" aria-hidden="true" style="clip-path:inset(35.31640625% 1.875% 60.18359375% 63.944091796875%)"><span class="fc-ring" aria-hidden="true" style="left:63.944091796875%;top:35.31640625%;width:34.180908203125%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Unrecognised category text needs a decision before its row can be imported.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the correct category</h3><p>Select an existing category with the same meaning. Choose <strong>Add as a new category</strong> only when a new category is intended.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-new-category"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose an existing category, or Add as a new category when the meaning is new."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-140.56477864583334%;top:-127.16666666666667%"><img class="fc-background" data-evidence="import-new-category" alt="Choose an existing category, or Add as a new category when the meaning is new."><img class="fc-sharp" data-evidence="import-new-category" alt="" aria-hidden="true" style="clip-path:inset(64.4375% 21.412353515625% 31.5625% 64.3359375%)"><span class="fc-ring" aria-hidden="true" style="left:64.3359375%;top:64.4375%;width:14.251708984375%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Choose an existing category, or Add as a new category when the meaning is new.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check a new category code</h3><p>When adding a category, check or change its generated code. This example adds a fictional category. Resolve unmatched specimens through their choices too.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-category-code"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Check the suggested code before adding the category."><span class="fc-screenshot"><span class="fc-scene" style="width:262.55568731771416%;height:262.55568731771416%;left:-162.55568731771416%;top:-63.073298932726516%"><img class="fc-background" data-evidence="import-category-code" alt="Check the suggested code before adding the category."><img class="fc-sharp" data-evidence="import-category-code" alt="" aria-hidden="true" style="clip-path:inset(40.81640625% 1.875% 54.68359375% 63.944091796875%)"><span class="fc-ring" aria-hidden="true" style="left:63.944091796875%;top:40.81640625%;width:34.180908203125%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Check the suggested code before adding the category.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Continue to Review</h3><p>Open the sheet dots menu and select <strong>Next</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-values-next"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Next builds the reviewed counts with your value decisions."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-24.833333333333332%"><img class="fc-background" data-evidence="import-values-next" alt="Next builds the reviewed counts with your value decisions."><img class="fc-sharp" data-evidence="import-values-next" alt="" aria-hidden="true" style="clip-path:inset(26.0625% 2.265625% 69.9375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:26.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Next builds the reviewed counts with your value decisions.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Read the counts and warnings</h3><p>Check New, Changed, Unchanged and Refused, any refusal reasons, and Categories to add. Use Back in the dots menu if you need to correct the file decisions.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-review"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Read the new, changed, unchanged and refused counts, plus any categories to add."><span class="fc-screenshot"><span class="fc-scene" style="width:177.53120665742026%;height:177.53120665742026%;left:-77.53120665742024%;top:-13.14147018030513%"><img class="fc-background" data-evidence="import-review" alt="Read the new, changed, unchanged and refused counts, plus any categories to add."><img class="fc-sharp" data-evidence="import-review" alt="" aria-hidden="true" style="clip-path:inset(22.56640625% 0.0% 51.43359374999999% 47.578125%)"><span class="fc-ring" aria-hidden="true" style="left:47.578125%;top:22.56640625%;width:52.42187499999999%;height:26.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">5</span></span></span></span></button><figcaption>Read the new, changed, unchanged and refused counts, plus any categories to add.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Choose Apply</h3><p>When the review matches your intention, open the sheet dots menu and select <strong>Apply</strong>. Nothing is written before this action.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-apply"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Apply writes only after you have reviewed the import."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-24.833333333333332%"><img class="fc-background" data-evidence="import-apply" alt="Apply writes only after you have reviewed the import."><img class="fc-sharp" data-evidence="import-apply" alt="" aria-hidden="true" style="clip-path:inset(26.0625% 2.265625% 69.9375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:26.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Apply writes only after you have reviewed the import.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The sheet closes and imported tests appear. They start Off at this lab. Importing the identical file again reports unchanged rows, without duplicates.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="import-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Imported tests appear in Tests and start Off at this lab."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-53.108723958333336%;top:-37.833333333333336%"><img class="fc-background" data-evidence="import-result" alt="Imported tests appear in Tests and start Off at this lab."><img class="fc-sharp" data-evidence="import-result" alt="" aria-hidden="true" style="clip-path:inset(31.6875% 54.317626953125% 65.8125% 31.649169921874996%)"><span class="fc-ring" aria-hidden="true" style="left:31.649169921874996%;top:31.6875%;width:14.033203124999998%;height:2.5%"></span></span></span></button><figcaption>Imported tests appear in Tests and start Off at this lab.</figcaption></figure>
+<figure class="dg-shot dg-context-shot" data-shot-id="repeat-review"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The identical file is recognised as unchanged rather than creating duplicate tests."><span class="fc-screenshot"><span class="fc-scene" style="width:177.53120665742026%;height:177.53120665742026%;left:-77.53120665742024%;top:-12.697642163661582%"><img class="fc-background" data-evidence="repeat-review" alt="The identical file is recognised as unchanged rather than creating duplicate tests."><img class="fc-sharp" data-evidence="repeat-review" alt="" aria-hidden="true" style="clip-path:inset(22.56640625% 0.0% 51.93359374999999% 47.578125%)"><span class="fc-ring" aria-hidden="true" style="left:47.578125%;top:22.56640625%;width:52.42187499999999%;height:25.5%"></span></span></span></button><figcaption>The identical file is recognised as unchanged rather than creating duplicate tests.</figcaption></figure>
+<h2 id="dg-parameters">Choose the result fields for a test</h2>
+<p>Do this when people will enter results through this test. Choices come from the installed result dictionary. If none are available, import your system's dictionary first. <a href="terminology-review.html">Terminology</a> explains code lists and <a href="start-here-review.html">Start here</a> explains the CLI. Optional practice includes a fictional dictionary.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the test and choose its result fields</h3><p>Choose Edit from the test row menu. Tick the fields this test produces under its result parameters.</p><figure class="dg-shot dg-context-shot" data-shot-id="edit-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Edit opens the catalog and local settings."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-31.166666666666664%"><img class="fc-background" data-evidence="edit-menu" alt="Edit opens the catalog and local settings."><img class="fc-sharp" data-evidence="edit-menu" alt="" aria-hidden="true" style="clip-path:inset(28.4375% 1.640625% 67.5625% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:28.4375%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Edit opens the catalog and local settings.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="parameter-choice"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Tick the result fields that this test produces. Choices come from your result dictionary."><span class="fc-screenshot"><span class="fc-scene" style="width:235.89714055345982%;height:235.89714055345982%;left:-135.89714055345985%;top:-124.72053445445907%"><img class="fc-background" data-evidence="parameter-choice" alt="Tick the result fields that this test produces. Choices come from your result dictionary."><img class="fc-sharp" data-evidence="parameter-choice" alt="" aria-hidden="true" style="clip-path:inset(72.06640625% 1.875% 23.93359375% 59.639892578125%)"><span class="fc-ring" aria-hidden="true" style="left:59.639892578125%;top:72.06640625%;width:38.485107421875%;height:4.0%"><span class="fc-marker" style="left:auto;right:4px">1</span></span></span></span></button><figcaption>Tick the result fields that this test produces. Choices come from your result dictionary.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose each result type</h3><p>Choose <strong>Numeric</strong>, <strong>Coded</strong> or <strong>Text</strong> for each selected result field. A coded field also needs its configured value set. The example uses Numeric.</p><figure class="dg-shot dg-context-shot" data-shot-id="parameter-type"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Numeric, Coded or Text for the result field."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-130.70638020833334%;top:-160.17708333333334%"><img class="fc-background" data-evidence="parameter-type" alt="Choose Numeric, Coded or Text for the result field."><img class="fc-sharp" data-evidence="parameter-type" alt="" aria-hidden="true" style="clip-path:inset(76.81640625% 26.610107421875% 19.18359375% 62.139892578125%)"><span class="fc-ring" aria-hidden="true" style="left:62.139892578125%;top:76.81640625%;width:11.25%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Choose Numeric, Coded or Text for the result field.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open the numeric field actions</h3><p>For a numeric field needing a reference band, select the dots beside its result-type selector.</p><figure class="dg-shot dg-context-shot" data-shot-id="parameter-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Numeric fields have their own range actions."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-150.70638020833334%;top:-160.17708333333334%"><img class="fc-background" data-evidence="parameter-actions" alt="Numeric fields have their own range actions."><img class="fc-sharp" data-evidence="parameter-actions" alt="" aria-hidden="true" style="clip-path:inset(76.81640625% 23.485107421875% 19.18359375% 74.014892578125%)"><span class="fc-ring" aria-hidden="true" style="left:74.014892578125%;top:76.81640625%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Numeric fields have their own range actions.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose Add a range</h3><p>Select <strong>Add a range</strong>. A reference-band form appears below the result field.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-range"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Add a range creates one reference band for this result field."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-137.39583333333334%;top:-166.66666666666669%"><img class="fc-background" data-evidence="add-range" alt="Add a range creates one reference band for this result field."><img class="fc-sharp" data-evidence="add-range" alt="" aria-hidden="true" style="clip-path:inset(81.9375% 23.8671875% 14.0625% 64.4140625%)"><span class="fc-ring" aria-hidden="true" style="left:64.4140625%;top:81.9375%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Add a range creates one reference band for this result field.</figcaption></figure></section>
+<h2 id="dg-ranges">Set the reference band and save</h2>
+<p>Use the bounds approved for your test, method and population. The example band and numbers are fictional and must not be used as clinical ranges.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Name the band</h3><p>Enter a name that identifies this reference band. The example uses <code>Example band only</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="range-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Name the reference band. This fictional band is for documentation only."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="range-name" alt="Name the reference band. This fictional band is for documentation only."><img class="fc-sharp" data-evidence="range-name" alt="" aria-hidden="true" style="clip-path:inset(83.19140625% 5.390625% 12.80859375% 67.896728515625%)"><span class="fc-ring" aria-hidden="true" style="left:67.896728515625%;top:83.19140625%;width:26.712646484375004%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Name the reference band. This fictional band is for documentation only.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Enter the approved bounds</h3><p>Enter the lower and upper bounds for your actual test. Blank bounds are open. The screenshot's 1 and 10 are documentation values only.</p><figure class="dg-shot dg-context-shot" data-shot-id="range-bounds"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use the lower and upper bounds approved for your actual method. The numbers here are fictional."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="range-bounds" alt="Use the lower and upper bounds approved for your actual method. The numbers here are fictional."><img class="fc-sharp" data-evidence="range-bounds" alt="" aria-hidden="true" style="clip-path:inset(88.19140625% 21.0400390625% 7.808593749999999% 67.896728515625%)"><img class="fc-sharp" data-evidence="range-bounds" alt="" aria-hidden="true" style="clip-path:inset(88.19140625% 5.390625% 7.808593749999999% 83.546142578125%)"><span class="fc-ring" aria-hidden="true" style="left:67.896728515625%;top:88.19140625%;width:11.063232421875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span><span class="fc-ring" aria-hidden="true" style="left:83.546142578125%;top:88.19140625%;width:11.063232421875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Use the lower and upper bounds approved for your actual method. The numbers here are fictional.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Enter the unit</h3><p>Set the unit used by this band. Use the same meaning and scale as the actual result.</p><figure class="dg-shot dg-context-shot" data-shot-id="range-unit"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Set the unit used by this reference band."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-145.80891927083331%;top:-166.66666666666669%"><img class="fc-background" data-evidence="range-unit" alt="Set the unit used by this reference band."><img class="fc-sharp" data-evidence="range-unit" alt="" aria-hidden="true" style="clip-path:inset(93.19140625% 21.0400390625% 2.80859375% 67.896728515625%)"><span class="fc-ring" aria-hidden="true" style="left:67.896728515625%;top:93.19140625%;width:11.063232421875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Set the unit used by this reference band.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check sex and age restrictions</h3><p>Set any sex or age limits that apply. An unrestricted band should have no such restriction.</p><figure class="dg-shot dg-context-shot" data-shot-id="range-context"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Sex and age limits restrict who this band applies to. Leave them open only for an unrestricted band."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="range-context" alt="Sex and age limits restrict who this band applies to. Leave them open only for an unrestricted band."><img class="fc-sharp" data-evidence="range-context" alt="" aria-hidden="true" style="clip-path:inset(93.19140625% 5.390625% 2.80859375% 83.546142578125%)"><span class="fc-ring" aria-hidden="true" style="left:83.546142578125%;top:93.19140625%;width:11.063232421875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Sex and age limits restrict who this band applies to. Leave them open only for an unrestricted band.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Save the test</h3><p>Open the test sheet dots menu and select <strong>Save</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="parameter-save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Save stores the selected result fields and reference bands."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-14.166666666666666%"><img class="fc-background" data-evidence="parameter-save" alt="Save stores the selected result fields and reference bands."><img class="fc-sharp" data-evidence="parameter-save" alt="" aria-hidden="true" style="clip-path:inset(22.0625% 2.265625% 73.9375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:22.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Save stores the selected result fields and reference bands.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The selected fields, result types and reference bands are saved with the test.</p></div>
+<h2 id="dg-map">Link a received test code to the catalog</h2>
+<p>Do this after your normal lab data has arrived. If Observed is empty, you can build the catalog now and return later. Enabling a test at this lab and mapping a received code are separate actions.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Observed</h3><p>Select <strong>Observed</strong> at the top. Tests lists the codes received with orders.</p><figure class="dg-shot dg-context-shot" data-shot-id="observed-tab"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Observed lists test and result codes received from your data sources."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-46.521809895833336%;top:0.0%"><img class="fc-background" data-evidence="observed-tab" alt="Observed lists test and result codes received from your data sources."><img class="fc-sharp" data-evidence="observed-tab" alt="" aria-hidden="true" style="clip-path:inset(6.25% 60.49560546875% 89.75% 32.886962890625%)"><span class="fc-ring" aria-hidden="true" style="left:32.886962890625%;top:6.25%;width:6.617431640625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Observed lists test and result codes received from your data sources.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="observed-test-row"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Each source code shows its current catalog mapping."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-14.7802734375%;top:-20.166666666666664%"><img class="fc-background" data-evidence="observed-test-row" alt="Each source code shows its current catalog mapping."><img class="fc-sharp" data-evidence="observed-test-row" alt="" aria-hidden="true" style="clip-path:inset(22.75% 70.164794921875% 70.125% 18.75%)"><span class="fc-ring" aria-hidden="true" style="left:18.75%;top:22.75%;width:11.085205078125%;height:7.124999999999999%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Each source code shows its current catalog mapping.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Map to catalog test</h3><p>Open the received-code row dots menu and select <strong>Map to catalog test</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="observed-row-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the dots on the source-code row."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-20.166666666666664%"><img class="fc-background" data-evidence="observed-row-actions" alt="Open the dots on the source-code row."><img class="fc-sharp" data-evidence="observed-row-actions" alt="" aria-hidden="true" style="clip-path:inset(24.3125% 1.25% 71.6875% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:24.3125%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Open the dots on the source-code row.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="map-test-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Map to catalog test opens the destination picker."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-33.83333333333333%"><img class="fc-background" data-evidence="map-test-menu" alt="Map to catalog test opens the destination picker."><img class="fc-sharp" data-evidence="map-test-menu" alt="" aria-hidden="true" style="clip-path:inset(29.4375% 1.640625% 66.5625% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:29.4375%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Map to catalog test opens the destination picker.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open the destination selector</h3><p>Select <strong>Choose a catalog test</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="map-picker"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose a catalog test is the destination selector."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-42.84375%"><img class="fc-background" data-evidence="map-picker" alt="Choose a catalog test is the destination selector."><img class="fc-sharp" data-evidence="map-picker" alt="" aria-hidden="true" style="clip-path:inset(32.56640625% 1.875% 62.93359375000001% 69.04052734375%)"><span class="fc-ring" aria-hidden="true" style="left:69.04052734375%;top:32.56640625%;width:29.08447265625%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Choose a catalog test is the destination selector.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Search the catalog</h3><p>In <strong>Search catalog tests</strong>, search for the test this source code actually represents.</p><figure class="dg-shot dg-context-shot" data-shot-id="map-search"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Search for the catalog test that this source code actually means."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-59.166666666666664%"><img class="fc-background" data-evidence="map-search" alt="Search for the catalog test that this source code actually means."><img class="fc-sharp" data-evidence="map-search" alt="" aria-hidden="true" style="clip-path:inset(38.6875% 2.57568359375% 56.8125% 69.74609375%)"><span class="fc-ring" aria-hidden="true" style="left:69.74609375%;top:38.6875%;width:27.67822265625%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Search for the catalog test that this source code actually means.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Select the correct test</h3><p>Choose the matching catalog test. Check its code as well as its name.</p><figure class="dg-shot dg-context-shot" data-shot-id="map-target"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Select the matching catalog test."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-74.5%"><img class="fc-background" data-evidence="map-target" alt="Select the matching catalog test."><img class="fc-sharp" data-evidence="map-target" alt="" aria-hidden="true" style="clip-path:inset(44.6875% 2.26318359375% 51.31250000000001% 69.43359375%)"><span class="fc-ring" aria-hidden="true" style="left:69.43359375%;top:44.6875%;width:28.30322265625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Select the matching catalog test.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Save the mapping</h3><p>Open the mapping sheet dots menu and select <strong>Save</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="map-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The mapping sheet has its own dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-1.1770833333333333%"><img class="fc-background" data-evidence="map-actions" alt="The mapping sheet has its own dots menu."><img class="fc-sharp" data-evidence="map-actions" alt="" aria-hidden="true" style="clip-path:inset(17.44140625% 1.875% 79.05859375% 95.9375%)"><span class="fc-ring" aria-hidden="true" style="left:95.9375%;top:17.44140625%;width:2.1875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>The mapping sheet has its own dots menu.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="map-save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Save writes the mapping used by reports."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-14.166666666666666%"><img class="fc-background" data-evidence="map-save" alt="Save writes the mapping used by reports."><img class="fc-sharp" data-evidence="map-save" alt="" aria-hidden="true" style="clip-path:inset(22.0625% 2.265625% 73.9375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:22.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Save writes the mapping used by reports.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The received code shows its Catalog test. Reports can count the source code through this catalog identity.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="mapped-test"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The source code now shows its catalog test."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-111.87988281250001%;top:-18.166666666666668%"><img class="fc-background" data-evidence="mapped-test" alt="The source code now shows its catalog test."><img class="fc-sharp" data-evidence="mapped-test" alt="" aria-hidden="true" style="clip-path:inset(24.3125% 32.060546875% 73.1875% 53.470458984375%)"><span class="fc-ring" aria-hidden="true" style="left:53.470458984375%;top:24.3125%;width:14.468994140625%;height:2.5%"></span></span></span></button><figcaption>The source code now shows its catalog test.</figcaption></figure>
+<h2 id="dg-match">Match received result codes to the dictionary</h2>
+<p>Result codes identify individual results. They are different from test codes. Exact-code matching is useful when the source and your result dictionary use the same codes. Existing mappings and ambiguous codes are left alone.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Results in Observed</h3><p>Select <strong>Results</strong> to see received result codes.</p><figure class="dg-shot dg-context-shot" data-shot-id="results-toggle"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Results switches Observed from test codes to result codes."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-92.08984375%;top:0.0%"><img class="fc-background" data-evidence="results-toggle" alt="Results switches Observed from test codes to result codes."><img class="fc-sharp" data-evidence="results-toggle" alt="" aria-hidden="true" style="clip-path:inset(12.125% 43.955078125% 83.875% 50.5224609375%)"><span class="fc-ring" aria-hidden="true" style="left:50.5224609375%;top:12.125%;width:5.5224609375%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Results switches Observed from test codes to result codes.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="result-code-row"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Result codes are separate from test codes."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-16.354166666666668%;top:-20.166666666666664%"><img class="fc-background" data-evidence="result-code-row" alt="Result codes are separate from test codes."><img class="fc-sharp" data-evidence="result-code-row" alt="" aria-hidden="true" style="clip-path:inset(22.75% 68.984375% 70.125% 18.75%)"><span class="fc-ring" aria-hidden="true" style="left:18.75%;top:22.75%;width:12.265625%;height:7.124999999999999%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Result codes are separate from test codes.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Map matching codes</h3><p>Open the Observed dots menu and select <strong>Map matching codes</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="observed-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the Observed dots menu to match result codes."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="observed-actions" alt="Open the Observed dots menu to match result codes."><img class="fc-sharp" data-evidence="observed-actions" alt="" aria-hidden="true" style="clip-path:inset(12.125% 1.25% 83.875% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:12.125%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Open the Observed dots menu to match result codes.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="match-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Map matching codes checks exact matches against your result dictionary."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-33.33333333333333%"><img class="fc-background" data-evidence="match-menu" alt="Map matching codes checks exact matches against your result dictionary."><img class="fc-sharp" data-evidence="match-menu" alt="" aria-hidden="true" style="clip-path:inset(29.25% 1.634521484375% 66.75% 85.13671875%)"><span class="fc-ring" aria-hidden="true" style="left:85.13671875%;top:29.25%;width:13.228759765625%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Map matching codes checks exact matches against your result dictionary.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose the lab system</h3><p>Choose the source system whose result codes you want to match. If only one exists, it is selected automatically.</p><figure class="dg-shot dg-context-shot" data-shot-id="match-system"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the lab system whose result codes you want to match."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-26.84375%"><img class="fc-background" data-evidence="match-system" alt="Choose the lab system whose result codes you want to match."><img class="fc-sharp" data-evidence="match-system" alt="" aria-hidden="true" style="clip-path:inset(26.566406250000004% 1.875% 68.93359375% 68.79638671875%)"><span class="fc-ring" aria-hidden="true" style="left:68.79638671875%;top:26.566406250000004%;width:29.32861328125%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Choose the lab system whose result codes you want to match.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Read the proposed matches</h3><p>Check each code, destination name and result count. Matching names do not replace checking the actual code meanings.</p><figure class="dg-shot dg-context-shot" data-shot-id="match-preview"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Read the proposed exact-code matches before applying them."><span class="fc-screenshot"><span class="fc-scene" style="width:228.16399286987524%;height:228.16399286987524%;left:-128.16399286987524%;top:-33.00356506238859%"><img class="fc-background" data-evidence="match-preview" alt="Read the proposed exact-code matches before applying them."><img class="fc-sharp" data-evidence="match-preview" alt="" aria-hidden="true" style="clip-path:inset(33.06640625% 0.0% 60.30859374999999% 60.07812500000001%)"><span class="fc-ring" aria-hidden="true" style="left:60.07812500000001%;top:33.06640625%;width:39.921875%;height:6.625%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">4</span></span></span></span></button><figcaption>Read the proposed exact-code matches before applying them.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Open Matching actions</h3><p>Select the dots in the matching sheet.</p><figure class="dg-shot dg-context-shot" data-shot-id="match-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open Matching actions after checking the list."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-6.510416666666667%"><img class="fc-background" data-evidence="match-actions" alt="Open Matching actions after checking the list."><img class="fc-sharp" data-evidence="match-actions" alt="" aria-hidden="true" style="clip-path:inset(19.44140625% 1.875% 77.05859375% 95.9375%)"><span class="fc-ring" aria-hidden="true" style="left:95.9375%;top:19.44140625%;width:2.1875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Open Matching actions after checking the list.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Apply the matches</h3><p>Select <strong>Map these codes</strong>. For different codes, use Map to result field on the received-code row instead.</p><figure class="dg-shot dg-context-shot" data-shot-id="match-apply"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Map these codes applies the proposed matches."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-19.5%"><img class="fc-background" data-evidence="match-apply" alt="Map these codes applies the proposed matches."><img class="fc-sharp" data-evidence="match-apply" alt="" aria-hidden="true" style="clip-path:inset(24.0625% 2.265625% 71.9375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:24.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Map these codes applies the proposed matches.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The matched code names its Result field. If the page reports a stale warehouse copy, its dots menu offers Rebuild warehouse copy.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="matched-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The received result code now names its result field."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-110.28157552083333%;top:-18.166666666666668%"><img class="fc-background" data-evidence="matched-result" alt="The received result code now names its result field."><img class="fc-sharp" data-evidence="matched-result" alt="" aria-hidden="true" style="clip-path:inset(24.3125% 32.572021484375% 73.1875% 52.783203125%)"><span class="fc-ring" aria-hidden="true" style="left:52.783203125%;top:24.3125%;width:14.644775390625%;height:2.5%"></span></span></span></button><figcaption>The received result code now names its result field.</figcaption></figure>
+<figure class="dg-shot dg-context-shot" data-shot-id="rebuild-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Rebuild warehouse copy retries publishing mappings when the page reports a stale copy."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-22.666666666666664%"><img class="fc-background" data-evidence="rebuild-menu" alt="Rebuild warehouse copy retries publishing mappings when the page reports a stale copy."><img class="fc-sharp" data-evidence="rebuild-menu" alt="" aria-hidden="true" style="clip-path:inset(25.25% 1.634521484375% 70.75% 85.13671875%)"><span class="fc-ring" aria-hidden="true" style="left:85.13671875%;top:25.25%;width:13.228759765625%;height:4.0%"></span></span></span></button><figcaption>Rebuild warehouse copy retries publishing mappings when the page reports a stale copy.</figcaption></figure>
+<h2 id="dg-loinc">Link a result field to LOINC</h2>
+<p>Use a confirmed code for the meaning of your real field. The fictional example only demonstrates the editor. Its illustrative LOINC entry is not a recommendation for your field. A lab receiving the dictionary from central cannot change these links.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Result fields</h3><p>Select <strong>Result fields</strong>. Find the dictionary code and check its role and units.</p><figure class="dg-shot dg-context-shot" data-shot-id="result-fields-tab"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Result fields lists fields from the installed result dictionary."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-26.4208984375%;top:0.0%"><img class="fc-background" data-evidence="result-fields-tab" alt="Result fields lists fields from the installed result dictionary."><img class="fc-sharp" data-evidence="result-fields-tab" alt="" aria-hidden="true" style="clip-path:inset(6.25% 67.425537109375% 89.75% 24.7412109375%)"><span class="fc-ring" aria-hidden="true" style="left:24.7412109375%;top:6.25%;width:7.833251953125001%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Result fields lists fields from the installed result dictionary.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="result-field-row"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Result fields shows the dictionary code, role, units and LOINC link."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-74.4091796875%;top:-20.166666666666664%"><img class="fc-background" data-evidence="result-field-row" alt="Result fields shows the dictionary code, role, units and LOINC link."><img class="fc-sharp" data-evidence="result-field-row" alt="" aria-hidden="true" style="clip-path:inset(22.75% 42.14111328125% 70.125% 35.447998046875%)"><span class="fc-ring" aria-hidden="true" style="left:35.447998046875%;top:22.75%;width:22.410888671875%;height:7.124999999999999%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Result fields shows the dictionary code, role, units and LOINC link.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Link LOINC</h3><p>Open the field row dots menu and select <strong>Link LOINC</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="result-field-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the result-field row dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-20.166666666666664%"><img class="fc-background" data-evidence="result-field-actions" alt="Open the result-field row dots menu."><img class="fc-sharp" data-evidence="result-field-actions" alt="" aria-hidden="true" style="clip-path:inset(24.3125% 1.25% 71.6875% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:24.3125%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Open the result-field row dots menu.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="loinc-link-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Link LOINC opens the field link editor."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-33.83333333333333%"><img class="fc-background" data-evidence="loinc-link-menu" alt="Link LOINC opens the field link editor."><img class="fc-sharp" data-evidence="loinc-link-menu" alt="" aria-hidden="true" style="clip-path:inset(29.4375% 1.640625% 66.5625% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:29.4375%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Link LOINC opens the field link editor.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Enter or select the confirmed LOINC</h3><p>When LOINC is loaded, search and select it. Otherwise enter your confirmed code. This installation checks typed code format only. It does not prove the clinical meaning.</p><figure class="dg-shot dg-context-shot" data-shot-id="loinc-input"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Enter the confirmed LOINC code for your real result field. A typed code is checked only for format when LOINC is not loaded."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-64.17708333333333%"><img class="fc-background" data-evidence="loinc-input" alt="Enter the confirmed LOINC code for your real result field. A typed code is checked only for format when LOINC is not loaded."><img class="fc-sharp" data-evidence="loinc-input" alt="" aria-hidden="true" style="clip-path:inset(40.56640625% 1.875% 54.93359375% 66.546630859375%)"><span class="fc-ring" aria-hidden="true" style="left:66.546630859375%;top:40.56640625%;width:31.578369140625%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Enter the confirmed LOINC code for your real result field. A typed code is checked only for format when LOINC is not loaded.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Save the link</h3><p>Open the LOINC link dots menu and select <strong>Save</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="loinc-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use the LOINC link dots menu to save."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-1.1770833333333333%"><img class="fc-background" data-evidence="loinc-actions" alt="Use the LOINC link dots menu to save."><img class="fc-sharp" data-evidence="loinc-actions" alt="" aria-hidden="true" style="clip-path:inset(17.44140625% 1.875% 79.05859375% 95.9375%)"><span class="fc-ring" aria-hidden="true" style="left:95.9375%;top:17.44140625%;width:2.1875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Use the LOINC link dots menu to save.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="loinc-save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Save stores the link. Check the meaning against your own terminology before using it."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-14.166666666666666%"><img class="fc-background" data-evidence="loinc-save" alt="Save stores the link. Check the meaning against your own terminology before using it."><img class="fc-sharp" data-evidence="loinc-save" alt="" aria-hidden="true" style="clip-path:inset(22.0625% 2.265625% 73.9375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:22.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Save stores the link. Check the meaning against your own terminology before using it.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The field row shows its LOINC code. Export CSV in the Result fields menu downloads the links.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="loinc-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The result-field row now shows the saved LOINC code."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-20.833333333333336%"><img class="fc-background" data-evidence="loinc-result" alt="The result-field row now shows the saved LOINC code."><img class="fc-sharp" data-evidence="loinc-result" alt="" aria-hidden="true" style="clip-path:inset(25.687500000000004% 10.3271484375% 72.5625% 86.29638671875%)"><span class="fc-ring" aria-hidden="true" style="left:86.29638671875%;top:25.687500000000004%;width:3.3764648437500004%;height:1.7500000000000002%"></span></span></span></button><figcaption>The result-field row now shows the saved LOINC code.</figcaption></figure>
+<figure class="dg-shot dg-context-shot" data-shot-id="result-export"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Export CSV downloads the dictionary links for review or editing."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-1.3333333333333335%"><img class="fc-background" data-evidence="result-export" alt="Export CSV downloads the dictionary links for review or editing."><img class="fc-sharp" data-evidence="result-export" alt="" aria-hidden="true" style="clip-path:inset(17.25% 1.640625% 78.75% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:17.25%;width:11.71875%;height:4.0%"></span></span></span></button><figcaption>Export CSV downloads the dictionary links for review or editing.</figcaption></figure>
+<h2 id="dg-phone">Use Test catalog on a phone</h2>
+<p>The same tabs and actions remain available on a phone. Wide tables can scroll horizontally.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose the tab</h3><p>Use Tests, Result fields or Observed at the top of the page.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-tests"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Tests, Result fields and Observed remain at the top on a phone."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:0.0%"><img class="fc-background" data-evidence="phone-tests" alt="Tests, Result fields and Observed remain at the top on a phone."><img class="fc-sharp" data-evidence="phone-tests" alt="" aria-hidden="true" style="clip-path:inset(6.0344827586206895% 80.61666666666667% 89.77832512315271% 4.266666666666667%)"><span class="fc-ring" aria-hidden="true" style="left:4.266666666666667%;top:6.0344827586206895%;width:15.116666666666667%;height:4.1871921182266005%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Tests, Result fields and Observed remain at the top on a phone.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the relevant actions</h3><p>In Tests, the page dots menu is beside the search and table controls. Each row still has its own menu.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The Tests dots menu stays beside the search and table controls."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:0.0%"><img class="fc-background" data-evidence="phone-actions" alt="The Tests dots menu stays beside the search and table controls."><img class="fc-sharp" data-evidence="phone-actions" alt="" aria-hidden="true" style="clip-path:inset(11.945812807881774% 4.266666666666667% 84.11330049261085% 87.2%)"><span class="fc-ring" aria-hidden="true" style="left:87.2%;top:11.945812807881774%;width:8.533333333333333%;height:3.9408866995073892%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>The Tests dots menu stays beside the search and table controls.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose received result codes</h3><p>In Observed, choose Results when you want received result codes rather than test codes.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-results"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use Results to work with received result codes on a phone."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:-15.28%"><img class="fc-background" data-evidence="phone-results" alt="Use Results to work with received result codes on a phone."><img class="fc-sharp" data-evidence="phone-results" alt="" aria-hidden="true" style="clip-path:inset(16.871921182266007% 60.16666666666667% 79.1871921182266% 20.983333333333334%)"><span class="fc-ring" aria-hidden="true" style="left:20.983333333333334%;top:16.871921182266007%;width:18.85%;height:3.9408866995073892%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Use Results to work with received result codes on a phone.</figcaption></figure></section>
+<h2 id="dg-practice">Optional practice with fictional data</h2>
+<p>Every task above can use your own data. Use these files only in a test installation. A test can be retired, but cannot be deleted. Do not import fictional tests into a live catalog.</p>
+<ul><li><a href="test-catalog-evidence/example-tests.csv" download>Download a two-test CSV</a> for the import task.</li><li><a href="test-catalog-evidence/example-result-fields.json" download>Download a one-field result dictionary</a> for the result-field tasks.</li><li><a href="test-catalog-evidence/example-lab-data.json" download>Download four fictional lab resources</a> to populate Observed.</li></ul>
+<p>To follow the pictures exactly, add EXAMPLE-ALPHA manually first. Importing the CSV alone creates Beta and Gamma. Use your own matching names instead if you skip the practice files.</p>
+<p>For the optional dictionary and lab-data bundle, first follow <a href="start-here-review.html">Start here</a>. Put the downloaded files in the installation's <code>data</code> folder. From an example development checkout:</p>
+<pre><code>cd ~/Downloads/openldr_ce
+pnpm openldr terminology import parameters data/example-result-fields.json
+pnpm openldr ingest data/example-lab-data.json</code></pre>
+<p>For an installed Linux or macOS copy, use <code>./openldr</code> instead of <code>pnpm openldr</code>. On Windows, use <code>.\openldr.ps1</code> from your installation folder, such as <code>C:\openldr_ce</code>. Replace the example folder with your real folder. Start here shows the full platform steps.</p>
+<h2 id="dg-limits">Before changing shared catalog data</h2>
+<p>A catalog received from central has read-only shared definitions. Local availability, local specimen choices and local names remain this lab's settings.</p>
+<p>Import accepts at most 5,000 rows and 5 MB. Excel import reads the first worksheet. Tests match by code. A file does not retire tests absent from it or change local settings.</p>
+<p>Retiring a test hides it from the default active list. It can be restored. Catalog tests cannot be deleted. Use the Status filter when looking for retired tests.</p>
+<h2 id="dg-help">Troubleshooting</h2>
+<p><strong>Add test or Import is missing.</strong> Check whether the catalog comes from central and whether your account can manage terminology. Read the ownership message above the table.</p>
+<p><strong>A new test is absent from Lab order.</strong> Check On at this lab. Creating or importing a test does not automatically enable it.</p>
+<p><strong>The import refuses rows.</strong> Read each row's reason in Review. Return to Values for unchosen category or specimen text. Check Name and the code or LOINC that supplies its identity.</p>
+<p><strong>No result parameters appear.</strong> This installation has no usable result fields in its dictionary. Load the dictionary for your system first. The optional practice dictionary is only an example.</p>
+<p><strong>A code is still unmapped.</strong> Check whether you selected Tests or Results. Mapping one level does not map the other.</p>
+<p><strong>The page reports a stale warehouse copy.</strong> Open Observed actions and choose Rebuild warehouse copy. The page reports a failure if it cannot rebuild.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="terminology-review.html">Terminology</a> explains configured code lists. <a href="facilities-review.html">Facilities</a> explains facility codes. <a href="start-here-review.html">Start here</a> explains installed and development CLI use.</p>
+</article>
+
+      <nav class="dg-onpage" aria-label="On this page"><p>On this page</p><a href="#dg-add">Add a test to your catalog</a><a href="#dg-save">Finish and save the test</a><a href="#dg-enable">Make a test available at this lab</a><a href="#dg-local">Set this lab&#x27;s name and specimen choices</a><a href="#dg-find">Find and export tests</a><a href="#dg-import">Choose and map your test-list file</a><a href="#dg-values">Resolve values and review the import</a><a href="#dg-parameters">Choose the result fields for a test</a><a href="#dg-ranges">Set the reference band and save</a><a href="#dg-map">Link a received test code to the catalog</a><a href="#dg-match">Match received result codes to the dictionary</a><a href="#dg-loinc">Link a result field to LOINC</a><a href="#dg-phone">Use Test catalog on a phone</a><a href="#dg-practice">Optional practice with fictional data</a><a href="#dg-limits">Before changing shared catalog data</a><a href="#dg-help">Troubleshooting</a><a href="#dg-related">Related guides</a><small>Click any screenshot to enlarge it.</small></nav>
+     </div>
+    </div>
+   </section>
+  </div>
+  <div class="dg-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" hidden><button type="button" class="cursor-interaction" data-close-lightbox>Close</button><div data-lightbox-content></div></div>
+ </div>
+</div>
+<script type="application/json" id="facilities-evidence-assets">{"open-page":"./test-catalog-evidence/open-page.png","tests-tab":"./test-catalog-evidence/tests-tab.png","page-actions":"./test-catalog-evidence/page-actions.png","add-menu":"./test-catalog-evidence/add-menu.png","test-code":"./test-catalog-evidence/test-code.png","test-name":"./test-catalog-evidence/test-name.png","test-short-name":"./test-catalog-evidence/test-short-name.png","category-option":"./test-catalog-evidence/category-option.png","specimen":"./test-catalog-evidence/specimen.png","loinc":"./test-catalog-evidence/loinc.png","sheet-actions":"./test-catalog-evidence/sheet-actions.png","save-menu":"./test-catalog-evidence/save-menu.png","created":"./test-catalog-evidence/created.png","row-actions":"./test-catalog-evidence/row-actions.png","enable-menu":"./test-catalog-evidence/enable-menu.png","enabled":"./test-catalog-evidence/enabled.png","edit-menu":"./test-catalog-evidence/edit-menu.png","fixed-code":"./test-catalog-evidence/fixed-code.png","local-enabled":"./test-catalog-evidence/local-enabled.png","local-specimen":"./test-catalog-evidence/local-specimen.png","local-name":"./test-catalog-evidence/local-name.png","local-save":"./test-catalog-evidence/local-save.png","search":"./test-catalog-evidence/search.png","search-result":"./test-catalog-evidence/search-result.png","export":"./test-catalog-evidence/export.png","import-menu":"./test-catalog-evidence/import-menu.png","import-file":"./test-catalog-evidence/import-file.png","import-columns":"./test-catalog-evidence/import-columns.png","import-missing-column":"./test-catalog-evidence/import-missing-column.png","import-next-actions":"./test-catalog-evidence/import-next-actions.png","import-next":"./test-catalog-evidence/import-next.png","import-unknown":"./test-catalog-evidence/import-unknown.png","import-new-category":"./test-catalog-evidence/import-new-category.png","import-category-code":"./test-catalog-evidence/import-category-code.png","import-values-next":"./test-catalog-evidence/import-values-next.png","import-review":"./test-catalog-evidence/import-review.png","import-apply":"./test-catalog-evidence/import-apply.png","import-result":"./test-catalog-evidence/import-result.png","repeat-review":"./test-catalog-evidence/repeat-review.png","parameter-choice":"./test-catalog-evidence/parameter-choice.png","parameter-type":"./test-catalog-evidence/parameter-type.png","parameter-actions":"./test-catalog-evidence/parameter-actions.png","add-range":"./test-catalog-evidence/add-range.png","range-name":"./test-catalog-evidence/range-name.png","range-bounds":"./test-catalog-evidence/range-bounds.png","range-unit":"./test-catalog-evidence/range-unit.png","range-context":"./test-catalog-evidence/range-context.png","parameter-save":"./test-catalog-evidence/parameter-save.png","observed-tab":"./test-catalog-evidence/observed-tab.png","observed-test-row":"./test-catalog-evidence/observed-test-row.png","observed-row-actions":"./test-catalog-evidence/observed-row-actions.png","map-test-menu":"./test-catalog-evidence/map-test-menu.png","map-picker":"./test-catalog-evidence/map-picker.png","map-search":"./test-catalog-evidence/map-search.png","map-target":"./test-catalog-evidence/map-target.png","map-actions":"./test-catalog-evidence/map-actions.png","map-save":"./test-catalog-evidence/map-save.png","mapped-test":"./test-catalog-evidence/mapped-test.png","results-toggle":"./test-catalog-evidence/results-toggle.png","result-code-row":"./test-catalog-evidence/result-code-row.png","observed-actions":"./test-catalog-evidence/observed-actions.png","match-menu":"./test-catalog-evidence/match-menu.png","match-system":"./test-catalog-evidence/match-system.png","match-preview":"./test-catalog-evidence/match-preview.png","match-actions":"./test-catalog-evidence/match-actions.png","match-apply":"./test-catalog-evidence/match-apply.png","matched-result":"./test-catalog-evidence/matched-result.png","rebuild-menu":"./test-catalog-evidence/rebuild-menu.png","result-fields-tab":"./test-catalog-evidence/result-fields-tab.png","result-field-row":"./test-catalog-evidence/result-field-row.png","result-field-actions":"./test-catalog-evidence/result-field-actions.png","loinc-link-menu":"./test-catalog-evidence/loinc-link-menu.png","loinc-input":"./test-catalog-evidence/loinc-input.png","loinc-actions":"./test-catalog-evidence/loinc-actions.png","loinc-save":"./test-catalog-evidence/loinc-save.png","loinc-result":"./test-catalog-evidence/loinc-result.png","result-export":"./test-catalog-evidence/result-export.png","phone-tests":"./test-catalog-evidence/phone-tests.png","phone-actions":"./test-catalog-evidence/phone-actions.png","phone-results":"./test-catalog-evidence/phone-results.png"}</script>
+<script>
+(() => {
+ const root = document.getElementById('test-catalog-evidence-guide');
+ const assets = JSON.parse(document.getElementById('facilities-evidence-assets').textContent);
+ root.querySelectorAll('img[data-evidence]').forEach(img=>{img.loading='lazy';img.decoding='async';img.src=assets[img.dataset.evidence];});
+ const pane = root.querySelector('[data-reading-pane]');
+ let previewTheme='dark';
+ function applyTheme(){root.style.colorScheme=previewTheme;root.querySelector('[data-theme-toggle]').setAttribute('aria-label','Switch to '+(previewTheme==='dark'?'light':'dark')+' mode');}
+ applyTheme();
+ root.querySelector('[data-theme-toggle]').addEventListener('click',()=>{previewTheme=previewTheme==='dark'?'light':'dark';applyTheme();});
+ const box = root.querySelector('.dg-lightbox');
+ let previousFocus = null;
+ function closeBox() { box.hidden = true; root.querySelector('.dg-main').inert=false; if(previousFocus) previousFocus.focus(); }
+ root.querySelector('[data-close-lightbox]').addEventListener('click', closeBox);
+ root.addEventListener('keydown', event => { if(event.key==='Escape' && !box.hidden) closeBox(); if(event.key==='Tab' && !box.hidden) {event.preventDefault();box.querySelector('button').focus();} });
+ root.querySelectorAll('[data-enlarge]').forEach(button => button.addEventListener('click', () => {
+  previousFocus = button;
+  const content = box.querySelector('[data-lightbox-content]');
+  const frame = button.querySelector('.fc-screenshot');
+  content.replaceChildren();
+  content.className = frame ? 'dg-context-shot' : '';
+  if(frame) {
+   content.dataset.shotId = button.closest('[data-shot-id]').dataset.shotId;
+   content.append(frame.cloneNode(true));
+  } else {
+   delete content.dataset.shotId;
+   content.append(button.querySelector('img').cloneNode(true));
+  }
+  box.hidden = false;
+  root.querySelector('.dg-main').inert=true;
+  box.querySelector('button').focus();
+ }));
+ root.querySelectorAll('a[href^="#dg-"]').forEach(link => link.addEventListener('click', event => {
+  const target = root.querySelector(link.getAttribute('href'));
+  if(!target) return;
+  event.preventDefault();
+  pane.scrollTo({top:target.getBoundingClientRect().top-pane.getBoundingClientRect().top+pane.scrollTop-12,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});
+  root.querySelectorAll('.dg-onpage a').forEach(item => item.removeAttribute('aria-current'));
+  if(link.closest('.dg-onpage')) link.setAttribute('aria-current','location');
+ }));
+ root.querySelectorAll('[data-play-loop]').forEach(button => button.addEventListener('click', () => {
+  const video=button.closest('figure').querySelector('video');
+  if(video.paused) video.play().then(()=>button.textContent='Pause loop').catch(()=>button.textContent='Play loop');
+  else {video.pause();button.textContent='Play loop';}
+ }));
+ root.querySelectorAll('.dg-loop').forEach(figure=>{
+  const video=figure.querySelector('video');
+  const button=figure.querySelector('[data-play-loop]');
+  video.addEventListener('play',()=>{button.textContent='Pause loop';});
+  video.addEventListener('pause',()=>{button.textContent='Play loop';});
+  if(!matchMedia('(prefers-reduced-motion:reduce)').matches) {
+   video.autoplay=true;
+   video.play().catch(()=>{button.textContent='Play loop';});
+  }
+ });
+ const expand = root.querySelector('[data-expand]');
+ root.querySelector('[data-collapse]').addEventListener('click',()=>{root.classList.add('dg-folded');expand.hidden=false;});
+ expand.addEventListener('click',()=>{root.classList.remove('dg-folded');expand.hidden=true;});
+ root.querySelector('[data-search]').addEventListener('input',event=>{
+  const query=event.target.value.trim().toLowerCase();
+  root.querySelectorAll('.dg-navitem').forEach(item=>{item.hidden=!!query&&!item.textContent.toLowerCase().includes(query);});
+ });
+
+})();
+</script>
+<style>
+#test-catalog-evidence-guide .dg-context-shot { max-width:500px; }
+#test-catalog-evidence-guide .fc-screenshot { display:block; position:relative; width:100%; aspect-ratio:8/5; container-type:inline-size; overflow:hidden; background:var(--dg-bg); }
+#test-catalog-evidence-guide .dg-context-shot img { position:absolute; inset:0; display:block; width:100%; height:100%; max-height:none; object-fit:fill; }
+#test-catalog-evidence-guide .fc-scene { position:absolute; display:block; }
+#test-catalog-evidence-guide .fc-background { filter:blur(.25cqw); opacity:.9; }
+#test-catalog-evidence-guide .fc-sharp { pointer-events:none; }
+#test-catalog-evidence-guide .fc-ring { position:absolute; display:block; border:2px solid var(--dg-link); border-radius:3px; pointer-events:none; }
+#test-catalog-evidence-guide .fc-marker { position:absolute; right:calc(100% + 3px); top:-4px; display:flex; align-items:center; justify-content:center; width:19px; height:19px; border-radius:50%; background:var(--dg-link); color:var(--dg-bg); font:500 11px/1 Arial,sans-serif; }
+#test-catalog-evidence-guide [data-shot-id="open-dashboard"] .fc-marker { left:calc(100% + 3px); right:auto; }
+#test-catalog-evidence-guide .dg-lightbox .dg-context-shot { margin:0; width:min(100%,calc((min(var(--guide-preview-height,840px),100dvh) - 64px)*1.6)); max-width:none; }
+</style>
+<style>#test-catalog-evidence-guide .fc-marker{left:calc(100% + 3px);right:auto}#test-catalog-evidence-guide .dg-head-icons{padding-right:0}@media(max-width:900px){#test-catalog-evidence-guide .fc-marker{left:auto!important;right:4px!important}}</style>
+</body></html>

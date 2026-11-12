@@ -312,3 +312,21 @@ Never run the general sample reset commands against the populated installation.
 Next section is Test catalog. Remaining sections stay in preview until the operator approves publication.
 
 Facilities publication commit: 4e9981a0. Changelog generation and push follow this commit.
+
+## Test catalog preview checkpoint
+
+Facilities publication and its changelog were pushed through ef2273df.
+The remote main SHA was verified as ef2273df4425452ab431ac587ca5048685df8cea.
+
+Test catalog is now available at test-catalog-review.html on port 4392.
+It has 59 numbered steps and 82 image placements, with native desktop and phone captures.
+Practice files remain optional. The published Test catalog article is unchanged.
+See test-catalog-review-notes.md and test-catalog-evidence/preview-checks.json.
+The preview checks passed every source, step coverage, enlargement, anchors, mobile layout and menu consistency.
+The check returned 59 steps, 82 frames and HTTP 200.
+
+Active preview routes now come from preview-pages.json.
+Build new sections with write-guide-article.py and build-guide.py, then refresh-navigation.py.
+The capture-kit.cjs module constrains workflow writes to the isolated API on port 3006.
+The temporary capture installation remains available with its owned durable PostgreSQL volume.
+Next section is Patients. Use fictional patients in the isolated installation only.

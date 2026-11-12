@@ -42,9 +42,7 @@ def high_resolution(page, steps):
     return steps
 
 def navigation(name):
-    pages={'start-here':'start-here-review.html','dashboard':'dashboard-review.html',
-           'user-preferences':'preferences-review.html','terminology':'terminology-review.html',
-           'facilities':'facilities-review.html'}
+    pages=json.loads((ROOT/'preview-pages.json').read_text())
     current=next((k for k,v in pages.items() if v==name),None)
     result='<nav class="dg-docnav" aria-label="Documentation sections">'
     for group in json.loads((ROOT/'navigation.json').read_text()):

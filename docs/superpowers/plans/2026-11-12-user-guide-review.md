@@ -44,7 +44,7 @@ Reuse the named Facilities sibling for layout. Add its link to all active previe
 Check every screenshot loads at native resolution, every numbered step has evidence, and desktop/mobile navigation and enlargement agree.
 Save command output and limits. Commit and push the section before moving on.
 
-- [ ] Test catalog
+- [x] Test catalog
 - [ ] Patients
 - [ ] Forms
 - [ ] Workflows

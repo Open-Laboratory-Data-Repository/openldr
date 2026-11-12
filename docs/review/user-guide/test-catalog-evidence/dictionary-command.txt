@@ -1,0 +1,6 @@
+$ node packages/cli/dev.mjs terminology import parameters docs/review/user-guide/test-catalog-evidence/example-result-fields.json
+(node:128439) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+loaded 1 result parameter concepts into urn:openldr:default_result
+  result: 1
+{"level":30,"time":1794472399107,"pid":128439,"hostname":"fredrick-Station","name":"openldr","msg":"sync disabled (not configured)"}

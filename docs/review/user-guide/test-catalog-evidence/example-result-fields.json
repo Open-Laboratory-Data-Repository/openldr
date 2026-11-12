@@ -1,0 +1,8 @@
+[
+  {
+    "code": "EXAMPLE-RESULT",
+    "description": "Example numeric result",
+    "result_role": "result",
+    "units": "example units"
+  }
+]
