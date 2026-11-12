@@ -27,5 +27,6 @@
   "environment": "environment-review.html",
   "upgrading": "upgrading-review.html",
   "advanced-docs": "advanced-docs-review.html",
-  "auth-providers": "auth-providers-review.html"
+  "auth-providers": "auth-providers-review.html",
+  "forms": "forms-review.html"
 }

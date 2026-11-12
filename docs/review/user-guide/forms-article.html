@@ -1,0 +1,144 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Capture and form design</span><span>Submit lab orders and maintain form definitions</span><span>About 30 minutes</span></div>
+<h1>Forms</h1>
+<p>Forms lets staff enter data through published forms. Form authors use the builder to choose fields, preview the design and publish versions.</p>
+<p>Use your own patients, enabled catalog tests and approved form design. The pictures show fictional records and an Example request form in an isolated test installation. No documentation samples are required.</p>
+<p>Use forms allows reading form definitions. Submit forms allows data capture. Edit forms allows design changes, and Publish forms allows publication. A form also needs a valid submission configuration and an enabled workflow for incoming data before it can write data.</p>
+<p>Draft and Archived forms can still open through View/Run. Submit is disabled until the form is Published. Preview in the builder is a separate way to try a design without saving a response.</p>
+<p>The version numbers in these pictures are examples. Each publication saves a snapshot of the design and takes the next number. Your numbers depend on your own publication history. Read <a href="./start-here-review.html">Start here</a> for installation and command-line setup.</p>
+<h2 id="dg-order">Choose the patient, test and specimen for a lab order</h2>
+<p>Use this when recording an intended order through your published Lab order form. Use the patient and tests appropriate to that order.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Forms</h3><p>Select <strong>Forms</strong> in the main menu.</p>__SHOT:open-page:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Lab order</h3><p>Open the <strong>Lab order</strong> row dots and select <strong>View/Run</strong>.</p>__SHOT:order-row-actions:2____SHOT:order-run:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Search for the patient</h3><p>In <strong>Patient</strong>, search using your patient name or identifier.</p>__SHOT:order-patient-search:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Select the patient</h3><p>Check the matching record and select the correct patient.</p>__SHOT:order-patient-choice:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Search for the test</h3><p>In <strong>Tests</strong>, search for the requested catalog test. The list uses tests switched on at this lab.</p>__SHOT:order-test-search:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Choose the test</h3><p>Select the requested test. Repeat this choice only when the order needs another test.</p>__SHOT:order-test-choice:6__</section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Open its details</h3><p>Under <strong>Results</strong>, select the chosen test row to open its details.</p>__SHOT:order-test-details:7__</section>
+<section class="dg-step"><h3><span class="dg-number">8.</span> Choose the specimen</h3><p>Select the specimen type recorded for this test. Use an option from your configured list.</p>__SHOT:order-specimen:8__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The test details hold the chosen specimen. You have not submitted the order yet.</p></div>
+<h2 id="dg-submit-order">Review and submit the lab order</h2>
+<p>Use this after selecting the patient, requested tests and specimen details. Complete any other required fields in your form before submitting.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Close the test details</h3><p>Select <strong>Close</strong> at the top right of the test-details sheet.</p>__SHOT:order-details-close:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the priority</h3><p>Choose the recorded <strong>Priority</strong>. The picture uses <strong>Routine</strong>.</p>__SHOT:order-priority:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Review the order and open its actions</h3><p>Check the patient, tests and specimen details, then open the page dots at the top right.</p>__SHOT:order-submit-actions:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Submit the intended order</h3><p>Select <strong>Submit</strong> once. Wait for the result. Do not submit again merely to confirm success.</p>__SHOT:order-submit:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> <strong>Response captured.</strong> confirms the saved response. The answers remain on screen. Another Submit is another write, so use it only for an intended submission.</p></div>
+__SHOT:order-result:0__
+<h2 id="dg-new">Start a request-form design</h2>
+<p>Use this when an existing form does not collect the information your workflow needs. The builder selects a FHIR healthcare data format and a record type.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose New</h3><p>From Forms, open the page dots at the top right and select <strong>New</strong>.</p>__SHOT:page-actions:1____SHOT:new-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Name the form</h3><p>Enter a name that describes its task. The example uses <code>Example request form</code>.</p>__SHOT:builder-name:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose the FHIR version</h3><p>Open <strong>FHIR Version</strong> and choose the version your records require. The example selects <strong>R4 (most common)</strong>.</p>__SHOT:builder-fhir-version:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose the record type</h3><p>Open <strong>Resource Type</strong>, find <strong>ServiceRequest</strong> and select it for this request-form example.</p>__SHOT:builder-resource:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The available starter pack opens so you can choose its fields.</p></div>
+<h2 id="dg-pack">Choose starter-pack fields and save a draft</h2>
+<p>Use the starter pack to keep the fields your form needs. This example keeps Patient, Tests, Results, Priority and Reference Number. Your own workflow may need more fields.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Clear Requesting Clinician for this example</h3><p>Clear <strong>Requesting Clinician</strong> when this example form does not collect it.</p>__SHOT:pack-clinician:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Clear Clinical Notes for this example</h3><p>Clear <strong>Clinical Notes</strong>. Keep it selected in your own form if that workflow needs it.</p>__SHOT:pack-notes:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Clear Referring Facility for this example</h3><p>Clear <strong>Referring Facility</strong> for the five-field example.</p>__SHOT:pack-facility:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Clear Order rejection for this example</h3><p>Clear <strong>Order rejection</strong> for this example.</p>__SHOT:pack-rejection:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Check the remaining selection</h3><p>Check that <strong>Patient</strong>, <strong>Tests</strong>, <strong>Results</strong>, <strong>Priority</strong> and <strong>Reference Number</strong> remain selected. The pictured pack shows <strong>5 of 9 selected</strong>.</p>__SHOT:pack-choices:5____SHOT:pack-selected-count:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Add the fields</h3><p>Open the starter-pack dots and select <strong>Add 5 fields</strong>.</p>__SHOT:pack-actions:6____SHOT:pack-add:6__</section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Save the draft</h3><p>Open the builder dots at the top right and select <strong>Save draft</strong>.</p>__SHOT:builder-actions:7____SHOT:draft-save:7__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The form definition is saved as a Draft. Saving the design does not submit a response or publish it.</p></div>
+__SHOT:builder-fields:0__
+<h2 id="dg-field">Change the reference-field wording</h2>
+<p>Use this when the form should use wording staff recognise. This example changes Reference Number to Requisition reference.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the field editor</h3><p>Select the <strong>Reference Number</strong> field's Edit control in the builder.</p>__SHOT:field-open:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Change Display Label</h3><p>In <strong>Display Label</strong>, enter <code>Requisition reference</code>.</p>__SHOT:field-label:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Enter a placeholder</h3><p>In <strong>Placeholder</strong>, enter <code>Enter the requisition number</code>. This hint appears inside an empty input.</p>__SHOT:field-placeholder:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check Required</h3><p>Leave <strong>Required</strong> off when this answer is optional. Turn it on only when your workflow requires an answer.</p>__SHOT:field-required:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Check Enabled</h3><p>Keep <strong>Enabled</strong> on so the field appears and collects an answer.</p>__SHOT:field-enabled:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Apply the field edit</h3><p>Open the field-editor dots and select <strong>Save</strong>. This applies the edit to the current builder design.</p>__SHOT:field-actions:6____SHOT:field-save:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The field list shows Requisition reference. Use the builder's Save draft or Publish action to store the changed form.</p></div>
+__SHOT:field-updated:0__
+<h2 id="dg-preview">Try the design without capturing data</h2>
+<p>Use Preview to inspect the current builder design before publication. Its example answers do not become submitted form responses.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Preview</h3><p>Open the builder dots and select <strong>Preview</strong>.</p>__SHOT:builder-actions:1____SHOT:preview-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Preview actions</h3><p>Select the dots in the Preview sheet header.</p>__SHOT:preview-actions:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Fill example answers</h3><p>Select <strong>Fill example</strong>.</p>__SHOT:preview-fill:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Read the preview</h3><p>Check the wording, fields and example answers. The example shows the Requisition reference input.</p>__SHOT:preview-filled:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Reset the example answers</h3><p>Open Preview actions again and select <strong>Reset</strong>.</p>__SHOT:preview-reset:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Close Preview</h3><p>Select <strong>Close</strong> at the top right to return to the builder.</p>__SHOT:preview-close:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> You return to the same design. Fill example and Reset did not submit a response or save the form definition.</p></div>
+<h2 id="dg-publish">Save and publish the reviewed design</h2>
+<p>Use this when the design is ready for use. Publishing stores the current design and creates a numbered snapshot.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Save the edited draft</h3><p>Open the builder dots and select <strong>Save draft</strong>.</p>__SHOT:draft-save-edited:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Publish the design</h3><p>Open the builder dots again and select <strong>Publish</strong>.</p>__SHOT:publish-menu:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read the published version</h3><p>Check the published status and generated snapshot number in the header. You cannot type this number.</p>__SHOT:published-version:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The Forms list shows the form as Published. Submission still requires valid answers and a configured capture workflow.</p></div>
+__SHOT:published-row:0__
+<h2 id="dg-compare">Compare a changed placeholder with a published version</h2>
+<p>Use this before publishing a later change. The example changes only the reference-field placeholder; its label already matches the published version.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Change the placeholder</h3><p>Open the Requisition reference field editor. Change <strong>Placeholder</strong> to <code>Enter the reference from the paper form</code>, then use the field dots to Save.</p>__SHOT:version-draft-change:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Compare</h3><p>Open the builder dots and select <strong>Compare</strong>.</p>__SHOT:compare-menu:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose the left-hand version</h3><p>Open the left selector and choose the published snapshot to compare. The example selects <strong>v1</strong>.</p>__SHOT:compare-from:3____SHOT:compare-from-version:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check the right-hand version</h3><p>Keep <strong>Current draft</strong> in the right selector to compare the design presently in the builder. You can also choose another published version.</p>__SHOT:compare-to:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Read the reported difference</h3><p>The example reports one changed field property, <strong>Field reference-number · placeholder</strong>. It does not report a label change.</p>__SHOT:compare-result:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Close Compare with Escape</h3><p>Press Escape to return to the builder. Closing Compare does not save or publish the changed design.</p>__SHOT:compare-close:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> You have reviewed the difference while retaining the current builder edit.</p></div>
+<h2 id="dg-save-change">Save and publish a later content change</h2>
+<p>Use this after reviewing a change against a published version.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Save the changed draft</h3><p>Open the builder dots and select <strong>Save draft</strong>.</p>__SHOT:changed-save-draft:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the Draft status</h3><p>When saved content differs from the published content, the current form becomes <strong>Draft</strong>. View/Run can still open it, but Submit is disabled until publication.</p>__SHOT:changed-draft-status:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Publish the reviewed change</h3><p>Open the builder dots and select <strong>Publish</strong> when the change is ready.</p>__SHOT:changed-publish:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The form becomes Published with the next snapshot number. An unchanged save does not by itself turn a Published form into Draft.</p></div>
+<h2 id="dg-restore">Restore the content of a published snapshot</h2>
+<p>Use this when an earlier published design contains the content you want. Restoring replaces the editable form with that snapshot.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Versions</h3><p>Open the builder dots and select <strong>Versions</strong>.</p>__SHOT:versions-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Find the snapshot</h3><p>Read its version number, label and publication date. The list puts newest versions first and has pagination when needed.</p>__SHOT:versions-list:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open the version actions</h3><p>Select the dots on the snapshot you want to restore. The picture uses version 1.</p>__SHOT:version-row-actions:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose Restore</h3><p>Select <strong>Restore</strong>.</p>__SHOT:restore-menu:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Confirm the snapshot</h3><p>Read the confirmation, then select <strong>Restore</strong> to replace the current design. Cancel keeps the current design.</p>__SHOT:restore-confirm:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Check the resulting status</h3><p>The pictured restore changes the published content, so the form becomes <strong>Draft</strong>. Restoring identical content can leave a Published form Published.</p>__SHOT:restore-result:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The builder contains the restored content. A restored Draft remains viewable through View/Run, with Submit disabled until it is published.</p></div>
+<h2 id="dg-republish">Publish reviewed restored content</h2>
+<p>Use this after checking that restored Draft content is the design you want staff to use.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Publish the restored form</h3><p>Open the builder dots and select <strong>Publish</strong>.</p>__SHOT:republish-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the new snapshot number</h3><p>Read the published version in the header. Republishing creates the next snapshot; it does not reuse the restored snapshot number.</p>__SHOT:republished-version:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The restored design is Published again. The example installation has snapshots 1 through 4; those numbers are illustrative.</p></div>
+<h2 id="dg-export">Export the form definition</h2>
+<p>Use this when you need the form as a FHIR Questionnaire JSON file. This export contains the definition, not submitted answers.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the form row actions</h3><p>Return to Forms and open the dots on the form you want to export.</p>__SHOT:list-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Export</h3><p>Select <strong>Export</strong>. Your browser downloads the Questionnaire JSON file.</p>__SHOT:export-menu:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The downloaded file contains the form definition. Export does not submit or change the form.</p></div>
+<h2 id="dg-duplicate">Make a separate draft and inspect its submission state</h2>
+<p>Use Duplicate when you want to adapt an existing form while retaining its original definition.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Duplicate</h3><p>From the original form row dots, select <strong>Duplicate</strong>.</p>__SHOT:duplicate-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the separate copy</h3><p>Find the new copy in Forms. It starts as a <strong>Draft</strong>. The original form remains.</p>__SHOT:duplicate-result:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open View/Run on the Draft</h3><p>Open the copy's row dots and select <strong>View/Run</strong>. The page warns that submission is disabled until publication.</p>__SHOT:draft-run-warning:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check Submit</h3><p>Open the page dots. <strong>Submit</strong> is disabled on this unpublished form.</p>__SHOT:draft-submit-disabled:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The copy remains a separate Draft. Opening View/Run does not publish it or submit answers.</p></div>
+<h2 id="dg-retire">Archive or delete an unused copy</h2>
+<p>Use Archive to retain a definition while stopping submission use. Delete permanently removes the chosen definition. The pictures retire only the separate demonstration copy.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Return to Forms</h3><p>Select <strong>Forms</strong> in the main menu. Find the copy you intend to retire.</p>__SHOT:open-page:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Archive the copy</h3><p>Open its row dots and select <strong>Archive</strong>.</p>__SHOT:archive-menu:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check Archived</h3><p>The copy remains in the management list with <strong>Archived</strong> status. It is no longer Published for submission.</p>__SHOT:archive-result:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose Delete when removal is intended</h3><p>If you intend permanent removal, open that same copy's row dots and select <strong>Delete</strong>. Check that you chose the copy, not the original.</p>__SHOT:delete-menu:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Confirm the named form</h3><p>Read the form name in the confirmation. Select <strong>Delete</strong> to remove it, or Cancel to keep it.</p>__SHOT:delete-confirm:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The deleted copy disappears from Forms. The captured example retained its original form.</p></div>
+<h2 id="dg-phone">Inspect forms and previews on a phone</h2>
+<p>Use the same Forms list and builder actions on a phone. A wide table can scroll horizontally.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Find the form</h3><p>Use <strong>Search forms</strong> in the phone-width list.</p>__SHOT:phone-list:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Builder actions</h3><p>Open the form in the builder and select its dots at the top right.</p>__SHOT:phone-builder-actions:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose Preview</h3><p>Select <strong>Preview</strong> from the builder menu.</p>__SHOT:phone-preview-menu:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Inspect the phone preview</h3><p>Read the preview and scroll its fields. Preview actions remains in its header dots.</p>__SHOT:phone-preview:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The design remains available for inspection at phone width.</p></div>
+<h2 id="dg-limits">Limits</h2>
+<p>This walkthrough captures an order and specimen choice. It does not demonstrate entering laboratory result values or rejecting an order.</p>
+<p>Field-editor Save applies a local builder edit. Builder Save draft stores the definition. Publish stores the design and creates a version. Preview actions do none of these writes.</p>
+<p>Saving or restoring different content can return a Published form to Draft. Identical content does not force that change. View/Run remains available, but submission requires Published status.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>No patient matches.</strong> Check the search value and whether your normal feed has supplied that patient. Use Patients to inspect the received record.</p>
+<p><strong>A test is absent.</strong> Check that it exists in Test catalog and is switched on at this lab.</p>
+<p><strong>Submit is disabled.</strong> Check the form status and submission-readiness message. Publish a reviewed Draft and check the capture configuration.</p>
+<p><strong>Submit reports invalid answers.</strong> Read the field errors and correct required or invalid values before retrying. A successful Response captured message does not need a second submission.</p>
+<p><strong>Restore leaves Draft.</strong> Review the restored content, then Publish it when it should be available for submission again.</p>
+<h2 id="dg-related">Related guides</h2>
+<p>Read <a href="./patients-review.html">Patients</a> for received patient records and <a href="./test-catalog-review.html">Test catalog</a> for lab-enabled tests. Read <a href="./workflows-review.html">Workflows</a> for the capture workflow and <a href="./start-here-review.html">Start here</a> for installation and command-line setup.</p>
+<h2 id="dg-practice">Optional practice</h2>
+<p>Use a test installation with fictional patients and lab-enabled test definitions. The capture tasks work with your own received records; no documentation sample file is required.</p>
+<p>For design practice, use a separate form name and the five-field ServiceRequest example. Try Preview, Save draft, Publish, Compare and Versions. Duplicate that definition before practising Archive or Delete.</p>
+<p>Submit a test Lab order only when you intend to write that order. The documented example submitted one response. Its later screenshots did not submit another response.</p>
+</article>
