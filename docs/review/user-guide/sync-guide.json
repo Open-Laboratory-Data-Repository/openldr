@@ -1,0 +1,283 @@
+{
+  "title": "Distributed sync",
+  "meta": [
+    "System setup",
+    "Connect a lab to central",
+    "About 30 minutes to prepare"
+  ],
+  "intro": [
+    "Distributed sync links a lab installation to a central OpenLDR installation. The lab pushes its clinical records. Central supplies shared configuration and terminology for the lab to read.",
+    "You need <strong>View sync</strong> to read status and events. <strong>Manage sync</strong> permits configuration, site management and divergence decisions. Central enrolls labs under Settings, Sites. A lab configures its link under Settings, Distributed sync.",
+    "For a live link, obtain the site id, central URL, OIDC issuer, client id and one-time client secret through central enrollment. Central enrollment requires Keycloak client administration. Keep these values private and use HTTPS.",
+    "The pictures show the real settings and a deliberately unavailable local central. This preview verifies configuration and failure inspection. It does not show a successful lab-to-central transfer or invent enrollment credentials. No documentation sample data is required."
+  ],
+  "tasks": [
+    {
+      "id": "central",
+      "title": "Check central enrollment is available",
+      "intro": [
+        "The central administrator must enroll the lab before its operator can configure a real link."
+      ],
+      "steps": [
+        [
+          "Open Sites on central",
+          "Open <strong>Settings</strong>, then <strong>Sites</strong>.",
+          [
+            "sites"
+          ]
+        ],
+        [
+          "Check provider administration",
+          "Enrollment requires Keycloak client administration. This isolated installation reports that it is unavailable, so it cannot issue a real client secret. Configure the central identity service before proceeding with a live setup.",
+          [
+            "admin-unavailable"
+          ]
+        ]
+      ],
+      "result": "A configured central offers Enroll site. This preview stops before enrollment because provider client administration is unavailable.",
+      "resultShots": []
+    },
+    {
+      "id": "configure",
+      "title": "Enter the enrollment values on the lab",
+      "intro": [
+        "Use the values issued by your central administrator. The screenshot values point only to a nonexistent local test service."
+      ],
+      "steps": [
+        [
+          "Open Distributed sync",
+          "On the lab, open <strong>Settings</strong>, then <strong>Distributed sync</strong>.",
+          [
+            "open"
+          ]
+        ],
+        [
+          "Choose Settings",
+          "Stay on the <strong>Settings</strong> tab.",
+          [
+            "settings"
+          ]
+        ],
+        [
+          "Check Enable sync",
+          "Keep <strong>Enable sync</strong> off while entering the enrollment values. Turn it on when they are ready. Off leaves both workers dormant.",
+          [
+            "enabled"
+          ]
+        ],
+        [
+          "Choose Direction",
+          "Use Push to central for lab data only, Pull from central for shared configuration only, or <strong>Bidirectional</strong> for both.",
+          [
+            "direction"
+          ]
+        ],
+        [
+          "Enter Central URL",
+          "Use the public HTTPS address supplied at enrollment. The picture uses an absent local HTTP test address and is not a production configuration.",
+          [
+            "central"
+          ]
+        ],
+        [
+          "Enter Site ID",
+          "Use the stable site identifier assigned by central. Do not invent another id for an enrolled client.",
+          [
+            "site"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "credentials",
+      "title": "Enter the site credentials and save",
+      "intro": [
+        "Continue in the Sync Settings tab. Use credentials supplied for this lab by central. Leave an existing secret blank only when keeping it."
+      ],
+      "steps": [
+        [
+          "Enter issuer and client id",
+          "Copy <strong>OIDC issuer URL</strong> and <strong>Client ID</strong> exactly from central enrollment.",
+          [
+            "issuer"
+          ]
+        ],
+        [
+          "Enter the one-time secret",
+          "Fill <strong>Client secret</strong>. The field is masked and write-only. The screenshot contains a fictional value that cannot authenticate.",
+          [
+            "secret"
+          ]
+        ],
+        [
+          "Set the interval",
+          "Choose <strong>Sync interval (minutes)</strong> between 1 and 1440. The default is 15.",
+          [
+            "interval"
+          ]
+        ],
+        [
+          "Open the tab actions",
+          "Turn Enable sync on when ready, then open the tab-strip dots.",
+          [
+            "actions"
+          ]
+        ],
+        [
+          "Save the configuration",
+          "Select <strong>Save</strong>. Changes start, stop or reconfigure workers immediately, without an API restart.",
+          [
+            "save"
+          ]
+        ]
+      ],
+      "result": "A valid link can authenticate and transfer data. A save notification proves the settings were accepted, not that central was reached.",
+      "resultShots": []
+    },
+    {
+      "id": "activity",
+      "title": "Read live sync activity",
+      "intro": [
+        "Use Activity to establish whether the saved link actually works."
+      ],
+      "steps": [
+        [
+          "Open Activity",
+          "Select the <strong>Activity</strong> tab. Read push and pull state, Pending push, Last checked and Last success.",
+          [
+            "activity"
+          ]
+        ],
+        [
+          "Request a pass",
+          "Open the tab dots and choose <strong>Sync now</strong> to request an immediate pass. It does not run a pass while sync is off.",
+          [
+            "now"
+          ]
+        ],
+        [
+          "Read the event row",
+          "Read event, direction, record count and detail. This example records a real failure because its local central does not exist.",
+          [
+            "failed-row"
+          ]
+        ],
+        [
+          "Open the event",
+          "Select its row to open the <strong>Sync event</strong> sheet.",
+          [
+            "detail"
+          ]
+        ],
+        [
+          "Read the full error",
+          "Read the error and metadata. Correct the specific connection, identity or data issue before retrying.",
+          [
+            "error"
+          ]
+        ]
+      ],
+      "result": "A successful live link shows successful events, advancing cursors and a falling pending backlog. The example establishes failure visibility only.",
+      "resultShots": []
+    },
+    {
+      "id": "pause",
+      "title": "Stop sync and edit safely",
+      "intro": [
+        "Use the master switch to pause both workers without removing the saved connection values."
+      ],
+      "steps": [
+        [
+          "Save with Enable sync off",
+          "Close the event, return to Settings, switch Enable sync off, then open the dots and Save.",
+          [
+            "disable-save"
+          ]
+        ],
+        [
+          "Keep the stored secret when editing",
+          "Reopen or reload Settings. The secret remains blank with its stored-secret placeholder. Leave it blank to keep it when changing other fields.",
+          [
+            "secret-kept"
+          ]
+        ]
+      ],
+      "result": "Both workers stop. The fictional test link remains disabled after capture.",
+      "resultShots": []
+    },
+    {
+      "id": "phone",
+      "title": "Use sync settings on a phone",
+      "intro": [
+        "The settings form scrolls vertically at phone width. Wide event tables can scroll within their own pane."
+      ],
+      "steps": [
+        [
+          "Read the connection fields",
+          "Open Distributed sync, Settings and scroll to the required field.",
+          [
+            "phone-settings"
+          ]
+        ],
+        [
+          "Check Activity",
+          "Use Activity for current state and events. Open a row for its complete detail.",
+          [
+            "phone-activity"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "enroll",
+      "title": "What central enrollment supplies",
+      "paragraphs": [
+        "On a central with Keycloak client administration configured, open Sites, then its dots and Enroll site. Supply a stable lowercase Site ID, an optional Name and the public Central URL. Enrollment creates a client named sync-&lt;siteId&gt; and its site_id token mapping.",
+        "The enrollment result shows client id, client secret, OIDC issuer and central URL. Copy the secret privately before closing. It appears only once. A lost secret requires Rotate secret on that site row and an update on the lab. Revoke deletes the client and marks the site revoked.",
+        "The central service account needs manage-clients and view-clients in the Keycloak realm. These operations were not exercised in this isolated preview. Its identity administration is intentionally disabled."
+      ]
+    },
+    {
+      "id": "tls",
+      "title": "Trust central TLS on the lab server",
+      "paragraphs": [
+        "A browser accepting a self-signed certificate does not make the lab server trust it. Download central's public certificate from the Sites dots or enrollment result, then transfer it to the lab through your normal administration channel.",
+        "Mount it read-only into the lab API container and set NODE_EXTRA_CA_CERTS to that container path. Recreate the lab API after changing its environment. The certificate must match the central hostname or IP address, including its Subject Alternative Name. Keep normal certificate validation enabled.",
+        "Use a trusted HTTPS central address in production. A localhost HTTP address is useful only for isolated tests like this preview. No certificate download or TLS trust change was exercised here."
+      ]
+    },
+    {
+      "id": "cli",
+      "title": "Use the CLI",
+      "paragraphs": [
+        "Follow <a href=\"start-here-review.html\">Start here</a> for CLI setup. From <code>openldr_ce</code>, central uses sync enroll, list, rotate and revoke. These credentials are real secrets. Do not put their output in shared logs or screenshots.",
+        "On the lab, settings sync show masks the stored secret. Set one field at a time with settings sync set. Sync status and sync now inspect or request live work."
+      ],
+      "html": [
+        "<pre><code>pnpm openldr settings sync show\npnpm openldr sync status\npnpm openldr sync now\npnpm openldr settings sync set enabled false</code></pre>"
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>Enrollment is unavailable.</strong> Check central Keycloak administration capabilities and its service-account roles. Generic OIDC does not provision sync clients.",
+        "<strong>Authentication fails.</strong> Match site id, issuer, client id and current secret to central enrollment. Rotate a lost secret, then update the lab.",
+        "<strong>Certificate error.</strong> Check trust on the lab API server and certificate address matching. The browser's exception does not configure the server.",
+        "<strong>Activity contains failed, quarantined or diverged events.</strong> Open the event and read its full reason. Do not treat every failure as a network problem. Resolve the reported condition before repeating changes.",
+        "<strong>Pending push remains high.</strong> Read Last success and recent failures. Sync now requests a pass but does not prove it succeeded."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "<a href=\"auth-providers-review.html\">Authentication providers</a>, <a href=\"environment-review.html\">Environment variables</a> and <a href=\"settings-review.html\">Settings</a>."
+      ]
+    }
+  ]
+}

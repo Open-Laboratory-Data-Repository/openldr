@@ -61,7 +61,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [x] Setup checks
 - [x] Laboratory
 - [x] Data exposure
-- [ ] Distributed Sync
+- [x] Distributed Sync
 - [x] Connectors
 - [x] Connect to SQL Server and diagnose a connection
 - [x] Import from OpenLDR v1
