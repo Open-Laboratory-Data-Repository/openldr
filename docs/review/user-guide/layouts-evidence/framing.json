@@ -1,0 +1,553 @@
+[
+  {
+    "id": "user-menu",
+    "crop": [
+      0,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 8,
+        "y": 755.5,
+        "width": 223,
+        "height": 36.5
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "settings-menu",
+    "crop": [
+      0,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 13,
+        "y": 682.5,
+        "width": 198,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "layouts-page",
+    "crop": [
+      103.5,
+      288.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 252,
+        "y": 420,
+        "width": 183,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "page-actions",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1232,
+        "y": 62,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "new-layout",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 103,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "name",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 907.828125,
+        "y": 127.53125,
+        "width": 348.171875,
+        "height": 36
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "pages",
+    "crop": [
+      800,
+      83.53125,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1085.90625,
+        "y": 223.53125,
+        "width": 170.09375,
+        "height": 20
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "start-page",
+    "crop": [
+      731.75,
+      146.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 912.75,
+        "y": 280.5,
+        "width": 118,
+        "height": 32
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "role-default",
+    "crop": [
+      800,
+      395.53125,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 907.828125,
+        "y": 535.53125,
+        "width": 348.171875,
+        "height": 20
+      }
+    ],
+    "step": 6,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "sheet-actions",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1204,
+        "y": 16,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "step": 7,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "save-layout",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1077,
+        "y": 53,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 7,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "created-result",
+    "crop": [
+      398,
+      0,
+      882,
+      551.25
+    ],
+    "targets": [
+      {
+        "x": 448,
+        "y": 149,
+        "width": 832,
+        "height": 57
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "row-actions",
+    "crop": [
+      800,
+      27.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1232,
+        "y": 161.5,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "edit-layout",
+    "crop": [
+      800,
+      68.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 202.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "edit-page",
+    "crop": [
+      752.8671875,
+      251.53125,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 907.828125,
+        "y": 391.53125,
+        "width": 170.078125,
+        "height": 20
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "edit-save",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1077,
+        "y": 53,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "edited-result",
+    "crop": [
+      513.40625,
+      27.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 713.40625,
+        "y": 149,
+        "width": 80,
+        "height": 57
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "pick-user-menu",
+    "crop": [
+      0,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 8,
+        "y": 755.5,
+        "width": 223,
+        "height": 36.5
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "pick-layout-menu",
+    "crop": [
+      0,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 13,
+        "y": 641.5,
+        "width": 198,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "pick-layout",
+    "crop": [
+      64.1484375,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 216,
+        "y": 678.5,
+        "width": 176.296875,
+        "height": 32
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "picked-result",
+    "crop": [
+      0,
+      23.0,
+      1197.6000000000001,
+      748.5
+    ],
+    "targets": [
+      {
+        "x": 0,
+        "y": 48,
+        "width": 239,
+        "height": 698.5
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "role-default-option",
+    "crop": [
+      64.1484375,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 216,
+        "y": 646.5,
+        "width": 176.296875,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "full-sidebar",
+    "crop": [
+      64.1484375,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 216,
+        "y": 710.5,
+        "width": 176.296875,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "full-result",
+    "crop": [
+      0,
+      324.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 8,
+        "y": 456,
+        "width": 223,
+        "height": 36
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "delete-layout",
+    "crop": [
+      800,
+      100.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 234.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "delete-confirm",
+    "crop": [
+      391.0,
+      244.375,
+      498,
+      311.25
+    ],
+    "targets": [
+      {
+        "x": 416,
+        "y": 285.734375,
+        "width": 448,
+        "height": 228.53125
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "deleted-result",
+    "crop": [
+      172.79999999999995,
+      84.0,
+      1107.2,
+      692.0
+    ],
+    "targets": [
+      {
+        "x": 448,
+        "y": 109,
+        "width": 832,
+        "height": 642
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "phone-layouts",
+    "crop": [
+      0,
+      0,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 173.453125,
+        "y": 56,
+        "width": 73.046875,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "phone-editor",
+    "crop": [
+      0,
+      44.34375,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 177.328125,
+        "y": 143.53125,
+        "width": 173.671875,
+        "height": 36
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  }
+]

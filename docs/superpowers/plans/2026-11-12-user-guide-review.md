@@ -53,7 +53,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [ ] Scheduled reports with workflows
 - [ ] Custom Queries
 - [ ] Report Designer
-- [ ] Layouts
+- [x] Layouts
 - [x] Users and Roles
 - [x] Roles
 - [ ] Audit

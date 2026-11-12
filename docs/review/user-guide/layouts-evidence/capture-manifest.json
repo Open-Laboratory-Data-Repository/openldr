@@ -1,0 +1,616 @@
+{
+  "capturedAt": "2026-11-12T13:54:54.171Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5188/studio/settings/layouts",
+  "steps": [
+    {
+      "id": "user-menu",
+      "label": "Open your user menu at the bottom left.",
+      "path": "layouts-evidence/user-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 755.5,
+          "width": 223,
+          "height": 36.5
+        }
+      ]
+    },
+    {
+      "id": "settings-menu",
+      "label": "Choose Settings.",
+      "path": "layouts-evidence/settings-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 13,
+          "y": 682.5,
+          "width": 198,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "layouts-page",
+      "label": "Select Layouts in Settings.",
+      "path": "layouts-evidence/layouts-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 420,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "page-actions",
+      "label": "Open the Layouts dots menu.",
+      "path": "layouts-evidence/page-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 62,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "new-layout",
+      "label": "Choose New layout.",
+      "path": "layouts-evidence/new-layout.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 103,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "name",
+      "label": "Name the layout for its intended use.",
+      "path": "layouts-evidence/name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 907.828125,
+          "y": 127.53125,
+          "width": 348.171875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "pages",
+      "label": "Select the pages this sidebar should show. Docs always remains available.",
+      "path": "layouts-evidence/pages.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1085.90625,
+          "y": 223.53125,
+          "width": 170.09375,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "start-page",
+      "label": "Choose the page that should open first. Only selected pages are offered.",
+      "path": "layouts-evidence/start-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 912.75,
+          "y": 280.5,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "role-default",
+      "label": "Optionally make this layout the default for selected roles.",
+      "path": "layouts-evidence/role-default.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 907.828125,
+          "y": 535.53125,
+          "width": 348.171875,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "sheet-actions",
+      "label": "Open the layout editor dots.",
+      "path": "layouts-evidence/sheet-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1204,
+          "y": 16,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "save-layout",
+      "label": "Choose Save.",
+      "path": "layouts-evidence/save-layout.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1077,
+          "y": 53,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "created-result",
+      "label": "The table shows the saved page count, start page and role default.",
+      "path": "layouts-evidence/created-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 149,
+          "width": 832,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "row-actions",
+      "label": "Open the dots for the correct layout.",
+      "path": "layouts-evidence/row-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 161.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "edit-layout",
+      "label": "Choose Edit.",
+      "path": "layouts-evidence/edit-layout.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 202.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "edit-page",
+      "label": "Change the selected pages. The example adds Activity.",
+      "path": "layouts-evidence/edit-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 907.828125,
+          "y": 391.53125,
+          "width": 170.078125,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "edit-save",
+      "label": "Choose Save in the editor dots menu.",
+      "path": "layouts-evidence/edit-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1077,
+          "y": 53,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "edited-result",
+      "label": "The page count reflects the changed selection.",
+      "path": "layouts-evidence/edited-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 713.40625,
+          "y": 149,
+          "width": 80,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "pick-user-menu",
+      "label": "Open your user menu to choose a sidebar.",
+      "path": "layouts-evidence/pick-user-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 755.5,
+          "width": 223,
+          "height": 36.5
+        }
+      ]
+    },
+    {
+      "id": "pick-layout-menu",
+      "label": "Open Layout.",
+      "path": "layouts-evidence/pick-layout-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 13,
+          "y": 641.5,
+          "width": 198,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "pick-layout",
+      "label": "Choose the named layout.",
+      "path": "layouts-evidence/pick-layout.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 216,
+          "y": 678.5,
+          "width": 176.296875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "picked-result",
+      "label": "The sidebar shows the selected layout pages plus Docs.",
+      "path": "layouts-evidence/picked-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 0,
+          "y": 48,
+          "width": 239,
+          "height": 698.5
+        }
+      ]
+    },
+    {
+      "id": "role-default-option",
+      "label": "Role default follows the default set by administrators.",
+      "path": "layouts-evidence/role-default-option.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 216,
+          "y": 646.5,
+          "width": 176.296875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "full-sidebar",
+      "label": "Choose Full sidebar to show all pages your permissions allow.",
+      "path": "layouts-evidence/full-sidebar.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 216,
+          "y": 710.5,
+          "width": 176.296875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "full-result",
+      "label": "The full sidebar returns, subject to your role permissions.",
+      "path": "layouts-evidence/full-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 456,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "phone-layouts",
+      "label": "Use Layouts in the horizontal Settings section list on a phone.",
+      "path": "layouts-evidence/phone-layouts.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 173.453125,
+          "y": 56,
+          "width": 73.046875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "phone-editor",
+      "label": "The layout editor uses the phone width. Scroll to reach pages and role defaults.",
+      "path": "layouts-evidence/phone-editor.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 177.328125,
+          "y": 143.53125,
+          "width": 173.671875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "delete-layout",
+      "label": "Choose Delete for the correct layout.",
+      "path": "layouts-evidence/delete-layout.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 234.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "delete-confirm",
+      "label": "Check the layout name and fallback behaviour before confirming.",
+      "path": "layouts-evidence/delete-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 285.734375,
+          "width": 448,
+          "height": 228.53125
+        }
+      ]
+    },
+    {
+      "id": "deleted-result",
+      "label": "The layout is removed from the list.",
+      "path": "layouts-evidence/deleted-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 109,
+          "width": 832,
+          "height": 642
+        }
+      ]
+    }
+  ]
+}

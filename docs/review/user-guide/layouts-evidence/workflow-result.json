@@ -1,0 +1,32 @@
+{
+  "created": {
+    "id": "bd3edef3-7e79-43d7-9ee2-5ee66f6d577c",
+    "name": "Documentation review",
+    "startPage": "/reports",
+    "pages": [
+      "/",
+      "/reports",
+      "/forms"
+    ],
+    "roles": [
+      "system_auditor"
+    ]
+  },
+  "edited": {
+    "id": "bd3edef3-7e79-43d7-9ee2-5ee66f6d577c",
+    "name": "Documentation review",
+    "startPage": "/reports",
+    "pages": [
+      "/",
+      "/reports",
+      "/forms",
+      "/activity"
+    ],
+    "roles": [
+      "system_auditor"
+    ]
+  },
+  "pickedPreference": "bd3edef3-7e79-43d7-9ee2-5ee66f6d577c",
+  "restoredPreference": "full",
+  "deleted": true
+}

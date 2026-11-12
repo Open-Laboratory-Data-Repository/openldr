@@ -431,3 +431,13 @@ no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewp
 All active preview menus match. Sample data remains optional.
 See users-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
+
+## Layouts preview checkpoint
+
+Previous checkpoint HEAD: 5d16a2a1.
+layouts-review.html has 20 numbered steps and 29 native image placements.
+Every step has screenshot evidence. The integrated browser check reported no missing images,
+no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+All active preview menus match. Sample data remains optional.
+See layouts-review-notes.md for live workflows, source proofs and untested variants.
+This remains a preview. Its published guide is unchanged.
