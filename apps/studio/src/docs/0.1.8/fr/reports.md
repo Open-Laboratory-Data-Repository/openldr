@@ -33,12 +33,30 @@ Une nouvelle installation fournit dix rapports dans quatre catégories :
 
 | Catégorie | Rapports | Fonctionne avec l'exemple |
 | --- | --- | --- |
-| AMR / Surveillance | AMR Cumulative Antibiogram, AMR First-Isolate Resistance Summary, AMR Resistance Rate, AMR Resistance by Facility | Non. Ils ont besoin de résultats de microbiologie. |
+| AMR / Surveillance | AMR Cumulative Antibiogram, AMR First-Isolate Resistance Summary, AMR Resistance Rate, AMR Resistance by Facility | Avec l'exemple de microbiologie. Voir plus bas. |
 | Operational | Clinical Microbiology Report, LIS Stakeholders Update, Specimen Turnaround Time, Test Volume Over Time | Turnaround et Test Volume, oui |
 | Quality | Patient Demographics | Oui |
-| Regulatory | AMR GLASS RIS (stratified) | Non. Il a besoin de résultats de microbiologie. |
+| Regulatory | AMR GLASS RIS (stratified) | Avec l'exemple de microbiologie. Voir plus bas. |
 
-Les rapports AMR et de microbiologie lisent des germes et des résultats d'antibiogramme. L'exemple n'en contient pas, donc ils restent vides. Ils se remplissent quand votre système de laboratoire envoie de la microbiologie, par exemple par un export WHONET. Voir [Load and push data](https://openldr.online/#/docs/load-data) sur le site web.
+Les rapports AMR et de microbiologie lisent des germes et des résultats d'antibiogramme. L'exemple principal n'en contient pas. Un second exemple contient 48 cultures inventées, de septembre à octobre 2026, pour les essayer :
+
+```bash
+cd ~/Downloads/openldr_ce
+curl -L -o data/openldr-sample-microbiology.json https://openldr.online/docs-samples/openldr-sample-microbiology.json
+./openldr ingest data/openldr-sample-microbiology.json
+```
+
+Depuis une copie des sources, le fichier est déjà dans le dépôt :
+
+```bash
+pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-microbiology.json
+```
+
+Un bon chargement se termine par `batch <id>: done (455 resources)`. Il s'ajoute à l'exemple principal et ne change aucun de ses chiffres.
+
+**Résultat attendu :** **AMR Resistance Rate** du `2026-09-01` au `2026-10-31` liste 10 antibiotiques. Ciprofloxacin indique 48 testés, 13 résistants, 4 intermédiaires, 31 sensibles, 27,1 % de résistance. Vancomycin indique 11 testés, aucun résistant. Pour la page d'un isolat, lancez **Clinical Microbiology Report** avec le numéro `MIC-0001`.
+
+Vos propres données remplissent ces rapports quand votre système de laboratoire envoie de la microbiologie, par exemple par un export WHONET. Voir [Load and push data](https://openldr.online/#/docs/load-data) sur le site web.
 
 ## Exemple 1 : exécuter un rapport
 
@@ -190,7 +208,7 @@ Un système de laboratoire découpe souvent un résultat de microbiologie en plu
 
 - **Exécuter est grisé.** Un filtre obligatoire est vide. Ouvrez **Paramètres** et remplissez chaque filtre marqué d'une étoile. La plupart des rapports demandent une période.
 - **« date range not selected », ou un message qui nomme un paramètre.** Le rapport s'est exécuté sans une valeur nécessaire. Réglez-la dans **Paramètres** et relancez. Le message nomme le paramètre.
-- **Le résultat est vide.** Élargissez la période, effacez les filtres facultatifs, ou vérifiez que les données sont chargées. Les rapports AMR restent vides sans données de microbiologie.
+- **Le résultat est vide.** Élargissez la période, effacez les filtres facultatifs, ou vérifiez que les données sont chargées. Les rapports AMR restent vides sans données de microbiologie. Chargez l'exemple de microbiologie pour vérifier qu'ils fonctionnent.
 - **« no data for this report request » sur le Clinical Microbiology Report.** Ce numéro n'a pas de microbiologie. Une demande de biochimie ou de sérologie n'a pas de germe. Le rapport refuse au lieu d'imprimer une page vide, car un rapport de microbiologie sans germe se lirait comme une culture négative. Vérifiez d'abord les panels de la demande dans **Requête**.
 - **Un rapport de microbiologie montre un germe sans sensibilités.** C'est en général un vrai résultat. La culture a poussé et aucun antibiogramme n'a été fait.
 - **Chaque rapport de microbiologie a un tableau de sensibilités vide.** Vérifiez d'abord dans **Terminologie** le jeu de valeurs d'interprétation de l'antibiogramme. Le rapport choisit les sensibilités dans ce jeu. S'il n'a jamais été chargé sur cette installation, chaque tableau est vide, comme des cultures sans antibiogramme. Un tableau vide est un résultat. Tous vides, c'est un problème d'installation.

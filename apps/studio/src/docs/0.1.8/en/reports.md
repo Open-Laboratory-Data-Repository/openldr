@@ -31,12 +31,30 @@ A new install ships ten reports in four categories:
 
 | Category | Reports | Works with the sample data |
 | --- | --- | --- |
-| AMR / Surveillance | AMR Cumulative Antibiogram, AMR First-Isolate Resistance Summary, AMR Resistance Rate, AMR Resistance by Facility | No. They need microbiology results. |
+| AMR / Surveillance | AMR Cumulative Antibiogram, AMR First-Isolate Resistance Summary, AMR Resistance Rate, AMR Resistance by Facility | With the microbiology sample. See below. |
 | Operational | Clinical Microbiology Report, LIS Stakeholders Update, Specimen Turnaround Time, Test Volume Over Time | Turnaround and Test Volume, yes |
 | Quality | Patient Demographics | Yes |
-| Regulatory | AMR GLASS RIS (stratified) | No. It needs microbiology results. |
+| Regulatory | AMR GLASS RIS (stratified) | With the microbiology sample. See below. |
 
-The AMR and microbiology reports read organisms and susceptibility results. The sample has none, so they come back empty. They fill once your lab system sends microbiology, for example through a WHONET export. See [Load and push data](https://openldr.online/#/docs/load-data) on the website.
+The AMR and microbiology reports read organisms and susceptibility results. The main sample has none. A second sample has 48 made-up cultures, from September to October 2026, for trying them:
+
+```bash
+cd ~/Downloads/openldr_ce
+curl -L -o data/openldr-sample-microbiology.json https://openldr.online/docs-samples/openldr-sample-microbiology.json
+./openldr ingest data/openldr-sample-microbiology.json
+```
+
+From a source checkout, the file is already in the repository:
+
+```bash
+pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-microbiology.json
+```
+
+A good run ends with `batch <id>: done (455 resources)`. It adds to the main sample and changes none of its numbers.
+
+**Expected result:** **AMR Resistance Rate** from `2026-09-01` to `2026-10-31` lists 10 antibiotics. Ciprofloxacin reads 48 tested, 13 resistant, 4 intermediate, 31 susceptible, 27.1% resistant. Vancomycin reads 11 tested, none resistant. For one isolate's page, run **Clinical Microbiology Report** with lab number `MIC-0001`.
+
+Your own data fills these reports once your lab system sends microbiology, for example through a WHONET export. See [Load and push data](https://openldr.online/#/docs/load-data) on the website.
 
 ## Example 1: run a report
 
@@ -188,7 +206,7 @@ A lab system often splits one microbiology result into several orders under one 
 
 - **Run is greyed out.** A required filter is empty. Open **Actions**, **Parameters**, and fill every filter marked with a star. Most reports need a date range.
 - **"date range not selected", or a message naming a parameter.** The report ran without a value it needs. Set it in **Parameters** and run again. The message names the parameter.
-- **The result is empty.** Widen the date range, clear optional filters, or check that the data is loaded. The AMR reports stay empty without microbiology data.
+- **The result is empty.** Widen the date range, clear optional filters, or check that the data is loaded. The AMR reports stay empty without microbiology data. Load the microbiology sample to check that they work.
 - **"no data for this report request" on the Clinical Microbiology Report.** That lab number has no microbiology. A chemistry or serology request has no organism. The report refuses rather than printing an empty page, because a microbiology report with no organism reads like a negative culture. Check the request's panels in **Query** first.
 - **A microbiology report shows an organism but no susceptibilities.** Usually a real result. The culture grew something and no sensitivity testing was done.
 - **Every microbiology report has an empty susceptibility table.** Check **Terminology** for the AST interpretation value set first. The report picks susceptibilities from that value set. If it never loaded on this install, every table is empty, which looks like cultures with no sensitivity testing. One empty table is a result. All of them is a setup problem.

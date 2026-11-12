@@ -33,12 +33,30 @@ Uma instalação nova traz dez relatórios em quatro categorias:
 
 | Categoria | Relatórios | Funciona com o exemplo |
 | --- | --- | --- |
-| AMR / Surveillance | AMR Cumulative Antibiogram, AMR First-Isolate Resistance Summary, AMR Resistance Rate, AMR Resistance by Facility | Não. Precisam de resultados de microbiologia. |
+| AMR / Surveillance | AMR Cumulative Antibiogram, AMR First-Isolate Resistance Summary, AMR Resistance Rate, AMR Resistance by Facility | Com o exemplo de microbiologia. Veja abaixo. |
 | Operational | Clinical Microbiology Report, LIS Stakeholders Update, Specimen Turnaround Time, Test Volume Over Time | Turnaround e Test Volume, sim |
 | Quality | Patient Demographics | Sim |
-| Regulatory | AMR GLASS RIS (stratified) | Não. Precisa de resultados de microbiologia. |
+| Regulatory | AMR GLASS RIS (stratified) | Com o exemplo de microbiologia. Veja abaixo. |
 
-Os relatórios AMR e de microbiologia leem organismos e resultados de antibiograma. O exemplo não os tem, por isso ficam vazios. Enchem-se quando o seu sistema de laboratório envia microbiologia, por exemplo através de uma exportação WHONET. Veja [Load and push data](https://openldr.online/#/docs/load-data) no site.
+Os relatórios AMR e de microbiologia leem organismos e resultados de antibiograma. O exemplo principal não os tem. Um segundo exemplo tem 48 culturas inventadas, de setembro a outubro de 2026, para os experimentar:
+
+```bash
+cd ~/Downloads/openldr_ce
+curl -L -o data/openldr-sample-microbiology.json https://openldr.online/docs-samples/openldr-sample-microbiology.json
+./openldr ingest data/openldr-sample-microbiology.json
+```
+
+Numa cópia das fontes, o ficheiro já está no repositório:
+
+```bash
+pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-microbiology.json
+```
+
+Um bom carregamento termina com `batch <id>: done (455 resources)`. Junta-se ao exemplo principal e não muda nenhum dos seus números.
+
+**Resultado esperado:** **AMR Resistance Rate** de `2026-09-01` a `2026-10-31` lista 10 antibióticos. Ciprofloxacin mostra 48 testados, 13 resistentes, 4 intermédios, 31 sensíveis, 27,1% de resistência. Vancomycin mostra 11 testados, nenhum resistente. Para a página de um isolado, execute **Clinical Microbiology Report** com o número `MIC-0001`.
+
+Os seus próprios dados enchem estes relatórios quando o seu sistema de laboratório envia microbiologia, por exemplo através de uma exportação WHONET. Veja [Load and push data](https://openldr.online/#/docs/load-data) no site.
 
 ## Exemplo 1: executar um relatório
 
@@ -190,7 +208,7 @@ Um sistema de laboratório divide muitas vezes um resultado de microbiologia em 
 
 - **Executar está desativado.** Falta um filtro obrigatório. Abra **Parâmetros** e preencha todos os filtros marcados com estrela. A maioria dos relatórios pede um intervalo de datas.
 - **"date range not selected", ou uma mensagem com o nome de um parâmetro.** O relatório correu sem um valor de que precisa. Defina-o em **Parâmetros** e execute de novo. A mensagem diz qual é o parâmetro.
-- **O resultado está vazio.** Alargue o intervalo de datas, limpe os filtros opcionais ou confirme que os dados estão carregados. Os relatórios AMR ficam vazios sem dados de microbiologia.
+- **O resultado está vazio.** Alargue o intervalo de datas, limpe os filtros opcionais ou confirme que os dados estão carregados. Os relatórios AMR ficam vazios sem dados de microbiologia. Carregue o exemplo de microbiologia para confirmar que funcionam.
 - **"no data for this report request" no Clinical Microbiology Report.** Esse número não tem microbiologia. Um pedido de bioquímica ou serologia não tem organismo. O relatório recusa em vez de imprimir uma página vazia, porque um relatório de microbiologia sem organismo parece uma cultura negativa. Veja primeiro os painéis do pedido em **Consulta**.
 - **Um relatório de microbiologia mostra um organismo sem sensibilidades.** Normalmente é um resultado verdadeiro. A cultura cresceu e não se fez antibiograma.
 - **Todos os relatórios de microbiologia têm a tabela de sensibilidades vazia.** Veja primeiro em **Terminologia** o conjunto de valores de interpretação do antibiograma. O relatório escolhe as sensibilidades desse conjunto. Se nunca foi carregado nesta instalação, todas as tabelas ficam vazias, como culturas sem antibiograma. Uma tabela vazia é um resultado. Todas vazias é um problema de instalação.
