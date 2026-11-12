@@ -74,7 +74,7 @@ async function deadLock(): Promise<LockInfo> {
 }
 
 const mode = async (p: string) => (await stat(p)).mode & 0o777;
-const leftovers = async () => (await readdir(paths.root)).filter((n) => n !== 'standalone.lock' && !['blobs', 'logs', 'crash'].includes(n));
+const leftovers = async () => (await readdir(paths.root)).filter((n) => n !== 'standalone.lock' && !['blobs', 'logs', 'crash', 'work'].includes(n));
 
 describe('resolveDataDir', () => {
   it('prefers the flag, then OPENLDR_HOME, then the OS default', () => {
@@ -112,6 +112,7 @@ describe('folders and state file', () => {
       blobs: '/d/blobs',
       logs: '/d/logs',
       crash: '/d/crash',
+      work: '/d/work',
       stateFile: '/d/standalone.json',
       lockFile: '/d/standalone.lock',
       serverLog: '/d/logs/server.log',
@@ -121,7 +122,7 @@ describe('folders and state file', () => {
 
   it('creates the root owner-only and the state file owner-only', async () => {
     expect(await mode(paths.root)).toBe(0o700);
-    for (const d of [paths.blobs, paths.logs, paths.crash]) expect((await stat(d)).isDirectory()).toBe(true);
+    for (const d of [paths.blobs, paths.logs, paths.crash, paths.work]) expect((await stat(d)).isDirectory()).toBe(true);
     await loadOrCreateState(paths, pick);
     expect(await mode(paths.stateFile)).toBe(0o600);
     expect(await leftovers()).toEqual(['standalone.json']);

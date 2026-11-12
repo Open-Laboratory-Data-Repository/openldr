@@ -133,6 +133,12 @@ describe('buildEnvironment', () => {
     expect(env.WEB_DIST_DIR).toBe(STUDIO_DIST);
   });
 
+  it('gives terminology work files their own folder, not the data folder root', () => {
+    const env = buildEnvironment(input);
+    expect(env.TERMINOLOGY_WORK_DIR).toBe(input.paths.work);
+    expect(env.TERMINOLOGY_WORK_DIR).not.toBe(ROOT);
+  });
+
   it('sets or deliberately leaves every schema setting named as a path', () => {
     const env = buildEnvironment(input);
     const schemaKeys = Object.keys(ConfigSchema._def.schema._def.schema.shape);

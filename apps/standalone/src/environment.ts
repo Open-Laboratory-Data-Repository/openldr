@@ -23,8 +23,8 @@ export interface EnvironmentInput {
  * `process.env`, so nothing from the shell or a `.env` file leaks in.
  *
  * Every path is inside the data folder, apart from the studio build, which ships with the app.
- * `TERMINOLOGY_WORK_DIR` is the data folder itself: an ingest makes its own scratch folder there
- * and removes it. Unset, it would fall back to the system temp folder.
+ * `TERMINOLOGY_WORK_DIR` is the `work` folder, which `ensureFolders` creates: an ingest makes its
+ * own scratch folder there and removes it. Unset, it would fall back to the system temp folder.
  *
  * Throws on unusable input. The message names the field and never its value, since some values
  * are secrets.
@@ -54,7 +54,7 @@ export function buildEnvironment(input: EnvironmentInput): Record<string, string
     SEED_ON_START: 'false',
     SECRETS_ENCRYPTION_KEY: state.secretsKey,
     PLUGIN_CRASH_LOG_DIR: paths.crash,
-    TERMINOLOGY_WORK_DIR: paths.root,
+    TERMINOLOGY_WORK_DIR: paths.work,
     WEB_DIST_DIR: input.studioDist,
     APP_VERSION: input.appVersion,
   };
@@ -78,6 +78,7 @@ function check(input: EnvironmentInput): void {
     ['paths.root', input.paths.root],
     ['paths.blobs', input.paths.blobs],
     ['paths.crash', input.paths.crash],
+    ['paths.work', input.paths.work],
     ['paths.serverLog', input.paths.serverLog],
     ['studioDist', input.studioDist],
   ];

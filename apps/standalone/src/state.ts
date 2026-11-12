@@ -15,6 +15,8 @@ export interface StandalonePaths {
   blobs: string;
   logs: string;
   crash: string;
+  /** Scratch files, such as a terminology ingest's unpacked download. */
+  work: string;
   stateFile: string;
   lockFile: string;
   serverLog: string;
@@ -109,6 +111,7 @@ export function pathsFor(root: string): StandalonePaths {
     blobs: join(root, 'blobs'),
     logs,
     crash: join(root, 'crash'),
+    work: join(root, 'work'),
     stateFile: join(root, 'standalone.json'),
     lockFile: join(root, 'standalone.lock'),
     serverLog: join(logs, 'server.log'),
@@ -124,7 +127,7 @@ export function pathsFor(root: string): StandalonePaths {
 export async function ensureFolders(paths: StandalonePaths): Promise<void> {
   await mkdir(paths.root, { recursive: true, mode: 0o700 });
   if (!IS_WINDOWS) await chmod(paths.root, 0o700);
-  for (const dir of [paths.blobs, paths.logs, paths.crash]) {
+  for (const dir of [paths.blobs, paths.logs, paths.crash, paths.work]) {
     await mkdir(dir, { recursive: true, mode: 0o700 });
   }
 }
