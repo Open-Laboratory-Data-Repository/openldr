@@ -5,15 +5,22 @@ export const PASSWORD_MAX = 128;
 
 export type PasswordRuleFailure = 'too_short' | 'too_long' | 'same_as_username';
 
-/** Length counts characters (code points), not UTF-16 units. */
+/** One typed password can arrive as different code points. NFKC makes them one string. */
+function normalize(text: string): string {
+  return text.normalize('NFKC');
+}
+
+/** Length counts characters (code points) of the NFKC form, not UTF-16 units. */
 export function checkPasswordRules(password: string, username: string): 'ok' | PasswordRuleFailure {
-  const length = Array.from(password).length;
+  const normalized = normalize(password);
+  const length = Array.from(normalized).length;
   if (length < PASSWORD_MIN) return 'too_short';
   if (length > PASSWORD_MAX) return 'too_long';
-  if (password.toLowerCase() === username.toLowerCase()) return 'same_as_username';
+  if (normalized.toLowerCase() === normalize(username).toLowerCase()) return 'same_as_username';
   return 'ok';
 }
 
+/** Passwords are NFKC-normalized inside `hash` and `verify`. Callers pass the raw input. */
 export interface PasswordHasher {
   hash(password: string): Promise<string>;
   /** False for a wrong password and for a stored value it cannot parse. Never throws. */
@@ -93,7 +100,7 @@ export function createPasswordHasher(opts: { maxConcurrent?: number; scrypt?: Sc
   return {
     async hash(password) {
       const salt = randomBytes(SALT_BYTES);
-      const key = await limit(() => scrypt(password, salt, KEY_BYTES, params));
+      const key = await limit(() => scrypt(normalize(password), salt, KEY_BYTES, params));
       return `scrypt$${N}$${R}$${P}$${salt.toString('base64')}$${key.toString('base64')}`;
     },
 
@@ -102,7 +109,7 @@ export function createPasswordHasher(opts: { maxConcurrent?: number; scrypt?: Sc
         const parsed = parseStored(stored);
         if (!parsed) return false;
         const { N: n, r, p, salt, key } = parsed;
-        const derived = await limit(() => scrypt(password, salt, key.length, { N: n, r, p, maxmem: MAXMEM }));
+        const derived = await limit(() => scrypt(normalize(password), salt, key.length, { N: n, r, p, maxmem: MAXMEM }));
         return derived.length === key.length && timingSafeEqual(derived, key);
       } catch {
         return false;

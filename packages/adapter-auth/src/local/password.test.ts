@@ -30,6 +30,15 @@ describe('checkPasswordRules', () => {
     expect(checkPasswordRules('x'.repeat(PASSWORD_MIN - 1), 'ada')).toBe('too_short');
     expect(checkPasswordRules('x'.repeat(PASSWORD_MAX), 'ada')).toBe('ok');
   });
+
+  it('gives the same answer for the composed and decomposed forms', () => {
+    // 9 code points composed, 10 decomposed. Both must count as 9.
+    expect(checkPasswordRules('abcdefghé', 'ada')).toBe('too_short');
+    expect(checkPasswordRules('abcdefghé', 'ada')).toBe('too_short');
+    // The username comparison normalizes both sides.
+    expect(checkPasswordRules('renélovelace', 'renélovelace')).toBe('same_as_username');
+    expect(checkPasswordRules('renélovelace', 'renélovelace')).toBe('same_as_username');
+  });
 });
 
 describe('createPasswordHasher', () => {
@@ -39,6 +48,20 @@ describe('createPasswordHasher', () => {
     expect(stored.startsWith('scrypt$32768$8$3$')).toBe(true);
     expect(await h.verify('correct horse', stored)).toBe(true);
     expect(await h.verify('wrong horse!!', stored)).toBe(false);
+  });
+
+  it('verifies the composed form against the decomposed form, both ways', async () => {
+    const h = createPasswordHasher();
+    const composed = 'café au lait';
+    const decomposed = 'café au lait';
+    expect(await h.verify(composed, await h.hash(decomposed))).toBe(true);
+    expect(await h.verify(decomposed, await h.hash(composed))).toBe(true);
+  });
+
+  it('verifies a full-width password against the plain form', async () => {
+    const h = createPasswordHasher();
+    const stored = await h.hash('ABCdefghij');
+    expect(await h.verify('ＡＢＣdefghij', stored)).toBe(true);
   });
 
   it('uses a new salt each time', async () => {
