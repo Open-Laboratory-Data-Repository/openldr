@@ -1,0 +1,249 @@
+{
+  "title": "Data Exposure",
+  "meta": [
+    "Administration",
+    "Choose additional dashboard columns",
+    "About 10 minutes"
+  ],
+  "intro": [
+    "Data Exposure controls which additional table columns the dashboard builder offers. Administrators use it to hide columns or approve their availability. You need Manage data exposure.",
+    "This policy covers additional table columns in the dashboard builder. Built-in dimensions, raw SQL and connector-backed reports are outside it. Hiding a column here does not erase its data or remove database access.",
+    "The PII badge means personally identifiable information. Showing one of these columns requires an extra confirmation, then Save.",
+    "Use your own approved column policy. The pictures use an isolated test installation and restore the demonstrated columns afterward. No sample records are required."
+  ],
+  "tasks": [
+    {
+      "id": "hide",
+      "title": "Hide an additional dashboard column",
+      "intro": [
+        "Use this when an additional column should no longer be offered in the dashboard builder."
+      ],
+      "steps": [
+        [
+          "Open Settings and Data Exposure",
+          "Open your user menu at the bottom left, choose <strong>Settings</strong>, then select <strong>Data Exposure</strong>.",
+          [
+            "user-menu",
+            "settings-menu",
+            "exposure-page"
+          ]
+        ],
+        [
+          "Find the table group",
+          "Find the table containing the column. The example uses <strong>Patient</strong>. Match both the table and column name.",
+          [
+            "table-group"
+          ]
+        ],
+        [
+          "Check the current state",
+          "Read <strong>Shown</strong> or <strong>Hidden</strong> beside the switch. The example starts with <code>managing_organization</code> Shown.",
+          [
+            "shown-column"
+          ]
+        ],
+        [
+          "Turn the column off",
+          "Turn off its switch. The draft now says <strong>Hidden</strong>.",
+          [
+            "hide-column"
+          ]
+        ],
+        [
+          "Check the unsaved indicator",
+          "<strong>Unsaved changes</strong> means the draft has not yet changed the stored policy.",
+          [
+            "unsaved"
+          ]
+        ],
+        [
+          "Save the policy",
+          "Open the page dots at the top right and select <strong>Save</strong>.",
+          [
+            "page-actions",
+            "save-hidden"
+          ]
+        ]
+      ],
+      "result": "The indicator clears. The saved column remains Hidden after reopening the page and is absent from additional builder columns.",
+      "resultShots": [
+        "hidden-result"
+      ]
+    },
+    {
+      "id": "discard",
+      "title": "Discard unsaved policy changes",
+      "intro": [
+        "Use this when you want to keep the saved policy after changing a switch."
+      ],
+      "steps": [
+        [
+          "Review the draft change",
+          "Check which switch you changed. The example has turned the hidden column back on without saving.",
+          [
+            "discard-draft"
+          ]
+        ],
+        [
+          "Choose Discard",
+          "Open the page dots and select <strong>Discard</strong>.",
+          [
+            "discard-menu"
+          ]
+        ]
+      ],
+      "result": "The page reloads the saved policy. The unsaved switch change disappears.",
+      "resultShots": [
+        "discard-result"
+      ]
+    },
+    {
+      "id": "show-pii",
+      "title": "Approve showing a personally identifying column",
+      "intro": [
+        "Use this only after deciding that dashboard users should be able to use this additional column. The pictures use a test installation."
+      ],
+      "steps": [
+        [
+          "Check the PII label",
+          "Find the correct table and column. The example is <code>surname</code> in Patient, marked <strong>PII</strong> and Hidden.",
+          [
+            "pii-hidden"
+          ]
+        ],
+        [
+          "Read and confirm the warning",
+          "Turn the switch on. Read the warning, then select <strong>Un-hide</strong> to approve the draft. Select Cancel to leave it hidden.",
+          [
+            "pii-confirm"
+          ]
+        ],
+        [
+          "Review the draft state",
+          "The column now says <strong>Shown</strong>. The policy still has unsaved changes.",
+          [
+            "pii-draft"
+          ]
+        ],
+        [
+          "Save the approval",
+          "Open the page dots and select <strong>Save</strong>.",
+          [
+            "save-pii"
+          ]
+        ]
+      ],
+      "result": "The saved column is available among additional dashboard-builder columns.",
+      "resultShots": [
+        "pii-result"
+      ]
+    },
+    {
+      "id": "restore",
+      "title": "Hide a personally identifying column again",
+      "intro": [
+        "Use this when an approved identifying column should no longer be offered."
+      ],
+      "steps": [
+        [
+          "Turn the column off",
+          "Find the column and turn off its switch. The example hides <code>surname</code> again.",
+          [
+            "rehide-pii"
+          ]
+        ],
+        [
+          "Save the new policy",
+          "Open the page dots and select <strong>Save</strong>.",
+          [
+            "save-rehide"
+          ]
+        ]
+      ],
+      "result": "The column is Hidden in the saved policy. No identifying data was deleted.",
+      "resultShots": []
+    },
+    {
+      "id": "show-normal",
+      "title": "Show a column without a PII warning",
+      "intro": [
+        "Use this when a non-PII additional column should be available again."
+      ],
+      "steps": [
+        [
+          "Turn the column on",
+          "Find the correct column and turn on its switch. The example restores <code>managing_organization</code>.",
+          [
+            "show-normal"
+          ]
+        ],
+        [
+          "Save the policy",
+          "Open the page dots and select <strong>Save</strong>.",
+          [
+            "restore-column"
+          ]
+        ]
+      ],
+      "result": "The saved column is available among additional dashboard-builder columns again.",
+      "resultShots": []
+    },
+    {
+      "id": "phone",
+      "title": "Review the policy on a phone",
+      "intro": [
+        "Use the same table groups and switches on a phone. Scroll vertically through the groups."
+      ],
+      "steps": [
+        [
+          "Find the table group",
+          "Find the correct group before changing a column.",
+          [
+            "phone-group"
+          ]
+        ],
+        [
+          "Read the column and state",
+          "Check its name, any PII badge, and Shown or Hidden state before changing the switch. Save changes through the page dots.",
+          [
+            "phone-column"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "practice",
+      "title": "Optional practice",
+      "paragraphs": [
+        "Use a test installation. Hide a non-PII column, save, then restore it. Try Discard with an unsaved switch change. Only practise PII approval with fictional data and restore the intended policy afterward."
+      ]
+    },
+    {
+      "id": "limits",
+      "title": "Limits",
+      "paragraphs": [
+        "This is not a database security boundary or a data-deletion tool. Built-in dimensions, raw SQL and connector-backed reports are outside this policy. Column changes remain drafts until Save."
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>The policy did not change.</strong> Check Unsaved changes, then choose Save in the page dots.",
+        "<strong>Discard is unavailable.</strong> No unsaved switch change exists.",
+        "<strong>A hidden field remains available elsewhere.</strong> Check whether it is a built-in dimension, raw SQL field or connector-backed report field, which this policy does not govern."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "Read <a href=\"./dashboard-review.html\">Dashboards</a> for building widgets and <a href=\"./roles-review.html\">Roles</a> for permissions. Read <a href=\"./start-here-review.html\">Start here</a> for command-line setup."
+      ]
+    }
+  ]
+}

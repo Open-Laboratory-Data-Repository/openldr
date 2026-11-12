@@ -491,3 +491,13 @@ no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewp
 All active preview menus match. Sample data remains optional.
 See plugin-sites-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
+
+## Data Exposure preview checkpoint
+
+Previous checkpoint HEAD: 501bd4b8.
+data-exposure-review.html has 18 numbered steps and 24 native image placements.
+Every step has screenshot evidence. The integrated browser check reported no missing images,
+no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+All active preview menus match. Sample data remains optional.
+See data-exposure-review-notes.md for live workflows, source proofs and untested variants.
+This remains a preview. Its published guide is unchanged.

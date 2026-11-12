@@ -1,0 +1,8 @@
+{
+  "hiddenColumn": "patients.managing_organization",
+  "hiddenRemovedFromBuilderMetadata": true,
+  "discardRestoredSavedHidden": true,
+  "piiShownInBuilderMetadata": true,
+  "piiRestoredHidden": true,
+  "normalRestoredShown": true
+}

@@ -60,7 +60,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [ ] Settings
 - [x] Setup checks
 - [x] Laboratory
-- [ ] Data exposure
+- [x] Data exposure
 - [ ] Distributed Sync
 - [x] Connectors
 - [x] Connect to SQL Server and diagnose a connection

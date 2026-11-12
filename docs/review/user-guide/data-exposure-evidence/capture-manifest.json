@@ -1,0 +1,511 @@
+{
+  "capturedAt": "2026-11-12T14:02:08.992Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5188/studio/settings/data-exposure",
+  "steps": [
+    {
+      "id": "user-menu",
+      "label": "Open your user menu at the bottom left.",
+      "path": "data-exposure-evidence/user-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 755.5,
+          "width": 223,
+          "height": 36.5
+        }
+      ]
+    },
+    {
+      "id": "settings-menu",
+      "label": "Choose Settings.",
+      "path": "data-exposure-evidence/settings-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 13,
+          "y": 682.5,
+          "width": 198,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "exposure-page",
+      "label": "Select Data Exposure in Settings.",
+      "path": "data-exposure-evidence/exposure-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 460,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "table-group",
+      "label": "Find the correct table group before changing a column.",
+      "path": "data-exposure-evidence/table-group.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 464,
+          "y": 136.609375,
+          "width": 800,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "shown-column",
+      "label": "Shown means the additional table column is offered in the dashboard builder.",
+      "path": "data-exposure-evidence/shown-column.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 560.21875,
+          "width": 832,
+          "height": 41
+        }
+      ]
+    },
+    {
+      "id": "hide-column",
+      "label": "Turn off the switch to mark the additional column Hidden.",
+      "path": "data-exposure-evidence/hide-column.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 560.21875,
+          "width": 832,
+          "height": 41
+        }
+      ]
+    },
+    {
+      "id": "unsaved",
+      "label": "Unsaved changes means the policy has not yet been applied.",
+      "path": "data-exposure-evidence/unsaved.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1123.921875,
+          "y": 70,
+          "width": 96.078125,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "page-actions",
+      "label": "Open the Data Exposure page dots.",
+      "path": "data-exposure-evidence/page-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 62,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "save-hidden",
+      "label": "Choose Save to apply the column policy.",
+      "path": "data-exposure-evidence/save-hidden.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 103,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "hidden-result",
+      "label": "The saved column remains Hidden after reopening the page.",
+      "path": "data-exposure-evidence/hidden-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 560.21875,
+          "width": 832,
+          "height": 41
+        }
+      ]
+    },
+    {
+      "id": "discard-draft",
+      "label": "Change a switch only to draft a new policy. This example has not been saved.",
+      "path": "data-exposure-evidence/discard-draft.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 560.21875,
+          "width": 832,
+          "height": 41
+        }
+      ]
+    },
+    {
+      "id": "discard-menu",
+      "label": "Discard reloads the saved policy and removes draft changes.",
+      "path": "data-exposure-evidence/discard-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 135,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "discard-result",
+      "label": "The column returns to its saved Hidden state.",
+      "path": "data-exposure-evidence/discard-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 560.21875,
+          "width": 832,
+          "height": 41
+        }
+      ]
+    },
+    {
+      "id": "pii-hidden",
+      "label": "PII identifies columns containing personally identifiable information.",
+      "path": "data-exposure-evidence/pii-hidden.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 261.21875,
+          "width": 832,
+          "height": 43
+        }
+      ]
+    },
+    {
+      "id": "pii-confirm",
+      "label": "Read the exposure warning before choosing Un-hide.",
+      "path": "data-exposure-evidence/pii-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 275.734375,
+          "width": 448,
+          "height": 248.53125
+        }
+      ]
+    },
+    {
+      "id": "pii-draft",
+      "label": "Confirming marks the column Shown in the draft. Save still applies it.",
+      "path": "data-exposure-evidence/pii-draft.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 262.21875,
+          "width": 832,
+          "height": 41
+        }
+      ]
+    },
+    {
+      "id": "save-pii",
+      "label": "Choose Save to apply the column policy.",
+      "path": "data-exposure-evidence/save-pii.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 103,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "pii-result",
+      "label": "The saved personally identifying column is now Shown.",
+      "path": "data-exposure-evidence/pii-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 262.21875,
+          "width": 832,
+          "height": 41
+        }
+      ]
+    },
+    {
+      "id": "rehide-pii",
+      "label": "Turn the personally identifying column off again when it should be hidden.",
+      "path": "data-exposure-evidence/rehide-pii.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 262.21875,
+          "width": 832,
+          "height": 41
+        }
+      ]
+    },
+    {
+      "id": "save-rehide",
+      "label": "Choose Save to apply the column policy.",
+      "path": "data-exposure-evidence/save-rehide.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 103,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "restore-column",
+      "label": "Choose Save to apply the column policy.",
+      "path": "data-exposure-evidence/restore-column.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 103,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-group",
+      "label": "Scroll through table groups on a phone.",
+      "path": "data-exposure-evidence/phone-group.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 16,
+          "y": 229.609375,
+          "width": 343,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "phone-column",
+      "label": "Read the column name, PII label and Shown or Hidden state before changing it.",
+      "path": "data-exposure-evidence/phone-column.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 0,
+          "y": 354.21875,
+          "width": 375,
+          "height": 43
+        }
+      ]
+    },
+    {
+      "id": "show-normal",
+      "label": "Turn on a non-PII column when it should be available again.",
+      "path": "data-exposure-evidence/show-normal.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 560.21875,
+          "width": 832,
+          "height": 41
+        }
+      ]
+    }
+  ]
+}
