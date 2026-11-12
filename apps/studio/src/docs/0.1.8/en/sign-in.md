@@ -17,6 +17,8 @@ Capital letters do not matter in the username or the email. Your email works onl
 
 You stay signed in while you use Studio. A session ends after 12 hours with no use, or 7 days after you signed in, whichever comes first. Then you sign in again.
 
+Closing the browser signs you out of that browser, unless the browser is set to restore its last session. The 12-hour and 7-day limits still apply.
+
 ## Choose a new password at first sign-in
 
 An administrator who adds you or resets your password gives you a temporary password. Studio asks you to replace it the first time you use it.
@@ -30,6 +32,8 @@ An administrator who adds you or resets your password gives you a temporary pass
 **Expected result:** Studio opens. Until you finish this page, Studio shows nothing else. To leave without changing it, select **Sign out**.
 
 A password must be 10 to 128 characters long, and it cannot be your username. There is no rule about digits or symbols, and a password never expires. A long phrase you can remember works well.
+
+The new password cannot be the temporary one. If you type the temporary password again, Studio shows **Choose a password different from the temporary one.**
 
 ## Change your password
 

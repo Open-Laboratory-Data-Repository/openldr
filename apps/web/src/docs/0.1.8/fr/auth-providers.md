@@ -56,8 +56,9 @@ Ces valeurs sont fixes. Ce ne sont pas des paramètres.
 - Cinq mots de passe faux de suite verrouillent le compte pendant cinq minutes. Un verrouillage se termine toujours tout seul. Une connexion réussie ou une réinitialisation par un administrateur remet le compte à zéro.
 - Chaque adresse a droit à 30 tentatives de connexion par minute. Une adresse IPv6 compte par son /64. Le compte est gardé en mémoire sur chaque serveur.
 - Une session se termine après 12 heures sans utilisation, ou 7 jours après la connexion, selon ce qui arrive en premier.
+- Le cookie de session n'a pas de date d'expiration. Fermer le navigateur déconnecte donc l'utilisateur de ce navigateur, sauf si le navigateur est réglé pour rouvrir sa dernière session. Les limites de 12 heures et de 7 jours s'appliquent toujours.
 - Changer son propre mot de passe ferme ses autres sessions et garde la session en cours.
-- La réinitialisation par un administrateur donne un mot de passe temporaire et ferme les sessions de l'utilisateur. Celui-ci doit choisir un nouveau mot de passe à la connexion suivante.
+- La réinitialisation par un administrateur donne un mot de passe temporaire et ferme les sessions de l'utilisateur. Celui-ci doit choisir un nouveau mot de passe à la connexion suivante, différent du mot de passe temporaire.
 - La réinitialisation du mot de passe par e-mail n'est pas disponible. Studio masque **Envoyer un e-mail de réinitialisation**.
 
 Un mot de passe faux, un compte verrouillé et un compte désactivé reçoivent tous le même message, donc la page de connexion ne révèle pas si un compte existe.

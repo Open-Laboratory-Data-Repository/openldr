@@ -56,8 +56,9 @@ Estes valores são fixos. Não são definições.
 - Cinco palavras-passe erradas seguidas bloqueiam a conta durante cinco minutos. Um bloqueio acaba sempre por si. Um início de sessão certo ou uma reposição feita por um administrador põe a contagem a zero.
 - Cada endereço tem direito a 30 tentativas de início de sessão por minuto. Um endereço IPv6 conta pelo seu /64. A contagem fica em memória em cada servidor.
 - Uma sessão termina após 12 horas sem uso, ou 7 dias depois de iniciar sessão, o que acontecer primeiro.
+- O cookie de sessão não tem data de expiração. Por isso, fechar o navegador termina a sessão do utilizador nesse navegador, a não ser que o navegador esteja configurado para reabrir a última sessão. Os limites de 12 horas e de 7 dias continuam a aplicar-se.
 - Alterar a própria palavra-passe termina as outras sessões e mantém a sessão atual.
-- Uma reposição feita por um administrador define uma palavra-passe temporária e termina as sessões desse utilizador. O utilizador tem de escolher uma nova palavra-passe no próximo início de sessão.
+- Uma reposição feita por um administrador define uma palavra-passe temporária e termina as sessões desse utilizador. O utilizador tem de escolher uma nova palavra-passe no próximo início de sessão, diferente da temporária.
 - A reposição da palavra-passe por e-mail não está disponível. O Studio esconde **Enviar e-mail de reposição**.
 
 Uma palavra-passe errada, uma conta bloqueada e uma conta desativada recebem todas a mesma mensagem, por isso a página de início de sessão não revela se uma conta existe.

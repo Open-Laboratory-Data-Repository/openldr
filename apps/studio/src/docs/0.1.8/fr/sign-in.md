@@ -17,6 +17,8 @@ Les majuscules ne comptent pas dans le nom d'utilisateur ni dans l'e-mail. L'e-m
 
 Vous restez connecté tant que vous utilisez Studio. Une session se termine après 12 heures sans utilisation, ou 7 jours après la connexion, selon ce qui arrive en premier. Il faut alors vous reconnecter.
 
+Fermer le navigateur vous déconnecte de ce navigateur, sauf s'il est réglé pour rouvrir sa dernière session. Les limites de 12 heures et de 7 jours s'appliquent toujours.
+
 ## Choisir un nouveau mot de passe à la première connexion
 
 Un administrateur qui vous ajoute ou réinitialise votre mot de passe vous donne un mot de passe temporaire. Studio vous demande de le remplacer la première fois que vous l'utilisez.
@@ -30,6 +32,8 @@ Un administrateur qui vous ajoute ou réinitialise votre mot de passe vous donne
 **Résultat attendu :** Studio s'ouvre. Tant que cette page n'est pas terminée, Studio n'affiche rien d'autre. Pour partir sans changer le mot de passe, sélectionnez **Se déconnecter**.
 
 Un mot de passe compte de 10 à 128 caractères, et ne peut pas être votre nom d'utilisateur. Aucune règle n'impose de chiffres ou de symboles, et un mot de passe n'expire jamais. Une longue phrase facile à retenir convient bien.
+
+Le nouveau mot de passe ne peut pas être le mot de passe temporaire. Si vous saisissez à nouveau le mot de passe temporaire, Studio affiche **Choisissez un mot de passe différent du mot de passe temporaire.**
 
 ## Changer votre mot de passe
 

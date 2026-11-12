@@ -56,8 +56,9 @@ These values are fixed. They are not settings.
 - Five wrong passwords in a row lock the account for five minutes. A lock always ends by itself. A correct sign-in or an administrator's reset clears the count.
 - Each address gets 30 sign-in attempts a minute. An IPv6 address counts by its /64. The count is kept in memory on each server.
 - A session ends after 12 hours with no use, or 7 days after sign-in, whichever comes first.
+- The session cookie has no expiry date, so closing the browser signs the user out of that browser, unless the browser is set to restore its last session. The 12-hour and 7-day limits still apply.
 - Changing your own password ends your other sessions and keeps the current one.
-- An administrator's reset sets a temporary password and ends that user's sessions. The user must choose a new password at the next sign-in.
+- An administrator's reset sets a temporary password and ends that user's sessions. The user must choose a new password at the next sign-in, and it cannot be the temporary one.
 - Password reset by email is not available. Studio hides **Send reset email**.
 
 A wrong password, a locked account and a disabled account all get the same message, so the sign-in page does not reveal whether an account exists.

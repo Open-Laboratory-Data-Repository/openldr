@@ -17,6 +17,8 @@ As maiúsculas não contam no nome de utilizador nem no e-mail. O e-mail só fun
 
 Mantém a sessão iniciada enquanto usa o Studio. Uma sessão termina após 12 horas sem uso, ou 7 dias depois de iniciar sessão, o que acontecer primeiro. Depois disso, inicia sessão de novo.
 
+Fechar o navegador termina a sessão nesse navegador, a não ser que esteja configurado para reabrir a última sessão. Os limites de 12 horas e de 7 dias continuam a aplicar-se.
+
 ## Escolher uma nova palavra-passe no primeiro início de sessão
 
 Um administrador que o junta ou que repõe a sua palavra-passe dá-lhe uma palavra-passe temporária. O Studio pede-lhe que a substitua da primeira vez que a usa.
@@ -30,6 +32,8 @@ Um administrador que o junta ou que repõe a sua palavra-passe dá-lhe uma palav
 **Resultado esperado:** o Studio abre. Enquanto não terminar esta página, o Studio não mostra mais nada. Para sair sem a alterar, selecione **Terminar sessão**.
 
 Uma palavra-passe tem de 10 a 128 caracteres, e não pode ser o seu nome de utilizador. Não há regra sobre algarismos ou símbolos, e uma palavra-passe nunca expira. Uma frase longa que consiga lembrar funciona bem.
+
+A nova palavra-passe não pode ser a temporária. Se voltar a escrever a palavra-passe temporária, o Studio mostra **Escolha uma palavra-passe diferente da temporária.**
 
 ## Alterar a sua palavra-passe
 
