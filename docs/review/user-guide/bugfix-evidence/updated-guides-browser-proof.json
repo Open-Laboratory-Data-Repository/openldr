@@ -1,0 +1,134 @@
+{
+  "pages": 15,
+  "results": [
+    {
+      "locale": "en",
+      "slug": "query",
+      "steps": 53,
+      "images": 69,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "report-designer",
+      "steps": 43,
+      "images": 50,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "reports",
+      "steps": 53,
+      "images": 59,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "marketplace",
+      "steps": 26,
+      "images": 27,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "plugin-sites",
+      "steps": 18,
+      "images": 18,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "query",
+      "steps": 53,
+      "images": 69,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "report-designer",
+      "steps": 43,
+      "images": 50,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "reports",
+      "steps": 53,
+      "images": 59,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "marketplace",
+      "steps": 26,
+      "images": 27,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "plugin-sites",
+      "steps": 18,
+      "images": 18,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "query",
+      "steps": 53,
+      "images": 69,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "report-designer",
+      "steps": 43,
+      "images": 50,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "reports",
+      "steps": 53,
+      "images": 59,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "marketplace",
+      "steps": 26,
+      "images": 27,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "plugin-sites",
+      "steps": 18,
+      "images": 18,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    }
+  ],
+  "phone": {
+    "width": 375,
+    "height": 812,
+    "overflow": false
+  },
+  "lightTheme": true,
+  "multiFocus": true,
+  "browserErrors": [],
+  "limits": "Headless layout does not prove retractable browser chrome. This does not exercise every download/export workflow or production deployment."
+}

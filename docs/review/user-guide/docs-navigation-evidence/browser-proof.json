@@ -1,0 +1,116 @@
+{
+  "sizes": [
+    {
+      "width": 320,
+      "height": 640,
+      "belowSearch": true,
+      "valueRightGap": 4,
+      "versionMenuPassed": true,
+      "articleWidthBefore": 272,
+      "articleWidthOpen": 272,
+      "lastGuideReachable": true,
+      "escapeFocusReturn": true,
+      "outsideClickCloses": true,
+      "searchAndSelectionCloses": true,
+      "focusTrapped": true,
+      "toggleTapTargets": 44
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "belowSearch": true,
+      "valueRightGap": 4,
+      "versionMenuPassed": true,
+      "articleWidthBefore": 327,
+      "articleWidthOpen": 327,
+      "lastGuideReachable": true,
+      "escapeFocusReturn": true,
+      "outsideClickCloses": true,
+      "searchAndSelectionCloses": true,
+      "focusTrapped": true,
+      "toggleTapTargets": 44
+    },
+    {
+      "width": 393,
+      "height": 812,
+      "belowSearch": true,
+      "valueRightGap": 4,
+      "versionMenuPassed": true,
+      "articleWidthBefore": 345,
+      "articleWidthOpen": 345,
+      "lastGuideReachable": true,
+      "escapeFocusReturn": true,
+      "outsideClickCloses": true,
+      "searchAndSelectionCloses": true,
+      "focusTrapped": true,
+      "toggleTapTargets": 44
+    },
+    {
+      "width": 767,
+      "height": 700,
+      "belowSearch": true,
+      "valueRightGap": 4,
+      "versionMenuPassed": true,
+      "articleWidthBefore": 719,
+      "articleWidthOpen": 719,
+      "lastGuideReachable": true,
+      "escapeFocusReturn": true,
+      "outsideClickCloses": true,
+      "searchAndSelectionCloses": true,
+      "focusTrapped": true,
+      "toggleTapTargets": 44
+    },
+    {
+      "width": 768,
+      "height": 700,
+      "belowSearch": true,
+      "valueRightGap": 4,
+      "versionMenuPassed": true,
+      "inlineNavigationPreserved": true
+    },
+    {
+      "width": 1024,
+      "height": 768,
+      "belowSearch": true,
+      "valueRightGap": 4,
+      "versionMenuPassed": true,
+      "inlineNavigationPreserved": true
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "belowSearch": true,
+      "valueRightGap": 4,
+      "versionMenuPassed": true,
+      "inlineNavigationPreserved": true
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "belowSearch": true,
+      "valueRightGap": 4,
+      "versionMenuPassed": true,
+      "inlineNavigationPreserved": true
+    }
+  ],
+  "locales": [
+    {
+      "locale": "fr",
+      "belowSearch": true,
+      "valueRightGap": 4,
+      "versionMenuPassed": true,
+      "articleWidthUnchanged": true
+    },
+    {
+      "locale": "pt",
+      "belowSearch": true,
+      "valueRightGap": 4,
+      "versionMenuPassed": true,
+      "articleWidthUnchanged": true
+    }
+  ],
+  "browserErrors": [],
+  "mutations": [],
+  "limits": "Headless layout and input checks. Physical phone browser chrome was not tested.",
+  "resizeOpenDrawer": true
+}

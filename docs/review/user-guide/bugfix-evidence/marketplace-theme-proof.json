@@ -1,0 +1,332 @@
+{
+  "api": "http://127.0.0.1:3010",
+  "plugin": "ui-reference",
+  "marketplace": [
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "action": "Disable",
+      "status": 200,
+      "savedEnabled": false,
+      "oppositeActionVisible": true,
+      "detailStayedOpen": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "action": "Enable",
+      "status": 200,
+      "savedEnabled": true,
+      "oppositeActionVisible": true,
+      "detailStayedOpen": true
+    },
+    {
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "action": "Disable",
+      "status": 200,
+      "savedEnabled": false,
+      "oppositeActionVisible": true,
+      "detailStayedOpen": true
+    },
+    {
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "action": "Enable",
+      "status": 200,
+      "savedEnabled": true,
+      "oppositeActionVisible": true,
+      "detailStayedOpen": true
+    }
+  ],
+  "themes": [
+    {
+      "site": "page",
+      "theme": "dark",
+      "ratios": [
+        {
+          "selector": ".ref p",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(12, 19, 34)",
+          "contrast": 15.734031980819395
+        },
+        {
+          "selector": ".ref h1",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(12, 19, 34)",
+          "contrast": 15.734031980819395
+        },
+        {
+          "selector": "#ping",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(20, 29, 48)",
+          "contrast": 14.268113207244083
+        },
+        {
+          "selector": "#reports",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(27, 38, 60)",
+          "contrast": 12.820590847923672
+        }
+      ],
+      "sameDocument": true
+    },
+    {
+      "site": "page",
+      "theme": "light",
+      "ratios": [
+        {
+          "selector": ".ref p",
+          "foreground": "rgb(15, 23, 42)",
+          "background": "rgb(244, 247, 251)",
+          "contrast": 16.61470137497158
+        },
+        {
+          "selector": ".ref h1",
+          "foreground": "rgb(15, 23, 42)",
+          "background": "rgb(244, 247, 251)",
+          "contrast": 16.61470137497158
+        },
+        {
+          "selector": "#ping",
+          "foreground": "rgb(15, 23, 42)",
+          "background": "rgb(255, 255, 255)",
+          "contrast": 17.85253496299567
+        },
+        {
+          "selector": "#reports",
+          "foreground": "rgb(15, 23, 42)",
+          "background": "rgb(248, 250, 252)",
+          "contrast": 17.062933971317335
+        }
+      ],
+      "sameDocument": true
+    },
+    {
+      "site": "page",
+      "theme": "dark",
+      "ratios": [
+        {
+          "selector": ".ref p",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(12, 19, 34)",
+          "contrast": 15.734031980819395
+        },
+        {
+          "selector": ".ref h1",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(12, 19, 34)",
+          "contrast": 15.734031980819395
+        },
+        {
+          "selector": "#ping",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(20, 29, 48)",
+          "contrast": 14.268113207244083
+        },
+        {
+          "selector": "#reports",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(27, 38, 60)",
+          "contrast": 12.820590847923672
+        }
+      ],
+      "sameDocument": true
+    },
+    {
+      "site": "widget",
+      "theme": "dark",
+      "ratios": [
+        {
+          "selector": ".ref p",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(12, 19, 34)",
+          "contrast": 15.734031980819395
+        },
+        {
+          "selector": ".ref h1",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(12, 19, 34)",
+          "contrast": 15.734031980819395
+        },
+        {
+          "selector": "#ping",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(20, 29, 48)",
+          "contrast": 14.268113207244083
+        },
+        {
+          "selector": "#reports",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(27, 38, 60)",
+          "contrast": 12.820590847923672
+        }
+      ],
+      "sameDocument": true
+    },
+    {
+      "site": "widget",
+      "theme": "light",
+      "ratios": [
+        {
+          "selector": ".ref p",
+          "foreground": "rgb(15, 23, 42)",
+          "background": "rgb(244, 247, 251)",
+          "contrast": 16.61470137497158
+        },
+        {
+          "selector": ".ref h1",
+          "foreground": "rgb(15, 23, 42)",
+          "background": "rgb(244, 247, 251)",
+          "contrast": 16.61470137497158
+        },
+        {
+          "selector": "#ping",
+          "foreground": "rgb(15, 23, 42)",
+          "background": "rgb(255, 255, 255)",
+          "contrast": 17.85253496299567
+        },
+        {
+          "selector": "#reports",
+          "foreground": "rgb(15, 23, 42)",
+          "background": "rgb(248, 250, 252)",
+          "contrast": 17.062933971317335
+        }
+      ],
+      "sameDocument": true
+    },
+    {
+      "site": "widget",
+      "theme": "dark",
+      "ratios": [
+        {
+          "selector": ".ref p",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(12, 19, 34)",
+          "contrast": 15.734031980819395
+        },
+        {
+          "selector": ".ref h1",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(12, 19, 34)",
+          "contrast": 15.734031980819395
+        },
+        {
+          "selector": "#ping",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(20, 29, 48)",
+          "contrast": 14.268113207244083
+        },
+        {
+          "selector": "#reports",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(27, 38, 60)",
+          "contrast": 12.820590847923672
+        }
+      ],
+      "sameDocument": true
+    },
+    {
+      "site": "panel",
+      "theme": "dark",
+      "ratios": [
+        {
+          "selector": ".ref p",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(12, 19, 34)",
+          "contrast": 15.734031980819395
+        },
+        {
+          "selector": ".ref h1",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(12, 19, 34)",
+          "contrast": 15.734031980819395
+        },
+        {
+          "selector": "#ping",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(20, 29, 48)",
+          "contrast": 14.268113207244083
+        },
+        {
+          "selector": "#reports",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(27, 38, 60)",
+          "contrast": 12.820590847923672
+        }
+      ],
+      "sameDocument": true
+    },
+    {
+      "site": "panel",
+      "theme": "light",
+      "ratios": [
+        {
+          "selector": ".ref p",
+          "foreground": "rgb(15, 23, 42)",
+          "background": "rgb(244, 247, 251)",
+          "contrast": 16.61470137497158
+        },
+        {
+          "selector": ".ref h1",
+          "foreground": "rgb(15, 23, 42)",
+          "background": "rgb(244, 247, 251)",
+          "contrast": 16.61470137497158
+        },
+        {
+          "selector": "#ping",
+          "foreground": "rgb(15, 23, 42)",
+          "background": "rgb(255, 255, 255)",
+          "contrast": 17.85253496299567
+        },
+        {
+          "selector": "#reports",
+          "foreground": "rgb(15, 23, 42)",
+          "background": "rgb(248, 250, 252)",
+          "contrast": 17.062933971317335
+        }
+      ],
+      "sameDocument": true
+    },
+    {
+      "site": "panel",
+      "theme": "dark",
+      "ratios": [
+        {
+          "selector": ".ref p",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(12, 19, 34)",
+          "contrast": 15.734031980819395
+        },
+        {
+          "selector": ".ref h1",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(12, 19, 34)",
+          "contrast": 15.734031980819395
+        },
+        {
+          "selector": "#ping",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(20, 29, 48)",
+          "contrast": 14.268113207244083
+        },
+        {
+          "selector": "#reports",
+          "foreground": "rgb(230, 237, 246)",
+          "background": "rgb(27, 38, 60)",
+          "contrast": 12.820590847923672
+        }
+      ],
+      "sameDocument": true
+    }
+  ],
+  "limits": "Only owned sample plugin and isolated account preferences. Headless checks do not prove native phone chrome."
+}

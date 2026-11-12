@@ -1,0 +1,475 @@
+{
+  "capturedAt": "2026-11-12T14:03:32.292Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5189/studio/settings/sites",
+  "steps": [
+    {
+      "id": "sites",
+      "label": "Central manages enrolled labs under Settings, Sites.",
+      "path": "sync-evidence/sites.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 220,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "admin-unavailable",
+      "label": "This isolated installation has no provider client administration, so enrollment is unavailable.",
+      "path": "sync-evidence/admin-unavailable.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 464,
+          "y": 149,
+          "width": 800,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "label": "A lab configures its link under Settings, Distributed sync.",
+      "path": "sync-evidence/open.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 260,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "label": "Stay on the Settings tab to configure the lab.",
+      "path": "sync-evidence/settings.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 464,
+          "y": 65,
+          "width": 74.59375,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "enabled",
+      "label": "Enable sync controls whether the push and pull workers run.",
+      "path": "sync-evidence/enabled.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 117,
+          "width": 36,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "direction",
+      "label": "Choose Push to central, Pull from central or Bidirectional.",
+      "path": "sync-evidence/direction.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 885,
+          "y": 274,
+          "width": 141.15625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "central",
+      "label": "Use the reachable central address from enrollment. This picture uses an absent local test address.",
+      "path": "sync-evidence/central.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 880,
+          "y": 221,
+          "width": 384,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "site",
+      "label": "Use the exact enrolled site id.",
+      "path": "sync-evidence/site.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 880,
+          "y": 273,
+          "width": 384,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "issuer",
+      "label": "Use the OIDC issuer and client id supplied by central.",
+      "path": "sync-evidence/issuer.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 880,
+          "y": 325,
+          "width": 384,
+          "height": 36
+        },
+        {
+          "x": 880,
+          "y": 377,
+          "width": 384,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "secret",
+      "label": "Enter the one-time secret. It remains masked. This is a fictional unusable value.",
+      "path": "sync-evidence/secret.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 880,
+          "y": 429,
+          "width": 384,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "interval",
+      "label": "Choose a sync interval between 1 and 1440 minutes.",
+      "path": "sync-evidence/interval.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 880,
+          "y": 481,
+          "width": 384,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "actions",
+      "label": "The tab-strip dots contain Save.",
+      "path": "sync-evidence/actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 66,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "save",
+      "label": "Save applies the configuration without restarting the API.",
+      "path": "sync-evidence/save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 107,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "activity",
+      "label": "Activity shows the live worker state and events.",
+      "path": "sync-evidence/activity.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 542.59375,
+          "y": 65,
+          "width": 68.34375,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "now",
+      "label": "Sync now asks for a pass immediately.",
+      "path": "sync-evidence/now.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 107,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "failed-row",
+      "label": "The absent local central produces a real failed event, not a successful link.",
+      "path": "sync-evidence/failed-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 245,
+          "width": 832,
+          "height": 47
+        }
+      ]
+    },
+    {
+      "id": "detail",
+      "label": "Open an event to read its full error and metadata.",
+      "path": "sync-evidence/detail.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 721,
+          "y": 25.265625,
+          "width": 543,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "error",
+      "label": "Read the actual network failure before changing settings.",
+      "path": "sync-evidence/error.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 885,
+          "y": 263.53125,
+          "width": 379,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "disable-save",
+      "label": "Save with Enable sync off stops both workers.",
+      "path": "sync-evidence/disable-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 107,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "secret-kept",
+      "label": "A saved secret stays blank when editing other fields.",
+      "path": "sync-evidence/secret-kept.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 880,
+          "y": 429,
+          "width": 384,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "phone-settings",
+      "label": "The settings fields stack at phone width.",
+      "path": "sync-evidence/phone-settings.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 16,
+          "y": 342,
+          "width": 343,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "phone-activity",
+      "label": "Activity remains available on a phone.",
+      "path": "sync-evidence/phone-activity.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 94.59375,
+          "y": 118,
+          "width": 68.34375,
+          "height": 34
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "reportId": "r-96b6adbb-96f2-4934-a38d-f186915558ed",
+  "runs": {
+    "runs": [
+      {
+        "id": "7defe96b-556f-4d8d-bacf-d30562f59005",
+        "reportId": "r-96b6adbb-96f2-4934-a38d-f186915558ed",
+        "reportName": "Request summary report",
+        "format": "preview",
+        "params": {
+          "to": "2026-11-12",
+          "from": "2026-01-01"
+        },
+        "rowCount": 1,
+        "userId": "e33a5446-a89b-498d-8b44-30570d4b50e8",
+        "userName": "dev-admin",
+        "createdAt": "2026-11-12T14:22:07.272Z"
+      },
+      {
+        "id": "bf12e14e-5228-47b5-a15d-53f1dcffffe3",
+        "reportId": "r-96b6adbb-96f2-4934-a38d-f186915558ed",
+        "reportName": "Request summary report",
+        "format": "xlsx",
+        "params": {
+          "to": "2026-11-12",
+          "from": "2026-01-01"
+        },
+        "rowCount": 1,
+        "userId": "e33a5446-a89b-498d-8b44-30570d4b50e8",
+        "userName": "dev-admin",
+        "createdAt": "2026-11-12T14:22:06.837Z"
+      },
+      {
+        "id": "327e1076-eb00-41e4-a64b-59df81178fd1",
+        "reportId": "r-96b6adbb-96f2-4934-a38d-f186915558ed",
+        "reportName": "Request summary report",
+        "format": "csv",
+        "params": {
+          "to": "2026-11-12",
+          "from": "2026-01-01"
+        },
+        "rowCount": 1,
+        "userId": "e33a5446-a89b-498d-8b44-30570d4b50e8",
+        "userName": "dev-admin",
+        "createdAt": "2026-11-12T14:22:06.469Z"
+      },
+      {
+        "id": "79070ad2-260a-4046-8585-aa75c9f60722",
+        "reportId": "r-96b6adbb-96f2-4934-a38d-f186915558ed",
+        "reportName": "Request summary report",
+        "format": "pdf",
+        "params": {
+          "to": "2026-11-12",
+          "from": "2026-01-01"
+        },
+        "rowCount": 1,
+        "userId": "e33a5446-a89b-498d-8b44-30570d4b50e8",
+        "userName": "dev-admin",
+        "createdAt": "2026-11-12T14:22:05.350Z"
+      },
+      {
+        "id": "985a7b40-68fd-4c69-b821-4fa2dc859f0d",
+        "reportId": "r-96b6adbb-96f2-4934-a38d-f186915558ed",
+        "reportName": "Request summary report",
+        "format": "preview",
+        "params": {
+          "to": "2026-11-12",
+          "from": "2026-01-01"
+        },
+        "rowCount": 1,
+        "userId": "e33a5446-a89b-498d-8b44-30570d4b50e8",
+        "userName": "dev-admin",
+        "createdAt": "2026-11-12T14:22:03.356Z"
+      }
+    ],
+    "total": 5
+  },
+  "result": {
+    "columns": [
+      {
+        "key": "requests",
+        "label": "requests",
+        "kind": "string"
+      }
+    ],
+    "rows": [
+      {
+        "requests": 0
+      }
+    ],
+    "chart": {
+      "type": "stat",
+      "value": "1",
+      "label": "rows"
+    },
+    "meta": {
+      "generatedAt": "2026-11-12T14:22:08.428Z",
+      "rowCount": 1
+    }
+  }
+}

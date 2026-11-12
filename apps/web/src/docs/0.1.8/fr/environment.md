@@ -1,14 +1,74 @@
 # Variables d'environnement
 
-OpenLDR se configure avec des variables d'environnement lues au démarrage. Dans un déploiement Docker, elles se trouvent dans le fichier `.env` que l'installateur génère à côté de `docker-compose.yml`. Modifiez une valeur, puis recréez la pile pour l'appliquer :
+<!-- operator-platform -->
 
+Effectuez la maintenance sur l'hôte OpenLDR, dans le dossier Compose installé. Les exemples utilisent `~/Downloads/openldr_ce` sous Linux/macOS et `C:\openldr_ce` dans PowerShell. Remplacez ces chemins. Le terminal affiche déjà l'invite bleue ; saisissez seulement la commande. Les extraits de configuration indiquent le fichier à modifier ; ce ne sont pas des commandes. Ces images ne prouvent pas une opération réussie. Les données de démonstration sont facultatives.
+
+## Modifier un paramètre API
+
+Cet exemple change le niveau des journaux. Prévoyez une interruption pour recréer l’API. Les valeurs sont lues au démarrage. Un simple redémarrage ne remplace pas l’environnement du conteneur. Ne changez pas clés, émetteur ou moteur de base dans cet exemple.
+
+### 1. Trouver l’installation et son fichier caché
+
+Utilisez le vrai dossier sur l’hôte, pas celui de l’appareil de lecture. Conservez toutes les surcharges Compose.
+
+```sh
+{{operator:env-folder}}
 ```
-docker compose up -d
+
+![Trouver l’installation et son fichier caché.](guide:operator-env-folder)
+
+### 2. Conserver une copie privée
+
+La copie contient aussi des secrets. Limitez les accès et ne versionnez aucun des fichiers. Ne remplacez pas une sauvegarde utile.
+
+```sh
+{{operator:env-backup}}
 ```
 
-La plupart des opérateurs ne modifient jamais ces valeurs à la main. L'installateur écrit des valeurs par défaut raisonnables et génère tous les secrets pour vous. Cette page sert de référence pour les valeurs qui comptent dès que vous dépassez une installation sur un seul hôte : un domaine public, une base de données externe, ou SQL Server comme stockage analytique.
+![Conserver une copie privée.](guide:operator-env-backup)
 
-> Les secrets (`*_PASSWORD`, `*_SECRET_*`, `SECRETS_ENCRYPTION_KEY`) sont générés à la première installation. Ne les partagez jamais et ne les placez jamais dans un dépôt de code. Changer `SECRETS_ENCRYPTION_KEY` une fois que des connecteurs existent rend leurs identifiants enregistrés illisibles. Considérez cette clé comme définitive dès que la pile est en service.
+### 3. Modifier la ligne LOG_LEVEL existante
+
+Ouvrez .env dans l’éditeur. Modifiez cette valeur sans remplacer le fichier ni dupliquer la clé. Revenez à info ensuite. Ne changez pas SECRETS_ENCRYPTION_KEY sans procédure ; les identifiants chiffrés en dépendent.
+
+```text
+{{operator:env-loglevel}}
+```
+
+![Modifier la ligne LOG_LEVEL existante.](guide:operator-env-loglevel)
+
+### 4. Vérifier Compose sans afficher les secrets
+
+Exigez code 0. Cela vérifie Compose, pas chaque valeur applicative. Ne partagez pas la sortie complète de docker compose config, qui peut révéler les identifiants.
+
+```sh
+{{operator:env-check}}
+```
+
+![Vérifier Compose sans afficher les secrets.](guide:operator-env-check)
+
+### 5. Recréer le service concerné
+
+Pour LOG_LEVEL, recréez api et lisez son journal. Les paramètres de passerelle ou Keycloak nécessitent leurs propres services. Hôte public et certificats suivent les procédures Installation ; une seule variable ne suffit pas.
+
+```sh
+{{operator:env-recreate}}
+```
+
+![Recréer le service concerné.](guide:operator-env-recreate)
+
+### 6. Lire la valeur appliquée et la santé
+
+Attendez debug pour cet exemple et examinez la santé réelle. Cela ne prouve pas une intégration modifiée. Revenez à info avec les mêmes étapes.
+
+```sh
+{{operator:env-verify}}
+```
+
+![Lire la valeur appliquée et la santé.](guide:operator-env-verify)
+
+La référence décrit l’installation fournie lorsque précisé. Les valeurs du code diffèrent : MIGRATE_ON_START et SEED_ON_START absents valent false. L’installateur active les migrations et choisit les exemples selon ses options. Les définitions système essentielles restent installées sans exemples. TLS_MODE et LETSENCRYPT_EMAIL enregistrent des choix ; les modifier ne délivre pas de certificat. Suivez Installation.
 
 ## Exécution
 

@@ -1,130 +1,145 @@
-# Verificações de instalação
+# Verificações da configuração
 
-**Verificações de instalação** mostra o que ainda falta a esta instalação antes do uso real, e abre a página que resolve cada ponto. É o primeiro sítio a ver depois de instalar, e depois de qualquer alteração no servidor.
+Setup checks verifica os serviços e definições necessários nesta instalação. Use a página após instalar ou alterar a configuração e siga as indicações de cada aviso ou falha.
 
-Leva cerca de 5 minutos. Selecione uma imagem ou um clip para o ampliar.
+Precisa de View settings. Alterar uma definição ligada pode exigir outra permissão. Estas verificações usam a mesma lista que `openldr doctor`. Leia [Começar aqui](/docs/start-here) para configurar a linha de comandos.
 
-![As verificações numa instalação de teste nova: três avisos, para o início de sessão, o nome do laboratório e o fuso horário.](setup-checks-tour.png)
+Consulte os resultados da sua instalação. As capturas mostram uma instalação de desenvolvimento isolada com configuração em falta intencional. Não são necessários dados de exemplo.
 
-## Quem pode fazer o quê
+## Ler o relatório atual de preparação
 
-Precisa de **View settings**. Os administradores do laboratório têm-na. Resolver um ponto precisa da capacidade da página que o resolve, por exemplo **Edit general settings** para a página Laboratório.
+Faça estas verificações antes de disponibilizar a instalação ao pessoal. Executam-se ao abrir a página.
 
-## Abrir as verificações
+### 1. Abrir Settings e Setup checks
 
-Abra **Definições** e depois **Verificações de instalação**, a segunda da lista. O CE corre as verificações ao abrir a página. Para as correr outra vez, abra o menu **⋯** e escolha **Executar de novo**.
+Abra o menu de utilizador no canto inferior esquerdo, escolha **Settings** e depois **Setup checks**.
 
-Cada verificação mostra um estado:
+![Abrir o menu de utilizador no canto inferior esquerdo.](setup-checks-guide-user-menu.png)
 
-| Estado | Significado |
-| --- | --- |
-| Passou | Nada a fazer. |
-| Aviso | O CE funciona, mas algo não está como um laboratório real precisa. |
-| Falhou | Algo está avariado ou inseguro. Corrija antes do uso real. |
-| Ignorado | A verificação não se aplica a esta instalação. |
+![Escolher Settings.](setup-checks-guide-settings-menu.png)
 
-Um aviso ou uma falha diz o que mudar. Quando uma página de definições o resolve, uma ligação como **Abrir Laboratório** abre essa página. O topo da página conta os avisos e as falhas, ou diz **Todas as verificações passaram.**
+![Selecionar Setup checks em Settings.](setup-checks-guide-setup-page.png)
 
-## Exemplo 1: ler as verificações de uma instalação nova
+### 2. Ler o resumo
 
-1. Abra **Definições** e depois **Verificações de instalação**.
+Leia o número de falhas e avisos. Se não existir nenhum, o resumo indica All checks passed.
 
-**Resultado esperado** numa instalação de teste nova com `AUTH_DEV_BYPASS` ligado: **3 avisos**.
+![Ler o número de falhas e avisos.](setup-checks-guide-summary.png)
 
-| Verificação | Estado | Porquê |
-| --- | --- | --- |
-| Serviços | Passou | |
-| Início de sessão | Aviso | O início de sessão está desligado (`AUTH_DEV_BYPASS`). Qualquer pessoa que chegue a este servidor é tratada como administrador. |
-| Chave dos segredos | Passou | |
-| Nome do laboratório | Aviso | O nome está vazio ou ainda é o predefinido. |
-| Fuso horário | Aviso | Nenhum fuso horário está definido. |
-| Conectores | Passou, 1 de 1 | O conector do armazém incluído responde. |
-| Sincronização com o central | Ignorado | A sincronização está desligada. |
+### 3. Ler primeiro as falhas
 
-Numa instalação de produção, o início de sessão aparece como **Falhou**, e não como aviso.
+Leia os detalhes do serviço e a ação sugerida. Esta instalação de teste indica uma falha no armazenamento de objetos. Siga as indicações para o seu resultado.
 
-## Exemplo 2: resolver dois avisos
+![Ler os detalhes e a ação sugerida junto de uma falha.](setup-checks-guide-failed-service.png)
 
-![Abrir Laboratório a partir da verificação, definir o nome e o fuso horário, guardar e correr de novo.](setup-checks-fix.mp4)
+### 4. Ler os avisos
 
-1. Em **Nome do laboratório**, selecione **Abrir Laboratório**.
-2. Em **Nome do laboratório**, escreva o nome do seu laboratório, por exemplo `Sample Central Laboratory`.
-3. Em **Fuso horário**, escreva o seu fuso, por exemplo `Africa/Dar_es_Salaam`.
-4. Abra o menu de três pontos da página e selecione **Guardar**.
-5. Volte a **Verificações de instalação**, abra **⋯** e selecione **Executar de novo**.
+Um aviso exige revisão mesmo quando o serviço está disponível. O exemplo avisa que Laboratory name ainda usa o valor fornecido por predefinição.
 
-**Resultado esperado:** **1 aviso**. O nome do laboratório e o fuso horário passam a **Passou** e mostram o que está definido. Só fica o início de sessão, que continua aviso numa instalação de teste.
+![Ler cada aviso antes de considerar a instalação pronta.](setup-checks-guide-warning.png)
 
-![As verificações depois da correção: fica um aviso.](setup-checks-after.png)
+### 5. Verificar os itens ignorados
 
-Veja [Laboratório](/docs/laboratory) para o nome, o logótipo e o fuso horário.
+**Skipped** significa que a verificação não se aplicava. Não significa que uma função não utilizada foi configurada.
 
-## As verificações
+![Skipped indica uma verificação não aplicável, não uma configuração aprovada.](setup-checks-guide-skipped.png)
 
-| Verificação | O que vê | Se não estiver cumprida |
-| --- | --- | --- |
-| Serviços | O início de sessão, o armazenamento de ficheiros, os eventos e o armazém respondem. | O CE não consegue servir nem guardar dados. Corra `openldr health` no servidor para ver que serviço está parado. |
-| Início de sessão | O início de sessão está ligado. Com o início de sessão próprio do OpenLDR, existe um administrador. | Com `AUTH_DEV_BYPASS` ligado, qualquer pessoa que chegue ao servidor é administrador. Falha numa instalação de produção e é aviso nas outras. Com o início de sessão próprio do OpenLDR, a verificação também avisa enquanto não existir nenhum administrador. |
-| Chave dos segredos | `SECRETS_ENCRYPTION_KEY` está definido. | Um conector com palavra-passe não pode ser guardado nem lido. |
-| Nome do laboratório | O nome está definido e não é o predefinido. | Os relatórios imprimem o nome do produto como laboratório emissor. |
-| Fuso horário | Há um fuso horário definido. | O relatório mensal de transmissão conta os dias em UTC, por isso as chegadas à noite caem no dia errado. |
-| Conectores | Cada conector de anfitrião ativo responde. | As importações e consultas nesse conector falham. A verificação diz qual é. |
-| Sincronização com o central | A sincronização tem URL da central e site id, e o último ciclo correu bem. | Os resultados não chegam à central. |
+**Resultado esperado:** sabe que verificações exigem atenção e que indicações se aplicam à instalação.
 
-Três verificações podem aparecer como Ignorado:
+## Seguir um aviso e verificar a correção
 
-- **Fuso horário** num armazém SQL Server. A definição usa nomes de fuso IANA, que o SQL Server não usa. Deixe-a vazia e escreva o nome do fuso do Windows em cada execução de relatório.
-- **Conectores** quando nenhum conector de anfitrião está ativo.
-- **Sincronização com o central** quando a sincronização está desligada.
+Use a página ligada para corrigir um problema. Este exemplo corrige o nome do laboratório e o fuso horário em falta no PostgreSQL.
 
-## O que as verificações não mostram
+### 1. Abrir a página ligada
 
-Uma verificação mostra um nome ou um número, nunca uma mensagem de erro. As mensagens de erro podem ter nomes de servidores e de utilizadores. Para o detalhe de um conector com falha, abra **Definições**, **Conectores** e escolha **Diagnosticar** nele. Veja [Ligações SQL Server e diagnóstico](/docs/connector-diagnose).
+Selecione **Open Laboratory** junto do aviso Laboratory name.
 
-Cada execução fica no registo de auditoria, com os nomes das verificações que falharam ou deram aviso.
+![Seguir a ligação para a definição que exige atenção.](setup-checks-guide-open-laboratory.png)
 
-## Na linha de comandos
+### 2. Introduzir o nome do laboratório
 
-Um servidor sem interface mostra a mesma lista:
+Introduza o nome real do laboratório emissor. A captura usa `Documentation laboratory` numa instalação de teste.
 
-```bash
-openldr doctor
-```
+![Introduzir o nome real do laboratório. O exemplo usa um nome fictício.](setup-checks-guide-correct-name.png)
 
-Na instalação de teste do Exemplo 1, mostra:
+### 3. Definir o fuso horário quando aplicável
 
-```text
-PASS  Services
-WARN  Sign-in
-      Sign-in is switched off (AUTH_DEV_BYPASS). Anyone who can reach this server is treated as an administrator. Turn it off before real use.
-PASS  Secrets key
-WARN  Laboratory name
-      The laboratory name is empty or still the shipped default. Reports print it as the issuing laboratory. Set it in Settings, Laboratory.
-WARN  Time zone
-      No time zone is set. The monthly transmission report then counts days in UTC, which moves evening arrivals to the wrong day. Set it in Settings, Laboratory.
-PASS  Connectors: 1 of 1
-SKIP  Sync with central
+No PostgreSQL ou MySQL, introduza o nome do fuso horário local. O exemplo usa `Africa/Dar_es_Salaam`. No SQL Server, siga as indicações da página e forneça o fuso Windows em cada execução de relatório.
 
-3 warnings.
-```
+![Usar um fuso horário local com nome no PostgreSQL ou MySQL.](setup-checks-guide-correct-zone.png)
 
-Junte `--json` para saída legível por máquina. O comando sai com o código 1 quando uma verificação falhou. Os avisos não mudam o código, por isso este exemplo sai com 0.
+### 4. Guardar a correção
 
-## Num telemóvel
+Abra o menu de pontos de Laboratory e escolha **Save**.
 
-A página funciona num telemóvel. A mensagem de cada verificação passa para baixo do nome, e o estado fica ao lado do nome.
+![Abrir o menu de pontos de Laboratory.](setup-checks-guide-laboratory-actions.png)
+
+![Escolher Save para guardar as correções.](setup-checks-guide-laboratory-save.png)
+
+### 5. Regressar a Setup checks
+
+Selecione **Setup checks** em Settings. A abertura executa novamente as verificações.
+
+![Laboratory name e Time zone indicam agora Passed.](setup-checks-guide-corrected-result.png)
+
+**Resultado esperado:** as verificações Laboratory name e Time zone corrigidas indicam Passed. Os restantes avisos e falhas ainda exigem atenção.
+
+## Executar novamente as verificações
+
+Use esta ação após alterar a configuração ou recuperar um serviço.
+
+### 1. Abrir as ações da página
+
+Selecione os pontos no canto superior direito de Setup checks.
+
+![Abrir o menu de pontos de Setup checks.](setup-checks-guide-setup-actions.png)
+
+### 2. Escolher Run again
+
+Selecione **Run again**. Aguarde o fim das verificações.
+
+![Escolher Run again após uma correção.](setup-checks-guide-run-again.png)
+
+**Resultado esperado:** o novo resumo mostra o resultado atual. Leia as falhas e avisos restantes.
+
+![Ler o novo resumo e tratar as falhas e avisos restantes.](setup-checks-guide-rerun-result.png)
+
+## Ler as verificações num telemóvel
+
+Use a mesma página no telemóvel. Cada verificação inclui o estado e as indicações.
+
+### 1. Ler o resumo
+
+Abra Setup checks e leia o resumo no topo.
+
+![Ler o resumo no topo no telemóvel.](setup-checks-guide-phone-summary.png)
+
+### 2. Percorrer as verificações
+
+Leia os detalhes de cada verificação e as ligações ou ações propostas.
+
+![Percorrer as verificações para ler os detalhes e indicações.](setup-checks-guide-phone-check.png)
+
+## Prática opcional
+
+Não são necessários registos de prática. Numa instalação de teste, corrija um aviso real do nome ou fuso horário, guarde e execute novamente as verificações. Não provoque uma falha de serviço para este exercício.
+
+## Limites
+
+O relatório descreve as verificações no momento da execução. All checks passed não comprova todos os relatórios, fluxos ou tarefas do pessoal. Algumas correções exigem configuração do servidor fora do Studio.
 
 ## Resolução de problemas
 
-- **Serviços falhou.** Corra `openldr health` no servidor para ver que serviço está parado.
-- **Conectores falhou.** A verificação diz qual é o conector. Corra **Diagnosticar** nele.
-- **Sincronização com o central falhou.** O último ciclo falhou. **Definições**, **Sincronização distribuída**, **Atividade** diz porquê. Veja [Sincronização distribuída](/docs/sync).
-- **Início de sessão avisa que ainda não existe nenhum administrador.** A instalação usa o início de sessão próprio do OpenLDR, e ninguém terminou a configuração. O `openldr doctor` mostra `No administrator exists yet. Run "openldr auth setup-code", then open studio to create one.` Até lá, o Studio mostra a página **Criar o administrador**, e não esta página. Veja [Início de sessão e palavras-passe](/docs/sign-in).
-- **Uma verificação não conseguiu correr.** O registo do servidor tem o motivo.
+**As verificações não puderam executar-se.** Verifique a ligação à API e o registo do servidor e tente Run again.
+
+**Os serviços falharam.** Siga as indicações da ferramenta de diagnóstico apresentada e examine o serviço indicado.
+
+**Um aviso indica que a autenticação está desligada.** Desligue o desvio de autenticação de desenvolvimento na configuração do servidor antes da utilização real.
+
+**Início de sessão avisa que ainda não existe nenhum administrador.** A instalação usa o início de sessão próprio do OpenLDR, e ninguém terminou a configuração. O `openldr doctor` mostra `No administrator exists yet. Run "openldr auth setup-code", then open studio to create one.` Até lá, o Studio mostra a página **Criar o administrador**, e não esta página. Veja [Início de sessão e palavras-passe](/docs/sign-in).
+
+**Uma página ligada está indisponível.** Peça ajuda a um administrador com permissão para alterar essa definição.
 
 ## Guias relacionados
 
-- [Definições](/docs/settings)
-- [Laboratório](/docs/laboratory)
-- [Conectores](/docs/connectors)
-- [Ligações SQL Server e diagnóstico](/docs/connector-diagnose)
+Leia [Laboratório](/docs/laboratory) para os dados do laboratório emissor, [Conectores](/docs/connectors) para testar ligações e [Começar aqui](/docs/start-here) para a instalação e a linha de comandos.

@@ -1,140 +1,396 @@
 # Patients
 
-**Patients** lists every patient OpenLDR has received with lab data, and where they were tested. The source system, such as a HIMS or a lab system, owns each patient. OpenLDR shows patients and never edits them.
+Find the patient records received with lab data, read their identifiers and requests, and review possible duplicates. The Patients page reads source records. It does not offer patient editing or merging.
 
-Patient settings are optional. OpenLDR receives patient records with your lab data without requiring you to label identifier systems first. We strongly recommend configuring these settings and reviewing possible duplicates as you use the system.
+**Patient settings are optional.** OpenLDR receives patients with lab data before you label identifier systems. We strongly recommend adding useful labels and reviewing possible duplicates during use.
 
-This guide takes about 15 minutes. It uses the docs sample data, so load that first. Select any picture or clip to enlarge it.
+Use your own received records and identifier systems. No documentation sample data is required. The pictures show fictional patients in a test installation. [Optional practice data](#optional-practice-with-fictional-patients) is at the end.
 
-![Patients with the sample data loaded: 25 patients.](patients-list.png)
+**View patient index** allows a masked list and exact-identifier searches. **View patient identifiers** allows full names, identifiers, dates of birth and contact details, plus name searches. These unmasked views are audited. The pictures use this permission.
 
-## Who can do what
+**Manage patient index** allows identifier-system settings and duplicate decisions. A lab receiving identifier labels from central cannot change those shared labels here.
 
-| Permission | What it lets you do |
-| --- | --- |
-| View patient index | Open **Patients**. Names and identifiers are masked, and search matches an exact identifier only. |
-| View patient identifiers | See names, identifiers, date of birth, phone and email in full, and search by part of a name. Every unmasked view is audited. |
-| Manage patient index | Name identifier systems, and choose which ones are listed and searched. Mark duplicate groups. |
+## Find a patient and read their details
 
-### What masking hides
+Use this when you need to check who a source record describes and which lab requests belong to it. If the list is empty, return after your normal feed has sent patient data.
 
-Without **View patient identifiers**:
+### 1. Open Patients
 
-- A name shows its first letter, such as `J*** M***`.
-- An identifier shows its last four characters.
-- You see the birth year, not the date of birth, and no phone or email.
-- Search matches an exact identifier only. A partial name search would reveal names one letter at a time.
+Select **Patients** in the main menu, then use the **Patients** tab.
 
-With it, you see everything, and search also matches part of a name. Every list and every patient you open is written to the audit log. The log records how many patients matched, never what you searched for.
+![Patients is in the main menu on the left.](patients-guide-open-page.png)
 
-## Before you start
+![Patients lists records received from your source systems.](patients-guide-patients-tab.png)
 
-The examples need the docs sample data. If **Total Orders** on the sample dashboard reads 0, load it first. See [Load the sample data](/docs/dashboard#load-the-sample-data).
+### 2. Search for the person
 
-With the sample loaded, the list shows 25 patients: the 24 sample patients and one patient a new install seeds itself, **Seed Sample**. Ages are worked out from today's date, so yours may differ by a year from the pictures.
+In **Search name or identifier**, enter a name or identifier. Without permission to view identifiers, the field reads **Exact identifier** and requires the complete identifier value.
 
-## Example 1: open a patient
+![With identifier-view permission, search can find part of a name.](patients-guide-search-name.png)
 
-![Selecting Chausiku Demo to open the patient sheet.](patients-sheet.mp4)
+### 3. Check the matching row
 
-1. Open **Patients**.
-2. Select the row **Chausiku Demo**, aged 32, with 4 requests.
+Read the name, sex, age, listed identifiers and request count. Match the person using your source records. Names alone do not establish identity.
 
-![The patient sheet: identity, identifiers and requests.](patients-sheet-detail.png)
+![Read the matching patient row before opening it.](patients-guide-search-result.png)
 
-**Expected result:** the **Patient** sheet. **Identity** shows sex M, date of birth 1994-05-14, and **Source id** SAMPLE-0004. **Identifiers** lists `urn:openldr:sample:patient` SAMPLE-0004. **Requests** lists four orders, newest first, with their panel, requesting facility, status and number of results. One Full blood count is **revoked**, with 0 results.
+### 4. Open the patient
 
-You can also open a patient with **View** in its row menu. If a record was merged into another, the sheet's menu offers **Open the patient this record was merged into**.
+Select the row. **Identity** in the Patient sheet shows source details. The row dots menu also offers **View**.
 
-If the sheet says the list is out of date, the server has restarted. Reload the page.
+![Select the patient row to open its read-only details.](patients-guide-open-row.png)
 
-## Example 2: name an identifier and search by it
+![View in the patient row menu opens the same details.](patients-guide-row-view.png)
 
-Each identifier arrives with a **system**: a URI that says what kind of identifier it is, such as a national ID or an ART number. The sample patients use `urn:openldr:sample:patient`. By default no system is shown in the list, so the **Identifiers** column is empty.
+![Identity shows source details. The Patients page does not edit them.](patients-guide-identity.png)
 
-![Labelling the sample system Sample ID, showing it in the list, and searching SAMPLE-0007.](patients-identifier-system.mp4)
+### 5. Read the identifiers
 
-1. Open the **Identifier systems** tab. It lists every system seen, with how many patients carry it. The sample system has 24.
-2. Open the row menu of `urn:openldr:sample:patient` and select **Edit**.
-3. In **Label**, type `Sample ID`.
-4. Turn on **Show in the list**. Leave **Search matches it** on.
-5. Open the sheet's actions menu and select **Save**.
-6. Go back to the **Patients** tab. In **Search name or identifier**, type `SAMPLE-0007`.
+Under **Identifiers**, read each identifier system and value. A system label changes the display name, not the source value.
 
-**Expected result:** one patient, **Hamisi Sample**, F, with `Sample ID: SAMPLE-0007` in the **Identifiers** column.
+![Identifiers shows the systems and values received for this patient.](patients-guide-identifiers.png)
 
-![Search by the sample identifier: one match.](patients-search.png)
+### 6. Read the requests
 
-- Leave **Label** empty to use the name the source system sends.
-- **Show in the list** adds the system to the **Identifiers** column.
-- **Search matches it** lets search find patients by it.
-- A lab that receives these labels from central cannot change them.
+Under **Requests**, check the order dates, panels, requesting facilities, statuses and result counts. Use the request pagination if there are more rows.
 
-You need **Manage patient index** to edit a system.
+![Requests shows this patient's orders, status and result counts.](patients-guide-requests.png)
 
-## Find a patient
+### 7. Close the sheet
 
-Type any identifier, such as an MPI number or a national ID, and OpenLDR finds the patient whichever identifier it is. **Filter** and **Status** show merged records too. **Columns** chooses what the list shows.
+Select **Close** at the top right to return to the list.
 
-## Duplicates
+![Close returns to the patient list.](patients-guide-close-details-step-7.png)
 
-The **Duplicates** tab lists patients that look like the same person.
+**Expected result:** You can inspect the record without changing patient details. Corrections to source identity data belong in the system that maintains it.
 
-![The Duplicates tab with the sample data: No likely duplicates.](patients-duplicates.png)
+## Name an identifier system and show it in the list
 
-With the sample data it reads **No likely duplicates.** OpenLDR finds two kinds:
+An identifier system is the URI that says what kind of identifier a value is. Configure systems that have arrived from your data sources. Use a label people recognise.
 
-- **Same identifier.** Two or more patients carry the same value in the same identifier system, such as the same NRC. Identifiers with no system, and systems where **Search matches it** is off, are not used.
-- **Same name and date of birth.** Surname, first name and date of birth match, ignoring case, extra spaces and accents. Patients whose sexes differ are not matched. A patient with no date of birth is never matched this way.
+### 1. Open Identifier systems
 
-The sample has two patients called Amina Demo. They are not a duplicate group: their dates of birth and sexes differ.
+Select **Identifier systems** at the top of Patients. It lists received systems and patient counts.
 
-Only active patients are compared. OpenLDR does not merge patients. Fix duplicates in the source system, and its next update clears the group here.
+![Identifier systems lists the identifier types that have arrived.](patients-guide-identifier-tab.png)
 
-- Select a group to see its patients. **Open patient** in a patient's menu opens the full record.
-- The list shows at most 50 patients per group, and says how many it shows out of the total. A group bigger than that cannot be marked here. Fix it in the source system, or turn off **Search matches it** for that identifier system. A placeholder identifier shared by many patients is the usual cause.
-- With **Manage patient index**, **Mark as not duplicates** in the group's menu records that the patients are different people. You can add a reason. Use **Status** to see these groups again, and **Show again** to undo.
-- With **View patient identifiers**, **Export CSV** in the tab's menu sends the open groups to the source system's team. Each export is audited.
+### 2. Choose Edit for the system
 
-## On a phone
+Open the dots on the correct system row and select **Edit**. Check the URI before changing its settings.
 
-The patient list and the sheet work on a phone.
+![Open the dots beside the identifier system you want to label.](patients-guide-identifier-row-actions.png)
 
-![Patients on a phone.](patients-phone.png)
+![Edit opens this identifier system's display and search settings.](patients-guide-identifier-edit.png)
 
-## After upgrading
+### 3. Enter the label
 
-Patients received before this release have no identifiers listed until you run `openldr db reproject --force` once. It also fills in what OpenLDR needs to find patients with the same name and date of birth.
+In **Label**, enter the readable name. The fictional example uses `Example ID`. Leave it blank to use the source-provided name.
 
-## From the command line
+![Give this identifier system a name people recognise. The example uses Example ID.](patients-guide-identifier-label.png)
 
-- `openldr patients list [--search <text>] [--status active|merged|all] [--identifiers]`
-- `openldr patients show <id> [--identifiers]`
-- `openldr patients identifier-systems list`
-- `openldr patients identifier-systems set <system> [--label <text>] [--list-column on|off] [--searchable on|off]`
-- `openldr patients duplicates list [--status open|dismissed|all] [--limit <n>] [--offset <n>] [--identifiers]`
-- `openldr patients duplicates dismiss <idA> <idB> [--reason <text>]` and `restore <idA> <idB>`
-- `openldr patients duplicates export [--out <file>]`
+### 4. Choose whether to show its values
 
-Output is masked unless you pass `--identifiers`. `patients list` and `patients show` with `--identifiers` are audited. So are `duplicates list` with `--identifiers` and `duplicates export`, which is always unmasked. `duplicates dismiss` and `restore` are audited too.
+Turn on **Show in the list** to include this system in the Patients table's Identifiers column.
 
-For example, the same label as Example 2:
+![Show in the list includes this identifier system in the patient table.](patients-guide-identifier-list.png)
 
-```bash
-./openldr patients identifier-systems set urn:openldr:sample:patient --label "Sample ID" --list-column on
+### 5. Check whether searches should match it
+
+Keep **Search matches it** on for useful identifying values. Turn it off for a placeholder system that should not identify a person. It also affects same-identifier duplicate matching.
+
+![Search matches it determines whether identifiers from this system participate in searching.](patients-guide-identifier-searchable.png)
+
+### 6. Open Identifier system actions
+
+Select the dots in this settings sheet.
+
+![Identifier system settings have their own dots menu.](patients-guide-identifier-actions.png)
+
+### 7. Save the settings
+
+Select **Save**.
+
+![Save stores the label and display/search choices.](patients-guide-identifier-save.png)
+
+**Expected result:** The system row shows its saved label and display/search settings.
+
+![The identifier system now displays the saved label.](patients-guide-identifier-saved.png)
+
+## Find a patient by a listed identifier
+
+Search by the identifier value, not the label. More than one matching record can appear when the source contains a shared or duplicated identifier.
+
+### 1. Return to Patients and search
+
+Select **Patients** and enter the identifier value. The example searches `DOCS-001`.
+
+![Patients lists records received from your source systems.](patients-guide-patients-tab.png)
+
+![Search an identifier value rather than its label. These two fictional records deliberately share DOCS-001.](patients-guide-search-identifier.png)
+
+### 2. Check the labelled value
+
+Read the Identifiers column. This example shows **Example ID: DOCS-001**. The two fictional records deliberately share it.
+
+![The listed identifier appears with its configured label.](patients-guide-listed-identifier.png)
+
+**Expected result:** Matching patients appear with the configured identifier label. An empty Identifiers column does not mean the source record has no identifiers; check the display setting.
+
+## Find records marked Merged
+
+Use this when the source has made a record inactive or reported a replacement. The default patient list shows active records.
+
+### 1. Open Filter
+
+Select **Filter** above the patient list.
+
+![Use Filter to include records marked Merged by the source.](patients-guide-filter-open.png)
+
+### 2. Add a filter
+
+Select **Add filter**.
+
+![Add filter starts a Status rule.](patients-guide-filter-add.png)
+
+### 3. Check the Status rule
+
+Use **Status** as the column and keep **Equals**.
+
+![Choose Status and keep its equals operator.](patients-guide-filter-status.png)
+
+### 4. Choose Merged
+
+Select **Merged** as the value.
+
+![Choose Merged to inspect inactive or replaced records.](patients-guide-filter-merged.png)
+
+### 5. Apply the filter
+
+Select **Apply**.
+
+![Apply updates the patient list with this Status rule.](patients-guide-filter-apply.png)
+
+**Expected result:** The list shows records marked Merged. A badge appears beside their names. Clear the status filter when you want active records again.
+
+![Merged records show a badge beside the patient name.](patients-guide-merged-row-step-0.png)
+
+## Follow a replacement reported by the source
+
+A replaced record can point to the patient it was merged into upstream. OpenLDR follows that reported link; this action does not merge records.
+
+### 1. Open the merged record
+
+Select the merged patient row. A reported replacement adds an actions menu in its Identity section.
+
+![Merged records show a badge beside the patient name.](patients-guide-merged-row-step-1.png)
+
+![A source-reported replacement adds a patient-sheet dots menu.](patients-guide-merged-actions-step-1.png)
+
+### 2. Open the patient-sheet actions
+
+Select the dots beside **Identity**.
+
+![A source-reported replacement adds a patient-sheet dots menu.](patients-guide-merged-actions-step-2.png)
+
+### 3. Follow the replacement
+
+Select **Open the patient this record was merged into**.
+
+![Open the patient this record was merged into follows the source replacement.](patients-guide-merged-replacement.png)
+
+**Expected result:** The replacement patient opens in the read-only Patient sheet.
+
+![The replacement patient opens in the same read-only sheet.](patients-guide-replacement-result.png)
+
+## Inspect a possible duplicate group
+
+Review the evidence before deciding whether records describe the same person. A shared identifier can be a data-entry problem or a placeholder. OpenLDR does not resolve that decision for you.
+
+### 1. Open Duplicates
+
+Select **Duplicates** at the top of Patients.
+
+![Duplicates lists groups that may represent the same person.](patients-guide-duplicates-tab.png)
+
+### 2. Read the rule and evidence
+
+Check why each group was suggested and how many patients it contains. The example matches a shared identifier.
+
+![Read the rule and evidence before deciding whether the group is a duplicate.](patients-guide-duplicate-group.png)
+
+### 3. Open the group
+
+Select the group row to open **Likely duplicates**.
+
+![Select the group row to inspect its members.](patients-guide-duplicate-open.png)
+
+### 4. Compare the members
+
+Read the evidence, identifiers and available identity details. Same-name matching also requires matching birth details and compatible sex values.
+
+![The group sheet explains why these patients were matched.](patients-guide-duplicate-evidence.png)
+
+### 5. Open a member when needed
+
+Use that member's dots menu and select **Open patient** to inspect its full record and requests.
+
+![Each member has its own dots menu for opening the full patient.](patients-guide-member-actions.png)
+
+![Open patient opens the selected member's read-only record.](patients-guide-member-open.png)
+
+**Expected result:** The selected member opens in a read-only Patient sheet. No patient record is merged by reviewing the group.
+
+![Open patient displays the selected member in its read-only patient sheet.](patients-guide-member-view-result.png)
+
+## Record that a group contains different people
+
+Only use this after checking that the suggested records are different people. For an actual duplicate, correct the source records instead. The group decision is reversible.
+
+### 1. Return to the group
+
+If a member's Patient sheet is open, select **Close** to return to Likely duplicates.
+
+![Close returns to the patient list.](patients-guide-close-details-step-1.png)
+
+### 2. Enter a reason if useful
+
+In **Reason**, record why these are different people. The example explicitly describes its fictional demonstration.
+
+![If you have confirmed different people, enter a reason for the decision.](patients-guide-duplicate-reason.png)
+
+### 3. Open the group actions
+
+Select the dots beside the group's Evidence heading.
+
+![Use the group dots menu to record your decision.](patients-guide-duplicate-actions.png)
+
+### 4. Mark the group as different people
+
+Select **Mark as not duplicates**.
+
+![Mark as not duplicates hides this reviewed group from Open. It does not merge or delete patients.](patients-guide-duplicate-mark.png)
+
+**Expected result:** The group disappears from Open. Patient records remain unchanged.
+
+![The reviewed group is absent from the Open list.](patients-guide-duplicate-dismissed.png)
+
+## Show a reviewed group again
+
+Use this to undo a previous Not duplicates decision and return the group for review.
+
+### 1. Choose Not duplicates
+
+In Duplicates, open **Status** and choose **Not duplicates**.
+
+![Use Status to find groups marked as not duplicates.](patients-guide-duplicate-status.png)
+
+![Not duplicates lists reviewed groups.](patients-guide-duplicate-status-option.png)
+
+### 2. Open the reviewed group
+
+Select its row.
+
+![Open the reviewed group if you need to undo the decision.](patients-guide-duplicate-reopen.png)
+
+### 3. Choose Show again
+
+Open the group dots menu and select **Show again**.
+
+![Use the group dots menu to record your decision.](patients-guide-duplicate-actions.png)
+
+![Show again returns the group to Open without changing patient records.](patients-guide-duplicate-restore.png)
+
+### 4. Return to Open
+
+Use **Status** to choose **Open**.
+
+![Choose Open to return to unresolved duplicate groups.](patients-guide-duplicate-status-open.png)
+
+**Expected result:** The group is back in the open review list.
+
+![The group is back in Open for review.](patients-guide-duplicate-restored.png)
+
+## Export open duplicate groups
+
+Use this when the team maintaining the source records needs the open groups. Export requires View patient identifiers and is audited.
+
+### 1. Open Duplicates actions
+
+Select the dots above the Duplicates table.
+
+![The Duplicates tab has a separate export menu.](patients-guide-duplicate-export-actions.png)
+
+### 2. Choose Export CSV
+
+Select **Export CSV**. The browser downloads the open groups.
+
+![Export CSV downloads open groups for the team that maintains the source data.](patients-guide-duplicate-export.png)
+
+**Expected result:** The CSV includes the identifiers needed for source review. The export does not mark or merge any patient.
+
+## Use Patients on a phone
+
+The tabs and patient sheet remain available on a phone. A wide list can scroll horizontally.
+
+### 1. Choose the tab
+
+Use Patients, Identifier systems or Duplicates at the top.
+
+![Patients, Identifier systems and Duplicates remain at the top on a phone.](patients-guide-phone-tabs.png)
+
+### 2. Search for the patient
+
+Use the search field, with the same identifier permissions as on desktop.
+
+![Use the patient search on a phone.](patients-guide-phone-search.png)
+
+### 3. Open the patient details
+
+Select the matching row and scroll the Patient sheet to read its sections.
+
+![The patient sheet uses the phone width and scrolls through its sections.](patients-guide-phone-details.png)
+
+## Optional practice with fictional patients
+
+Every task above can use your received records. This optional file is only for a test installation. It contains three fictional patient records, one request, one report and one result. Two patient records share an identifier; one old record points to its replacement.
+
+[Download the six-resource practice bundle](https://openldr.online/docs-samples/user-guide/patients/example-patients.json). Read [Start here](/docs/start-here) for installed and development CLI instructions, then put the file in your installation's data folder.
+
+Development checkout example:
+
+```shell
+cd ~/Downloads/openldr_ce
+pnpm openldr ingest data/example-patients.json
 ```
+
+For an installed Linux or macOS copy, use `./openldr` instead of `pnpm openldr`. On Windows, use `.\openldr.ps1` from your installation folder, such as `C:\openldr_ce`. Replace example folders with your real folder. Start here shows each platform.
+
+The fixture does not require the optional Test catalog practice files. Request and patient counts in your installation can differ from the pictures.
+
+## Understand masking and duplicate limits
+
+Without View patient identifiers, names are masked, identifiers show only their last four characters, and birth dates show only the year. Phone and email are hidden. Search requires an exact identifier. These limits also apply when inspecting duplicate groups.
+
+Same-identifier groups use the same value in the same searchable identifier system. Identifiers with no system and systems with Search matches it off are excluded. Name-and-birth-date matching ignores case, spacing and accents. Active records are compared.
+
+A group shows at most 50 members. A larger group cannot be marked here. Check whether a placeholder identifier has been used for many people and correct the source data or searchable-system setting.
+
+Patient data belongs to the source workflow. This page reads identity records, labels identifier systems and records duplicate-review decisions. It has no patient-edit or merge action.
 
 ## Troubleshooting
 
-- **Names show as `J*** M***`.** Your role lacks **View patient identifiers**.
-- **Search finds nothing for part of a name.** Without **View patient identifiers**, search matches an exact identifier only.
-- **The Identifiers column is empty.** No identifier system has **Show in the list** on. See [Example 2](#example-2-name-an-identifier-and-search-by-it).
-- **Search does not find a patient by an identifier.** That system has **Search matches it** off.
-- **A patient has no identifiers after an upgrade.** Run `openldr db reproject --force` once.
-- **The sheet says the list is out of date.** Reload the page.
+**The patient list is empty.** Check whether patient data has arrived from your normal feed. You do not need sample data or identifier labels to receive patients.
+
+**Part of a name finds nothing.** A user without View patient identifiers must search the complete identifier value. Check Search matches it for that identifier system.
+
+**The Identifiers column is empty.** Enable Show in the list for a received system. Open the Patient sheet to check the source identifiers themselves.
+
+**Identifier settings cannot be edited.** Check Manage patient index and whether the labels come from central. A central-managed lab reads those labels here.
+
+**The sheet says the list is out of date.** Reload the page and reopen the patient. The list reference can expire after a server restart.
+
+**A duplicate group returns after a source update.** Compare the current membership and evidence. Correct actual duplicates in the source system rather than marking them as different people.
 
 ## Related guides
 
-- [Facilities](/docs/facilities)
-- [Test catalog](/docs/test-catalog)
-- [Data exposure](/docs/data-exposure)
+[Facilities](/docs/facilities) explains facility identity. [Test catalog](/docs/test-catalog) explains test and result codes. [Start here](/docs/start-here) explains the CLI.

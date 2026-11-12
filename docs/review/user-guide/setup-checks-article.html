@@ -1,0 +1,44 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Administration</span><span>Check installation readiness</span><span>About 10 minutes</span></div>
+<h1>Setup checks</h1>
+<p>Setup checks reviews the services and settings this installation needs. Use it after installation or configuration changes, then follow the advice beside each warning or failure.</p>
+<p>You need View settings. Changing a linked setting may need another permission. These checks use the same list as <code>openldr doctor</code>. Read <a href="./start-here-review.html">Start here</a> for command-line setup.</p>
+<p>Use your own installation results. The pictures show an isolated development installation with deliberate missing configuration. No sample data is required.</p>
+<h2 id="dg-read">Read the current readiness report</h2>
+<p>Use this before treating an installation as ready for staff. The checks run when the page opens.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Settings and Setup checks</h3><p>Open your user menu at the bottom left, choose <strong>Settings</strong>, then select <strong>Setup checks</strong>.</p>__SHOT:user-menu:1____SHOT:settings-menu:1____SHOT:setup-page:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read the summary</h3><p>Read the number of failed checks and warnings. If neither exists, the summary says All checks passed.</p>__SHOT:summary:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read failed checks first</h3><p>Read the service detail and suggested next action. This test installation reports a blob-storage service failure. Follow the advice for your own result.</p>__SHOT:failed-service:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Read the warnings</h3><p>A warning needs review even when the service is available. The example warns that Laboratory name still uses the shipped default.</p>__SHOT:warning:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Check skipped items</h3><p><strong>Skipped</strong> means the check did not apply. It does not mean that an unused feature has been configured.</p>__SHOT:skipped:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> You know which checks need attention and which advice applies to this installation.</p></div>
+<h2 id="dg-correct">Follow a warning and check the correction</h2>
+<p>Use a linked setting page to correct a problem. This example corrects a laboratory name and missing time zone on PostgreSQL.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the linked page</h3><p>Select <strong>Open Laboratory</strong> beside the Laboratory name warning.</p>__SHOT:open-laboratory:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Enter the laboratory name</h3><p>Enter your actual issuing laboratory name. The picture uses <code>Documentation laboratory</code> in a test installation.</p>__SHOT:correct-name:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Set the time zone when applicable</h3><p>For PostgreSQL or MySQL, enter your named local time zone. The example uses <code>Africa/Dar_es_Salaam</code>. On SQL Server, follow the page advice and supply the Windows zone in each report run instead.</p>__SHOT:correct-zone:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Save the correction</h3><p>Open the Laboratory page dots and select <strong>Save</strong>.</p>__SHOT:laboratory-actions:4____SHOT:laboratory-save:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Return to Setup checks</h3><p>Select <strong>Setup checks</strong> in Settings. Opening it runs the checks again.</p>__SHOT:corrected-result:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The corrected Laboratory name and Time zone checks show Passed. Other warnings or failures still need attention.</p></div>
+<h2 id="dg-rerun">Run the checks again</h2>
+<p>Use this after configuration changes or after a service recovers.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the page actions</h3><p>Select the dots at the top right of Setup checks.</p>__SHOT:setup-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Run again</h3><p>Select <strong>Run again</strong>. Wait for the checks to finish.</p>__SHOT:run-again:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The new summary shows the current result. Read the remaining failed checks and warnings.</p></div>
+__SHOT:rerun-result:0__
+<h2 id="dg-phone">Read setup checks on a phone</h2>
+<p>Use the same page on a phone. Each check includes its status and advice.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Read the summary</h3><p>Open Setup checks and read the summary at the top.</p>__SHOT:phone-summary:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Scroll through the checks</h3><p>Read each check detail and any link or next action.</p>__SHOT:phone-check:2__</section>
+<h2 id="dg-practice">Optional practice</h2>
+<p>No practice records are required. In a test installation, correct a genuine laboratory-name or time-zone warning, save it, then run the checks again. Do not introduce a service failure for this exercise.</p>
+<h2 id="dg-limits">Limits</h2>
+<p>The report describes the checks at the time they ran. All checks passed does not prove every report, feed or staff workflow. Some repairs need server configuration outside Studio.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>The checks could not run.</strong> Check the API connection and server log, then try Run again.</p>
+<p><strong>Services failed.</strong> Follow the displayed health-command advice and inspect the named service.</p>
+<p><strong>Sign-in warns that it is switched off.</strong> Turn off the development authentication bypass in server configuration before real use.</p>
+<p><strong>A linked page is unavailable.</strong> Ask an administrator with permission to edit that setting.</p>
+<h2 id="dg-related">Related guides</h2>
+<p>Read <a href="./laboratory-review.html">Laboratory</a> for issuing-lab details. Read <a href="./connectors-review.html">Connectors</a> for connection tests. Read <a href="./start-here-review.html">Start here</a> for installation and command-line setup.</p>
+</article>

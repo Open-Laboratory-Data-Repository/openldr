@@ -1,0 +1,102 @@
+{
+  "capturedAt": "2026-11-12T15:34:28.775Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "steps": [
+    {
+      "id": "reports-unpublish-action",
+      "caption": "Select Unpublish for the selected report.",
+      "path": "bugfix-evidence/reports-unpublish-action.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1093,
+          "y": 288,
+          "width": 166,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "reports-unpublish-success",
+      "caption": "Unpublish succeeds. The report leaves the library. The API records Draft and retains its design.",
+      "path": "bugfix-evidence/reports-unpublish-success.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 940,
+          "y": 739.5,
+          "width": 123.28125,
+          "height": 19.5
+        },
+        {
+          "x": 248,
+          "y": 56,
+          "width": 174,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "reports-date-range-parameters",
+      "caption": "The required Period filter accepts a Date range preset.",
+      "path": "bugfix-evidence/reports-date-range-parameters.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1206.3125,
+          "y": 159.28125,
+          "width": 57.6875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "reports-date-range-result",
+      "caption": "The required Date range query returns the dates selected in Reports.",
+      "path": "bugfix-evidence/reports-date-range-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 471,
+          "y": 250.875,
+          "width": 420.46875,
+          "height": 44.5
+        },
+        {
+          "x": 891.46875,
+          "y": 250.875,
+          "width": 388.53125,
+          "height": 44.5
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>System setup</span><span>Connect a lab to central</span><span>About 30 minutes to prepare</span></div>
+<h1>Distributed sync</h1>
+<p>Distributed sync links a lab installation to a central OpenLDR installation. The lab pushes its clinical records. Central supplies shared configuration and terminology for the lab to read.</p>
+<p>You need <strong>View sync</strong> to read status and events. <strong>Manage sync</strong> permits configuration, site management and divergence decisions. Central enrolls labs under Settings, Sites. A lab configures its link under Settings, Distributed sync.</p>
+<p>For a live link, obtain the site id, central URL, OIDC issuer, client id and one-time client secret through central enrollment. Central enrollment requires Keycloak client administration. Keep these values private and use HTTPS.</p>
+<p>The pictures show the real settings and a deliberately unavailable local central. This preview verifies configuration and failure inspection. It does not show a successful lab-to-central transfer or invent enrollment credentials. No documentation sample data is required.</p>
+<h2 id="dg-central">Check central enrollment is available</h2>
+<p>The central administrator must enroll the lab before its operator can configure a real link.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Sites on central</h3><p>Open <strong>Settings</strong>, then <strong>Sites</strong>.</p>__SHOT:sites:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check provider administration</h3><p>Enrollment requires Keycloak client administration. This isolated installation reports that it is unavailable, so it cannot issue a real client secret. Configure the central identity service before proceeding with a live setup.</p>__SHOT:admin-unavailable:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> A configured central offers Enroll site. This preview stops before enrollment because provider client administration is unavailable.</p></div>
+<h2 id="dg-configure">Enter the enrollment values on the lab</h2>
+<p>Use the values issued by your central administrator. The screenshot values point only to a nonexistent local test service.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Distributed sync</h3><p>On the lab, open <strong>Settings</strong>, then <strong>Distributed sync</strong>.</p>__SHOT:open:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Settings</h3><p>Stay on the <strong>Settings</strong> tab.</p>__SHOT:settings:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check Enable sync</h3><p>Keep <strong>Enable sync</strong> off while entering the enrollment values. Turn it on when they are ready. Off leaves both workers dormant.</p>__SHOT:enabled:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose Direction</h3><p>Use Push to central for lab data only, Pull from central for shared configuration only, or <strong>Bidirectional</strong> for both.</p>__SHOT:direction:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Enter Central URL</h3><p>Use the public HTTPS address supplied at enrollment. The picture uses an absent local HTTP test address and is not a production configuration.</p>__SHOT:central:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Enter Site ID</h3><p>Use the stable site identifier assigned by central. Do not invent another id for an enrolled client.</p>__SHOT:site:6__</section>
+<h2 id="dg-credentials">Enter the site credentials and save</h2>
+<p>Continue in the Sync Settings tab. Use credentials supplied for this lab by central. Leave an existing secret blank only when keeping it.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Enter issuer and client id</h3><p>Copy <strong>OIDC issuer URL</strong> and <strong>Client ID</strong> exactly from central enrollment.</p>__SHOT:issuer:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Enter the one-time secret</h3><p>Fill <strong>Client secret</strong>. The field is masked and write-only. The screenshot contains a fictional value that cannot authenticate.</p>__SHOT:secret:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Set the interval</h3><p>Choose <strong>Sync interval (minutes)</strong> between 1 and 1440. The default is 15.</p>__SHOT:interval:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Open the tab actions</h3><p>Turn Enable sync on when ready, then open the tab-strip dots.</p>__SHOT:actions:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Save the configuration</h3><p>Select <strong>Save</strong>. Changes start, stop or reconfigure workers immediately, without an API restart.</p>__SHOT:save:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> A valid link can authenticate and transfer data. A save notification proves the settings were accepted, not that central was reached.</p></div>
+<h2 id="dg-activity">Read live sync activity</h2>
+<p>Use Activity to establish whether the saved link actually works.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Activity</h3><p>Select the <strong>Activity</strong> tab. Read push and pull state, Pending push, Last checked and Last success.</p>__SHOT:activity:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Request a pass</h3><p>Open the tab dots and choose <strong>Sync now</strong> to request an immediate pass. It does not run a pass while sync is off.</p>__SHOT:now:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read the event row</h3><p>Read event, direction, record count and detail. This example records a real failure because its local central does not exist.</p>__SHOT:failed-row:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Open the event</h3><p>Select its row to open the <strong>Sync event</strong> sheet.</p>__SHOT:detail:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Read the full error</h3><p>Read the error and metadata. Correct the specific connection, identity or data issue before retrying.</p>__SHOT:error:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> A successful live link shows successful events, advancing cursors and a falling pending backlog. The example establishes failure visibility only.</p></div>
+<h2 id="dg-pause">Stop sync and edit safely</h2>
+<p>Use the master switch to pause both workers without removing the saved connection values.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Save with Enable sync off</h3><p>Close the event, return to Settings, switch Enable sync off, then open the dots and Save.</p>__SHOT:disable-save:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Keep the stored secret when editing</h3><p>Reopen or reload Settings. The secret remains blank with its stored-secret placeholder. Leave it blank to keep it when changing other fields.</p>__SHOT:secret-kept:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Both workers stop. The fictional test link remains disabled after capture.</p></div>
+<h2 id="dg-phone">Use sync settings on a phone</h2>
+<p>The settings form scrolls vertically at phone width. Wide event tables can scroll within their own pane.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Read the connection fields</h3><p>Open Distributed sync, Settings and scroll to the required field.</p>__SHOT:phone-settings:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check Activity</h3><p>Use Activity for current state and events. Open a row for its complete detail.</p>__SHOT:phone-activity:2__</section>
+<h2 id="dg-enroll">What central enrollment supplies</h2>
+<p>On a central with Keycloak client administration configured, open Sites, then its dots and Enroll site. Supply a stable lowercase Site ID, an optional Name and the public Central URL. Enrollment creates a client named sync-&lt;siteId&gt; and its site_id token mapping.</p>
+<p>The enrollment result shows client id, client secret, OIDC issuer and central URL. Copy the secret privately before closing. It appears only once. A lost secret requires Rotate secret on that site row and an update on the lab. Revoke deletes the client and marks the site revoked.</p>
+<p>The central service account needs manage-clients and view-clients in the Keycloak realm. These operations were not exercised in this isolated preview. Its identity administration is intentionally disabled.</p>
+<h2 id="dg-tls">Trust central TLS on the lab server</h2>
+<p>A browser accepting a self-signed certificate does not make the lab server trust it. Download central's public certificate from the Sites dots or enrollment result, then transfer it to the lab through your normal administration channel.</p>
+<p>Mount it read-only into the lab API container and set NODE_EXTRA_CA_CERTS to that container path. Recreate the lab API after changing its environment. The certificate must match the central hostname or IP address, including its Subject Alternative Name. Keep normal certificate validation enabled.</p>
+<p>Use a trusted HTTPS central address in production. A localhost HTTP address is useful only for isolated tests like this preview. No certificate download or TLS trust change was exercised here.</p>
+<h2 id="dg-cli">Use the CLI</h2>
+<p>Follow <a href="start-here-review.html">Start here</a> for CLI setup. From <code>openldr_ce</code>, central uses sync enroll, list, rotate and revoke. These credentials are real secrets. Do not put their output in shared logs or screenshots.</p>
+<p>On the lab, settings sync show masks the stored secret. Set one field at a time with settings sync set. Sync status and sync now inspect or request live work.</p>
+<pre><code>pnpm openldr settings sync show
+pnpm openldr sync status
+pnpm openldr sync now
+pnpm openldr settings sync set enabled false</code></pre>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>Enrollment is unavailable.</strong> Check central Keycloak administration capabilities and its service-account roles. Generic OIDC does not provision sync clients.</p>
+<p><strong>Authentication fails.</strong> Match site id, issuer, client id and current secret to central enrollment. Rotate a lost secret, then update the lab.</p>
+<p><strong>Certificate error.</strong> Check trust on the lab API server and certificate address matching. The browser's exception does not configure the server.</p>
+<p><strong>Activity contains failed, quarantined or diverged events.</strong> Open the event and read its full reason. Do not treat every failure as a network problem. Resolve the reported condition before repeating changes.</p>
+<p><strong>Pending push remains high.</strong> Read Last success and recent failures. Sync now requests a pass but does not prove it succeeded.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="auth-providers-review.html">Authentication providers</a>, <a href="environment-review.html">Environment variables</a> and <a href="settings-review.html">Settings</a>.</p>
+</article>

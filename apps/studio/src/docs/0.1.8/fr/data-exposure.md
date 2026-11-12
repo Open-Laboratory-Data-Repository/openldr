@@ -1,114 +1,183 @@
 # Exposition des données
 
-**Paramètres → Exposition des données** décide quelles colonnes supplémentaires le **Builder** des tableaux de bord peut proposer quand quelqu'un joint une autre table, par exemple le sexe du patient ou le site de prélèvement de l'échantillon. Masquez une colonne ici et elle disparaît du Builder pour tout le monde.
+Data Exposure contrôle les colonnes supplémentaires proposées par le créateur de tableaux de bord. Les administrateurs y masquent les colonnes ou approuvent leur disponibilité. Vous avez besoin de Manage data exposure.
 
-Elle ne couvre pas tout. Lisez [Ce que la page ne couvre pas](#ce-que-la-page-ne-couvre-pas) avant de compter sur elle pour garder une colonne privée.
+Cette politique couvre les colonnes supplémentaires du créateur. Elle exclut les dimensions intégrées, le SQL brut et les rapports de connecteurs. Masquer une colonne ici ne supprime pas ses données ni l'accès à la base.
 
-Comptez 10 minutes. Sélectionnez une image ou un clip pour l'agrandir.
+Le badge PII signifie information permettant d'identifier une personne. Afficher une telle colonne exige une confirmation supplémentaire, puis Save.
 
-![Exposition des données : la table Patient, chaque colonne avec son badge DPI et un interrupteur Visible ou Masquée.](data-exposure-tour.png)
+Utilisez votre politique de colonnes approuvée. Les images proviennent d'une installation de test isolée et les colonnes sont rétablies après démonstration. Aucun exemple d'enregistrement n'est requis.
 
-## Qui peut faire quoi
+## Masquer une colonne supplémentaire du tableau de bord
 
-Une seule capacité couvre cette page : **Manage data exposure**. Sans elle, la page n'apparaît pas dans les Paramètres.
+Utilisez cette tâche lorsqu'une colonne supplémentaire ne doit plus être proposée dans le créateur de tableaux de bord.
 
-## Ce que montre la page
+### 1. Ouvrir Settings et Data Exposure
 
-La page liste sept tables. Chaque ligne est une colonne, avec un interrupteur : activé veut dire **Visible**, désactivé veut dire **Masquée**.
+Ouvrez votre menu utilisateur en bas à gauche, choisissez **Settings**, puis **Data Exposure**.
 
-| Table | Colonnes | Masquées sur une installation neuve | Marquées DPI |
-| --- | --- | --- | --- |
-| Patient | 18 | 13 | 8 : noms, date de naissance, identifiant national, téléphone, e-mail, GUID du patient, clé de rapprochement |
-| Specimen | 13 | 7 | aucune |
-| Request | 30 | 8 | `clinical_info` |
-| Facility | 12 | 3 | aucune |
-| Report | 20 | 5 | aucune |
-| Facility Map | 16 | 2 | aucune |
-| Test Map | 9 | 1 | aucune |
+![Ouvrez votre menu utilisateur en bas à gauche.](data-exposure-guide-user-menu.png)
 
-**DPI** veut dire données à caractère personnel. Un badge rouge **DPI** marque ces colonnes. Elles sont masquées au départ.
+![Choisissez Settings.](data-exposure-guide-settings-menu.png)
 
-## Exemple 1 : masquer une colonne
+![Sélectionnez Data Exposure dans Settings.](data-exposure-guide-exposure-page.png)
 
-Masquez la colonne `sex` du patient, puis remettez-la.
+### 2. Trouver le groupe de table
 
-![Désactiver sex dans la table Patient et enregistrer depuis le menu Exposition des données.](data-exposure-hide.mp4)
+Trouvez la table contenant la colonne. L'exemple utilise **Patient**. Vérifiez le nom de la table et celui de la colonne.
 
-1. Ouvrez **Paramètres**, puis **Exposition des données**.
-2. Sous **Patient**, trouvez `sex`. Elle est **Visible**.
-3. Désactivez-la. Elle devient **Masquée**. **Modifications non enregistrées** s'affiche.
-4. Ouvrez le menu à trois points de la page et sélectionnez **Enregistrer**. **Politique des colonnes enregistrée** s'affiche.
+![Trouvez le bon groupe avant de modifier une colonne.](data-exposure-guide-table-group.png)
 
-**Résultat attendu :** `sex` reste **Masquée** après un rechargement de la page.
+### 3. Vérifier l'état actuel
 
-Les changements restent sur votre écran seulement, jusqu'à **Enregistrer**. **Annuler les modifications**, dans le même menu, jette les changements non enregistrés et recharge les valeurs enregistrées. Si **Enregistrer** signale une erreur, ne supposez pas qu'un changement a été gardé. Rechargez et vérifiez.
+Lisez **Shown** ou **Hidden** près de l'interrupteur. L'exemple commence avec `managing_organization` à Shown.
 
-Pour la remettre, activez `sex` et sélectionnez de nouveau **Enregistrer**.
+![Shown indique que la colonne supplémentaire est proposée dans le créateur de tableaux de bord.](data-exposure-guide-shown-column.png)
 
-## Exemple 2 : voir la colonne disparaître du Builder
+### 4. Désactiver la colonne
 
-Faites-le pendant que `sex` est encore masquée par l'Exemple 1.
+Désactivez son interrupteur. Le brouillon indique maintenant **Hidden**.
 
-1. Ouvrez **Tableaux de bord** et modifiez un widget, ou ajoutez-en un. Voir [Tableaux de bord, Exemple 1](/docs/dashboard#exemple-1-creer-un-widget-de-demandes-par-examen).
-2. Dans le Builder, sélectionnez **Join data**. Réglez la table sur **Patient**.
-3. Regardez les colonnes Patient proposées.
+![Désactivez l'interrupteur pour marquer la colonne supplémentaire Hidden.](data-exposure-guide-hide-column.png)
 
-**Résultat attendu :** la liste propose `managing_organization`, `active`, `source_system` et `created_at`. `sex` a disparu. Rendez-la visible, enregistrez et rouvrez l'éditeur de widget : `sex` est de nouveau proposée.
+### 5. Vérifier l'indicateur de modifications
 
-Un widget enregistré avant avec `sex` cesse de s'exécuter dès que vous la masquez. Le serveur refuse sa requête, car la colonne n'est plus permise.
+**Unsaved changes** signifie que le brouillon n'a pas encore modifié la politique enregistrée.
 
-## Rendre visible une colonne DPI
+![Unsaved changes indique que la politique n'est pas encore appliquée.](data-exposure-guide-unsaved.png)
 
-Activer une colonne avec un badge **DPI** demande d'abord : **Rendre** *nom* **visible ?** Sélectionnez **Rendre visible** seulement si cette colonne est vraiment utile dans le Builder. Sélectionnez ensuite **Enregistrer**.
+### 6. Enregistrer la politique
 
-## Ce que la page ne couvre pas
+Ouvrez les points de la page en haut à droite et sélectionnez **Save**.
 
-Cette page contrôle les colonnes supplémentaires que le Builder propose dans **Join data**. Elle les contrôle quand la colonne est choisie, quand la requête s'exécute et quand la requête est convertie en SQL. Ce n'est pas un filtre sur tous les champs que renvoie OpenLDR.
+![Ouvrez les points de la page Data Exposure.](data-exposure-guide-page-actions.png)
 
-Elle ne s'applique **pas** :
+![Choisissez Save pour appliquer la politique de colonnes.](data-exposure-guide-save-hidden.png)
 
-- **Aux champs intégrés du Builder.** Les champs que chaque modèle de données propose par défaut restent disponibles.
-- **Aux widgets SQL.** Le SQL brut lit tout ce que le compte de base de données peut lire.
-- **À une requête du Builder convertie en SQL.** Une fois convertie, elle ne suit plus les changements faits ensuite sur cette page.
-- **Aux requêtes personnalisées, aux rapports qui en dépendent, aux données du Concepteur de rapports et aux nœuds de base de données des workflows.** Ils exécutent tous du SQL via les [Connecteurs](/docs/connectors). Ils ignorent cette page, même quand le connecteur pointe vers la base OpenLDR.
+**Résultat attendu :** l'indicateur disparaît. La colonne reste Hidden après réouverture et n'apparaît plus parmi les colonnes supplémentaires du créateur.
 
-Pour garder une colonne privée sur ces chemins, limitez plutôt le compte de base de données. Donnez au compte de chaque connecteur, et au compte des widgets SQL, l'accès aux seules tables, colonnes ou vues approuvées. Les contrôles de lecture seule et les limites de lignes ne masquent aucune colonne.
+![La colonne enregistrée reste Hidden après réouverture de la page.](data-exposure-guide-hidden-result.png)
 
-Masquer une colonne ne supprime pas les données déjà stockées, ni les fichiers déjà exportés.
+## Abandonner les modifications non enregistrées
 
-## Vérifier le bon chemin
+Utilisez cette tâche pour conserver la politique enregistrée après avoir changé un interrupteur.
 
-- Testez avec des données non sensibles.
-- Un état **Masquée** enregistré prouve seulement que le choix a été enregistré. Vérifiez le Builder à part, comme dans l'Exemple 2.
-- Vérifiez à part les widgets SQL et les rapports sur connecteurs. Pour un connecteur, exécutez une requête avec son compte sur une vue approuvée et sur une colonne interdite.
-- Vérifiez le rapport final avant de le partager.
+### 1. Vérifier la modification du brouillon
 
-## En ligne de commande
+Vérifiez l'interrupteur modifié. L'exemple a réactivé la colonne masquée sans enregistrer.
 
-```bash
-./openldr data-exposure list
-./openldr data-exposure hide patients sex
-./openldr data-exposure show patients sex
-```
+![Changer un interrupteur prépare seulement une politique. Cet exemple n'a pas été enregistré.](data-exposure-guide-discard-draft.png)
 
-`hide` et `show` prennent un nom de table et un ou plusieurs noms de colonnes. Un serveur en marche ne voit un changement fait en ligne de commande qu'après le prochain enregistrement sur cette page, ou un redémarrage. Redémarrez le conteneur api pour l'appliquer tout de suite.
+### 2. Choisir Discard
 
-## Sur un téléphone
+Ouvrez les points de la page et sélectionnez **Discard**.
 
-La page fonctionne sur un téléphone. Chaque ligne garde le nom de la colonne à gauche et son interrupteur à droite. Ouvrez **Exposition des données** depuis la rangée des pages des Paramètres en haut. C'est la dernière, donc faites glisser la rangée sur le côté.
+![Discard recharge la politique enregistrée et retire les modifications du brouillon.](data-exposure-guide-discard-menu.png)
+
+**Résultat attendu :** la page recharge la politique enregistrée. La modification non enregistrée de l'interrupteur disparaît.
+
+![La colonne retrouve son état enregistré Hidden.](data-exposure-guide-discard-result.png)
+
+## Approuver l'affichage d'une colonne identifiante
+
+Utilisez cette tâche seulement après avoir décidé que les utilisateurs des tableaux de bord doivent disposer de cette colonne. Les images utilisent une installation de test.
+
+### 1. Vérifier le badge PII
+
+Trouvez la bonne table et la bonne colonne. L'exemple utilise `surname` dans Patient, marqué **PII** et Hidden.
+
+![PII identifie les colonnes contenant des informations permettant d'identifier une personne.](data-exposure-guide-pii-hidden.png)
+
+### 2. Lire et confirmer l'avertissement
+
+Activez l'interrupteur. Lisez l'avertissement, puis sélectionnez **Un-hide** pour approuver le brouillon. Sélectionnez Cancel pour garder la colonne masquée.
+
+![Lisez l'avertissement d'exposition avant de choisir Un-hide.](data-exposure-guide-pii-confirm.png)
+
+### 3. Vérifier l'état du brouillon
+
+La colonne indique maintenant **Shown**. La politique comporte encore des modifications non enregistrées.
+
+![La confirmation marque la colonne Shown dans le brouillon. Save reste nécessaire pour l'appliquer.](data-exposure-guide-pii-draft.png)
+
+### 4. Enregistrer l'approbation
+
+Ouvrez les points de la page et sélectionnez **Save**.
+
+![Choisissez Save pour appliquer la politique de colonnes.](data-exposure-guide-save-pii.png)
+
+**Résultat attendu :** la colonne enregistrée est disponible parmi les colonnes supplémentaires du créateur de tableaux de bord.
+
+![La colonne identifiante enregistrée indique maintenant Shown.](data-exposure-guide-pii-result.png)
+
+## Masquer à nouveau une colonne identifiante
+
+Utilisez cette tâche lorsqu'une colonne identifiante approuvée ne doit plus être proposée.
+
+### 1. Désactiver la colonne
+
+Trouvez la colonne et désactivez son interrupteur. L'exemple masque à nouveau `surname`.
+
+![Désactivez à nouveau la colonne identifiante lorsqu'elle doit être masquée.](data-exposure-guide-rehide-pii.png)
+
+### 2. Enregistrer la nouvelle politique
+
+Ouvrez les points de la page et sélectionnez **Save**.
+
+![Choisissez Save pour appliquer la politique de colonnes.](data-exposure-guide-save-rehide.png)
+
+**Résultat attendu :** la colonne est Hidden dans la politique enregistrée. Aucune donnée identifiante n'a été supprimée.
+
+## Afficher une colonne sans avertissement PII
+
+Utilisez cette tâche pour rendre à nouveau disponible une colonne supplémentaire sans PII.
+
+### 1. Activer la colonne
+
+Trouvez la bonne colonne et activez son interrupteur. L'exemple rétablit `managing_organization`.
+
+![Activez une colonne sans PII lorsqu'elle doit être à nouveau disponible.](data-exposure-guide-show-normal.png)
+
+### 2. Enregistrer la politique
+
+Ouvrez les points de la page et sélectionnez **Save**.
+
+![Choisissez Save pour appliquer la politique de colonnes.](data-exposure-guide-restore-column.png)
+
+**Résultat attendu :** la colonne enregistrée est de nouveau disponible parmi les colonnes supplémentaires du créateur.
+
+## Vérifier la politique sur téléphone
+
+Utilisez les mêmes groupes et interrupteurs sur téléphone. Faites défiler les groupes verticalement.
+
+### 1. Trouver le groupe de table
+
+Trouvez le bon groupe avant de modifier une colonne.
+
+![Faites défiler les groupes de tables sur téléphone.](data-exposure-guide-phone-group.png)
+
+### 2. Lire la colonne et son état
+
+Vérifiez son nom, son éventuel badge PII et son état Shown ou Hidden avant de changer l'interrupteur. Enregistrez avec les points de la page.
+
+![Lisez le nom, le badge PII et l'état Shown ou Hidden avant modification.](data-exposure-guide-phone-column.png)
+
+## Exercice facultatif
+
+Utilisez une installation de test. Masquez une colonne sans PII, enregistrez, puis rétablissez-la. Essayez Discard après une modification non enregistrée. Exercez-vous à l'approbation PII avec des données fictives uniquement, puis rétablissez la politique voulue.
+
+## Limites
+
+Cette fonction n'est ni une limite de sécurité de la base ni un outil de suppression. Les dimensions intégrées, le SQL brut et les rapports de connecteurs sont exclus. Les modifications restent des brouillons jusqu'à Save.
 
 ## Dépannage
 
-- **Une colonne masquée apparaît encore dans le Builder.** Fermez et rouvrez l'éditeur de widget. Si vous l'avez changée en ligne de commande, redémarrez le conteneur api.
-- **Un widget échoue maintenant.** Il utilise une colonne que vous avez masquée. Rendez-la visible ou changez le widget.
-- **Un rapport montre encore une colonne masquée.** Le rapport passe par un connecteur, que cette page ne couvre pas. Limitez le compte de base de données du connecteur.
-- **L'enregistrement échoue.** Rechargez la page pour voir ce qui a été gardé, puis réessayez.
-- **La page manque dans les Paramètres.** Il vous faut **Manage data exposure**.
+**La politique n'a pas changé.** Vérifiez Unsaved changes, puis choisissez Save dans les points de la page.
+
+**Discard est indisponible.** Aucune modification d'interrupteur non enregistrée n'existe.
+
+**Un champ masqué reste disponible ailleurs.** Vérifiez s'il s'agit d'une dimension intégrée, d'un champ SQL brut ou d'un rapport de connecteur. Cette politique ne les couvre pas.
 
 ## Guides associés
 
-- [Paramètres](/docs/settings)
-- [Tableaux de bord](/docs/dashboard)
-- [Requêtes personnalisées](/docs/query)
-- [Connecteurs](/docs/connectors)
-- [Rapports](/docs/reports)
+Lisez [Tableaux de bord](/docs/dashboard) pour créer des widgets et [Rôles](/docs/roles) pour les permissions. Lisez [Commencer ici](/docs/start-here) pour configurer la CLI.

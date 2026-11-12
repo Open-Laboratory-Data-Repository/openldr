@@ -1,0 +1,11 @@
+{
+  "id": "e6280ae0-b3bf-41c5-9010-5e98199a3ddb",
+  "name": "Example v1 database",
+  "pluginId": null,
+  "type": "microsoft-sql",
+  "kind": "database",
+  "allowedHost": null,
+  "enabled": true,
+  "createdAt": "2026-11-12T13:59:12.396Z",
+  "updatedAt": "2026-11-12T13:59:12.396Z"
+}

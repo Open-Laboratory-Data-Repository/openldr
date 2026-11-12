@@ -1,0 +1,389 @@
+{
+  "title": "Settings",
+  "meta": [
+    "Administration",
+    "Change General settings",
+    "About 20 minutes"
+  ],
+  "intro": [
+    "General settings shows application information, optional capabilities and runtime limits. It also contains data-validation settings and destructive maintenance actions.",
+    "You need View settings to open General. Edit general settings allows numeric limits and validation changes. Manage feature flags allows optional-capability switches. Danger zone allows destructive maintenance.",
+    "Use your own approved operational choices. The pictures show an isolated test installation. The destructive examples ran only against that disposable installation, after verifying its database and identity-provider ownership. No practice data is required.",
+    "Use the linked pages in Settings for Laboratory, Setup checks, Connectors, Roles, Layouts and Data Exposure. This guide covers General. Read <a href=\"./start-here-review.html\">Start here</a> for command-line setup."
+  ],
+  "tasks": [
+    {
+      "id": "about",
+      "title": "Read the running version and update state",
+      "intro": [
+        "Use this when reporting a problem or deciding whether to schedule an upgrade."
+      ],
+      "steps": [
+        [
+          "Open Settings and General",
+          "Open your user menu at the bottom left, choose <strong>Settings</strong>, then select <strong>General</strong>.",
+          [
+            "user-menu",
+            "settings-menu",
+            "general-page"
+          ]
+        ],
+        [
+          "Read About",
+          "Read the running <strong>Version</strong>, environment and configured services in About.",
+          [
+            "about"
+          ]
+        ],
+        [
+          "Read Latest",
+          "Read <strong>Latest</strong> and the last-check time. Use available release-note and upgrade-procedure links when planning an upgrade. This page does not install updates.",
+          [
+            "update-state"
+          ]
+        ]
+      ],
+      "result": "You have the running version and the server's current update-check result.",
+      "resultShots": []
+    },
+    {
+      "id": "updates",
+      "title": "Change automatic update checks",
+      "intro": [
+        "Use this when deciding whether this server should check for available releases."
+      ],
+      "steps": [
+        [
+          "Change Auto update check",
+          "Turn <strong>Auto update check</strong> on or off in About. The change saves immediately.",
+          [
+            "update-switch"
+          ]
+        ],
+        [
+          "Read the resulting state",
+          "When off, Latest says <strong>update check is off</strong>. Turning it on allows checks again. It does not upgrade the installation.",
+          [
+            "update-off"
+          ]
+        ]
+      ],
+      "result": "The update-check choice is saved.",
+      "resultShots": []
+    },
+    {
+      "id": "flags",
+      "title": "Enable or disable an optional capability",
+      "intro": [
+        "Use this after deciding which optional capabilities the installation should offer. Read the description before changing a switch."
+      ],
+      "steps": [
+        [
+          "Change the feature flag",
+          "In <strong>Feature Flags</strong>, turn the required switch on or off. The example turns on <strong>Dashboard raw SQL</strong>.",
+          [
+            "flag"
+          ]
+        ],
+        [
+          "Check the save message",
+          "The change saves immediately. Check the <strong>Saved</strong> message. There is no separate Save button for feature flags.",
+          [
+            "flag-saved"
+          ]
+        ]
+      ],
+      "result": "The new flag applies immediately. The example restored its original off state after capture.",
+      "resultShots": []
+    },
+    {
+      "id": "limits",
+      "title": "Change a runtime limit",
+      "intro": [
+        "Use this when you need to tune an operational limit without restarting. Read the setting description and choose a value for your workload."
+      ],
+      "steps": [
+        [
+          "Enter the value",
+          "In <strong>Limits & tuning</strong>, enter the intended number. The example changes <strong>Dashboard SQL row cap</strong> to <code>5000</code>.",
+          [
+            "number-value"
+          ]
+        ],
+        [
+          "Leave the field to save",
+          "Select another field or press Tab. Leaving the number field saves it. The server limits values to the accepted range.",
+          [
+            "number-saved"
+          ]
+        ],
+        [
+          "Check the saved value",
+          "Reopen General when you need to confirm persistence. Read the value the server kept.",
+          [
+            "number-reopened"
+          ]
+        ]
+      ],
+      "result": "The numeric limit remains saved after reopening General.",
+      "resultShots": []
+    },
+    {
+      "id": "validation",
+      "title": "Change incoming-data validation",
+      "intro": [
+        "Use this when changing which incoming lab data the installation accepts. Raising strictness may reject previously accepted data. Lowering it permits more incomplete data."
+      ],
+      "steps": [
+        [
+          "Open Data validation",
+          "Scroll to <strong>Danger Zone</strong> and open <strong>Data validation</strong>.",
+          [
+            "validation-menu"
+          ]
+        ],
+        [
+          "Choose the level",
+          "Choose Low, Medium or High as required. The example changes High to <strong>Medium</strong>.",
+          [
+            "validation-level"
+          ]
+        ],
+        [
+          "Read the effect",
+          "Read the confirmation warning for the direction of your change.",
+          [
+            "validation-warning"
+          ]
+        ],
+        [
+          "Type the confirmation phrase",
+          "Enter the exact lowercase level shown in the prompt. The example types <code>medium</code>.",
+          [
+            "validation-phrase"
+          ]
+        ],
+        [
+          "Apply the change",
+          "Select <strong>Apply</strong>. Select Cancel to keep the previous level.",
+          [
+            "validation-apply"
+          ]
+        ]
+      ],
+      "result": "Data validation displays the saved level.",
+      "resultShots": [
+        "validation-result"
+      ]
+    },
+    {
+      "id": "reset-dashboards",
+      "title": "Reset all dashboards to the sample",
+      "intro": [
+        "Use this only when every dashboard should be removed and the built-in sample restored. This cannot be undone."
+      ],
+      "steps": [
+        [
+          "Open the action dots",
+          "In Danger Zone, select the dots beside <strong>Reset dashboards</strong>.",
+          [
+            "reset-dashboards-actions"
+          ]
+        ],
+        [
+          "Choose Reset",
+          "Select <strong>Reset</strong>.",
+          [
+            "reset-dashboards-menu"
+          ]
+        ],
+        [
+          "Read what the action removes",
+          "Check the confirmation title and warning. Cancel if the action does not match your intent.",
+          [
+            "reset-dashboards-warning"
+          ]
+        ],
+        [
+          "Type the exact phrase",
+          "Enter <code>reset dashboards</code> exactly as shown.",
+          [
+            "reset-dashboards-phrase"
+          ]
+        ],
+        [
+          "Confirm Reset",
+          "Select <strong>Reset</strong> to perform the operation. Wait for completion.",
+          [
+            "reset-dashboards-confirm"
+          ]
+        ]
+      ],
+      "result": "Every dashboard is deleted and the built-in sample is recreated.",
+      "resultShots": [
+        "reset-dashboards-result"
+      ]
+    },
+    {
+      "id": "clear-audit",
+      "title": "Clear audit events and workflow run history",
+      "intro": [
+        "Use this only when the audit trail and workflow run history should be permanently removed. This cannot be undone."
+      ],
+      "steps": [
+        [
+          "Open the action dots",
+          "In Danger Zone, select the dots beside <strong>Clear audit log</strong>.",
+          [
+            "clear-audit-actions"
+          ]
+        ],
+        [
+          "Choose Clear",
+          "Select <strong>Clear</strong>.",
+          [
+            "clear-audit-menu"
+          ]
+        ],
+        [
+          "Read what the action removes",
+          "Check the confirmation title and warning. Cancel if the action does not match your intent.",
+          [
+            "clear-audit-warning"
+          ]
+        ],
+        [
+          "Type the exact phrase",
+          "Enter <code>clear audit</code> exactly as shown.",
+          [
+            "clear-audit-phrase"
+          ]
+        ],
+        [
+          "Confirm Clear",
+          "Select <strong>Clear</strong> to perform the operation. Wait for completion.",
+          [
+            "clear-audit-confirm"
+          ]
+        ]
+      ],
+      "result": "Old audit events and workflow run history are removed. The clear operation itself writes a new audit event.",
+      "resultShots": [
+        "clear-audit-result"
+      ]
+    },
+    {
+      "id": "factory-reset",
+      "title": "Restore internal factory defaults",
+      "intro": [
+        "Use this only when all internal application data should be wiped and reseeded. It removes forms, connectors, dashboards, workflows, terminology, local users, audit data and other internal records. This cannot be undone."
+      ],
+      "steps": [
+        [
+          "Open the action dots",
+          "In Danger Zone, select the dots beside <strong>Factory reset</strong>.",
+          [
+            "factory-reset-actions"
+          ]
+        ],
+        [
+          "Choose Factory reset",
+          "Select <strong>Factory reset</strong>.",
+          [
+            "factory-reset-menu"
+          ]
+        ],
+        [
+          "Read what the action removes",
+          "Check the confirmation title and warning. Cancel if the action does not match your intent.",
+          [
+            "factory-reset-warning"
+          ]
+        ],
+        [
+          "Type the exact phrase",
+          "Enter <code>factory reset</code> exactly as shown.",
+          [
+            "factory-reset-phrase"
+          ]
+        ],
+        [
+          "Confirm Factory reset",
+          "Select <strong>Factory reset</strong> to perform the operation. Wait for completion.",
+          [
+            "factory-reset-confirm"
+          ]
+        ]
+      ],
+      "result": "The internal database is wiped and factory defaults are reseeded. External target data and identity-provider accounts are outside this reset.",
+      "resultShots": [
+        "factory-reset-result"
+      ]
+    },
+    {
+      "id": "phone",
+      "title": "Read General settings on a phone",
+      "intro": [
+        "Use the same General page on a phone. The page scrolls vertically."
+      ],
+      "steps": [
+        [
+          "Read About",
+          "Read the version and update information near the top.",
+          [
+            "phone-about"
+          ]
+        ],
+        [
+          "Scroll to the limits",
+          "Read the field description before changing a numeric limit.",
+          [
+            "phone-limit"
+          ]
+        ],
+        [
+          "Read Danger Zone carefully",
+          "Scroll to the action and read its description before opening the dots.",
+          [
+            "phone-danger"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "practice",
+      "title": "Optional practice",
+      "paragraphs": [
+        "Use a disposable test installation. Change one reversible flag or numeric limit, confirm it saved, then restore it. Do not practise destructive maintenance against staff data."
+      ]
+    },
+    {
+      "id": "limits-section",
+      "title": "Limits",
+      "paragraphs": [
+        "Update checking does not install a release. Feature switches save immediately. Numeric fields save when you leave them. Destructive actions affect the internal database and cannot be undone through this page."
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>A control is absent.</strong> Check the separate permission for feature flags, general edits or Danger Zone actions.",
+        "<strong>A numeric value changed after saving.</strong> The server clamps it to the accepted range. Read the saved value.",
+        "<strong>A confirmation stays disabled.</strong> Type the exact phrase displayed by the prompt.",
+        "<strong>Latest cannot confirm an update.</strong> Read the displayed last-check error and resolve the server's outbound connection before relying on the result."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "Read <a href=\"./setup-checks-review.html\">Setup checks</a> for readiness and <a href=\"./laboratory-review.html\">Laboratory</a> for issuing-lab details. Read <a href=\"./audit-review.html\">Audit</a> to inspect recorded administration actions."
+      ]
+    }
+  ]
+}

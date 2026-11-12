@@ -1,161 +1,258 @@
 # Marketplace
 
-Le **Marketplace** est l'endroit où les administrateurs trouvent et installent des compléments pour OpenLDR : des **plugins** qui lisent ou envoient des données (un import CSV, un lecteur HL7 v2, un envoi vers DHIS2), des **modèles de formulaires**, et des **packs de contenu** de données de référence comme des systèmes de codes, un registre d'établissements et des requêtes de rapports. Tout vient d'un **registre**, une liste publiée d'artefacts. Une installation neuve en a un, **Default registry**, sur GitHub.
+Utilisez Marketplace pour examiner et installer des plugins, modèles de formulaire, rapports et packs de contenu. Les paquets viennent de registres, des listes de fichiers fournies par un éditeur.
 
-Comptez 10 minutes, avec un accès réseau à GitHub. Sélectionnez une image ou un clip pour l'agrandir.
+**View marketplace** permet de parcourir les paquets disponibles et installés. **Manage marketplace** permet d'installer, désactiver, retirer et gérer les registres.
 
-![Marketplace, Parcourir : les artefacts du registre par défaut, avec leur type, éditeur, version et état de signature.](marketplace-tour.png)
+Commencez par le registre approuvé par votre organisation. Une installation neuve inclut Default registry sur GitHub. Le serveur doit pouvoir le joindre pour lire les paquets.
 
-## Qui peut faire quoi
+Les images utilisent un plugin de destination d'entraînement signé depuis un registre local d'exercice. Suivez les mêmes tâches avec votre paquet approuvé. Aucun exemple de documentation n'est nécessaire. La configuration facultative d'exercice se trouve à la fin.
 
-| Capacité | Ce qu'elle permet |
-| --- | --- |
-| **View marketplace** | Ouvrir Paramètres, Marketplace, et parcourir les artefacts disponibles et installés |
-| **Manage marketplace** | Installer, activer, désactiver, supprimer, et gérer les registres |
+## Trouver votre paquet
 
-## Les trois onglets
+Vérifiez sa source et son usage avant de le choisir. Installer un plugin lui accorde les capacités déclarées.
 
-- **Parcourir** liste ce que proposent les registres. **Tous les types** filtre par plugin, formulaire ou pack de contenu.
-- **Installés (N)** liste ce qu'a cette installation, avec l'état de chaque artefact.
-- **Registres** liste d'où viennent les artefacts.
+### 1. Ouvrir Marketplace
 
-Chaque carte affiche **Non vérifié** tant que sa signature n'a pas été contrôlée. L'ouvrir contrôle la signature, et la carte passe à **Vérifié**.
+Ouvrez **Settings**, puis **Marketplace**.
 
-## Exemple 1 : lire un plugin avant de l'installer
+![Ouvrez Settings, puis Marketplace.](marketplace-guide-open.png)
 
-![Ouvrir tabular. Les détails, permissions et prérequis se chargent et il passe à Vérifié.](marketplace-read.mp4)
+### 2. Choisir Browse
 
-1. Ouvrez **Paramètres**, puis **Marketplace**. **Parcourir** est ouvert.
-2. Sélectionnez **tabular**.
+Utilisez **Browse** pour voir les paquets des registres activés.
 
-**Résultat attendu :** après quelques secondes, la page affiche **Vérifié**, avec la description **CSV/Excel -> FHIR R4 ingestion plugin (configurable mapping)**. Elle montre :
+![Browse liste les paquets proposés par les registres activés.](marketplace-guide-browse.png)
 
-| Champ | Valeur |
-| --- | --- |
-| Entry point | `convert` |
-| Checksum (sha256) | l'empreinte du fichier, contrôlée avant exécution |
-| Sandbox | WASI enabled |
-| Memory limit | 256 MB |
-| Time limit | 30000 ms |
-| Permissions | `read-input`, `emit-fhir` (Patient, Specimen, Observation) |
-| Prérequis | Compatible with CE 0.1.11 |
+### 3. Rechercher le paquet
 
-![Les détails de tabular : ce qu'il exécute, ce qu'il peut faire et ce dont il a besoin.](marketplace-read-full.png)
+Saisissez son identifiant dans Search. L'exemple fictif d'exercice utilise `test-sink`.
 
-Un plugin tourne dans un bac à sable avec une mémoire et un temps fixes. Ses permissions disent ce qu'il peut faire : `tabular` peut lire le fichier qu'on lui donne et écrire des patients, prélèvements et observations FHIR, rien d'autre.
+![Recherchez par identifiant de paquet.](marketplace-guide-search.png)
 
-## Exemple 2 : l'installer
+### 4. Choisir un type si nécessaire
 
-![Ouvrir le menu, sélectionner Installer, lire les capacités et approuver.](marketplace-install.mp4)
+Utilisez **All types** pour limiter la liste aux plugins, modèles de formulaire, rapports ou packs de contenu.
 
-1. Sur la page **tabular**, ouvrez **⋯** et sélectionnez **Installer**.
-2. **Vérifier et approuver : tabular** liste la version et les **Capacités demandées**. Lisez-les.
-3. Sélectionnez **Approuver et installer**.
+![Filtrez par type pour trouver un plugin, un formulaire, un rapport ou un pack de contenu.](marketplace-guide-filter.png)
 
-**Résultat attendu :** l'onglet affiche **Installés (1)**, et **tabular** y est listé **Actif**.
+### 5. Vérifier la carte
 
-![tabular installé et Actif.](marketplace-installed.png)
+Lisez l'identifiant, la version, l'éditeur et le registre. Ouvrez la bonne carte de paquet.
 
-L'approbation porte sur les capacités de la version choisie. Choisir une autre version relance le contrôle.
+![Lisez l'identifiant, la version, l'éditeur et le registre du paquet.](marketplace-guide-card.png)
 
-## Exemple 3 : le supprimer
+**Résultat attendu :** le détail s'ouvre. Son ouverture récupère les informations nécessaires aux contrôles de signature, de droits et de compatibilité.
 
-![Ouvrir le plugin installé, choisir Supprimer et confirmer.](marketplace-remove.mp4)
+## Lire le paquet avant de l'installer
 
-1. Sur **Installés**, sélectionnez **tabular**. Ouvrez **⋯**. Il propose **Désactiver**, **Supprimer** et **Retour**.
-2. Sélectionnez **Supprimer**, puis **Supprimer** de nouveau dans **Supprimer tabular ?**. Cela désinstalle l'artefact de cette installation.
+Le contrôle de signature établit si le fichier correspond à la clé de l'éditeur. Décidez si vous faites confiance à cet éditeur et aux actions du paquet.
 
-**Résultat attendu :** **Installés (0)**.
+### 1. Vérifier la signature
 
-**Désactiver** garde un plugin installé mais l'empêche de se charger. **Rollback**, quand une version plus ancienne est installée, la remet active.
+Lisez **Verified** ou l'échec de vérification. Une carte distante non ouverte peut rester Unverified jusqu'au chargement du détail.
 
-## Registres
+![L'ouverture du détail vérifie la signature de l'éditeur.](marketplace-guide-signature.png)
 
-![L'onglet Registres : Default registry, Distant (HTTP), sur GitHub.](marketplace-registry-list.png)
+### 2. Lire la description
 
-1. Ouvrez l'onglet **Registres**. **Default registry** est un registre **Distant (HTTP)** à l'adresse `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/marketplace/main`.
-2. Pour en ajouter un, ouvrez le menu **⋯** de la page et sélectionnez **Ajouter un registre**. Remplissez **Nom**, **Type** et **Emplacement (URL ou répertoire)**, puis choisissez **Enregistrer** dans le menu **⋯** du panneau. Fermez le panneau sans enregistrer pour abandonner.
+Lisez ce que fait le paquet et les réglages nécessaires. Ce paquet d'entraînement n'a aucune destination réelle.
 
-![Le panneau Ajouter un registre.](marketplace-add-registry.png)
+![Lisez la description du paquet avant de l'installer.](marketplace-guide-readme.png)
 
-Un registre peut être une adresse web ou un dossier du serveur. Un laboratoire sans Internet peut faire pointer un registre dossier vers une copie du marketplace.
+### 3. Lire les droits et exigences
 
-## Comprendre les permissions
+Vérifiez l'éditeur, la version sélectionnée, les droits et la compatibilité. Loading permissions ou Permissions unavailable ne signifie pas qu'aucun droit n'est demandé. Attendez des détails confirmés.
 
-**Chargement des permissions** signifie que les détails sont en cours de récupération. L'installation reste désactivée.
+![Lisez la version sélectionnée, les droits et la compatibilité.](marketplace-guide-permissions.png)
 
-**Permissions indisponibles** signifie que les permissions n'ont pas pu être établies. Cela ne signifie pas que le paquet ne demande aucune permission. Quittez les détails, vérifiez la disponibilité du registre, puis rouvrez le paquet.
+**Résultat attendu :** Install devient disponible seulement lorsque la version choisie réussit les contrôles requis. Choisir une autre version relance ses contrôles.
 
-**Aucune permission particulière demandée** apparaît seulement lorsque les détails chargés confirment une liste vide. Pour un paquet déjà installé sans référence au registre, les permissions proviennent de son enregistrement local.
+## Approuver et installer un paquet
 
-Un changement de version relance cette vérification. L'approbation d'installation utilise les permissions de la version sélectionnée. Elle n'accorde rien avant votre confirmation.
+Effectuez cette tâche uniquement après avoir examiné le paquet choisi et ses capacités.
 
-## Gérer les paquets et les registres
+### 1. Choisir Install
 
-Dans **Installés**, utilisez le menu du paquet pour les actions disponibles, notamment l'activation, la désactivation et la suppression.
+Ouvrez les points du détail du paquet et sélectionnez **Install**.
 
-Dans **Registres**, ouvrez le menu et choisissez **Ajouter un registre**. Renseignez le nom, le type et l'emplacement. Enregistrez, puis vérifiez la ligne créée. Vous pouvez modifier le registre ou le désactiver depuis la liste.
+![Choisissez Install après avoir examiné les détails.](marketplace-guide-install.png)
 
-![Liste et formulaire des registres](marketplace-registries.png)
+### 2. Examiner l'approbation
 
-## Packs de contenu
+Vérifiez la version et **Requested capabilities**. Un pack de contenu montre plutôt ses étapes incluses.
 
-Un pack de contenu est un lot signé de données de référence. Il installe, dans cet ordre, des systèmes de codes, des jeux de valeurs, un registre d'établissements, la mise en correspondance des liens et des requêtes personnalisées. Un paquet ne déclare aucune capacité.
+![Examinez la version et les capacités demandées avant d'approuver.](marketplace-guide-consent.png)
 
-Dans **Parcourir**, filtrez sur **Pack de contenu**. Les détails d'un paquet listent ses étapes avec leurs nombres. La confirmation d'installation affiche la même liste. Il faut la permission de gérer le Marketplace, comme pour les extensions.
+### 3. Approuver cette installation
 
-L'installation vérifie d'abord chaque étape. Un pack sans signature d'éditeur est refusé. Elle contrôle la signature et la clé de l'éditeur, l'empreinte du fichier et la liste des étapes. Elle contrôle aussi que chaque requête est en lecture seule (SELECT), que le fichier du registre s'aperçoit sans erreur et que le registre n'est pas désactivé. Si un contrôle échoue, rien n'est écrit.
+Sélectionnez **Approve & install** pour continuer. Cancel ferme l'approbation sans installer.
 
-La première installation d'un éditeur épingle sa clé. Un paquet ultérieur signé avec une autre clé est refusé.
+![Approve & install autorise uniquement cette installation examinée.](marketplace-guide-approve.png)
 
-Ensuite, l'installation applique les étapes dans l'ordre. Si une étape échoue, les étapes précédentes restent écrites. Le paquet affiche **Échec à l'étape N** avec l'erreur sur sa carte et dans ses détails. Choisissez **Installer à nouveau** dans le menu `⋯` pour la terminer.
+### 4. Vérifier Installed
 
-Installer deux fois est sans risque :
+Utilisez les points du détail puis Back, et choisissez **Installed**. Vérifiez l'identifiant installé et l'état Active.
 
-- Les systèmes de codes et les jeux de valeurs sont remplacés selon leur URL.
-- La source du registre est réutilisée et ses lignes sont mises à jour selon leur code.
-- La mise en correspondance des liens est relancée.
-- Les requêtes sont remplacées selon leur nom. Une requête modifiée par un administrateur est écrasée à la nouvelle installation du paquet.
+![Installed liste le plugin enregistré avec son état actif.](marketplace-guide-installed.png)
 
-Les lignes absentes du registre d'un paquet plus récent sont signalées. Elles ne sont jamais retirées.
+**Résultat attendu :** le paquet est installé dans cette instance OpenLDR. L'installation ne configure pas toutes les dépendances externes et ne prouve pas que le plugin importe vos données.
 
-Une étape de registre peut lister des colonnes supplémentaires. Leurs valeurs vont dans les `extras` de chaque établissement, sous le nom de la colonne en minuscules. Les requêtes personnalisées les lisent dans la table `facility_registry` de l'entrepôt. Toute autre colonne inconnue du registre fait toujours refuser le paquet. Une version plus ancienne de CE refuse un paquet qui liste des colonnes supplémentaires, et n'écrit rien.
+## Désactiver ou activer un plugin installé
 
-Un pack peut associer des codes de test de laboratoire à des tests du catalogue (**Correspondances de tests**). Il indique le code LOINC de chaque code, et CE l'associe au test du catalogue lié à ce LOINC. Un code que le pack ne peut pas résoudre est ignoré et listé : aucun test du catalogue n'a ce LOINC, ou deux l'ont. Un code déjà associé ici est conservé. La simulation en ligne de commande (`openldr market install <dir> --dry-run`) liste ce qu'elle associerait, conserverait et ignorerait.
+La désactivation conserve les fichiers et la fiche installés. Elle arrête le chargement du plugin.
 
-Choisissez **Détacher** pour oublier l'enregistrement d'installation. Tout ce que le paquet a écrit est conservé. Il n'existe pas de désinstallation.
+### 1. Choisir Disable
 
-Dans la ligne de commande, `openldr market install <bundle-dir> --dry-run` exécute les contrôles et affiche les étapes, avec le nombre de codes que chaque étape de mise en correspondance des liens lierait. Elle n'écrit rien.
+Dans Installed, ouvrez le plugin. Ouvrez ses points et sélectionnez **Disable**.
 
-## En ligne de commande
+![Disable garde le plugin installé, mais arrête son chargement.](marketplace-guide-disable.png)
 
-La CLI installe depuis un dossier de bundle sur le serveur, pas depuis un registre.
+### 2. Le réactiver si nécessaire
 
-```bash
-./openldr market list
-./openldr market verify <bundle-dir>
-./openldr market install <bundle-dir> --dry-run
-./openldr market disable tabular
-./openldr market remove tabular
+Après désactivation, ouvrez les mêmes points du panneau et sélectionnez **Enable**. L'action est actualisée après chaque modification réussie ; le panneau peut rester ouvert.
+
+![Enable autorise à nouveau le chargement du plugin installé.](marketplace-guide-enable.png)
+
+**Résultat attendu :** le plugin installé peut se charger à nouveau après activation. Ses paramètres de connexion externes ne changent pas.
+
+## Retirer un plugin installé
+
+Vérifiez les workflows et importations dépendants avant de retirer un plugin.
+
+### 1. Choisir Remove
+
+Ouvrez les points du détail du plugin installé et sélectionnez **Remove**.
+
+![Remove désinstalle ce plugin.](marketplace-guide-remove.png)
+
+### 2. Confirmer l'identifiant du plugin
+
+Dans la confirmation, choisissez **Remove** pour désinstaller ou Cancel pour conserver le plugin. La capture d'exercice retire test-sink.
+
+![Confirmez l'identifiant avant de retirer le plugin.](marketplace-guide-remove-confirm.png)
+
+**Résultat attendu :** le plugin retiré n'est plus installé. Sa carte disponible peut rester dans Browse.
+
+## Ajouter un registre
+
+Utilisez l'URL de registre ou le dossier serveur fourni par votre organisation. Un dossier de registre local contient des répertoires de paquets. Le serveur OpenLDR doit pouvoir y accéder.
+
+### 1. Ouvrir Registries
+
+Choisissez l'onglet **Registries**. Vérifiez les sources existantes pour éviter un doublon.
+
+![Registries liste les sources de paquets.](marketplace-guide-registries.png)
+
+### 2. Choisir Add registry
+
+Ouvrez les points de la barre d'onglets et sélectionnez **Add registry**.
+
+![Choisissez Add registry dans les points de la barre d'onglets.](marketplace-guide-add-registry.png)
+
+### 3. Nommer la source
+
+Saisissez un **Name** utile. L'exemple utilise Example local registry.
+
+![Utilisez un nom identifiant le propriétaire du registre.](marketplace-guide-registry-name.png)
+
+### 4. Choisir son type
+
+Choisissez **Local directory** pour un dossier du serveur API ou **Remote (HTTP)** pour un registre web.
+
+![Un registre local est un dossier du serveur OpenLDR.](marketplace-guide-registry-type.png)
+
+### 5. Saisir son emplacement
+
+Remplissez **Location** avec le dossier serveur ou l'URL de base du registre. L'image utilise un dossier d'exercice isolé.
+
+![Saisissez le dossier visible par le serveur API, pas celui de votre ordinateur.](marketplace-guide-registry-location.png)
+
+### 6. Enregistrer la source
+
+Ouvrez les points du panneau et sélectionnez **Save**.
+
+![Save ajoute le registre.](marketplace-guide-registry-save.png)
+
+**Résultat attendu :** le registre activé apparaît dans la liste. Ses paquets disponibles apparaissent dans Browse. Un dossier de votre ordinateur n'est pas automatiquement visible par un serveur ou un conteneur.
+
+![Le registre local est listé et activé.](marketplace-guide-registry-saved.png)
+
+## Modifier un registre
+
+Un registre désactivé ne fournit plus de paquets disponibles. Il ne désinstalle pas les paquets déjà installés.
+
+### 1. Choisir Edit
+
+Ouvrez les points de la ligne du registre et sélectionnez **Edit**.
+
+![Edit modifie le nom, le type, l'emplacement ou l'activation d'un registre.](marketplace-guide-registry-edit.png)
+
+### 2. Vérifier les paramètres et Enabled
+
+Modifiez le nom, le type, l'emplacement ou l'état Enabled. Enregistrez par les points du panneau. Fermez sans Save pour abandonner les modifications.
+
+![Vérifiez l'emplacement enregistré et Enabled avant de modifier un registre.](marketplace-guide-registry-settings.png)
+
+## Examiner les paquets sur un téléphone
+
+Les mêmes onglets et actions de paquet sont disponibles sur un téléphone.
+
+### 1. Lire une carte de paquet
+
+Recherchez dans Browse et ouvrez la bonne carte. Les cartes s'empilent verticalement.
+
+![Les cartes de Browse s'empilent à la largeur du téléphone.](marketplace-guide-phone.png)
+
+### 2. Examiner la version et les droits
+
+Lisez les détails au-dessus de la description, puis descendez vers les sections restantes.
+
+![La version et les droits apparaissent avant la description sur un téléphone.](marketplace-guide-phone-details.png)
+
+## Packs de contenu et autres types de paquet
+
+Un pack applique ses étapes de données de référence dans l'ordre déclaré. Examinez leur liste et leurs nombres avant l'installation. Un pack peut modifier des systèmes de codes, jeux de valeurs, établissements, associations et requêtes nommées. Une nouvelle tentative peut écraser une requête modifiée localement.
+
+Si l'application d'un pack échoue, les étapes précédentes peuvent rester enregistrées. Lisez Failed at step N et l'erreur, corrigez la cause, puis choisissez de nouveau Install. Un pack refuse les signatures invalides et les contrôles préalables en échec avant toute écriture.
+
+**Detach** oublie la fiche d'un pack ou modèle de formulaire installé en conservant les données créées. Ce n'est pas une désinstallation. Les plugins proposent Remove. Une ancienne version de plugin installée peut proposer Rollback. Ces options dépendent du type choisi et des versions installées.
+
+Un paquet dont les détails ne chargent pas garde l'installation désactivée. Vérifiez la disponibilité du registre avant de réessayer. Le test documenté a suivi le parcours plugin. Il n'a appliqué aucun pack et n'a restauré aucune ancienne version de plugin.
+
+## Utiliser un paquet local depuis la CLI
+
+Suivez [Commencer ici](/docs/start-here) pour configurer la CLI. Depuis `openldr_ce`, l'installation CLI lit un répertoire de paquet sur le serveur. Elle ne parcourt pas les registres Studio. Vérifiez et simulez avant d'appliquer un paquet approuvé.
+
+```shell
+pnpm openldr market list
+pnpm openldr market verify <bundle-directory>
+pnpm openldr market install <bundle-directory> --dry-run
+pnpm openldr market install <bundle-directory>
+pnpm openldr market disable <plugin-id>
+pnpm openldr market remove <plugin-id>
 ```
 
-`verify` contrôle le manifeste, le fichier et la clé de l'éditeur d'un bundle. `install --dry-run` lance tous les contrôles sans rien écrire. `update` n'installe un pack de contenu que si le bundle est plus récent que celui installé. `rollback <id> <version>` réactive une version plus ancienne d'un plugin.
+## Exercice facultatif avec une destination d'entraînement locale
 
-## Sur un téléphone
+Utilisez vos registres et paquets approuvés pour le travail normal. Le [manifeste d'exercice](https://openldr.online/docs-samples/user-guide/marketplace/manifest.json) facultatif appartient à un paquet d'entraînement signé. Il ne contient pas de données cliniques et n'envoie rien à une destination réelle.
 
-Le Marketplace fonctionne sur un téléphone. Les cartes s'empilent en une colonne. Sur la page d'un artefact, les détails, permissions et prérequis viennent d'abord, au-dessus de la description.
+Dans une copie du dépôt sur une installation temporaire, `pnpm build:test-sink` et `pnpm make:docs-marketplace-bundle` créent le paquet d'entraînement du dépôt. Utilisez le dossier généré sur ce serveur comme registre local. Les racines locales contiennent directement les répertoires des paquets. Le format d'index HTTP est différent.
 
-## Dépannage
+Les images utilisent un dossier d'exercice généré distinct. Ne considérez pas la clé de son éditeur de test comme un choix de confiance en production.
 
-- **Parcourir est vide.** Le registre est injoignable ou désactivé. Vérifiez **Registres**, et que le serveur joint l'adresse du registre.
-- **La carte reste Non vérifié.** Ouvrez-la. La signature se contrôle au chargement des détails.
-- **Les permissions affichent Permissions indisponibles.** Les détails n'ont pas pu être lus. Cela ne veut pas dire que l'artefact n'a besoin d'aucune permission. L'installation reste désactivée.
-- **L'installation échoue.** Vérifiez la compatibilité, les capacités et la disponibilité du registre.
-- **Un artefact installé n'apparaît pas ailleurs.** Vérifiez qu'il est actif et pris en charge par cette partie de l'application.
+## Résolution des problèmes
+
+**Browse est vide.** Effacez Search et le filtre de type. Vérifiez les registres activés et l'accès du serveur API au dossier ou à l'URL. Utilisez les points de la barre d'onglets puis Refresh après modification des sources.
+
+**Un paquet local manque.** Indiquez le répertoire dont les enfants directs sont les dossiers lisibles des paquets, chacun avec son manifeste et son contenu.
+
+**Permissions unavailable.** Les détails du paquet n'ont pas pu être récupérés. Cela ne prouve pas une liste de droits vide.
+
+**L'approbation reste ouverte après une erreur.** Lisez la notification. Corrigez les exigences signalées de stockage, compatibilité, signature ou autre avant de réessayer.
+
+**Un plugin est installé, mais absent ailleurs.** Vérifiez son activation et la déclaration de la capacité attendue, importateur, page ou autre. Pour les cartes et panneaux, lisez [Cartes et panneaux de plugins](/docs/plugin-sites).
 
 ## Guides associés
 
-- [Paramètres](/docs/settings)
-- [Connecteurs](/docs/connectors)
-- [Formulaires](/docs/forms)
-- [Établissements](/docs/facilities)
+[Connecteurs](/docs/connectors) décrit les destinations des plugins. [Formulaires](/docs/forms) décrit l'édition des formulaires. [Cartes et panneaux de plugins](/docs/plugin-sites) décrit les emplacements facultatifs des plugins.

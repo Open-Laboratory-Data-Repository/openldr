@@ -1,0 +1,49 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Administration</span><span>Read recorded changes and access events</span><span>About 10 minutes</span></div>
+<h1>Audit</h1>
+<p>Audit records who performed an action, when it happened and which entity it affected. Administrators and reviewers use it to investigate changes and access events.</p>
+<p>You need View audit log. Use the events already recorded by your installation. The pictures show changes to fictional accounts and layouts in a test installation. No sample data is required.</p>
+<p>Audit is read-only. Reading an event does not change it. Before, After and Metadata appear only when that action recorded those values.</p>
+<h2 id="dg-filter">Find events for an action</h2>
+<p>Use this when you know the kind of action you need to investigate. You can also filter by actor, entity or time.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Audit</h3><p>Select <strong>Audit</strong> in the main menu.</p>__SHOT:open-audit:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read the list columns</h3><p>Read <strong>When</strong>, <strong>Actor</strong>, <strong>Action</strong>, <strong>Entity type</strong> and <strong>Entity ID</strong>. An action such as user.update describes the recorded operation.</p>__SHOT:read-event-row:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open Filter</h3><p>Select <strong>Filter</strong> above the table.</p>__SHOT:filter-open:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Add a rule</h3><p>Select <strong>Add filter</strong>.</p>__SHOT:filter-add:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Choose Action</h3><p>Open the column selector and choose <strong>Action</strong>. Keep <strong>Equals</strong> for an exact action name.</p>__SHOT:filter-action:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Enter the action</h3><p>Enter the action to inspect. The example uses <code>user.update</code> for profile changes. Use an action present in your own installation.</p>__SHOT:filter-value:6__</section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Apply the filter</h3><p>Select <strong>Apply</strong>.</p>__SHOT:filter-apply:7__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The list shows matching events. An empty result means no event matches the current rules.</p></div>
+__SHOT:filter-result:0__
+<h2 id="dg-inspect">Read an event and its recorded values</h2>
+<p>Use this to identify the affected record and compare changes. Different actions record different details.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the event</h3><p>Select the matching event row. Read the event identifier, timestamp, actor, action and affected entity in the sheet.</p>__SHOT:event-identifiers:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read Before</h3><p>Scroll to <strong>Before</strong>. It contains previous values when the action supplied them. <strong>None recorded.</strong> means no snapshot was recorded.</p>__SHOT:event-before:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read After</h3><p>Scroll to <strong>After</strong>. Compare the saved values with Before. These are recorded snapshots, not an editor.</p>__SHOT:event-after:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Read Metadata</h3><p>Scroll to <strong>Metadata</strong> for any additional recorded context.</p>__SHOT:event-metadata:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Copy an event reference when needed</h3><p>Use <strong>Copy Event ID</strong> beside the identifier when recording a reference in your investigation. Other populated detail values also have copy controls.</p>__SHOT:event-copy:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Close the sheet</h3><p>Select <strong>Close</strong> at the top right.</p>__SHOT:event-close:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> You return to the same filtered event list. The audit record remains unchanged.</p></div>
+<h2 id="dg-browse">Browse more events and refresh the list</h2>
+<p>Use this when you need events outside the current page or changes recorded after you opened Audit.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Clear the filter when needed</h3><p>Open Filter and select <strong>Clear</strong> to return to all events.</p>__SHOT:filter-clear:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose a page size</h3><p>Open <strong>Rows per page</strong> at the bottom and select a size. The example chooses <strong>10</strong>.</p>__SHOT:page-size:2____SHOT:ten-rows:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read the next page</h3><p>Select <strong>Next page</strong> when it is enabled.</p>__SHOT:next-page:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Return to the previous page</h3><p>Select <strong>Previous page</strong>.</p>__SHOT:previous-page:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Refresh the list</h3><p>Open the page dots and select <strong>Refresh</strong>. The current filters still apply.</p>__SHOT:refresh-actions:5____SHOT:refresh-menu:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The table reads the requested page or refreshed events from the server.</p></div>
+<h2 id="dg-phone">Read audit events on a phone</h2>
+<p>Use the same Audit page on a phone. The event table can scroll horizontally.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Use the filter controls</h3><p>Use <strong>Filter</strong> above the table to narrow the results before reading wide rows.</p>__SHOT:phone-filter:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the event sheet</h3><p>Select an event row. Scroll the sheet to read identifiers and snapshots.</p>__SHOT:phone-event:2__</section>
+<h2 id="dg-practice">Optional practice</h2>
+<p>In a test installation, make an approved profile or layout change, then find its audit event. Compare the recorded Before and After values when present. No audit-data import is required.</p>
+<h2 id="dg-limits">Limits</h2>
+<p>This page does not edit, delete or export audit events. A missing snapshot does not prove that an action made no change. It means that action recorded no snapshot.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>No audit events match.</strong> Review the active filter chips or choose Filter, then Clear.</p>
+<p><strong>A recent event is absent.</strong> Choose Refresh and check the current filters and page.</p>
+<p><strong>Before or After says None recorded.</strong> Use the actor, action, entity details and available metadata. That snapshot cannot be recovered through this page.</p>
+<h2 id="dg-related">Related guides</h2>
+<p>Read <a href="./users-review.html">Users</a> for account actions and <a href="./roles-review.html">Roles</a> for permissions. Read <a href="./start-here-review.html">Start here</a> for command-line setup.</p>
+</article>

@@ -1,0 +1,8 @@
+$ node packages/cli/dev.mjs sync now
+(node:221576) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":30,"time":1794492325266,"pid":221576,"hostname":"fredrick-Station","name":"openldr","msg":"sync disabled (not configured)"}
+sync is disabled — nothing to trigger
+[ELIFECYCLE] Command failed with exit code 1.
+
+EXIT 1

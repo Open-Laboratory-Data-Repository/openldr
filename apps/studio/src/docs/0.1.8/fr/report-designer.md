@@ -1,144 +1,391 @@
 # Concepteur de rapports
 
-Le **Concepteur de rapports** (Report Designer) est un outil de mise en page par glisser-déposer pour les rapports imprimables. Vous placez un en-tête, des titres, des tableaux, des graphiques et des panneaux sur une page A4 ou Letter, vous liez chaque tableau à une [requête personnalisée](/docs/query) enregistrée, et vous publiez le résultat comme rapport dans la bibliothèque des [Rapports](/docs/reports).
+Utilisez Report Designer pour disposer les éléments imprimables, les lier à des Custom Queries enregistrées et créer des rapports pour la bibliothèque. Une conception contrôle la page. Une requête fournit les lignes. Les paramètres du modèle définissent les filtres saisis lors de l'exécution.
 
-Une installation neuve contient dix modèles, un par rapport intégré. Ce guide lit la construction de l'un d'eux, puis construit un nouveau modèle et le publie comme rapport. Comptez 15 minutes. Sélectionnez une image ou un clip pour l'agrandir.
+Commencez avec votre requête enregistrée et votre mise en page prévue. Aucun jeu de données de documentation n'est nécessaire. Les images utilisent une requête retournant zéro demande avec des paramètres Text nommés `from` et `to`. Un paramètre de requête Date range est aussi accepté. L'exercice facultatif est à la fin.
 
-Les menus et panneaux du concepteur sont en anglais à l'écran, ce guide garde donc leurs libellés anglais.
+Vous devez avoir **Edit report templates** pour créer, modifier et publier les conceptions. **View reports** ouvre la bibliothèque et **Run reports** exécute ses entrées.
 
-![Test Volume Over Time ouvert dans le concepteur, son tableau sélectionné et l'onglet Data montrant la requête liée.](report-designer-tour.png)
+Publier une révision et créer un rapport de bibliothèque sont deux actions distinctes. Enregistrez la nouvelle conception avant chacune.
 
-## Qui peut faire quoi
+## Examiner une conception existante
 
-| Capacité | Ce qu'elle permet |
-| --- | --- |
-| **View reports** | Voir la bibliothèque des Rapports |
-| **Run reports** | Exécuter et prévisualiser un rapport |
-| **Edit report templates** | Ouvrir le concepteur, créer et modifier des modèles, les publier, et créer des rapports dans la bibliothèque |
+Comprenez ainsi le lien entre un tableau existant, sa requête et les filtres exposés par le rapport.
 
-## Avant de commencer
+### 1. Ouvrir Report Designer
 
-L'Exemple 2 a besoin des données d'exemple de la documentation. Voir [Tableaux de bord, Charger les données d'exemple](/docs/dashboard#charger-les-donnees-d-exemple).
+Sélectionnez Report Designer dans le menu principal.
 
-## Exemple 1 : lire la construction d'un rapport intégré
+![Ouvrez Report Designer pour examiner et créer les mises en page.](report-designer-guide-open-page.png)
 
-![Ouvrir Test Volume Over Time, sélectionner son tableau et l'onglet Data.](report-designer-explore.mp4)
+### 2. Choisir un modèle
 
-1. Ouvrez **Concepteur de rapports**. La liste **Templates** à gauche montre les dix modèles, avec le format et l'orientation.
-2. Sélectionnez **Test Volume Over Time**. L'en-tête affiche **Saved** et **PUBLISHED**.
-3. Sur la page, sélectionnez le tableau, nommé **Data**, avec les colonnes Month, Test et Count.
-4. Ouvrez l'onglet **Data** à droite.
+Sélectionnez une entrée existante dans Templates. L'exemple ouvre Test Volume Over Time.
 
-**Résultat attendu :** **Bind query** affiche **Test volume by month**, une requête personnalisée enregistrée. La liste **Columns** a trois colonnes cochées. Sous **Parameters**, `dateRange` porte le libellé **Date range** : c'est le filtre que le rapport demande à l'exécution.
+![Sélectionnez une conception existante dans Templates.](report-designer-guide-existing-template.png)
 
-Un rapport a donc trois parties : un modèle (cette page), la requête qui remplit ses tableaux, et les filtres qui passent des valeurs à la requête.
+### 3. Sélectionner son tableau
 
-## Exemple 2 : construire un modèle et le publier comme rapport
+Sélectionnez l'élément tableau sur la page imprimable.
 
-Construisez un rapport d'un seul tableau : les patients par tranche d'âge.
+![Sélectionnez l'élément tableau sur la page.](report-designer-guide-existing-table.png)
 
-### Construire le modèle
+### 4. Lire ses réglages Data
 
-![New template, le nommer, insérer un tableau, le lier à Patient demographics by age band, cocher les colonnes et afficher les données.](report-designer-build.mp4)
+Sélectionnez Data dans l'inspecteur à droite. Vérifiez Bind query et les Parameters du modèle dessous.
 
-1. Ouvrez le menu **⋯** en haut du canevas et sélectionnez **New template**.
-2. Cliquez dans la case du nom, **Untitled template**, et tapez `Patients by age band (sample)`.
-3. Ouvrez **⋯**, sélectionnez **Insert**, puis **Table**. Un tableau se pose sur la page.
-4. Tableau sélectionné, ouvrez l'onglet **Data**. Réglez **Bind query** sur **Patient demographics by age band**.
-5. Sélectionnez **Load columns**. Cinq colonnes apparaissent : band, total, male, female, other. Cochez les cinq.
-6. Sélectionnez **Load pages** au-dessus du canevas, puis **Show data** dans l'en-tête.
+![Data montre la liaison de requête et les paramètres du modèle.](report-designer-guide-existing-data-tab.png)
 
-**Résultat attendu :** le tableau se remplit de vraies lignes : 5-14 avec 3 patients, 15-24 avec 4, 25-49 avec 14, 50+ avec 4. Cela fait 25 patients : les 24 des données d'exemple, et **Sample Seed**, que chaque installation crée.
+![La requête liée fournit les lignes du tableau. Les paramètres du modèle définissent les filtres d'exécution.](report-designer-guide-existing-binding.png)
 
-![Le tableau lié et rempli avec les patients de l'exemple.](report-designer-bound.png)
+## Créer une conception de tableau distincte
 
-**Show data** ne montre que les lignes que tient la première page, pour que le canevas ne promette jamais plus que ce qu'imprime le PDF.
+Utilisez une nouvelle conception pour votre rapport plutôt que de modifier une définition intégrée partagée.
 
-### Enregistrer, publier et ajouter aux Rapports
+### 1. Choisir New template
 
-![Enregistrer le modèle et publier une révision.](report-designer-publish.mp4)
+Ouvrez More actions au-dessus du canevas et sélectionnez New template. Le concepteur vide propose aussi New template.
 
-1. Ouvrez **⋯** et sélectionnez **Save**. L'en-tête affiche **Saved**.
-2. Ouvrez **⋯** et sélectionnez **Publish revision**. L'en-tête affiche **PUBLISHED**. Rien n'est ajouté aux Rapports.
-3. Ouvrez **⋯** et sélectionnez **Create report from this design**. Le panneau **New report** s'ouvre.
+![More actions contient les opérations sur les modèles.](report-designer-guide-actions.png)
 
-![Nommer le rapport, choisir Operational et le créer.](report-designer-create-report.mp4)
+![New template démarre une conception distincte.](report-designer-guide-new-template.png)
 
-4. Dans **Name**, tapez `Patients by age band (sample)`.
-5. Ouvrez **Category** et sélectionnez **Operational**. **Template** et **Primary query** sont déjà remplis, à partir du modèle et de son tableau.
-6. Ouvrez le menu **Actions** du panneau et sélectionnez **Create report**.
+### 2. Nommer la conception
 
-### L'exécuter
+Saisissez un Report name clair, comme Request summary design.
 
-![Exécuter le nouveau rapport depuis la bibliothèque des Rapports.](report-designer-run.mp4)
+![Définissez Report name selon les besoins du rapport.](report-designer-guide-design-name.png)
 
-1. Ouvrez **Rapports**. **Patients by age band (sample)** est listé sous **Operational**.
-2. Sélectionnez-le, ouvrez le menu à trois points, sélectionnez **Paramètres**, puis **Exécuter**. Il n'a pas de filtre, rien à remplir.
+### 3. Insérer un tableau
 
-**Résultat attendu :** le document montre les cinq colonnes et les quatre lignes de l'étape 6.
+Ouvrez More actions, pointez Insert et sélectionnez Table.
 
-![Le document du rapport.](report-designer-report.png)
+![Insert liste les types d'éléments imprimables.](report-designer-guide-insert.png)
 
-Pour retirer l'exemple, supprimez le rapport depuis son menu dans Rapports, puis le modèle avec **⋯ → Delete** dans le concepteur.
+![Table ajoute un tableau de données à cette conception.](report-designer-guide-insert-table.png)
 
-## Deux actions distinctes
+### 4. Sélectionner le tableau
 
-| Action du menu ⋯ | Résultat |
-| --- | --- |
-| **Publish revision** | Publie une version du modèle enregistré. Ne crée pas de rapport dans la bibliothèque. |
-| **Create report from this design** | Ouvre le panneau de création d'un rapport lié au modèle et à une requête principale. Ne publie pas de révision du modèle. |
+Le Table inséré est sélectionné. Glissez-le à l'emplacement prévu et utilisez ses poignées pour le redimensionner. L'exemple conserve sa position initiale.
 
-Les deux demandent un modèle déjà enregistré. Le nom du rapport peut différer de celui du modèle. Publier une révision ultérieure du même modèle ne demande pas de créer un autre rapport : utilisez l'action de création seulement pour ajouter une entrée à la bibliothèque.
+![Le nouveau tableau est sélectionné pour la configuration.](report-designer-guide-new-table.png)
 
-Une révision publiée appartient au modèle. La requête principale fournit les lignes du tableur, le modèle définit la mise en page du document.
+## Choisir la requête du tableau
 
-## Les éléments
+Utilisez une requête enregistrée retournant les colonnes prévues. Si elle a des paramètres, définissez des valeurs de modèle correspondantes avant de charger les colonnes.
 
-**⋯ → Insert** propose : Text, Table, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date/time, Cell grid, Chart et Letterhead. Faites glisser un élément pour le déplacer et utilisez les poignées pour le redimensionner. Un élément sélectionné affiche son nom dans une étiquette au-dessus.
+### 1. Ouvrir Data
 
-- **Table.** Dans l'onglet **Data** : **Bind query**, **Load columns**, puis cochez, réordonnez et renommez les colonnes. **Sort by column** trie les lignes avant le dessin. **First data row is the header** sert quand la requête renvoie ses libellés en première ligne (il faut aussi Sort by). **Transpose**, dans Properties, retourne un tableau large.
-- **Cell grid.** Liez la requête dans **Data**, puis réglez la colonne de libellé, les colonnes de cellules, les paliers de couleur et les colonnes de fin dans **Properties**.
-- **Chart.** Liez la requête dans **Data**, puis choisissez le type (bar, line ou donut), la colonne de libellé et les colonnes de valeurs dans **Properties**. Les graphiques s'impriment en formes vectorielles nettes, et un graphique lié exporte aussi ses lignes vers Excel.
-- **Paramètres.** Dans **Data**, **Add parameter** définit les filtres du rapport (Text, Select ou Date range). La **Key** d'un paramètre doit correspondre au **Variable ID** du paramètre de la requête, pour que la valeur passe dans la requête.
-- **Letterhead.** La bande d'identité partagée (logo, nom, adresse, contact, filet). Sa mise en page est définie une fois, donc tous les modèles qui l'utilisent changent ensemble. Les valeurs viennent de Paramètres, Laboratoire. Voir [Laboratoire](/docs/laboratory).
+Avec le tableau sélectionné, sélectionnez Data dans l'inspecteur.
 
-## Autres possibilités
+![Ouvrez Data pour le tableau personnalisé sélectionné.](report-designer-guide-new-data-tab.png)
 
-- **Preview** rend le modèle en PDF avec des données réelles. **Export → PDF** ou **Excel** télécharge directement la sortie.
-- La case d'état à côté du nom affiche Saved, Saving ou Unsaved changes. Le concepteur enregistre aussi automatiquement.
-- La bande au-dessus du canevas indique combien de pages le modèle imprime. **Load pages** exécute les requêtes liées pour un vrai compte. Ce compte est un instantané, et la bande dit quand le modèle a changé depuis. Un tableau qui déborde reçoit une ligne pointillée là où finit sa première page.
-- La section **Flow** de Properties règle le comportement des blocs quand un tableau ou une grille continue sur d'autres pages : **Place below**, **Gap after**, **First page only**, **Show with** et **Fill to bottom of box**.
-- Un tableau lié peut avoir une **ligne de totaux** (un libellé, et les colonnes à additionner), et un texte peut afficher `{{sum(elementName.columnKey)}}`. Une **règle** par colonne (« When ≥ 10 → Critical ») met des valeurs en évidence sans toucher au SQL. Une colonne de statut venant de la requête l'emporte toujours sur une règle.
-- **Trend** sur une colonne liée dessine la valeur en petite ligne dans la cellule. La requête fournit les nombres en une chaîne délimitée, par exemple `12,14,11,18`. Ce qui n'est pas au moins deux nombres propres s'imprime en texte, et Excel exporte toujours la chaîne brute.
-- **⋯ → Versions** liste chaque version publiée avec son auteur et sa date. **Restore** recharge une version dans la copie de travail comme une modification ordinaire : une seule étape d'annulation, enregistrée automatiquement, sans publication.
-- Le choix **Print language** en haut de Properties bascule le texte entre le texte du modèle et la traduction d'une langue. Une case vide veut dire « s'imprime comme écrit ». Un rapport imprimé depuis [Rapports](/docs/reports) utilise la langue du studio, et `openldr report run <id> --format pdf --lang fr` fait de même sans interface. Seul le texte saisi est traduit : jamais les résultats des requêtes, les informations du laboratoire ni les codes-barres.
-- Les **rapports intégrés sont déjà livrés en français et en portugais**. Les dates suivent la langue d'impression (`2 sept. 2026`, `2 set. 2026`), le jour toujours avant le mois. Les codes de sensibilité (R, I, S) ne sont jamais traduits.
-- Un panneau clé/valeur **non** lié à une requête liste ses paires sous **Pair translations** quand une langue est choisie. Une valeur contenant `{{param.from}}` ou `{{date}}` peut aussi être traduite, jetons compris.
-- Un modèle en **brouillon** imprime un tampon DRAFT en diagonale sur chaque page. La publication le retire.
-- **Page numbers**, dans les réglages de page, ajoute un pied de page numéroté. Un modèle peut avoir plusieurs pages.
-- Dans l'onglet **Layers**, l'œil masque un élément (il quitte le canevas et le PDF, et le bloc dessous remonte), le cadenas le bloque, et les lignes se réordonnent par glisser-déposer.
-- Sélectionnez plusieurs éléments et choisissez **⋯ → Group selection** pour les nommer comme un groupe. **Alt** atteint un élément seul dans le groupe. **Ungroup** retire le groupe.
-- **Ctrl+D** duplique, **Ctrl+C** et **Ctrl+V** copient et collent. **⋯ → Duplicate** crée un modèle à partir d'un autre, **⋯ → Delete** en supprime un.
-- Depuis [Rapports](/docs/reports), les responsables reviennent au modèle d'un rapport publié avec **Modifier le modèle**.
+### 2. Lier la requête enregistrée
 
-## Sur un téléphone
+Ouvrez Bind query et choisissez votre Custom Query. L'exemple utilise Request count for reporting, avec deux paramètres de requête Text obligatoires nommés from et to.
 
-Le concepteur est fait pour un grand écran. Sur un téléphone, servez-vous-en pour lire un modèle, pas pour en construire un. Les rapports issus d'un modèle s'exécutent et s'impriment sur un téléphone comme les autres.
+![Choisissez votre Custom Query enregistrée.](report-designer-guide-bind-query.png)
 
-## Dépannage
+## Définir le filtre de rapport et les valeurs d'aperçu
 
-- **Aucune colonne à choisir.** Choisissez une requête dans **Bind query**, puis sélectionnez **Load columns**.
-- **Le tableau du canevas reste vide avec Show data.** Cochez au moins une colonne, puis relancez **Load pages**. Une requête avec un filtre obligatoire a besoin d'une valeur par défaut dans son paramètre.
-- **Le modèle est publié mais absent des Rapports.** Publier une révision ne crée pas d'entrée. Utilisez **Create report from this design**.
-- **Create report est grisé.** Remplissez Name, Category, Template et Primary query.
-- **Un publish demande d'enregistrer d'abord.** Enregistrez et attendez **Saved**.
-- **L'aperçu ne s'affiche pas.** Vérifiez que la requête liée et ses paramètres sont valides.
-- **Rien à exporter.** Le modèle n'a encore aucun tableau.
-- **Les lignes d'un tableau passent sur d'autres pages.** C'est normal : les tableaux se répartissent sur plusieurs pages quand les données ne tiennent pas sur une.
+Reports accepte une requête enregistrée avec un paramètre Date range, comme `period`. La requête illustrée utilise deux paramètres Text obligatoires nommés `from` et `to`. Les deux formes utilisent une seule commande Date range sur le modèle.
+
+### 1. Ajouter un paramètre de modèle
+
+Sélectionnez Add parameter sous les réglages de liaison.
+
+![Add parameter définit un filtre exposé par ce modèle.](report-designer-guide-add-parameter.png)
+
+### 2. Faire correspondre la clé de requête
+
+Définissez une Key unique, comme period. Ce contrôle de plage fournit les valeurs from et to utilisées par la requête de rapport.
+
+![Définissez Key param1 selon les besoins du rapport.](report-designer-guide-parameter-key.png)
+
+### 3. Choisir le libellé visible
+
+Définissez Label avec le texte à afficher, comme Period.
+
+![Définissez Label period selon les besoins du rapport.](report-designer-guide-parameter-label.png)
+
+### 4. Faire correspondre le type du paramètre
+
+Réglez Type sur Date range. La requête illustrée utilise deux paramètres Text nommés `from` et `to`.
+
+![Choisissez Date range pour le paramètre de requête.](report-designer-guide-parameter-type.png)
+
+### 5. Définir le début par défaut
+
+Saisissez la première date incluse par défaut. L'exemple utilise 2026-01-01.
+
+![Définissez From period selon les besoins du rapport.](report-designer-guide-parameter-from.png)
+
+### 6. Définir la fin par défaut
+
+Saisissez la dernière date incluse par défaut. L'exemple utilise 2027-01-01. La requête inclut toute la journée de fin, comme le calendrier et le planificateur du rapport. Ces valeurs servent à l'aperçu. Les utilisateurs peuvent en choisir d'autres.
+
+![Définissez To period selon les besoins du rapport.](report-designer-guide-parameter-to.png)
+
+## Choisir et prévisualiser la colonne imprimée
+
+Load columns utilise les valeurs par défaut du modèle pour exécuter la requête liée. La requête de comptage retourne une colonne requests même si l'entrepôt ne contient aucune demande.
+
+### 1. Charger les colonnes de requête
+
+Sélectionnez Load columns. Lisez l'erreur si la requête ou les valeurs par défaut sont invalides.
+
+![Load columns exécute la requête avec les valeurs par défaut du modèle.](report-designer-guide-load-columns.png)
+
+### 2. Inclure la colonne
+
+Cochez requests pour l'inclure dans le tableau. Choisissez les vraies colonnes de sortie nécessaires à votre rapport.
+
+![Incluez la colonne requests dans le tableau imprimé.](report-designer-guide-include-column.png)
+
+### 3. Définir son libellé imprimé
+
+Saisissez un libellé lisible, comme Requests. Cela change le texte imprimé, pas le champ de requête.
+
+![Définissez Label de la colonne requests selon les besoins du rapport.](report-designer-guide-column-label.png)
+
+### 4. Charger les données des pages
+
+Sélectionnez Load pages au-dessus du canevas. Il exécute les données liées et calcule le nombre de pages physiques.
+
+![Load pages récupère les lignes et calcule le nombre de pages imprimées.](report-designer-guide-load-pages.png)
+
+### 5. Afficher les données chargées
+
+Sélectionnez Show data. Rechargez les pages après modification si le nombre est périmé.
+
+![Show data remplit le canevas avec les lignes chargées.](report-designer-guide-show-data.png)
+
+**Résultat attendu :** le tableau montre le nombre réel. Cette installation imprime une colonne Requests contenant zéro.
+
+![La colonne imprimée contient le nombre actuel, y compris zéro.](report-designer-guide-bound-result.png)
+
+## Enregistrer et examiner le PDF
+
+Enregistrez explicitement une nouvelle conception. Vérifiez ensuite la page réellement produite avant publication.
+
+### 1. Enregistrer la conception
+
+Ouvrez More actions et sélectionnez Save. Attendez Saved. Après le premier enregistrement, les modifications suivantes sont aussi enregistrées automatiquement.
+
+![Save conserve la nouvelle conception avant publication.](report-designer-guide-save.png)
+
+### 2. Ouvrir Preview
+
+Ouvrez More actions et sélectionnez Preview.
+
+![Preview produit le PDF de la conception de travail actuelle.](report-designer-guide-preview.png)
+
+### 3. Vérifier et télécharger la page produite
+
+Lisez l'aperçu PDF et utilisez Download pour une copie locale. Fermez l'aperçu pour revenir à l'édition.
+
+![L'aperçu montre la sortie réelle de la requête dans la conception imprimable.](report-designer-guide-preview-result.png)
+
+![Download enregistre le PDF produit.](report-designer-guide-preview-download.png)
+
+**Résultat attendu :** l'aperçu produit la conception actuelle avec les données de requête. Une conception brouillon porte un tampon DRAFT.
+
+## Publier une révision enregistrée
+
+Publiez après avoir vérifié la conception enregistrée. Une révision conserve l'état publié. Elle n'ajoute aucune entrée à la bibliothèque Reports.
+
+### 1. Publier la révision
+
+Ouvrez More actions et sélectionnez Publish revision. Enregistrez d'abord si le concepteur le demande.
+
+![Publish revision capture la conception enregistrée sans créer de rapport de bibliothèque.](report-designer-guide-publish.png)
+
+### 2. Vérifier le statut publié
+
+Vérifiez Published à côté du nom de la conception.
+
+![Published confirme la révision de la conception.](report-designer-guide-published.png)
+
+**Résultat attendu :** la conception enregistrée possède une révision publiée.
+
+## Examiner les versions publiées
+
+Identifiez ainsi la révision enregistrée avant d'envisager une restauration.
+
+### 1. Ouvrir Versions
+
+Ouvrez More actions et sélectionnez Versions.
+
+![Versions liste les états publiés.](report-designer-guide-versions.png)
+
+### 2. Lire la ligne de révision
+
+Vérifiez sa version, la date de publication et l'auteur. Restore charge cet état dans la copie de travail comme une modification. Il ne publie pas une nouvelle révision. Fermez le panneau si aucune restauration n'est nécessaire.
+
+![Lisez la révision, la date et l'auteur avant restauration.](report-designer-guide-version-row.png)
+
+## Créer l'entrée de bibliothèque du rapport
+
+Effectuez cette tâche après la préparation de la conception et de la requête. Le rapport de bibliothèque peut porter un autre nom que sa conception.
+
+### 1. Choisir Create report from this design
+
+Ouvrez More actions et sélectionnez Create report from this design.
+
+![Create report from this design crée une entrée de bibliothèque distincte.](report-designer-guide-create-report.png)
+
+### 2. Nommer le rapport
+
+Saisissez le Name de bibliothèque. L'exemple utilise Request summary report.
+
+![Choisissez le nom du rapport de bibliothèque.](report-designer-guide-report-name.png)
+
+### 3. Choisir sa catégorie
+
+Ouvrez Category et choisissez la catégorie où le trouver, comme Operational.
+
+![Choisissez la catégorie où les utilisateurs trouveront le rapport.](report-designer-guide-report-category.png)
+
+### 4. Vérifier les définitions liées
+
+Confirmez Template et Primary query. Le modèle contrôle la mise en page Document. La requête principale fournit les lignes Spreadsheet.
+
+![Vérifiez le modèle sélectionné pour ce rapport.](report-designer-guide-report-template.png)
+
+![Vérifiez la requête principale fournissant les lignes du tableur.](report-designer-guide-report-query.png)
+
+### 5. Créer l'entrée de bibliothèque
+
+Ouvrez les points Actions du panneau et sélectionnez Create report.
+
+![Le panneau New report a ses propres points Actions.](report-designer-guide-report-actions.png)
+
+![Create report ajoute l'entrée de bibliothèque nommée.](report-designer-guide-report-create.png)
+
+**Résultat attendu :** l'entrée nommée est disponible sous sa catégorie dans Reports. Ouvrez ses Parameters et exécutez-la ici. [Rapports](/docs/reports) décrit ce parcours.
+
+## Exporter directement depuis le concepteur
+
+Utilisez ces exports pour produire une sortie de la conception actuelle sans ouvrir son rapport de bibliothèque.
+
+### 1. Exporter le PDF
+
+Ouvrez More actions, pointez Export et sélectionnez PDF.
+
+![Export PDF télécharge la sortie de la conception actuelle.](report-designer-guide-export-pdf.png)
+
+### 2. Exporter vers Excel
+
+Ouvrez More actions, pointez Export et sélectionnez Excel. Les lignes liées du tableau deviennent des données de classeur.
+
+![Export Excel télécharge les lignes liées du tableau.](report-designer-guide-export-excel.png)
+
+**Résultat attendu :** le navigateur télécharge le PDF produit ou le classeur.
+
+## Contrôler la visibilité et le verrouillage des éléments
+
+Layers fournit des contrôles directs pour les éléments sélectionnés. Masquer affecte la sortie. Verrouiller empêche les déplacements.
+
+### 1. Ouvrir Layers
+
+Sélectionnez Layers dans l'inspecteur.
+
+![Layers sélectionne les éléments et contrôle visibilité, verrouillage et ordre.](report-designer-guide-layers.png)
+
+### 2. Masquer un élément si souhaité
+
+Utilisez Hide Table, le contrôle œil, pour le tableau sélectionné. Les éléments masqués n'apparaissent ni dans le canevas ni dans le PDF.
+
+![Utilisez l'œil pour masquer volontairement un élément.](report-designer-guide-hide-layer.png)
+
+### 3. Le réafficher
+
+Utilisez Show Table pour le rétablir.
+
+![Utilisez Show Table pour rétablir l'élément masqué.](report-designer-guide-show-layer.png)
+
+### 4. Verrouiller sa position
+
+Utilisez Lock Table pour empêcher le déplacement tout en gardant la sélection possible.
+
+![Lock garde l'élément sélectionnable en empêchant le déplacement.](report-designer-guide-lock-layer.png)
+
+### 5. Le déverrouiller
+
+Utilisez Unlock Table pour le déplacer. L'exemple laisse le tableau visible et déverrouillé.
+
+![Unlock Table autorise à nouveau le déplacement.](report-designer-guide-unlock-layer.png)
+
+## Examiner une conception existante sur un téléphone
+
+Utilisez un grand écran pour créer des mises en page. Sur un téléphone, trouvez et examinez un modèle existant ou exécutez son rapport dans Reports.
+
+### 1. Développer Explorer
+
+Sélectionnez Expand explorer sur sa barre étroite.
+
+![Utilisez la barre Explorer pour trouver un modèle existant sur un téléphone.](report-designer-guide-phone-explorer.png)
+
+### 2. Choisir le modèle existant
+
+Sélectionnez son nom, puis repliez Explorer si vous avez besoin de place pour le canevas.
+
+![Choisissez la conception existante. Utilisez un écran plus grand pour la modifier.](report-designer-guide-phone-template.png)
+
+### 3. Ouvrir ses actions
+
+Utilisez More actions pour examiner les opérations disponibles. Modifiez la mise en page sur un écran plus grand.
+
+![Utilisez More actions pour examiner une conception existante.](report-designer-guide-phone-actions.png)
+
+## Choisir les éléments de page et les outils de mise en page
+
+Insert propose aussi Text, Letterhead, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date, Cell grid et Chart. Sélectionnez un élément pour modifier ses Properties. La tâche à un tableau n'exige pas ces éléments supplémentaires.
+
+Properties contrôle le format du papier, l'orientation et les numéros de page lorsqu'aucun élément n'est sélectionné. Il contrôle aussi position, dimensions et apparence des éléments. Undo et Redo parcourent les modifications. Le zoom ne change que votre vue.
+
+Pour Chart ou Cell grid, liez une requête dans Data et choisissez les colonnes de libellé, valeur ou cellule correspondantes dans Properties. Vérifiez la sortie produite avec vos lignes.
+
+Les réglages Flow placent un élément sous un autre ou contrôlent le contenu répété sur les pages suivantes. Utilisez Load pages après une modification de mise en page pour contrôler le nombre de pages physiques. Show data montre seulement les lignes tenant dans la page du canevas.
+
+## Séparer le texte du rapport et les champs de requête
+
+Un libellé de colonne imprimée peut différer du nom du champ de requête. Utilisez les champs de libellé de Data pour le texte visible. Gardez les clés de liaison alignées avec la sortie réelle de la requête.
+
+Le sélecteur Print language de Properties modifie les textes du rapport pour une langue. Les traductions vides reprennent le texte d'origine. Changer la langue de conception ne traduit pas les données de la requête.
+
+Un Letterhead utilise l'identité du laboratoire configurée dans Settings. Il peut donner à plusieurs conceptions les mêmes logo, nom et coordonnées.
+
+## Gérer les conceptions avec soin
+
+More actions inclut Duplicate et Delete. Duplicate démarre une conception distincte pour une variante. Delete supprime définitivement une conception après confirmation. Vérifiez d'abord les rapports liés.
+
+Restore dans Versions modifie la copie de travail et peut être annulé. Prévisualisez la conception restaurée avant de la publier volontairement. Une autre révision ne nécessite pas un autre rapport de bibliothèque pour la même conception.
+
+Create report from this design ajoute une entrée de bibliothèque distincte. Il ne remplace pas Publish revision. Une conception publiée absente de Reports exige encore la création de bibliothèque.
+
+## Référence facultative d'exercice
+
+[Téléchargez la requête facultative de comptage pour rapports](https://openldr.online/docs-samples/user-guide/report-designer/report-count-query.json). Importez-la par Query pour une référence. Ses paramètres Text obligatoires nommés `from` et `to` restent valides pour les rapports utilisant une commande Date range. Aucun exemple patient n'est requis. Utilisez votre requête approuvée pour les rapports habituels.
+
+[Téléchargez le PDF d'exemple publié](https://openldr.online/docs-samples/user-guide/report-designer/published-summary.pdf) ou [son classeur exporté](https://openldr.online/docs-samples/user-guide/report-designer/summary-design.xlsx) pour comparer le résultat à une colonne. Ces fichiers contiennent uniquement un comptage nul.
+
+## Résolution des problèmes
+
+**Aucune colonne n'apparaît.** Choisissez Bind query, configurez les valeurs par défaut nécessaires et sélectionnez Load columns.
+
+**Le canevas reste vide.** Incluez au moins une colonne liée, puis Load pages et Show data. Lisez les erreurs de requête avant de changer la mise en page.
+
+**Le statut d'enregistrement affiche une erreur.** Corrigez-la avant de publier. Un nouveau modèle exige un premier Save explicite.
+
+**Create report est indisponible.** Enregistrez la conception, puis remplissez Name, Category, Template et Primary query dans le panneau New report.
+
+**L'aperçu et la sortie diffèrent des lignes attendues.** Alignez les clés du modèle sur les identifiants de paramètres de requête. Vérifiez les valeurs par défaut et les bornes de dates SQL. L'exemple inclut les deux jours limites du calendrier.
+
+**Un tableau s'imprime sur plusieurs pages.** Les données peuvent dépasser la première page. Utilisez Load pages et consultez le PDF pour vérifier le nombre réel.
+
+**Reports indique required parameter: period.** Définissez les deux dates dans Parameters et relancez le rapport. Vérifiez que le modèle expose un filtre Date range et que la requête déclare ses paramètres obligatoires.
 
 ## Guides associés
 
-- [Rapports](/docs/reports)
-- [Requêtes personnalisées](/docs/query)
-- [Laboratoire](/docs/laboratory)
-- [Connecteurs](/docs/connectors)
+[Requête](/docs/query) crée les requêtes enregistrées. [Rapports](/docs/reports) exécute les entrées de bibliothèque et planifie les sorties. [Laboratoire](/docs/laboratory) configure l'identité partagée.

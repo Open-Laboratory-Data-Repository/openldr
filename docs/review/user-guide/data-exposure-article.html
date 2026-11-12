@@ -1,0 +1,56 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Administration</span><span>Choose additional dashboard columns</span><span>About 10 minutes</span></div>
+<h1>Data Exposure</h1>
+<p>Data Exposure controls which additional table columns the dashboard builder offers. Administrators use it to hide columns or approve their availability. You need Manage data exposure.</p>
+<p>This policy covers additional table columns in the dashboard builder. Built-in dimensions, raw SQL and connector-backed reports are outside it. Hiding a column here does not erase its data or remove database access.</p>
+<p>The PII badge means personally identifiable information. Showing one of these columns requires an extra confirmation, then Save.</p>
+<p>Use your own approved column policy. The pictures use an isolated test installation and restore the demonstrated columns afterward. No sample records are required.</p>
+<h2 id="dg-hide">Hide an additional dashboard column</h2>
+<p>Use this when an additional column should no longer be offered in the dashboard builder.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Settings and Data Exposure</h3><p>Open your user menu at the bottom left, choose <strong>Settings</strong>, then select <strong>Data Exposure</strong>.</p>__SHOT:user-menu:1____SHOT:settings-menu:1____SHOT:exposure-page:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Find the table group</h3><p>Find the table containing the column. The example uses <strong>Patient</strong>. Match both the table and column name.</p>__SHOT:table-group:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check the current state</h3><p>Read <strong>Shown</strong> or <strong>Hidden</strong> beside the switch. The example starts with <code>managing_organization</code> Shown.</p>__SHOT:shown-column:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Turn the column off</h3><p>Turn off its switch. The draft now says <strong>Hidden</strong>.</p>__SHOT:hide-column:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Check the unsaved indicator</h3><p><strong>Unsaved changes</strong> means the draft has not yet changed the stored policy.</p>__SHOT:unsaved:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Save the policy</h3><p>Open the page dots at the top right and select <strong>Save</strong>.</p>__SHOT:page-actions:6____SHOT:save-hidden:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The indicator clears. The saved column remains Hidden after reopening the page and is absent from additional builder columns.</p></div>
+__SHOT:hidden-result:0__
+<h2 id="dg-discard">Discard unsaved policy changes</h2>
+<p>Use this when you want to keep the saved policy after changing a switch.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Review the draft change</h3><p>Check which switch you changed. The example has turned the hidden column back on without saving.</p>__SHOT:discard-draft:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Discard</h3><p>Open the page dots and select <strong>Discard</strong>.</p>__SHOT:discard-menu:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The page reloads the saved policy. The unsaved switch change disappears.</p></div>
+__SHOT:discard-result:0__
+<h2 id="dg-show-pii">Approve showing a personally identifying column</h2>
+<p>Use this only after deciding that dashboard users should be able to use this additional column. The pictures use a test installation.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Check the PII label</h3><p>Find the correct table and column. The example is <code>surname</code> in Patient, marked <strong>PII</strong> and Hidden.</p>__SHOT:pii-hidden:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read and confirm the warning</h3><p>Turn the switch on. Read the warning, then select <strong>Un-hide</strong> to approve the draft. Select Cancel to leave it hidden.</p>__SHOT:pii-confirm:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Review the draft state</h3><p>The column now says <strong>Shown</strong>. The policy still has unsaved changes.</p>__SHOT:pii-draft:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Save the approval</h3><p>Open the page dots and select <strong>Save</strong>.</p>__SHOT:save-pii:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The saved column is available among additional dashboard-builder columns.</p></div>
+__SHOT:pii-result:0__
+<h2 id="dg-restore">Hide a personally identifying column again</h2>
+<p>Use this when an approved identifying column should no longer be offered.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Turn the column off</h3><p>Find the column and turn off its switch. The example hides <code>surname</code> again.</p>__SHOT:rehide-pii:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Save the new policy</h3><p>Open the page dots and select <strong>Save</strong>.</p>__SHOT:save-rehide:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The column is Hidden in the saved policy. No identifying data was deleted.</p></div>
+<h2 id="dg-show-normal">Show a column without a PII warning</h2>
+<p>Use this when a non-PII additional column should be available again.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Turn the column on</h3><p>Find the correct column and turn on its switch. The example restores <code>managing_organization</code>.</p>__SHOT:show-normal:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Save the policy</h3><p>Open the page dots and select <strong>Save</strong>.</p>__SHOT:restore-column:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The saved column is available among additional dashboard-builder columns again.</p></div>
+<h2 id="dg-phone">Review the policy on a phone</h2>
+<p>Use the same table groups and switches on a phone. Scroll vertically through the groups.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Find the table group</h3><p>Find the correct group before changing a column.</p>__SHOT:phone-group:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read the column and state</h3><p>Check its name, any PII badge, and Shown or Hidden state before changing the switch. Save changes through the page dots.</p>__SHOT:phone-column:2__</section>
+<h2 id="dg-practice">Optional practice</h2>
+<p>Use a test installation. Hide a non-PII column, save, then restore it. Try Discard with an unsaved switch change. Only practise PII approval with fictional data and restore the intended policy afterward.</p>
+<h2 id="dg-limits">Limits</h2>
+<p>This is not a database security boundary or a data-deletion tool. Built-in dimensions, raw SQL and connector-backed reports are outside this policy. Column changes remain drafts until Save.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>The policy did not change.</strong> Check Unsaved changes, then choose Save in the page dots.</p>
+<p><strong>Discard is unavailable.</strong> No unsaved switch change exists.</p>
+<p><strong>A hidden field remains available elsewhere.</strong> Check whether it is a built-in dimension, raw SQL field or connector-backed report field, which this policy does not govern.</p>
+<h2 id="dg-related">Related guides</h2>
+<p>Read <a href="./dashboard-review.html">Dashboards</a> for building widgets and <a href="./roles-review.html">Roles</a> for permissions. Read <a href="./start-here-review.html">Start here</a> for command-line setup.</p>
+</article>

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "packages": [
+    {
+      "id": "test-sink",
+      "kind": "plugin",
+      "latestVersion": "0.1.0",
+      "publisher": "Guide practice publisher",
+      "summary": "Local training sink. No external destination.",
+      "path": "bundles/test-sink",
+      "signatureFingerprint": "b341563b4ef06aafdaa19f32d67a98e3fcd2496ba40defdb70a118e7729a63c5"
+    }
+  ]
+}

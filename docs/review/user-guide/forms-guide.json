@@ -1,0 +1,726 @@
+{
+  "title": "Forms",
+  "meta": [
+    "Capture and form design",
+    "Submit lab orders and maintain form definitions",
+    "About 30 minutes"
+  ],
+  "intro": [
+    "Forms lets staff enter data through published forms. Form authors use the builder to choose fields, preview the design and publish versions.",
+    "Use your own patients, enabled catalog tests and approved form design. The pictures show fictional records and an Example request form in an isolated test installation. No documentation samples are required.",
+    "Use forms allows reading form definitions. Submit forms allows data capture. Edit forms allows design changes, and Publish forms allows publication. A form also needs a valid submission configuration and an enabled workflow for incoming data before it can write data.",
+    "Draft and Archived forms can still open through View/Run. Submit is disabled until the form is Published. Preview in the builder is a separate way to try a design without saving a response.",
+    "The version numbers in these pictures are examples. Each publication saves a snapshot of the design and takes the next number. Your numbers depend on your own publication history. Read <a href=\"./start-here-review.html\">Start here</a> for installation and command-line setup."
+  ],
+  "tasks": [
+    {
+      "id": "order",
+      "title": "Choose the patient, test and specimen for a lab order",
+      "intro": [
+        "Use this when recording an intended order through your published Lab order form. Use the patient and tests appropriate to that order."
+      ],
+      "steps": [
+        [
+          "Open Forms",
+          "Select <strong>Forms</strong> in the main menu.",
+          [
+            "open-page"
+          ]
+        ],
+        [
+          "Open Lab order",
+          "Open the <strong>Lab order</strong> row dots and select <strong>View/Run</strong>.",
+          [
+            "order-row-actions",
+            "order-run"
+          ]
+        ],
+        [
+          "Search for the patient",
+          "In <strong>Patient</strong>, search using your patient name or identifier.",
+          [
+            "order-patient-search"
+          ]
+        ],
+        [
+          "Select the patient",
+          "Check the matching record and select the correct patient.",
+          [
+            "order-patient-choice"
+          ]
+        ],
+        [
+          "Search for the test",
+          "In <strong>Tests</strong>, search for the requested catalog test. The list uses tests switched on at this lab.",
+          [
+            "order-test-search"
+          ]
+        ],
+        [
+          "Choose the test",
+          "Select the requested test. Repeat this choice only when the order needs another test.",
+          [
+            "order-test-choice"
+          ]
+        ],
+        [
+          "Open its details",
+          "Under <strong>Results</strong>, select the chosen test row to open its details.",
+          [
+            "order-test-details"
+          ]
+        ],
+        [
+          "Choose the specimen",
+          "Select the specimen type recorded for this test. Use an option from your configured list.",
+          [
+            "order-specimen"
+          ]
+        ]
+      ],
+      "result": "The test details hold the chosen specimen. You have not submitted the order yet.",
+      "resultShots": []
+    },
+    {
+      "id": "submit-order",
+      "title": "Review and submit the lab order",
+      "intro": [
+        "Use this after selecting the patient, requested tests and specimen details. Complete any other required fields in your form before submitting."
+      ],
+      "steps": [
+        [
+          "Close the test details",
+          "Select <strong>Close</strong> at the top right of the test-details sheet.",
+          [
+            "order-details-close"
+          ]
+        ],
+        [
+          "Choose the priority",
+          "Choose the recorded <strong>Priority</strong>. The picture uses <strong>Routine</strong>.",
+          [
+            "order-priority"
+          ]
+        ],
+        [
+          "Review the order and open its actions",
+          "Check the patient, tests and specimen details, then open the page dots at the top right.",
+          [
+            "order-submit-actions"
+          ]
+        ],
+        [
+          "Submit the intended order",
+          "Select <strong>Submit</strong> once. Wait for the result. Do not submit again merely to confirm success.",
+          [
+            "order-submit"
+          ]
+        ]
+      ],
+      "result": "<strong>Response captured.</strong> confirms the saved response. The answers remain on screen. Another Submit is another write, so use it only for an intended submission.",
+      "resultShots": [
+        "order-result"
+      ]
+    },
+    {
+      "id": "new",
+      "title": "Start a request-form design",
+      "intro": [
+        "Use this when an existing form does not collect the information your workflow needs. The builder selects a FHIR healthcare data format and a record type."
+      ],
+      "steps": [
+        [
+          "Choose New",
+          "From Forms, open the page dots at the top right and select <strong>New</strong>.",
+          [
+            "page-actions",
+            "new-menu"
+          ]
+        ],
+        [
+          "Name the form",
+          "Enter a name that describes its task. The example uses <code>Example request form</code>.",
+          [
+            "builder-name"
+          ]
+        ],
+        [
+          "Choose the FHIR version",
+          "Open <strong>FHIR Version</strong> and choose the version your records require. The example selects <strong>R4 (most common)</strong>.",
+          [
+            "builder-fhir-version"
+          ]
+        ],
+        [
+          "Choose the record type",
+          "Open <strong>Resource Type</strong>, find <strong>ServiceRequest</strong> and select it for this request-form example.",
+          [
+            "builder-resource"
+          ]
+        ]
+      ],
+      "result": "The available starter pack opens so you can choose its fields.",
+      "resultShots": []
+    },
+    {
+      "id": "pack",
+      "title": "Choose starter-pack fields and save a draft",
+      "intro": [
+        "Use the starter pack to keep the fields your form needs. This example keeps Patient, Tests, Results, Priority and Reference Number. Your own workflow may need more fields."
+      ],
+      "steps": [
+        [
+          "Clear Requesting Clinician for this example",
+          "Clear <strong>Requesting Clinician</strong> when this example form does not collect it.",
+          [
+            "pack-clinician"
+          ]
+        ],
+        [
+          "Clear Clinical Notes for this example",
+          "Clear <strong>Clinical Notes</strong>. Keep it selected in your own form if that workflow needs it.",
+          [
+            "pack-notes"
+          ]
+        ],
+        [
+          "Clear Referring Facility for this example",
+          "Clear <strong>Referring Facility</strong> for the five-field example.",
+          [
+            "pack-facility"
+          ]
+        ],
+        [
+          "Clear Order rejection for this example",
+          "Clear <strong>Order rejection</strong> for this example.",
+          [
+            "pack-rejection"
+          ]
+        ],
+        [
+          "Check the remaining selection",
+          "Check that <strong>Patient</strong>, <strong>Tests</strong>, <strong>Results</strong>, <strong>Priority</strong> and <strong>Reference Number</strong> remain selected. The pictured pack shows <strong>5 of 9 selected</strong>.",
+          [
+            "pack-choices",
+            "pack-selected-count"
+          ]
+        ],
+        [
+          "Add the fields",
+          "Open the starter-pack dots and select <strong>Add 5 fields</strong>.",
+          [
+            "pack-actions",
+            "pack-add"
+          ]
+        ],
+        [
+          "Save the draft",
+          "Open the builder dots at the top right and select <strong>Save draft</strong>.",
+          [
+            "builder-actions",
+            "draft-save"
+          ]
+        ]
+      ],
+      "result": "The form definition is saved as a Draft. Saving the design does not submit a response or publish it.",
+      "resultShots": [
+        "builder-fields"
+      ]
+    },
+    {
+      "id": "field",
+      "title": "Change the reference-field wording",
+      "intro": [
+        "Use this when the form should use wording staff recognise. This example changes Reference Number to Requisition reference."
+      ],
+      "steps": [
+        [
+          "Open the field editor",
+          "Select the <strong>Reference Number</strong> field's Edit control in the builder.",
+          [
+            "field-open"
+          ]
+        ],
+        [
+          "Change Display Label",
+          "In <strong>Display Label</strong>, enter <code>Requisition reference</code>.",
+          [
+            "field-label"
+          ]
+        ],
+        [
+          "Enter a placeholder",
+          "In <strong>Placeholder</strong>, enter <code>Enter the requisition number</code>. This hint appears inside an empty input.",
+          [
+            "field-placeholder"
+          ]
+        ],
+        [
+          "Check Required",
+          "Leave <strong>Required</strong> off when this answer is optional. Turn it on only when your workflow requires an answer.",
+          [
+            "field-required"
+          ]
+        ],
+        [
+          "Check Enabled",
+          "Keep <strong>Enabled</strong> on so the field appears and collects an answer.",
+          [
+            "field-enabled"
+          ]
+        ],
+        [
+          "Apply the field edit",
+          "Open the field-editor dots and select <strong>Save</strong>. This applies the edit to the current builder design.",
+          [
+            "field-actions",
+            "field-save"
+          ]
+        ]
+      ],
+      "result": "The field list shows Requisition reference. Use the builder's Save draft or Publish action to store the changed form.",
+      "resultShots": [
+        "field-updated"
+      ]
+    },
+    {
+      "id": "preview",
+      "title": "Try the design without capturing data",
+      "intro": [
+        "Use Preview to inspect the current builder design before publication. Its example answers do not become submitted form responses."
+      ],
+      "steps": [
+        [
+          "Open Preview",
+          "Open the builder dots and select <strong>Preview</strong>.",
+          [
+            "builder-actions",
+            "preview-menu"
+          ]
+        ],
+        [
+          "Open Preview actions",
+          "Select the dots in the Preview sheet header.",
+          [
+            "preview-actions"
+          ]
+        ],
+        [
+          "Fill example answers",
+          "Select <strong>Fill example</strong>.",
+          [
+            "preview-fill"
+          ]
+        ],
+        [
+          "Read the preview",
+          "Check the wording, fields and example answers. The example shows the Requisition reference input.",
+          [
+            "preview-filled"
+          ]
+        ],
+        [
+          "Reset the example answers",
+          "Open Preview actions again and select <strong>Reset</strong>.",
+          [
+            "preview-reset"
+          ]
+        ],
+        [
+          "Close Preview",
+          "Select <strong>Close</strong> at the top right to return to the builder.",
+          [
+            "preview-close"
+          ]
+        ]
+      ],
+      "result": "You return to the same design. Fill example and Reset did not submit a response or save the form definition.",
+      "resultShots": []
+    },
+    {
+      "id": "publish",
+      "title": "Save and publish the reviewed design",
+      "intro": [
+        "Use this when the design is ready for use. Publishing stores the current design and creates a numbered snapshot."
+      ],
+      "steps": [
+        [
+          "Save the edited draft",
+          "Open the builder dots and select <strong>Save draft</strong>.",
+          [
+            "draft-save-edited"
+          ]
+        ],
+        [
+          "Publish the design",
+          "Open the builder dots again and select <strong>Publish</strong>.",
+          [
+            "publish-menu"
+          ]
+        ],
+        [
+          "Read the published version",
+          "Check the published status and generated snapshot number in the header. You cannot type this number.",
+          [
+            "published-version"
+          ]
+        ]
+      ],
+      "result": "The Forms list shows the form as Published. Submission still requires valid answers and a configured capture workflow.",
+      "resultShots": [
+        "published-row"
+      ]
+    },
+    {
+      "id": "compare",
+      "title": "Compare a changed placeholder with a published version",
+      "intro": [
+        "Use this before publishing a later change. The example changes only the reference-field placeholder; its label already matches the published version."
+      ],
+      "steps": [
+        [
+          "Change the placeholder",
+          "Open the Requisition reference field editor. Change <strong>Placeholder</strong> to <code>Enter the reference from the paper form</code>, then use the field dots to Save.",
+          [
+            "version-draft-change"
+          ]
+        ],
+        [
+          "Open Compare",
+          "Open the builder dots and select <strong>Compare</strong>.",
+          [
+            "compare-menu"
+          ]
+        ],
+        [
+          "Choose the left-hand version",
+          "Open the left selector and choose the published snapshot to compare. The example selects <strong>v1</strong>.",
+          [
+            "compare-from",
+            "compare-from-version"
+          ]
+        ],
+        [
+          "Check the right-hand version",
+          "Keep <strong>Current draft</strong> in the right selector to compare the design presently in the builder. You can also choose another published version.",
+          [
+            "compare-to"
+          ]
+        ],
+        [
+          "Read the reported difference",
+          "The example reports one changed field property, <strong>Field reference-number · placeholder</strong>. It does not report a label change.",
+          [
+            "compare-result"
+          ]
+        ],
+        [
+          "Close Compare with Escape",
+          "Press Escape to return to the builder. Closing Compare does not save or publish the changed design.",
+          [
+            "compare-close"
+          ]
+        ]
+      ],
+      "result": "You have reviewed the difference while retaining the current builder edit.",
+      "resultShots": []
+    },
+    {
+      "id": "save-change",
+      "title": "Save and publish a later content change",
+      "intro": [
+        "Use this after reviewing a change against a published version."
+      ],
+      "steps": [
+        [
+          "Save the changed draft",
+          "Open the builder dots and select <strong>Save draft</strong>.",
+          [
+            "changed-save-draft"
+          ]
+        ],
+        [
+          "Check the Draft status",
+          "When saved content differs from the published content, the current form becomes <strong>Draft</strong>. View/Run can still open it, but Submit is disabled until publication.",
+          [
+            "changed-draft-status"
+          ]
+        ],
+        [
+          "Publish the reviewed change",
+          "Open the builder dots and select <strong>Publish</strong> when the change is ready.",
+          [
+            "changed-publish"
+          ]
+        ]
+      ],
+      "result": "The form becomes Published with the next snapshot number. An unchanged save does not by itself turn a Published form into Draft.",
+      "resultShots": []
+    },
+    {
+      "id": "restore",
+      "title": "Restore the content of a published snapshot",
+      "intro": [
+        "Use this when an earlier published design contains the content you want. Restoring replaces the editable form with that snapshot."
+      ],
+      "steps": [
+        [
+          "Open Versions",
+          "Open the builder dots and select <strong>Versions</strong>.",
+          [
+            "versions-menu"
+          ]
+        ],
+        [
+          "Find the snapshot",
+          "Read its version number, label and publication date. The list puts newest versions first and has pagination when needed.",
+          [
+            "versions-list"
+          ]
+        ],
+        [
+          "Open the version actions",
+          "Select the dots on the snapshot you want to restore. The picture uses version 1.",
+          [
+            "version-row-actions"
+          ]
+        ],
+        [
+          "Choose Restore",
+          "Select <strong>Restore</strong>.",
+          [
+            "restore-menu"
+          ]
+        ],
+        [
+          "Confirm the snapshot",
+          "Read the confirmation, then select <strong>Restore</strong> to replace the current design. Cancel keeps the current design.",
+          [
+            "restore-confirm"
+          ]
+        ],
+        [
+          "Check the resulting status",
+          "The pictured restore changes the published content, so the form becomes <strong>Draft</strong>. Restoring identical content can leave a Published form Published.",
+          [
+            "restore-result"
+          ]
+        ]
+      ],
+      "result": "The builder contains the restored content. A restored Draft remains viewable through View/Run, with Submit disabled until it is published.",
+      "resultShots": []
+    },
+    {
+      "id": "republish",
+      "title": "Publish reviewed restored content",
+      "intro": [
+        "Use this after checking that restored Draft content is the design you want staff to use."
+      ],
+      "steps": [
+        [
+          "Publish the restored form",
+          "Open the builder dots and select <strong>Publish</strong>.",
+          [
+            "republish-menu"
+          ]
+        ],
+        [
+          "Check the new snapshot number",
+          "Read the published version in the header. Republishing creates the next snapshot; it does not reuse the restored snapshot number.",
+          [
+            "republished-version"
+          ]
+        ]
+      ],
+      "result": "The restored design is Published again. The example installation has snapshots 1 through 4; those numbers are illustrative.",
+      "resultShots": []
+    },
+    {
+      "id": "export",
+      "title": "Export the form definition",
+      "intro": [
+        "Use this when you need the form as a FHIR Questionnaire JSON file. This export contains the definition, not submitted answers."
+      ],
+      "steps": [
+        [
+          "Open the form row actions",
+          "Return to Forms and open the dots on the form you want to export.",
+          [
+            "list-actions"
+          ]
+        ],
+        [
+          "Choose Export",
+          "Select <strong>Export</strong>. Your browser downloads the Questionnaire JSON file.",
+          [
+            "export-menu"
+          ]
+        ]
+      ],
+      "result": "The downloaded file contains the form definition. Export does not submit or change the form.",
+      "resultShots": []
+    },
+    {
+      "id": "duplicate",
+      "title": "Make a separate draft and inspect its submission state",
+      "intro": [
+        "Use Duplicate when you want to adapt an existing form while retaining its original definition."
+      ],
+      "steps": [
+        [
+          "Choose Duplicate",
+          "From the original form row dots, select <strong>Duplicate</strong>.",
+          [
+            "duplicate-menu"
+          ]
+        ],
+        [
+          "Check the separate copy",
+          "Find the new copy in Forms. It starts as a <strong>Draft</strong>. The original form remains.",
+          [
+            "duplicate-result"
+          ]
+        ],
+        [
+          "Open View/Run on the Draft",
+          "Open the copy's row dots and select <strong>View/Run</strong>. The page warns that submission is disabled until publication.",
+          [
+            "draft-run-warning"
+          ]
+        ],
+        [
+          "Check Submit",
+          "Open the page dots. <strong>Submit</strong> is disabled on this unpublished form.",
+          [
+            "draft-submit-disabled"
+          ]
+        ]
+      ],
+      "result": "The copy remains a separate Draft. Opening View/Run does not publish it or submit answers.",
+      "resultShots": []
+    },
+    {
+      "id": "retire",
+      "title": "Archive or delete an unused copy",
+      "intro": [
+        "Use Archive to retain a definition while stopping submission use. Delete permanently removes the chosen definition. The pictures retire only the separate demonstration copy."
+      ],
+      "steps": [
+        [
+          "Return to Forms",
+          "Select <strong>Forms</strong> in the main menu. Find the copy you intend to retire.",
+          [
+            "open-page"
+          ]
+        ],
+        [
+          "Archive the copy",
+          "Open its row dots and select <strong>Archive</strong>.",
+          [
+            "archive-menu"
+          ]
+        ],
+        [
+          "Check Archived",
+          "The copy remains in the management list with <strong>Archived</strong> status. It is no longer Published for submission.",
+          [
+            "archive-result"
+          ]
+        ],
+        [
+          "Choose Delete when removal is intended",
+          "If you intend permanent removal, open that same copy's row dots and select <strong>Delete</strong>. Check that you chose the copy, not the original.",
+          [
+            "delete-menu"
+          ]
+        ],
+        [
+          "Confirm the named form",
+          "Read the form name in the confirmation. Select <strong>Delete</strong> to remove it, or Cancel to keep it.",
+          [
+            "delete-confirm"
+          ]
+        ]
+      ],
+      "result": "The deleted copy disappears from Forms. The captured example retained its original form.",
+      "resultShots": []
+    },
+    {
+      "id": "phone",
+      "title": "Inspect forms and previews on a phone",
+      "intro": [
+        "Use the same Forms list and builder actions on a phone. A wide table can scroll horizontally."
+      ],
+      "steps": [
+        [
+          "Find the form",
+          "Use <strong>Search forms</strong> in the phone-width list.",
+          [
+            "phone-list"
+          ]
+        ],
+        [
+          "Open Builder actions",
+          "Open the form in the builder and select its dots at the top right.",
+          [
+            "phone-builder-actions"
+          ]
+        ],
+        [
+          "Choose Preview",
+          "Select <strong>Preview</strong> from the builder menu.",
+          [
+            "phone-preview-menu"
+          ]
+        ],
+        [
+          "Inspect the phone preview",
+          "Read the preview and scroll its fields. Preview actions remains in its header dots.",
+          [
+            "phone-preview"
+          ]
+        ]
+      ],
+      "result": "The design remains available for inspection at phone width.",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "limits",
+      "title": "Limits",
+      "paragraphs": [
+        "This walkthrough captures an order and specimen choice. It does not demonstrate entering laboratory result values or rejecting an order.",
+        "Field-editor Save applies a local builder edit. Builder Save draft stores the definition. Publish stores the design and creates a version. Preview actions do none of these writes.",
+        "Saving or restoring different content can return a Published form to Draft. Identical content does not force that change. View/Run remains available, but submission requires Published status."
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>No patient matches.</strong> Check the search value and whether your normal feed has supplied that patient. Use Patients to inspect the received record.",
+        "<strong>A test is absent.</strong> Check that it exists in Test catalog and is switched on at this lab.",
+        "<strong>Submit is disabled.</strong> Check the form status and submission-readiness message. Publish a reviewed Draft and check the capture configuration.",
+        "<strong>Submit reports invalid answers.</strong> Read the field errors and correct required or invalid values before retrying. A successful Response captured message does not need a second submission.",
+        "<strong>Restore leaves Draft.</strong> Review the restored content, then Publish it when it should be available for submission again."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "Read <a href=\"./patients-review.html\">Patients</a> for received patient records and <a href=\"./test-catalog-review.html\">Test catalog</a> for lab-enabled tests. Read <a href=\"./workflows-review.html\">Workflows</a> for the capture workflow and <a href=\"./start-here-review.html\">Start here</a> for installation and command-line setup."
+      ]
+    },
+    {
+      "id": "practice",
+      "title": "Optional practice",
+      "paragraphs": [
+        "Use a test installation with fictional patients and lab-enabled test definitions. The capture tasks work with your own received records; no documentation sample file is required.",
+        "For design practice, use a separate form name and the five-field ServiceRequest example. Try Preview, Save draft, Publish, Compare and Versions. Duplicate that definition before practising Archive or Delete.",
+        "Submit a test Lab order only when you intend to write that order. The documented example submitted one response. Its later screenshots did not submit another response."
+      ]
+    }
+  ]
+}

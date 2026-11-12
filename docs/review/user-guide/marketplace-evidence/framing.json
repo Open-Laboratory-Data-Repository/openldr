@@ -1,0 +1,515 @@
+[
+  {
+    "id": "open",
+    "crop": [
+      103.5,
+      208.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 252,
+        "y": 340,
+        "width": 183,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "browse",
+    "crop": [
+      259.34375,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 464,
+        "y": 49,
+        "width": 70.6875,
+        "height": 34
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "search",
+    "crop": [
+      384.0,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 464,
+        "y": 100,
+        "width": 320,
+        "height": 36
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "filter",
+    "crop": [
+      624.0,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 792,
+        "y": 100,
+        "width": 144,
+        "height": 36
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "card",
+    "crop": [
+      353.328125,
+      97.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 464,
+        "y": 165,
+        "width": 258.65625,
+        "height": 164
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "signature",
+    "crop": [
+      525.828125,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 736.8125,
+        "y": 94,
+        "width": 58.03125,
+        "height": 22
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "readme",
+    "crop": [
+      439.0,
+      70.125,
+      582,
+      363.75
+    ],
+    "targets": [
+      {
+        "x": 464,
+        "y": 199,
+        "width": 532,
+        "height": 106
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "permissions",
+    "crop": [
+      679.1999999999999,
+      138.0,
+      600.8000000000001,
+      375.5
+    ],
+    "targets": [
+      {
+        "x": 1020,
+        "y": 163,
+        "width": 244,
+        "height": 325.5
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "install",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 105,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "consent",
+    "crop": [
+      359.0,
+      224.375,
+      562,
+      351.25
+    ],
+    "targets": [
+      {
+        "x": 384,
+        "y": 268.5625,
+        "width": 512,
+        "height": 262.875
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "approve",
+    "crop": [
+      323.125,
+      338.4375,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 494.59375,
+        "y": 470.4375,
+        "width": 137.0625,
+        "height": 36
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "installed",
+    "crop": [
+      353.328125,
+      83.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 464,
+        "y": 165,
+        "width": 258.65625,
+        "height": 137
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "disable",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 105,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "enable",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 105,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "remove",
+    "crop": [
+      800,
+      3.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 137,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "remove-confirm",
+    "crop": [
+      391.0,
+      244.375,
+      498,
+      311.25
+    ],
+    "targets": [
+      {
+        "x": 416,
+        "y": 295.734375,
+        "width": 448,
+        "height": 208.53125
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "registries",
+    "crop": [
+      54.399999999999864,
+      34.0,
+      1225.6000000000001,
+      766.0
+    ],
+    "targets": [
+      {
+        "x": 448,
+        "y": 84,
+        "width": 832,
+        "height": 716
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "add-registry",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 90.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "registry-name",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 921,
+        "y": 99.53125,
+        "width": 335,
+        "height": 36
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "registry-type",
+    "crop": [
+      755.3984375,
+      54.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 926,
+        "y": 188.5,
+        "width": 138.796875,
+        "height": 32
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "registry-location",
+    "crop": [
+      800,
+      63.53125,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 921,
+        "y": 195.53125,
+        "width": 335,
+        "height": 36
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "registry-save",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1077,
+        "y": 66.25,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 6,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "registry-saved",
+    "crop": [
+      398,
+      4.875,
+      882,
+      551.25
+    ],
+    "targets": [
+      {
+        "x": 448,
+        "y": 238,
+        "width": 832,
+        "height": 85
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "registry-edit",
+    "crop": [
+      800,
+      171.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 305.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "registry-settings",
+    "crop": [
+      767,
+      21.21875,
+      513,
+      320.625
+    ],
+    "targets": [
+      {
+        "x": 793,
+        "y": 99.53125,
+        "width": 463,
+        "height": 164
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "phone",
+    "crop": [
+      0,
+      577.625,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 16,
+        "y": 632,
+        "width": 343,
+        "height": 164
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "phone-details",
+    "crop": [
+      0,
+      199.34375,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 16,
+        "y": 244.28125,
+        "width": 343,
+        "height": 144.5
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "inside"
+  }
+]

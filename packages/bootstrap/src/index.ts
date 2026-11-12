@@ -18,7 +18,8 @@ import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, createStarterPackStore, seededStarterPacks, type FormStore, type StarterPackStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
-import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, StoredQueryRowLimitError, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
+import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, StoredQueryRowLimitError, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
+import { runReportStoredQuery } from './report-query';
 import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
 import {
   createWorkflowStore, type WorkflowStore,
@@ -793,7 +794,7 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
     },
   };
   const runReportQuery = (queryId: string, values: Record<string, unknown>) =>
-    runStoredQuery(reportRenderDeps, queryId, values);
+    runReportStoredQuery(reportRenderDeps, queryId, values);
   const dataDrivenReporting = createDataDrivenReporting({
     reportDefs: reportDefStore,
     reportDesigns: reportDesignStore,

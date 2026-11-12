@@ -1,0 +1,82 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>System setup</span><span>Review and install packages</span><span>About 15 minutes</span></div>
+<h1>Marketplace</h1>
+<p>Use Marketplace to review and install plugins, form templates, reports and content packs. Packages come from registries, which are lists of files supplied by a publisher.</p>
+<p><strong>View marketplace</strong> lets you browse packages and installed items. <strong>Manage marketplace</strong> lets you install, disable, remove and manage registries.</p>
+<p>Begin with the registry your organisation trusts. A fresh installation includes Default registry on GitHub. Its server must reach that registry to read packages.</p>
+<p>The pictures use a signed training sink from a local practice registry. You can follow the same tasks with your approved package. No documentation samples are required. Optional practice setup is at the end.</p>
+<h2 id="dg-open">Find your package</h2>
+<p>Check its source and purpose before choosing a package. Installing a plugin grants its declared capabilities.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Marketplace</h3><p>Open <strong>Settings</strong>, then <strong>Marketplace</strong>.</p>__SHOT:open:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Browse</h3><p>Use <strong>Browse</strong> to see available packages from enabled registries.</p>__SHOT:browse:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Search for the package</h3><p>Enter the package id in Search. The fictional practice example uses <code>test-sink</code>.</p>__SHOT:search:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose a type if useful</h3><p>Use <strong>All types</strong> to narrow the list to a plugin, form template, report or content pack.</p>__SHOT:filter:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Check the card</h3><p>Read the id, version, publisher and registry. Open the correct package card.</p>__SHOT:card:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The package detail opens. Opening it retrieves the package information needed for signature, permission and compatibility checks.</p></div>
+<h2 id="dg-review">Read the package before installing</h2>
+<p>A signature check establishes whether the file matches the publisher key. Decide whether you trust that publisher and what the package may do.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Check the signature</h3><p>Read <strong>Verified</strong> or the verification failure. An unopened remote card can be Unverified until details load.</p>__SHOT:signature:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read the description</h3><p>Read what the package does and any required setup. This training package has no real destination.</p>__SHOT:readme:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read permissions and requirements</h3><p>Check publisher, selected version, permissions and compatibility. Loading permissions or Permissions unavailable does not mean no permissions are requested. Wait for confirmed details.</p>__SHOT:permissions:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Install becomes available only when the selected version passes the required checks. Selecting another version starts its checks again.</p></div>
+<h2 id="dg-install">Approve and install a package</h2>
+<p>Use this only after reviewing the selected package and capabilities.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Install</h3><p>Open the package detail dots and select <strong>Install</strong>.</p>__SHOT:install:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Review the approval</h3><p>Check the version and <strong>Requested capabilities</strong>. A content pack shows its included steps instead.</p>__SHOT:consent:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Approve this installation</h3><p>Select <strong>Approve &amp; install</strong> to proceed. Cancel closes the approval without installing.</p>__SHOT:approve:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check Installed</h3><p>Use the detail dots and Back, then choose <strong>Installed</strong>. Check the installed id and Active state.</p>__SHOT:installed:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The package is installed in this OpenLDR instance. Installation does not configure every external dependency or prove the plugin can import your data.</p></div>
+<h2 id="dg-disable">Disable or enable an installed plugin</h2>
+<p>Disabling keeps the installed files and record. It stops the plugin loading.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Disable</h3><p>On Installed, open the plugin. Open its dots and select <strong>Disable</strong>.</p>__SHOT:disable:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Enable it again when appropriate</h3><p>After disabling, reload the page and reopen the plugin from Installed. Open its dots and select <strong>Enable</strong>. This refreshes the current menu state.</p>__SHOT:enable:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The installed plugin can load again when enabled. This does not change its external connection settings.</p></div>
+<h2 id="dg-remove">Remove an installed plugin</h2>
+<p>Check dependent workflows and imports before removing a plugin.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Remove</h3><p>Open the installed plugin detail dots and select <strong>Remove</strong>.</p>__SHOT:remove:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the plugin id</h3><p>In the confirmation, choose <strong>Remove</strong> to uninstall this plugin or Cancel to keep it. The practice capture removes test-sink.</p>__SHOT:remove-confirm:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The removed plugin is no longer installed. Its available registry card can still appear in Browse.</p></div>
+<h2 id="dg-registry">Add a registry</h2>
+<p>Use the registry URL or server folder supplied by your organisation. A local registry folder contains package directories. It must be accessible to the OpenLDR server.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Registries</h3><p>Choose the <strong>Registries</strong> tab. Check existing sources before adding a duplicate.</p>__SHOT:registries:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Add registry</h3><p>Open the tab-strip dots and select <strong>Add registry</strong>.</p>__SHOT:add-registry:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Name the source</h3><p>Enter a useful <strong>Name</strong>. The example uses Example local registry.</p>__SHOT:registry-name:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose its type</h3><p>Choose <strong>Local directory</strong> for a folder on the API server or <strong>Remote (HTTP)</strong> for a web registry.</p>__SHOT:registry-type:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Enter its location</h3><p>Fill <strong>Location</strong> with the server folder or registry base URL. The picture uses an isolated practice folder.</p>__SHOT:registry-location:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Save the source</h3><p>Open the sheet dots and select <strong>Save</strong>.</p>__SHOT:registry-save:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The enabled registry appears in the list. Its available packages appear in Browse. A folder on your laptop is not automatically visible to a server or container.</p></div>
+__SHOT:registry-saved:0__
+<h2 id="dg-registry-edit">Change a registry</h2>
+<p>A disabled registry stops supplying available packages. It does not uninstall packages already installed.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Edit</h3><p>Open the registry row dots and select <strong>Edit</strong>.</p>__SHOT:registry-edit:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check settings and Enabled</h3><p>Update the name, type, location or Enabled state. Save from the sheet dots. Close without Save to discard changes.</p>__SHOT:registry-settings:2__</section>
+<h2 id="dg-phone">Review packages on a phone</h2>
+<p>The same tabs and package actions are available at phone width.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Read a package card</h3><p>Search in Browse and open the correct card. Cards stack vertically.</p>__SHOT:phone:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Review version and permissions</h3><p>Read details above the package description, then scroll for the remaining sections.</p>__SHOT:phone-details:2__</section>
+<h2 id="dg-packs">Content packs and other package types</h2>
+<p>A content pack applies its declared reference-data steps in order. Review its list and counts before installing. Pack installation can update code systems, value sets, facilities, mappings and named queries. A retry can overwrite a query changed locally.</p>
+<p>If a pack fails during application, earlier steps can remain written. Read Failed at step N and its error, correct the cause, then choose Install again. A pack refuses invalid signatures and failed preflight checks before writing.</p>
+<p><strong>Detach</strong> forgets an installed pack or form-template record while retaining its created data. It is not an uninstall. Plugins offer Remove. An older installed plugin version can offer Rollback. These alternatives depend on the selected package type and installed versions.</p>
+<p>A package whose details cannot load keeps installation disabled. Check registry availability before retrying. This preview exercised the plugin path. It did not apply a content pack or roll back an older plugin.</p>
+<h2 id="dg-cli">Use a local bundle from the CLI</h2>
+<p>Follow <a href="start-here-review.html">Start here</a> for CLI setup. From <code>openldr_ce</code>, CLI install reads a bundle directory on the server. It does not browse the Studio registry list. Verify and dry-run before applying an approved bundle.</p>
+<pre><code>pnpm openldr market list
+pnpm openldr market verify &lt;bundle-directory&gt;
+pnpm openldr market install &lt;bundle-directory&gt; --dry-run
+pnpm openldr market install &lt;bundle-directory&gt;
+pnpm openldr market disable &lt;plugin-id&gt;
+pnpm openldr market remove &lt;plugin-id&gt;</code></pre>
+<h2 id="dg-practice">Optional practice with a local training sink</h2>
+<p>Use your approved registry and packages for normal work. The optional <a href="marketplace-evidence/practice-registry/test-sink/manifest.json">practice manifest</a> belongs to a signed training bundle. It has no clinical sample data and sends nothing to a real destination.</p>
+<p>In a source checkout on a disposable installation, <code>pnpm build:test-sink</code> and <code>pnpm make:docs-marketplace-bundle</code> create the repository training bundle. Use the generated bundle folder on that server as a local registry. Local registry roots contain immediate package directories. The HTTP index format is different.</p>
+<p>The native pictures use a separate generated practice folder inside this preview evidence directory. Do not treat its publisher key as a production trust decision.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>Browse is empty.</strong> Clear Search and the type filter. Check enabled registries and whether the API server can read the folder or URL. Use the tab-strip dots and Refresh after source changes.</p>
+<p><strong>A local package is missing.</strong> Point the registry at the directory whose immediate children are readable bundle directories, each with its manifest and payload.</p>
+<p><strong>Permissions unavailable.</strong> The package details could not be retrieved. This does not establish an empty permission list.</p>
+<p><strong>Approval stays open after an error.</strong> Read the error notification. Correct storage, compatibility, signature or other reported requirements before retrying.</p>
+<p><strong>A plugin is installed but missing elsewhere.</strong> Confirm it is enabled and declares the expected importer, page or other capability. For cards and panels, see <a href="plugin-sites-review.html">Plugin cards and side panels</a>.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="connectors-review.html">Connectors</a> covers plugin destinations. <a href="forms-review.html">Forms</a> covers form editing. <a href="plugin-sites-review.html">Plugin cards and side panels</a> covers optional plugin places.</p>
+</article>

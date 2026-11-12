@@ -1,0 +1,316 @@
+{
+  "capturedAt": "2026-11-12T15:34:28.775Z",
+  "apiBase": "http://127.0.0.1:3010",
+  "studioBase": "http://127.0.0.1:5190",
+  "writes": "Only guide_bugfix_internal, guide_bugfix_target and openldr-docs-bugfix-review",
+  "tests": {
+    "apiDateRange": {
+      "json": {
+        "status": 200,
+        "result": {
+          "columns": [
+            {
+              "key": "start_date",
+              "label": "start_date",
+              "kind": "string"
+            },
+            {
+              "key": "end_date",
+              "label": "end_date",
+              "kind": "string"
+            }
+          ],
+          "rows": [
+            {
+              "start_date": "2026-01-01",
+              "end_date": "2026-11-12"
+            }
+          ],
+          "chart": {
+            "type": "stat",
+            "value": "1",
+            "label": "rows"
+          },
+          "meta": {
+            "generatedAt": "2026-11-12T15:34:28.867Z",
+            "rowCount": 1
+          }
+        }
+      },
+      "csv": {
+        "status": 200,
+        "contentType": "text/csv",
+        "bytes": 42
+      },
+      "pdf": {
+        "status": 200,
+        "contentType": "application/pdf",
+        "bytes": 1868
+      }
+    },
+    "uiCreate": {
+      "status": 201,
+      "request": {
+        "id": "r-a7a9e222-547a-4136-844c-eefbbf0360bc",
+        "name": "Fictional UI report review",
+        "description": "",
+        "category": "amr",
+        "designId": "d-bugfix-date-range",
+        "primaryQueryId": "cq_09e00ac9",
+        "status": "published"
+      },
+      "record": {
+        "id": "r-a7a9e222-547a-4136-844c-eefbbf0360bc",
+        "name": "Fictional UI report review",
+        "description": "",
+        "category": "amr",
+        "designId": "d-bugfix-date-range",
+        "primaryQueryId": "cq_09e00ac9",
+        "summaryMetrics": null,
+        "chart": null,
+        "paramOptions": null,
+        "status": "published"
+      }
+    },
+    "uiUnpublish": {
+      "status": 200,
+      "request": {
+        "id": "r-a7a9e222-547a-4136-844c-eefbbf0360bc",
+        "name": "Fictional UI report review",
+        "description": "",
+        "category": "amr",
+        "designId": "d-bugfix-date-range",
+        "primaryQueryId": "cq_09e00ac9",
+        "summaryMetrics": null,
+        "chart": null,
+        "paramOptions": null,
+        "status": "draft"
+      },
+      "response": {
+        "id": "r-a7a9e222-547a-4136-844c-eefbbf0360bc",
+        "name": "Fictional UI report review",
+        "description": "",
+        "category": "amr",
+        "designId": "d-bugfix-date-range",
+        "primaryQueryId": "cq_09e00ac9",
+        "summaryMetrics": null,
+        "chart": null,
+        "paramOptions": null,
+        "status": "draft"
+      },
+      "persisted": {
+        "id": "r-a7a9e222-547a-4136-844c-eefbbf0360bc",
+        "name": "Fictional UI report review",
+        "description": "",
+        "category": "amr",
+        "designId": "d-bugfix-date-range",
+        "primaryQueryId": "cq_09e00ac9",
+        "summaryMetrics": null,
+        "chart": null,
+        "paramOptions": null,
+        "status": "draft"
+      },
+      "libraryEntryRemoved": true,
+      "designRetained": true
+    },
+    "helperRepublish": {
+      "method": "Existing browser setReportStatus helper, not a visible UI control",
+      "status": 200,
+      "request": {
+        "id": "r-a7a9e222-547a-4136-844c-eefbbf0360bc",
+        "name": "Fictional UI report review",
+        "description": "",
+        "category": "amr",
+        "designId": "d-bugfix-date-range",
+        "primaryQueryId": "cq_09e00ac9",
+        "summaryMetrics": null,
+        "chart": null,
+        "paramOptions": null,
+        "status": "published"
+      },
+      "record": {
+        "id": "r-a7a9e222-547a-4136-844c-eefbbf0360bc",
+        "name": "Fictional UI report review",
+        "description": "",
+        "category": "amr",
+        "designId": "d-bugfix-date-range",
+        "primaryQueryId": "cq_09e00ac9",
+        "summaryMetrics": null,
+        "chart": null,
+        "paramOptions": null,
+        "status": "published"
+      }
+    },
+    "uiDateRange": {
+      "status": 200,
+      "query": {
+        "from": "2026-01-01",
+        "to": "2026-11-12"
+      },
+      "result": {
+        "columns": [
+          {
+            "key": "start_date",
+            "label": "start_date",
+            "kind": "string"
+          },
+          {
+            "key": "end_date",
+            "label": "end_date",
+            "kind": "string"
+          }
+        ],
+        "rows": [
+          {
+            "start_date": "2026-01-01",
+            "end_date": "2026-11-12"
+          }
+        ],
+        "chart": {
+          "type": "stat",
+          "value": "1",
+          "label": "rows"
+        },
+        "meta": {
+          "generatedAt": "2026-11-12T15:34:40.524Z",
+          "rowCount": 1
+        }
+      }
+    },
+    "uiReportExports": {
+      "json": {
+        "status": 200,
+        "result": {
+          "columns": [
+            {
+              "key": "start_date",
+              "label": "start_date",
+              "kind": "string"
+            },
+            {
+              "key": "end_date",
+              "label": "end_date",
+              "kind": "string"
+            }
+          ],
+          "rows": [
+            {
+              "start_date": "2026-01-01",
+              "end_date": "2026-11-12"
+            }
+          ],
+          "chart": {
+            "type": "stat",
+            "value": "1",
+            "label": "rows"
+          },
+          "meta": {
+            "generatedAt": "2026-11-12T15:34:40.998Z",
+            "rowCount": 1
+          }
+        }
+      },
+      "csv": {
+        "status": 200,
+        "contentType": "text/csv",
+        "bytes": 42
+      },
+      "pdf": {
+        "status": 200,
+        "contentType": "application/pdf",
+        "bytes": 1868
+      }
+    },
+    "finalDraft": {
+      "id": "r-a7a9e222-547a-4136-844c-eefbbf0360bc",
+      "name": "Fictional UI report review",
+      "description": "",
+      "category": "amr",
+      "designId": "d-bugfix-date-range",
+      "primaryQueryId": "cq_09e00ac9",
+      "summaryMetrics": null,
+      "chart": null,
+      "paramOptions": null,
+      "status": "draft"
+    }
+  },
+  "fixture": {
+    "query": {
+      "id": "cq_09e00ac9",
+      "name": "Fictional date range review query",
+      "connectorId": "232d5c85-32a3-4e03-8c44-8bd8c2be76f5",
+      "sql": "select {{param.from}}::text as start_date, {{param.to}}::text as end_date",
+      "params": [
+        {
+          "id": "period",
+          "type": "daterange",
+          "label": "Period",
+          "required": true
+        }
+      ],
+      "groupId": null
+    },
+    "design": {
+      "id": "d-bugfix-date-range",
+      "name": "Fictional date range design",
+      "paper": "A4",
+      "orientation": "portrait",
+      "pages": [
+        {
+          "id": "p-bugfix",
+          "elements": [
+            {
+              "id": "table-bugfix",
+              "kind": "table",
+              "name": "Date values",
+              "rect": {
+                "x": 20,
+                "y": 30,
+                "w": 540,
+                "h": 110
+              },
+              "dataSource": {
+                "kind": "custom-query",
+                "queryId": "cq_09e00ac9"
+              },
+              "boundColumns": [
+                {
+                  "key": "start_date",
+                  "label": "Start date"
+                },
+                {
+                  "key": "end_date",
+                  "label": "End date"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "parameters": [
+        {
+          "key": "period",
+          "label": "Period",
+          "type": "daterange",
+          "required": true
+        }
+      ],
+      "status": "draft",
+      "createdAt": "Thu Nov 12 2026 18:34:18 GMT+0300 (East Africa Time)",
+      "updatedAt": "Thu Nov 12 2026 18:34:18 GMT+0300 (East Africa Time)"
+    },
+    "report": {
+      "id": "r-bugfix-date-range",
+      "name": "Fictional date range review",
+      "description": "Fictional dates only. No clinical rows.",
+      "category": "operational",
+      "designId": "d-bugfix-date-range",
+      "primaryQueryId": "cq_09e00ac9",
+      "summaryMetrics": null,
+      "chart": null,
+      "paramOptions": null,
+      "status": "published"
+    }
+  },
+  "browserErrors": []
+}

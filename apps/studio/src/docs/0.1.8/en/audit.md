@@ -1,92 +1,175 @@
 # Audit
 
-**Audit** records who changed what, and when: workflows, forms, users, roles, reports, connectors, settings, patients viewed, and more. Each event has an actor, an action, the thing it touched, and often a copy of that thing before and after.
+Audit records who performed an action, when it happened and which entity it affected. Administrators and reviewers use it to investigate changes and access events.
 
-Sign-ins and sign-outs are handled by Keycloak, not OpenLDR, which never sees the password. Find them in the Keycloak admin console under **Realm**, **Events**. This log records failed authentications (`auth.failed`) and every operator action, including command-line actions, shown with the actor type `cli`.
+You need View audit log. Use the events already recorded by your installation. The pictures show changes to fictional accounts and layouts in a test installation. No sample data is required.
 
-This guide takes about 10 minutes. Select any picture or clip to enlarge it.
+Audit is read-only. Reading an event does not change it. Before, After and Metadata appear only when that action recorded those values.
 
-![Audit: the newest events first, with when, actor, action, entity type and entity ID.](audit-tour.png)
+## Find events for an action
 
-## Who can do what
+Use this when you know the kind of action you need to investigate. You can also filter by actor, entity or time.
 
-One permission covers this page: **View audit log**. It is read-only. Nothing here can change or delete an event.
+### 1. Open Audit
 
-## Before you start
+Select **Audit** in the main menu.
 
-The example finds the changes made to the **Ingest** workflow. If you followed [Workflows, Example 1](/docs/workflows#example-1-get-the-ingest-webhook-ready), there is at least one. Otherwise, pick any event you see.
+![Select Audit in the main menu.](audit-guide-open-audit.png)
 
-## Example 1: who changed the Ingest workflow?
+### 2. Read the list columns
 
-![Filtering on Entity ID wf-ingest and opening the newest event.](audit-filter-workflow.mp4)
+Read **When**, **Actor**, **Action**, **Entity type** and **Entity ID**. An action such as user.update describes the recorded operation.
 
-1. Open **Audit**. The newest events are at the top.
-2. Select **Filter**, then **Add filter**.
-3. Set the column to **Entity ID**, the operator to **Contains**, and the value to `wf-ingest`.
-4. Select **Apply**. A chip under the toolbar shows the filter.
-5. Select the newest row.
+![Read When, Actor, Action and entity details before opening an event.](audit-guide-read-event-row.png)
 
-**Expected result:** one `workflow.update` event for each time Ingest was saved, by the person who saved it. The event sheet shows the event id, time, actor, action, entity type `workflow` and entity id `wf-ingest`, then **Before**: the workflow as it was.
+### 3. Open Filter
 
-![One event: who, what, when, and the workflow before the change.](audit-event.png)
+Select **Filter** above the table.
 
-Each value has a copy button, so you can paste an id into another filter or another screen.
+![Use Filter to find an action or actor.](audit-guide-filter-open.png)
 
-## Filter, sort and columns
+### 4. Add a rule
 
-- **Filter** adds rules: a column, an operator and a value. Text columns offer **Equals**, **Not equals**, **Contains** and more. **When** offers dates and ranges.
-- Each rule shows as a chip under the toolbar. Remove a chip to drop one rule, or use **Clear all**.
-- **Sort** orders by any column, up or down.
-- **Columns** hides and shows columns. **Reset** puts the table back to its defaults.
-- Filtering, sorting and paging run on the server, so a large log stays fast.
+Select **Add filter**.
 
-To follow a chain of changes, start with the entity, add the actor, then compare times across create, update, run, publish and delete events.
+![Choose Add filter.](audit-guide-filter-add.png)
 
-## Actions worth knowing
+### 5. Choose Action
 
-| Action | What happened |
-| --- | --- |
-| `workflow.create`, `workflow.update`, `workflow.delete` | A workflow was made, saved or deleted |
-| `dashboard.create`, `dashboard.update`, `dashboard.delete` | A dashboard was made, saved or deleted |
-| `customQuery.create`, `customQuery.delete` | A saved query was made or deleted |
-| `role.create`, `role.delete`, `role.capability.backfill` | A role was made or deleted, or gained a new capability on upgrade |
-| `settings.flag.update` | A setting such as **Dashboard raw SQL** was switched |
-| `patients.list`, `patients.view` | Someone listed or opened patients |
-| `user.status`, `user.status.failed` | An account was enabled or disabled, or the attempt failed |
-| `auth.failed` | A sign-in token was refused |
+Open the column selector and choose **Action**. Keep **Equals** for an exact action name.
 
-## From the command line
+![Choose Action as the filter column.](audit-guide-filter-action.png)
 
-`openldr audit list` takes the same filters and sorting as the page, so a script can repeat any view.
+### 6. Enter the action
 
-- `--where column:operator:value` can be repeated. Only the first two colons split the value, so a value can hold a colon, such as an id or a URL.
-- `--sort column` sorts up, `--sort -column` sorts down. It can be repeated.
-- On the time column, `eq` with a bare date such as `2026-08-06` matches the whole day. `between` with two bare dates includes all of the end day.
+Enter the action to inspect. The example uses `user.update` for profile changes. Use an action present in your own installation.
 
-The same search as Example 1:
+![Enter the action name. The example uses user.update.](audit-guide-filter-value.png)
 
-```bash
-./openldr audit list --where entityId:like:wf-ingest --sort -occurredAt
-```
+### 7. Apply the filter
 
-All form events, newest first:
+Select **Apply**.
 
-```bash
-./openldr audit list --where action:like:form. --sort -occurredAt
-```
+![Choose Apply to request matching audit events.](audit-guide-filter-apply.png)
 
-An unknown column, or an operator that column does not allow, is refused with a message naming the problem. It is the same check the page uses.
+**Expected result:** The list shows matching events. An empty result means no event matches the current rules.
+
+![The list contains matching user.update events.](audit-guide-filter-result.png)
+
+## Read an event and its recorded values
+
+Use this to identify the affected record and compare changes. Different actions record different details.
+
+### 1. Open the event
+
+Select the matching event row. Read the event identifier, timestamp, actor, action and affected entity in the sheet.
+
+![Check Event ID, Timestamp, Actor and the affected entity.](audit-guide-event-identifiers.png)
+
+### 2. Read Before
+
+Scroll to **Before**. It contains previous values when the action supplied them. **None recorded.** means no snapshot was recorded.
+
+![Before records the previous values when supplied by this action.](audit-guide-event-before.png)
+
+### 3. Read After
+
+Scroll to **After**. Compare the saved values with Before. These are recorded snapshots, not an editor.
+
+![After records the saved values when supplied by this action.](audit-guide-event-after.png)
+
+### 4. Read Metadata
+
+Scroll to **Metadata** for any additional recorded context.
+
+![Metadata contains additional context when the action records it.](audit-guide-event-metadata.png)
+
+### 5. Copy an event reference when needed
+
+Use **Copy Event ID** beside the identifier when recording a reference in your investigation. Other populated detail values also have copy controls.
+
+![Use the copy control beside a value when recording an event reference.](audit-guide-event-copy.png)
+
+### 6. Close the sheet
+
+Select **Close** at the top right.
+
+![Close returns to the filtered list.](audit-guide-event-close.png)
+
+**Expected result:** You return to the same filtered event list. The audit record remains unchanged.
+
+## Browse more events and refresh the list
+
+Use this when you need events outside the current page or changes recorded after you opened Audit.
+
+### 1. Clear the filter when needed
+
+Open Filter and select **Clear** to return to all events.
+
+![Clear removes the active filter rules.](audit-guide-filter-clear.png)
+
+### 2. Choose a page size
+
+Open **Rows per page** at the bottom and select a size. The example chooses **10**.
+
+![Use Rows per page to change the number of events shown.](audit-guide-page-size.png)
+
+![Choose the page size. The example chooses 10.](audit-guide-ten-rows.png)
+
+### 3. Read the next page
+
+Select **Next page** when it is enabled.
+
+![Next page reads the next group of events.](audit-guide-next-page.png)
+
+### 4. Return to the previous page
+
+Select **Previous page**.
+
+![Previous page returns to the preceding group.](audit-guide-previous-page.png)
+
+### 5. Refresh the list
+
+Open the page dots and select **Refresh**. The current filters still apply.
+
+![Open the Audit page dots menu.](audit-guide-refresh-actions.png)
+
+![Choose Refresh to request the current filtered list again.](audit-guide-refresh-menu.png)
+
+**Expected result:** The table reads the requested page or refreshed events from the server.
+
+## Read audit events on a phone
+
+Use the same Audit page on a phone. The event table can scroll horizontally.
+
+### 1. Use the filter controls
+
+Use **Filter** above the table to narrow the results before reading wide rows.
+
+![Filter remains available above the table on a phone.](audit-guide-phone-filter.png)
+
+### 2. Open the event sheet
+
+Select an event row. Scroll the sheet to read identifiers and snapshots.
+
+![The event sheet uses the phone width and scrolls through recorded values.](audit-guide-phone-event.png)
+
+## Optional practice
+
+In a test installation, make an approved profile or layout change, then find its audit event. Compare the recorded Before and After values when present. No audit-data import is required.
+
+## Limits
+
+This page does not edit, delete or export audit events. A missing snapshot does not prove that an action made no change. It means that action recorded no snapshot.
 
 ## Troubleshooting
 
-- **No events appear.** Widen the time range, or clear one filter at a time.
-- **The actor is unexpected.** A scheduled workflow or a system action may have made the change.
-- **Before and after are empty.** Some events record the action without a full copy.
-- **Too many events.** Combine an entity filter with an actor filter.
-- **I cannot find a sign-in.** Successful sign-ins are in Keycloak's events, not here.
+**No audit events match.** Review the active filter chips or choose Filter, then Clear.
+
+**A recent event is absent.** Choose Refresh and check the current filters and page.
+
+**Before or After says None recorded.** Use the actor, action, entity details and available metadata. That snapshot cannot be recovered through this page.
 
 ## Related guides
 
-- [Users and Roles](/docs/users)
-- [Workflows](/docs/workflows)
-- [Activity](/docs/activity)
+Read [Users](/docs/users) for account actions and [Roles](/docs/roles) for permissions. Read [Start here](/docs/start-here) for command-line setup.

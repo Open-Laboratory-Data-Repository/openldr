@@ -110,7 +110,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [selected, setSelected] = useState<CardEntry | null>(null);
+  const [selected, setSelected] = useState<{ source: 'browse' | 'installed'; id: string; version: string; type: string; ref?: string } | null>(null);
   const [tab, setTab] = useState('browse');
   /** RegistriesTab owns its create dialog. The ⋯ that opens it now lives up here on the tab strip,
    *  so the child hands its opener up once via `onReady` rather than the parent lifting all of that
@@ -136,13 +136,23 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
     })
     .map((a) => withBrowseRef(installedToEntry(a), props.available)), [props.installed, props.available, filter, typeFilter]);
 
-  if (selected) {
+  const selectedEntry = useMemo(() => {
+    if (!selected) return null;
+    if (selected.source === 'browse') {
+      const bundle = props.available.find((entry) => entry.id === selected.id && entry.ref === selected.ref && entry.type === selected.type);
+      return bundle ? availableToEntry(bundle, installedById) : null;
+    }
+    const artifact = props.installed.find((entry) => entry.id === selected.id && entry.version === selected.version && entry.type === selected.type);
+    return artifact ? withBrowseRef(installedToEntry(artifact), props.available) : null;
+  }, [selected, props.available, props.installed, installedById]);
+
+  if (selectedEntry) {
     return (
       // ⚠ The detail view keeps a `p-4` of its own. It renders <Divider/>, which negative-margins
       // by exactly 4 to reach the pane edges, so it needs a 4 to cancel.
       <div className="flex min-h-0 flex-1 flex-col p-4">
       <PackageDetail
-        entry={selected}
+        entry={selectedEntry}
         onBack={() => setSelected(null)}
         onInstall={props.onInstall}
         onToggleEnabled={props.onToggleEnabled}
@@ -224,7 +234,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
             <div className="px-1 py-6 text-center text-sm text-muted-foreground">{t('settings.marketplace.emptyBrowse')}</div>
           ) : (
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-              {browseEntries.map((e) => <PackageCard key={e.ref ?? e.id} entry={e} onClick={() => setSelected(e)} />)}
+              {browseEntries.map((e) => <PackageCard key={e.ref ?? e.id} entry={e} onClick={() => setSelected({ source: 'browse', id: e.id, version: e.version, type: e.type, ref: e.ref })} />)}
             </div>
           )}
         </div>
@@ -248,7 +258,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
             <div className="px-1 py-6 text-center text-sm text-muted-foreground">{t('settings.marketplace.emptyInstalled')}</div>
           ) : (
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-              {installedEntries.map((e) => <PackageCard key={e.id} entry={e} onClick={() => setSelected(e)} />)}
+              {installedEntries.map((e) => <PackageCard key={e.id} entry={e} onClick={() => setSelected({ source: 'installed', id: e.id, version: e.version, type: e.type })} />)}
             </div>
           )}
         </div>

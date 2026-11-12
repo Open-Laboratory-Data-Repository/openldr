@@ -1,0 +1,7 @@
+{
+  "recoveredAfterPowerCut": true,
+  "warehouseRequestCountBefore": 1,
+  "warehouseRequestCountAfter": 2,
+  "evidence": "order-result.png",
+  "note": "Original transport-response JSON did not survive. The native screenshot and warehouse count confirm the one submission."
+}

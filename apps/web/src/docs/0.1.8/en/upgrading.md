@@ -1,69 +1,202 @@
 # Planned upgrades
 
-Schedule downtime for a Compose upgrade. Schema changes can prevent old and new versions from writing safely together. This procedure keeps the database engine version unchanged. A database engine upgrade needs its own tested procedure.
+<!-- operator-platform -->
+
+Run maintenance on the OpenLDR host, from your installed Compose folder. The examples use `~/Downloads/openldr_ce` on Linux/macOS and `C:\openldr_ce` in PowerShell. Replace these paths with your installation. The blue prompt is already shown by the terminal. Type the command only. Configuration snippets name the file to edit; they are not terminal commands. Pictures are examples, not proof that maintenance succeeded. Sample data is optional.
 
 ## Prepare the release
 
-Work in the installed Compose project directory. Use the same project name, environment file and Compose overlays throughout. Record the current image tags and IDs with `docker compose images`. Keep the previous images and Compose files available. Read the target release notes and migration requirements.
+Schedule downtime. Keep the same project name, environment file and overlays throughout. Preserve the database engine versions. Read release notes before choosing the application release.
 
-Save the current `.env` and configuration privately before editing them. Pin `OPENLDR_VERSION` to the chosen release in `.env`. Download only the application images needed by that release before downtime. Do not blindly pull every service: the storage services have separate versions. Preserve the current PostgreSQL, storage service and external database versions.
+### 1. Record the current images and services
 
-Save this guide outside Studio before stopping services. Confirm who can restore backups and how senders queue or retry during downtime.
+Keep the old image IDs and exact tags outside the deployment. All commands below run in this same folder.
+
+```sh
+{{operator:upgrade-folder}}
+```
+
+![Record the current images and services.](guide:operator-upgrade-folder)
+
+### 2. Save configuration and keys privately
+
+Replace BEFORE_UPGRADE with your backup name. Restrict access. Include every overlay, encryption/signing key, certificate and local data file. This does not back up database or object volumes. Save this guide outside Studio.
+
+```sh
+{{operator:upgrade-private-copy}}
+```
+
+![Save configuration and keys privately.](guide:operator-upgrade-private-copy)
 
 ## Stop writes and wait
 
-Pause webhook senders, scheduled external writers, synchronization peers and operator writes. Block new incoming traffic. Stop every old API replica, including replicas outside this Compose project. Stop separate CLI jobs and other processes that write to the same databases or storage.
+Pause senders, sync peers and scheduled writers. Block new traffic. Stop separate CLI jobs and every API replica, including other hosts. Keep writers stopped until all checks finish.
 
-New installer Compose files set this API service property:
+### 1. Allow active work to finish
 
-```yaml
-stop_grace_period: ${OPENLDR_STOP_GRACE_PERIOD:-5m}
+Merge under services.api on older deployments. Choose a duration covering the longest work. The explicit stop timeout below overrides this value.
+
+```text
+{{operator:upgrade-grace}}
 ```
 
-Existing installations must add this property under `services.api` in their local Compose file. Set `OPENLDR_STOP_GRACE_PERIOD` to allow the longest expected work to finish. An explicit stop timeout takes precedence:
+![Allow active work to finish.](guide:operator-upgrade-grace)
+
+### 2. Stop the old API and inspect shutdown
+
+300 seconds is an example. Timeout, forced kill or exit 137 is not proof of drained work. Investigate interrupted jobs and external effects before continuing.
 
 ```sh
-docker compose stop -t 300 api
+{{operator:upgrade-stop}}
 ```
 
-The example allows 300 seconds. Increase it when necessary. OpenLDR waits for active requests and workers during shutdown. Check container state and shutdown logs. A forced kill, timeout or exit code 137 does not prove work drained. Investigate before proceeding, including possible partial external effects.
+![Stop the old API and inspect shutdown.](guide:operator-upgrade-stop)
 
-Stop Keycloak and the storage service after the API stops, and stop any other writers to their stores. Keep PostgreSQL running for logical backups. Keep all writers stopped through backup verification and migrations. Queued webhook receipts may remain for the new worker. Record their IDs and investigate running or interrupted work before resuming deliveries.
+### 3. Stop identity and file-store writers
 
-## Back up one stopped-write state
-
-Store the backup privately, outside the deployment's volumes. Capture all of these from the same period without writes:
-
-- The internal database, configured target database and Keycloak database, plus required database roles.
-- Every blob bucket or volume, including files referenced by workflow receipts.
-- `.env`, Compose files and overlays, mounted configuration, encryption and signing keys, certificates and local `data` files.
-- The image inventory and exact previous application release.
-
-For PostgreSQL, identify the real database names and account first. Run `pg_dump -Fc -f /tmp/DB.dump -U USER DB` inside the PostgreSQL container with `docker compose exec -T postgres`. Replace `DB` and `USER` with deployment values. Copy each completed dump out with `docker compose cp postgres:/tmp/DB.dump ./PRIVATE_BACKUP/DB.dump`. The destination directory must already exist. Repeat for each database. Check every exit code.
-
-Save roles separately with `pg_dumpall --globals-only -f /tmp/globals.sql -U USER`, then copy that file out. Use the same container execution pattern. Protect these files because they can contain credentials. Using `-f` and `compose cp` avoids binary shell redirection in Windows PowerShell.
-
-For MySQL, SQL Server or externally managed stores, use the database administrator's native backup and restore procedure. PostgreSQL dumps do not cover those databases. For the storage service, use a tested bucket backup or copy its volume while the service is stopped. Do not copy a live PostgreSQL data volume as a logical backup. Never run `docker compose down -v` during an upgrade.
-
-## Prove the backup restores
-
-Restore into separate database and blob destinations that cannot contact production services or senders. Restore roles and each database with errors treated as failures. Resolve bootstrap role conflicts explicitly. Compare representative row counts and saved records. Restore blob files and compare their checksums against the backup.
-
-Use the preserved encryption keys to decrypt representative saved secrets in the isolated environment. Confirm that restored records can find their restored blobs. A successful dump, archive listing or health response alone does not prove recoverability. Do not migrate production until this restore check succeeds.
-
-## Migrate before starting the new API
-
-An install from before 0.1.11 must do steps 1 to 4 of the section "Moving from MinIO to Garage" below first. The new compose file refuses to run without `GARAGE_RPC_SECRET` and `GARAGE_ADMIN_TOKEN`.
-
-Keep the databases available and every old writer stopped. Confirm the API image is the pinned new release. Run its bundled CLI once:
+Use your real service names. On an older MinIO deployment the storage service may be named minio. Keep PostgreSQL running for logical backups. Stop other processes writing these stores too.
 
 ```sh
-docker compose run --rm --no-deps api node /app/cli/dist/index.js db migrate
+{{operator:upgrade-stores-stop}}
 ```
 
-This command overrides the API start command. It does not start dependencies or serve requests. Require exit code 0 and successful internal and target database migrations before starting the new services.
+![Stop identity and file-store writers.](guide:operator-upgrade-stores-stop)
 
-If migration fails, stop here. Some schema changes may already have committed. Do not start old binaries against that schema. Diagnose the failure, or restore the matching database, blob, configuration, keys and image snapshot together. If traffic was reopened, reconcile deliveries and external effects before restoring an older snapshot.
+## Back up and prove restoration
+
+Capture databases, roles and every object bucket or stopped volume from the same period without writes. Never use docker compose down -v. Do not copy a live PostgreSQL data volume as a logical backup.
+
+### 1. Create each PostgreSQL dump
+
+Replace DB_NAME and DB_USER with actual values. Repeat for the internal, analytics and Keycloak databases. For SQL Server/MySQL targets, use their tested native backup procedure separately.
+
+```sh
+{{operator:upgrade-dump}}
+```
+
+![Create each PostgreSQL dump.](guide:operator-upgrade-dump)
+
+### 2. Copy each dump outside the volumes
+
+The private destination must already exist. Check every exit code. File copying avoids binary redirection through PowerShell.
+
+```sh
+{{operator:upgrade-dump-copy}}
+```
+
+![Copy each dump outside the volumes.](guide:operator-upgrade-dump-copy)
+
+### 3. Save database roles too
+
+Replace DB_USER. Protect globals.sql because role definitions can contain credentials. Back up every blob bucket or stopped object-store volume with your tested procedure.
+
+```sh
+{{operator:upgrade-roles}}
+```
+
+![Save database roles too.](guide:operator-upgrade-roles)
+
+### 4. Restore on an isolated destination
+
+Use only an isolated empty target, never production. Restore roles first and resolve bootstrap role conflicts. Copy the dump there before running this example. Archive listing alone proves nothing. Restore blobs, compare checksums and records, decrypt representative secrets with preserved keys, and check record-to-file links. Do not migrate production until these checks pass.
+
+```sh
+{{operator:upgrade-restore}}
+```
+
+![Restore on an isolated destination.](guide:operator-upgrade-restore)
+
+## Prepare older MinIO installations
+
+Skip this task if already using Garage. Before migration, obtain the target release Compose/config files and merge the old service from your backup. Keep its exact cached image and volume. Preserve old credentials separately.
+
+### 1. Preserve the old source service
+
+Replace every placeholder using the preserved configuration. Use the original volume name instead of miniodata if different. Literal old credentials keep working after the S3 variables change. Do not pull a guessed latest image.
+
+```text
+{{operator:upgrade-minio-config}}
+```
+
+![Preserve the old source service.](guide:operator-upgrade-minio-config)
+
+### 2. Generate new Garage values
+
+Prefix the 24-character hex result with GK for the access key. Generate separate 64-character hex results for the S3 secret, RPC secret and admin token. Keep them private.
+
+```sh
+{{operator:upgrade-garage-key}}
+```
+
+![Generate new Garage values.](guide:operator-upgrade-garage-key)
+
+### 3. Write the new storage settings
+
+Replace all placeholders before saving. Include config/garage.toml and the target release Compose files. The new Compose file refuses missing Garage secrets. Do not start the API yet.
+
+```text
+{{operator:upgrade-garage-config}}
+```
+
+![Write the new storage settings.](guide:operator-upgrade-garage-config)
+
+## Migrate with the pinned API image
+
+Keep databases available and every old writer stopped. Preserve database engine and object-store image versions.
+
+### 1. Pin the chosen application release
+
+Use the concrete release selected from release notes, not the literal placeholder. Do not change the issuer or encryption key.
+
+```text
+{{operator:upgrade-version}}
+```
+
+![Pin the chosen application release.](guide:operator-upgrade-version)
+
+### 2. Download only the application images
+
+Use all your existing Compose overlays. Keep previous images available for recovery. This does not upgrade PostgreSQL or Garage.
+
+```sh
+{{operator:upgrade-pull}}
+```
+
+![Download only the application images.](guide:operator-upgrade-pull)
+
+### 3. Run migrations once
+
+Require exit 0 and successful internal and target migrations. This starts no dependency or API listener. On failure, stop. Some changes may already be committed. Never start old binaries against a partially changed schema. Restore matching databases, files, keys and images together if recovery is required.
+
+```sh
+{{operator:upgrade-migrate}}
+```
+
+![Run migrations once.](guide:operator-upgrade-migrate)
+
+## Copy old objects before reopening writes
+
+Only for the MinIO-to-Garage move. Keep the API stopped. Databases must be available for the maintenance CLI.
+
+### 1. Start the source and target object stores
+
+Use actual service names from the merged Compose configuration. Do not include api in this command.
+
+```sh
+{{operator:upgrade-stores}}
+```
+
+![Start the source and target object stores.](guide:operator-upgrade-stores)
+
+### 2. Copy and verify the objects
+
+Replace OLD_KEY, OLD_SECRET and SOURCE_BUCKET. Credentials appear in process arguments and shell history. The copy does not change MinIO. Repeat after failure to resume. It skips same-size objects; equal size does not prove equal content. Require successful verification, then compare representative file checksums and opened files. Keep the old volume. Deleting it is an optional later disposal task.
+
+```sh
+{{operator:upgrade-storage-copy}}
+```
+
+![Copy and verify the objects.](guide:operator-upgrade-storage-copy)
 
 ## Installs that use Keycloak
 
@@ -77,73 +210,34 @@ Without it Keycloak does not start, and nobody can sign in. If `.env` already ha
 
 ## Check before resuming traffic
 
-Start the existing storage and identity services first, then the pinned new application services. Preserve their database engine versions. Check `docker compose ps`, API health and logs. Read representative saved data through Studio or the CLI. Check workflow receipts and their linked runs before reopening incoming traffic.
+Start the new API only after migration and any storage copy pass. Reconcile deliveries and external effects before restoring an older snapshot if traffic was already reopened.
 
-An HTTP 202 means the webhook was accepted, not completed. Poll outstanding receipts. Investigate interrupted receipts and external effects before deciding whether to submit replacement work. Retry the same logical request with its original `Idempotency-Key` and input. Do not bulk replay interrupted requests with fresh keys.
+### 1. Start the pinned services and inspect status
 
-If you upgrade from a release before lab_results had a status column, run `openldr db reproject --force` once. It fills in the status of results already in the warehouse, so rejected tests stop counting as results.
+Keep the engine versions and overlays unchanged. Read actual logs and representative saved data before reopening incoming traffic.
 
-If you upgrade from a release before the Patient Index, run `openldr db reproject --force` once. It lists every identifier of patients already in the warehouse, so search can find them by any identifier, not only the first.
+```sh
+{{operator:upgrade-start}}
+```
 
-If you upgrade from a release before duplicate detection, run `openldr db reproject --force` once. It stores the normalised name and date of birth that the Duplicates tab matches on.
+![Start the pinned services and inspect status.](guide:operator-upgrade-start)
 
-Resume senders only after these checks pass. Keep the verified backup and previous images according to the site's retention policy.
+### 2. Check health and outstanding work
 
-## Moving from MinIO to Garage (installs from before 0.1.11)
+HTTP 202 means accepted, not completed. Inspect webhook receipts and linked runs. Retry an interrupted logical request only with its original Idempotency-Key and input. Health alone proves neither restored data nor downstream effects.
 
-MinIO removed its images from Docker Hub on 2026-09-11. From 0.1.11 the `storage` service runs Garage instead. An install that already holds files must copy them across once. A fresh install does not need this.
+```sh
+{{operator:upgrade-health}}
+```
 
-1. Note the current MinIO key and secret from `.env` (`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`). Step 4 overwrites them.
-2. Back up `.env` and `docker-compose.yml`.
-3. Download the 0.1.11 files:
-   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.11/deploy/install/docker-compose.yml`, saved as `docker-compose.yml`
-   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.11/deploy/install/garage.toml`, saved as `config/garage.toml`
+![Check health and outstanding work.](guide:operator-upgrade-health)
 
-   Then add the old `minio` service back into `docker-compose.yml` from your backup. This keeps MinIO running beside Garage. Give it the old key and secret as literal values, not `${S3_...}`. Step 4 changes those variables, and MinIO would then reject the old login.
+### 3. Rebuild older warehouse projections only when required
 
-   ```yaml
-     minio:
-       image: minio/minio:latest
-       command: server /data --console-address ':9001'
-       environment:
-         MINIO_ROOT_USER: <old key>
-         MINIO_ROOT_PASSWORD: <old secret>
-       volumes:
-         - miniodata:/data
-   ```
+For releases predating result status, the Patient Index or duplicate detection, this fills the added warehouse/index fields. It rewrites the read model and requires --force. Skip when not required. Keep the verified backup and previous images under your retention policy.
 
-   Add `miniodata:` under the top-level `volumes:` too. The MinIO image is still on the machine from the old install, so this works without Docker Hub.
-4. Generate new values and write them to `.env`:
-   - `S3_ACCESS_KEY_ID`: `GK` followed by 24 hex characters (`echo GK$(openssl rand -hex 12)`)
-   - `S3_SECRET_ACCESS_KEY`, `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN`: 64 hex characters each (`openssl rand -hex 32`)
-   - `S3_ENDPOINT=http://storage:3900`
-5. Start MinIO and the new services: `docker compose up -d minio storage api`.
-6. Copy the files:
-   `./openldr storage copy --from-endpoint http://minio:9000 --from-key <old key> --from-secret <old secret> --from-bucket openldr`
-   It prints object counts and bytes for both sides, then checks that every source object is on Garage at the same size. It exits non-zero if any is missing. Extra objects on Garage are expected while the api runs, because it keeps writing new files there. They do not fail the check. Run it again to resume after a failure. It skips objects already on Garage with the same size. It does not replace an object whose size is unchanged but whose content differs. It never changes MinIO.
-7. When it reports `every source object is on the target`, open a few uploaded files in the studio.
-8. Remove the `minio` service from `docker-compose.yml` and run `docker compose up -d --remove-orphans`. Keep the `miniodata` volume until you are sure. Then delete it with `docker volume rm <project>_miniodata`.
+```sh
+{{operator:upgrade-reproject}}
+```
 
-Without the `./openldr` wrapper, run `docker compose run --rm --no-deps api node /app/cli/dist/index.js storage copy` with the same flags.
-
-The `--from-secret` value shows in your shell history and in the process list while the command runs. Clear that history line afterwards, or run the command in a throwaway shell.
-
-If you run from source, the compose file (`docker-compose.prod.yml`) and `deploy/install/garage.toml` arrive with the new checkout. Skip the downloads in step 3, but still add the old `minio` service back with its old login. Your `.env.prod` came from an earlier `pnpm run init`. Its `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` are not in Garage's format. Replace both as in step 4 (`GK` plus `openssl rand -hex 12`, and `openssl rand -hex 32`). Then add `GARAGE_RPC_SECRET` and `GARAGE_ADMIN_TOKEN`. Compose refuses to run until both exist. In step 5, start the services with `docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr up -d --build minio storage api`. In step 6, run the copy inside the api container with `docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr exec api node /app/cli/dist/index.js storage copy` and the same flags. In step 8, use the same `--env-file`, `-f` and `-p` options.
-
-## When a third-party image disappears
-
-Every third-party image an install pulls comes from the OpenLDR copy on GHCR, pinned by digest. The list is `deploy/third-party-images.json`. If a vendor removes an image, existing installs and new installs keep working, because the copy stays. The one exception is SQL Server, whose image stays on Microsoft's registry.
-
-To replace a vendor:
-
-1. Pick a replacement that speaks the same protocol.
-2. Add it to `deploy/third-party-images.json` and run `pnpm images:mirror <name>`. It copies linux/amd64 and linux/arm64 only.
-3. Make the new GHCR package public in its settings page.
-4. Swap it in behind the same compose service name.
-5. If the data format differs, move the data. The MinIO to Garage section above is the worked example.
-
-## References
-
-- [Docker Compose service shutdown grace](https://docs.docker.com/reference/compose-file/services/#stop_grace_period)
-- [Docker Compose one-off commands](https://docs.docker.com/reference/cli/docker/compose/run/)
-- [PostgreSQL 16 backup and restore](https://www.postgresql.org/docs/16/backup-dump.html)
+![Rebuild older warehouse projections only when required.](guide:operator-upgrade-reproject)

@@ -27,6 +27,16 @@ describe('Lightbox', () => {
     expect(img).toHaveStyle({ filter: 'blur(.25cqw)' });
     expect(sharp.style.clipPath).toContain('inset(');
   });
+  it('preserves every focused control in a published multi-field step', () => {
+    render(<Lightbox image={{ url: '/assets/connector.png', alt: 'Connector address', focus: 'connectors-guide-address.png' }} onClose={() => {}} />);
+    const background = screen.getByAltText('Connector address');
+    const scene = background.parentElement!;
+    expect(scene.querySelectorAll('img[aria-hidden="true"]')).toHaveLength(3);
+    expect(scene.querySelectorAll('.border-ring')).toHaveLength(3);
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    expect(scene.querySelectorAll('.border-ring')).toHaveLength(3);
+    expect(scene.parentElement!.parentElement).toHaveStyle({ width: '150%' });
+  });
   it('keeps the themed illustration surround while zooming', () => {
     render(<Lightbox image={{ url: '/assets/start.png', alt: 'Terminal', illustration: true }} onClose={() => {}} />);
     const image = screen.getByAltText('Terminal');

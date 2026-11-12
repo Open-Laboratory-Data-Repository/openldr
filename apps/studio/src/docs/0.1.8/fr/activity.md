@@ -1,77 +1,234 @@
 # Activité
 
-**Activité** suit chaque envoi de données, appelé charge, pendant son passage dans OpenLDR : reçue, vérifiée, enregistrée, transmise. Une charge est un lot de données, par exemple un envoi HTTP vers un webhook. Servez-vous-en pour répondre à « ces données sont-elles arrivées, et ont-elles été enregistrées ? ».
+Activity permet de vérifier l'arrivée d'un envoi récent et les événements enregistrés ensuite. Un envoi est un lot de données, comme une requête webhook ou un lot d'ingestion CLI.
 
-Ce n'est pas l'[Audit](/docs/audit). L'Audit enregistre ce que les personnes ont modifié. Activité enregistre ce qui est arrivé aux données.
+Utilisez vos propres envois récents. Aucune donnée d'exemple n'est nécessaire. Les captures suivent le patient fictif envoyé dans l'installation de test de Workflows. Une installation vide peut n'avoir aucun envoi récent.
 
-Ce guide prend environ 10 minutes. Sélectionnez une image ou un clip pour l'agrandir.
+Vous avez besoin de **View activity**. Cette page lit les événements enregistrés. Elle ne modifie, ne relance et ne supprime pas les données. [Audit](/docs/audit) enregistre les changements utilisateur et administratifs.
 
-![Activité après trois envois vers le webhook Ingest. Chacun a atteint Persistée et est Terminée.](activity-list.png)
+## Suivre un envoi
 
-## Qui peut faire quoi
+Utilisez cette tâche quand un expéditeur demande si ses données sont arrivées. Gardez son identifiant de réponse ou l'heure d'envoi à portée de main.
 
-Une seule autorisation couvre cette page : **View activity**. Elle ne fait que lire. Rien ici ne modifie ni ne relance des données.
+### 1. Ouvrir Activity
 
-## Avant de commencer
+Sélectionnez **Activity** dans le menu principal.
 
-Une nouvelle installation affiche **Aucune charge récente.** Activité liste les charges passées par un flux de travail, les imports, et les lots chargés avec `openldr ingest`. Les données d'exemple, une fois chargées avec `openldr ingest`, apparaissent ici comme un lot. Sa **Source** vaut `cli`. Son **Statut** affiche **Terminée** une fois enregistré, ou **Échouée** avec l'erreur.
+![Ouvrir Activity pour suivre les envois récents.](activity-guide-open-page.png)
 
-Pour voir une charge, envoyez-en une par le webhook Ingest. Voir [Flux de travail, exemples 1 et 2](/docs/workflows#exemple-1-preparer-le-webhook-ingest). Cela prend environ cinq minutes et ne change aucun compte.
+### 2. Rechercher l'envoi
 
-## Exemple 1 : suivre une charge
+Saisissez son identifiant dans **Search payloads...**. La recherche trouve aussi la source, l'état ou l'étape dans la liste chargée.
 
-![Sélectionner une charge pour ouvrir son cycle de vie.](activity-detail.mp4)
+![Rechercher l'identifiant de l'envoi pour trouver cette requête.](activity-guide-search.png)
 
-1. Ouvrez **Activité**. Les charges les plus récentes sont en haut.
-2. Trouvez votre charge. **Source** vaut **webhook**. **Étape** affiche **Persistée**. **Statut** affiche **Terminée**.
-3. Sélectionnez la ligne. **Cycle de vie de la charge** s'ouvre à droite.
+### 3. Vérifier la ligne correspondante
 
-**Résultat attendu :** deux étapes. **Reçue**, depuis le webhook, avec l'identifiant de l'exécution. Puis **Persistée**, avec **1 × Patient** : la ressource enregistrée.
+Vérifiez la source et l'heure de début. Lisez l'étape et l'état actuels. L'exemple a atteint Persisted et Complete.
 
-Gardez l'identifiant de la charge, le long identifiant en haut, si vous demandez à un administrateur de regarder.
+![Vérifier la source, l'heure de début, l'étape et l'état actuels.](activity-guide-matching-row.png)
 
-Pour voir les dernières charges, ouvrez le menu à trois points en haut à droite et sélectionnez **Actualiser**. Rouvrez une ligne pour obtenir ses derniers détails.
+### 4. Ouvrir le cycle de vie
 
-## Lire les étapes et le statut
+Sélectionnez la ligne pour ouvrir **Payload lifecycle**.
 
-| Étape | Ce qu'elle veut dire |
+![Sélectionner la ligne pour consulter son cycle de vie enregistré.](activity-guide-open-row.png)
+
+### 5. Conserver l'identifiant
+
+Copiez l'identifiant sous le titre du panneau pour signaler un problème.
+
+![Conserver l'identifiant pour demander de l'aide à un administrateur.](activity-guide-payload-id.png)
+
+### 6. Lire Received
+
+Lisez l'heure d'arrivée, la source détaillée et l'identifiant d'exécution associé. Utilisez cet identifiant dans l'historique de Workflows.
+
+![Received enregistre l'arrivée et l'identifiant d'exécution du workflow.](activity-guide-received.png)
+
+### 7. Lire Persisted
+
+Lisez l'événement de stockage et le nombre de ressources. L'exemple a stocké un Patient. D'autres workflows peuvent enregistrer d'autres étapes.
+
+![Persisted enregistre le nombre de ressources stockées.](activity-guide-persisted.png)
+
+### 8. Revenir à la liste
+
+Sélectionnez **Close** en haut à droite.
+
+![Fermer le panneau du cycle de vie pour revenir à la liste.](activity-guide-close.png)
+
+**Résultat attendu :** vous identifiez l'envoi et les étapes réellement enregistrées pour lui.
+
+## Charger le dernier état enregistré
+
+Utilisez Refresh après l'arrivée de nouvelles données. Fermez puis rouvrez le panneau pour charger ses détails actuels.
+
+### 1. Ouvrir Activity actions
+
+Sélectionnez les points nommés **Activity actions**.
+
+![Activity actions contient Refresh.](activity-guide-actions.png)
+
+### 2. Choisir Refresh
+
+Sélectionnez **Refresh**. Rouvrez la ligne pour consulter les détails actualisés du cycle de vie.
+
+![Refresh recharge la liste récente.](activity-guide-refresh.png)
+
+**Résultat attendu :** la liste des envois récents se recharge.
+
+## Afficher les envois terminés
+
+Utilisez un filtre Status pour examiner un résultat particulier. Les filtres s'appliquent aux envois récents chargés.
+
+### 1. Ouvrir Filter
+
+Sélectionnez **Filter**.
+
+![Filter réduit la liste des envois récents chargés.](activity-guide-filter.png)
+
+### 2. Ajouter une règle
+
+Sélectionnez **Add filter**.
+
+![Add filter crée une règle.](activity-guide-add-filter.png)
+
+### 3. Choisir Status
+
+Ouvrez le sélecteur de colonne et choisissez **Status**. Gardez **Equals**.
+
+![Choisir Status comme colonne et garder Equals.](activity-guide-status-rule.png)
+
+### 4. Choisir Complete
+
+Ouvrez le sélecteur de valeur et choisissez **Complete**. Choisissez un autre état pour examiner ce résultat.
+
+![Choisir Complete pour lire les envois stockés sans exécution de workflow en échec.](activity-guide-complete-value.png)
+
+### 5. Appliquer la règle
+
+Sélectionnez **Apply**. La règle apparaît au-dessus du tableau.
+
+![Apply actualise les lignes visibles.](activity-guide-apply-filter.png)
+
+**Résultat attendu :** les lignes visibles correspondent à la règle Status.
+
+![Le filtre Status appliqué apparaît au-dessus des lignes correspondantes.](activity-guide-filtered.png)
+
+## Afficher les débuts les plus récents en premier
+
+Triez par heure quand l'ordre d'arrivée compte. Ce tri modifie seulement la liste chargée.
+
+### 1. Ajouter un tri
+
+Sélectionnez **Sort**, puis **Add sort**.
+
+![Add sort crée une règle de tri.](activity-guide-add-sort.png)
+
+### 2. Choisir Started
+
+Sélectionnez **Started** parmi les colonnes proposées.
+
+![Choisir Started pour trier par heure d'arrivée.](activity-guide-sort-started.png)
+
+### 3. Choisir l'ordre décroissant
+
+Sélectionnez **Asc** une fois pour passer à **Desc**.
+
+![Passer de Asc à Desc pour afficher les débuts les plus récents en premier.](activity-guide-sort-direction.png)
+
+### 4. Appliquer le tri
+
+Sélectionnez **Apply**. Les débuts les plus récents apparaissent en premier.
+
+![Apply conserve le tri choisi pour les lignes chargées.](activity-guide-apply-sort.png)
+
+## Choisir les colonnes visibles
+
+Utilisez cette tâche quand le tableau est plus large que les informations nécessaires.
+
+### 1. Ouvrir Columns
+
+Sélectionnez **Columns**.
+
+![Columns contrôle les colonnes visibles du tableau.](activity-guide-columns.png)
+
+### 2. Choisir les champs
+
+Cochez ou décochez les colonnes à afficher. Gardez Payload visible pour identifier les lignes. Fermez ensuite le menu.
+
+![Garder les champs nécessaires à la vérification.](activity-guide-column-options.png)
+
+### 3. Parcourir les pages du tableau
+
+Utilisez la taille de page et les flèches sous le tableau quand la liste chargée dépasse une page.
+
+![Utiliser la taille de page et les flèches quand il y a plusieurs pages.](activity-guide-pagination.png)
+
+## Lire un envoi sur téléphone
+
+Recherchez d'abord pour réduire le tableau. Faites défiler horizontalement pour lire les colonnes plus à droite.
+
+### 1. Rechercher les envois récents
+
+Utilisez le champ de recherche en haut d'Activity.
+
+![Rechercher les envois récents sur téléphone.](activity-guide-phone-search.png)
+
+### 2. Ouvrir l'envoi
+
+Sélectionnez son identifiant dans la ligne.
+
+![Sélectionner l'identifiant pour ouvrir le cycle de vie.](activity-guide-phone-open.png)
+
+### 3. Lire le cycle de vie
+
+Faites défiler le panneau pour lire les étapes enregistrées et les nombres de ressources.
+
+![Lire chaque étape enregistrée dans le panneau sur téléphone.](activity-guide-phone-detail.png)
+
+## Lire les étapes et les états
+
+La barre souligne les étapes jusqu'à la dernière enregistrée. Lisez le cycle de vie pour voir les événements réellement présents. L'absence de Validated ne prouve pas l'échec de toutes les vérifications précédentes.
+
+Un envoi enregistré ne prouve pas que le destinataire a accepté ou lu les données. Stuck ne prouve pas un arrêt du traitement. Vérifiez History et les résultats des nœuds du workflow.
+
+| Étape | Signification |
 | --- | --- |
-| Reçue | Un lot ou une exécution de flux a noté l'arrivée des données. |
-| Validée | Une étape du flux a vérifié les données, et elles sont passées. |
-| Persistée | Les données ont été enregistrées. Le détail dit combien de chaque ressource. |
-| Envoyée | Une étape du flux a transmis les données, par exemple à un autre système. |
+| Received | Un lot d'ingestion ou un workflow a enregistré l'arrivée. |
+| Validated | Un workflow a enregistré une vérification réussie. |
+| Persisted | Un événement de stockage a enregistré des ressources sauvegardées. |
+| Pushed | Une étape a enregistré un envoi vers un autre système. |
 
-Le détail liste les étapes enregistrées. Tous les flux n'enregistrent pas les quatre. La barre d'étapes de la liste est un résumé, pas la preuve de chaque étape précédente. Un envoi enregistré ne prouve pas que quelqu'un a vérifié les données à l'arrivée.
-
-| Statut | Ce qu'il veut dire |
+| État | Signification |
 | --- | --- |
-| Terminée | Les données ont été enregistrées, et aucune exécution de flux pour elles n'a échoué. Pas besoin d'étape Envoyée. |
-| Échouée | Une exécution de flux pour elles a échoué. Ouvrez l'**History** du flux. |
-| Bloquée | Aucun des deux cas ne peut être montré. Vérifiez l'**History** du flux avant de conclure que le traitement s'est arrêté. |
+| Complete | Les données ont atteint le stockage sans exécution de workflow en échec enregistrée. |
+| Failed | Une exécution de workflow ou un lot d'ingestion associé a échoué. |
+| Stuck | Les événements enregistrés n'établissent ni réussite ni échec. |
+| Running | Un import ou un lot CLI est encore actif. |
+| Stopped | Un import ou un lot CLI a été arrêté. |
 
-## Trouver une charge
+## Comprendre la période d'historique
 
-- **Rechercher des charges utiles…** trouve l'identifiant de la charge, la source, le statut ou l'étape.
-- **Filtrer**, **Trier** et **Colonnes** marchent comme sur n'importe quel tableau.
-- La page charge les 200 charges les plus récentes. Recherche, filtres, tri et pagination ne portent que sur ces 200. Ils ne cherchent pas dans l'historique plus ancien.
+Activity charge jusqu'à 200 envois récents. Recherche, filtres, tri et pagination agissent sur ces lignes chargées. Ils ne recherchent pas dans toute la base.
 
-## Dépannage
+L'historique des lots CLI a sa propre limite. Pour les lots plus anciens, utilisez `openldr pipeline status`. Consultez [Commencer ici](/docs/start-here) pour le lanceur installé ou la forme de développement `pnpm openldr pipeline status`. Utilisez votre vrai dossier, comme `~/Downloads/openldr_ce` ou `C:\openldr_ce`.
 
-- **La liste est vide.** Cela ne prouve pas que rien n'est arrivé. Effacez la recherche et les filtres, sélectionnez **Actualiser**, et vérifiez l'**History** du flux. Activité montre les 100 derniers lots chargés avec `openldr ingest`. Pour les plus anciens, lancez `openldr pipeline status`.
-- **Une erreur de chargement s'affiche.** Sélectionnez de nouveau **Actualiser**. Si elle reste, signalez l'erreur à un administrateur.
-- **Le panneau du cycle de vie reste en chargement.** Fermez-le, sélectionnez **Actualiser**, et rouvrez la ligne. La page ne distingue pas toujours une requête échouée d'une requête lente.
-- **Une charge est Échouée.** Ouvrez le flux par lequel elle est passée, puis **History**, et lisez l'erreur du nœud en échec. Cette page n'a pas de bouton pour relancer. Suivez la procédure de reprise du flux.
+## Pratique facultative avec des données fictives
 
-## Gestion des événements en file
+Vous pouvez suivre tout envoi reçu sans créer de données supplémentaires. Pour un test, utilisez le Bundle fictif facultatif de [Workflows](/docs/workflows#fichiers-fictifs-facultatifs-d-exercice). Suivez ses étapes webhook, puis recherchez ici l'identifiant de corrélation renvoyé. Aucun exemple n'est requis en usage habituel.
 
-Ces notes sont pour les administrateurs.
+## Résolution de problèmes
 
-- Chaque instance du bus d'événements traite un gestionnaire à la fois. Un gestionnaire lent retarde les événements suivants. D'autres notifications de file ne lancent pas d'autres gestionnaires pendant un lot. Les événements en attente patientent jusqu'à un lot suivant. Des processus serveur séparés peuvent quand même traiter des événements en même temps.
-- Le processus renouvelle ses baux pour les événements en cours et pour ceux qui attendent dans son lot réservé. Un processus de remplacement reçoit un nouveau jeton de réservation. Un ancien processus ne peut alors plus marquer cette réservation comme finie, échouée ou à réessayer.
-- Après un plantage, une réservation expirée compte comme une tentative échouée et peut être réessayée. Les gestionnaires doivent supporter d'être lancés deux fois : une panne de base ou un processus en pause peut laisser un autre processus traiter le même événement.
-- Arrêtez les anciens processus avant une mise à jour. Les processus sans vérification du jeton de réservation ne peuvent pas offrir cette protection.
+**La liste est vide.** Effacez recherche et filtres, puis choisissez Refresh. Vérifiez les réponses à l'expéditeur et History dans Workflows avant de conclure à une absence d'arrivée. Les événements anciens peuvent être hors de la période récente.
+
+**Une ligne indique Failed.** Ouvrez History du workflow et examinez le nœud en échec. Activity ne propose pas de relance. Vérifiez les effets avant de suivre la procédure de reprise du workflow.
+
+**Le panneau reste sur Loading.** Fermez-le, choisissez Refresh puis rouvrez la ligne. Si cela persiste, demandez à un administrateur de vérifier la requête API et les journaux serveur. Le panneau ne distingue pas toutes les requêtes échouées des requêtes lentes.
+
+**Refresh affiche une erreur.** Réessayez une fois. Signalez l'erreur exacte si elle persiste.
 
 ## Guides associés
 
-- [Flux de travail](/docs/workflows)
-- [Audit](/docs/audit)
+[Workflows](/docs/workflows) explique les exécutions et les reçus webhook. [Audit](/docs/audit) explique les traces de changements administratifs.

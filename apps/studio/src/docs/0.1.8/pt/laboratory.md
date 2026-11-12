@@ -1,132 +1,149 @@
 # Laboratório
 
-**Definições → Laboratório** diz quem é o seu laboratório: o nome, a morada, o contacto e o logótipo impressos como cabeçalho em todos os relatórios. A página define também o registo de unidades predefinido e o fuso horário do laboratório.
+Laboratory guarda o nome, a morada, os contactos e o logótipo do laboratório emissor usados nos modelos de relatório. Também define o registo de unidades predefinido e o fuso horário local.
 
-Leva cerca de 10 minutos. Selecione uma imagem ou um clip para o ampliar.
+Use os dados reais e o logótipo aprovado do laboratório. As imagens mostram um laboratório fictício numa instalação de teste. Não precisa de dados de prática. View settings permite abrir a página. Edit general settings permite guardar.
 
-## Quem pode fazer o quê
+O laboratório emissor produz os relatórios. As unidades enviam os pedidos. Escolher aqui um registo predefinido não cria nem importa unidades.
 
-| Capacidade | O que permite |
-| --- | --- |
-| **View settings** | Abrir a página Laboratório |
-| **Edit general settings** | Guardar as alterações |
+## Guardar os dados do laboratório
 
-Quem pode ver relatórios vê o cabeçalho que eles trazem.
+Faça esta tarefa após a instalação ou quando os dados do laboratório emissor mudarem.
 
-## Exemplo 1: definir o cabeçalho
+### 1. Abrir Settings e Laboratory
 
-![Escrever o nome, a morada, o contacto e o fuso horário do laboratório, e guardar a partir do menu de três pontos.](laboratory-identity.mp4)
+Abra o menu do utilizador no canto inferior esquerdo, escolha **Settings** e depois **Laboratory**.
 
-1. Abra **Definições** e depois **Laboratório**.
-2. Em **Nome do laboratório**, escreva `Sample Central Laboratory`.
-3. Em **Morada**, escreva `1 Sample Road, Sample City`. Carregue em Enter para mudar de linha.
-4. Em **Contacto**, escreva `lab@example.org`. Também serve um telefone ou uma linha de acreditação.
-5. Em **Fuso horário**, escreva `Africa/Dar_es_Salaam`. Numa instalação real, use o seu fuso.
-6. Abra o menu de três pontos da página e selecione **Guardar**. Aparece a mensagem **Guardado.**
-7. Recarregue a página e confirme que os valores continuam lá.
+![Abra o menu do utilizador no canto inferior esquerdo.](laboratory-guide-user-menu.png)
 
-Nada fica guardado antes de **Guardar**. Isso inclui um logótipo novo ou um logótipo limpo. Se **Guardar** mostrar um erro, mantenha a página aberta, corrija o valor e guarde de novo.
+![Escolha Settings.](laboratory-guide-settings-menu.png)
 
-### O logótipo
+![Selecione Laboratory em Settings.](laboratory-guide-laboratory-page.png)
 
-1. Selecione **Escolher ficheiro…** e escolha uma imagem PNG, JPEG ou WebP com menos de 256 KB. Aparece uma pré-visualização ao lado do botão.
-2. Selecione **Guardar** no menu de três pontos.
+### 2. Introduzir o nome do laboratório
 
-**Limpar** retira o logótipo. Guarde para manter essa alteração. O logótipo tem de ser um ficheiro de imagem carregado, não um endereço web, porque uma imagem ligada não sai no PDF. É lido em cada relatório, daí o limite de tamanho.
+Introduza o nome do laboratório emissor em **Laboratory name**. O exemplo usa `Documentation laboratory`.
 
-## Exemplo 2: ver o cabeçalho num relatório
+![Introduza o nome do laboratório emissor.](laboratory-guide-name.png)
 
-Este exemplo precisa dos dados de exemplo da documentação. Veja [Painéis, Carregar os dados de exemplo](/docs/dashboard#carregar-os-dados-de-exemplo).
+### 3. Introduzir a morada
 
-1. Abra **Relatórios** e selecione **Test Volume Over Time**.
-2. Abra o menu de três pontos, selecione **Parâmetros** e defina **Date range** de 1 de setembro de 2026 a 31 de outubro de 2026.
-3. Selecione **Executar**.
+Introduza em **Address** a morada a imprimir no cabeçalho. Pode ocupar várias linhas.
 
-**Resultado esperado:** o relatório abre com o seu cabeçalho no topo: o logótipo, **Sample Central Laboratory**, a morada e o contacto. Por baixo vêm o título, o período e uma tabela de 10 linhas, uma por exame e por mês.
+![Introduza a morada que os modelos de relatório devem imprimir.](laboratory-guide-address.png)
 
-![O cabeçalho no topo de Test Volume Over Time: logótipo, nome, morada e contacto.](laboratory-letterhead.png)
+### 4. Introduzir os contactos
 
-| Month | Test | Count |
-| --- | --- | --- |
-| 2026-09 | Full blood count | 10 |
-| 2026-09 | Malaria rapid test | 8 |
-| 2026-10 | HIV viral load | 8 |
+Introduza os contactos aprovados em **Contact**. A imagem usa um endereço de email example.invalid.
 
-São 3 das 10 linhas. Juntas, as linhas somam 60, o número de pedidos do exemplo.
+![Introduza os contactos do laboratório emissor.](laboratory-guide-contact.png)
 
-**Transferir** guarda um PDF com o mesmo cabeçalho. As saídas CSV e XLSX têm só os dados. Veja [Relatórios, Exemplo 1](/docs/reports#exemplo-1-executar-um-relatorio) para todos os passos.
+### 5. Escolher o registo de unidades
 
-### O cabeçalho nos seus modelos
+Em **Facility register**, selecione uma origem já registada. Se faltar, registe-a primeiro em Facilities. Esta escolha fornece o registo predefinido do formulário Facility.
 
-Um modelo de relatório pode colocar cada parte do cabeçalho pelo nome. A página lista os quatro nomes por baixo do título:
+![Escolha um registo existente. Registe a origem em Facilities se faltar.](laboratory-guide-register.png)
 
-| Nome | Imprime |
-| --- | --- |
-| `{{lab.name}}` | Nome do laboratório |
-| `{{lab.address}}` | Morada |
-| `{{lab.contact}}` | Contacto |
-| `{{lab.logo}}` | Logótipo |
+### 6. Definir o fuso horário quando aplicável
 
-Veja o [Designer de relatórios](/docs/report-designer) para construir um modelo.
+Para PostgreSQL ou MySQL, introduza um fuso com nome, como `Africa/Dar_es_Salaam`. Leia a ajuda abaixo do campo. SQL Server exige um nome de fuso Windows em cada execução de relatório. Deixe este campo vazio nesse caso.
 
-## Escolher um registo de unidades
+![Introduza um fuso com nome para PostgreSQL ou MySQL. Leia a exceção SQL Server abaixo.](laboratory-guide-timezone.png)
 
-**Registo de unidades** lista as fontes ativas registadas em [Unidades](/docs/facilities). A que escolher passa a ser o **Sistema** inicial quando alguém cria uma unidade à mão.
+### 7. Guardar os dados
 
-Escolha o registo a que pertencem os seus códigos de unidade. O endereço do sistema separa esses códigos dos de outro registo.
+Abra os pontos da página no canto superior direito e selecione **Save**.
 
-Guardar esta escolha não importa unidades. Não muda o nome, não move e não muda os códigos das unidades que já existem.
+![Abra o menu de pontos de Laboratory.](laboratory-guide-page-actions.png)
 
-Se o registo que quer não aparece:
+![Escolha Save para guardar as definições do laboratório.](laboratory-guide-save-identity.png)
 
-1. Abra [Unidades](/docs/facilities), inicie **Importar unidades** e registe a fonte.
-2. Volte ao Laboratório e recarregue a página.
-3. Selecione-o em **Registo de unidades** e guarde.
+**Resultado esperado:** os dados guardados permanecem ao reabrir Laboratory.
 
-Uma lista vazia também pode querer dizer que as fontes não carregaram. Veja Unidades antes de concluir que não existe nenhuma.
+![A identidade guardada do laboratório permanece após reabrir a página.](laboratory-guide-identity-result.png)
 
-## Fuso horário
+## Remover um logótipo antigo
 
-O fuso horário decide a que dia pertence um resultado num relatório. Um resultado às 01:00 em Dar es Salaam ainda cai no dia anterior em UTC.
+Faça esta tarefa quando o logótipo atual já não deva aparecer nos modelos que usam o logótipo do laboratório.
 
-- Escreva um fuso com nome, como `Africa/Dar_es_Salaam`. Os desvios fixos são recusados. `+03:00` é recusado. `Etc/GMT+3` também, porque quer dizer UTC−3, o contrário do que parece.
-- Define o valor inicial do filtro **Time zone** de cada relatório. Pode mudá-lo para uma execução.
-- Uma execução agendada ou pela linha de comandos não o lê. Dê o fuso diretamente ao agendamento ou ao comando. Veja [Relatórios](/docs/reports).
-- Não define a hora a que correm os agendamentos.
-- **Armazém SQL Server:** deixe-o vazio. O SQL Server usa nomes de fuso do Windows, que este campo recusa. Escreva o fuso do Windows no filtro **Time zone** em cada execução do relatório.
+### 1. Limpar o logótipo do rascunho
 
-## Na linha de comandos
+Selecione **Clear** junto a Logo. Isto altera apenas o rascunho.
 
-`openldr settings lab` lê e escreve os mesmos valores que a página.
+![Clear remove o logótipo atual do rascunho.](laboratory-guide-clear-logo.png)
 
-```bash
-./openldr settings lab show
-./openldr settings lab set --name "Sample Central Laboratory" --timezone Africa/Dar_es_Salaam
-./openldr settings lab set --logo-file ./logo.png
-```
+### 2. Guardar a remoção
 
-- `--address` aceita `\n` para mudar de linha.
-- Um valor vazio limpa um campo, por exemplo `--timezone ""`.
-- `--logo-file` aceita um ficheiro PNG, JPEG ou WebP com o mesmo limite de 256 KB.
+Abra os pontos da página e selecione **Save**.
 
-O registo de unidades só se define na página.
+![Escolha Save para guardar as definições do laboratório.](laboratory-guide-save-clear-logo.png)
 
-## Num telemóvel
+**Resultado esperado:** as definições guardadas do laboratório deixam de conter um logótipo.
 
-A página funciona num telemóvel. As etiquetas ficam à esquerda das caixas, e as caixas estreitam. **Escolher ficheiro…** abre o seletor de ficheiros do telemóvel, por isso o logótipo pode vir das fotos ou dos ficheiros.
+## Carregar o logótipo do laboratório
+
+Use um ficheiro PNG ou JPEG até 256 KB. Um PNG transparente é útil para um logótipo de cabeçalho.
+
+### 1. Escolher a imagem
+
+Selecione **Choose file…** junto a Logo e escolha a imagem local aprovada.
+
+![Choose file abre a seleção de um ficheiro de imagem.](laboratory-guide-choose-logo.png)
+
+### 2. Verificar a pré-visualização
+
+Confirme que a imagem esperada aparece junto a Logo. A imagem reutiliza a marca fornecida na instalação de teste.
+
+![O PNG escolhido aparece na pré-visualização antes de guardar.](laboratory-guide-logo-preview.png)
+
+### 3. Guardar o logótipo
+
+Abra os pontos da página e selecione **Save**.
+
+![Escolha Save para guardar as definições do laboratório.](laboratory-guide-save-logo.png)
+
+**Resultado esperado:** o logótipo permanece ao reabrir Laboratory. Um modelo de relatório tem de usar as variáveis do laboratório para mostrar estes valores.
+
+![O logótipo guardado permanece ao reabrir Laboratory.](laboratory-guide-logo-result.png)
+
+## Alterar os dados num telemóvel
+
+Use os mesmos campos no telemóvel. A página desloca-se verticalmente.
+
+### 1. Editar os campos de identidade
+
+Introduza o nome do laboratório e os outros dados no formulário adaptado ao telemóvel.
+
+![Os campos de Laboratory cabem na largura do telemóvel.](laboratory-guide-phone-name.png)
+
+### 2. Deslocar até Logo
+
+Desça até à pré-visualização do logótipo e ao controlo Choose file. Guarde pelo menu de pontos da página.
+
+![Desça até Logo. A pré-visualização e os controlos continuam disponíveis.](laboratory-guide-phone-logo.png)
+
+## Usar os dados nos modelos de relatório
+
+Os modelos podem usar `{{lab.name}}`, `{{lab.address}}`, `{{lab.contact}}` e `{{lab.logo}}`. A página mostra estes nomes abaixo da descrição. Coloque-os num modelo com Report Designer. Guardar Laboratory não altera um modelo.
+
+## Prática opcional
+
+Numa instalação de teste, guarde um nome de laboratório fictício e um contacto example.invalid. Reutilize um PNG ou JPEG de teste aprovado para o exercício de carregamento. Depois reponha as definições pretendidas.
+
+## Limites
+
+O logótipo aceita PNG e JPEG até 256 KB. SVG, WebP e endereços web de imagens não são aceites. O seletor de registos lista origens existentes. Não permite registar uma origem.
 
 ## Resolução de problemas
 
-- **As alterações desapareceram depois de recarregar.** Não foram guardadas. Use **Guardar** no menu de três pontos e espere por **Guardado.**
-- **O fuso horário não fica guardado.** Use um fuso com nome como `Africa/Dar_es_Salaam`, não um desvio.
-- **O logótipo é recusado.** Tem de ser PNG, JPEG ou WebP e ter menos de 256 KB.
-- **O relatório ainda mostra o nome antigo.** Execute o relatório outra vez. Um resultado já mostrado ou exportado mantém o cabeçalho com que foi feito.
-- **A lista de registos está vazia.** Registe uma fonte em Unidades e recarregue esta página.
-- **Não foi possível guardar a identidade do laboratório.** Leia primeiro a mensagem por baixo do campo. Se não houver nenhuma, a sua função pode não ter **Edit general settings**.
+**A lista de registos está vazia.** Abra Facilities e registe a origem antes de voltar aqui.
+
+**O fuso horário é recusado.** Use um fuso com nome, sem desvio fixo. Siga a exceção SQL Server indicada abaixo do campo.
+
+**O logótipo é recusado.** Verifique o formato e o tamanho. Escolha um PNG ou JPEG até 256 KB.
+
+**Um relatório não mostra os dados guardados.** Verifique se o modelo usa as variáveis do laboratório.
 
 ## Guias relacionados
 
-- [Definições](/docs/settings)
-- [Relatórios](/docs/reports)
-- [Designer de relatórios](/docs/report-designer)
-- [Unidades](/docs/facilities)
+Leia [Unidades](/docs/facilities) para registar uma origem. Leia [Verificações de configuração](/docs/setup-checks) para avaliar a preparação. Leia [Começar aqui](/docs/start-here) para configurar a linha de comandos.

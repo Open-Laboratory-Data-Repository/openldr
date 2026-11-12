@@ -1,0 +1,574 @@
+{
+  "capturedAt": "2026-11-12T13:57:05.953Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5189/studio/settings/marketplace",
+  "steps": [
+    {
+      "id": "add-registry",
+      "label": "Choose Add registry from the tab strip dots.",
+      "path": "marketplace-evidence/add-registry.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 90.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "registry-name",
+      "label": "Use a name identifying the registry owner.",
+      "path": "marketplace-evidence/registry-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 921,
+          "y": 99.53125,
+          "width": 335,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "registry-type",
+      "label": "A local registry is a folder on the OpenLDR server.",
+      "path": "marketplace-evidence/registry-type.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 926,
+          "y": 188.5,
+          "width": 138.796875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "registry-location",
+      "label": "Enter the folder visible to the API server, not your laptop.",
+      "path": "marketplace-evidence/registry-location.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 921,
+          "y": 195.53125,
+          "width": 335,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "registry-save",
+      "label": "Save adds the registry.",
+      "path": "marketplace-evidence/registry-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1077,
+          "y": 66.25,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "install",
+      "label": "Choose Install after reviewing the details.",
+      "path": "marketplace-evidence/install.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 105,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "consent",
+      "label": "Review the version and requested capabilities before approval.",
+      "path": "marketplace-evidence/consent.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 384,
+          "y": 268.5625,
+          "width": 512,
+          "height": 262.875
+        }
+      ]
+    },
+    {
+      "id": "approve",
+      "label": "Approve and install authorizes only this reviewed installation.",
+      "path": "marketplace-evidence/approve.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 494.59375,
+          "y": 470.4375,
+          "width": 137.0625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "label": "Open Settings, then Marketplace.",
+      "path": "marketplace-evidence/open.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 340,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "browse",
+      "label": "Browse lists packages offered by enabled registries.",
+      "path": "marketplace-evidence/browse.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 464,
+          "y": 49,
+          "width": 70.6875,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "registries",
+      "label": "Registries lists package sources.",
+      "path": "marketplace-evidence/registries.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 84,
+          "width": 832,
+          "height": 716
+        }
+      ]
+    },
+    {
+      "id": "registry-saved",
+      "label": "The local registry is listed and enabled.",
+      "path": "marketplace-evidence/registry-saved.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 238,
+          "width": 832,
+          "height": 85
+        }
+      ]
+    },
+    {
+      "id": "search",
+      "label": "Search by the package id.",
+      "path": "marketplace-evidence/search.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 464,
+          "y": 100,
+          "width": 320,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "filter",
+      "label": "Filter by type when you need a plugin, form, report or content pack.",
+      "path": "marketplace-evidence/filter.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 792,
+          "y": 100,
+          "width": 144,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "card",
+      "label": "Read the package id, version, publisher and registry.",
+      "path": "marketplace-evidence/card.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 464,
+          "y": 165,
+          "width": 258.65625,
+          "height": 164
+        }
+      ]
+    },
+    {
+      "id": "signature",
+      "label": "Opening details checks the publisher signature.",
+      "path": "marketplace-evidence/signature.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 736.8125,
+          "y": 94,
+          "width": 58.03125,
+          "height": 22
+        }
+      ]
+    },
+    {
+      "id": "readme",
+      "label": "Read the package description before installing it.",
+      "path": "marketplace-evidence/readme.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 464,
+          "y": 199,
+          "width": 532,
+          "height": 106
+        }
+      ]
+    },
+    {
+      "id": "permissions",
+      "label": "Read the selected version, permissions and compatibility.",
+      "path": "marketplace-evidence/permissions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1020,
+          "y": 163,
+          "width": 244,
+          "height": 325.5
+        }
+      ]
+    },
+    {
+      "id": "installed",
+      "label": "Installed lists the saved plugin with its active state.",
+      "path": "marketplace-evidence/installed.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 464,
+          "y": 165,
+          "width": 258.65625,
+          "height": 137
+        }
+      ]
+    },
+    {
+      "id": "disable",
+      "label": "Disable keeps the plugin installed but stops it loading.",
+      "path": "marketplace-evidence/disable.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 105,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "enable",
+      "label": "Enable permits the installed plugin to load again.",
+      "path": "marketplace-evidence/enable.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 105,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "remove",
+      "label": "Remove uninstalls this plugin.",
+      "path": "marketplace-evidence/remove.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 137,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "remove-confirm",
+      "label": "Confirm the plugin id before removing it.",
+      "path": "marketplace-evidence/remove-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 295.734375,
+          "width": 448,
+          "height": 208.53125
+        }
+      ]
+    },
+    {
+      "id": "registry-edit",
+      "label": "Edit revises a registry name, kind, location or enabled state.",
+      "path": "marketplace-evidence/registry-edit.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 305.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "registry-settings",
+      "label": "Check stored location and Enabled before changing a registry.",
+      "path": "marketplace-evidence/registry-settings.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 793,
+          "y": 99.53125,
+          "width": 463,
+          "height": 164
+        }
+      ]
+    },
+    {
+      "id": "phone",
+      "label": "Browse cards stack at phone width.",
+      "path": "marketplace-evidence/phone.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 16,
+          "y": 632,
+          "width": 343,
+          "height": 164
+        }
+      ]
+    },
+    {
+      "id": "phone-details",
+      "label": "Version and permissions appear before the description on a phone.",
+      "path": "marketplace-evidence/phone-details.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 16,
+          "y": 244.28125,
+          "width": 343,
+          "height": 144.5
+        }
+      ]
+    }
+  ]
+}

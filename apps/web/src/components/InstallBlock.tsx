@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Copy } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -43,9 +43,21 @@ function CopyCommandButton({ command }: { command: string }) {
 
 function CommandRow({ command }: { command: string }) {
   return (
-    <div className="flex items-center gap-3 font-mono text-sm sm:text-base">
-      <span className="text-muted-foreground">$</span>
-      <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap">{command}</code>
+    <div className="px-5 py-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="m-0 text-sm font-semibold text-foreground">Installation command</p>
+        <CopyCommandButton command={command} />
+      </div>
+      <code className="block min-w-0 overflow-x-auto whitespace-nowrap rounded-md border border-primary/30 bg-primary/5 px-4 py-4 font-mono font-medium text-foreground">{command}</code>
+    </div>
+  );
+}
+
+function PlatformNote({ children }: { children: ReactNode }) {
+  return (
+    <div className="border-t border-border bg-muted/40 px-5 py-4">
+      <p className="m-0 text-sm font-semibold text-foreground">Platform requirements</p>
+      <p className="mb-0 mt-1 text-sm leading-6 text-muted-foreground">{children}</p>
     </div>
   );
 }
@@ -57,7 +69,7 @@ export function InstallBlock() {
     <section
       id="install"
       aria-label="OpenLDR installation"
-      className="mx-auto max-w-5xl px-6 py-20 text-center"
+      className="mx-auto max-w-6xl px-6 py-20 text-center"
     >
       {/* Same heading-plus-subtitle block as the two sections above. This is also where the hero's
           "Get started" button scrolls to, so the heading has to confirm the reader arrived. */}
@@ -70,10 +82,10 @@ export function InstallBlock() {
 
       <div
         aria-label="OpenLDR install command"
-        className="mx-auto max-w-4xl overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm"
+        className="mx-auto w-full overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm"
       >
         <Tabs value={activeCommand} onValueChange={setActiveCommand} className="relative w-full">
-          <TabsList className="h-auto w-full max-w-full overflow-x-auto border-b border-border px-4 py-3 pr-16">
+          <TabsList className="h-auto w-full max-w-full overflow-x-auto border-b border-border px-4 py-3">
             <TabsTrigger
               value="unix"
               className="rounded-md border-b-0 px-3 data-[state=active]:border-b-0 data-[state=active]:bg-background"
@@ -93,33 +105,24 @@ export function InstallBlock() {
               Windows Server
             </TabsTrigger>
           </TabsList>
-          <div className="absolute right-4 top-2.5">
-            <CopyCommandButton command={COMMANDS[activeCommand]} />
-          </div>
-
-          <TabsContent value="unix" className="px-5 py-6">
+          <TabsContent value="unix">
             <CommandRow command={COMMANDS.unix} />
-            <p className="mt-4 text-sm text-muted-foreground">
-              Any Linux distribution or macOS with Docker installed.
-            </p>
+            <PlatformNote>Run in a terminal on Linux or macOS with Docker installed.</PlatformNote>
           </TabsContent>
-          <TabsContent value="windows" className="px-5 py-6">
+          <TabsContent value="windows">
             <CommandRow command={COMMANDS.windows} />
-            <p className="mt-4 text-sm text-muted-foreground">
-              Windows 10/11 with Docker Desktop - run it in PowerShell.
-            </p>
+            <PlatformNote>Run in PowerShell on Windows 10/11 with Docker Desktop installed.</PlatformNote>
           </TabsContent>
-          <TabsContent value="wsl" className="px-5 py-6">
+          <TabsContent value="wsl">
             <CommandRow command={COMMANDS.wsl} />
-            <p className="mt-4 text-sm text-muted-foreground">
-              Windows Server can&apos;t run these Linux images natively - install Docker CE on a
-              Linux host it provides, either a WSL2 Ubuntu distro or a Hyper-V virtual machine,
-              and run the command above there. New to this?{' '}
+            <PlatformNote>
+              Install Docker CE inside a WSL2 Ubuntu distro or a Hyper-V virtual machine
+              on Windows Server. Run the command in that Linux environment.{' '}
               <Link to="/docs/windows-server" className="text-foreground underline underline-offset-4">
                 Windows Server setup guide
               </Link>
               .
-            </p>
+            </PlatformNote>
           </TabsContent>
         </Tabs>
       </div>

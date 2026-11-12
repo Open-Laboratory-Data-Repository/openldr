@@ -1,0 +1,29 @@
+{
+  "columns": [
+    {
+      "key": "start_date",
+      "label": "start_date",
+      "kind": "string"
+    },
+    {
+      "key": "end_date",
+      "label": "end_date",
+      "kind": "string"
+    }
+  ],
+  "rows": [
+    {
+      "start_date": "2026-01-01",
+      "end_date": "2026-11-12"
+    }
+  ],
+  "chart": {
+    "type": "stat",
+    "value": "1",
+    "label": "rows"
+  },
+  "meta": {
+    "generatedAt": "2026-11-12T15:35:32.183Z",
+    "rowCount": 1
+  }
+}

@@ -1,69 +1,202 @@
 # Mises à niveau planifiées
 
-Prévoyez une interruption pour une mise à niveau Compose. Des changements de schéma peuvent empêcher les anciennes et nouvelles versions d'écrire ensemble sans risque. Cette procédure conserve la version du moteur de base de données. Sa mise à niveau exige une procédure distincte et testée.
+<!-- operator-platform -->
+
+Effectuez la maintenance sur l'hôte OpenLDR, dans le dossier Compose installé. Les exemples utilisent `~/Downloads/openldr_ce` sous Linux/macOS et `C:\openldr_ce` dans PowerShell. Remplacez ces chemins. Le terminal affiche déjà l'invite bleue ; saisissez seulement la commande. Les extraits de configuration indiquent le fichier à modifier ; ce ne sont pas des commandes. Ces images ne prouvent pas une opération réussie. Les données de démonstration sont facultatives.
 
 ## Préparer la version
 
-Travaillez dans le répertoire du projet Compose installé. Gardez le même nom de projet, fichier d'environnement et fichiers Compose complémentaires. Relevez les étiquettes et identifiants des images avec `docker compose images`. Conservez les anciennes images et les fichiers Compose. Lisez les notes de la version cible et les exigences de migration.
+Planifiez une interruption. Conservez projet, fichier environnement et surcharges Compose. Ne changez pas les versions des moteurs de base. Lisez les notes de version.
 
-Sauvegardez les fichiers `.env` et de configuration actuels dans un emplacement privé avant toute modification. Fixez `OPENLDR_VERSION` à la version choisie dans `.env`. Téléchargez uniquement les images applicatives nécessaires avant l'interruption. Ne téléchargez pas toutes les nouvelles images sans contrôle. Les services de stockage ont leurs propres versions. Conservez les versions actuelles de PostgreSQL, du service de stockage et des bases externes.
+### 1. Relever images et services actuels
 
-Enregistrez ce guide hors de Studio avant l'arrêt. Identifiez la personne chargée de restaurer les sauvegardes. Vérifiez comment les émetteurs mettent leurs envois en attente ou les réessaient.
-
-## Arrêter les écritures et attendre
-
-Suspendez les émetteurs webhook, les écritures externes planifiées, les pairs de synchronisation et les écritures des opérateurs. Bloquez les nouvelles requêtes entrantes. Arrêtez toutes les anciennes répliques API, y compris hors de ce projet Compose. Arrêtez les tâches CLI séparées et tout processus écrivant dans les mêmes bases ou stockages.
-
-Les nouveaux fichiers Compose de l'installateur définissent cette propriété du service API :
-
-```yaml
-stop_grace_period: ${OPENLDR_STOP_GRACE_PERIOD:-5m}
-```
-
-Les installations existantes doivent l'ajouter sous `services.api` dans leur fichier Compose local. Adaptez `OPENLDR_STOP_GRACE_PERIOD` à la durée du travail le plus long. Un délai explicite dans la commande d'arrêt est prioritaire :
+Conservez les identifiants et versions hors du déploiement. Les commandes suivantes utilisent ce dossier.
 
 ```sh
-docker compose stop -t 300 api
+{{operator:upgrade-folder}}
 ```
 
-Cet exemple accorde 300 secondes. Augmentez ce délai si nécessaire. OpenLDR attend les requêtes et traitements actifs pendant l'arrêt. Consultez l'état du conteneur et les journaux. Un arrêt forcé, un délai dépassé ou le code 137 ne prouve pas leur achèvement. Examinez la situation avant de continuer, notamment les effets externes partiels.
+![Relever images et services actuels.](guide:operator-upgrade-folder)
 
-Arrêtez Keycloak et le service de stockage après l'API, ainsi que les autres processus écrivant dans leurs stockages. Gardez PostgreSQL actif pour les sauvegardes logiques. Maintenez toutes les écritures arrêtées pendant la vérification des sauvegardes et les migrations. Des reçus webhook en attente peuvent rester pour le nouveau traitement. Notez leurs identifiants. Examinez les travaux actifs ou interrompus avant de reprendre les envois.
+### 2. Sauvegarder configuration et clés
 
-## Sauvegarder un même état sans écritures
-
-Placez la sauvegarde dans un emplacement privé, hors des volumes du déploiement. Capturez tous ces éléments pendant la même période sans écritures :
-
-- La base interne, la base cible configurée et la base Keycloak, avec les rôles nécessaires.
-- Tous les compartiments ou volumes de fichiers, dont les fichiers référencés par les reçus webhook.
-- `.env`, les fichiers Compose complémentaires, la configuration montée, les clés de chiffrement et signature, les certificats et les fichiers locaux de `data`.
-- L'inventaire des images et la version applicative précédente exacte.
-
-Pour PostgreSQL, identifiez d'abord les vrais noms des bases et le compte. Exécutez `pg_dump -Fc -f /tmp/DB.dump -U USER DB` dans le conteneur PostgreSQL avec `docker compose exec -T postgres`. Remplacez `DB` et `USER` par les valeurs du déploiement. Copiez chaque sauvegarde terminée avec `docker compose cp postgres:/tmp/DB.dump ./PRIVATE_BACKUP/DB.dump`. Créez le répertoire de destination au préalable. Répétez pour chaque base. Vérifiez chaque code de sortie.
-
-Sauvegardez les rôles avec `pg_dumpall --globals-only -f /tmp/globals.sql -U USER`, puis copiez ce fichier. Utilisez le même mode d'exécution dans le conteneur. Protégez ces fichiers car ils peuvent contenir des identifiants. L'emploi de `-f` et `compose cp` évite la redirection binaire dans Windows PowerShell.
-
-Pour MySQL, SQL Server ou les stockages externes, suivez la procédure native de sauvegarde et restauration de l'administrateur. Les sauvegardes PostgreSQL ne couvrent pas ces bases. Pour le service de stockage, utilisez une sauvegarde de compartiments testée ou copiez son volume après son arrêt. Ne copiez pas un volume PostgreSQL actif comme sauvegarde logique. N'exécutez jamais `docker compose down -v` pendant une mise à niveau.
-
-## Vérifier la restauration
-
-Restaurez dans des bases et stockages distincts, sans accès aux services de production ni aux émetteurs. Restaurez les rôles et chaque base en traitant toute erreur comme un échec. Résolvez explicitement les conflits de rôles initiaux. Comparez des nombres de lignes et des enregistrements représentatifs. Restaurez les fichiers et comparez leurs sommes de contrôle à la sauvegarde.
-
-Utilisez les clés conservées pour déchiffrer des secrets enregistrés représentatifs dans cet environnement isolé. Vérifiez que les enregistrements restaurés retrouvent leurs fichiers. Une sauvegarde réussie, une liste d'archive ou une réponse de santé ne prouve pas la récupération. Ne migrez pas la production avant la réussite de cette restauration.
-
-## Migrer avant de démarrer la nouvelle API
-
-Une installation antérieure à 0.1.11 doit d'abord faire les étapes 1 à 4 de la section « Passer de MinIO à Garage » plus bas. Le nouveau fichier Compose refuse de s'exécuter sans `GARAGE_RPC_SECRET` et `GARAGE_ADMIN_TOKEN`.
-
-Gardez les bases disponibles et tous les anciens processus d'écriture arrêtés. Vérifiez que l'image API correspond à la version cible. Exécutez une fois sa CLI intégrée :
+Remplacez BEFORE_UPGRADE. Limitez les accès. Incluez surcharges, clés de chiffrement et signature, certificats et fichiers locaux. Cela ne sauvegarde pas les volumes de base ou de fichiers. Gardez ce guide hors de Studio.
 
 ```sh
-docker compose run --rm --no-deps api node /app/cli/dist/index.js db migrate
+{{operator:upgrade-private-copy}}
 ```
 
-Cette commande remplace la commande de démarrage API. Elle ne démarre aucune dépendance et ne sert aucune requête. Exigez le code de sortie 0 et la réussite des migrations interne et cible avant de démarrer les nouveaux services.
+![Sauvegarder configuration et clés.](guide:operator-upgrade-private-copy)
 
-Si la migration échoue, arrêtez-vous. Certains changements de schéma peuvent déjà être validés. Ne démarrez pas les anciens binaires sur ce schéma. Analysez l'échec, ou restaurez ensemble les bases, fichiers, configuration, clés et images de la même sauvegarde. Si le trafic avait repris, rapprochez les envois et leurs effets externes avant de restaurer un état antérieur.
+## Arrêter les écritures
+
+Suspendez émetteurs, synchronisation et écritures planifiées. Bloquez le trafic. Arrêtez les travaux CLI et toutes les API, y compris sur les autres hôtes.
+
+### 1. Laisser finir les travaux actifs
+
+Ajoutez sous services.api aux anciennes installations. Prévoyez le travail le plus long. Le délai explicite suivant prend priorité.
+
+```text
+{{operator:upgrade-grace}}
+```
+
+![Laisser finir les travaux actifs.](guide:operator-upgrade-grace)
+
+### 2. Arrêter et contrôler la fermeture API
+
+300 secondes est un exemple. Un délai dépassé, arrêt forcé ou code 137 ne prouve pas la fin des travaux. Examinez les effets interrompus.
+
+```sh
+{{operator:upgrade-stop}}
+```
+
+![Arrêter et contrôler la fermeture API.](guide:operator-upgrade-stop)
+
+### 3. Arrêter les écritures identité et fichiers
+
+Utilisez les vrais noms. Une ancienne installation peut nommer le stockage minio. Gardez PostgreSQL actif pour les sauvegardes logiques. Arrêtez aussi les autres écrivains.
+
+```sh
+{{operator:upgrade-stores-stop}}
+```
+
+![Arrêter les écritures identité et fichiers.](guide:operator-upgrade-stores-stop)
+
+## Sauvegarder et prouver la restauration
+
+Sauvegardez bases, rôles et tous les fichiers ou volumes arrêtés durant le même arrêt des écritures. Ne lancez jamais docker compose down -v. Ne copiez pas un volume PostgreSQL actif comme sauvegarde logique.
+
+### 1. Créer chaque sauvegarde PostgreSQL
+
+Remplacez DB_NAME et DB_USER. Répétez pour bases interne, analytique et Keycloak. Pour SQL Server/MySQL, appliquez aussi leur procédure native testée.
+
+```sh
+{{operator:upgrade-dump}}
+```
+
+![Créer chaque sauvegarde PostgreSQL.](guide:operator-upgrade-dump)
+
+### 2. Copier chaque sauvegarde hors des volumes
+
+La destination privée doit exister. Contrôlez chaque code de sortie. La copie évite la redirection binaire PowerShell.
+
+```sh
+{{operator:upgrade-dump-copy}}
+```
+
+![Copier chaque sauvegarde hors des volumes.](guide:operator-upgrade-dump-copy)
+
+### 3. Sauvegarder aussi les rôles
+
+Remplacez DB_USER. Protégez globals.sql, qui peut contenir des identifiants. Sauvegardez chaque bucket ou volume arrêté avec la procédure testée.
+
+```sh
+{{operator:upgrade-roles}}
+```
+
+![Sauvegarder aussi les rôles.](guide:operator-upgrade-roles)
+
+### 4. Restaurer dans une destination isolée
+
+Utilisez une base vide isolée, jamais la production. Restaurez les rôles et résolvez les conflits initiaux. Copiez la sauvegarde sur cet hôte. Une liste seule ne prouve rien. Restaurez les fichiers, comparez sommes et données, déchiffrez des secrets avec les clés conservées et vérifiez les liens vers les fichiers avant migration.
+
+```sh
+{{operator:upgrade-restore}}
+```
+
+![Restaurer dans une destination isolée.](guide:operator-upgrade-restore)
+
+## Préparer les anciennes installations MinIO
+
+Ignorez si Garage est déjà utilisé. Avant migration, récupérez Compose et configuration de la version cible et réintégrez le service sauvegardé. Gardez image exacte, volume et anciens identifiants.
+
+### 1. Conserver le service source ancien
+
+Remplacez tous les marqueurs par la configuration sauvegardée. Reprenez le vrai volume si différent de miniodata. Les anciens identifiants explicites restent valides après changement S3. Ne tirez pas une image latest supposée.
+
+```text
+{{operator:upgrade-minio-config}}
+```
+
+![Conserver le service source ancien.](guide:operator-upgrade-minio-config)
+
+### 2. Générer les nouvelles valeurs Garage
+
+Préfixez les 24 caractères hexadécimaux par GK. Générez séparément 64 caractères pour secret S3, secret RPC et jeton admin. Gardez-les privés.
+
+```sh
+{{operator:upgrade-garage-key}}
+```
+
+![Générer les nouvelles valeurs Garage.](guide:operator-upgrade-garage-key)
+
+### 3. Écrire les nouveaux paramètres de stockage
+
+Remplacez tous les marqueurs. Incluez config/garage.toml et les fichiers Compose cibles. Compose refuse les secrets Garage absents. Ne démarrez pas encore l’API.
+
+```text
+{{operator:upgrade-garage-config}}
+```
+
+![Écrire les nouveaux paramètres de stockage.](guide:operator-upgrade-garage-config)
+
+## Migrer avec l’image API choisie
+
+Gardez les bases disponibles et tous les anciens écrivains arrêtés. Préservez les versions des moteurs et du stockage.
+
+### 1. Fixer la version applicative choisie
+
+Utilisez la version concrète choisie dans les notes, pas le marqueur. Ne changez ni émetteur ni clé de chiffrement.
+
+```text
+{{operator:upgrade-version}}
+```
+
+![Fixer la version applicative choisie.](guide:operator-upgrade-version)
+
+### 2. Télécharger seulement les images applicatives
+
+Utilisez toutes les surcharges existantes. Conservez les anciennes images pour récupération. Cela ne met pas à niveau PostgreSQL ou Garage.
+
+```sh
+{{operator:upgrade-pull}}
+```
+
+![Télécharger seulement les images applicatives.](guide:operator-upgrade-pull)
+
+### 3. Exécuter les migrations une fois
+
+Exigez code 0 et migrations interne et cible réussies. Cela ne lance ni dépendances ni serveur API. En cas d’échec, arrêtez. Des changements peuvent déjà être validés. Ne lancez pas d’anciens binaires sur un schéma modifié. Restaurez ensemble bases, fichiers, clés et images si nécessaire.
+
+```sh
+{{operator:upgrade-migrate}}
+```
+
+![Exécuter les migrations une fois.](guide:operator-upgrade-migrate)
+
+## Copier les anciens fichiers avant les écritures
+
+Seulement pour MinIO vers Garage. Gardez l’API arrêtée. Les bases doivent rester disponibles pour le CLI de maintenance.
+
+### 1. Démarrer les stockages source et cible
+
+Utilisez les vrais noms de la configuration fusionnée. N’ajoutez pas api à cette commande.
+
+```sh
+{{operator:upgrade-stores}}
+```
+
+![Démarrer les stockages source et cible.](guide:operator-upgrade-stores)
+
+### 2. Copier et vérifier les objets
+
+Remplacez OLD_KEY, OLD_SECRET et SOURCE_BUCKET. Ces secrets apparaissent dans arguments et historique. MinIO reste inchangé. Répétez après échec. Les objets de même taille sont ignorés ; taille égale ne prouve pas contenu égal. Exigez vérification réussie, comparez des sommes et ouvrez des fichiers. Conservez l’ancien volume. Sa suppression ultérieure est facultative.
+
+```sh
+{{operator:upgrade-storage-copy}}
+```
+
+![Copier et vérifier les objets.](guide:operator-upgrade-storage-copy)
 
 ## Installations qui utilisent Keycloak
 
@@ -77,69 +210,34 @@ Sans elle, Keycloak ne démarre pas et personne ne peut se connecter. Si `.env` 
 
 ## Vérifier avant de reprendre le trafic
 
-Démarrez d'abord les services existants de stockage et d'identité, puis les services applicatifs de la version cible. Conservez leurs versions de moteurs de bases. Vérifiez `docker compose ps`, la santé de l'API et les journaux. Lisez des données représentatives dans Studio ou la CLI. Vérifiez les reçus webhook et leurs exécutions liées avant de rouvrir le trafic.
+Démarrez la nouvelle API seulement après migration et copie réussies. Si le trafic avait repris, réconciliez livraisons et effets externes avant une restauration ancienne.
 
-HTTP 202 signifie que le webhook a été accepté, pas terminé. Consultez les reçus en attente. Examinez les reçus interrompus et les effets externes avant de soumettre un travail de remplacement. Réessayez la même requête logique avec son `Idempotency-Key` et son contenu d'origine. Ne rejouez pas en masse les requêtes interrompues avec de nouvelles clés.
+### 1. Démarrer les services choisis et contrôler l’état
 
-Si vous mettez à niveau depuis une version où lab_results n'avait pas de colonne status, lancez `openldr db reproject --force` une fois. Cela remplit le statut des résultats déjà présents dans l'entrepôt, pour que les tests rejetés ne comptent plus comme des résultats.
+Gardez versions et surcharges. Consultez journaux et données représentatives avant de rouvrir le trafic.
 
-Reprenez les envois seulement après ces vérifications. Conservez la sauvegarde vérifiée et les anciennes images selon la politique du site.
+```sh
+{{operator:upgrade-start}}
+```
 
-## Passer de MinIO à Garage (installations antérieures à 0.1.11)
+![Démarrer les services choisis et contrôler l’état.](guide:operator-upgrade-start)
 
-MinIO a retiré ses images de Docker Hub le 2026-09-11. Depuis 0.1.11, le service `storage` exécute Garage à la place. Une installation qui contient déjà des fichiers doit les copier une fois. Une nouvelle installation n'en a pas besoin.
+### 2. Vérifier santé et travaux en attente
 
-1. Notez la clé et le secret MinIO actuels dans `.env` (`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`). L'étape 4 les remplace.
-2. Sauvegardez `.env` et `docker-compose.yml`.
-3. Téléchargez les fichiers de la version 0.1.11 :
-   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.11/deploy/install/docker-compose.yml`, à enregistrer sous `docker-compose.yml`
-   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.11/deploy/install/garage.toml`, à enregistrer sous `config/garage.toml`
+HTTP 202 signifie accepté, pas terminé. Examinez reçus webhook et exécutions liées. Réessayez une demande interrompue avec sa clé Idempotency-Key et entrée d’origine. La santé seule ne prouve ni restauration ni effets externes.
 
-   Remettez ensuite l'ancien service `minio` dans `docker-compose.yml` à partir de votre sauvegarde. MinIO reste ainsi actif à côté de Garage. Donnez-lui l'ancienne clé et l'ancien secret en valeurs littérales, pas en `${S3_...}`. L'étape 4 modifie ces variables, et MinIO refuserait alors l'ancien identifiant.
+```sh
+{{operator:upgrade-health}}
+```
 
-   ```yaml
-     minio:
-       image: minio/minio:latest
-       command: server /data --console-address ':9001'
-       environment:
-         MINIO_ROOT_USER: <ancienne clé>
-         MINIO_ROOT_PASSWORD: <ancien secret>
-       volumes:
-         - miniodata:/data
-   ```
+![Vérifier santé et travaux en attente.](guide:operator-upgrade-health)
 
-   Ajoutez aussi `miniodata:` sous le bloc `volumes:` de premier niveau. L'image MinIO est encore sur la machine depuis l'ancienne installation, donc cela fonctionne sans Docker Hub.
-4. Générez de nouvelles valeurs et écrivez-les dans `.env` :
-   - `S3_ACCESS_KEY_ID` : `GK` suivi de 24 caractères hexadécimaux (`echo GK$(openssl rand -hex 12)`)
-   - `S3_SECRET_ACCESS_KEY`, `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` : 64 caractères hexadécimaux chacun (`openssl rand -hex 32`)
-   - `S3_ENDPOINT=http://storage:3900`
-5. Démarrez MinIO et les nouveaux services : `docker compose up -d minio storage api`.
-6. Copiez les fichiers :
-   `./openldr storage copy --from-endpoint http://minio:9000 --from-key <ancienne clé> --from-secret <ancien secret> --from-bucket openldr`
-   La commande affiche le nombre d'objets et d'octets des deux côtés, puis vérifie que chaque objet de la source est dans Garage avec la même taille. Elle se termine avec un code non nul s'il en manque un. Des objets en plus dans Garage sont normaux tant que l'api tourne, car elle y écrit de nouveaux fichiers. Ils ne font pas échouer la vérification. Relancez-la pour reprendre après un échec. Elle ignore les objets déjà présents dans Garage avec la même taille. Elle ne remplace pas un objet de même taille mais de contenu différent. Elle ne modifie jamais MinIO.
-7. Quand elle affiche `every source object is on the target`, ouvrez quelques fichiers téléversés dans le studio.
-8. Retirez le service `minio` de `docker-compose.yml` et lancez `docker compose up -d --remove-orphans`. Gardez le volume `miniodata` tant que vous n'êtes pas sûr. Supprimez-le ensuite avec `docker volume rm <projet>_miniodata`.
+### 3. Reconstruire les anciennes projections seulement si nécessaire
 
-Sans le script `./openldr`, lancez `docker compose run --rm --no-deps api node /app/cli/dist/index.js storage copy` avec les mêmes options.
+Pour versions antérieures au statut de résultat, index patient ou doublons, cela remplit les nouveaux champs. Cette reconstruction exige --force. Ignorez si inutile. Gardez sauvegarde vérifiée et anciennes images selon votre politique.
 
-La valeur de `--from-secret` apparaît dans l'historique du shell et dans la liste des processus pendant l'exécution. Effacez ensuite cette ligne de l'historique, ou lancez la commande dans un shell jetable.
+```sh
+{{operator:upgrade-reproject}}
+```
 
-Si vous exécutez depuis les sources, le fichier Compose (`docker-compose.prod.yml`) et `deploy/install/garage.toml` arrivent avec la nouvelle copie du dépôt. Ignorez donc les téléchargements de l'étape 3, mais remettez quand même l'ancien service `minio` avec son ancien identifiant. Votre `.env.prod` vient d'un ancien `pnpm run init`. Ses `S3_ACCESS_KEY_ID` et `S3_SECRET_ACCESS_KEY` n'ont pas le format de Garage. Remplacez-les comme à l'étape 4 (`GK` plus `openssl rand -hex 12`, et `openssl rand -hex 32`). Ajoutez ensuite `GARAGE_RPC_SECRET` et `GARAGE_ADMIN_TOKEN`. Compose refuse de s'exécuter tant que ces deux valeurs manquent. À l'étape 5, démarrez les services avec `docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr up -d --build minio storage api`. À l'étape 6, lancez la copie dans le conteneur api avec `docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr exec api node /app/cli/dist/index.js storage copy` et les mêmes options. À l'étape 8, utilisez les mêmes options `--env-file`, `-f` et `-p`.
-
-## Quand une image tierce disparaît
-
-Chaque image tierce qu'une installation télécharge provient de la copie OpenLDR sur GHCR, fixée par son digest. La liste se trouve dans `deploy/third-party-images.json`. Si un éditeur retire une image, les installations existantes et nouvelles continuent de fonctionner, car la copie reste. La seule exception est SQL Server, dont l'image reste sur le registre de Microsoft.
-
-Pour remplacer un éditeur :
-
-1. Choisissez un remplaçant qui parle le même protocole.
-2. Ajoutez-le à `deploy/third-party-images.json` et lancez `pnpm images:mirror <nom>`. La commande copie seulement linux/amd64 et linux/arm64.
-3. Rendez le nouveau paquet GHCR public dans la page de ses paramètres.
-4. Branchez-le sous le même nom de service Compose.
-5. Si le format des données diffère, déplacez les données. La section sur le passage de MinIO à Garage, plus haut, en donne l'exemple détaillé.
-
-## Références
-
-- [Délai d'arrêt des services Docker Compose](https://docs.docker.com/reference/compose-file/services/#stop_grace_period)
-- [Commandes ponctuelles Docker Compose](https://docs.docker.com/reference/cli/docker/compose/run/)
-- [Sauvegarde et restauration PostgreSQL 16](https://www.postgresql.org/docs/16/backup-dump.html)
+![Reconstruire les anciennes projections seulement si nécessaire.](guide:operator-upgrade-reproject)

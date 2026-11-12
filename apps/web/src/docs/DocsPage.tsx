@@ -1,6 +1,6 @@
-import { isValidElement, useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
+import { isValidElement, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import ReactMarkdown, { type Components } from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   Select,
@@ -21,6 +21,13 @@ import {
   type DocLocale,
 } from './content';
 import { extractToc, headingIdMaker, wantsToc, type TocEntry } from './toc';
+import { InstallResultIllustration } from './InstallResultIllustration';
+import { InstallGuideIllustration } from './InstallGuideIllustration';
+import { INSTALL_PLATFORM_MARKER, installMarkdown, installScene, type InstallPlatform } from './installGuide';
+import { useWebsiteTheme } from '@/components/useWebsiteTheme';
+import { hasWebFocus, WebFocusedScreenshot } from './WebFocusedScreenshot';
+import { OPERATOR_PLATFORM_MARKER, OPERATOR_PAGES, operatorExample, operatorMarkdown, operatorText } from './operatorGuide';
+import { SERVER_COMMANDS, serverMarkdown, serverScene, serverPlatform } from './serverGuide';
 
 function textContent(children: ReactNode): string {
   if (Array.isArray(children)) return children.map(textContent).join('');
@@ -105,7 +112,28 @@ function makeHeadingId(): (node: object | undefined, children: ReactNode) => str
 }
 
 /** A clip (`x.mp4`) plays muted on a loop, with its `x.png` poster. A screenshot opens full size. */
-function DocMedia({ src, alt }: { src: string; alt: string }) {
+function InstallCapture({ src, alt }: { src: string; alt: string }) {
+  const theme = useWebsiteTheme();
+  const url = theme === 'light' ? src.replace(/\.png$/, '-light.png') : src;
+  return <span className="my-6 block">
+    <a href={url} target="_blank" rel="noreferrer noopener" aria-label={alt}>
+      <img src={url} alt={alt} width="1008" height="568" loading="lazy" className="block w-full rounded-md border border-border" />
+    </a>
+    <span className="mt-1 block text-xs text-muted-foreground">{alt}</span>
+  </span>;
+}
+
+function DocMedia({ src, alt, platform, locale }: { src: string; alt: string; platform: InstallPlatform; locale: DocLocale }) {
+  if (hasWebFocus(src)) return <WebFocusedScreenshot src={src} alt={alt} />;
+  if (src === 'guide:install-result') return <InstallResultIllustration alt={alt} locale={locale} />;
+  const example = operatorExample(src);
+  if (example?.file) return null;
+  if (example) return <InstallGuideIllustration scene="terminal" platform={example.shell ?? platform} command={operatorText(example, platform)} alt={alt} locale={locale} />;
+  const server = serverScene(src);
+  if (server) return <InstallGuideIllustration scene="terminal" platform={serverPlatform(server)} command={SERVER_COMMANDS[server]} alt={alt} locale={locale} />;
+  const scene = installScene(src);
+  if (scene) return <InstallGuideIllustration scene={scene} platform={['tls', 'tls-ready', 'renewal'].includes(scene) ? 'unix' : platform} alt={alt} locale={locale} />;
+  if (/^\/docs-images\/install\/[a-z-]+\.png$/.test(src)) return <InstallCapture src={src} alt={alt} />;
   const url = resolveMedia(src);
   if (!url) {
     return (
@@ -145,11 +173,11 @@ function DocMedia({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function markdownComponents(): Components {
+function markdownComponents(platform: InstallPlatform, locale: DocLocale): Components {
   const headingId = makeHeadingId();
   return {
     img({ src, alt }) {
-      return <DocMedia src={typeof src === 'string' ? src : ''} alt={alt ?? ''} />;
+      return <DocMedia src={typeof src === 'string' ? src : ''} alt={alt ?? ''} platform={platform} locale={locale} />;
     },
     h4({ children, node }) {
       return <h4 id={headingId(node, children)} className="scroll-mt-20">{children}</h4>;
@@ -222,19 +250,73 @@ function NavLink({ slug, title, active, nested }: { slug: string; title: string;
   );
 }
 
-function OnThisPage({ entries }: { entries: TocEntry[] }) {
+/** Track the section at the reading edge, including headings too near the page end. */
+function useActiveHeading(entries: TocEntry[]): string | null {
+  const [active, setActive] = useState<string | null>(null);
+  useEffect(() => {
+    if (!entries.length) { setActive(null); return; }
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      let current = entries[0].id;
+      for (const entry of entries) {
+        if ((document.getElementById(entry.id)?.getBoundingClientRect().top ?? Infinity) <= 104) current = entry.id;
+      }
+      const root = document.documentElement;
+      if (root.scrollHeight > window.innerHeight && window.scrollY + window.innerHeight >= root.scrollHeight - 2) current = entries[entries.length - 1].id;
+      setActive(current);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+    update();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule);
+    const article = document.querySelector('article');
+    if (article) observer?.observe(article);
+    return () => {
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      observer?.disconnect();
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [entries]);
+  return active;
+}
+
+function OnThisPage({ entries, follow = false }: { entries: TocEntry[]; follow?: boolean }) {
+  const active = useActiveHeading(entries);
+  const listRef = useRef<HTMLUListElement>(null);
+  const reveal = (target: HTMLElement | null) => {
+    const list = listRef.current;
+    if (!follow || !list || !target || !list.clientHeight) return;
+    const bounds = list.getBoundingClientRect();
+    const item = target.getBoundingClientRect();
+    if (item.top < bounds.top) list.scrollTop -= bounds.top - item.top;
+    else if (item.bottom > bounds.bottom) list.scrollTop += item.bottom - bounds.bottom;
+  };
+  useEffect(() => {
+    const list = listRef.current;
+    if (!follow || !list) return;
+    const showActive = () => reveal(list.querySelector<HTMLElement>('[aria-current="location"]'));
+    showActive();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(showActive);
+    observer?.observe(list);
+    return () => observer?.disconnect();
+  }, [active, entries, follow]);
   return (
-    <ul className="m-0 list-none space-y-0.5 p-0">
+    <ul ref={listRef} onFocus={event => reveal(event.target)} className={`m-0 list-none space-y-0.5 p-0 ${follow ? 'min-h-0 overflow-hidden' : ''}`}>
       {entries.map((entry) => (
         <li key={entry.id}>
           <a
             href={`#${entry.id}`}
+            aria-current={entry.id === active ? 'location' : undefined}
             onClick={(event) => {
               event.preventDefault();
               scrollToHeading(entry.id);
             }}
             className={[
-              'block border-l-2 border-transparent py-1 text-xs text-muted-foreground no-underline hover:text-foreground',
+              'block border-l-2 py-1 text-xs no-underline transition-colors',
+              entry.id === active ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground',
               entry.level === 3 ? 'pl-6 pr-2' : 'px-3',
             ].join(' ')}
           >
@@ -250,16 +332,18 @@ export function DocsPage() {
   const { page } = useParams();
   const [version, setVersion] = useState(DEFAULT_DOC_VERSION);
   const [locale, setLocale] = useState<DocLocale>(initialLocale);
+  const [installPlatform, setInstallPlatform] = useState<InstallPlatform>('unix');
   const key = page && isDocSlug(page) ? page : 'getting-started';
   const doc = docPage(key, version, locale);
-  const body = doc?.body ?? null;
+  const body = doc ? operatorMarkdown(serverMarkdown(installMarkdown(doc.body, installPlatform)), installPlatform) : null;
+  const showInstallPlatform = (doc?.body.includes(INSTALL_PLATFORM_MARKER) || doc?.body.includes(OPERATOR_PLATFORM_MARKER)) ?? false;
   const note = doc && doc.localeUsed !== locale ? ENGLISH_ONLY[locale] : '';
   const title = pageTitle(key, version, locale);
   const changeLocale = (value: string): void => {
     setLocale(value as DocLocale);
     rememberLocale(value as DocLocale);
   };
-  const toc = useMemo(() => (body ? extractToc(stripLeadingH1(body)) : []), [body]);
+  const toc = useMemo(() => (body ? extractToc(stripLeadingH1(body)).filter(entry => !(showInstallPlatform || key === 'requirements' || key === 'windows-server' || OPERATOR_PAGES.includes(key)) || entry.level === 2) : []), [body, showInstallPlatform, key]);
   const showToc = wantsToc(toc);
 
   // Opening another page keeps the window's scroll position, which drops the reader into the
@@ -324,7 +408,7 @@ export function DocsPage() {
           ))}
         </nav>
       </aside>
-      <article className="doc-content min-w-0 max-w-3xl" aria-labelledby="doc-title">
+      <article className="doc-content min-w-0 max-w-3xl" data-guide={version === '0.1.8' ? key : undefined} aria-labelledby="doc-title">
         <div className="mb-6 border-b border-border pb-4">
           <p className="text-xs font-medium text-muted-foreground">OpenLDR {version}</p>
           {/* The page's own h1. The sidebar's "Documentation" is a label, not a heading, so the
@@ -334,6 +418,13 @@ export function DocsPage() {
           </h1>
         </div>
         {note && <p className="mb-4 text-xs text-muted-foreground">{note}</p>}
+        {showInstallPlatform ? <div className="mb-6 flex flex-wrap items-center gap-3">
+          <label htmlFor="install-platform" className="text-sm font-medium">{{ en: 'Commands for', fr: 'Commandes pour', pt: 'Comandos para' }[locale]}</label>
+          <Select value={installPlatform} onValueChange={value => setInstallPlatform(value as InstallPlatform)}>
+            <SelectTrigger id="install-platform" className="w-52" aria-label="Installation platform"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="unix">Linux / macOS</SelectItem><SelectItem value="windows">Windows 10/11</SelectItem></SelectContent>
+          </Select>
+        </div> : null}
         {showToc && (
           // Narrow screens have no right-hand column, so the list folds up above the article.
           <details className="mb-6 rounded-md border border-border px-3 py-2 xl:hidden">
@@ -347,7 +438,11 @@ export function DocsPage() {
           <p className="text-muted-foreground">This page is not available for version {version}.</p>
         ) : (
           <div className="doc-markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents()}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents(installPlatform, locale)}
+              urlTransform={(url, key) => key === 'src' && (url === 'guide:install-result' || installScene(url) || serverScene(url) || operatorExample(url)) ? url : defaultUrlTransform(url)}
+            >
               {stripLeadingH1(body)}
             </ReactMarkdown>
           </div>
@@ -356,10 +451,10 @@ export function DocsPage() {
       {showToc && (
         <nav
           aria-label="On this page"
-          className="hidden max-h-[calc(100dvh-6rem)] overflow-y-auto xl:sticky xl:top-20 xl:block xl:self-start"
+          className="hidden max-h-[calc(100dvh-6rem)] xl:sticky xl:top-20 xl:flex xl:flex-col xl:self-start"
         >
-          <p className="px-3 pb-2 text-xs font-semibold uppercase text-primary">On this page</p>
-          <OnThisPage entries={toc} />
+          <p className="shrink-0 px-3 pb-2 text-xs font-semibold uppercase text-primary">On this page</p>
+          <OnThisPage entries={toc} follow />
         </nav>
       )}
     </div>

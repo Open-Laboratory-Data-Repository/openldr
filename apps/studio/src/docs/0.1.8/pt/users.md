@@ -1,118 +1,271 @@
-# Utilizadores e funções
+# Utilizadores
 
-**Utilizadores** lista quem pode entrar, o seu estado e a sua função. Os administradores usam-no para juntar pessoas, dar uma função a cada uma, e ligar ou desligar o acesso.
+Use Users para encontrar contas, atualizar perfis, atribuir um papel e controlar o acesso. Os papéis definem as permissões da conta. O painel Users seleciona um papel por pessoa.
 
-A entrada propriamente dita é tratada pelo fornecedor de identidade, normalmente o Keycloak. O OpenLDR decide o que uma pessoa autenticada pode fazer, através da sua função. As funções estão descritas em [Funções](/docs/roles).
+Use as contas reais da equipa e decisões de acesso aprovadas. As imagens usam uma conta fictícia numa instalação de teste isolada. Não precisa de dados de exemplo.
 
-Este guia leva cerca de 15 minutos. Selecione uma imagem para a ampliar.
+View users permite consultar o diretório. Manage users permite criar contas, alterar perfis e ativar ou desativar o acesso. Manage roles permite atribuir papéis. Reset passwords e Force logout permitem as respetivas ações de segurança.
 
-![Utilizadores: as contas do fornecedor de identidade, com pesquisa, estado e colunas.](users-tour.png)
+Criar contas, editar perfis do fornecedor, repor palavras-passe e terminar sessões do fornecedor exige administração de identidade configurada. Quando não está disponível, a página pede para contactar o administrador do fornecedor de identidade. Os controlos de papéis e acesso OpenLDR continuam disponíveis. Com o início de sessão próprio do OpenLDR, estas ações estão sempre disponíveis. Veja [Início de sessão e palavras-passe](/docs/sign-in).
 
-## Quem pode fazer o quê
+Para instalação e linha de comandos, leia [Começar aqui](/docs/start-here). Para definir permissões dos papéis, leia [Papéis](/docs/roles).
 
-Os nomes das permissões aparecem em inglês.
+## Criar uma conta de operador
 
-| Permissão | O que permite |
-| --- | --- |
-| View users | Abrir **Utilizadores** e ver as contas. |
-| Manage users | Criar, editar, ativar e desativar contas. |
-| Reset passwords | Repor uma palavra-passe ou enviar um e-mail de reposição. |
-| Force logout | Terminar todas as sessões ativas de uma pessoa. |
-| Manage roles | Também é precisa para guardar uma função num utilizador. |
+Faça esta tarefa quando uma pessoa precisa do seu próprio acesso. Verifique o papel necessário antes de criar a conta.
 
-O administrador tem todas.
+### 1. Abrir Users
 
-## A lista
+Selecione **Users** no menu principal.
 
-1. Abra **Utilizadores**. Começa com as contas ativas.
-2. Escreva em **Pesquisar utilizador, nome ou e-mail**. A pesquisa abrange todo o diretório, não só a página que vê.
-3. **Estado** muda entre **Ativo**, contas desativadas e **Todos os estados**.
-4. **Colunas** escolhe o que a lista mostra.
+![Selecione Users no menu principal.](users-guide-open-users.png)
 
-A lista segue a ordem do fornecedor de identidade. Cada página tem no máximo 100 contas. O rodapé mostra o intervalo no ecrã sem total, como **1–2 (total desconhecido)**, porque o fornecedor não o dá. Use **Seguinte** para ver mais. Os filtros e a ordenação por coluna não estão disponíveis, porque o fornecedor não os suporta. Contas juntadas ou removidas enquanto pagina podem deslocar as páginas.
+### 2. Escolher New user
 
-O menu de três pontos no canto superior direito tem **Novo utilizador** e **Atualizar**.
+Abra os pontos da página acima do diretório e selecione **New user**. Se não estiver disponível, contacte o administrador do fornecedor de identidade.
 
-## Exemplo 1: dar uma função a alguém
+![Abra o menu de pontos de Users.](users-guide-page-actions.png)
 
-![O menu de uma linha: Editar, Desativar, Repor palavra-passe, Enviar e-mail de reposição, Forçar término de sessão.](users-row-menu.png)
+![Escolha New user.](users-guide-new-user.png)
 
-1. Na linha da pessoa, abra o menu de três pontos.
-2. Selecione **Editar**. A ficha **Editar utilizador** abre.
+### 3. Introduzir o nome de utilizador
 
-![A ficha Editar utilizador: função, primeiro nome, apelido e e-mail.](users-edit-sheet.png)
+Introduza o nome de acesso da pessoa. O exemplo usa `documentation.operator`.
 
-3. Espere que **Função** carregue e escolha uma função. Cada pessoa tem uma só função. Escolher outra substitui-a.
-4. Mude **Primeiro nome**, **Apelido** ou **E-mail** se for preciso.
-5. Abra o menu de três pontos da ficha e guarde.
-6. Confirme a mensagem de sucesso. Abra de novo a pessoa para ver a função guardada.
+![Introduza o nome de utilizador da conta.](users-guide-username.png)
 
-Se a ficha mostrar um erro de atribuição de função, fica aberta. Corrija o erro antes de dar a alteração por feita.
+### 4. Escolher uma palavra-passe inicial
 
-Escolha a função com menos capacidades que ainda deixe a pessoa trabalhar. Se nenhuma servir, crie uma primeiro. Veja [Funções, exemplo 1](/docs/roles#exemplo-1-criar-uma-funcao-so-de-leitura).
+Introduza uma **Password** inicial, ou deixe vazia e combine a ativação pelo fornecedor de identidade. Uma palavra-passe inicial exige alteração no próximo acesso. Partilhe as credenciais pelo processo aprovado. Com o início de sessão próprio do OpenLDR não há fornecedor. Uma conta criada sem palavra-passe não consegue iniciar sessão até repor a sua palavra-passe.
 
-## Exemplo 2: juntar uma pessoa
+![Introduza uma palavra-passe inicial ou deixe vazia e combine a ativação pelo fornecedor.](users-guide-password.png)
 
-1. Abra o menu de três pontos no canto superior direito e selecione **Novo utilizador**.
-2. Preencha o nome de utilizador, o nome e o e-mail.
-3. Escolha uma função.
-4. Guarde e confirme a mensagem de sucesso.
+### 5. Confirmar a palavra-passe
 
-Uma conta nova sem função não pode fazer nada. Dê-lhe sempre uma função.
+Se introduziu uma palavra-passe, repita-a em **Confirm password**.
 
-## Desativar ou ativar o acesso
+![Introduza novamente a mesma palavra-passe inicial.](users-guide-confirm-password.png)
 
-Abra o menu da linha e selecione **Desativar**, ou **Ativar** numa conta desativada.
+### 6. Escolher o papel
 
-- Desativar escreve primeiro um bloqueio local no OpenLDR e depois atualiza o fornecedor de identidade.
-- O pedido seguinte da pessoa devolve `403 account disabled`, mesmo com um testemunho emitido antes. Um ecrã já aberto no navegador pode continuar visível.
-- As contas que nunca entraram também recebem o bloqueio local.
-- Ativar atualiza primeiro o fornecedor e depois levanta o bloqueio local.
-- Se algum passo falhar, a ação mostra um erro. Uma desativação falhada pode deixar o fornecedor ativo enquanto o OpenLDR bloqueia o acesso. Uma ativação falhada pode deixar o fornecedor ativo enquanto o bloqueio local fica. Corrija a ligação e repita a mesma ação.
-- Se outra mudança de estado da mesma conta ainda estiver a correr, a resposta é `409`. Espere e tente de novo. O mesmo acontece quando o Studio e a linha de comandos mudam a mesma conta ao mesmo tempo.
+Selecione o papel que permite as ações necessárias à pessoa. As novas contas usam **Lab Technician** por predefinição.
 
-O registo de auditoria guarda `user.status` quando corre bem e `user.status.failed` quando falha.
+![Escolha o papel adequado. O exemplo usa Lab Technician.](users-guide-choose-role.png)
 
-## Palavras-passe e sessões
+### 7. Completar o perfil
 
-- **Repor palavra-passe** define uma nova palavra-passe para a pessoa.
-- **Enviar e-mail de reposição** envia-lhe uma ligação para repor.
-- **Forçar término de sessão** termina todas as suas sessões de uma vez.
+Preencha os campos do formulário Users publicado. O formulário mostrado pede nome próprio, apelido e email. O seu pode ter outros campos. Um formulário publicado é opcional para criar contas.
 
-Estas ações dependem do fornecedor de identidade. Podem faltar em contas que ele não deixa o OpenLDR gerir.
+![Complete o formulário Users publicado. Este formulário de teste pede nome e email.](users-guide-profile.png)
 
-## Num telemóvel
+### 8. Criar a conta
 
-A lista de utilizadores funciona num telemóvel.
+Abra os pontos do painel e selecione **Create**. Se a atribuição do papel falhar após guardar a conta, escolha um papel válido e tente novamente no mesmo painel.
 
-![Utilizadores num telemóvel.](users-phone.png)
+![Abra os pontos do painel New user.](users-guide-sheet-actions.png)
 
-## Na linha de comandos
+![Escolha Create para guardar a conta e o papel.](users-guide-create-user.png)
 
-```bash
-./openldr users list
-./openldr user deactivate <local-id>
-./openldr user activate <local-id>
-./openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
-```
+**Resultado esperado:** o painel fecha e a conta aparece Active no diretório.
 
-- `users list` lista as contas locais e os seus identificadores locais.
-- `deactivate` e `activate` atualizam os dois sistemas numa conta associada, pelo seu identificador no fornecedor. Uma conta criada só no OpenLDR muda localmente. O registo de auditoria dá `cli` como autor.
-- `directory-list` lê o diretório do fornecedor. O JSON tem `rows`, `offset`, `limit`, `total: null` e `hasMore`. Some `limit` a `offset` enquanto `hasMore` for verdadeiro. Omita `--enabled` para os dois estados.
+![A conta aparece Active com o nome e o email.](users-guide-created-result.png)
 
-Quando a administração do fornecedor não está configurada, a lista mostra as contas locais. A pesquisa local encontra o nome de utilizador, o nome e o e-mail em qualquer parte do texto, e os resultados vêm por nome de utilizador.
+## Editar um perfil ou atribuir outro papel
+
+Faça esta tarefa quando os dados ou as responsabilidades mudarem. Alterar o papel altera as permissões da pessoa.
+
+### 1. Encontrar a conta
+
+Pesquise por nome de utilizador, nome ou email. A pesquisa abrange todo o diretório.
+
+![Pesquise em todo o diretório por nome de utilizador, nome ou email.](users-guide-search-user.png)
+
+### 2. Abrir as ações
+
+Selecione os pontos da conta certa.
+
+![Abra os pontos do utilizador certo.](users-guide-row-actions.png)
+
+### 3. Escolher Edit
+
+Selecione **Edit**. Selecionar a linha abre o mesmo painel. Sem administração de identidade, o menu mostra **Edit role**.
+
+![Escolha Edit para abrir o perfil e o papel.](users-guide-edit-user.png)
+
+### 4. Atualizar o perfil
+
+Edite os campos fornecidos pelo formulário Users. Não pode alterar o nome de utilizador aqui.
+
+![Atualize os campos de perfil fornecidos pelo formulário Users.](users-guide-edit-profile.png)
+
+### 5. Escolher o papel
+
+Abra **Role** e selecione o papel necessário. O exemplo escolhe **System Auditor**.
+
+![Escolha outro papel. O exemplo muda para System Auditor.](users-guide-change-role.png)
+
+### 6. Guardar a conta
+
+Abra os pontos do painel e selecione **Save**.
+
+![Escolha Save no menu de pontos do painel.](users-guide-save-user.png)
+
+**Resultado esperado:** o painel fecha e o diretório mostra o perfil guardado. Reabra a conta para consultar o papel guardado.
+
+![O perfil guardado aparece na tabela Users.](users-guide-edited-result.png)
+
+## Desativar o acesso de uma conta
+
+Faça esta tarefa quando uma pessoa já não deve entrar. Não pode desativar a própria conta pelo menu da sua linha.
+
+### 1. Escolher Disable
+
+Encontre a conta. Abra os pontos da linha e selecione **Disable**.
+
+![Escolha Disable para o utilizador certo.](users-guide-disable-menu.png)
+
+### 2. Confirmar a conta
+
+Verifique o nome de utilizador na confirmação. Selecione **Disable** para continuar.
+
+![Confirme o nome da conta antes de selecionar Disable.](users-guide-disable-confirm.png)
+
+### 3. Abrir Status
+
+As contas desativadas desaparecem da lista Active predefinida. Abra **Status**.
+
+![Use Status para encontrar uma conta desativada.](users-guide-status-filter.png)
+
+### 4. Escolher Disabled
+
+Selecione **Disabled**.
+
+![Escolha Disabled.](users-guide-disabled-option.png)
+
+**Resultado esperado:** a conta aparece com estado Disabled. Desativar o acesso mantém a conta e o perfil.
+
+![A conta aparece com estado Disabled.](users-guide-disabled-result.png)
+
+## Restaurar o acesso de uma conta
+
+Faça esta tarefa quando uma pessoa desativada deve voltar a entrar.
+
+### 1. Escolher Enable
+
+Encontre a conta com Status em Disabled ou All statuses. Abra os pontos da linha e selecione **Enable**.
+
+![Escolha Enable para restaurar o acesso da conta.](users-guide-enable-menu.png)
+
+### 2. Confirmar a conta
+
+Verifique o nome de utilizador e selecione **Enable**.
+
+![Verifique a conta e confirme Enable.](users-guide-enable-confirm.png)
+
+### 3. Voltar a Active
+
+Abra **Status** e escolha **Active**.
+
+![Escolha Active para encontrar a conta ativada.](users-guide-active-option.png)
+
+**Resultado esperado:** a conta volta à lista Active.
+
+![A conta volta à lista Active.](users-guide-enabled-result.png)
+
+## Repor uma palavra-passe
+
+Faça esta tarefa quando uma conta precisa de uma nova palavra-passe. Exige administração de identidade e Reset passwords.
+
+### 1. Abrir Reset password
+
+Encontre a conta. Abra os pontos da linha e selecione **Reset password**.
+
+![Escolha Reset password para a conta certa.](users-guide-reset-menu.png)
+
+### 2. Introduzir uma nova palavra-passe
+
+Introduza **New password**. **Generate** cria uma palavra-passe e preenche ambos os campos. O olho revela-a e Copy copia-a.
+
+![Introduza uma nova palavra-passe. Generate pode preencher ambos os campos.](users-guide-reset-new-password.png)
+
+### 3. Confirmar a nova palavra-passe
+
+Introduza a mesma palavra-passe em **Confirm password**. Generate já preencheu este campo.
+
+![Introduza novamente a mesma nova palavra-passe.](users-guide-reset-confirm-password.png)
+
+### 4. Escolher se é temporária
+
+Mantenha **Require password change at next sign-in** selecionado para uma palavra-passe temporária. Desmarque apenas se a pessoa deve usar esta palavra-passe diretamente.
+
+![Mantenha Require password change ligado para uma palavra-passe temporária, ou desligue quando adequado.](users-guide-reset-change.png)
+
+### 5. Repor a palavra-passe
+
+Selecione **Reset password**. Partilhe a palavra-passe de forma segura pelo processo aprovado.
+
+![Selecione Reset password após verificar a escolha de alteração da palavra-passe.](users-guide-reset-submit.png)
+
+**Resultado esperado:** a página confirma a reposição. Com a opção temporária predefinida, a pessoa tem de a alterar no próximo acesso.
+
+![A página confirma a reposição da palavra-passe.](users-guide-reset-result.png)
+
+## Terminar as sessões do fornecedor de um utilizador
+
+Faça esta tarefa quando as sessões existentes do fornecedor devem terminar. Exige administração de identidade e Force logout. Com o início de sessão próprio do OpenLDR, termina as sessões OpenLDR da pessoa.
+
+### 1. Escolher Force sign-out
+
+Encontre a conta. Abra os pontos da linha e selecione **Force sign-out**. Não pode aplicar esta ação à própria conta aqui.
+
+![Escolha Force sign-out para terminar as sessões do fornecedor deste utilizador.](users-guide-logout-menu.png)
+
+### 2. Confirmar a conta
+
+Verifique o nome de utilizador e selecione **Force sign-out**.
+
+![Confirme Force sign-out para a conta certa.](users-guide-logout-confirm.png)
+
+**Resultado esperado:** a página confirma o fim de todas as sessões. Esta ação não desativa a conta.
+
+![A página confirma o fim de todas as sessões.](users-guide-logout-result.png)
+
+## Usar Users num telemóvel
+
+Use o mesmo diretório e painel de conta no telemóvel. Colunas largas podem exigir deslocamento horizontal.
+
+### 1. Encontrar a conta
+
+Pesquise por nome de utilizador, nome ou email.
+
+![Pesquise uma conta no telemóvel.](users-guide-phone-search.png)
+
+### 2. Abrir a conta
+
+Selecione a linha. Desloque o painel User para ler o perfil e o papel. Selecione **Close** no canto superior direito para voltar.
+
+![O painel User usa a largura do telemóvel. Desloque para ler os campos do perfil.](users-guide-phone-profile.png)
+
+## Enviar email de reposição quando o correio está configurado
+
+Os pontos da conta também oferecem **Send reset email**. Pede ao fornecedor de identidade para enviar uma ligação de reposição. Verifique primeiro o email e a configuração de envio do fornecedor. O teste documentado não enviou email. O início de sessão próprio do OpenLDR não tem email de reposição, por isso o Studio oculta aí esta ação.
+
+## Prática opcional
+
+Use uma instalação de teste e um operador fictício. Siga as tarefas com o seu nome de utilizador de teste e um email example.invalid. Não teste desativação, reposição de palavra-passe ou saída forçada na conta de outra pessoa sem autorização.
+
+## Limites
+
+Users não permite eliminar contas. Desative o acesso quando uma conta já não deve entrar. Os campos abaixo de Role dependem do formulário Users publicado. O OpenLDR não configura aqui o envio de email do fornecedor.
 
 ## Resolução de problemas
 
-- **Permissão negada.** A função da pessoa não tem a capacidade que a página ou a ação pede.
-- **Falta uma página no menu de alguém.** A sua função não a inclui.
-- **Faltam as ações de reposição.** A conta pode ser controlada pelo fornecedor de identidade.
-- **Uma pessoa desativada ainda vê um ecrã antigo.** O conteúdo já carregado fica. O pedido seguinte é bloqueado.
-- **Alguém mantém o acesso antigo depois de mudar de função.** Peça-lhe para terminar a sessão e voltar a entrar, ou espere que a sessão se renove.
-- **Uma conta nova não pode fazer nada.** Ainda não tem função.
+**New user ou as ações de palavra-passe não aparecem.** Leia o aviso acima do diretório. Peça ao administrador do fornecedor de identidade para configurar a administração de contas.
+
+**A conta desaparece após mudar o estado.** Mude Status para Active, Disabled ou All statuses para a encontrar.
+
+**A conta foi guardada, mas a atribuição do papel falhou.** Mantenha o painel aberto, escolha um papel válido e guarde novamente. Não retire a última pessoa capaz de gerir papéis.
 
 ## Guias relacionados
 
-- [Funções](/docs/roles)
-- [Auditoria](/docs/audit)
-- [Definições](/docs/settings)
+Leia [Papéis](/docs/roles) para definir permissões. Leia [Começar aqui](/docs/start-here) para instalação e linha de comandos.

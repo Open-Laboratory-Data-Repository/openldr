@@ -1,0 +1,191 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "example-catalog-patient",
+        "active": true,
+        "identifier": [
+          {
+            "system": "urn:example:patient-id",
+            "value": "DOCS-001"
+          }
+        ],
+        "name": [
+          {
+            "family": "Documentation",
+            "given": [
+              "Case One"
+            ]
+          }
+        ],
+        "birthDate": "1990-01-01",
+        "gender": "unknown",
+        "telecom": [
+          {
+            "system": "email",
+            "value": "case-one@example.invalid"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Patient/example-catalog-patient"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "example-patient-two",
+        "active": true,
+        "identifier": [
+          {
+            "system": "urn:example:patient-id",
+            "value": "DOCS-001"
+          }
+        ],
+        "name": [
+          {
+            "family": "Documentation",
+            "given": [
+              "Case Two"
+            ]
+          }
+        ],
+        "birthDate": "1980-01-01",
+        "gender": "unknown"
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Patient/example-patient-two"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "example-patient-old",
+        "active": false,
+        "identifier": [
+          {
+            "system": "urn:example:patient-id",
+            "value": "DOCS-OLD-001"
+          }
+        ],
+        "name": [
+          {
+            "family": "Documentation",
+            "given": [
+              "Old Record"
+            ]
+          }
+        ],
+        "link": [
+          {
+            "other": {
+              "reference": "Patient/example-catalog-patient"
+            },
+            "type": "replaced-by"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Patient/example-patient-old"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "id": "example-catalog-order",
+        "status": "completed",
+        "intent": "order",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:example:test-source",
+              "code": "SOURCE-ALPHA",
+              "display": "Example source panel"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/example-catalog-patient"
+        },
+        "authoredOn": "2026-11-12T08:00:00Z"
+      },
+      "request": {
+        "method": "PUT",
+        "url": "ServiceRequest/example-catalog-order"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "example-catalog-report",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:example:test-source",
+              "code": "SOURCE-ALPHA",
+              "display": "Example source panel"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/example-catalog-patient"
+        },
+        "basedOn": [
+          {
+            "reference": "ServiceRequest/example-catalog-order"
+          }
+        ],
+        "effectiveDateTime": "2026-11-12T09:00:00Z",
+        "result": [
+          {
+            "reference": "Observation/example-catalog-result"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "DiagnosticReport/example-catalog-report"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "example-catalog-result",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:example:result-source",
+              "code": "EXAMPLE-RESULT",
+              "display": "Example source result"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/example-catalog-patient"
+        },
+        "basedOn": [
+          {
+            "reference": "ServiceRequest/example-catalog-order"
+          }
+        ],
+        "effectiveDateTime": "2026-11-01T08:00:00Z",
+        "valueQuantity": {
+          "value": 5,
+          "unit": "example units"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Observation/example-catalog-result"
+      }
+    }
+  ]
+}

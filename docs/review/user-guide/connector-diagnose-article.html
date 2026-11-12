@@ -1,0 +1,55 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>System setup</span><span>Find the failed connection check</span><span>About 10 minutes</span></div>
+<h1>Diagnose connections</h1>
+<p>Use Diagnose when a saved host connector cannot connect. It checks the settings, server name, port, login and server version in order.</p>
+<p>You need <strong>Manage connectors</strong>. Diagnosis runs from the OpenLDR server using stored credentials. It opens a test connection but does not import data.</p>
+<p>Use your own saved connection. The pictures show a real isolated Postgres connection and a deliberately absent SQL Server instance. A failed example does not prove a SQL Server login works.</p>
+<h2 id="dg-run">Diagnose a saved connection</h2>
+<p>Begin with a connection you already use, or the warehouse connector on a new installation.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Connectors</h3><p>Open <strong>Settings</strong>, then <strong>Connectors</strong>.</p>__SHOT:open:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Diagnose</h3><p>Open the host connector row dots and select <strong>Diagnose</strong>. Checks start as the sheet opens.</p>__SHOT:diagnose:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read the settings result</h3><p>Read the status and message for each step. A warning gives advice without stopping the later checks.</p>__SHOT:passed:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Read the connection results</h3><p>Check <strong>Port</strong>, <strong>Login</strong> and <strong>Server version</strong>. The local Postgres example passes all checks.</p>__SHOT:login:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Repeat when needed</h3><p>Open the diagnosis sheet dots and select <strong>Run again</strong>. This uses the currently saved settings.</p>__SHOT:again:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> A successful run ends with All checks passed. It proves the tested connection. It does not prove a particular report query, source schema or account permission.</p></div>
+<h2 id="dg-sql">Enter SQL Server settings</h2>
+<p>Ask the database operator whether you have a named instance, a fixed TCP port, a SQL login or a Windows domain account. Do not create the fictional connection unless you want an isolated failure example.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Add a host connector</h3><p>Close the diagnosis sheet. Open the Connectors page dots and choose <strong>Add connector</strong>. Enter a useful name and set Category to <strong>Host</strong>.</p>__SHOT:add:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Microsoft SQL</h3><p>Set <strong>Database type</strong> to <strong>Microsoft SQL</strong>.</p>__SHOT:sql-type:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Enter server and instance</h3><p>Enter <strong>Host</strong>. A pasted <code>SERVER\INSTANCE</code> splits into Host and Instance name when you leave the field. Use a fixed Port only when Instance name is empty.</p>__SHOT:split:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Enter database and account</h3><p>Fill <strong>Database</strong>, <strong>User</strong> and <strong>Password</strong>. For a Windows account, fill Windows domain and use the username without the domain. Leave the domain blank for a SQL login.</p>__SHOT:login-fields:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Check encryption</h3><p><strong>Encrypt</strong> starts on. Use the server operator's encryption and certificate requirements. Trust server certificate accepts a server certificate without normal certificate validation.</p>__SHOT:encryption:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Save the connector</h3><p>Open the sheet dots and choose <strong>Save</strong>.</p>__SHOT:save:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The saved connector can now be diagnosed. The screenshot example intentionally names an instance that does not exist.</p></div>
+<h2 id="dg-failure">Read and correct a failed diagnosis</h2>
+<p>Diagnosis stops at the first failed check. Later steps show as skipped, so they have no result yet.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Diagnose the saved row</h3><p>Open its row dots and choose <strong>Diagnose</strong>.</p>__SHOT:bad-diagnose:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read the first failure</h3><p>Read the failed step and correction message. This example gets no SQL Server Browser reply for its absent named instance.</p>__SHOT:browser-failure:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check which steps were skipped</h3><p>Here Port, Login and Server version were not attempted. Do not treat a skipped login as an accepted password.</p>__SHOT:skipped:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Correct the saved settings</h3><p>Close diagnosis, open row dots and choose <strong>Edit</strong>. Check Host and Instance name. If your operator supplies a fixed TCP port, clear Instance name and enter that port. Save any change, then diagnose again.</p>__SHOT:correction:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Follow the actual failed step. The correction can require a database service, firewall or name-resolution change outside OpenLDR. This preview does not claim the absent instance was repaired.</p></div>
+<h2 id="dg-phone">Read diagnosis on a phone</h2>
+<p>The same row menu opens diagnosis at phone width.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Read the check messages</h3><p>Open Diagnose, then scroll inside the sheet to read each result. Messages wrap beneath the step name.</p>__SHOT:phone:1__</section>
+<h2 id="dg-checks">What the checks mean</h2>
+<p><strong>Settings.</strong> A host is present and the port is valid. A localhost warning reminds you that Docker containers have their own loopback address.</p>
+<p><strong>Server name.</strong> The OpenLDR server resolves the name to an address. A successful lookup does not prove the database port answers.</p>
+<p><strong>SQL Server Browser.</strong> For a named SQL Server instance, UDP 1434 reports its TCP port. Ask the operator to start Browser and allow UDP, or use the actual fixed TCP port with no instance name.</p>
+<p><strong>Port.</strong> A TCP connection opens. A wrong service can still answer the port.</p>
+<p><strong>Login.</strong> The saved account opens the database. Check username, password, domain and database access when this fails.</p>
+<p><strong>Server version.</strong> The server answers a small query. This still does not prove the tables or columns required by an importer exist.</p>
+<h2 id="dg-cli">Run the same check from the CLI</h2>
+<p>Follow <a href="start-here-review.html">Start here</a> for CLI setup. From <code>openldr_ce</code>, list connectors to get the id. Diagnose exits 1 when a step fails. Add <code>--json</code> for structured results.</p>
+<pre><code>pnpm openldr connectors list
+pnpm openldr connectors diagnose &lt;id&gt;
+pnpm openldr connectors diagnose &lt;id&gt; --json</code></pre>
+<h2 id="dg-practice">Optional practice and limits</h2>
+<p>No sample data is needed. Test your existing warehouse connector first. A disposable Microsoft SQL connector with a nonexistent instance can demonstrate the Browser failure. Remove that example afterward through its row dots and confirmation.</p>
+<p>This preview exercised actual Postgres success and a real UDP timeout for an absent named instance. It did not exercise Windows authentication, a working named SQL Server instance, certificate replacement or an old TLS server.</p>
+<h2 id="dg-help">Troubleshooting</h2>
+<p><strong>The first check fails.</strong> Read that check before the skipped results. Correct the saved settings in Edit and run Diagnose again.</p>
+<p><strong>Browser times out for a named SQL Server instance.</strong> Check the server and instance names and whether SQL Server Browser is reachable. Later checks are skipped until discovery succeeds.</p>
+<p><strong>All checks pass but the importer fails.</strong> Diagnosis verifies the connection and server response. It does not prove that the account can read each required source table.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="connectors-review.html">Connectors</a> covers creation, testing and secret changes. <a href="v1-import-review.html">Import from OpenLDR v1</a> uses a database connector.</p>
+</article>

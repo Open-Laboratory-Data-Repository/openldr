@@ -1,0 +1,51 @@
+{
+  "checkedAt": "2026-11-12T15:35:34.937Z",
+  "command": "node packages/cli/dev.mjs report run r-bugfix-date-range --param from=2026-01-01 --param to=2026-11-12",
+  "results": {
+    "json": {
+      "exit": 0,
+      "rowCount": 1,
+      "rows": [
+        {
+          "start_date": "2026-01-01",
+          "end_date": "2026-11-12"
+        }
+      ]
+    },
+    "csv": {
+      "exit": 0,
+      "bytes": 42
+    },
+    "pdf": {
+      "exit": 0,
+      "bytes": 1868
+    }
+  },
+  "isolation": {
+    "databases": [
+      "guide_bugfix_internal",
+      "guide_bugfix_target"
+    ],
+    "bucket": "openldr-docs-bugfix-review",
+    "identityAdminAdapter": "none",
+    "settings": [
+      {
+        "key": "sync.enabled",
+        "value": "false"
+      },
+      {
+        "key": "update.enabled",
+        "value": "false"
+      }
+    ]
+  },
+  "finalReport": [
+    {
+      "id": "r-a7a9e222-547a-4136-844c-eefbbf0360bc",
+      "status": "draft",
+      "summary_metrics": null,
+      "chart": null,
+      "param_options": null
+    }
+  ]
+}

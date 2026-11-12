@@ -1,0 +1,1 @@
+{"dashboardSqlEnabled":false,"authEnforced":true,"version":"0.1.11","environment":"development","authCapabilities":{"identityAdmin":false,"syncClientAdmin":false},"oidc":{"mode":"oidc","issuerUrl":"http://127.0.0.1:19879/realms/docs","clientId":"openldr-web","audience":"openldr-api","resource":null,"scopes":"openid profile email"}}

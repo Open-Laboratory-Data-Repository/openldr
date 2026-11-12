@@ -1,0 +1,49 @@
+{
+  "desktop": {
+    "steps": 21,
+    "frames": 21,
+    "missingScreenshots": 0,
+    "brokenAnchors": []
+  },
+  "enlarged": {
+    "nativeWidth": 5120,
+    "blur": "blur(5.50398px)"
+  },
+  "mobile": {
+    "height": 812,
+    "viewport": 812,
+    "overflow": false
+  },
+  "navigation": [
+    "start-here",
+    "dashboard",
+    "user-preferences",
+    "terminology",
+    "facilities",
+    "test-catalog",
+    "patients",
+    "roles",
+    "connectors",
+    "connector-diagnose",
+    "workflows",
+    "activity",
+    "users",
+    "layouts",
+    "audit",
+    "setup-checks",
+    "laboratory",
+    "marketplace",
+    "plugin-sites",
+    "data-exposure",
+    "settings",
+    "report-pipeline",
+    "query",
+    "v1-import",
+    "sync",
+    "environment",
+    "upgrading",
+    "advanced-docs",
+    "auth-providers"
+  ],
+  "http": 200
+}

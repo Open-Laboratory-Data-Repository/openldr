@@ -4,6 +4,7 @@
 // badges onto several of its shots, which teach a procedure but read as a tutorial when the point
 // is simply to show what the product looks like.
 import dashboardUrl from './gallery/dashboard.png?url';
+import dashboardLightUrl from './gallery/dashboard-light.png?url';
 import reportsUrl from './gallery/reports.png?url';
 import queryUrl from './gallery/query.png?url';
 import formBuilderUrl from './gallery/form-builder.png?url';
@@ -14,6 +15,7 @@ import marketplaceUrl from './gallery/marketplace.png?url';
 
 export const PUBLIC_SCREENSHOT_NAMES = [
   'dashboard.png',
+  'dashboard-light.png',
   'reports.png',
   'query.png',
   'form-builder.png',
@@ -27,6 +29,7 @@ export type PublicScreenshotName = (typeof PUBLIC_SCREENSHOT_NAMES)[number];
 
 const screenshotModules: Record<string, string> = {
   './gallery/dashboard.png': dashboardUrl,
+  './gallery/dashboard-light.png': dashboardLightUrl,
   './gallery/reports.png': reportsUrl,
   './gallery/query.png': queryUrl,
   './gallery/form-builder.png': formBuilderUrl,

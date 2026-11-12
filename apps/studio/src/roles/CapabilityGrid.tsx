@@ -51,7 +51,9 @@ export function CapabilityGrid({ groups, selected, onChange, readOnly = false }:
                     <div key={cap.key} className="flex items-start justify-between gap-4">
                       <div>
                         <div className="text-sm font-medium">{cap.label}</div>
-                        <div className="text-xs text-muted-foreground">{cap.description}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {cap.key === 'data_exposure.manage' ? t('settings.dataExposure.description') : cap.description}
+                        </div>
                       </div>
                       <Switch
                         data-testid={capId}

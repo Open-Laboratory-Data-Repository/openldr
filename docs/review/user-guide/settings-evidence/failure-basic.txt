@@ -1,0 +1,79 @@
+OpenLDR
+Dashboard
+Reports
+Report Designer
+Query
+Workflows
+Terminology
+Facilities
+Test catalog
+Patients
+Forms
+Users
+Audit
+Activity
+Docs
+D
+dev-admin
+lab_admin
+Settings
+1
+General
+Setup checks
+Laboratory
+Notifications
+Sites
+Distributed sync
+Connectors
+Marketplace
+Roles
+Layouts
+Data Exposure
+General
+
+Application information, feature flags, and administrative actions.
+
+About
+Version
+0.1.11
+Latest
+0.1.11· up to date
+Environment
+development
+License
+Apache-2.0
+Auto update check
+Last checked 15 minutes ago
+Feature Flags
+
+Toggle optional capabilities. Changes take effect immediately.
+
+Dashboard raw SQL
+Allow authoring and running read-only SQL in dashboard widgets against the configured PostgreSQL, MySQL or SQL Server warehouse. Off by default. Approved stored queries can still run when this is off.
+Workflow listener triggers
+Run external listener triggers (Postgres LISTEN / IMAP email polling). Turning this off stops all listeners on the next reconcile.
+Publish workflow datasets
+Publish materialized workflow datasets as real tables in the Postgres warehouse so the SQL node and dashboards can query them.
+Limits & tuning
+
+Operational limits, tunable at runtime without a restart. Values are clamped to safe ranges.
+
+Dashboard SQL timeout (ms)
+Maximum execution time for dashboard builder and raw SQL queries before cancellation.
+Dashboard SQL row cap
+Raw SQL returns up to this many rows. Builder queries count database groups before further aggregation and return an error if that count exceeds this limit.
+Marketplace max payload (bytes)
+Maximum size of a plugin bundle downloaded from a remote registry.
+Danger Zone
+
+Irreversible actions on the internal database. External data and identity are never touched.
+
+Data validation
+Validation strictness for incoming lab data.
+High
+Reset dashboards
+Delete all dashboards and restore the sample.
+Clear audit log
+Empty the audit trail and workflow run history.
+Factory reset
+Wipe the entire internal database and restore factory defaults.

@@ -1,0 +1,82 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Administration</span><span>Change General settings</span><span>About 20 minutes</span></div>
+<h1>Settings</h1>
+<p>General settings shows application information, optional capabilities and runtime limits. It also contains data-validation settings and destructive maintenance actions.</p>
+<p>You need View settings to open General. Edit general settings allows numeric limits and validation changes. Manage feature flags allows optional-capability switches. Danger zone allows destructive maintenance.</p>
+<p>Use your own approved operational choices. The pictures show an isolated test installation. The destructive examples ran only against that disposable installation, after verifying its database and identity-provider ownership. No practice data is required.</p>
+<p>Use the linked pages in Settings for Laboratory, Setup checks, Connectors, Roles, Layouts and Data Exposure. This guide covers General. Read <a href="./start-here-review.html">Start here</a> for command-line setup.</p>
+<h2 id="dg-about">Read the running version and update state</h2>
+<p>Use this when reporting a problem or deciding whether to schedule an upgrade.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Settings and General</h3><p>Open your user menu at the bottom left, choose <strong>Settings</strong>, then select <strong>General</strong>.</p>__SHOT:user-menu:1____SHOT:settings-menu:1____SHOT:general-page:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read About</h3><p>Read the running <strong>Version</strong>, environment and configured services in About.</p>__SHOT:about:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read Latest</h3><p>Read <strong>Latest</strong> and the last-check time. Use available release-note and upgrade-procedure links when planning an upgrade. This page does not install updates.</p>__SHOT:update-state:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> You have the running version and the server's current update-check result.</p></div>
+<h2 id="dg-updates">Change automatic update checks</h2>
+<p>Use this when deciding whether this server should check for available releases.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Change Auto update check</h3><p>Turn <strong>Auto update check</strong> on or off in About. The change saves immediately.</p>__SHOT:update-switch:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read the resulting state</h3><p>When off, Latest says <strong>update check is off</strong>. Turning it on allows checks again. It does not upgrade the installation.</p>__SHOT:update-off:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The update-check choice is saved.</p></div>
+<h2 id="dg-flags">Enable or disable an optional capability</h2>
+<p>Use this after deciding which optional capabilities the installation should offer. Read the description before changing a switch.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Change the feature flag</h3><p>In <strong>Feature Flags</strong>, turn the required switch on or off. The example turns on <strong>Dashboard raw SQL</strong>.</p>__SHOT:flag:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the save message</h3><p>The change saves immediately. Check the <strong>Saved</strong> message. There is no separate Save button for feature flags.</p>__SHOT:flag-saved:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The new flag applies immediately. The example restored its original off state after capture.</p></div>
+<h2 id="dg-limits">Change a runtime limit</h2>
+<p>Use this when you need to tune an operational limit without restarting. Read the setting description and choose a value for your workload.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Enter the value</h3><p>In <strong>Limits & tuning</strong>, enter the intended number. The example changes <strong>Dashboard SQL row cap</strong> to <code>5000</code>.</p>__SHOT:number-value:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Leave the field to save</h3><p>Select another field or press Tab. Leaving the number field saves it. The server limits values to the accepted range.</p>__SHOT:number-saved:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check the saved value</h3><p>Reopen General when you need to confirm persistence. Read the value the server kept.</p>__SHOT:number-reopened:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The numeric limit remains saved after reopening General.</p></div>
+<h2 id="dg-validation">Change incoming-data validation</h2>
+<p>Use this when changing which incoming lab data the installation accepts. Raising strictness may reject previously accepted data. Lowering it permits more incomplete data.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Data validation</h3><p>Scroll to <strong>Danger Zone</strong> and open <strong>Data validation</strong>.</p>__SHOT:validation-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the level</h3><p>Choose Low, Medium or High as required. The example changes High to <strong>Medium</strong>.</p>__SHOT:validation-level:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read the effect</h3><p>Read the confirmation warning for the direction of your change.</p>__SHOT:validation-warning:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Type the confirmation phrase</h3><p>Enter the exact lowercase level shown in the prompt. The example types <code>medium</code>.</p>__SHOT:validation-phrase:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Apply the change</h3><p>Select <strong>Apply</strong>. Select Cancel to keep the previous level.</p>__SHOT:validation-apply:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Data validation displays the saved level.</p></div>
+__SHOT:validation-result:0__
+<h2 id="dg-reset-dashboards">Reset all dashboards to the sample</h2>
+<p>Use this only when every dashboard should be removed and the built-in sample restored. This cannot be undone.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the action dots</h3><p>In Danger Zone, select the dots beside <strong>Reset dashboards</strong>.</p>__SHOT:reset-dashboards-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Reset</h3><p>Select <strong>Reset</strong>.</p>__SHOT:reset-dashboards-menu:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read what the action removes</h3><p>Check the confirmation title and warning. Cancel if the action does not match your intent.</p>__SHOT:reset-dashboards-warning:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Type the exact phrase</h3><p>Enter <code>reset dashboards</code> exactly as shown.</p>__SHOT:reset-dashboards-phrase:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Confirm Reset</h3><p>Select <strong>Reset</strong> to perform the operation. Wait for completion.</p>__SHOT:reset-dashboards-confirm:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Every dashboard is deleted and the built-in sample is recreated.</p></div>
+__SHOT:reset-dashboards-result:0__
+<h2 id="dg-clear-audit">Clear audit events and workflow run history</h2>
+<p>Use this only when the audit trail and workflow run history should be permanently removed. This cannot be undone.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the action dots</h3><p>In Danger Zone, select the dots beside <strong>Clear audit log</strong>.</p>__SHOT:clear-audit-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Clear</h3><p>Select <strong>Clear</strong>.</p>__SHOT:clear-audit-menu:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read what the action removes</h3><p>Check the confirmation title and warning. Cancel if the action does not match your intent.</p>__SHOT:clear-audit-warning:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Type the exact phrase</h3><p>Enter <code>clear audit</code> exactly as shown.</p>__SHOT:clear-audit-phrase:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Confirm Clear</h3><p>Select <strong>Clear</strong> to perform the operation. Wait for completion.</p>__SHOT:clear-audit-confirm:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Old audit events and workflow run history are removed. The clear operation itself writes a new audit event.</p></div>
+__SHOT:clear-audit-result:0__
+<h2 id="dg-factory-reset">Restore internal factory defaults</h2>
+<p>Use this only when all internal application data should be wiped and reseeded. It removes forms, connectors, dashboards, workflows, terminology, local users, audit data and other internal records. This cannot be undone.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the action dots</h3><p>In Danger Zone, select the dots beside <strong>Factory reset</strong>.</p>__SHOT:factory-reset-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Factory reset</h3><p>Select <strong>Factory reset</strong>.</p>__SHOT:factory-reset-menu:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read what the action removes</h3><p>Check the confirmation title and warning. Cancel if the action does not match your intent.</p>__SHOT:factory-reset-warning:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Type the exact phrase</h3><p>Enter <code>factory reset</code> exactly as shown.</p>__SHOT:factory-reset-phrase:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Confirm Factory reset</h3><p>Select <strong>Factory reset</strong> to perform the operation. Wait for completion.</p>__SHOT:factory-reset-confirm:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The internal database is wiped and factory defaults are reseeded. External target data and identity-provider accounts are outside this reset.</p></div>
+__SHOT:factory-reset-result:0__
+<h2 id="dg-phone">Read General settings on a phone</h2>
+<p>Use the same General page on a phone. The page scrolls vertically.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Read About</h3><p>Read the version and update information near the top.</p>__SHOT:phone-about:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Scroll to the limits</h3><p>Read the field description before changing a numeric limit.</p>__SHOT:phone-limit:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read Danger Zone carefully</h3><p>Scroll to the action and read its description before opening the dots.</p>__SHOT:phone-danger:3__</section>
+<h2 id="dg-practice">Optional practice</h2>
+<p>Use a disposable test installation. Change one reversible flag or numeric limit, confirm it saved, then restore it. Do not practise destructive maintenance against staff data.</p>
+<h2 id="dg-limits-section">Limits</h2>
+<p>Update checking does not install a release. Feature switches save immediately. Numeric fields save when you leave them. Destructive actions affect the internal database and cannot be undone through this page.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>A control is absent.</strong> Check the separate permission for feature flags, general edits or Danger Zone actions.</p>
+<p><strong>A numeric value changed after saving.</strong> The server clamps it to the accepted range. Read the saved value.</p>
+<p><strong>A confirmation stays disabled.</strong> Type the exact phrase displayed by the prompt.</p>
+<p><strong>Latest cannot confirm an update.</strong> Read the displayed last-check error and resolve the server's outbound connection before relying on the result.</p>
+<h2 id="dg-related">Related guides</h2>
+<p>Read <a href="./setup-checks-review.html">Setup checks</a> for readiness and <a href="./laboratory-review.html">Laboratory</a> for issuing-lab details. Read <a href="./audit-review.html">Audit</a> to inspect recorded administration actions.</p>
+</article>

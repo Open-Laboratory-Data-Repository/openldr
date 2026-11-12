@@ -1,0 +1,60 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Administration</span><span>Choose sidebar pages and a start page</span><span>About 15 minutes</span></div>
+<h1>Layouts</h1>
+<p>A layout is a named sidebar. Administrators choose its pages and optional start page, then make it a default for selected roles. Each person can choose another layout through their user menu.</p>
+<p>A layout only hides pages. It never grants permission to open them. Docs remains available. Your role still controls access.</p>
+<p>Use page selections that suit your staff. The pictures use a temporary Documentation review layout in a test installation. No sample data is required.</p>
+<p>Edit general settings allows creating, editing and deleting layouts. View roles allows reading the role choices for defaults. Anyone signed in can choose an available layout.</p>
+<h2 id="dg-create">Create a sidebar for a team</h2>
+<p>Use this when a team needs a shorter sidebar and a suitable first page. Choose pages based on their work.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Settings and Layouts</h3><p>Open your user menu at the bottom left, choose <strong>Settings</strong>, then select <strong>Layouts</strong>.</p>__SHOT:user-menu:1____SHOT:settings-menu:1____SHOT:layouts-page:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose New layout</h3><p>Open the page dots at the top right and select <strong>New layout</strong>.</p>__SHOT:page-actions:2____SHOT:new-layout:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Name the layout</h3><p>Enter a clear <strong>Name</strong>. The example uses <code>Documentation review</code>.</p>__SHOT:name:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose the pages</h3><p>Select the pages this sidebar should show. Choose at least one. Docs always remains available and is not a checkbox.</p>__SHOT:pages:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Choose the start page</h3><p>Open <strong>Start page</strong> and choose a selected page. The example chooses Reports. The default option is Dashboard.</p>__SHOT:start-page:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Choose any role defaults</h3><p>Under <strong>Default for roles</strong>, select the roles that should use this layout by default. Leave them clear if people will choose it themselves.</p>__SHOT:role-default:6__</section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Save the layout</h3><p>Open the editor dots at the top right and select <strong>Save</strong>.</p>__SHOT:sheet-actions:7____SHOT:save-layout:7__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The table shows the saved layout, page count, start page and role defaults.</p></div>
+__SHOT:created-result:0__
+<h2 id="dg-edit">Change an existing layout</h2>
+<p>Use this when a team needs a different set of pages. Users who selected the layout receive its saved changes.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the row actions</h3><p>Find the layout and select its row dots.</p>__SHOT:row-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Edit</h3><p>Select <strong>Edit</strong>.</p>__SHOT:edit-layout:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Change its pages</h3><p>Select or clear page checkboxes. The example adds <strong>Activity</strong>. Removing the selected start page clears that choice.</p>__SHOT:edit-page:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Save the changes</h3><p>Open the editor dots and select <strong>Save</strong>.</p>__SHOT:edit-save:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The table reflects the saved page selection.</p></div>
+__SHOT:edited-result:0__
+<h2 id="dg-pick">Choose a layout for yourself</h2>
+<p>Use this when you prefer another available sidebar. Your personal choice overrides a role default.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open your user menu</h3><p>Select your user menu at the bottom left.</p>__SHOT:pick-user-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Layout</h3><p>Open <strong>Layout</strong>. This menu appears when at least one named layout exists.</p>__SHOT:pick-layout-menu:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose the named layout</h3><p>Select the layout you want. The example chooses <strong>Documentation review</strong>.</p>__SHOT:pick-layout:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The sidebar changes to the layout pages that your role can open. Docs stays visible. A personal Start page choice can override the layout start page.</p></div>
+__SHOT:picked-result:0__
+<h2 id="dg-restore">Return to the role default or full sidebar</h2>
+<p>Use this when you want the administrator's role default again, or all pages your role permits.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Role default</h3><p>Open your user menu, then Layout. Select <strong>Role default</strong> to clear your personal layout choice. The menu names the current default in brackets.</p>__SHOT:role-default-option:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Full sidebar when needed</h3><p>To show every permitted page, open the same Layout menu and select <strong>Full sidebar</strong>.</p>__SHOT:full-sidebar:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The full sidebar returns. Permissions still decide which pages appear.</p></div>
+__SHOT:full-result:0__
+<h2 id="dg-delete">Remove an unused layout</h2>
+<p>Use this when a named sidebar is no longer needed. Check the affected role defaults before deleting it.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Delete</h3><p>Open the correct layout's row dots and select <strong>Delete</strong>.</p>__SHOT:delete-layout:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the fallback</h3><p>Check the layout name. People who chose it return to their role default. Roles using it lose that default. Select <strong>Delete layout</strong> to confirm.</p>__SHOT:delete-confirm:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The layout disappears from the list.</p></div>
+__SHOT:deleted-result:0__
+<h2 id="dg-phone">Edit layouts on a phone</h2>
+<p>Use the same Layouts page on a phone. The Settings section list scrolls horizontally.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Layouts</h3><p>Select <strong>Layouts</strong> in the Settings section list.</p>__SHOT:phone-layouts:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the editor</h3><p>Open the layout row dots and choose Edit. Scroll the sheet to reach page and role choices.</p>__SHOT:phone-editor:2__</section>
+<h2 id="dg-practice">Optional practice</h2>
+<p>In a test installation, create <code>Documentation review</code> with Dashboard, Reports and Forms. Choose Reports as its start page. Try it through the user menu, restore Full sidebar, then delete the test layout.</p>
+<h2 id="dg-limits">Limits</h2>
+<p>Layouts do not grant permissions or change the underlying data. Sidebar pages keep their standard order. Personal layout and start-page choices can override a role default.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>A selected page does not appear.</strong> Check whether your role can open it. Adding a page to a layout does not grant access.</p>
+<p><strong>The expected first page does not open.</strong> Check your personal Start page choice in the user menu.</p>
+<p><strong>Role defaults cannot be read.</strong> The editor keeps existing defaults. Ask an administrator with View roles to review them.</p>
+<h2 id="dg-related">Related guides</h2>
+<p>Read <a href="./roles-review.html">Roles</a> for page permissions. Read <a href="./preferences-review.html">User preferences</a> for personal choices. Read <a href="./start-here-review.html">Start here</a> for command-line setup.</p>
+</article>

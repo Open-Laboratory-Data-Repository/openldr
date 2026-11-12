@@ -1,0 +1,357 @@
+{
+  "title": "Users",
+  "meta": [
+    "Administration",
+    "Manage accounts and assign a role",
+    "About 20 minutes"
+  ],
+  "intro": [
+    "Use Users to find accounts, update their profiles, assign a role and control access. Roles define the permissions an account receives. The Users sheet selects one role per person.",
+    "Use your own staff accounts and approved access decisions. The pictures use a fictional account in an isolated test installation. No sample data is required.",
+    "View users allows the directory. Manage users allows account creation, profile changes and enabling or disabling access. Manage roles allows role assignment. Reset passwords and Force logout allow their respective security actions.",
+    "Creating accounts, editing provider profiles, resetting passwords and ending provider sessions require a configured identity administrator. When it is unavailable, the page tells you to contact your identity provider administrator. OpenLDR role and account-access controls remain available.",
+    "For installation and command-line setup, read <a href=\"./start-here-review.html\">Start here</a>. To define role permissions, read <a href=\"./roles-review.html\">Roles</a>."
+  ],
+  "tasks": [
+    {
+      "id": "create",
+      "title": "Create an operator account",
+      "intro": [
+        "Use this when a person needs their own sign-in. Check the required role before creating the account."
+      ],
+      "steps": [
+        [
+          "Open Users",
+          "Select <strong>Users</strong> in the main menu.",
+          [
+            "open-users"
+          ]
+        ],
+        [
+          "Choose New user",
+          "Open the page dots above the directory and select <strong>New user</strong>. If it is unavailable, contact your identity provider administrator.",
+          [
+            "page-actions",
+            "new-user"
+          ]
+        ],
+        [
+          "Enter the username",
+          "Enter the person's sign-in username. The example uses <code>documentation.operator</code>.",
+          [
+            "username"
+          ]
+        ],
+        [
+          "Choose an initial password",
+          "Enter an initial <strong>Password</strong>, or leave it blank and arrange activation through your identity provider. An initial password requires a change at the next sign-in. Share account credentials through your approved process.",
+          [
+            "password"
+          ]
+        ],
+        [
+          "Confirm the password",
+          "If you entered a password, enter it again in <strong>Confirm password</strong>.",
+          [
+            "confirm-password"
+          ]
+        ],
+        [
+          "Choose the role",
+          "Select the role that grants the actions this person needs. New accounts default to <strong>Lab Technician</strong>.",
+          [
+            "choose-role"
+          ]
+        ],
+        [
+          "Complete the profile",
+          "Fill the fields in your published Users form. The pictured form asks for first name, last name and email. Your form may contain different fields. A published form is optional for account creation.",
+          [
+            "profile"
+          ]
+        ],
+        [
+          "Create the account",
+          "Open the sheet dots and select <strong>Create</strong>. If role assignment fails after saving the account, choose a valid role and retry in the same sheet.",
+          [
+            "sheet-actions",
+            "create-user"
+          ]
+        ]
+      ],
+      "result": "The sheet closes and the new account appears Active in the directory.",
+      "resultShots": [
+        "created-result"
+      ]
+    },
+    {
+      "id": "edit",
+      "title": "Edit a profile or assign another role",
+      "intro": [
+        "Use this when staff details or responsibilities change. Changing the role changes the permissions the person receives."
+      ],
+      "steps": [
+        [
+          "Find the account",
+          "Search by username, name or email. Search applies to the whole directory.",
+          [
+            "search-user"
+          ]
+        ],
+        [
+          "Open its actions",
+          "Select the dots for the correct account.",
+          [
+            "row-actions"
+          ]
+        ],
+        [
+          "Choose Edit",
+          "Select <strong>Edit</strong>. Selecting the row opens the same sheet. With identity administration unavailable, this menu reads <strong>Edit role</strong>.",
+          [
+            "edit-user"
+          ]
+        ],
+        [
+          "Update the profile",
+          "Edit the fields provided by your Users form. Username cannot be changed here.",
+          [
+            "edit-profile"
+          ]
+        ],
+        [
+          "Choose the role",
+          "Open <strong>Role</strong> and select the required role. The example chooses <strong>System Auditor</strong>.",
+          [
+            "change-role"
+          ]
+        ],
+        [
+          "Save the account",
+          "Open the sheet dots and select <strong>Save</strong>.",
+          [
+            "save-user"
+          ]
+        ]
+      ],
+      "result": "The sheet closes and the directory shows the saved profile. Reopen the account to inspect its saved role.",
+      "resultShots": [
+        "edited-result"
+      ]
+    },
+    {
+      "id": "disable",
+      "title": "Disable account access",
+      "intro": [
+        "Use this when someone should no longer sign in. You cannot disable your own account through its row menu."
+      ],
+      "steps": [
+        [
+          "Choose Disable",
+          "Find the account. Open its row dots and select <strong>Disable</strong>.",
+          [
+            "disable-menu"
+          ]
+        ],
+        [
+          "Confirm the account",
+          "Check the username in the confirmation. Select <strong>Disable</strong> to continue.",
+          [
+            "disable-confirm"
+          ]
+        ],
+        [
+          "Open Status",
+          "Disabled accounts disappear from the default Active list. Open <strong>Status</strong>.",
+          [
+            "status-filter"
+          ]
+        ],
+        [
+          "Choose Disabled",
+          "Select <strong>Disabled</strong>.",
+          [
+            "disabled-option"
+          ]
+        ]
+      ],
+      "result": "The account appears with Disabled status. Disabling access keeps the account and profile.",
+      "resultShots": [
+        "disabled-result"
+      ]
+    },
+    {
+      "id": "enable",
+      "title": "Restore account access",
+      "intro": [
+        "Use this when a disabled person should be able to sign in again."
+      ],
+      "steps": [
+        [
+          "Choose Enable",
+          "Find the account using Status set to Disabled or All statuses. Open its row dots and select <strong>Enable</strong>.",
+          [
+            "enable-menu"
+          ]
+        ],
+        [
+          "Confirm the account",
+          "Check the username, then select <strong>Enable</strong>.",
+          [
+            "enable-confirm"
+          ]
+        ],
+        [
+          "Return to Active",
+          "Open <strong>Status</strong> and choose <strong>Active</strong>.",
+          [
+            "active-option"
+          ]
+        ]
+      ],
+      "result": "The account returns to the Active list.",
+      "resultShots": [
+        "enabled-result"
+      ]
+    },
+    {
+      "id": "password",
+      "title": "Reset a password",
+      "intro": [
+        "Use this when an account needs a replacement password. This requires identity administration and Reset passwords."
+      ],
+      "steps": [
+        [
+          "Open Reset password",
+          "Find the account. Open its row dots and select <strong>Reset password</strong>.",
+          [
+            "reset-menu"
+          ]
+        ],
+        [
+          "Enter a new password",
+          "Enter <strong>New password</strong>. <strong>Generate</strong> creates a password and fills both fields. The eye reveals it and Copy copies it.",
+          [
+            "reset-new-password"
+          ]
+        ],
+        [
+          "Confirm the new password",
+          "Enter the same password in <strong>Confirm password</strong>. Generate has already filled this for you.",
+          [
+            "reset-confirm-password"
+          ]
+        ],
+        [
+          "Choose whether it is temporary",
+          "Keep <strong>Require password change at next sign-in</strong> selected for a temporary password. Clear it only when the person should use this password directly.",
+          [
+            "reset-change"
+          ]
+        ],
+        [
+          "Reset the password",
+          "Select <strong>Reset password</strong>. Share the password securely using your approved process.",
+          [
+            "reset-submit"
+          ]
+        ]
+      ],
+      "result": "The page confirms the password reset. With the default temporary option, the person must change it at their next sign-in.",
+      "resultShots": [
+        "reset-result"
+      ]
+    },
+    {
+      "id": "logout",
+      "title": "End a user's provider sessions",
+      "intro": [
+        "Use this when existing provider sessions should end. This requires identity administration and Force logout."
+      ],
+      "steps": [
+        [
+          "Choose Force sign-out",
+          "Find the account. Open its row dots and select <strong>Force sign-out</strong>. You cannot use this action on yourself here.",
+          [
+            "logout-menu"
+          ]
+        ],
+        [
+          "Confirm the account",
+          "Check the username and select <strong>Force sign-out</strong>.",
+          [
+            "logout-confirm"
+          ]
+        ]
+      ],
+      "result": "The page confirms that all sessions were signed out. This action does not disable the account.",
+      "resultShots": [
+        "logout-result"
+      ]
+    },
+    {
+      "id": "phone",
+      "title": "Use Users on a phone",
+      "intro": [
+        "Use the same directory and account sheet on a phone. Wide columns can require horizontal scrolling."
+      ],
+      "steps": [
+        [
+          "Find the account",
+          "Search by username, name or email.",
+          [
+            "phone-search"
+          ]
+        ],
+        [
+          "Open the account",
+          "Select its row. Scroll the User sheet to read its profile and role. Select <strong>Close</strong> at the top right to return.",
+          [
+            "phone-profile"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "email",
+      "title": "Send a reset email when mail is configured",
+      "paragraphs": [
+        "The account row dots also offer <strong>Send reset email</strong>. It asks the identity provider to send the account a reset link. Check the email address and your provider's outgoing mail configuration first. This preview did not send email."
+      ]
+    },
+    {
+      "id": "practice",
+      "title": "Optional practice",
+      "paragraphs": [
+        "Use a test installation and a fictional operator. Follow the account tasks using your own test username and example.invalid email address. Do not test disable, password reset or force sign-out on another person's account without approval."
+      ]
+    },
+    {
+      "id": "limits",
+      "title": "Limits",
+      "paragraphs": [
+        "Users has no delete-account action. Disable access when an account should stop signing in. The fields below Role depend on your published Users form. OpenLDR cannot configure outgoing provider email here."
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>New user or password actions are missing.</strong> Read the notice above the directory. Ask your identity provider administrator to configure account administration.",
+        "<strong>The account disappears after a status change.</strong> Change Status to Active, Disabled or All statuses to find it again.",
+        "<strong>The account saved but role assignment failed.</strong> Keep the sheet open, choose a valid role, then save again. Do not remove the last person able to manage roles."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "Read <a href=\"./roles-review.html\">Roles</a> to define permissions. Read <a href=\"./start-here-review.html\">Start here</a> for installation and command-line setup."
+      ]
+    }
+  ]
+}

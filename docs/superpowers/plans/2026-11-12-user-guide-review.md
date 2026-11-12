@@ -46,31 +46,31 @@ Save command output and limits. Commit and push the section before moving on.
 
 - [x] Test catalog
 - [x] Patients
-- [ ] Forms
-- [ ] Workflows
-- [ ] Reports
-- [ ] Activity
-- [ ] Scheduled reports with workflows
-- [ ] Custom Queries
-- [ ] Report Designer
-- [ ] Layouts
-- [ ] Users and Roles
+- [x] Forms
+- [x] Workflows
+- [x] Reports
+- [x] Activity
+- [x] Scheduled reports with workflows
+- [x] Custom Queries
+- [x] Report Designer
+- [x] Layouts
+- [x] Users and Roles
 - [x] Roles
-- [ ] Audit
-- [ ] Settings
-- [ ] Setup checks
-- [ ] Laboratory
-- [ ] Data exposure
-- [ ] Distributed Sync
-- [ ] Connectors
-- [ ] Connect to SQL Server and diagnose a connection
-- [ ] Import from OpenLDR v1
-- [ ] Marketplace
-- [ ] Plugin cards and side panels
-- [ ] Authentication providers
-- [ ] Environment Variables
-- [ ] Planned upgrades
-- [ ] Deployment & Developer Docs
+- [x] Audit
+- [x] Settings
+- [x] Setup checks
+- [x] Laboratory
+- [x] Data exposure
+- [x] Distributed Sync
+- [x] Connectors
+- [x] Connect to SQL Server and diagnose a connection
+- [x] Import from OpenLDR v1
+- [x] Marketplace
+- [x] Plugin cards and side panels
+- [x] Authentication providers
+- [x] Environment Variables
+- [x] Planned upgrades
+- [x] Deployment & Developer Docs
 
 ## Recovery
 
@@ -95,3 +95,17 @@ No agent edits published app code or pushes. This replaces native-only execution
 - Root retains Forms on API3006, Studio5186, PostgreSQL15439.
 
 Capture PNGs and manifests now use flush-to-disk and atomic replacement. Once-only operation proofs use durableJson.
+
+## Publication approved
+
+The operator approved publishing all remaining reviewed guides on main.
+Use a worktree for isolation, merge and push, then explain the observed app bugs.
+The published Markdown becomes the editing source. Keep original evidence as an archive.
+
+- [x] Create codex/publish-user-guides in a managed worktree and verify the baseline.
+- [x] Copy the approved native images, framing and optional downloads into production paths.
+- [x] Publish the 27 guides in English, French and Portuguese.
+- [x] Verify translated links, code examples, native assets and the actual Studio viewer.
+- [x] Run docs tests, typechecks and builds.
+- [x] Merge main, generate its changelog, push and compare remote HEAD.
+- [x] Explain reproduced bugs and source-backed wording inconsistencies without changing app behavior.

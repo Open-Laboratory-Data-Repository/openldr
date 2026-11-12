@@ -1,0 +1,27 @@
+{
+  "workflows": [
+    {
+      "id": "wf_mwdm73ch_j7nrq2",
+      "name": "Build request summary",
+      "enabled": false,
+      "actions": [
+        "manual",
+        "sql-query",
+        "materialize-dataset",
+        "schedule"
+      ]
+    },
+    {
+      "id": "wf_mwdm7gxs_tlfvh0",
+      "name": "Create summary workbook",
+      "enabled": true,
+      "actions": [
+        "manual",
+        "load-dataset",
+        "excel-template"
+      ]
+    }
+  ],
+  "noEmailNodeSaved": true,
+  "scheduledReviewWorkflowDisabled": true
+}

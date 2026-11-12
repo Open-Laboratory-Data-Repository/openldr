@@ -1,118 +1,271 @@
-# Utilisateurs et rôles
+# Utilisateurs
 
-**Utilisateurs** liste les personnes qui peuvent se connecter, leur statut et leur rôle. Les administrateurs s'en servent pour ajouter des personnes, donner un rôle à chacune, et activer ou désactiver un accès.
+Utilisez Users pour trouver des comptes, modifier leurs profils, attribuer un rôle et contrôler les accès. Les rôles définissent les droits du compte. Le panneau Users sélectionne un rôle par personne.
 
-La connexion elle-même est gérée par le fournisseur d'identité, en général Keycloak. OpenLDR décide de ce qu'une personne connectée peut faire, par son rôle. Les rôles sont décrits dans [Rôles](/docs/roles).
+Utilisez vos comptes de personnel et vos décisions d'accès approuvées. Les images utilisent un compte fictif sur une installation de test isolée. Aucun jeu de données n'est nécessaire.
 
-Ce guide prend environ 15 minutes. Sélectionnez une image pour l'agrandir.
+View users donne accès à l'annuaire. Manage users permet de créer des comptes, modifier les profils et activer ou désactiver l'accès. Manage roles permet d'attribuer les rôles. Reset passwords et Force logout permettent les actions de sécurité correspondantes.
 
-![Utilisateurs : les comptes du fournisseur d'identité, avec recherche, statut et colonnes.](users-tour.png)
+Créer des comptes, modifier les profils du fournisseur, réinitialiser les mots de passe et terminer les sessions du fournisseur exige une administration d'identité configurée. Sinon, la page demande de contacter l'administrateur du fournisseur d'identité. Les contrôles de rôle et d'accès OpenLDR restent disponibles. Avec la connexion propre à OpenLDR, ces actions sont toujours disponibles. Voir [Connexion et mots de passe](/docs/sign-in).
 
-## Qui peut faire quoi
+Pour l'installation et la ligne de commande, lisez [Commencer ici](/docs/start-here). Pour définir les droits des rôles, lisez [Rôles](/docs/roles).
 
-Les noms des autorisations s'affichent en anglais.
+## Créer un compte opérateur
 
-| Autorisation | Ce qu'elle permet |
-| --- | --- |
-| View users | Ouvrir **Utilisateurs** et voir les comptes. |
-| Manage users | Créer, modifier, activer et désactiver des comptes. |
-| Reset passwords | Réinitialiser un mot de passe ou envoyer un e-mail de réinitialisation. |
-| Force logout | Fermer toutes les sessions actives d'une personne. |
-| Manage roles | Nécessaire aussi pour enregistrer un rôle sur un utilisateur. |
+Effectuez cette tâche lorsqu'une personne a besoin de son propre accès. Vérifiez le rôle requis avant de créer le compte.
 
-L'administrateur les a toutes.
+### 1. Ouvrir Users
 
-## La liste
+Sélectionnez **Users** dans le menu principal.
 
-1. Ouvrez **Utilisateurs**. La liste commence par les comptes actifs.
-2. Tapez dans **Rechercher un identifiant, nom ou e-mail**. La recherche porte sur tout l'annuaire, pas seulement la page affichée.
-3. **Statut** passe des comptes **Actif** aux comptes désactivés, ou à **Tous les statuts**.
-4. **Colonnes** choisit ce que la liste affiche.
+![Sélectionnez Users dans le menu principal.](users-guide-open-users.png)
 
-La liste suit l'ordre du fournisseur d'identité. Chaque page contient au plus 100 comptes. Le bas de page montre la plage affichée sans total, comme **1–2 (total inconnu)**, car le fournisseur n'en donne pas. Utilisez **Suivant** pour la suite. Les filtres et le tri par colonne ne sont pas disponibles, car le fournisseur ne les gère pas. Des comptes ajoutés ou retirés pendant que vous paginez peuvent décaler les pages.
+### 2. Choisir New user
 
-Le menu à trois points en haut à droite a **Nouvel utilisateur** et **Actualiser**.
+Ouvrez les points de la page au-dessus de l'annuaire et sélectionnez **New user**. Si l'action est indisponible, contactez l'administrateur du fournisseur d'identité.
 
-## Exemple 1 : donner un rôle à quelqu'un
+![Ouvrez le menu à points de Users.](users-guide-page-actions.png)
 
-![Le menu d'une ligne : Modifier, Désactiver, Réinitialiser le mot de passe, Envoyer un e-mail de réinitialisation, Forcer la déconnexion.](users-row-menu.png)
+![Choisissez New user.](users-guide-new-user.png)
 
-1. Sur la ligne de la personne, ouvrez le menu à trois points.
-2. Sélectionnez **Modifier**. La fiche **Modifier l'utilisateur** s'ouvre.
+### 3. Saisir le nom d'utilisateur
 
-![La fiche Modifier l'utilisateur : rôle, prénom, nom et e-mail.](users-edit-sheet.png)
+Saisissez le nom de connexion de la personne. L'exemple utilise `documentation.operator`.
 
-3. Attendez le chargement de **Rôle**, puis choisissez un rôle. Chaque personne a un seul rôle. En choisir un autre le remplace.
-4. Changez **Prénom**, **Nom de famille** ou **E-mail** si besoin.
-5. Ouvrez le menu à trois points de la fiche et enregistrez.
-6. Vérifiez le message de réussite. Rouvrez la personne pour voir le rôle enregistré.
+![Saisissez le nom d'utilisateur du compte.](users-guide-username.png)
 
-Si la fiche affiche une erreur d'attribution de rôle, elle reste ouverte. Corrigez l'erreur avant de considérer le changement comme fait.
+### 4. Choisir un mot de passe initial
 
-Choisissez le rôle qui a le moins de capacités tout en permettant à la personne de travailler. Si aucun rôle ne convient, créez-en un d'abord. Voir [Rôles, exemple 1](/docs/roles#exemple-1-creer-un-role-en-lecture-seule).
+Saisissez un **Password** initial, ou laissez-le vide et organisez l'activation via votre fournisseur d'identité. Un mot de passe initial impose un changement à la prochaine connexion. Transmettez les identifiants selon votre procédure approuvée. Avec la connexion propre à OpenLDR, il n'y a pas de fournisseur. Un compte créé sans mot de passe ne peut pas se connecter tant que vous n'avez pas réinitialisé son mot de passe.
 
-## Exemple 2 : ajouter une personne
+![Saisissez un mot de passe initial ou laissez-le vide et organisez l'activation via le fournisseur.](users-guide-password.png)
 
-1. Ouvrez le menu à trois points en haut à droite et sélectionnez **Nouvel utilisateur**.
-2. Remplissez l'identifiant, le nom et l'e-mail.
-3. Choisissez un rôle.
-4. Enregistrez, et vérifiez le message de réussite.
+### 5. Confirmer le mot de passe
 
-Un nouveau compte sans rôle ne peut rien faire. Donnez-lui toujours un rôle.
+Si vous avez saisi un mot de passe, répétez-le dans **Confirm password**.
 
-## Désactiver ou activer un accès
+![Saisissez de nouveau le même mot de passe initial.](users-guide-confirm-password.png)
 
-Ouvrez le menu de la ligne et sélectionnez **Désactiver**, ou **Activer** sur un compte désactivé.
+### 6. Choisir le rôle
 
-- La désactivation écrit d'abord un blocage local dans OpenLDR, puis met à jour le fournisseur d'identité.
-- La requête suivante de la personne renvoie `403 account disabled`, même avec un jeton émis avant. Un écran déjà ouvert dans son navigateur peut rester visible.
-- Les comptes qui ne se sont jamais connectés reçoivent aussi le blocage local.
-- L'activation met d'abord à jour le fournisseur, puis lève le blocage local.
-- Si une étape échoue, l'action signale une erreur. Une désactivation ratée peut laisser le fournisseur actif alors qu'OpenLDR bloque l'accès. Une activation ratée peut laisser le fournisseur actif alors que le blocage local reste. Réparez la connexion et refaites la même action.
-- Si un autre changement de statut de ce compte est en cours, la réponse est `409`. Attendez et réessayez. C'est aussi le cas quand Studio et la ligne de commande changent le même compte en même temps.
+Sélectionnez le rôle autorisant les actions nécessaires à cette personne. Les nouveaux comptes ont **Lab Technician** par défaut.
 
-Le journal d'audit note `user.status` en cas de réussite et `user.status.failed` en cas d'échec.
+![Choisissez le rôle adapté. L'exemple utilise Lab Technician.](users-guide-choose-role.png)
 
-## Mots de passe et sessions
+### 7. Compléter le profil
 
-- **Réinitialiser le mot de passe** donne un nouveau mot de passe à la personne.
-- **Envoyer un e-mail de réinitialisation** lui envoie un lien de réinitialisation.
-- **Forcer la déconnexion** ferme toutes ses sessions d'un coup.
+Remplissez les champs de votre formulaire Users publié. Le formulaire illustré demande le prénom, le nom et l'adresse électronique. Le vôtre peut proposer d'autres champs. Un formulaire publié est facultatif pour créer un compte.
 
-Ces actions dépendent du fournisseur d'identité. Elles peuvent manquer pour des comptes qu'il ne laisse pas gérer par OpenLDR.
+![Complétez le formulaire Users publié. Ce formulaire de test demande le nom et l'adresse électronique.](users-guide-profile.png)
 
-## Sur un téléphone
+### 8. Créer le compte
 
-La liste des utilisateurs marche sur un téléphone.
+Ouvrez les points du panneau et sélectionnez **Create**. Si l'attribution du rôle échoue après l'enregistrement du compte, choisissez un rôle valide et réessayez dans le même panneau.
 
-![Utilisateurs sur un téléphone.](users-phone.png)
+![Ouvrez les points du panneau New user.](users-guide-sheet-actions.png)
 
-## En ligne de commande
+![Choisissez Create pour enregistrer le compte et le rôle.](users-guide-create-user.png)
 
-```bash
-./openldr users list
-./openldr user deactivate <local-id>
-./openldr user activate <local-id>
-./openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
-```
+**Résultat attendu :** le panneau se ferme et le nouveau compte apparaît Active dans l'annuaire.
 
-- `users list` liste les comptes locaux et leurs identifiants locaux.
-- `deactivate` et `activate` mettent à jour les deux systèmes pour un compte lié, par son identifiant chez le fournisseur. Un compte créé seulement dans OpenLDR change localement. Le journal d'audit nomme l'auteur `cli`.
-- `directory-list` lit l'annuaire du fournisseur. Son JSON contient `rows`, `offset`, `limit`, `total: null` et `hasMore`. Ajoutez `limit` à `offset` tant que `hasMore` est vrai. Omettez `--enabled` pour les deux statuts.
+![Le compte apparaît Active avec son nom et son adresse électronique.](users-guide-created-result.png)
 
-Quand l'administration du fournisseur n'est pas configurée, la liste montre les comptes locaux. La recherche locale trouve l'identifiant, le nom affiché et l'e-mail n'importe où dans le texte, et les résultats sont triés par identifiant.
+## Modifier un profil ou attribuer un autre rôle
 
-## Dépannage
+Effectuez cette tâche lorsque les coordonnées ou responsabilités changent. Changer le rôle change les droits accordés à la personne.
 
-- **Accès refusé.** Le rôle de la personne n'a pas la capacité demandée par la page ou l'action.
-- **Une page manque dans le menu de quelqu'un.** Son rôle ne la comprend pas.
-- **Les actions de réinitialisation manquent.** Le compte est peut-être géré par le fournisseur d'identité.
-- **Une personne désactivée voit encore un ancien écran.** Le contenu déjà chargé reste. Sa requête suivante est bloquée.
-- **Quelqu'un garde son ancien accès après un changement de rôle.** Demandez-lui de se déconnecter puis de se reconnecter, ou attendez que sa session se renouvelle.
-- **Un nouveau compte ne peut rien faire.** Il n'a pas encore de rôle.
+### 1. Trouver le compte
+
+Recherchez par nom d'utilisateur, nom ou adresse électronique. La recherche couvre tout l'annuaire.
+
+![Recherchez dans tout l'annuaire par nom d'utilisateur, nom ou adresse électronique.](users-guide-search-user.png)
+
+### 2. Ouvrir ses actions
+
+Sélectionnez les points du bon compte.
+
+![Ouvrez les points du bon utilisateur.](users-guide-row-actions.png)
+
+### 3. Choisir Edit
+
+Sélectionnez **Edit**. Sélectionner la ligne ouvre le même panneau. Sans administration d'identité disponible, le menu affiche **Edit role**.
+
+![Choisissez Edit pour ouvrir le profil et le rôle.](users-guide-edit-user.png)
+
+### 4. Modifier le profil
+
+Modifiez les champs fournis par votre formulaire Users. Le nom d'utilisateur ne peut pas être changé ici.
+
+![Modifiez les champs de profil fournis par votre formulaire Users.](users-guide-edit-profile.png)
+
+### 5. Choisir le rôle
+
+Ouvrez **Role** et sélectionnez le rôle requis. L'exemple choisit **System Auditor**.
+
+![Choisissez un autre rôle. L'exemple passe à System Auditor.](users-guide-change-role.png)
+
+### 6. Enregistrer le compte
+
+Ouvrez les points du panneau et sélectionnez **Save**.
+
+![Choisissez Save dans les points du panneau.](users-guide-save-user.png)
+
+**Résultat attendu :** le panneau se ferme et l'annuaire montre le profil enregistré. Rouvrez le compte pour consulter son rôle enregistré.
+
+![Le profil enregistré apparaît dans le tableau Users.](users-guide-edited-result.png)
+
+## Désactiver l'accès d'un compte
+
+Effectuez cette tâche lorsqu'une personne ne doit plus se connecter. Vous ne pouvez pas désactiver votre propre compte par son menu de ligne.
+
+### 1. Choisir Disable
+
+Trouvez le compte. Ouvrez les points de sa ligne et sélectionnez **Disable**.
+
+![Choisissez Disable pour le bon utilisateur.](users-guide-disable-menu.png)
+
+### 2. Confirmer le compte
+
+Vérifiez le nom d'utilisateur dans la confirmation. Sélectionnez **Disable** pour continuer.
+
+![Vérifiez le nom du compte avant de sélectionner Disable.](users-guide-disable-confirm.png)
+
+### 3. Ouvrir Status
+
+Les comptes désactivés disparaissent de la liste Active par défaut. Ouvrez **Status**.
+
+![Utilisez Status pour trouver un compte désactivé.](users-guide-status-filter.png)
+
+### 4. Choisir Disabled
+
+Sélectionnez **Disabled**.
+
+![Choisissez Disabled.](users-guide-disabled-option.png)
+
+**Résultat attendu :** le compte apparaît avec le statut Disabled. La désactivation de l'accès conserve le compte et son profil.
+
+![Le compte apparaît avec le statut Disabled.](users-guide-disabled-result.png)
+
+## Rétablir l'accès d'un compte
+
+Effectuez cette tâche lorsqu'une personne désactivée doit pouvoir se reconnecter.
+
+### 1. Choisir Enable
+
+Trouvez le compte avec Status réglé sur Disabled ou All statuses. Ouvrez les points de sa ligne et sélectionnez **Enable**.
+
+![Choisissez Enable pour rétablir l'accès du compte.](users-guide-enable-menu.png)
+
+### 2. Confirmer le compte
+
+Vérifiez le nom d'utilisateur, puis sélectionnez **Enable**.
+
+![Vérifiez le compte, puis confirmez Enable.](users-guide-enable-confirm.png)
+
+### 3. Revenir à Active
+
+Ouvrez **Status** et choisissez **Active**.
+
+![Choisissez Active pour trouver le compte réactivé.](users-guide-active-option.png)
+
+**Résultat attendu :** le compte revient dans la liste Active.
+
+![Le compte revient dans la liste Active.](users-guide-enabled-result.png)
+
+## Réinitialiser un mot de passe
+
+Effectuez cette tâche lorsqu'un compte a besoin d'un nouveau mot de passe. L'administration d'identité et Reset passwords sont requis.
+
+### 1. Ouvrir Reset password
+
+Trouvez le compte. Ouvrez les points de sa ligne et sélectionnez **Reset password**.
+
+![Choisissez Reset password pour le bon compte.](users-guide-reset-menu.png)
+
+### 2. Saisir un nouveau mot de passe
+
+Saisissez **New password**. **Generate** crée un mot de passe et remplit les deux champs. L'œil le révèle et Copy le copie.
+
+![Saisissez un nouveau mot de passe. Generate peut remplir les deux champs.](users-guide-reset-new-password.png)
+
+### 3. Confirmer le nouveau mot de passe
+
+Saisissez le même mot de passe dans **Confirm password**. Generate l'a déjà rempli.
+
+![Saisissez de nouveau le même nouveau mot de passe.](users-guide-reset-confirm-password.png)
+
+### 4. Choisir s'il est temporaire
+
+Gardez **Require password change at next sign-in** coché pour un mot de passe temporaire. Décochez uniquement si la personne doit utiliser directement ce mot de passe.
+
+![Gardez Require password change actif pour un mot de passe temporaire, ou désactivez-le si nécessaire.](users-guide-reset-change.png)
+
+### 5. Réinitialiser le mot de passe
+
+Sélectionnez **Reset password**. Transmettez le mot de passe de manière sûre selon votre procédure approuvée.
+
+![Sélectionnez Reset password après avoir vérifié le choix de changement de mot de passe.](users-guide-reset-submit.png)
+
+**Résultat attendu :** la page confirme la réinitialisation. Avec l'option temporaire par défaut, la personne doit le changer à sa prochaine connexion.
+
+![La page confirme la réinitialisation du mot de passe.](users-guide-reset-result.png)
+
+## Terminer les sessions du fournisseur d'un utilisateur
+
+Effectuez cette tâche lorsque les sessions existantes du fournisseur doivent se terminer. L'administration d'identité et Force logout sont requis. Avec la connexion propre à OpenLDR, elle termine les sessions OpenLDR de la personne.
+
+### 1. Choisir Force sign-out
+
+Trouvez le compte. Ouvrez les points de sa ligne et sélectionnez **Force sign-out**. Vous ne pouvez pas utiliser cette action sur vous-même ici.
+
+![Choisissez Force sign-out pour terminer les sessions du fournisseur de cet utilisateur.](users-guide-logout-menu.png)
+
+### 2. Confirmer le compte
+
+Vérifiez le nom d'utilisateur et sélectionnez **Force sign-out**.
+
+![Confirmez Force sign-out pour le bon compte.](users-guide-logout-confirm.png)
+
+**Résultat attendu :** la page confirme la fermeture de toutes les sessions. Cette action ne désactive pas le compte.
+
+![La page confirme la fermeture de toutes les sessions.](users-guide-logout-result.png)
+
+## Utiliser Users sur un téléphone
+
+Utilisez le même annuaire et le même panneau de compte sur un téléphone. Les colonnes larges peuvent nécessiter un défilement horizontal.
+
+### 1. Trouver le compte
+
+Recherchez par nom d'utilisateur, nom ou adresse électronique.
+
+![Recherchez un compte sur un téléphone.](users-guide-phone-search.png)
+
+### 2. Ouvrir le compte
+
+Sélectionnez sa ligne. Faites défiler le panneau User pour lire le profil et le rôle. Sélectionnez **Close** en haut à droite pour revenir.
+
+![Le panneau User utilise la largeur du téléphone. Faites défiler pour lire les champs du profil.](users-guide-phone-profile.png)
+
+## Envoyer un courriel de réinitialisation si la messagerie est configurée
+
+Les points du compte proposent aussi **Send reset email**. Cette action demande au fournisseur d'identité d'envoyer un lien de réinitialisation. Vérifiez d'abord l'adresse et la configuration d'envoi du fournisseur. Le test documenté n'a envoyé aucun courriel. La connexion propre à OpenLDR n'a pas d'e-mail de réinitialisation, donc Studio y masque cette action.
+
+## Exercice facultatif
+
+Utilisez une installation de test et un opérateur fictif. Suivez les tâches avec votre nom d'utilisateur de test et une adresse example.invalid. Ne testez ni la désactivation, ni la réinitialisation, ni la fermeture forcée sur le compte d'autrui sans autorisation.
+
+## Limites
+
+Users ne permet pas de supprimer un compte. Désactivez l'accès lorsqu'il ne doit plus se connecter. Les champs sous Role dépendent de votre formulaire Users publié. OpenLDR ne peut pas configurer l'envoi des courriels du fournisseur ici.
+
+## Résolution des problèmes
+
+**New user ou les actions de mot de passe manquent.** Lisez l'avis au-dessus de l'annuaire. Demandez à l'administrateur du fournisseur d'identité de configurer l'administration des comptes.
+
+**Le compte disparaît après un changement de statut.** Réglez Status sur Active, Disabled ou All statuses pour le retrouver.
+
+**Le compte est enregistré, mais l'attribution du rôle échoue.** Gardez le panneau ouvert, choisissez un rôle valide et enregistrez de nouveau. Ne retirez pas la dernière personne capable de gérer les rôles.
 
 ## Guides associés
 
-- [Rôles](/docs/roles)
-- [Audit](/docs/audit)
-- [Paramètres](/docs/settings)
+Lisez [Rôles](/docs/roles) pour définir les droits. Lisez [Commencer ici](/docs/start-here) pour l'installation et la ligne de commande.

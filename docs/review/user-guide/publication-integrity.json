@@ -1,0 +1,12 @@
+{
+  "guides": 27,
+  "stepsPerLocale": 775,
+  "framesPerLocale": 913,
+  "locales": [
+    "en",
+    "fr",
+    "pt"
+  ],
+  "downloads": 18,
+  "nativeAssets": 905
+}

@@ -1,0 +1,54 @@
+{
+  "updateToggledOffAndRestored": true,
+  "rawSqlFlagToggledAndRestored": true,
+  "rowCapSavedAndReopened": 5000,
+  "originalValidation": "high",
+  "validationSaved": "medium",
+  "dashboardsBefore": [
+    {
+      "id": "default",
+      "name": "Lab Overview (Sample)"
+    }
+  ],
+  "reset-dashboards": {
+    "attempted": true,
+    "complete": true
+  },
+  "dashboardsAfter": [
+    {
+      "id": "default",
+      "name": "Lab Overview (Sample)"
+    }
+  ],
+  "auditBeforeClear": 43,
+  "clear-audit": {
+    "attempted": true,
+    "complete": true
+  },
+  "auditAfterClear": 1,
+  "auditClearRecorded": true,
+  "laboratoryBeforeReset": {
+    "name": "Documentation laboratory",
+    "timezone": "Africa/Dar_es_Salaam"
+  },
+  "providerUsersBeforeReset": [
+    {
+      "id": "98d39a17-dc15-43f4-af80-0be7e8169367",
+      "username": "documentation.operator"
+    }
+  ],
+  "factory-reset": {
+    "attempted": true,
+    "complete": true
+  },
+  "laboratoryAfterReset": {
+    "name": "OpenLDR",
+    "timezone": null
+  },
+  "providerUsersAfterReset": [
+    {
+      "id": "98d39a17-dc15-43f4-af80-0be7e8169367",
+      "username": "documentation.operator"
+    }
+  ]
+}

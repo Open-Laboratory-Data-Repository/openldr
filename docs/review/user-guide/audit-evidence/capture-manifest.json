@@ -1,0 +1,490 @@
+{
+  "capturedAt": "2026-11-12T13:56:49.647Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5188/studio/audit",
+  "steps": [
+    {
+      "id": "open-audit",
+      "label": "Select Audit in the main menu.",
+      "path": "audit-evidence/open-audit.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 496,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "read-event-row",
+      "label": "Read When, Actor, Action and entity details before opening an event.",
+      "path": "audit-evidence/read-event-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 137,
+          "width": 1040,
+          "height": 47
+        }
+      ]
+    },
+    {
+      "id": "filter-open",
+      "label": "Use Filter to find an action or actor.",
+      "path": "audit-evidence/filter-open.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 56,
+          "width": 72.671875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "filter-add",
+      "label": "Choose Add filter.",
+      "path": "audit-evidence/filter-add.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 265,
+          "y": 190,
+          "width": 87.359375,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "filter-action",
+      "label": "Choose Action as the filter column.",
+      "path": "audit-evidence/filter-action.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 372,
+          "y": 222,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "filter-value",
+      "label": "Enter the action name. The example uses user.update.",
+      "path": "audit-evidence/filter-value.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 683,
+          "y": 119,
+          "width": 158,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "filter-apply",
+      "label": "Choose Apply to request matching audit events.",
+      "path": "audit-evidence/filter-apply.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 824.96875,
+          "y": 186,
+          "width": 54.03125,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "filter-result",
+      "label": "The list contains matching user.update events.",
+      "path": "audit-evidence/filter-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 608,
+          "y": 181.5,
+          "width": 80.71875,
+          "height": 22
+        }
+      ]
+    },
+    {
+      "id": "event-identifiers",
+      "label": "Check Event ID, Timestamp, Actor and the affected entity.",
+      "path": "audit-evidence/event-identifiers.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 397.53125,
+          "width": 671,
+          "height": 44
+        }
+      ]
+    },
+    {
+      "id": "event-before",
+      "label": "Before records the previous values when supplied by this action.",
+      "path": "audit-evidence/event-before.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 442.53125,
+          "width": 671,
+          "height": 285.359375
+        }
+      ]
+    },
+    {
+      "id": "event-after",
+      "label": "After records the saved values when supplied by this action.",
+      "path": "audit-evidence/event-after.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 488.890625,
+          "width": 671,
+          "height": 311.359375
+        }
+      ]
+    },
+    {
+      "id": "event-metadata",
+      "label": "Metadata contains additional context when the action records it.",
+      "path": "audit-evidence/event-metadata.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 715.25,
+          "width": 671,
+          "height": 85
+        }
+      ]
+    },
+    {
+      "id": "event-copy",
+      "label": "Use the copy control beside a value when recording an event reference.",
+      "path": "audit-evidence/event-copy.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 135.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "event-close",
+      "label": "Close returns to the filtered list.",
+      "path": "audit-evidence/event-close.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 16,
+          "width": 28,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "filter-clear",
+      "label": "Clear removes the active filter rules.",
+      "path": "audit-evidence/filter-clear.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 764.28125,
+          "y": 186,
+          "width": 52.6875,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "page-size",
+      "label": "Use Rows per page to change the number of events shown.",
+      "path": "audit-evidence/page-size.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1023.21875,
+          "y": 762,
+          "width": 80,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "ten-rows",
+      "label": "Choose the page size. The example chooses 10.",
+      "path": "audit-evidence/ten-rows.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1028.25,
+          "y": 629,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "next-page",
+      "label": "Next page reads the next group of events.",
+      "path": "audit-evidence/next-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 760,
+          "width": 40,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "previous-page",
+      "label": "Previous page returns to the preceding group.",
+      "path": "audit-evidence/previous-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1184,
+          "y": 760,
+          "width": 40,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "refresh-actions",
+      "label": "Open the Audit page dots menu.",
+      "path": "audit-evidence/refresh-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 56,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "refresh-menu",
+      "label": "Choose Refresh to request the current filtered list again.",
+      "path": "audit-evidence/refresh-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1113,
+          "y": 97,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-filter",
+      "label": "Filter remains available above the table on a phone.",
+      "path": "audit-evidence/phone-filter.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 12,
+          "y": 100,
+          "width": 72.671875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-event",
+      "label": "The event sheet uses the phone width and scrolls through recorded values.",
+      "path": "audit-evidence/phone-event.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 38.5,
+          "y": 127.53125,
+          "width": 336.5,
+          "height": 65
+        }
+      ]
+    }
+  ]
+}

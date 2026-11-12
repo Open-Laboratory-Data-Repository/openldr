@@ -1,0 +1,1688 @@
+{
+  "capturedAt": "2026-11-12T14:22:33.453Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5186/studio/forms",
+  "steps": [
+    {
+      "id": "page-actions",
+      "label": "The Forms page dots menu contains New.",
+      "path": "forms-evidence/page-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 56,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "new-menu",
+      "label": "New opens the Form Builder.",
+      "path": "forms-evidence/new-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1113,
+          "y": 97,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "builder-name",
+      "label": "Name the form for the task people will use it for.",
+      "path": "forms-evidence/builder-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 271,
+          "y": 82,
+          "width": 179.3125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "builder-fhir-version",
+      "label": "Choose the FHIR version your target records use. This example uses R4.",
+      "path": "forms-evidence/builder-fhir-version.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 607.25,
+          "y": 155,
+          "width": 159.03125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "builder-resource",
+      "label": "Select ServiceRequest to build a request form.",
+      "path": "forms-evidence/builder-resource.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 983.25,
+          "y": 322,
+          "width": 257.640625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "pack-choices",
+      "label": "Keep the fields needed for the form. This example keeps Patient, Tests, Results, Priority and Reference Number.",
+      "path": "forms-evidence/pack-choices.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 705,
+          "y": 395.53125,
+          "width": 575,
+          "height": 101
+        }
+      ]
+    },
+    {
+      "id": "pack-actions",
+      "label": "The starter pack has its own dots menu.",
+      "path": "forms-evidence/pack-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 165.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "builder-fields",
+      "label": "The builder lists the fields added from the pack.",
+      "path": "forms-evidence/builder-fields.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 347,
+          "y": 528,
+          "width": 497.875,
+          "height": 54
+        }
+      ]
+    },
+    {
+      "id": "builder-actions",
+      "label": "Open Builder actions for previewing and saving.",
+      "path": "forms-evidence/builder-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1231,
+          "y": 82,
+          "width": 36,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "draft-save",
+      "label": "Save draft stores the current design without publishing it.",
+      "path": "forms-evidence/draft-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1112,
+          "y": 232,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "order-result",
+      "label": "Response captured confirms the submitted response. Submit again only for another intended order.",
+      "path": "forms-evidence/order-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 272,
+          "y": 116,
+          "width": 190,
+          "height": 22
+        }
+      ],
+      "recoveredFrom": "original-submission.png"
+    },
+    {
+      "id": "open-page",
+      "label": "Forms is in the main menu on the left.",
+      "path": "forms-evidence/open-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 416,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "order-row-actions",
+      "label": "Use the Lab order row dots menu to open its capture page.",
+      "path": "forms-evidence/order-row-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 206.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "order-run",
+      "label": "View/Run opens the published form for data entry.",
+      "path": "forms-evidence/order-run.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1057.75,
+          "y": 247.5,
+          "width": 201.21875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "order-patient-search",
+      "label": "Search for your actual patient by name or identifier.",
+      "path": "forms-evidence/order-patient-search.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 462,
+          "y": 209,
+          "width": 794,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "order-patient-choice",
+      "label": "Select the correct patient from the results.",
+      "path": "forms-evidence/order-patient-choice.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 463,
+          "y": 250,
+          "width": 792,
+          "height": 54
+        }
+      ]
+    },
+    {
+      "id": "order-test-search",
+      "label": "Tests lists catalog tests switched on at this lab.",
+      "path": "forms-evidence/order-test-search.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 462,
+          "y": 326,
+          "width": 794,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "order-test-choice",
+      "label": "Choose the catalog test requested for this patient.",
+      "path": "forms-evidence/order-test-choice.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 463,
+          "y": 367,
+          "width": 792,
+          "height": 54
+        }
+      ]
+    },
+    {
+      "id": "order-test-details",
+      "label": "Open the selected test row under Results to complete specimen and result details.",
+      "path": "forms-evidence/order-test-details.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 475,
+          "y": 421,
+          "width": 724,
+          "height": 42
+        }
+      ]
+    },
+    {
+      "id": "order-specimen",
+      "label": "Select the specimen type used for this test.",
+      "path": "forms-evidence/order-specimen.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 800.25,
+          "y": 131.5,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "order-details-close",
+      "label": "Close returns to the order with the chosen specimen.",
+      "path": "forms-evidence/order-details-close.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 16,
+          "width": 28,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "order-priority",
+      "label": "Choose the priority for this order. The example uses Routine.",
+      "path": "forms-evidence/order-priority.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 467,
+          "y": 533,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "order-submit-actions",
+      "label": "Review the order, then open its page dots menu.",
+      "path": "forms-evidence/order-submit-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 56,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "order-submit",
+      "label": "Submit writes a form response. Use it once for this intended order.",
+      "path": "forms-evidence/order-submit.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1113,
+          "y": 129,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "preview-menu",
+      "label": "Preview opens the current design without submitting data.",
+      "path": "forms-evidence/preview-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1112,
+          "y": 159,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "preview-actions",
+      "label": "Preview actions contains Fill example and Reset.",
+      "path": "forms-evidence/preview-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1204,
+          "y": 23.265625,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "preview-fill",
+      "label": "Fill example supplies demonstration answers without saving a response.",
+      "path": "forms-evidence/preview-fill.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1077,
+          "y": 60.25,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "preview-filled",
+      "label": "Preview shows how the form will look with example answers.",
+      "path": "forms-evidence/preview-filled.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 927,
+          "y": 363.53125,
+          "width": 329,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "preview-reset",
+      "label": "Reset clears the demonstration answers.",
+      "path": "forms-evidence/preview-reset.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1077,
+          "y": 92.25,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "preview-close",
+      "label": "Close returns to the builder.",
+      "path": "forms-evidence/preview-close.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 16,
+          "width": 28,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "draft-save-edited",
+      "label": "Save draft stores the updated design without publishing it.",
+      "path": "forms-evidence/draft-save-edited.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1112,
+          "y": 232,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "publish-menu",
+      "label": "Publish saves the design and creates a published version.",
+      "path": "forms-evidence/publish-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1112,
+          "y": 264,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "published-version",
+      "label": "The header shows the published state and version number.",
+      "path": "forms-evidence/published-version.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 271,
+          "y": 90,
+          "width": 12.6875,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "published-row",
+      "label": "The new form appears as Published in the list.",
+      "path": "forms-evidence/published-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 826.25,
+          "y": 154.5,
+          "width": 70.71875,
+          "height": 22
+        }
+      ]
+    },
+    {
+      "id": "version-draft-change",
+      "label": "Make the draft change you want to compare. The example changes the field placeholder.",
+      "path": "forms-evidence/version-draft-change.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1021.0625,
+          "y": 468.53125,
+          "width": 234.9375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "compare-menu",
+      "label": "Compare reads differences between versions and the current draft.",
+      "path": "forms-evidence/compare-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1112,
+          "y": 296,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "compare-from",
+      "label": "Choose the published version on the From side.",
+      "path": "forms-evidence/compare-from.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 329,
+          "y": 382.765625,
+          "width": 176,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "compare-from-version",
+      "label": "Select the version you want to compare against.",
+      "path": "forms-evidence/compare-from-version.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 334,
+          "y": 487.75,
+          "width": 118.59375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "compare-to",
+      "label": "The To side can be Current draft or another published version.",
+      "path": "forms-evidence/compare-to.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 531.015625,
+          "y": 382.765625,
+          "width": 176,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "compare-result",
+      "label": "Read the differences before deciding whether to publish or restore.",
+      "path": "forms-evidence/compare-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 305,
+          "y": 468.765625,
+          "width": 670,
+          "height": 43
+        }
+      ]
+    },
+    {
+      "id": "compare-close",
+      "label": "Escape returns to the builder without changing a stored version.",
+      "path": "forms-evidence/compare-close.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1231,
+          "y": 82,
+          "width": 36,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "changed-save-draft",
+      "label": "Save the reviewed change as a draft before publishing it.",
+      "path": "forms-evidence/changed-save-draft.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1112,
+          "y": 232,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "changed-draft-status",
+      "label": "Changing the stored published content returns the form to Draft.",
+      "path": "forms-evidence/changed-draft-status.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 253,
+          "y": 96,
+          "width": 10,
+          "height": 10
+        }
+      ]
+    },
+    {
+      "id": "changed-publish",
+      "label": "Publish the reviewed changed draft to create its next version.",
+      "path": "forms-evidence/changed-publish.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1112,
+          "y": 264,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "versions-menu",
+      "label": "Versions opens published snapshots, newest first.",
+      "path": "forms-evidence/versions-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1112,
+          "y": 328,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "versions-list",
+      "label": "Read the version number, label and publication date.",
+      "path": "forms-evidence/versions-list.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 705,
+          "y": 119.53125,
+          "width": 575,
+          "height": 198.5
+        }
+      ]
+    },
+    {
+      "id": "version-row-actions",
+      "label": "Each published version has its own dots menu.",
+      "path": "forms-evidence/version-row-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 278.03125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "restore-menu",
+      "label": "Restore replaces the editable form with the chosen snapshot.",
+      "path": "forms-evidence/restore-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 315,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "restore-confirm",
+      "label": "Review the selected version. Restoring different content returns it to Draft and disables submission until publication.",
+      "path": "forms-evidence/restore-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 275.734375,
+          "width": 448,
+          "height": 248.53125
+        }
+      ]
+    },
+    {
+      "id": "restore-result",
+      "label": "The restored form is Draft. Publish it again only after reviewing it.",
+      "path": "forms-evidence/restore-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 253,
+          "y": 96,
+          "width": 10,
+          "height": 10
+        }
+      ]
+    },
+    {
+      "id": "republish-menu",
+      "label": "Publish makes the reviewed restored form available again.",
+      "path": "forms-evidence/republish-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1112,
+          "y": 264,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "republished-version",
+      "label": "The reviewed restored form is published again with its next version number.",
+      "path": "forms-evidence/republished-version.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 271,
+          "y": 90,
+          "width": 12.6875,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "list-actions",
+      "label": "The form row menu contains lifecycle and export actions.",
+      "path": "forms-evidence/list-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 149.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "export-menu",
+      "label": "Export downloads the form as a Questionnaire JSON file.",
+      "path": "forms-evidence/export-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1057.75,
+          "y": 382.5,
+          "width": 201.21875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "duplicate-menu",
+      "label": "Duplicate creates a separate draft for adapting an existing form.",
+      "path": "forms-evidence/duplicate-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1057.75,
+          "y": 254.5,
+          "width": 201.21875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-list",
+      "label": "Forms is available on a phone. Wide table columns can scroll horizontally.",
+      "path": "forms-evidence/phone-list.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 12,
+          "y": 56,
+          "width": 307,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-builder-actions",
+      "label": "Builder actions remains available on a phone.",
+      "path": "forms-evidence/phone-builder-actions.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 265.6875,
+          "y": 289,
+          "width": 36,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "phone-preview-menu",
+      "label": "Open Preview from the same builder menu.",
+      "path": "forms-evidence/phone-preview-menu.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 146.75,
+          "y": 366,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-preview",
+      "label": "Preview opens over the builder at phone width.",
+      "path": "forms-evidence/phone-preview.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 299,
+          "y": 23.265625,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "duplicate-result",
+      "label": "Duplicate creates a separate Draft, leaving the original form unchanged.",
+      "path": "forms-evidence/duplicate-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 155.5,
+          "width": 220.59375,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "draft-run-warning",
+      "label": "A Draft can be opened for viewing, but submission is disabled until publication.",
+      "path": "forms-evidence/draft-run-warning.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 264,
+          "y": 109,
+          "width": 992,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "draft-submit-disabled",
+      "label": "The Submit action is disabled on this unpublished form.",
+      "path": "forms-evidence/draft-submit-disabled.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1113,
+          "y": 97,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "archive-menu",
+      "label": "Archive stops normal submission use while retaining the form definition.",
+      "path": "forms-evidence/archive-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 350.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "archive-result",
+      "label": "The archived form remains in the management list with its status.",
+      "path": "forms-evidence/archive-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 841.78125,
+          "y": 154.5,
+          "width": 64.6875,
+          "height": 22
+        }
+      ]
+    },
+    {
+      "id": "delete-menu",
+      "label": "Delete permanently removes the selected form definition. This is only the owned demonstration copy.",
+      "path": "forms-evidence/delete-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 414.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "delete-confirm",
+      "label": "Read the named form before confirming. Cancel keeps it.",
+      "path": "forms-evidence/delete-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 295.734375,
+          "width": 448,
+          "height": 208.53125
+        }
+      ]
+    },
+    {
+      "id": "pack-clinician",
+      "label": "Clear Requesting Clinician when this example form does not need it.",
+      "path": "forms-evidence/pack-clinician.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 705,
+          "y": 563.53125,
+          "width": 575,
+          "height": 101
+        }
+      ]
+    },
+    {
+      "id": "pack-notes",
+      "label": "Clear Clinical Notes when this example form does not need it.",
+      "path": "forms-evidence/pack-notes.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 705,
+          "y": 713.53125,
+          "width": 575,
+          "height": 86
+        }
+      ]
+    },
+    {
+      "id": "pack-facility",
+      "label": "Clear Referring Facility when this example form does not need it.",
+      "path": "forms-evidence/pack-facility.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 705,
+          "y": 582.53125,
+          "width": 575,
+          "height": 101
+        }
+      ]
+    },
+    {
+      "id": "pack-rejection",
+      "label": "Clear Order rejection when this example form does not need it.",
+      "path": "forms-evidence/pack-rejection.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 705,
+          "y": 683.53125,
+          "width": 575,
+          "height": 116
+        }
+      ]
+    },
+    {
+      "id": "pack-selected-count",
+      "label": "Five fields remain selected for this example form.",
+      "path": "forms-evidence/pack-selected-count.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 729,
+          "y": 169.53125,
+          "width": 91.0625,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "pack-add",
+      "label": "Add the five selected fields to this new form.",
+      "path": "forms-evidence/pack-add.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 202.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "field-open",
+      "label": "Open the Reference Number field to change its label.",
+      "path": "forms-evidence/field-open.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 347,
+          "y": 528,
+          "width": 497.875,
+          "height": 54
+        }
+      ]
+    },
+    {
+      "id": "field-label",
+      "label": "Display Label changes the wording shown to the person entering data.",
+      "path": "forms-evidence/field-label.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1021.0625,
+          "y": 216.53125,
+          "width": 234.9375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "field-placeholder",
+      "label": "Placeholder gives a short hint inside an empty input.",
+      "path": "forms-evidence/field-placeholder.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1021.0625,
+          "y": 468.53125,
+          "width": 234.9375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "field-required",
+      "label": "Required makes this answer mandatory. Leave it off when the field is optional.",
+      "path": "forms-evidence/field-required.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 921,
+          "y": 568.53125,
+          "width": 72.703125,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "field-enabled",
+      "label": "Enabled controls whether the field appears and collects an answer.",
+      "path": "forms-evidence/field-enabled.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1017.703125,
+          "y": 568.53125,
+          "width": 68.046875,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "field-actions",
+      "label": "Field actions contains Save and Cancel.",
+      "path": "forms-evidence/field-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 149.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "field-save",
+      "label": "Save applies field changes to the current design.",
+      "path": "forms-evidence/field-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 186.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "field-updated",
+      "label": "The field list uses the new label.",
+      "path": "forms-evidence/field-updated.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 348,
+          "y": 528,
+          "width": 496.875,
+          "height": 54
+        }
+      ]
+    }
+  ]
+}

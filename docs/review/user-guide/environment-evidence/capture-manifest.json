@@ -1,0 +1,175 @@
+{
+  "capturedAt": "2026-11-12T14:11:26.533Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5189/studio/settings/general",
+  "steps": [
+    {
+      "id": "general",
+      "label": "Open Settings, then General.",
+      "path": "environment-evidence/general.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 60,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "about",
+      "label": "About identifies the running application version and environment.",
+      "path": "environment-evidence/about.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 464,
+          "y": 168.046875,
+          "width": 800,
+          "height": 251
+        }
+      ]
+    },
+    {
+      "id": "folder",
+      "label": "Illustration. Work in the installed Compose project directory.",
+      "path": "environment-evidence/folder.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 204.046875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "backup",
+      "label": "Illustration. Back up configuration privately before editing.",
+      "path": "environment-evidence/backup.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 336.0625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "edit",
+      "label": "Illustration. Change only the environment value you intend to change.",
+      "path": "environment-evidence/edit.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 132.03125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "validate",
+      "label": "Illustration. Validate the Compose configuration without printing secrets.",
+      "path": "environment-evidence/validate.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 372.0625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "apply",
+      "label": "Illustration. Recreate affected services to apply startup settings.",
+      "path": "environment-evidence/apply.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 312.0625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "health",
+      "label": "Illustration. Check service state and application health.",
+      "path": "environment-evidence/health.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 228.046875,
+          "height": 32
+        }
+      ]
+    }
+  ]
+}

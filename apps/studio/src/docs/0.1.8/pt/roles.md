@@ -1,97 +1,193 @@
 # Funções
 
-Uma **função** é um conjunto com nome de **capacidades**. Uma capacidade é uma permissão precisa, como **Run reports** ou **Edit workflows**. Cada pessoa recebe uma função, e o servidor verifica as suas capacidades antes de cada página e de cada ação.
+Uma função agrupa capacidades, as permissões para ações específicas. Atribua funções em Users. O painel Users atribui uma função por pessoa.
 
-A entrada é tratada pelo fornecedor de identidade, normalmente o Keycloak. As funções não. Cada função, capacidade e atribuição vive na base de dados do OpenLDR, por isso o controlo de acesso funciona da mesma forma seja qual for o fornecedor de identidade.
+Use os seus próprios nomes de funções e requisitos de acesso. As imagens mostram uma função temporária Documentation reader numa instalação de teste isolada. Não precisa de dados de prática.
 
-Este guia leva cerca de 10 minutos. Selecione uma imagem ou um clip para o ampliar. Os nomes das funções incluídas e das capacidades aparecem em inglês.
+Precisa de View roles para consultar funções e de Manage roles para criar, alterar, eliminar ou atribuir funções. Abrir Users também exige View users. Criar ou editar identidades exige Manage users. Administrator está bloqueado. As restantes funções do sistema podem ser editadas, mas não eliminadas.
 
-![Definições, Funções: as cinco funções incluídas.](roles-tour.png)
+Para a instalação e a CLI, leia [Começar aqui](/docs/start-here). Este guia cobre a página Roles.
 
-## Quem pode fazer o quê
+## Consultar uma função antes de alterar o acesso
 
-Precisa de **Manage roles** para criar, alterar ou eliminar funções. **View roles** deixa abri-las e ler as suas capacidades. O administrador tem as duas.
+Use esta tarefa para verificar as ações permitidas por uma função existente.
 
-## As funções incluídas
+### 1. Abrir Settings e Roles
 
-| Função | Para que serve |
-| --- | --- |
-| Administrator | Todas as capacidades. **Bloqueada**: não pode ser alterada nem eliminada, para que alguém possa sempre recuperar o acesso. |
-| Lab Manager | Painéis, relatórios, formulários, fluxos de trabalho, terminologia e consultas. Nem utilizadores nem definições. |
-| Data Analyst | Ver painéis, executar e exportar relatórios, usar as consultas. Nada para alterar. |
-| System Auditor | Só leitura nas áreas principais, mais o registo de auditoria. |
-| Lab Technician | Registo na bancada: abrir e enviar formulários, nada mais. |
+Abra o menu de utilizador no canto inferior esquerdo, escolha **Settings** e selecione **Roles**.
 
-As capacidades das funções incluídas, exceto Administrator, podem ser mudadas. Uma função não pode ser eliminada enquanto houver pessoas com ela.
+![Abra o menu de utilizador no canto inferior esquerdo.](roles-guide-open-user-menu.png)
 
-As capacidades estão agrupadas por área: Dashboards, Reports, Forms, Workflows, Query, Users, Facilities, Patients, Roles, Terminology, Marketplace, Connectors, Sync, Settings, Observability e Audit.
+![Escolha Settings no menu de utilizador.](roles-guide-settings-menu.png)
 
-## Exemplo 1: criar uma função só de leitura
+![Selecione Roles na lista de secções de Settings.](roles-guide-roles-page.png)
 
-Crie uma função para alguém que só lê painéis e executa relatórios.
+### 2. Abrir a função
 
-![Criar Dashboard viewer com três capacidades.](roles-create.mp4)
+Selecione a linha de uma função. Leia o nome, a descrição e as capacidades selecionadas. Desloque o painel para ler cada permissão.
 
-1. Abra **Definições** e depois **Funções**.
-2. Abra o menu de três pontos no canto superior direito e selecione **Criar função**.
-3. Em **Nome**, escreva `Dashboard viewer`. **Identificador** preenche-se sozinho. Pode mudá-lo antes de guardar, e depois fica fixo.
-4. Em **Descrição**, escreva para que serve a função, por exemplo `Reads dashboards and runs reports. Changes nothing.`
-5. Em **Capacidades**, ative **View dashboards**, **View reports** e **Run reports**. O contador por cima da lista mostra quantas estão ativas.
-6. Abra o menu de três pontos da ficha e selecione **Criar**.
+![Leia o nome, a descrição e as capacidades selecionadas da função.](roles-guide-inspect-role.png)
 
-**Resultado esperado:** uma mensagem de sucesso, e a função na lista com **0 membros**.
+### 3. Verificar se está bloqueada
 
-Para dar esta função a alguém, veja [Utilizadores e funções, exemplo 1](/docs/users#exemplo-1-dar-uma-funcao-a-alguem).
+A função integrada Administrator mostra um aviso e campos apenas de leitura. Selecione **Close** no canto superior direito quando terminar.
 
-Para mudar uma função mais tarde, abra o menu da sua linha e selecione **Editar**. **Eliminar** remove uma função sem membros. Mudar uma função partilhada muda-a para todos os que a têm.
+![Administrator está bloqueado. As suas capacidades não podem ser alteradas.](roles-guide-locked-role.png)
 
-## Como as capacidades chegam a uma instalação existente
+**Resultado esperado:** consultar uma função não altera as permissões.
 
-As versões novas juntam capacidades. As funções vivem na base de dados, por isso uma função criada por uma versão antiga não conhece sozinha uma capacidade mais recente. O OpenLDR resolve isto em cada arranque:
+## Criar uma função com permissões escolhidas
 
-- **Administrator** recebe sempre a lista completa no reinício seguinte. Está bloqueada e quer dizer "todas as capacidades", por isso não há nada a preservar.
-- **As outras funções incluídas** recebem uma capacidade nova só da primeira vez que ela existe. Depois disso, o OpenLDR nunca a volta a dar. Se tirar uma capacidade a Lab Manager, ela continua tirada depois de reinícios e atualizações.
-- **As funções que criou nunca são alteradas.** Dê-lhes uma capacidade nova você mesmo.
+Use esta tarefa quando as funções existentes não correspondem ao acesso necessário. Decida as ações necessárias antes de selecionar capacidades.
 
-Uma capacidade dada desta forma fica no registo de auditoria como `role.capability.backfill`.
+### 1. Abrir as ações da página
 
-Para comparar a sua instalação com as definições incluídas:
+Selecione os pontos acima da tabela Roles.
 
-```bash
-./openldr roles doctor
-```
+![Abra o menu de pontos de Roles.](roles-guide-create-actions.png)
 
-Lista, por função incluída, as capacidades que tem, as que tirou de propósito e as que ainda faltam, mais as chaves de capacidade deixadas por uma funcionalidade retirada.
+### 2. Escolher Create role
 
-## Na linha de comandos
+Selecione **Create role**.
 
-```bash
-./openldr roles list
-./openldr roles show <slug>
-./openldr roles create <name>
-./openldr roles grant <slug> <capability>
-./openldr roles revoke <slug> <capability>
-./openldr roles delete <slug>
-./openldr user assign-role <subject> <slug>
-```
+![Escolha Create role.](roles-guide-create-menu.png)
 
-`roles create` também aceita `--slug`, `--desc`, e `--caps` com capacidades separadas por vírgulas. Por exemplo, a função do exemplo 1:
+### 3. Introduzir o nome
 
-```bash
-./openldr roles create "Dashboard viewer" --slug dashboard_viewer \
-  --desc "Reads dashboards and runs reports. Changes nothing." \
-  --caps dashboards.view,reports.view,reports.run
-```
+Use um nome reconhecido pela equipa. O exemplo usa `Documentation reader`.
+
+![Introduza um nome que descreva esta função.](roles-guide-name.png)
+
+### 4. Verificar o slug
+
+**Slug** é o identificador da função. O nome preenche-o automaticamente até o editar. Escolha-o com cuidado porque não pode alterá-lo após a criação.
+
+![Confira o identificador. Fica apenas de leitura após a criação.](roles-guide-slug.png)
+
+### 5. Descrever a função
+
+Indique o objetivo em **Description**. Isto ajuda outros administradores a perceber a quem atribuir a função.
+
+![Descreva quem deve usar esta função.](roles-guide-description.png)
+
+### 6. Selecionar as capacidades
+
+Ative cada permissão necessária. Leia a descrição junto de cada interruptor. O exemplo seleciona **View dashboards**.
+
+![Escolha cada permissão necessária. O exemplo permite consultar painéis.](roles-guide-capability.png)
+
+### 7. Abrir as ações do painel
+
+Selecione os pontos no topo do painel Create role.
+
+![Abra o menu de pontos do painel da função.](roles-guide-sheet-actions.png)
+
+### 8. Criar a função
+
+Selecione **Create**.
+
+![Escolha Create para guardar a função.](roles-guide-create-save.png)
+
+**Resultado esperado:** o painel fecha e a função aparece na lista. Criá-la não a atribui a ninguém. Use Users para a atribuir.
+
+![A função criada aparece com a descrição e o número de membros.](roles-guide-created-result.png)
+
+## Alterar a descrição ou as permissões de uma função
+
+Use esta tarefa quando mudam as responsabilidades das pessoas com a função. Confira quem a tem antes de alterar o acesso.
+
+### 1. Encontrar a função
+
+Introduza o nome em **Search roles**. O exemplo pesquisa `Documentation`.
+
+![Use Search roles para encontrar uma função pelo nome.](roles-guide-search.png)
+
+### 2. Abrir as ações da linha
+
+Selecione os pontos na linha da função correspondente.
+
+![Abra os pontos da função correspondente.](roles-guide-row-actions.png)
+
+### 3. Escolher Edit
+
+Selecione **Edit**. Selecionar a linha abre o mesmo painel.
+
+![Escolha Edit para alterar a descrição ou as permissões.](roles-guide-edit-menu.png)
+
+### 4. Atualizar a descrição
+
+Altere **Description** se o objetivo mudou. Também pode alterar Name. Slug continua apenas de leitura.
+
+![Atualize a descrição. O slug continua apenas de leitura.](roles-guide-edit-description.png)
+
+### 5. Ajustar as permissões individuais
+
+Ative ou desative capacidades. O exemplo acrescenta **View reports**.
+
+![Ative ou desative capacidades individuais.](roles-guide-edit-capability.png)
+
+### 6. Guardar a função
+
+Abra os pontos do painel e selecione **Save**.
+
+![Escolha Save para guardar as alterações.](roles-guide-edit-save.png)
+
+**Resultado esperado:** a lista mostra a descrição guardada. Os utilizadores com esta função recebem as suas permissões.
+
+![A descrição atualizada aparece na linha da função.](roles-guide-edited-result.png)
+
+## Eliminar uma função personalizada
+
+Use esta tarefa apenas quando as pessoas devem perder as permissões concedidas pela função. Não pode eliminar funções do sistema.
+
+### 1. Escolher Delete
+
+Encontre a função, abra os pontos da linha e selecione **Delete**.
+
+![Delete está disponível para uma função personalizada.](roles-guide-delete-menu.png)
+
+### 2. Confirmar a função e o efeito
+
+Leia a confirmação. Os membros perdem as capacidades concedidas pela função. Selecione **Delete** para confirmar ou **Cancel** para a manter.
+
+![Confira o nome da função e o efeito nos membros antes de confirmar.](roles-guide-delete-confirm.png)
+
+**Resultado esperado:** a função desaparece. Não pode anular a eliminação. Confira os utilizadores afetados após remover a função.
+
+![A função eliminada deixa de aparecer na pesquisa.](roles-guide-deleted-result.png)
+
+## Consultar funções num telemóvel
+
+Use a mesma página Roles no telemóvel. Colunas largas podem exigir deslocação horizontal.
+
+### 1. Pesquisar a função
+
+Introduza o nome em **Search roles**.
+
+![Pesquise funções no telemóvel. A tabela pode deslocar-se horizontalmente.](roles-guide-phone-search.png)
+
+### 2. Abrir as definições
+
+Selecione a linha da função. Desloque o painel para ler a descrição e as capacidades. Selecione **Close** no canto superior direito para regressar.
+
+![O painel da função usa a largura do telemóvel. Desloque-o para consultar as capacidades.](roles-guide-phone-sheet.png)
+
+## Prática opcional
+
+Numa instalação de teste, crie a função `Documentation reader`. Selecione apenas View dashboards. Acrescente View reports na tarefa de edição e elimine a função de prática quando terminar. Não a atribua a pessoal real.
+
+## Antes de alterar o acesso
+
+Administrator está bloqueado. As restantes funções do sistema podem ser editadas, mas não eliminadas. Não pode alterar um slug guardado.
+
+Criar uma função não a atribui a ninguém. As atribuições são geridas em Users. Confira as pessoas afetadas antes de alterar ou eliminar uma função atribuída.
 
 ## Resolução de problemas
 
-- **As capacidades de uma função não se podem mudar.** É Administrator, que está bloqueada, ou falta-lhe **Manage roles**. Pode na mesma abri-la para ler as capacidades.
-- **Uma função não se pode eliminar.** É uma função incluída bloqueada, ou ainda há pessoas com ela. Dê-lhes primeiro outra função.
-- **Alguém mantém o acesso antigo depois de mudar de função.** Peça-lhe para terminar a sessão e voltar a entrar, ou espere que a sessão se renove.
-- **Uma conta nova não pode fazer nada.** Ainda não tem função. Uma conta sem função não tem capacidades.
+**A função está apenas de leitura.** Confira se abriu a função bloqueada Administrator e se a sua conta tem Manage roles.
+
+**Uma nova função não altera o acesso de ninguém.** Criá-la apenas guarda as permissões. Use Users para atribuir a função à pessoa pretendida.
 
 ## Guias relacionados
 
-- [Utilizadores e funções](/docs/users)
-- [Auditoria](/docs/audit)
-- [Definições](/docs/settings)
+[Começar aqui](/docs/start-here) explica a CLI instalada e de desenvolvimento. Users explica a atribuição de funções às pessoas.

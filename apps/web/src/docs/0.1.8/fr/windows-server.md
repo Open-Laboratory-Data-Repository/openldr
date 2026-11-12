@@ -1,224 +1,344 @@
 # Windows Server
 
-OpenLDR est livré sous forme d'images de conteneurs **Linux**. Windows ne peut pas les exécuter nativement. Le moteur Docker natif n'exécute que des conteneurs Windows, et **Docker Desktop n'est pas pris en charge sur Windows Server**. OpenLDR tourne donc sur un hôte Linux que Windows lui fournit.
+Préparez un environnement Linux sur Windows Server, puis installez OpenLDR à l'intérieur. Les images fournies ciblent Linux AMD64. Docker Desktop ne prend pas en charge Windows Server.
 
-Il existe deux façons d'obtenir cet hôte Linux :
+Choisissez un seul parcours. Avec une VM Ubuntu et Docker déjà prêts, passez à **Installer OpenLDR dans Linux**. Les données d'exemple sont facultatives. La connexion à Studio reste différée jusqu'à la capture d'une installation neuve.
 
-- **WSL2** : une distribution Ubuntu dans Windows. Plus légère et plus rapide à mettre en place, mais seulement sur les versions récentes de Windows Server, et le réseau demande du travail.
-- **Hyper-V** : une vraie machine virtuelle Ubuntu Server. Fonctionne sur toutes les éditions de Windows qui ont Hyper-V, y compris Server 2019, et la VM obtient sa propre adresse sur le réseau local.
+| Votre serveur | Parcours |
+| --- | --- |
+| Server 2022 ou 2025 à jour avec WSL2 disponible | WSL2 ou VM Linux Hyper-V. |
+| Server 2019 | VM Linux Hyper-V. WSL1 ne suffit pas pour les conteneurs Linux. |
+| Serveur sans intervention après redémarrage | Préférez une VM Hyper-V avec démarrage automatique. WSL nécessite un mécanisme séparé. |
 
-## Quelle voie choisir
+Lisez [Prérequis](/docs/requirements). Il faut les droits administrateur Windows, la virtualisation matérielle et des ressources pour Windows et toute la pile Linux. Si Windows est lui-même une VM, son hyperviseur doit exposer la virtualisation imbriquée.
 
-| | WSL2 | VM Hyper-V |
-| --- | --- | --- |
-| **Server 2025** | ✅ Un seul `wsl --install` | ✅ |
-| **Server 2022** | ⚠️ Seulement après mise à jour au-delà de la version RTM | ✅ |
-| **Server 2019** | ❌ Pas viable | ✅ |
-| **Windows 10 / 11 Pro, Entreprise** | ✅ | ✅ |
-| **Windows 10 / 11 Famille** | ✅ | ❌ Pas d'Hyper-V dans l'édition Famille |
-| **Accès depuis le réseau local** | Proxy de ports ou mode miroir | Sa propre IP sur un commutateur externe |
-| **Après un redémarrage** | Le proxy de ports doit être relancé | Réglage de démarrage automatique de la VM |
-| **Coût en ressources** | Partage la RAM de l'hôte à la demande | Réserve ce que vous lui attribuez |
+Les exemples utilisent `Ubuntu-24.04`, la VM `OpenLDR` et le dossier Linux `~/Downloads/openldr_ce`. Remplacez `openldr.example.org` par une adresse accessible aux utilisateurs. Les images sont des illustrations vectorielles des commandes, pas des captures d'une installation Windows Server terminée. Sélectionnez une image pour l'agrandir.
 
-Choisissez **WSL2** si la machine est sous Server 2022 (à jour) ou 2025 et que vous voulez l'installation la plus légère.
-Choisissez **Hyper-V** si la machine est sous Server 2019, si l'équipe réseau veut OpenLDR sur sa propre adresse du réseau local, ou si vous voulez isoler la pile de l'hôte.
+Le texte bleu terminé par `$` ou `>` est l'**invite**. Le terminal l'affiche ; ne le saisissez pas. Saisissez la commande après l'invite et appuyez sur **Entrée**. Les lignes plus discrètes dessous sont la **sortie** du programme ; lisez-les sans les saisir. Par exemple, `docker --version` est une commande et `Docker version 29.5.2, build 79eb04c` est sa réponse. Les blocs à copier contiennent uniquement les commandes. Noms, chemins et versions peuvent différer. Certaines illustrations montrent les commandes sans leur sortie ; attendez la fin de chacune avant la suivante.
 
-Les deux utilisent le même hyperviseur. Ils peuvent donc coexister sur une même machine.
+## Vérifier Windows avant de choisir
 
----
+Ouvrez PowerShell en tant qu'administrateur sur le serveur. Utilisez une console ou une connexion de gestion permettant de reprendre après un redémarrage.
 
-## Voie A : WSL2
-
-**Signes de réussite** dans la distribution : `uname -r` se termine par `-microsoft-standard-WSL2` (et non `4.4.0`), et `ps -p 1 -o comm=` affiche `systemd`.
-
-### 1. Installer WSL2
-
-Dans un **PowerShell administrateur** sur le serveur (2022 à jour, ou 2025) :
+### 1. Lire la version et les informations de virtualisation
 
 ```powershell
-wsl.exe --install     # enables components, installs the WSL2 kernel + Ubuntu
+{{server:host-check}}
 ```
 
-Redémarrez quand on vous le demande. Au premier lancement d'Ubuntu, créez un nom d'utilisateur et un mot de passe UNIX.
+Vérifiez le produit, la version et les informations Hyper-V. Mettez Windows à jour avant WSL2. Consultez les [instructions Microsoft pour WSL sur Server](https://learn.microsoft.com/en-us/windows/wsl/install-on-server) en cas d'erreur. Aucun seuil de mise à jour cumulative non vérifié n'est imposé ici.
 
-**Sur Server 2022**, si cette commande échoue avec `WSL_E_OS_NOT_SUPPORTED` ou si `wsl --update` affiche seulement un lien, la version est trop ancienne. Installez une mise à jour cumulative récente de Windows, redémarrez et relancez. Vérifiez la version avec :
+![Illustration de commande: Lire la version et les informations de virtualisation.](guide:server-host-check)
+
+## Parcours A : préparer WSL2
+
+Exécutez les commandes Windows dans PowerShell administrateur et les commandes Linux dans Ubuntu. La distribution appartient au compte Windows qui l'installe. Réutilisez ce compte ensuite.
+
+### 1. Installer Ubuntu sous WSL2
 
 ```powershell
-[System.Environment]::OSVersion.Version    # RTM 10.0.20348.0 is too old; want 20348.2xxx+
+{{server:wsl-install}}
 ```
 
-### 2. Activer systemd (obligatoire avant Docker)
+Redémarrez Windows si demandé, puis rouvrez PowerShell avec le même compte. Si ce nom manque, vérifiez `wsl --list --online` et les instructions Microsoft. Ne remplacez pas cette distribution par WSL1.
 
-Dans le shell Ubuntu (WSL2) :
+![Illustration de commande: Installer Ubuntu sous WSL2.](guide:server-wsl-install)
+
+### 2. Mettre WSL à jour et vérifier la version
+
+```powershell
+{{server:wsl-version}}
+```
+
+La ligne Ubuntu doit indiquer **VERSION 2**. Si elle indique 1, lancez `wsl --set-version Ubuntu-24.04 2`, puis vérifiez à nouveau. Résolvez les erreurs avant de continuer.
+
+![Illustration de commande: Mettre WSL à jour et vérifier la version.](guide:server-wsl-version)
+
+### 3. Ouvrir Ubuntu et créer son compte Linux
+
+```powershell
+{{server:wsl-open}}
+```
+
+Au premier lancement, créez le nom et le mot de passe Linux demandés. Ce mot de passe est distinct de Windows. La saisie reste normalement invisible. Utilisez le dossier personnel Linux, pas `/mnt/c`, pour Docker et OpenLDR.
+
+![Illustration de commande: Ouvrir Ubuntu et créer son compte Linux.](guide:server-wsl-open)
+
+### 4. Vérifier le gestionnaire de services Linux
 
 ```bash
-sudo tee /etc/wsl.conf >/dev/null <<'EOF'
+{{server:systemd-check}}
+```
+
+Dans Ubuntu, attendez `systemd`. Ubuntu WSL peut déjà l'activer. Dans ce cas, sautez les deux étapes suivantes et passez à **Installer Docker dans Linux**.
+
+![Illustration de commande: Vérifier le gestionnaire de services Linux.](guide:server-systemd-check)
+
+### 5. Activer systemd seulement si nécessaire
+
+```bash
+{{server:systemd-edit}}
+```
+
+Dans Ubuntu, conservez les autres paramètres du fichier. Dans la section `[boot]` existante, définissez `systemd=true`. Si elle manque, ajoutez :
+
+```ini
 [boot]
 systemd=true
-EOF
 ```
 
-Lancez ensuite `wsl --shutdown` depuis PowerShell, attendez environ 10 secondes et rouvrez Ubuntu. Vérifiez :
+Enregistrez avec **Ctrl+O**, puis **Entrée**, et quittez avec **Ctrl+X**. Ne remplacez pas tout le fichier. Microsoft détaille les [prérequis systemd](https://learn.microsoft.com/en-us/windows/wsl/systemd), dont WSL 0.67.6 ou ultérieur.
 
-```bash
-uname -r            # ...-microsoft-standard-WSL2
-ps -p 1 -o comm=    # systemd
+![Illustration de commande: Activer systemd seulement si nécessaire.](guide:server-systemd-edit)
+
+### 6. Redémarrer WSL et répéter la vérification
+
+```powershell
+{{server:wsl-restart}}
 ```
 
-### 3. Installer Docker CE
+Terminez les travaux en cours et fermez Ubuntu. Lancez ces commandes dans PowerShell. `--shutdown` arrête toutes les distributions de ce compte. Dans Ubuntu rouvert, `ps -p 1 -o comm=` doit afficher `systemd`. Activer Docker dans Ubuntu ne configure pas son lancement au démarrage de Windows.
 
-Dans Ubuntu :
+![Illustration de commande: Redémarrer WSL et répéter la vérification.](guide:server-wsl-restart)
 
-```bash
-curl -fsSL https://get.docker.com | sh
-# The script prints "WSL DETECTED: use Docker Desktop" and pauses — ignore it.
-# Docker Desktop is NOT supported on Windows Server; Docker CE in the distro is correct.
-sudo usermod -aG docker $USER
-exec su -l $USER                     # reload group membership
+## Parcours B : préparer une VM Linux Hyper-V
 
-sudo systemctl enable --now docker   # persistent because systemd is on
-docker info --format '{{.OSType}}'   # must print: linux
-docker compose version               # v2 plugin ships with the script
-```
-
-> Travaillez dans votre dossier personnel Linux (`~`), **jamais** sous `/mnt/c/...`. Le pont vers Windows est lent et pénalise fortement Docker.
-
-Passez maintenant à [Installer OpenLDR](#installer-openldr).
-
----
-
-## Voie B : machine virtuelle Hyper-V
-
-Cette voie crée une VM Ubuntu Server ordinaire. Rien n'y est propre à OpenLDR, donc une VM Linux existante convient aussi. Si vous en avez déjà une, installez-y Docker et passez à [Installer OpenLDR](#installer-openldr).
-
-Donnez à la VM **4 vCPU, 8 Go de RAM et 100 Go de disque** pour commencer. La pile fait tourner ensemble Postgres, Keycloak, le stockage d'objets, l'API et la passerelle.
+La VM a sa propre adresse réseau. L'exemple utilise **4 processeurs virtuels, 8 Go de RAM et 100 Go de disque**, comme repères et non comme minimums mesurés. Réservez des ressources à Windows. Si une VM adaptée existe déjà, passez à Docker. Installer Hyper-V redémarre le serveur. Créer un commutateur externe peut interrompre le réseau. Prévoyez un accès console.
 
 ### 1. Activer Hyper-V
 
-Sur **Windows Server**, dans un PowerShell administrateur :
-
 ```powershell
-Install-WindowsFeature -Name Hyper-V -IncludeManagementTools -Restart
+{{server:hyperv-enable}}
 ```
 
-Sur **Windows 10 / 11 Pro ou Entreprise** :
+Dans PowerShell administrateur sur Windows Server, lancez la commande. Le serveur redémarre. Rouvrez PowerShell ensuite. En cas d'échec, suivez le [guide Microsoft Hyper-V](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-hyper-v).
+
+![Illustration de commande: Activer Hyper-V.](guide:server-hyperv-enable)
+
+### 2. Trouver un commutateur ou la bonne carte physique
 
 ```powershell
-Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All
+{{server:switch-list}}
 ```
 
-Les deux commandes redémarrent la machine. Windows Famille n'a pas Hyper-V : utilisez WSL2 dans ce cas.
+Réutilisez un commutateur externe adapté. Sinon, identifiez la carte du réseau voulu. `Ethernet` à l'étape suivante est un exemple, pas un nom à recopier sans vérification.
 
-### 2. Créer un commutateur externe
+![Illustration de commande: Trouver un commutateur ou la bonne carte physique.](guide:server-switch-list)
 
-C'est ce qui donne à la VM sa propre adresse sur le réseau local, au lieu de la cacher derrière l'hôte. Utilisez le nom d'une vraie carte réseau, tiré de `Get-NetAdapter` :
+### 3. Créer un commutateur externe si nécessaire
 
 ```powershell
-Get-NetAdapter | Where-Object Status -eq 'Up'
-New-VMSwitch -Name "OpenLDR-External" -NetAdapterName "Ethernet" -AllowManagementOS $true
+{{server:switch-create}}
 ```
 
-> La création d'un commutateur externe coupe brièvement le réseau de l'hôte. Ne la lancez pas depuis une session Bureau à distance que vous devez garder.
+Remplacez `Ethernet` par le nom identifié. Utilisez une console tolérant une coupure réseau. Si vous réutilisez un commutateur, remplacez `OpenLDR-External` dans les commandes suivantes. Voir les [commutateurs externes Microsoft](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/create-a-virtual-switch-for-hyper-v-virtual-machines).
 
-### 3. Créer la VM
+![Illustration de commande: Créer un commutateur externe si nécessaire.](guide:server-switch-create)
 
-Téléchargez d'abord l'ISO **Ubuntu Server LTS**, puis :
+### 4. Télécharger et localiser l'ISO Ubuntu Server
 
 ```powershell
-$vm = "OpenLDR"
-New-VM -Name $vm -Generation 2 -MemoryStartupBytes 8GB `
-  -NewVHDPath "C:\Hyper-V\$vm.vhdx" -NewVHDSizeBytes 100GB -SwitchName "OpenLDR-External"
-
-Set-VMProcessor  -VMName $vm -Count 4
-Set-VMMemory     -VMName $vm -DynamicMemoryEnabled $false
-Add-VMDvdDrive   -VMName $vm -Path "C:\iso\ubuntu-24.04-live-server-amd64.iso"
-
-# Ubuntu will not boot under the default Secure Boot template.
-Set-VMFirmware -VMName $vm -SecureBootTemplate MicrosoftUEFICertificateAuthority
-Set-VMFirmware -VMName $vm -FirstBootDevice (Get-VMDvdDrive -VMName $vm)
-
-# Bring the stack back up with the host.
-Set-VM -Name $vm -AutomaticStartAction Start -AutomaticStartDelay 30
-
-Start-VM -Name $vm
-vmconnect.exe localhost $vm
+{{server:iso-check}}
 ```
 
-Mémoire fixe plutôt que dynamique : Postgres et la JVM de Keycloak se comportent mal quand le pilote de ballon reprend de la mémoire sous charge.
+Téléchargez une image AMD64 Ubuntu Server LTS depuis [Ubuntu](https://ubuntu.com/download/server). Cet exemple utilise Ubuntu 24.04 LTS. Placez-la dans `C:\iso\ubuntu-server-amd64.iso`, ou corrigez le chemin. Attendez `True`. Gardez cette fenêtre ouverte pour réutiliser `$iso`.
 
-### 4. Installer Ubuntu
+![Illustration de commande: Télécharger et localiser l'ISO Ubuntu Server.](guide:server-iso-check)
 
-Suivez l'installateur. Deux choix comptent :
-
-- **Install OpenSSH server** : sinon, vous restez bloqué dans la fenêtre de console.
-- **Donnez-lui une adresse stable** : une IP statique, ou une réservation DHCP sur l'adresse MAC de la VM (`Get-VMNetworkAdapter -VMName OpenLDR`). Les certificats et les partenaires de synchronisation pointeront vers cette adresse.
-
-Retirez ensuite l'ISO pour que la VM ne redémarre pas dans l'installateur :
+### 5. Créer une nouvelle VM et son disque
 
 ```powershell
-Set-VMDvdDrive -VMName OpenLDR -Path $null
+{{server:vm-create}}
 ```
 
-### 5. Installer Docker CE
+Dans la même fenêtre PowerShell, utilisez un nouveau nom et un nouveau disque. Ne réutilisez pas le disque d'une VM existante. Adaptez les ressources à la charge. La capacité virtuelle ne prouve pas que le disque physique a assez d'espace libre.
 
-Connectez-vous à la VM en SSH et lancez :
+![Illustration de commande: Créer une nouvelle VM et son disque.](guide:server-vm-create)
+
+### 6. Monter l'ISO et configurer le démarrage
+
+```powershell
+{{server:vm-boot}}
+```
+
+Le modèle Secure Boot compatible Linux permet à Ubuntu de démarrer. Le démarrage automatique concerne la VM après Windows. Vérifiez séparément le démarrage de Docker et des conteneurs.
+
+![Illustration de commande: Monter l'ISO et configurer le démarrage.](guide:server-vm-boot)
+
+### 7. Ouvrir la console et installer Ubuntu
+
+```powershell
+{{server:vm-console}}
+```
+
+Cette commande suppose un bureau Windows et les outils Hyper-V. Sur Server Core, utilisez Hyper-V Manager depuis un poste de gestion. Suivez le [tutoriel illustré Ubuntu](https://ubuntu.com/tutorials/install-ubuntu-server). Sélectionnez uniquement le nouveau disque, créez un compte Linux, activez OpenSSH si vous prévoyez SSH, terminez et redémarrez. L'image ci-dessous illustre l'ouverture de la console, pas les écrans de l'installateur Ubuntu.
+
+![Illustration de commande: Ouvrir la console et installer Ubuntu.](guide:server-vm-console)
+
+### 8. Retirer l'ISO et prévoir une adresse stable
+
+```powershell
+{{server:vm-eject}}
+```
+
+Dans PowerShell Windows, éjectez l'ISO et relevez l'adresse MAC. Réservez une adresse DHCP pour cette MAC, ou configurez une adresse statique adaptée dans Linux. Vérifiez avec `hostname -I` dans Ubuntu. Le nom OpenLDR doit pointer vers cette VM. Continuez dans Ubuntu, par console ou SSH.
+
+![Illustration de commande: Retirer l'ISO et prévoir une adresse stable.](guide:server-vm-eject)
+
+## Installer Docker dans Linux
+
+Les deux parcours se rejoignent ici. Exécutez ces commandes **dans Ubuntu**, pas dans PowerShell. Elles suivent le [dépôt Ubuntu de Docker](https://docs.docker.com/engine/install/ubuntu/). Le script de commodité est destiné aux tests et au développement. Sur un environnement existant, vérifiez les conflits Docker/containerd dans cette documentation avant de modifier des paquets utilisés ailleurs.
+
+### 1. Vérifier Ubuntu, le processeur et les services
 
 ```bash
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-exec su -l $USER                     # reload group membership
-
-sudo systemctl enable --now docker
-docker info --format '{{.OSType}}'   # must print: linux
-docker compose version
+{{server:linux-check}}
 ```
 
----
+Cet exemple attend Ubuntu 24.04, `amd64` et `systemd`. Les limites d'architecture des images sont dans [Prérequis](/docs/requirements).
 
-## Installer OpenLDR
+![Illustration de commande: Vérifier Ubuntu, le processeur et les services.](guide:server-linux-check)
 
-Les deux voies aboutissent ici, sur un vrai hôte Docker Linux. Lancez l'installateur standard en une ligne.
-
-**Local / auto-signé :**
-```
-curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh | bash
-```
-
-**Domaine public et TLS de confiance :**
-```
-curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh \
-  | bash -s -- --server-name your.domain.com --letsencrypt you@email.com
-```
-
-Voir [Installation](/docs/install) pour toutes les options de l'installateur. Vérifiez que la pile tourne :
+### 2. Ajouter la clé de signature Docker
 
 ```bash
-docker compose ps            # all Up / healthy
-curl -I http://localhost/    # app responds on the host itself
+{{server:docker-key}}
 ```
 
-## Accéder à OpenLDR depuis d'autres machines
+Exécutez tout le bloc dans Ubuntu. Arrêtez-vous si un téléchargement ou une commande de paquets échoue.
 
-### Sur Hyper-V
+![Illustration de commande: Ajouter la clé de signature Docker.](guide:server-docker-key)
 
-Rien à faire. Le commutateur externe place déjà la VM sur le réseau local : ouvrez simplement l'adresse de la VM dans un navigateur. Ouvrez les ports dans le pare-feu de la VM s'il est activé :
+### 3. Ajouter le dépôt de paquets Docker
 
 ```bash
-sudo ufw allow 80,443/tcp    # only if ufw is active
+{{server:docker-repo}}
 ```
 
-### Sur WSL2
+Incluez la dernière ligne `EOF`. Ce fichier est propre à Docker et ne remplace pas les sources principales Ubuntu.
 
-WSL2 ne transfère que le **loopback** de l'invité vers la distribution. `localhost` fonctionne donc sur le serveur lui-même, mais l'adresse du serveur sur le réseau local n'atteint pas la pile par défaut. Deux options :
+![Illustration de commande: Ajouter le dépôt de paquets Docker.](guide:server-docker-repo)
 
-- **Réseau en miroir** (le plus simple, demande un WSL récent) : ajoutez `networkingMode=mirrored` sous `[wsl2]` dans `%USERPROFILE%\.wslconfig`, puis lancez `wsl --shutdown`. Certaines versions 2022 reviennent au NAT et affichent « mirrored mode not supported ». Utilisez alors le proxy de ports ci-dessous.
-- **Proxy de ports** : dans un PowerShell administrateur, transférez les ports de la passerelle (80/443) du serveur vers l'IP WSL2 :
-  ```powershell
-  $wslip = (wsl hostname -I).Trim().Split(' ')[0]
-  netsh interface portproxy add v4tov4 listenport=443 listenaddress=0.0.0.0 `
-    connectport=443 connectaddress=$wslip
-  New-NetFirewallRule -DisplayName "OpenLDR 443" -Direction Inbound `
-    -Action Allow -Protocol TCP -LocalPort 443 -Profile Any
-  ```
+### 4. Installer Docker Engine et Compose
 
-> **L'IP WSL2 change au redémarrage.** Relancez la commande du proxy de ports après chaque `wsl --shutdown` ou redémarrage, idéalement depuis une tâche planifiée à l'ouverture de session. Sinon, le proxy pointe vers une adresse morte.
+```bash
+{{server:docker-install}}
+```
+
+La commande installe le moteur, les outils et le module Compose, puis active et démarre Docker.
+
+![Illustration de commande: Installer Docker Engine et Compose.](guide:server-docker-install)
+
+### 5. Donner l'accès Docker au compte d'installation
+
+```bash
+{{server:docker-access}}
+```
+
+`newgrp` ouvre un shell avec les nouveaux groupes. Le groupe Docker donne des privilèges root sur Linux. Utilisez le compte de maintenance OpenLDR. Voir les [étapes Docker après installation](https://docs.docker.com/engine/install/linux-postinstall/).
+
+![Illustration de commande: Donner l'accès Docker au compte d'installation.](guide:server-docker-access)
+
+### 6. Vérifier le moteur, Compose et un conteneur de test
+
+```bash
+{{server:docker-check}}
+```
+
+Attendez un moteur Linux AMD64, une version Compose et le succès `hello-world`. La dernière commande télécharge une petite image et supprime le conteneur terminé. Résolvez toute erreur avant OpenLDR.
+
+![Illustration de commande: Vérifier le moteur, Compose et un conteneur de test.](guide:server-docker-check)
+
+## Installer OpenLDR dans Linux
+
+Choisissez le nom **avant la première installation**. Sur Hyper-V, il doit atteindre la VM Ubuntu. Sur WSL2 avec le transfert ci-dessous, il doit atteindre Windows. Remplacez `openldr.example.org` par ce nom ou une IP accessible. Un réseau privé ou Tailscale peut utiliser le certificat auto-signé généré.
+
+### 1. Télécharger l'installateur Linux
+
+```bash
+{{server:install-download}}
+```
+
+Le fichier est enregistré dans `~/Downloads/openldr-install.sh`, dans Ubuntu. N'utilisez pas l'installateur PowerShell Windows ici.
+
+![Illustration de commande: Télécharger l'installateur Linux.](guide:server-install-download)
+
+### 2. Installer avec l'adresse accessible aux utilisateurs
+
+```bash
+{{server:install-run}}
+```
+
+Remplacez le nom d'exemple. `--seedless` exclut tableaux de bord et données de démonstration. Omettez cette option si vous les souhaitez sur cette installation neuve. Vos données ne dépendent pas des exemples. Gardez les identifiants privés. Un certificat public nécessite la tâche séparée dans [Installation](/docs/install), avec le port 80 accessible. La connexion reste différée jusqu'à la capture d'une installation neuve.
+
+![Illustration de commande: Installer avec l'adresse accessible aux utilisateurs.](guide:server-install-run)
+
+### 3. Vérifier l'état réel des services
+
+```bash
+{{server:install-status}}
+```
+
+Vérifiez les conteneurs et la santé de l'API. `-k` sert ici au certificat auto-signé local. Cela ne prouve ni l'accès distant ni la connexion Studio. En cas d'erreur, consultez `docker compose logs --tail 100` dans ce dossier. Le code de sortie de l'installateur seul ne prouve pas la disponibilité.
+
+![Illustration de commande: Vérifier l'état réel des services.](guide:server-install-status)
+
+## Permettre aux autres postes de joindre WSL2
+
+Ignorez cette tâche pour Hyper-V. Sa VM a un accès LAN, mais routage et pare-feu doivent autoriser les ports de la passerelle. Pour le NAT WSL2, le [guide réseau Microsoft](https://learn.microsoft.com/en-us/windows/wsl/networking) décrit le transfert explicite. Ses instructions de réseau en miroir visent Windows 11, pas ce parcours Server.
+
+### 1. Lire l'adresse Ubuntu et vérifier les ports Windows
+
+```powershell
+{{server:wsl-address}}
+```
+
+Dans PowerShell administrateur du compte propriétaire de WSL, relevez l'IPv4 Ubuntu. Vérifiez que IIS ou un autre service n'occupe pas 80/443. Une liste vide signifie qu'aucun écouteur TCP correspondant n'a été trouvé. Ne stoppez pas un service existant sans en vérifier l'usage.
+
+![Illustration de commande: Lire l'adresse Ubuntu et vérifier les ports Windows.](guide:server-wsl-address)
+
+### 2. Transférer les ports vers Ubuntu
+
+```powershell
+{{server:wsl-proxy}}
+```
+
+Vérifiez que `$wslIp` correspond à l'IPv4 relevée. Les règles écoutent sur toutes les interfaces IPv4 Windows. Elles ne transfèrent que les ports de passerelle, pas ceux des services internes. Si vous utilisez d'autres ports, adaptez les deux extrémités.
+
+![Illustration de commande: Transférer les ports vers Ubuntu.](guide:server-wsl-proxy)
+
+### 3. Autoriser les clients prévus et examiner les règles
+
+```powershell
+{{server:wsl-firewall}}
+```
+
+Cet exemple autorise HTTPS au sous-réseau local sur un profil Windows Domain ou Private. Pour Tailscale ou un réseau routé, remplacez `LocalSubnet` par la plage cliente voulue et choisissez le profil actif. Ajoutez une règle TCP 80 similaire seulement pour les redirections HTTP ou la validation publique du certificat. Après redémarrage WSL, vérifiez son IP et répétez les transferts si elle change. Ces règles ne démarrent pas Ubuntu.
+
+![Illustration de commande: Autoriser les clients prévus et examiner les règles.](guide:server-wsl-firewall)
+
+## Vérifier l'accès distant et le redémarrage
+
+Faites le test réseau depuis un autre ordinateur. Un test local au serveur ne prouve pas l'accès des utilisateurs.
+
+### 1. Tester l'adresse depuis un autre poste Windows
+
+```powershell
+{{server:remote-check}}
+```
+
+Remplacez le nom par celui de l'installation. Attendez `TcpTestSucceeded: True`, qui prouve seulement la connexion TCP. Ouvrez `https://VOTRE_HOTE` pour tester la passerelle. Confiance du certificat et connexion sont distinctes. Ne désactivez pas durablement les contrôles de certificat.
+
+![Illustration de commande: Tester l'adresse depuis un autre poste Windows.](guide:server-remote-check)
+
+### 2. Vérifier le démarrage prévu
+
+```powershell
+{{server:vm-reboot-check}}
+```
+
+Pour Hyper-V, la propriété doit indiquer `Start`. Lors d'un redémarrage de maintenance, revérifiez VM, Docker, santé des conteneurs et accès distant. Pour WSL2, prévoyez et testez un mécanisme de démarrage sous le compte propriétaire. Un service systemd ne démarre pas WSL avec Windows. Sans ce mécanisme testé, ne considérez pas l'installation comme autonome. Préférez Hyper-V si le démarrage automatique est requis.
+
+![Illustration de commande: Vérifier le démarrage prévu.](guide:server-vm-reboot-check)
+
+**Résultat attendu :** Docker Linux exécute OpenLDR, le nom configuré atteint la passerelle depuis le réseau voulu et le retour après redémarrage a été vérifié. La connexion Studio reste une tâche séparée sur installation neuve.

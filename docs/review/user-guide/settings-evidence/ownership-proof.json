@@ -1,0 +1,10 @@
+{
+  "verifiedAt": "2026-11-12T14:04:26.872Z",
+  "processId": 36197,
+  "internalDatabase": "postgres://127.0.0.1:15441/guide_internal",
+  "targetDatabase": "postgres://127.0.0.1:15441/guide_target",
+  "bucket": "openldr-docs-admin-review",
+  "identityIssuer": "http://127.0.0.1:18288/realms/docs",
+  "identityInternalIssuer": "http://127.0.0.1:18288/realms/docs",
+  "identityAdapter": "keycloak"
+}

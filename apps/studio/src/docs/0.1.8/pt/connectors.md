@@ -1,271 +1,248 @@
 # Conectores
 
-Um **conector** é uma ligação guardada a outro sistema: uma base de dados, um servidor de e-mail, um servidor de ficheiros, ou um destino fornecido por um plugin instalado. Os nós dos fluxos de trabalho, as consultas personalizadas e os relatórios usam um conector **pelo nome**. Nenhum deles guarda palavras-passe. O servidor fornece-a quando o trabalho corre.
+Guarde uma ligação uma vez e selecione-a nos workflows, Custom Queries e relatórios. Um conector guarda as definições da ligação e as credenciais cifradas.
 
-Leva cerca de 15 minutos. Selecione uma imagem ou um clip para o ampliar.
+Precisa de **Manage connectors**. Use a sua base de dados ou conta de serviço. As capturas usam uma conta fictícia de relatórios só de leitura numa base Postgres isolada.
 
-![Definições, Conectores numa instalação nova: um conector, Target Warehouse (Postgres).](connectors-tour.png)
+Uma instalação nova cria um conector para o armazém de dados com o motor configurado. As capturas usam **Target Warehouse (Postgres)**. As consultas e relatórios integrados usam esse conector. Verifique as dependências antes de o alterar.
 
-## Quem pode fazer o quê
+O endereço e a porta têm de estar acessíveis a partir do servidor OpenLDR. No Docker, `localhost` designa esse contentor. Use o nome do serviço da base e a porta interna quando ambos partilham uma rede Docker.
 
-Uma só capacidade cobre esta página: **Manage connectors**. Sem ela, Conectores não aparece em Definições. A função incluída **Administrator** tem-na.
+Criar um conector não importa registos nem executa um workflow. A [prática opcional](#pratica-opcional) encontra-se no fim.
 
-## O que tem uma instalação nova
+## Escolher o tipo de ligação
 
-Um conector, **Target Warehouse (Postgres)**. Aponta para o armazém do laboratório, a base de dados onde o OpenLDR escreve os dados laboratoriais. Os relatórios incluídos e as consultas personalizadas leem através dele. Não o remova.
+Use as definições e a conta preparadas para o serviço pretendido. Escolha o tipo de ligação antes de preencher os campos.
 
-A lista mostra de cada conector o **Nome**, o **Tipo**, o **Host permitido do plugin** e um interruptor **Ativado**. **Host permitido do plugin** é o único host de rede que um conector de plugin pode alcançar. Não é o endereço de ligação guardado, e os conectores de anfitrião deixam-no vazio. Abra **Editar** para ver o endereço de um conector de anfitrião.
+### 1. Abrir o menu de utilizador
 
-## Exemplo 1: testar o conector do armazém
+Selecione o menu da sua conta no fundo da barra lateral principal.
 
-![Abrir o menu da linha Target Warehouse e selecionar Testar. Aparece Ligação OK.](connectors-test.mp4)
+![Abrir o menu de utilizador no canto inferior esquerdo.](connectors-guide-open-user-menu.png)
 
-1. Abra **Definições** e depois **Conectores**.
-2. Na linha **Target Warehouse (Postgres)**, abra o menu **⋯** e selecione **Testar**.
+### 2. Abrir Settings
 
-**Resultado esperado:** **Ligação OK** por baixo do menu da linha. O teste corre a partir do servidor OpenLDR, não do seu navegador. Prova assim que o servidor chega à base de dados.
+Escolha **Settings** no menu da conta.
 
-Cada teste fica registado na [Auditoria](/docs/audit) como `connector.test`, com o resultado.
+![Escolher Settings no menu de utilizador.](connectors-guide-settings-menu.png)
 
-## Exemplo 2: adicionar um conector só de leitura para relatórios
+### 3. Abrir Connectors
 
-Um relatório ou uma consulta personalizada precisa de ler os dados, não de os mudar, e raramente precisa do nome dos pacientes. Dê-lhe uma conta de base de dados que só lê as tabelas de que precisa. Assim, nem uma consulta errada pode mudar dados ou ler o nome de um paciente.
+Selecione **Connectors** em Settings.
 
-Este exemplo cria uma conta que lê pedidos, resultados, amostras, relatórios e unidades, mas não pacientes.
+![Abrir Settings e depois Connectors.](connectors-guide-open.png)
 
-### Criar a conta na base de dados
+### 4. Abrir as ações da página
 
-No servidor, com o utilizador que corre o OpenLDR, execute isto a partir da pasta da instalação. Troque a palavra-passe pela sua.
+Selecione os pontos acima da tabela.
 
-```bash
-docker compose -f docker-compose.prod.yml exec -T postgres psql -U openldr -d openldr_target <<'SQL'
-CREATE ROLE report_reader LOGIN PASSWORD 'choose-a-strong-password';
-GRANT CONNECT ON DATABASE openldr_target TO report_reader;
-GRANT USAGE ON SCHEMA public TO report_reader;
-GRANT SELECT ON lab_requests, lab_results, specimens, diagnostic_reports, facilities TO report_reader;
-SQL
+![O menu de pontos da página contém Add connector.](connectors-guide-actions.png)
+
+### 5. Escolher Add connector
+
+Selecione **Add connector**.
+
+![Escolher Add connector.](connectors-guide-add.png)
+
+### 6. Dar um nome à ligação
+
+Introduza um nome reconhecível ao escolher um conector. O exemplo usa `Example reporting database`. Não inclua palavras-passe no nome.
+
+![Usar um nome que identifique a base e a finalidade.](connectors-guide-name.png)
+
+### 7. Escolher Host
+
+Defina **Category** como **Host** para uma ligação integrada de base de dados, correio ou ficheiros.
+
+![Escolher Host para ligações integradas de base de dados, correio ou ficheiros.](connectors-guide-host-option.png)
+
+### 8. Escolher o tipo de serviço
+
+Defina **Database type** como o serviço real. O exemplo usa **Postgres**. A lista também contém serviços de correio e ficheiros.
+
+![Escolher o tipo real de serviço. O exemplo usa Postgres.](connectors-guide-type.png)
+
+## Introduzir os detalhes e guardar
+
+Continue no painel aberto. Os campos dependem do tipo de serviço escolhido. Este exemplo usa Postgres.
+
+### 1. Introduzir o endereço da base
+
+Preencha **Host**, **Port** e **Database**. O endereço mostrado pertence a esta instalação de teste. Use o endereço do seu servidor.
+
+![Introduzir o endereço, a porta e a base acessíveis a partir do servidor OpenLDR.](connectors-guide-address.png)
+
+### 2. Introduzir a conta
+
+Preencha **User** e **Password** com a conta da base. Um teste de ligação não determina que tabelas essa conta pode ler.
+
+![Usar a conta autorizada a ler os dados necessários.](connectors-guide-account.png)
+
+### 3. Verificar a cifragem do transporte
+
+Ajuste **Use SSL** aos requisitos da base. O exemplo local mantém desligado. Outros tipos têm as suas definições de transporte.
+
+![Ajustar Use SSL à base. O exemplo isolado não usa SSL.](connectors-guide-ssl.png)
+
+### 4. Abrir as ações do painel
+
+Selecione os pontos no cabeçalho do painel.
+
+![Abrir o menu de pontos do painel do conector.](connectors-guide-sheet-actions.png)
+
+### 5. Guardar o conector
+
+Selecione **Save**.
+
+![Save guarda o conector e as credenciais cifradas.](connectors-guide-save.png)
+
+**Resultado esperado:** o conector aparece na lista e começa ativo. Allowed plugin host é uma restrição de rede dos plugins. A coluna não indica o endereço guardado da base.
+
+![A linha mostra o nome, o tipo, o endereço permitido aos plugins e o estado ativo.](connectors-guide-created.png)
+
+## Testar a ligação guardada
+
+Faça um teste após criar o conector ou alterar as credenciais.
+
+### 1. Escolher Test
+
+Abra os pontos da linha e escolha **Test**.
+
+![Test connection verifica as credenciais guardadas.](connectors-guide-test.png)
+
+### 2. Ler o resultado
+
+Aguarde **Connection OK** ou uma falha por baixo do menu da linha. Uma ligação bem-sucedida não prova que uma consulta ou envio de correio tem sucesso.
+
+![Connection OK confirma que este servidor consegue ligar com a conta guardada.](connectors-guide-test-result.png)
+
+**Resultado esperado:** o servidor OpenLDR testa as credenciais guardadas. Os resultados aparecem em Audit.
+
+## Alterar definições ou credenciais
+
+Edite diretamente as definições normais. As palavras-passe ficam vazias após guardar. Deixe uma palavra-passe vazia para a manter.
+
+### 1. Abrir Edit
+
+Na linha correta, abra os pontos e escolha **Edit**.
+
+![Edit abre as definições normais guardadas.](connectors-guide-edit.png)
+
+### 2. Verificar os campos guardados
+
+Verifique o endereço, a porta, a base e o utilizador. Uma palavra-passe definida mostra uma indicação no campo. Introduza outra apenas para a substituir.
+
+![Os campos normais estão visíveis. A palavra-passe guardada permanece vazia.](connectors-guide-stored.png)
+
+### 3. Guardar as alterações
+
+Abra os pontos do painel e escolha **Save**. O exemplo deixa a palavra-passe vazia e mantém-na. Teste novamente o conector depois.
+
+![Guardar com a palavra-passe vazia mantém a que está guardada.](connectors-guide-save-kept.png)
+
+**Resultado esperado:** o mesmo conector continua disponível aos seus consumidores existentes. Usam as definições atualizadas na próxima execução.
+
+## Encontrar e desativar temporariamente uma ligação
+
+Desative um conector para suspender o uso sem eliminar as definições guardadas.
+
+### 1. Pesquisar na lista
+
+Pesquise pelo nome, tipo ou endereço permitido aos plugins.
+
+![A pesquisa encontra o nome, o tipo e o endereço do conector.](connectors-guide-search.png)
+
+### 2. Desligar Enabled
+
+Desligue **Enabled** na linha correta. As consultas e workflows que dependem dele podem falhar enquanto estiver desativado.
+
+![Enabled pode impedir temporariamente o uso do conector.](connectors-guide-toggle.png)
+
+### 3. Verificar o interruptor
+
+Um interruptor desligado indica que está desativado. Ligue quando puder ser usado.
+
+![Um interruptor desligado indica um conector desativado.](connectors-guide-disabled.png)
+
+**Resultado esperado:** desativar mantém o conector e as credenciais. Não remove as dependências.
+
+## Remover uma ligação desnecessária
+
+Verifique os workflows, consultas e relatórios dependentes antes de remover. Não remova o conector do armazém de dados apenas para limpar a lista.
+
+### 1. Escolher Remove
+
+Abra os pontos da linha e escolha **Remove**.
+
+![Remove elimina o conector e as credenciais guardadas.](connectors-guide-remove.png)
+
+### 2. Verificar a confirmação
+
+Confirme o nome. Escolha **Remove** para eliminar ou **Cancel** para manter. A captura mantém o exemplo para as tarefas seguintes.
+
+![Verificar o nome do conector antes de confirmar a remoção.](connectors-guide-remove-confirm.png)
+
+**Resultado esperado:** confirmar Remove elimina o conector e as credenciais. As referências restantes falham até serem reconfiguradas.
+
+## Usar Connectors num telemóvel
+
+A coluna Host fica oculta no telemóvel. Abra Edit para ler o endereço da ligação.
+
+### 1. Encontrar a linha
+
+Use a pesquisa e depois os pontos da linha ou Enabled.
+
+![No telemóvel, o nome, o tipo, o interruptor e os pontos cabem na largura.](connectors-guide-phone-list.png)
+
+### 2. Ler ou alterar as definições
+
+Escolha **Edit** nos pontos da linha. O painel preenche o ecrã. Desloque dentro dele nos formulários longos.
+
+![O painel de edição preenche o ecrã do telemóvel.](connectors-guide-phone-edit.png)
+
+## Escolher o tipo correto
+
+**Bases SQL.** Postgres, MySQL / MariaDB e Microsoft SQL têm definições diferentes. O conector escolhido determina o dialeto da consulta. Para instâncias SQL Server e contas de domínio Windows, leia [Diagnosticar ligações](/docs/connector-diagnose).
+
+**Outros serviços.** MongoDB, Redis, SMTP Email, IMAP Email, Gmail, Microsoft Outlook e SFTP mostram os campos do respetivo tipo. Use as credenciais fornecidas pelo operador. Gmail e Outlook exigem um registo de aplicação existente e um token de renovação. SMTP usa a conta de envio e as definições do retransmissor.
+
+**Destinos de plugin.** Escolha Category **Plugin**, selecione um plugin de destino instalado e preencha Base URL, Username e Password em conjunto. Ao editar, deixe os três vazios para os manter ou substitua os três. Instale um plugin de destino em [Mercado](/docs/marketplace) se a lista estiver vazia.
+
+Um nó oferece conectores ativos do tipo exigido. Um conector em falta pode estar desativado ou ter outro tipo. Não coloque palavras-passe nos nomes dos workflows ou no texto SQL.
+
+## Usar a linha de comandos
+
+Leia [Começar aqui](/docs/start-here) para configurar a CLI. A partir de `openldr_ce`, use os comandos seguintes. Obtenha o identificador na lista. As operações de adicionar, inspecionar, atualizar, testar e remover suportam conectores Host. Os destinos de plugin usam Studio.
+
+Um ficheiro de adição contém `name`, `type` e `config`. Um ficheiro de atualização contém apenas os campos a alterar. Os campos omitidos mantêm-se guardados. Os segredos vazios mantêm os valores existentes. Proteja os ficheiros de credenciais e remova-os após usar.
+
+```shell
+pnpm openldr connectors list
+pnpm openldr connectors inspect <id>
+pnpm openldr connectors add --file new-connector.json
+pnpm openldr connectors update <id> --file connector-patch.json
+pnpm openldr connectors test <id>
+pnpm openldr connectors remove <id> --force
 ```
 
-### Adicionar o conector
+## Prática opcional
 
-![Adicionar Warehouse (read only): Anfitrião, Postgres, o endereço, a base de dados, o utilizador e a palavra-passe, depois Guardar e Testar.](connectors-add.mp4)
+As tarefas usam a sua conta de serviço. Numa instalação descartável, peça ao operador uma pequena tabela de teste e um papel só de leitura. As capturas usam duas linhas fictícias em `guide_orders` e `guide_reader`.
 
-1. Em **Conectores**, abra o menu **⋯** da página e selecione **Adicionar conector**.
-2. Em **Nome**, escreva `Warehouse (read only)`. É o nome que se escolhe nos nós dos fluxos e nas consultas.
-3. Defina **Categoria** como **Anfitrião**. Deixe **Plugin** para destinos fornecidos por um plugin instalado.
-4. Defina **Tipo de base de dados** como **Postgres**.
-5. Preencha a ligação:
-
-   | Campo | Valor |
-   | --- | --- |
-   | Host | `postgres` |
-   | Porta | `5432` |
-   | Base de dados | `openldr_target` |
-   | Utilizador | `report_reader` |
-   | Palavra-passe | a palavra-passe que escolheu |
-
-6. Abra o menu **⋯** do painel e selecione **Guardar**. Aparece **Warehouse (read only) guardado**, e a linha nova. Começa ativada.
-7. Na linha dele, abra **⋯** e selecione **Testar**.
-
-**Resultado esperado:** **Ligação OK**.
-
-O clip foi feito numa instalação de desenvolvimento, onde a base de dados está em `localhost` porta `5433`. Numa instalação normal, o servidor chega a ela em `postgres` porta `5432`, como na tabela.
-
-### Ver o que consegue ler, e o que não consegue
-
-![Uma consulta em Warehouse (read only): 60 pedidos, depois a tabela patients recusada.](connectors-readonly-query.mp4)
-
-1. Abra **Consulta** e abra um separador novo. Veja [Consultas personalizadas, Exemplo 2](/docs/query#exemplo-2-escrever-uma-consulta).
-2. Escolha o conector **Warehouse (read only)**.
-3. Escreva `SELECT COUNT(*) AS orders FROM lab_requests` e selecione **Executar**.
-4. Troque por `SELECT COUNT(*) AS patients FROM patients` e selecione **Executar**.
-
-**Resultado esperado:** a primeira consulta devolve **60**, os pedidos do exemplo. A segunda falha. Aparece uma marca vermelha à esquerda do conector. Aponte para ela para ler **permission denied for table patients**. A tabela por baixo mantém o último resultado que funcionou, por isso veja a marca, não a tabela. A conta não consegue ler nomes de pacientes, seja qual for a consulta.
-
-![A mensagem da marca vermelha: permission denied for table patients.](connectors-readonly-denied.png)
-
-É assim que se mantêm colunas privadas nos caminhos dos conectores. A [Exposição de dados](/docs/data-exposure) não cobre os conectores.
-
-## Exemplo 3: mudar uma palavra-passe
-
-Quando a palavra-passe de uma base de dados muda, atualize o conector. Aqui a palavra-passe de `report_reader` muda primeiro, por isso o conector deixa de funcionar até ser atualizado.
-
-1. Mude a palavra-passe na base de dados:
-
-   ```bash
-   docker compose -f docker-compose.prod.yml exec -T postgres psql -U openldr -d openldr_target \
-     -c "ALTER ROLE report_reader PASSWORD 'the-new-password'"
-   ```
-
-2. Teste outra vez **Warehouse (read only)**. Falha com **Falha no teste: password authentication failed for user "report_reader"**, porque o conector ainda tem a palavra-passe antiga.
-
-![O teste a falhar depois da mudança de palavra-passe.](connectors-test-failed.png)
-
-![Editar o conector, escrever a palavra-passe nova, guardar e testar outra vez.](connectors-rotate.mp4)
-
-3. Na linha dele, abra **⋯** e selecione **Editar**. **Palavra-passe** está vazia e mostra **••• definido (deixe em branco para manter)**. A palavra-passe antiga nunca é mostrada.
-4. Escreva a palavra-passe nova em **Palavra-passe**. Deixe os outros campos como estão.
-5. Abra o menu **⋯** do painel e selecione **Guardar**.
-6. Teste outra vez.
-
-**Resultado esperado:** **Ligação OK**. Os fluxos, consultas e relatórios que usam o conector apanham a palavra-passe nova na próxima execução. Não é preciso mudar mais nada.
-
-## Como os fluxos de trabalho usam conectores
-
-Um nó **Postgres**, **MySQL** ou **Microsoft SQL**, ou um nó **Send Email**, mostra uma lista de conectores, não campos de palavra-passe. A lista é filtrada por tipo:
-
-- Um nó **Postgres** só lista conectores Postgres.
-- Um nó **Send Email (SMTP)** só lista conectores SMTP.
-
-Por isso crie primeiro o conector, depois abra o nó e escolha-o. Se um conector não aparece na lista de um nó, é do tipo errado ou está desativado.
-
-**O tipo do conector define o dialeto SQL.** O nome do nó é só um nome. O dialeto vem do conector ligado, por isso escolha um cujo tipo corresponda à sua base de dados real.
-
-Veja [Fluxos de trabalho](/docs/workflows) para um exemplo completo com o conector do armazém.
-
-## Segurança
-
-- As palavras-passe e os tokens são encriptados em repouso com a chave de encriptação do servidor. Depois de guardados, nunca mais são mostrados.
-- Para mudar um segredo, edite o conector, escreva o novo, salve e teste, como no Exemplo 3. Deixe um segredo em branco para manter o guardado.
-- Desligue **Ativado** para impedir qualquer uso de um conector, sem o apagar.
-- **Remover**, no menu da linha, apaga o conector e os segredos guardados. Tudo o que apontava para ele falha até o apontar para outro.
-- Dê a cada conector uma conta de base de dados só com os direitos de que precisa, como no Exemplo 2.
-- Nunca ponha segredos em nomes, notas, capturas de ecrã ou nomes de fluxos.
-- Mantenha um conector por destino real. Assim, mudá-lo ou desativá-lo tem um só efeito claro.
-
-## Os endereços são vistos a partir do servidor
-
-O host e a porta têm de ser alcançáveis **a partir do servidor OpenLDR**, não do seu computador.
-
-- Numa instalação normal, o OpenLDR corre em Docker Compose. Use o nome do serviço e a porta interna, por exemplo `postgres` e `5432`.
-- Se o OpenLDR corre diretamente numa máquina, use o endereço e a porta publicada que usaria nessa máquina, por exemplo `localhost` e `5433`.
-
-## Tipos de conector
-
-Defina **Categoria** como **Anfitrião** para estes. A lista **Tipo de base de dados** inclui também os serviços de e-mail e de ficheiros, apesar do nome.
-
-| Tipo | Usado por | Campos |
-| --- | --- | --- |
-| Postgres | Nó Postgres, consultas personalizadas, relatórios | Host, Porta (5432), Base de dados, Utilizador, Palavra-passe, Usar SSL |
-| MySQL / MariaDB | Nó MySQL, consultas personalizadas, relatórios | Host, Porta (3306), Base de dados, Utilizador, Palavra-passe, Usar SSL |
-| Microsoft SQL | Nó Microsoft SQL, consultas personalizadas, relatórios | Host, Porta (1433), Base de dados, Utilizador, Palavra-passe, Encriptar, Confiar no certificado do servidor |
-| MongoDB | Nó MongoDB | Dados de ligação e base de dados |
-| Redis | Nó Redis | Host, Porta, Palavra-passe, Índice de BD |
-| SMTP Email | Nó Send Email | Host, Porta, Utilizador, Palavra-passe, Usar TLS |
-| IMAP Email | Nó Email Trigger | Host, Porta, Utilizador, Palavra-passe, Usar TLS |
-| Gmail, Microsoft Outlook | Nó Send Email | ID do cliente, Segredo do cliente, Token de atualização, e Inquilino no Outlook |
-| SFTP | Nós de transferência de ficheiros | Host, Porta, Utilizador, Palavra-passe |
-
-No Microsoft SQL, ligue **Encriptar** para exigir TLS. Ligue **Confiar no certificado do servidor** só para um certificado autoassinado numa instalação de teste.
-
-Defina **Categoria** como **Plugin** para um destino fornecido por um plugin de saída instalado, como um envio para o DHIS2. Escolha o plugin em **Plugin de saída** e preencha **URL base**, **Utilizador** e **Palavra-passe**. Se a lista disser que não há plugins de saída instalados, instale um a partir do [Marketplace](/docs/marketplace).
-
-## Conectores de e-mail
-
-Use **SMTP Email** para o nó **Send Email**. Funciona com qualquer fornecedor SMTP, incluindo o Gmail com uma palavra-passe de aplicação, o Outlook e o Office 365, e serviços de envio como o smtp2go ou o Mailtrap.
-
-Use **Gmail** ou **Microsoft Outlook** só se já tiver uma aplicação Google Cloud ou Microsoft Entra com ID do cliente, segredo do cliente e token de atualização. Dá mais trabalho do que a maioria dos laboratórios precisa. Para o Gmail, o SMTP é mais simples.
-
-| Campo | Valor |
-| --- | --- |
-| Host | O servidor de e-mail, por exemplo `smtp.gmail.com` |
-| Porta | `587` com **Usar TLS** desligado (STARTTLS), ou `465` com **Usar TLS** ligado |
-| Utilizador | A conta que envia. É também o endereço do remetente |
-| Palavra-passe | A palavra-passe da conta, ou uma palavra-passe de aplicação no Gmail |
-
-O destinatário define-se depois, no campo **To** do nó Send Email.
-
-### Enviar do Gmail com uma palavra-passe de aplicação
-
-Com a verificação em dois passos ligada, o Gmail recusa a sua palavra-passe normal por SMTP com `534-5.7.9 Application-specific password required`. Use antes uma **palavra-passe de aplicação**: uma palavra-passe de 16 caracteres que o Gmail cria para uma só aplicação. Salta o segundo passo só para essa aplicação, protege a sua palavra-passe real e pode ser revogada a qualquer momento.
-
-1. Ligue a **verificação em dois passos** em `myaccount.google.com`, em Segurança. As palavras-passe de aplicação precisam dela.
-2. Vá a `myaccount.google.com/apppasswords`, dê-lhe um nome, por exemplo `OpenLDR`, e selecione **Criar**. Copie o código de 16 caracteres, mostrado como `abcd efgh ijkl mnop`.
-3. Adicione um conector com **Categoria** **Anfitrião** e **Tipo de base de dados** **SMTP Email**:
-
-   | Campo | Valor |
-   | --- | --- |
-   | Host | `smtp.gmail.com` |
-   | Porta | `587` |
-   | Utilizador | `you@gmail.com` |
-   | Palavra-passe | a palavra-passe de aplicação de 16 caracteres |
-   | Usar TLS | Desligado |
-
-4. Salve, teste e escolha este conector no nó Send Email.
-
-Se a página das palavras-passe de aplicação disser que não estão disponíveis, a verificação em dois passos não está totalmente ligada, ou um administrador do Google Workspace desligou-as. Use um serviço como o **Mailtrap** para testes, ou o **smtp2go**.
-
-| Fornecedor | Host | Porta | Usar TLS |
-| --- | --- | --- | --- |
-| Gmail | `smtp.gmail.com` | 587 | Desligado, com palavra-passe de aplicação |
-| Outlook / Office 365 | `smtp.office365.com` | 587 | Desligado |
-| smtp2go | `mail.smtp2go.com` | 2525 ou 587 | Desligado |
-| Mailtrap (testes) | `sandbox.smtp.mailtrap.io` | 587 | Desligado |
-
-## Na linha de comandos
-
-A linha de comandos pode listar, adicionar, ler, mudar, testar e remover um conector de base de dados. Os conectores de plugin, como o DHIS2, adicionam-se e testam-se no studio.
-
-```bash
-./openldr connectors list
-./openldr connectors add --file new.json
-./openldr connectors inspect <id>
-./openldr connectors update <id> --file patch.json
-./openldr connectors test <id>
-./openldr connectors remove <id> --force
-```
-
-- `list` mostra o id, o tipo ou plugin, o nome de cada conector, e se está ativo. Junte `--json` para JSON. Não mostra definições.
-- `add` lê `{"name", "type", "config"}` e mostra o id novo. Exemplo: `{"name":"Reports DB","type":"postgres","config":{"host":"db.internal","port":"5432","database":"lab","user":"reader","password":"..."}}`. Só aceita os campos do próprio tipo, como no studio.
-- `test` abre uma ligação de teste com as credenciais guardadas. Mostra `Connection OK` ou o erro, e sai com o código 1 se falhar.
-- `remove` recusa sem `--force`. Tudo o que usa o conector deixa de funcionar.
-- `inspect` mostra JSON com a `config` normal e um `secretsSet` verdadeiro ou falso para cada segredo. Nunca mostra um segredo.
-- `update` recebe uma correção JSON. Os campos omitidos ficam como estão, e um segredo em branco mantém o guardado. Exemplo: `{"config":{"host":"db.internal","port":"5432"}}`. Só mudar o nome: `{"name":"Lab database"}`.
-- A saída e os registos de auditoria nunca têm valores de segredos. Proteja qualquer ficheiro com um segredo novo, e apague-o depois.
-
-O id do conector está em `openldr connectors list`.
-
-## Editar as definições guardadas
-
-**Editar** mostra os campos normais guardados de um conector de anfitrião: host, porta, base de dados e utilizador quando o tipo os tem. Um segredo já definido fica em branco. Deixe-o em branco para o manter, mesmo que mude o host. Os URL, os campos desconhecidos e as definições de plugins não são mostrados.
-
-Num conector de plugin, preencha **URL base**, **Utilizador** e **Palavra-passe** juntos, ou deixe os três em branco para manter os valores guardados.
-
-## Limite das consultas
-
-As consultas dos conectores PostgreSQL, MySQL e Microsoft SQL têm um limite de 30 segundos. Uma consulta lenta falha em vez de deixar um fluxo ou relatório à espera para sempre. A ligação tem o seu próprio limite de 30 segundos. O formulário do conector não tem campo de tempo limite.
-
-- O PostgreSQL e o Microsoft SQL cancelam o pedido em curso.
-- O MySQL abre uma segunda ligação com a mesma conta para parar a consulta. Pode levar mais um segundo, e a conta tem de poder abrir outra ligação e terminar as suas próprias sessões.
-
-Se uma consulta atingir o limite, reduza o período ou os filtros e veja o plano na base de dados. Se o erro disser `server cancellation failed`, o OpenLDR fechou a sua ligação mas não confirmou que a base de dados parou a consulta. Peça ao operador da base de dados que veja as consultas ativas.
-
-## Paragem do servidor
-
-Com SIGTERM ou SIGINT, a API deixa de aceitar pedidos e de consultar a fila. Espera pelos pedidos ativos, pelo lote da fila reservado e pelo ciclo de projeção em curso, e depois fecha as bases de dados. Um segundo sinal não inicia outra paragem.
-
-Um processador que nunca termina pode deixar a paragem à espera para sempre. Dê tempo às importações em curso antes de o gestor de serviços forçar a paragem. Depois de o worker parar, os esvaziamentos manuais continuam possíveis até o contexto fechar.
-
-## Num telemóvel
-
-Num telemóvel, a tabela de conectores é mais larga do que o ecrã. Deslize-a para o lado para chegar ao menu **⋯** de cada linha, no fim da linha. O painel **Adicionar conector** ocupa o ecrã, com as etiquetas à esquerda de cada campo.
+Não copie o endereço ou a palavra-passe das capturas para um conector real. Dê à conta de relatórios SELECT apenas nas tabelas aprovadas. Confirme as consultas permitidas e recusadas na sua base. O teste ilustrado verificou a ligação Postgres local. Não testou o envio de correio, a autorização cloud ou a transferência de ficheiros.
 
 ## Resolução de problemas
 
-- **`534-5.7.9 Application-specific password required` (Gmail).** Use uma palavra-passe de aplicação, não a sua palavra-passe de início de sessão.
-- **Credenciais inválidas, ou falha de autenticação.** O utilizador ou a palavra-passe está errado. Edite o conector e escreva o segredo outra vez.
-- **Ligação recusada, ou tempo esgotado.** O host ou a porta está errado, ou o servidor não lhe chega. Compare o nome do serviço Docker com `localhost`.
-- **Erro TLS ou SSL.** Acerte **Usar SSL**, **Usar TLS** ou **Encriptar** com o que o servidor pede. No SMTP, 587 quer dizer **Usar TLS** desligado e 465 ligado.
-- **permission denied for table.** A conta da base de dados não tem direitos sobre essa tabela. Pode ser de propósito, como no Exemplo 2.
-- **Uma consulta falha mas o resultado antigo continua no ecrã.** A página Consulta mantém o último resultado que funcionou. A marca vermelha à esquerda do conector tem o erro. Aponte para ela para o ler.
-- **Um conector não aparece na lista de um nó.** O tipo não corresponde ao nó, ou está desativado.
-- **O teste passa mas um fluxo falha.** Abra o separador de execuções do fluxo e leia o erro do nó. Veja [Fluxos de trabalho, Exemplo 3](/docs/workflows#exemplo-3-ler-a-execucao). A consulta ou os direitos são a causa habitual.
+**Ligação recusada ou tempo esgotado.** Verifique o endereço a partir do servidor OpenLDR e a firewall da base. Abra os pontos da linha e Diagnose para ligações Host.
+
+**A autenticação falhou.** Verifique a conta e a base. Substitua a palavra-passe em Edit e teste novamente.
+
+**Erro SSL ou de certificado.** Pergunte ao operador que definições de transporte são necessárias. SQL Server mostra Encrypt e Trust server certificate.
+
+**O teste passa mas uma consulta falha.** Leia o erro ou a execução do workflow. A conta pode não ter acesso, o SQL pode usar outro dialeto ou a consulta exceder o prazo. As consultas dos conectores SQL têm um limite de 30 segundos.
+
+**Os resultados antigos continuam visíveis.** Verifique o erro junto do seletor do conector. Uma tabela anterior não prova que a última execução teve sucesso.
 
 ## Guias relacionados
 
-- [Fluxos de trabalho](/docs/workflows)
-- [Consultas personalizadas](/docs/query)
-- [Exposição de dados](/docs/data-exposure)
-- [Relatórios agendados](/docs/report-pipeline)
-- [Marketplace](/docs/marketplace)
-- [Definições](/docs/settings)
+[Diagnosticar ligações](/docs/connector-diagnose) explica as verificações. [Começar aqui](/docs/start-here) explica a CLI. Workflows e Custom Queries usam conectores guardados.

@@ -1,0 +1,135 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Data design</span><span>Browse data and save read-only SQL</span><span>About 30 minutes</span></div>
+<h1>Query</h1>
+<p>Use Query to browse enabled database connectors, inspect workflow datasets and save SELECT statements as Custom Queries. Report Designer can bind tables to those saved queries.</p>
+<p>Start with your own connector and received data. No documentation sample data is required. The count example below also returns a useful result when the warehouse is empty. The pictures use a separate test installation.</p>
+<p>You need <strong>Use query workbench</strong>. Queries read data. Statements that change data or tables are refused. A new installation creates a target-warehouse connector for its configured database engine. These pictures use <strong>Target Warehouse (Postgres)</strong>. Other sources need a matching enabled database connector.</p>
+<p>Saved built-in queries can supply reports. Inspect them freely, but understand those report dependencies before changing SQL or parameter identifiers.</p>
+<h2 id="dg-browse">Browse a source table</h2>
+<p>Use this to inspect a connector schema before writing SQL. A schema is the database namespace containing its tables.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Query</h3><p>Select Query in the main menu.</p>__SHOT:open-page:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Expand Connectors</h3><p>Select Connectors in the Explorer.</p>__SHOT:connectors:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Expand your connector</h3><p>Select the enabled database connector. The example uses Target Warehouse (Postgres).</p>__SHOT:warehouse:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Expand its schema</h3><p>Select the schema, such as public for the PostgreSQL warehouse.</p>__SHOT:schema:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Open the table</h3><p>Select the table you want to inspect. The example uses lab_requests. Empty tables can return no rows without an error.</p>__SHOT:table:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Inspect the browse SQL</h3><p>Select the SQL button above the results to show the generated SELECT. Plain table browsing has no guaranteed row order.</p>__SHOT:browse-sql:6__</section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Use the result pages</h3><p>Use the page size and arrows for larger results. Add a deliberate ORDER BY ending in a unique key before relying on stable pages.</p>__SHOT:browse-paging:7__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The tab reads current rows from the selected connector. The screenshot warehouse has no requests.</p></div>
+__SHOT:browse-result:0__
+<h2 id="dg-write">Run a warehouse count</h2>
+<p>Use a small read-only query to confirm the connector and the result. Your request count can differ from the picture.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open a new query</h3><p>Select the plus labelled new query in the tab bar.</p>__SHOT:new-query:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the connector</h3><p>Open Connector and select the database you intend to query.</p>__SHOT:choose-connector:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Enter the SELECT</h3><p>Enter <code>SELECT COUNT(*) AS requests FROM lab_requests</code> in the editor.</p>__SHOT:sql:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Run the query</h3><p>Select Run. The result has one requests column and one row, including when the count is zero.</p>__SHOT:run:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The result shows the current warehouse request count.</p></div>
+__SHOT:count-result:0__
+<h2 id="dg-parameters">Add a required date-range parameter</h2>
+<p>Use parameters when the same query should ask for values each time it runs. This example counts requests from an included start date up to an excluded end date.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Use the date-bound SQL</h3><p>Replace the SQL with <code>SELECT COUNT(*) AS requests FROM lab_requests WHERE authored_at &gt;= {{ param.from }} AND authored_at &lt; {{ param.to }}</code>.</p>__SHOT:parameter-sql:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Parameters</h3><p>Select Parameters above the SQL editor.</p>__SHOT:parameters:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Add a parameter</h3><p>Open the Parameter actions dots in the sheet and choose Add.</p>__SHOT:parameter-actions:3____SHOT:parameter-add:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Set Variable ID</h3><p>Enter <code>period</code> as Variable ID. Date-range parameters supply the special from and to values used by the SQL.</p>__SHOT:parameter-id:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Set its visible label</h3><p>Enter a clear Label, such as Period.</p>__SHOT:parameter-label:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Choose daterange</h3><p>Set Type to <strong>daterange</strong>.</p>__SHOT:parameter-type:6__</section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Require the date bounds</h3><p>Turn on Required because this SQL needs both dates.</p>__SHOT:parameter-required:7__</section>
+<section class="dg-step"><h3><span class="dg-number">8.</span> Save the parameter definition</h3><p>Open Parameter actions and select Save. This updates the current query tab. Save the query itself when you want to keep it.</p>__SHOT:parameter-save:8__</section>
+<h2 id="dg-run-values">Run with chosen dates</h2>
+<p>Use dates matching your reporting question. The example includes 2026-01-01 and excludes 2027-01-01. That is the whole 2026 calendar year.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Run the parameterized query</h3><p>Select Run. A Run parameters sheet asks for the configured values.</p>__SHOT:run:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Enter the date bounds</h3><p>Set the first date to the included start. Set the second to the excluded end used by this SQL. Different SQL can use a different boundary rule.</p>__SHOT:from-date:2____SHOT:to-date:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open Run actions</h3><p>Select the dots in the Run parameters sheet.</p>__SHOT:run-values-actions:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Run with these values</h3><p>Select Run with these values.</p>__SHOT:run-values:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The result counts only requests inside the SQL date bounds. Zero is a valid count.</p></div>
+__SHOT:parameter-result:0__
+<h2 id="dg-save">Save the custom query</h2>
+<p>Save the SQL, connector and parameter definition when other work needs to reuse them.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Save</h3><p>Open Query actions above the editor and select Save.</p>__SHOT:query-actions:1____SHOT:save-query:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Name the query</h3><p>Enter a unique name. The example uses Requests in a date range.</p>__SHOT:query-name:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Save the named definition</h3><p>Open Name actions in the naming sheet and choose Save.</p>__SHOT:name-save:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The query appears under Custom Queries in the Explorer. Later saves update the same definition.</p></div>
+__SHOT:saved-query:0__
+<h2 id="dg-rename">Rename a saved query</h2>
+<p>Use Rename to keep the existing query identifier and its report links. Renaming does not save unsaved editor changes.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the saved row actions</h3><p>Expand Custom Queries and use the dots beside the saved query.</p>__SHOT:saved-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Rename</h3><p>Select Rename in that row menu.</p>__SHOT:rename:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Save the new name</h3><p>Enter the new unique name, then open Name actions and choose Save. The example becomes Request count by period.</p>__SHOT:rename-value:3____SHOT:name-save:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The Explorer shows the new name and the query retains its identifier.</p></div>
+__SHOT:renamed:0__
+<h2 id="dg-group">Organise a query in a group</h2>
+<p>Groups arrange this installation's Explorer. They do not change a query's SQL or report bindings.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Custom query actions</h3><p>Select the dots beside Custom Queries.</p>__SHOT:custom-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Create a group</h3><p>Select New group.</p>__SHOT:new-group:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Name and save the group</h3><p>Enter a useful name, then use Name actions and Save. The example uses Documentation examples.</p>__SHOT:group-name:3____SHOT:name-save:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Move the query</h3><p>Open the query row dots, point at Move to group and select the destination group. Expand that group to see the query.</p>__SHOT:move-group:4____SHOT:group-option:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The saved query appears inside its group.</p></div>
+__SHOT:grouped:0__
+<h2 id="dg-export">Export selected queries</h2>
+<p>Use an export to move names, SQL, parameters and group names between installations. Review the file before sharing source-specific content.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Export queries</h3><p>Open Transfer actions in the Explorer header and select Export queries.</p>__SHOT:transfer-actions:1____SHOT:export-open:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Select the definitions</h3><p>Tick only the queries you intend to export.</p>__SHOT:export-select:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Download the file</h3><p>Open the export sheet dots and choose Download. Close the sheet when finished.</p>__SHOT:export-download:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The JSON file contains the selected definitions. It omits query identifiers and connector bindings.</p></div>
+<h2 id="dg-import">Review and import a query file</h2>
+<p>Use this for an exported query file or an approved content pack. Check same-name behavior before applying it.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Import queries</h3><p>Open Transfer actions and select Import queries.</p>__SHOT:import-open:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the JSON file</h3><p>Open the import sheet dots, choose Choose file and pick the query export.</p>__SHOT:import-choose:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read the preview</h3><p>Check whether each name is new, skipped or replaced. The example already exists, so it will be skipped with replacement off.</p>__SHOT:import-preview:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check the connector and replacement choice</h3><p>Choose the connector for newly imported names. Leave Replace existing queries off when you want to preserve existing definitions. Turn it on only when you intend replacement.</p>__SHOT:import-connector:4____SHOT:import-replace:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Apply the reviewed import</h3><p>Open the sheet dots and select Import. One invalid definition prevents the file from being imported.</p>__SHOT:import-apply:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The reviewed operation creates, skips or replaces the names as shown. Replacement keeps an existing query identifier and connector.</p></div>
+<h2 id="dg-dataset">Open a workflow dataset</h2>
+<p>Use this when a workflow has already prepared the rows you need. No workflow dataset is required for the other tasks in this guide.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Expand Datasets</h3><p>Select Datasets in the Explorer.</p>__SHOT:datasets:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open a saved dataset</h3><p>Select its name. The example opens request_summary, created in Scheduled reports with workflows. It contains one requests value of zero.</p>__SHOT:dataset-result:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The tab displays the saved workflow rows.</p></div>
+<h2 id="dg-phone">Run a saved query on a phone</h2>
+<p>The Explorer starts collapsed so the workspace has more room. A large screen is easier for writing SQL.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Expand the Explorer</h3><p>Select Expand explorer at the top of its narrow rail.</p>__SHOT:phone-expand:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the saved query</h3><p>Expand Custom Queries and its group, then select the query name.</p>__SHOT:phone-query:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Collapse the Explorer</h3><p>Select Collapse explorer to give the editor more width.</p>__SHOT:phone-collapse:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Enter run values</h3><p>Select Run and fill the parameter sheet. Use Run actions and Run with these values as on desktop.</p>__SHOT:phone-run:4____SHOT:phone-values:4__</section>
+<h2 id="dg-delete-group">Remove a group and keep its queries</h2>
+<p>Use this when the folder is no longer useful. Removing a group keeps every query it contains.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the group actions</h3><p>Use the dots beside the group name.</p>__SHOT:group-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Delete group</h3><p>Select Delete group.</p>__SHOT:group-delete:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Confirm the folder removal</h3><p>Read the confirmation explaining that queries remain, then select Delete group.</p>__SHOT:group-delete-confirm:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The folder disappears and its queries appear outside it.</p></div>
+__SHOT:ungrouped:0__
+<h2 id="dg-delete-query">Remove an unneeded saved query</h2>
+<p>Check report dependencies before deleting a query. This example removes a disposable definition and keeps the reviewed query.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the query actions</h3><p>Use the dots beside the unneeded saved query.</p>__SHOT:delete-query-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Delete query</h3><p>Select Delete query. This removes the saved definition, not warehouse rows.</p>__SHOT:delete-query:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Confirm the removal</h3><p>Read the confirmation, then choose Delete query only for the definition you intend to remove.</p>__SHOT:delete-query-confirm:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The saved definition disappears from the Explorer.</p></div>
+<h2 id="dg-types">Choose parameter types</h2>
+<p>Text accepts a value read as <code>{{ param.variableId }}</code>. Select asks for one value from Options SQL. Its first returned column supplies the choices. Date range supplies <code>{{ param.from }}</code> and <code>{{ param.to }}</code>.</p>
+<p>Choose a unique nonempty Variable ID for each parameter. The parameter row dots can move it up or down or remove it. Removing a parameter still referenced by SQL causes an unbound-parameter error.</p>
+<p>A blank optional value becomes an empty string. SQL must explicitly handle that empty value when it means no filter. Required does not invent a default. A report uses template parameters, so match its parameter key to the saved query definition.</p>
+<p>The current Reports page passes date filters as flat from and to values. A Custom Query declaring one daterange parameter works in this workbench but currently fails when bound directly to Reports. For reporting, use two Text query parameters named from and to, referenced by {{ param.from }} and {{ param.to }}. Report Designer can expose them through one Date range control.</p>
+<h2 id="dg-manage">Remove or regroup definitions</h2>
+<p>A saved query row offers Rename, Move to group and Delete query. No group moves a query back to the top-level list. Deleting a saved query requires confirmation and can break reports that reference it.</p>
+<p>Each group has Rename group and Delete group. Deleting a group keeps its queries and moves them out. Dragging a query onto a group is another way to move it. On a phone, use Move to group for a direct menu action.</p>
+<p>Refresh under Transfer actions reloads Explorer entries changed elsewhere, including by CLI or content pack imports. Group organisation belongs to this installation and is not sent through central-to-lab sync.</p>
+<h2 id="dg-paging">Keep paged results consistent</h2>
+<p>PostgreSQL and MySQL show a counted total. SQL Server can show total unknown and enables Next only when another row was found. Changing Rows per page returns to the first page.</p>
+<p>For stable paging, finish ORDER BY with a unique key. For example, <code>ORDER BY authored_at, id</code> breaks equal-time ties when id is unique. Rows can still change while you page because the workbench does not hold a database snapshot.</p>
+<p>A SQL Server connector without a Database can show accessible databases before schemas. Use full database, schema and table names for cross-database SQL on the same server. PostgreSQL connectors read one database each.</p>
+<h2 id="dg-cli">Export or import from the CLI</h2>
+<p>Read <a href="start-here-review.html">Start here</a> for the launcher on your platform. Use your real installation folder, such as <code>~/Downloads/openldr_ce</code> or <code>C:\openldr_ce</code>. A development checkout uses <code>pnpm openldr</code> instead of <code>openldr</code>.</p>
+<pre><code>openldr query export --out data/queries.json --name "Request count by period"
+openldr query import data/queries.json</code></pre>
+<p>Export overwrites an existing output file. Import skips existing names by default. Add <code>--force</code> only when you intend to replace them. Content for one lab system belongs in operator-managed pack files.</p>
+<h2 id="dg-practice">Optional practice query file</h2>
+<p><a href="query-evidence/request-count-queries.json" download>Download the single reviewed query export</a>. It asks for dates and counts warehouse requests. It contains no patient rows and needs no sample bundle. Import it only if you want a reference after writing your own query.</p>
+<p>For a practice dataset, follow the optional count workflow in <a href="report-pipeline-review.html">Scheduled reports with workflows</a>. Datasets can be absent on a new installation.</p>
+<h2 id="dg-help">Troubleshooting</h2>
+<p><strong>No sources are available.</strong> Ask a manager to configure an enabled database connector or create the workflow dataset you need.</p>
+<p><strong>A query fails.</strong> Read the error replacing the result. Correct SQL or values and run again. Old results are not a successful new answer.</p>
+<p><strong>An unbound parameter is reported.</strong> Match every SQL parameter to a configured definition. Date ranges use the from and to values.</p>
+<p><strong>A Select list is empty.</strong> Run its Options SQL in a separate tab. It may legitimately return no rows.</p>
+<p><strong>A name already exists.</strong> Choose another name. The naming sheet preserves the draft after a rejected duplicate name.</p>
+<p><strong>An imported change disappears after restart.</strong> Built-in definitions can be seeded again. Create a separate custom name when you need a durable variation.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="report-designer-review.html">Report Designer</a> binds saved query output to a page. <a href="reports-review.html">Reports</a> runs library entries. <a href="connectors-review.html">Connectors</a> configures data sources.</p>
+</article>

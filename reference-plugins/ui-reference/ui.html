@@ -1,8 +1,26 @@
 <style>
-  .ref { font-family: system-ui, sans-serif; padding: 16px; color: #111; }
+  /* Match the sibling plugin palette. The SDK updates data-openldr-theme on host changes. */
+  :root {
+    --bg: #f4f7fb;
+    --surface: #ffffff;
+    --surface-2: #f8fafc;
+    --border-strong: #cbd5e1;
+    --text: #0f172a;
+    color-scheme: light;
+  }
+  :root[data-openldr-theme="dark"] {
+    --bg: #0c1322;
+    --surface: #141d30;
+    --surface-2: #1b263c;
+    --border-strong: #3a4a66;
+    --text: #e6edf6;
+    color-scheme: dark;
+  }
+  body { margin: 0; background: var(--bg); color: var(--text); }
+  .ref { font-family: system-ui, sans-serif; padding: 16px; }
   .ref h1 { font-size: 16px; margin: 0 0 8px; }
-  .ref pre { background: #f4f4f5; padding: 8px; border-radius: 6px; font-size: 12px; overflow:auto; }
-  .ref button { padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
+  .ref pre { background: var(--surface-2); color: var(--text); padding: 8px; border-radius: 6px; font-size: 12px; overflow:auto; }
+  .ref button { padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; }
 </style>
 <div class="ref">
   <h1>OpenLDR Reference Plugin</h1>

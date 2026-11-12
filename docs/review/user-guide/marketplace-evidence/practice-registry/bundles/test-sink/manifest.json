@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "type": "plugin",
+  "id": "test-sink",
+  "version": "0.1.0",
+  "description": "Trivial sink ABI test plugin",
+  "readme": "# Training sink\n\nUse this local example to review and approve a plugin. It does not send data to a real destination.",
+  "license": "Apache-2.0",
+  "publisher": {
+    "id": "guide-system-review",
+    "name": "Guide practice publisher",
+    "keyFingerprint": "a38cccade1a6f25cb32e880ae29f67c850a6edb03aede7efc67778ef0fcfb834"
+  },
+  "compatibility": {
+    "ceVersion": "*"
+  },
+  "dependencies": [],
+  "capabilities": [
+    {
+      "kind": "net-egress",
+      "allowedHosts": []
+    }
+  ],
+  "source": "local-file",
+  "payload": {
+    "kind": "plugin",
+    "pluginKind": "sink",
+    "wasmSha256": "ae99e2196fc39e2fd8988e396f4e89cc9995632c2489247337e305a2e868868d",
+    "entrypoint": "convert",
+    "entrypoints": [
+      "health_check",
+      "push_aggregate",
+      "wf_echo",
+      "wf_convert",
+      "wf_emit"
+    ],
+    "wasi": true,
+    "limits": {
+      "memoryMb": 256,
+      "timeoutMs": 30000
+    },
+    "workflowNodes": [
+      {
+        "id": "echo",
+        "label": "Echo",
+        "kind": "transform",
+        "description": "",
+        "entrypoint": "wf_echo",
+        "ports": {
+          "inputs": [
+            {
+              "name": "in",
+              "binary": false
+            }
+          ],
+          "outputs": [
+            {
+              "name": "out",
+              "binary": false
+            }
+          ]
+        },
+        "capabilities": [],
+        "config": [
+          {
+            "key": "note",
+            "label": "Note",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "abi": "items"
+      },
+      {
+        "id": "convert",
+        "label": "Convert Lines",
+        "kind": "transform",
+        "description": "",
+        "entrypoint": "wf_convert",
+        "ports": {
+          "inputs": [
+            {
+              "name": "in",
+              "binary": false
+            }
+          ],
+          "outputs": [
+            {
+              "name": "out",
+              "binary": false
+            }
+          ]
+        },
+        "capabilities": [],
+        "config": [],
+        "abi": "bytes",
+        "binaryField": "file"
+      },
+      {
+        "id": "emit",
+        "label": "Emit File",
+        "kind": "transform",
+        "description": "",
+        "entrypoint": "wf_emit",
+        "ports": {
+          "inputs": [
+            {
+              "name": "in",
+              "binary": false
+            }
+          ],
+          "outputs": [
+            {
+              "name": "out",
+              "binary": false
+            }
+          ]
+        },
+        "capabilities": [],
+        "config": [],
+        "abi": "items"
+      }
+    ]
+  },
+  "signature": "42b2ca3805b71f55812181236884cead2d3a39d1031ce001d8e9e904e28bb3754f9ded14e3919265058a617f39de124bfb9d228f05fc3f7dc436842fe1f42102"
+}

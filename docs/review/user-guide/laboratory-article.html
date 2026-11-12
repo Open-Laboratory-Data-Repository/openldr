@@ -1,0 +1,47 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Administration</span><span>Set issuing-laboratory details</span><span>About 10 minutes</span></div>
+<h1>Laboratory</h1>
+<p>Laboratory stores the issuing laboratory name, address, contact details and logo used by report templates. It also sets the default facility register and the local time zone.</p>
+<p>Use your real laboratory details and approved logo. The pictures show a fictional laboratory in a test installation. No practice data is required. You need View settings to open the page and Edit general settings to save it.</p>
+<p>The issuing laboratory is the organisation producing reports. Facilities are the organisations sending work. Choosing a default register here does not create or import facilities.</p>
+<h2 id="dg-identity">Save your laboratory details</h2>
+<p>Use this after installation or when the issuing laboratory details change.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Settings and Laboratory</h3><p>Open your user menu at the bottom left, choose <strong>Settings</strong>, then select <strong>Laboratory</strong>.</p>__SHOT:user-menu:1____SHOT:settings-menu:1____SHOT:laboratory-page:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Enter the laboratory name</h3><p>Enter your issuing laboratory name in <strong>Laboratory name</strong>. The example uses <code>Documentation laboratory</code>.</p>__SHOT:name:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Enter the address</h3><p>Enter the address for your letterhead in <strong>Address</strong>. It can contain more than one line.</p>__SHOT:address:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Enter the contact details</h3><p>Enter your approved contact details in <strong>Contact</strong>. The picture uses an example.invalid email address.</p>__SHOT:contact:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Choose the facility register</h3><p>In <strong>Facility register</strong>, select an existing registered source. If the needed source is absent, register it through Facilities first. This choice supplies the default register for the Facility form.</p>__SHOT:register:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Set the time zone when applicable</h3><p>For PostgreSQL or MySQL, enter a named time zone such as <code>Africa/Dar_es_Salaam</code>. Read the help below the field. SQL Server requires a Windows time-zone name in each report run instead, so leave this setting empty there.</p>__SHOT:timezone:6__</section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Save the details</h3><p>Open the page dots at the top right and select <strong>Save</strong>.</p>__SHOT:page-actions:7____SHOT:save-identity:7__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The saved details remain when you reopen Laboratory.</p></div>
+__SHOT:identity-result:0__
+<h2 id="dg-clear">Remove an old logo</h2>
+<p>Use this when the current logo should no longer appear in templates that use the laboratory logo.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Clear the draft logo</h3><p>Select <strong>Clear</strong> beside Logo. This changes the draft only.</p>__SHOT:clear-logo:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Save the removal</h3><p>Open the page dots and select <strong>Save</strong>.</p>__SHOT:save-clear-logo:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The saved laboratory settings no longer contain a logo.</p></div>
+<h2 id="dg-logo">Upload the laboratory logo</h2>
+<p>Use a PNG or JPEG file up to 256 KB. Transparent PNG is useful for a letterhead logo.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose the image</h3><p>Select <strong>Choose file…</strong> beside Logo and select your approved local image.</p>__SHOT:choose-logo:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the preview</h3><p>Confirm that the expected image appears beside Logo. The picture reuses the test installation's shipped mark.</p>__SHOT:logo-preview:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Save the logo</h3><p>Open the page dots and select <strong>Save</strong>.</p>__SHOT:save-logo:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The logo remains after reopening Laboratory. A report template must use the laboratory tokens to display these values.</p></div>
+__SHOT:logo-result:0__
+<h2 id="dg-phone">Change laboratory details on a phone</h2>
+<p>Use the same fields on a phone. The page scrolls vertically.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Edit the identity fields</h3><p>Enter the laboratory name and other fields within the phone-width form.</p>__SHOT:phone-name:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Scroll to Logo</h3><p>Scroll down to the logo preview and Choose file control. Save changes through the page dots.</p>__SHOT:phone-logo:2__</section>
+<h2 id="dg-tokens">Use the details in report templates</h2>
+<p>Report templates can use <code>{{lab.name}}</code>, <code>{{lab.address}}</code>, <code>{{lab.contact}}</code> and <code>{{lab.logo}}</code>. The page prints these token names below its description. Use Report Designer to place them in a template. Saving Laboratory does not edit a template.</p>
+<h2 id="dg-practice">Optional practice</h2>
+<p>In a test installation, save a fictional laboratory name and example.invalid contact address. Reuse an approved test PNG or JPEG for the upload exercise. Restore your intended settings afterward.</p>
+<h2 id="dg-limits">Limits</h2>
+<p>The logo accepts PNG and JPEG, up to 256 KB. SVG, WebP and image web addresses are not accepted. The register picker lists existing sources; it cannot register one.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>The register list is empty.</strong> Open Facilities and register the source before returning here.</p>
+<p><strong>The time zone is refused.</strong> Use a named zone, not a fixed offset. Follow the SQL Server exception shown below the field.</p>
+<p><strong>The logo is refused.</strong> Check its format and size. Choose a PNG or JPEG no larger than 256 KB.</p>
+<p><strong>A report does not show the saved details.</strong> Check whether its template uses the laboratory tokens.</p>
+<h2 id="dg-related">Related guides</h2>
+<p>Read <a href="./facilities-review.html">Facilities</a> to register a source. Read <a href="./setup-checks-review.html">Setup checks</a> to review readiness. Read <a href="./start-here-review.html">Start here</a> for command-line setup.</p>
+</article>

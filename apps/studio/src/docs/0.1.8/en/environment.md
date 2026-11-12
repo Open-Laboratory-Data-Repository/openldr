@@ -1,257 +1,173 @@
 # Environment variables
 
-OpenLDR is configured through environment variables read at startup. In a Docker
-deployment they live in the `.env` file next to `docker-compose.yml` (the file the
-installer generates). Change a value, then recreate the stack to apply it:
+OpenLDR reads environment variables when its server starts. In an installed Docker deployment, edit the private `.env` beside its Compose file, then recreate the affected services.
 
-```
-docker compose up -d
-```
+Use Settings for values that have app controls. Connectors store destination credentials. Marketplace manages registries after their first boot. Distributed sync stores its link configuration in Settings. Those saved settings do not require an environment-file edit.
 
-Most operators never edit these by hand. The installer writes sensible defaults and
-generates every secret for you. This page is a reference for the values that matter
-when you move beyond a single-host install: a public domain, an external database, or
-SQL Server as the analytics store.
+You need server access and the deployment's exact Compose project, environment file and overlays. Keep those options consistent. The terminal pictures below are illustrations with placeholder commands. They do not show your server or claim that a deployment change was executed.
 
-> Secrets (`*_PASSWORD`, `*_SECRET_*`, `SECRETS_ENCRYPTION_KEY`) are generated on first
-> install and must never be shared or committed. Rotating `SECRETS_ENCRYPTION_KEY`
-> after connectors exist makes their stored credentials unreadable. Treat it as
-> permanent once the stack is live.
+Preserve `SECRETS_ENCRYPTION_KEY`. Replacing it after saved credentials exist makes them unreadable. Keep passwords, signing keys, private certificates and backups out of screenshots and version control.
 
-## Runtime
+## Identify the running installation
 
-| Variable | Default | Purpose |
+Check the application before choosing a configuration file. A source checkout and an installed Compose deployment use different startup commands.
+
+### 1. Open General
+
+Open **Settings**, then **General**.
+
+![Open Settings, then General.](environment-guide-general.png)
+
+### 2. Read About
+
+Record the running Version and Environment. This page identifies the app, but it does not expose the private environment file.
+
+![About identifies the running application version and environment.](environment-guide-about.png)
+
+### 3. Find its Compose directory
+
+On the server, open the directory containing this installation's Compose file and .env. The illustrated `~/openldr_ce` path is an example. Use your actual deployment directory.
+
+![Illustration. Work in the installed Compose project directory.](environment-guide-folder.png)
+
+**Expected result:** You know which running deployment and configuration files the change concerns.
+
+## Change a startup value
+
+Agree any downtime required by the selected value. Use a private editor and preserve existing credentials.
+
+### 1. Back up the configuration
+
+Save the current .env privately before editing. Keep it with the deployment backup and restrict access.
+
+![Illustration. Back up configuration privately before editing.](environment-guide-backup.png)
+
+### 2. Edit only the intended value
+
+Change the selected value. The illustration uses LOG_LEVEL. Do not paste the placeholder example over your complete file.
+
+![Illustration. Change only the environment value you intend to change.](environment-guide-edit.png)
+
+### 3. Validate the Compose configuration
+
+Run `docker compose config --quiet` with the deployment's normal project, env-file and overlay options. Require exit code 0. Avoid printing the expanded configuration into shared logs.
+
+![Illustration. Validate the Compose configuration without printing secrets.](environment-guide-validate.png)
+
+### 4. Recreate affected services
+
+Use `docker compose up -d` for the affected services. A restart alone keeps an existing container's environment. Public origin or identity changes can affect several services.
+
+![Illustration. Recreate affected services to apply startup settings.](environment-guide-apply.png)
+
+### 5. Check the result
+
+Check container state, app health, logs and the changed behavior. A healthy API does not prove external databases, login callbacks or file destinations work.
+
+![Illustration. Check service state and application health.](environment-guide-health.png)
+
+**Expected result:** The new process reads the intended value. Preserve the previous configuration until the behavior has been checked.
+
+## Runtime and deployment address
+
+The application parser and installer have different defaults. The parser defaults NODE_ENV to development. A deployed stack should explicitly run production. Compose-only values configure the gateway and image tags.
+
+| Variable | Default or source | Meaning |
 | --- | --- | --- |
-| `NODE_ENV` | `production` | Runtime mode. Keep `production` for deployments. |
-| `PORT` | `3000` | Internal API port behind the gateway. |
-| `LOG_LEVEL` | `info` | Log verbosity (`debug`, `info`, `warn`, `error`). |
-| `OPENLDR_VERSION` | `latest` | Image tag the stack pulls and runs. |
-| `TRUST_PROXY` | unset | How many proxies in front of the API to trust for the client IP. Set `1` behind the bundled gateway, so audit entries show the real client address. Only set it when a trusted proxy really fronts the API. Otherwise a client can fake its own IP. |
+| `NODE_ENV` | Parser: development | Set production for deployed services. |
+| `PORT` | 3000 | Internal API listening port. |
+| `LOG_LEVEL` | info | Server log level. |
+| `TRUST_PROXY` | Unset | Trust proxy hops for client IP attribution. Use only the actual trusted proxy chain. |
+| `OPENLDR_VERSION` | Deployment image tag | Pin the approved application release for upgrades. |
+| `SERVER_NAME`, `PUBLIC_ORIGIN` | Deployment values | Public hostname and complete external origin. |
+| `GATEWAY_HTTP_PORT`, `GATEWAY_HTTPS_PORT` | 80, 443 | Published gateway ports. |
+| `TLS_MODE`, `LETSENCRYPT_EMAIL` | Installer values | Gateway certificate mode and certificate contact. |
+| `MIGRATE_ON_START`, `SEED_ON_START` | Parser: false, false | Startup migrations and optional sample-data seeding. Upgrade procedure uses a separate migration step. |
 
-## Public address and TLS
+## Databases and object storage
 
-These decide the URL users reach and how the gateway terminates HTTPS. `SERVER_NAME`
-is the public hostname. `PUBLIC_ORIGIN` is the full origin used for links and OIDC
-redirects.
+The internal database always uses Postgres. Select the warehouse engine through TARGET_STORE_ADAPTER. These variables configure the warehouse itself. Additional report and source connections belong in Connectors.
 
-| Variable | Default | Purpose |
+| Variable | Default or source | Meaning |
 | --- | --- | --- |
-| `SERVER_NAME` | `localhost` | Public hostname or domain of this deployment. |
-| `PUBLIC_ORIGIN` | `https://localhost` | Full external origin (`https://your.domain`). |
-| `GATEWAY_HTTP_PORT` | `80` | Host port the gateway serves HTTP on. |
-| `GATEWAY_HTTPS_PORT` | `443` | Host port the gateway serves HTTPS on. |
-| `TLS_MODE` | `self-signed` | `self-signed` or a trusted (Let's Encrypt) certificate. |
-| `LETSENCRYPT_EMAIL` | unset | Contact email used when issuing a trusted certificate. |
+| `INTERNAL_DATABASE_URL` | Required | Application database, including accounts, audit and canonical resources. |
+| `TARGET_STORE_ADAPTER` | pg | Warehouse engine: pg, mssql or mysql. |
+| `TARGET_DATABASE_URL` | Required for pg | Postgres warehouse connection. |
+| `MSSQL_HOST`, `MSSQL_DATABASE`, `MSSQL_USER`, `MSSQL_PASSWORD` | Required for mssql | SQL Server warehouse connection. |
+| `MSSQL_PORT` | 1433 | SQL Server warehouse port. |
+| `MSSQL_ENCRYPT`, `MSSQL_TRUST_SERVER_CERT` | false, true | Warehouse transport options. Check the actual server certificate requirements. |
+| `MYSQL_HOST`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` | Required for mysql | MySQL or MariaDB warehouse connection. |
+| `MYSQL_PORT` | 3306 | MySQL warehouse port. |
+| `MYSQL_SSL`, `MYSQL_SSL_REJECT_UNAUTHORIZED` | false, false | Warehouse TLS and certificate verification options. |
+| `BLOB_ADAPTER` | minio | S3 adapter selector. It also supports the bundled Garage service. |
+| `S3_ENDPOINT`, `S3_BUCKET` | Required | Object service endpoint and bucket. |
+| `S3_REGION`, `S3_FORCE_PATH_STYLE` | us-east-1, true | S3 region and path addressing. |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Private credentials | Object-storage access. Garage requires its supported key format. |
+| `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` | Installer-generated | Garage service secrets. Preserve them with its configuration. |
+| `EVENTING_ADAPTER` | pg | Application event-store implementation. |
 
-## Database
+## Authentication and secrets
 
-OpenLDR always uses an internal Postgres application database. The target (analytics)
-warehouse can be Postgres, SQL Server, or MySQL/MariaDB, chosen with
-`TARGET_STORE_ADAPTER`. `TARGET_DATABASE_URL` applies to a Postgres target. SQL Server and
-MySQL use their own variables, listed further down.
+Use [Authentication providers](/docs/auth-providers) before changing an issuer. The application database binds to its identity namespace. Generic OIDC does not provide Keycloak user or sync-client administration.
 
-| Variable | Purpose |
-| --- | --- |
-| `INTERNAL_DATABASE_URL` | Application database (users, forms, workflows, audit). Always Postgres. |
-| `TARGET_DATABASE_URL` | Analytics warehouse the pipelines write to, when `TARGET_STORE_ADAPTER=pg`. |
-| `POSTGRES_PASSWORD` | Password for the bundled Postgres container. |
-
-## Adapters
-
-Adapters select the backing implementation for each subsystem. The defaults match the
-bundled containers. Change them only when pointing at external infrastructure.
-
-| Variable | Default | Purpose |
+| Variable | Default or source | Meaning |
 | --- | --- | --- |
-| `AUTH_ADAPTER` | `keycloak` | Sign-in mode: `local`, `keycloak` or `oidc`. See [Authentication providers](/docs/auth-providers). |
-| `BLOB_ADAPTER` | `minio` | Object-storage backend for uploads and artifacts. `minio` selects the S3 adapter, which also works with Garage. |
-| `EVENTING_ADAPTER` | `pg` | Event store used by workflow triggers. |
-| `TARGET_STORE_ADAPTER` | `pg` | Analytics warehouse engine: `pg`, `mssql`, or `mysql`. |
+| `AUTH_ADAPTER` | keycloak | local, keycloak or generic oidc sign-in. New installs set local. |
+| `IDENTITY_ADMIN_ADAPTER` | Depends on AUTH_ADAPTER | keycloak, local or none. Local sign-in uses local. Generic oidc requires none. |
+| `OIDC_ISSUER_URL` | Required for keycloak and oidc | Expected token issuer. Local sign-in does not use it. Preserve it for an existing identity namespace. |
+| `OIDC_WEB_CLIENT_ID` | openldr-web | Public browser client id. |
+| `OIDC_AUDIENCE` | Optional | Required API access-token audience when configured. |
+| `OIDC_SCOPES` | openid profile email | Requested browser scopes. Must include openid. |
+| `OIDC_RESOURCE` | Optional | Provider resource indicator when required. |
+| `OIDC_INTERNAL_JWKS_URL` | Optional | Explicit server-side signing-key endpoint. Expected issuer stays unchanged. |
+| `OIDC_INTERNAL_ISSUER_URL` | Optional | Keycloak server-side realm address. Generic OIDC does not derive endpoints from it. |
+| `KEYCLOAK_ADMIN_CLIENT_ID`, `KEYCLOAK_ADMIN_CLIENT_SECRET` | Private deployment values | Provider administration service account. |
+| `TLS_CERT_PATH` | Optional | Public server certificate offered for central certificate download. |
+| `SECRETS_ENCRYPTION_KEY` | Base64, 32 decoded bytes | Saved-credential encryption key. Preserve existing value. |
+| `AUTH_DEV_BYPASS` | false | Explicit development authentication bypass. Production rejects true. |
+| `AUTH_DEV_USERNAME`, `AUTH_DEV_ROLES` | dev-admin, lab_admin | Actor for an explicitly enabled development bypass. |
 
-An external reporting target is no longer an adapter chosen here. Create a connector under
-**Settings > Connectors** instead, and the sink plugin is resolved from that connector.
+## Workflow, plugin and import limits
 
-## Object storage (S3)
+Enable host-level capabilities only for the users and installations that need them. WORKFLOW_CODE_ENABLED permits authored JavaScript with host access. It is not a security sandbox. Dashboard SQL limits, workflow listener enablement and dataset publishing have Settings controls.
 
-The bundled `storage` service runs Garage, an S3-compatible server. Point these at any S3
-endpoint to use another one.
-
-| Variable | Default | Purpose |
+| Variable | Parser default | Meaning |
 | --- | --- | --- |
-| `S3_ENDPOINT` | `http://storage:3900` | S3 endpoint URL. |
-| `S3_REGION` | `us-east-1` | S3 region. |
-| `S3_ACCESS_KEY_ID` | generated | Access key. |
-| `S3_SECRET_ACCESS_KEY` | generated | Secret key. |
-| `S3_BUCKET` | `openldr` | Bucket that holds uploads and artifacts. |
-| `S3_FORCE_PATH_STYLE` | `true` | Path-style addressing (required by the bundled storage). |
-| `GARAGE_RPC_SECRET` | generated | Garage's internal secret, 64 hex characters. |
-| `GARAGE_ADMIN_TOKEN` | generated | Garage's admin API token, 64 hex characters. |
+| `WORKFLOW_CODE_ENABLED` | false | Permit Code node execution with host access. |
+| `WORKFLOW_CODE_TIMEOUT_MS`, `WORKFLOW_CODE_MEMORY_MB` | 5000, 128 | Code node time and memory limits. |
+| `WORKFLOW_HTTP_ALLOWLIST` | Empty | Hostnames allowed for workflow HTTP requests. |
+| `WORKFLOW_FILE_MAX_BYTES` | 52428800 | Workflow upload or webhook file limit. |
+| `WORKFLOW_LOOP_MAX_ITEMS` | 100000 | Maximum accumulated loop output items. |
+| `WORKFLOW_FILE_ACCESS_ENABLED`, `WORKFLOW_FILE_ACCESS_ROOT` | false, empty | Host file access and its required folder root. |
+| `WORKFLOW_EMAIL_POLL_MIN_SECONDS`, `WORKFLOW_EMAIL_MAX_PER_POLL` | 30, 50 | Email trigger polling floor and per-poll message limit. |
+| `FACILITY_IMPORT_MAX_UPLOAD_BYTES` | 67108864 | Facility register upload ceiling. Raising it also needs enough worker memory. |
+| `TERMINOLOGY_WORK_DIR` | Optional | Terminology download and extraction directory. |
+| `PLUGIN_UI_ENABLED`, `PLUGIN_EGRESS_ENABLED` | true, true | Plugin page/broker and network-access master switches. |
+| `PLUGIN_DATA_MAX_DOC_BYTES` | 8388608 | Maximum broker document size. |
+| `PLUGIN_CRASH_LOG_DIR` | .openldr/crash | Durable plugin crash-marker directory. |
+| `CRASH_LOOP_THRESHOLD`, `CRASH_LOOP_WINDOW_SEC` | 5, 60 | Crash count and measurement window. |
+| `CRASH_LOOP_BACKOFF_MS`, `CRASH_LOOP_BACKOFF_CAP_MS` | 2000, 60000 | Initial and maximum crash-loop backoff. |
 
-Garage only accepts an access key ID of `GK` followed by 24 hex characters, and a 64-character
-hex secret. The installer generates both.
+## Marketplace and sync configuration
 
-## Authentication (Keycloak / OIDC)
+MARKETPLACE_REGISTRY_URL or MARKETPLACE_REGISTRY_DIR seeds the initial registry only when none exist. Afterward, use Marketplace, Registries. Publishing requires its token, repository and local staging directory together.
 
-Keycloak is the default. Generic OIDC uses discovery and JWT access tokens. See [Authentication providers](/docs/auth-providers) for setup, administration limits and issuer protection.
+`OPENLDR_SITE_ID` supplies a fallback site stamp when no saved Site ID exists. Saved sync settings take precedence. `SYNC_ALLOW_INSECURE_TRANSPORT` defaults false. Use HTTPS for a live central.
 
-| Variable | Purpose |
-| --- | --- |
-| `IDENTITY_ADMIN_ADAPTER` | `keycloak`, `local` or `none`. Defaults to `keycloak` for Keycloak auth, `local` for local sign-in, `none` for generic OIDC. |
-| `OIDC_ISSUER_URL` | Public issuer URL. Required for `keycloak` and `oidc`, not used by `local`. Keep the existing value on upgrade. Later changes block startup. |
-| `OIDC_INTERNAL_ISSUER_URL` | Keycloak-only internal realm base URL. Generic OIDC ignores this value. |
-| `OIDC_INTERNAL_JWKS_URL` | Explicit internal signing-key endpoint override. Does not change the expected issuer. |
-| `OIDC_AUDIENCE` | Expected token audience. |
-| `OIDC_WEB_CLIENT_ID` | Public client ID the studio app authenticates with. |
-| `OIDC_SCOPES` | Scopes the studio app requests. Defaults to `openid profile email`. Must include `openid`. |
-| `OIDC_RESOURCE` | Resource URL to request, for providers that need one to issue the API access token. |
-| `TLS_CERT_PATH` | Path to this server's public TLS certificate (PEM). When set, the Sites page offers it for download, so a remote lab can trust a self-signed central. The installer sets this for you. |
-| `KC_HOSTNAME` | Public base URL Keycloak advertises. |
-| `KEYCLOAK_ADMIN` | Keycloak admin username. |
-| `KEYCLOAK_ADMIN_PASSWORD` | Keycloak admin password (generated). |
-| `KEYCLOAK_ADMIN_CLIENT_ID` | Client ID used for admin API calls. |
-| `KEYCLOAK_ADMIN_CLIENT_SECRET` | Client secret for admin API calls. |
-
-## Development-only settings
-
-These exist for local development and automated tests. Never set them in a deployment.
-
-`AUTH_DEV_BYPASS` turns **authentication off**. Any API request without a bearer token is
-served as a dev admin. It is off unless you set it, and the server refuses to start with it
-on under `NODE_ENV=production`. When it is on, Studio shows an "Authentication bypass
-active" banner and the server logs a warning at startup.
-
-| Variable | Default | Purpose |
+| Variable | Default or source | Meaning |
 | --- | --- | --- |
-| `AUTH_DEV_BYPASS` | `false` | Serve unauthenticated API requests as a dev admin. |
-| `AUTH_DEV_USERNAME` | `dev-admin` | Username of the injected dev actor. |
-| `AUTH_DEV_ROLES` | `lab_admin` | Roles granted to the injected dev actor. |
-| `MARKETPLACE_DEV_ALLOW_UNSIGNED` | `false` | Install marketplace bundles that carry no signature. |
+| `MARKETPLACE_REGISTRY_URL`, `MARKETPLACE_REGISTRY_DIR` | Initial source | Remote registry or local bundle directory used on first setup. |
+| `MARKETPLACE_LOCAL_REGISTRY_ROOT` | Empty | Optional allowed root for local registry folders. |
+| `MARKETPLACE_PUBLISH_TOKEN`, `MARKETPLACE_PUBLISH_REPO` | Private configuration | GitHub publishing credentials and destination. |
+| `MARKETPLACE_PUBLISH_BRANCH` | main | Target branch for publishing proposals. |
+| `MARKETPLACE_DEV_ALLOW_UNSIGNED` | false | Development-only unsigned package allowance. |
 
-## Secrets
+## Troubleshooting
 
-| Variable | Purpose |
-| --- | --- |
-| `SECRETS_ENCRYPTION_KEY` | Base64 32-byte key that encrypts connector credentials at rest. Generate with `openssl rand -base64 32`. |
+**A startup value did not change.** Restart the affected processes after changing their environment. In Docker, recreate affected services because a restart keeps the container environment.
 
-## First-run behavior
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `MIGRATE_ON_START` | `true` | Run database migrations when the API starts. |
-| `SEED_ON_START` | `true` | Seed default forms, workflows, and terminology on first boot. |
-
-## Terminology imports
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `TERMINOLOGY_WORK_DIR` | system temp folder | Folder where an uploaded terminology release is unzipped during import. A full SNOMED CT release needs room for the zip and the unzipped files at once. Point this at a larger disk when the container's temp folder is small. |
-
-## SQL Server target store
-
-Set only when `TARGET_STORE_ADAPTER=mssql`. Start the SQL Server profile with
-`docker compose --profile mssql up -d`.
-
-| Variable | Purpose |
-| --- | --- |
-| `MSSQL_HOST` | SQL Server host. |
-| `MSSQL_PORT` | SQL Server port (default `1433`). |
-| `MSSQL_DATABASE` | Target database name. |
-| `MSSQL_USER` | Login. |
-| `MSSQL_PASSWORD` | Password. |
-| `MSSQL_ENCRYPT` | `true`/`false`: encrypt the connection. |
-| `MSSQL_TRUST_SERVER_CERT` | `true`/`false`: trust a self-signed server certificate. |
-
-## MySQL / MariaDB target store
-
-Set only when `TARGET_STORE_ADAPTER=mysql`. Works with MySQL 8.4+ and MariaDB 11.4+.
-
-| Variable | Purpose |
-| --- | --- |
-| `MYSQL_HOST` | MySQL/MariaDB host. |
-| `MYSQL_PORT` | Server port (default `3306`). |
-| `MYSQL_DATABASE` | Target database name. |
-| `MYSQL_USER` | Login. |
-| `MYSQL_PASSWORD` | Password. |
-| `MYSQL_SSL` | `true`/`false`: connect over TLS. |
-| `MYSQL_SSL_REJECT_UNAUTHORIZED` | `true`/`false`: reject a server certificate that is not trusted. |
-
-## Workflows
-
-See [Workflows](/docs/workflows) for the nodes these settings control.
-
-> `WORKFLOW_CODE_ENABLED` lets workflow authors run JavaScript with the same access as the
-> server itself: its files, network, environment, and secrets. The code runner is not a
-> sandbox. Turn it on only when you trust everyone who can edit workflows.
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `WORKFLOW_CODE_ENABLED` | `false` | Allow Code nodes to run. When off, Code nodes refuse to run. |
-| `WORKFLOW_CODE_TIMEOUT_MS` | `5000` | Time limit for one Code node run, in milliseconds. |
-| `WORKFLOW_CODE_MEMORY_MB` | `128` | Memory limit for one Code node run, in MB. |
-| `WORKFLOW_HTTP_ALLOWLIST` | empty | Comma-separated hostnames the HTTP Request node may call. Empty means every host is refused. |
-| `WORKFLOW_FILE_MAX_BYTES` | `52428800` (50 MB) | Largest file accepted by a workflow run upload or webhook body. |
-| `WORKFLOW_LOOP_MAX_ITEMS` | `100000` | Most items a single loop node may collect. |
-| `WORKFLOW_FILE_ACCESS_ENABLED` | `false` | Allow the Read/Write File node to touch files on the server. |
-| `WORKFLOW_FILE_ACCESS_ROOT` | empty | The one folder the Read/Write File node is confined to. The node fails while this is empty. |
-| `WORKFLOW_EMAIL_POLL_MIN_SECONDS` | `30` | Shortest poll interval an email trigger may use, in seconds. |
-| `WORKFLOW_EMAIL_MAX_PER_POLL` | `50` | Most unread messages an email trigger handles per poll. |
-
-## Facility register import
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `FACILITY_IMPORT_MAX_UPLOAD_BYTES` | `67108864` (64 MB) | Largest facility register file you can upload. A larger upload is stopped mid-transfer. 64 MB is about 20 times a 13,000-row national register. Values above about 512 MB cannot work. |
-
-## Plugins
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `PLUGIN_UI_ENABLED` | `true` | Show plugin screens. When `false`, no plugin menu items or screens appear. |
-| `PLUGIN_EGRESS_ENABLED` | `true` | Allow plugins to reach the network. When `false`, every plugin network call is refused, whatever the plugin was granted. |
-| `PLUGIN_DATA_MAX_DOC_BYTES` | `8388608` (8 MB) | Largest document a plugin may store or send in one call. |
-| `PLUGIN_CRASH_LOG_DIR` | `.openldr/crash` | Folder for plugin crash records. The next start copies them into the audit log. |
-
-## Crash-loop protection
-
-If the server crashes `CRASH_LOOP_THRESHOLD` times within `CRASH_LOOP_WINDOW_SEC`, the next
-start writes one `system.crash_loop` audit entry and waits before exiting. The wait grows
-on each restart, which slows a restart loop instead of letting it spin.
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `CRASH_LOOP_THRESHOLD` | `5` | Crashes within the window before the protection starts. |
-| `CRASH_LOOP_WINDOW_SEC` | `60` | Length of the window, in seconds. |
-| `CRASH_LOOP_BACKOFF_MS` | `2000` | First wait before exiting, in milliseconds. |
-| `CRASH_LOOP_BACKOFF_CAP_MS` | `60000` | Longest wait, in milliseconds. |
-
-## Marketplace
-
-The two registry variables only seed the first registry, on a first boot that has none.
-After that, manage them in the **Registries** view of **Settings > Marketplace**. See
-[Marketplace](/docs/marketplace).
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `MARKETPLACE_REGISTRY_URL` | bundled registry | Remote registry seeded on first boot when no registries exist. |
-| `MARKETPLACE_REGISTRY_DIR` | unset | Local registry folder seeded on first boot when `MARKETPLACE_REGISTRY_URL` is unset. Publishing also stages bundles here. |
-| `MARKETPLACE_LOCAL_REGISTRY_ROOT` | empty | When set, a local registry added in Settings must be a folder inside this one. |
-| `MARKETPLACE_PUBLISH_TOKEN` | unset | GitHub token with write access to the publish repository. Keep it secret. |
-| `MARKETPLACE_PUBLISH_REPO` | unset | Repository that receives publish pull requests, as `owner/repo`. |
-| `MARKETPLACE_PUBLISH_BRANCH` | `main` | Branch the publish pull requests target. |
-
-Publishing is on only when `MARKETPLACE_PUBLISH_TOKEN`, `MARKETPLACE_PUBLISH_REPO`, and
-`MARKETPLACE_REGISTRY_DIR` are all set.
-
-## Distributed sync
-
-See [Distributed sync](/docs/sync) for enrolling a lab.
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `OPENLDR_SITE_ID` | unset | Site ID stamped on records this server writes, used when the Site ID on the sync **Settings** tab is empty. The saved setting wins. |
-| `SYNC_ALLOW_INSECURE_TRANSPORT` | `false` | Allow sync to a central over plain `http://`. Sync sends a client secret and patient-related data, so only use this on a trusted local network while setting up. `localhost` works without it. |
+**A CLI command fails.** Follow [Start here](/docs/start-here) for the installed or development CLI setup.
 
 ## Related guides
 
-- [Settings](/docs/settings)
-- [Connectors](/docs/connectors)
+[Settings](/docs/settings), [Connectors](/docs/connectors), [Distributed sync](/docs/sync), [Authentication providers](/docs/auth-providers) and [Planned upgrades](/docs/upgrading).

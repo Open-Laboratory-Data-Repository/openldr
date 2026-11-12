@@ -1,0 +1,391 @@
+{
+  "capturedAt": "2026-11-12T13:58:18.849Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5188/studio/settings/setup",
+  "steps": [
+    {
+      "id": "user-menu",
+      "label": "Open your user menu at the bottom left.",
+      "path": "setup-checks-evidence/user-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 755.5,
+          "width": 223,
+          "height": 36.5
+        }
+      ]
+    },
+    {
+      "id": "settings-menu",
+      "label": "Choose Settings.",
+      "path": "setup-checks-evidence/settings-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 13,
+          "y": 682.5,
+          "width": 198,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "setup-page",
+      "label": "Select Setup checks in Settings.",
+      "path": "setup-checks-evidence/setup-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 100,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "summary",
+      "label": "Read the counts of failed checks and warnings.",
+      "path": "setup-checks-evidence/summary.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 101,
+          "width": 832,
+          "height": 45
+        }
+      ]
+    },
+    {
+      "id": "failed-service",
+      "label": "Read the detail and next action beside a failed check.",
+      "path": "setup-checks-evidence/failed-service.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 146,
+          "width": 832,
+          "height": 109
+        }
+      ]
+    },
+    {
+      "id": "warning",
+      "label": "Read each warning before deciding whether the installation is ready.",
+      "path": "setup-checks-evidence/warning.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 392,
+          "width": 832,
+          "height": 93
+        }
+      ]
+    },
+    {
+      "id": "skipped",
+      "label": "Skipped means the check did not apply, not that its configuration passed.",
+      "path": "setup-checks-evidence/skipped.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 663,
+          "width": 832,
+          "height": 48
+        }
+      ]
+    },
+    {
+      "id": "open-laboratory",
+      "label": "Follow the check link to the setting that needs attention.",
+      "path": "setup-checks-evidence/open-laboratory.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 492,
+          "y": 452,
+          "width": 105.078125,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "correct-name",
+      "label": "Enter your actual laboratory name. This example uses a fictional test name.",
+      "path": "setup-checks-evidence/correct-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 570.734375,
+          "y": 180.265625,
+          "width": 693.265625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "correct-zone",
+      "label": "Use a named local time zone on PostgreSQL or MySQL.",
+      "path": "setup-checks-evidence/correct-zone.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 570.734375,
+          "y": 388.265625,
+          "width": 693.265625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "laboratory-actions",
+      "label": "Open the Laboratory dots menu.",
+      "path": "setup-checks-evidence/laboratory-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 64,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "laboratory-save",
+      "label": "Choose Save to keep the corrected settings.",
+      "path": "setup-checks-evidence/laboratory-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 105,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "corrected-result",
+      "label": "Laboratory name and Time zone now show Passed.",
+      "path": "setup-checks-evidence/corrected-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 392,
+          "width": 832,
+          "height": 65
+        },
+        {
+          "x": 448,
+          "y": 457,
+          "width": 832,
+          "height": 65
+        }
+      ]
+    },
+    {
+      "id": "setup-actions",
+      "label": "Open the Setup checks dots menu.",
+      "path": "setup-checks-evidence/setup-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 58,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "run-again",
+      "label": "Choose Run again after making a correction.",
+      "path": "setup-checks-evidence/run-again.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 99,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "rerun-result",
+      "label": "Read the new summary and address any remaining failed checks or warnings.",
+      "path": "setup-checks-evidence/rerun-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 101,
+          "width": 832,
+          "height": 45
+        }
+      ]
+    },
+    {
+      "id": "phone-summary",
+      "label": "Read the summary at the top on a phone.",
+      "path": "setup-checks-evidence/phone-summary.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 0,
+          "y": 162,
+          "width": 375,
+          "height": 45
+        }
+      ]
+    },
+    {
+      "id": "phone-check",
+      "label": "Scroll through each check to read its detail and guidance.",
+      "path": "setup-checks-evidence/phone-check.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 0,
+          "y": 207,
+          "width": 375,
+          "height": 129
+        }
+      ]
+    }
+  ]
+}

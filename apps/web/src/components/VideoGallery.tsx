@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Play } from 'lucide-react';
 import { Lightbox } from '@/components/Lightbox';
+import { Button } from '@/components/ui/button';
+import { VideoThumbnail } from '@/components/VideoThumbnail';
 import { VIDEOS, type ProductVideo } from '@/landing/videos';
 
 function VideoLightbox({ item, onClose, onStep }: { item: ProductVideo; onClose: () => void; onStep: (delta: number) => void }) {
@@ -54,7 +56,7 @@ export function VideoGallery() {
   }, []);
 
   return (
-    <div ref={sectionRef} className="mx-auto max-w-6xl scroll-mt-16 px-6 py-16">
+    <div id="videos" ref={sectionRef} className="mx-auto max-w-6xl scroll-mt-16 px-6 py-16">
       <div className="mx-auto mb-12 max-w-2xl text-center">
         <h2 className="text-3xl font-semibold tracking-tight">Watch it work</h2>
         <p className="mt-3 text-base leading-7 text-muted-foreground">
@@ -65,32 +67,25 @@ export function VideoGallery() {
       <ul className="grid list-none grid-cols-2 gap-4 pl-0 lg:grid-cols-4">
         {VIDEOS.map((item, index) => (
           <li key={item.name}>
-            <button
+            <Button
+              variant="ghost"
               type="button"
               onClick={(event) => {
                 openedFrom.current = event.currentTarget;
                 setOpenIndex(index);
               }}
-              className="group w-full overflow-hidden rounded-lg border border-border bg-card text-left transition-colors hover:border-muted-foreground/40"
+              className="group flex h-auto w-full flex-col items-stretch gap-0 overflow-hidden whitespace-normal rounded-lg border border-border bg-card p-0 text-left transition-colors hover:border-muted-foreground/40"
             >
               <span className="relative block">
-                {/* Posters are small JPEGs; the video itself loads only when opened. */}
-                <img
-                  src={item.poster}
-                  alt={item.description}
-                  loading={index < 4 ? 'eager' : 'lazy'}
-                  className="aspect-video w-full object-cover"
-                />
-                <span className="absolute inset-0 flex items-center justify-center">
-                  <span className="rounded-full bg-background/80 p-3 text-foreground shadow-sm transition-transform group-hover:scale-110">
-                    <Play aria-hidden="true" className="h-5 w-5" />
-                  </span>
+                <VideoThumbnail item={item} />
+                <span className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform group-hover:scale-110">
+                  <Play aria-hidden="true" className="h-4 w-4" />
                 </span>
               </span>
               <span className="block border-t border-border px-3 py-2 text-xs text-muted-foreground transition-colors group-hover:text-foreground">
                 {item.label}
               </span>
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

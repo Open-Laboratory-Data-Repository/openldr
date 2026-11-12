@@ -1,0 +1,38 @@
+{
+  "data-post": {
+    "unix": "curl --request POST https://YOUR_HOST/api/workflows/hooks/ingest \\\n  --header \"Content-Type: application/json\" \\\n  --header \"X-Webhook-Token: YOUR_SAVED_SECRET\" \\\n  --header \"Idempotency-Key: YOUR_UNIQUE_REQUEST_KEY\" \\\n  --data-binary @data/your-payload.json",
+    "windows": "curl.exe --request POST https://YOUR_HOST/api/workflows/hooks/ingest `\n  --header \"Content-Type: application/json\" `\n  --header \"X-Webhook-Token: YOUR_SAVED_SECRET\" `\n  --header \"Idempotency-Key: YOUR_UNIQUE_REQUEST_KEY\" `\n  --data-binary \"@data/your-payload.json\""
+  },
+  "data-poll": {
+    "unix": "curl --header \"X-Webhook-Token: YOUR_SAVED_SECRET\" \\\n  \"https://YOUR_HOST/api/workflows/hooks/ingest?requestId=REQUEST_ID\"",
+    "windows": "curl.exe --header \"X-Webhook-Token: YOUR_SAVED_SECRET\" `\n  \"https://YOUR_HOST/api/workflows/hooks/ingest?requestId=REQUEST_ID\""
+  },
+  "data-receipt": {
+    "unix": "./openldr workflows receipts show REQUEST_ID --json",
+    "windows": ".\\openldr.ps1 workflows receipts show REQUEST_ID --json"
+  },
+  "data-validate": {
+    "unix": "./openldr fhir validate data/your-payload.json",
+    "windows": ".\\openldr.ps1 fhir validate data/your-payload.json"
+  },
+  "data-ingest": {
+    "unix": "./openldr ingest data/your-payload.json",
+    "windows": ".\\openldr.ps1 ingest data/your-payload.json"
+  },
+  "data-status": {
+    "unix": "./openldr pipeline status --json",
+    "windows": ".\\openldr.ps1 pipeline status --json"
+  },
+  "data-logs": {
+    "unix": "./openldr pipeline logs BATCH_ID --json",
+    "windows": ".\\openldr.ps1 pipeline logs BATCH_ID --json"
+  },
+  "data-plugin": {
+    "unix": "./openldr plugin install data/approved-plugin.wasm",
+    "windows": ".\\openldr.ps1 plugin install data/approved-plugin.wasm"
+  },
+  "data-plugin-ingest": {
+    "unix": "./openldr ingest data/your-source-file --plugin PLUGIN_ID",
+    "windows": ".\\openldr.ps1 ingest data/your-source-file --plugin PLUGIN_ID"
+  }
+}

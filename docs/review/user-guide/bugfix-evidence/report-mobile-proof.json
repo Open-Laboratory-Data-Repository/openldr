@@ -1,0 +1,108 @@
+{
+  "viewport": [
+    375,
+    812
+  ],
+  "pixelDimensions": [
+    1500,
+    3248
+  ],
+  "limit": "Headless Chromium proves layout and requests. Real phone browser chrome remains unproved.",
+  "steps": [
+    {
+      "id": "reports-phone-date-range",
+      "focus": {
+        "x": 301.3125,
+        "y": 159.28125,
+        "width": 57.6875,
+        "height": 36
+      }
+    },
+    {
+      "id": "reports-phone-date-result",
+      "focus": {
+        "x": 41,
+        "y": 310.875,
+        "width": 173.59375,
+        "height": 44.5
+      }
+    },
+    {
+      "id": "reports-phone-unpublish-success",
+      "focus": {
+        "x": 56,
+        "y": 813,
+        "width": 123.28125,
+        "height": 19.5
+      }
+    }
+  ],
+  "run": {
+    "status": 200,
+    "query": {
+      "from": "2026-01-01",
+      "to": "2026-11-12"
+    },
+    "result": {
+      "columns": [
+        {
+          "key": "start_date",
+          "label": "start_date",
+          "kind": "string"
+        },
+        {
+          "key": "end_date",
+          "label": "end_date",
+          "kind": "string"
+        }
+      ],
+      "rows": [
+        {
+          "start_date": "2026-01-01",
+          "end_date": "2026-11-12"
+        }
+      ],
+      "chart": {
+        "type": "stat",
+        "value": "1",
+        "label": "rows"
+      },
+      "meta": {
+        "generatedAt": "2026-11-12T15:36:42.381Z",
+        "rowCount": 1
+      }
+    }
+  },
+  "layout": {
+    "documentWidth": 375,
+    "viewportWidth": 375,
+    "viewportHeight": 812
+  },
+  "unpublish": {
+    "status": 200,
+    "request": {
+      "id": "r-bugfix-date-range-phone",
+      "name": "Fictional phone report review",
+      "description": "Fictional dates only. No clinical rows.",
+      "category": "operational",
+      "designId": "d-bugfix-date-range",
+      "primaryQueryId": "cq_09e00ac9",
+      "summaryMetrics": null,
+      "chart": null,
+      "paramOptions": null,
+      "status": "draft"
+    },
+    "persisted": {
+      "id": "r-bugfix-date-range-phone",
+      "name": "Fictional phone report review",
+      "description": "Fictional dates only. No clinical rows.",
+      "category": "operational",
+      "designId": "d-bugfix-date-range",
+      "primaryQueryId": "cq_09e00ac9",
+      "summaryMetrics": null,
+      "chart": null,
+      "paramOptions": null,
+      "status": "draft"
+    }
+  }
+}

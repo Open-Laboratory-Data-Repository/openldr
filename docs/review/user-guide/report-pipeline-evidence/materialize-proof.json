@@ -1,0 +1,85 @@
+{
+  "dataset": {
+    "id": "f45854ff-ae8a-4ecc-a746-63eb772dd146",
+    "name": "request_summary",
+    "columns": [
+      {
+        "key": "requests",
+        "label": "requests"
+      }
+    ],
+    "rows": [
+      {
+        "requests": 0
+      }
+    ],
+    "rowCount": 1,
+    "workflowId": "wf_mwdm73ch_j7nrq2",
+    "publishedTable": null,
+    "createdAt": "Thu Nov 12 2026 16:59:48 GMT+0300 (East Africa Time)",
+    "updatedAt": "Thu Nov 12 2026 16:59:48 GMT+0300 (East Africa Time)"
+  },
+  "runs": [
+    {
+      "id": "8cf86de2-d53b-43c1-9274-6f7a4cf1c79d",
+      "workflowId": "wf_mwdm73ch_j7nrq2",
+      "triggerSource": "manual",
+      "status": "completed",
+      "startedAt": "Thu Nov 12 2026 16:59:48 GMT+0300 (East Africa Time)",
+      "finishedAt": "Thu Nov 12 2026 16:59:48 GMT+0300 (East Africa Time)",
+      "result": {
+        "status": "completed",
+        "results": [
+          {
+            "type": "trigger",
+            "label": "Manual Trigger",
+            "nodeId": "trigger-1794491980518",
+            "output": [
+              {
+                "json": {
+                  "timestamp": "2026-11-12T13:59:48.672Z",
+                  "triggered": true,
+                  "triggerType": "manual"
+                }
+              }
+            ],
+            "status": "success",
+            "durationMs": 0
+          },
+          {
+            "type": "action",
+            "label": "SQL Query",
+            "nodeId": "action-1794491981684",
+            "output": [
+              {
+                "json": {
+                  "requests": 0
+                }
+              }
+            ],
+            "status": "success",
+            "durationMs": 10
+          },
+          {
+            "type": "action",
+            "label": "Materialize Dataset",
+            "nodeId": "action-1794491984700",
+            "output": [
+              {
+                "json": {
+                  "requests": 0
+                }
+              }
+            ],
+            "status": "success",
+            "durationMs": 3
+          }
+        ],
+        "startedAt": "2026-11-12T13:59:48.671Z",
+        "finishedAt": "2026-11-12T13:59:48.685Z"
+      },
+      "error": null,
+      "correlationId": null
+    }
+  ]
+}

@@ -1,0 +1,230 @@
+[
+  {
+    "id": "general",
+    "crop": [
+      103.5,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 252,
+        "y": 60,
+        "width": 183,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "version",
+    "crop": [
+      430,
+      27.921875,
+      850,
+      531.25
+    ],
+    "targets": [
+      {
+        "x": 464,
+        "y": 168.046875,
+        "width": 800,
+        "height": 251
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "inventory",
+    "crop": [
+      0,
+      18.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 204.046875,
+        "height": 32
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "pin",
+    "crop": [
+      0,
+      18.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 132.03125,
+        "height": 32
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "drain",
+    "crop": [
+      99.0,
+      2.3505859375,
+      530.078125,
+      331.298828125
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 480.078125,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "stores",
+    "crop": [
+      99.0,
+      9.8505859375,
+      506.078125,
+      316.298828125
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 456.078125,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "database-backup",
+    "crop": [
+      99.0,
+      0,
+      614.09375,
+      383.80859375
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 564.09375,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "roles",
+    "crop": [
+      99.0,
+      0,
+      602.09375,
+      376.30859375
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 552.09375,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "restore",
+    "crop": [
+      99.0,
+      0,
+      866.140625,
+      541.337890625
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 816.140625,
+        "height": 32
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "migrate",
+    "crop": [
+      99.0,
+      0,
+      542.09375,
+      338.80859375
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 492.09375,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "start",
+    "crop": [
+      99.0,
+      6.1005859375,
+      518.078125,
+      323.798828125
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 468.078125,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "verify",
+    "crop": [
+      0,
+      18.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 228.046875,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  }
+]

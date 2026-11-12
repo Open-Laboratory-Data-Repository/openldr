@@ -1,0 +1,154 @@
+[
+  {
+    "id": "general",
+    "crop": [
+      103.5,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 252,
+        "y": 60,
+        "width": 183,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "about",
+    "crop": [
+      430,
+      27.921875,
+      850,
+      531.25
+    ],
+    "targets": [
+      {
+        "x": 464,
+        "y": 168.046875,
+        "width": 800,
+        "height": 251
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "folder",
+    "crop": [
+      0,
+      18.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 204.046875,
+        "height": 32
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "backup",
+    "crop": [
+      52.03125,
+      18.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 336.0625,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "edit",
+    "crop": [
+      0,
+      18.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 132.03125,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "validate",
+    "crop": [
+      70.03125,
+      18.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 372.0625,
+        "height": 32
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "apply",
+    "crop": [
+      40.03125,
+      18.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 312.0625,
+        "height": 32
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "health",
+    "crop": [
+      0,
+      18.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 124,
+        "y": 152,
+        "width": 228.046875,
+        "height": 32
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "after"
+  }
+]

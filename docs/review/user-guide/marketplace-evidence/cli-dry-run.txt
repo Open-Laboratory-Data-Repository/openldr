@@ -1,0 +1,6 @@
+$ node packages/cli/dev.mjs market install docs/review/user-guide/marketplace-evidence/practice-registry/test-sink --dry-run
+(node:76096) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+dry run: would install test-sink@0.1.0
+
+EXIT 0

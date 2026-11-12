@@ -1,0 +1,553 @@
+{
+  "capturedAt": "2026-11-12T13:54:01.497Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5187/studio/activity",
+  "steps": [
+    {
+      "id": "open-page",
+      "label": "Open Activity to follow recent payloads.",
+      "path": "activity-evidence/open-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 536,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "search",
+      "label": "Search the payload identifier to find this request.",
+      "path": "activity-evidence/search.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 56,
+          "width": 240,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "matching-row",
+      "label": "Match the source, start time, current stage and status.",
+      "path": "activity-evidence/matching-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 622.140625,
+          "y": 152.5,
+          "width": 56.046875,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "open-row",
+      "label": "Select the payload row to inspect its recorded lifecycle.",
+      "path": "activity-evidence/open-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 155.5,
+          "width": 259.25,
+          "height": 14
+        }
+      ]
+    },
+    {
+      "id": "payload-id",
+      "label": "Keep the payload identifier when asking an administrator for help.",
+      "path": "activity-evidence/payload-id.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 721,
+          "y": 78.53125,
+          "width": 543,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "received",
+      "label": "Received records arrival and its workflow run identifier.",
+      "path": "activity-evidence/received.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 767,
+          "y": 133.53125,
+          "width": 270.65625,
+          "height": 91.5
+        }
+      ]
+    },
+    {
+      "id": "persisted",
+      "label": "Persisted records the stored resource count.",
+      "path": "activity-evidence/persisted.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 767,
+          "y": 241.03125,
+          "width": 198.390625,
+          "height": 64
+        }
+      ]
+    },
+    {
+      "id": "close",
+      "label": "Close the lifecycle sheet to return to the list.",
+      "path": "activity-evidence/close.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 16,
+          "width": 28,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "actions",
+      "label": "Activity actions contains Refresh.",
+      "path": "activity-evidence/actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 56,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "refresh",
+      "label": "Refresh fetches the recent list again.",
+      "path": "activity-evidence/refresh.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1113,
+          "y": 97,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "filter",
+      "label": "Filter narrows the loaded recent payloads.",
+      "path": "activity-evidence/filter.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 500,
+          "y": 56,
+          "width": 72.671875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "add-filter",
+      "label": "Add filter creates a rule.",
+      "path": "activity-evidence/add-filter.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 513,
+          "y": 190,
+          "width": 87.359375,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "status-rule",
+      "label": "Choose Status as the column and keep Equals.",
+      "path": "activity-evidence/status-rule.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 615,
+          "y": 119,
+          "width": 176,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "complete-value",
+      "label": "Choose Complete to inspect stored payloads without a failed workflow run.",
+      "path": "activity-evidence/complete-value.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 936,
+          "y": 156,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "apply-filter",
+      "label": "Apply updates the visible rows.",
+      "path": "activity-evidence/apply-filter.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1072.96875,
+          "y": 186,
+          "width": 54.03125,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "filtered",
+      "label": "The applied Status filter appears above the matching rows.",
+      "path": "activity-evidence/filtered.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 260,
+          "y": 100,
+          "width": 34.03125,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "add-sort",
+      "label": "Add sort creates a sort rule.",
+      "path": "activity-evidence/add-sort.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 621.25,
+          "y": 190,
+          "width": 291.96875,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "sort-started",
+      "label": "Choose Started to sort by arrival time.",
+      "path": "activity-evidence/sort-started.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 626.25,
+          "y": 287,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "sort-direction",
+      "label": "Toggle Asc to Desc to show the latest start times first.",
+      "path": "activity-evidence/sort-direction.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 880.234375,
+          "y": 126,
+          "width": 52.015625,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "apply-sort",
+      "label": "Apply stores the chosen sort for the loaded rows.",
+      "path": "activity-evidence/apply-sort.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 921.21875,
+          "y": 196,
+          "width": 54.03125,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "columns",
+      "label": "Columns controls the visible table columns.",
+      "path": "activity-evidence/columns.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 711.8125,
+          "y": 56,
+          "width": 93.359375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "column-options",
+      "label": "Keep the fields you need for the review.",
+      "path": "activity-evidence/column-options.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 750.75,
+          "y": 135,
+          "width": 204,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "pagination",
+      "label": "Use the page size and arrows when there are several pages.",
+      "path": "activity-evidence/pagination.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1036.5625,
+          "y": 762,
+          "width": 80,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "phone-search",
+      "label": "Search recent payloads on a phone.",
+      "path": "activity-evidence/phone-search.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 12,
+          "y": 56,
+          "width": 307,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-open",
+      "label": "Select the identifier to open the payload lifecycle.",
+      "path": "activity-evidence/phone-open.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 16,
+          "y": 198.5,
+          "width": 86.421875,
+          "height": 74
+        }
+      ]
+    },
+    {
+      "id": "phone-detail",
+      "label": "Read each recorded stage in the phone sheet.",
+      "path": "activity-evidence/phone-detail.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 100.5,
+          "y": 241.03125,
+          "width": 198.390625,
+          "height": 64
+        }
+      ]
+    }
+  ]
+}

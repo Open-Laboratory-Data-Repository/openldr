@@ -289,13 +289,14 @@ describe('authored guide structure', () => {
     expectStepGuideStructure(['users', 'audit', 'connectors', 'marketplace']);
   });
 
-  it('keeps settings as a short routing guide', () => {
+  it('publishes the approved settings walkthrough with illustrated tasks', () => {
     const resolved = resolve('en', 'settings');
     expect(resolved, 'settings should resolve').not.toBeNull();
     expect(resolved!.content).toContain('# Settings');
-    expect(resolved!.content).toContain('/docs/connectors');
-    expect(resolved!.content).toContain('/docs/marketplace');
-    expect(resolved!.content).not.toMatch(/!\[[^\]]*]\(/);
+    expect(resolved!.content).toContain('/docs/setup-checks');
+    expect(resolved!.content).toContain('/docs/laboratory');
+    expect(resolved!.content).toContain('settings-guide-');
+    expect(resolved!.content).toContain('## Troubleshooting');
   });
 
   it('points advanced docs to the web docs (no longer a coming-soon placeholder)', () => {
@@ -307,6 +308,6 @@ describe('authored guide structure', () => {
     expect(resolved!.content).toContain('github.com/Open-Laboratory-Data-Repository/openldr');
     expect(resolved!.content).toContain('/docs/start-here');
     expect(resolved!.content).toContain('/docs/settings');
-    expect(resolved!.content).not.toMatch(/!\[[^\]]*]\(/);
+    expect(resolved!.content).toContain('advanced-docs-guide-');
   });
 });

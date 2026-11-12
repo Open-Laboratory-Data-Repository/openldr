@@ -1,0 +1,43 @@
+[
+  {
+    "phase": "before-phone-regressions",
+    "command": "pnpm --filter @openldr/studio test src/pages/Docs.test.tsx",
+    "exitCode": 1,
+    "output": [
+      "Test Files  1 failed (1)",
+      "Tests  2 failed | 16 passed (18)"
+    ]
+  },
+  {
+    "phase": "final",
+    "command": "pnpm --filter @openldr/studio test src/pages/Docs.test.tsx src/docs && pnpm --filter @openldr/config test src/env-docs.test.ts && pnpm --filter @openldr/studio typecheck && pnpm --filter @openldr/studio build",
+    "exitCode": 0,
+    "output": [
+      "Test Files  14 passed (14)",
+      "Tests  113 passed (113)",
+      "Test Files  1 passed (1)",
+      "Tests  8 passed (8)",
+      "\u2713 built in 12.33s"
+    ]
+  },
+  {
+    "phase": "browser",
+    "command": "node docs/review/user-guide/docs-navigation-evidence/check-navigation.cjs",
+    "exitCode": 0,
+    "output": [
+      "DOCS NAVIGATION PASS: 8 sizes; overlay preserves article width; search/selection, Escape, outside click, resize and versions; en/fr/pt; no server writes"
+    ]
+  },
+  {
+    "phase": "merged-main",
+    "commit": "aedafb37",
+    "command": "pnpm --filter @openldr/studio test src/pages/Docs.test.tsx && pnpm --filter @openldr/config test src/env-docs.test.ts",
+    "exitCode": 0,
+    "output": [
+      "Test Files  1 passed (1)",
+      "Tests  18 passed (18)",
+      "Test Files  1 passed (1)",
+      "Tests  8 passed (8)"
+    ]
+  }
+]

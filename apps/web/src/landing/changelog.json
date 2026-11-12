@@ -6,6 +6,48 @@
       "version": null,
       "entries": [
         {
+          "hash": "6f82520a",
+          "type": "fix",
+          "scope": "web",
+          "title": "Show configuration snippets once without terminal frames"
+        },
+        {
+          "hash": "04217ec6",
+          "type": "feat",
+          "scope": "web",
+          "title": "Add themed landing visuals and refresh getting started"
+        },
+        {
+          "hash": "09f22cb5",
+          "type": "fix",
+          "scope": "",
+          "title": "Match docs version menu to its trigger width"
+        },
+        {
+          "hash": "aedafb37",
+          "type": "fix",
+          "scope": "",
+          "title": "Move docs version picker and overlay phone navigation"
+        },
+        {
+          "hash": "6ac8080a",
+          "type": "fix",
+          "scope": "",
+          "title": "Keep documentation contents pinned to the active task"
+        },
+        {
+          "hash": "334ce996",
+          "type": "fix",
+          "scope": "",
+          "title": "Share documentation scrolling and correct environment formatting"
+        },
+        {
+          "hash": "30d9e025",
+          "type": "fix",
+          "scope": "",
+          "title": "Correct report dates, package actions and guide navigation"
+        },
+        {
           "hash": "4e9981a0",
           "type": "feat",
           "scope": "docs",

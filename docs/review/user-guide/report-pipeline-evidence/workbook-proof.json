@@ -1,0 +1,73 @@
+{
+  "runs": [
+    {
+      "id": "6e14ef71-51ee-407c-906b-36a4d83d7284",
+      "workflowId": "wf_mwdm7gxs_tlfvh0",
+      "triggerSource": "manual",
+      "status": "completed",
+      "startedAt": "Thu Nov 12 2026 17:00:09 GMT+0300 (East Africa Time)",
+      "finishedAt": "Thu Nov 12 2026 17:00:09 GMT+0300 (East Africa Time)",
+      "result": {
+        "status": "completed",
+        "results": [
+          {
+            "type": "trigger",
+            "label": "Manual Trigger",
+            "nodeId": "trigger-1794491998952",
+            "output": [
+              {
+                "json": {
+                  "timestamp": "2026-11-12T14:00:09.439Z",
+                  "triggered": true,
+                  "triggerType": "manual"
+                }
+              }
+            ],
+            "status": "success",
+            "durationMs": 0
+          },
+          {
+            "type": "action",
+            "label": "Load Dataset",
+            "nodeId": "action-1794492000233",
+            "output": [
+              {
+                "json": {
+                  "requests": 0
+                }
+              }
+            ],
+            "status": "success",
+            "durationMs": 1
+          },
+          {
+            "type": "action",
+            "label": "Excel Template",
+            "nodeId": "action-1794492003117",
+            "output": [
+              {
+                "json": {
+                  "requests": 0
+                },
+                "binary": {
+                  "file": {
+                    "byteSize": 5945,
+                    "fileName": "request-summary.xlsx",
+                    "objectKey": "workflow-artifacts/b33e963d-b4c9-40a9-baa8-e61d753f4e02/request-summary.xlsx",
+                    "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  }
+                }
+              }
+            ],
+            "status": "success",
+            "durationMs": 27
+          }
+        ],
+        "startedAt": "2026-11-12T14:00:09.439Z",
+        "finishedAt": "2026-11-12T14:00:09.467Z"
+      },
+      "error": null,
+      "correlationId": null
+    }
+  ]
+}

@@ -1,153 +1,293 @@
 # Definições
 
-**Definições** reúne as escolhas que um administrador faz uma vez para toda a instalação e depois raramente muda: a versão e a verificação de atualizações, os indicadores de funcionalidades, os limites, o cabeçalho dos relatórios, a sincronização, os conectores, o marketplace, as funções e as colunas extra que o Builder dos painéis pode oferecer.
+General mostra informações da aplicação, funções opcionais e limites de execução. Também contém definições de validação dos dados e ações destrutivas de manutenção.
 
-Este guia cobre a página **Geral** e aponta para o guia de cada outra página. Leva cerca de 5 minutos.
+View settings permite abrir General. Edit general settings permite alterar limites numéricos e validação. Manage feature flags permite os interruptores de funções opcionais. Danger zone permite manutenção destrutiva.
 
+Use as suas opções operacionais aprovadas. As capturas mostram uma instalação de teste isolada. Os exemplos destrutivos executaram apenas nessa instalação descartável, após verificar a propriedade da base e do fornecedor de identidade. Não são necessários dados de prática.
 
-## Quem pode fazer o quê
+Em Settings, use as páginas ligadas Laboratory, Setup checks, Connectors, Roles, Layouts e Data Exposure. Este guia cobre General. Leia [Começar aqui](/docs/start-here) para configurar a linha de comandos.
 
-Cada página de Definições tem a sua própria capacidade. Uma página para a qual não tem a capacidade não aparece no menu lateral.
+## Ler a versão e o estado de atualização
 
-| Capacidade | O que abre em Geral |
-| --- | --- |
-| **View settings** | Abre Definições, Geral e Laboratório. Mostra o cartão **Sobre** |
-| **Edit general settings** | O interruptor **Verificação automática de atualizações**, **Limites e afinação**, **Validação de dados**, e guardar a página Laboratório |
-| **Manage feature flags** | O cartão **Indicadores de funcionalidades** |
-| **Danger zone** | As três ações de reposição. Dê-a ao menor número de pessoas possível |
+Use esta tarefa ao comunicar um problema ou decidir se agenda uma atualização.
 
-Um cartão para o qual não tem a capacidade não aparece.
+### 1. Abrir Settings e General
 
-## As páginas de Definições
+Abra o menu de utilizador no canto inferior esquerdo, escolha **Settings** e depois **General**.
 
-| Página | Para que serve | Guia |
-| --- | --- | --- |
-| Geral | Versão, verificação de atualizações, indicadores, limites, zona de perigo | Esta página |
-| Laboratório | Cabeçalho de todos os relatórios, registo de unidades predefinido, fuso horário | [Laboratório](/docs/laboratory) |
-| Notificações | As notificações que recebe | Ainda sem guia |
-| Sites | Os sites para os quais esta instalação reporta | Ainda sem guia |
-| Sincronização distribuída | Ligar um laboratório a um servidor central. O separador **Definições** configura a ligação e a direção. O separador **Atividade** mostra o estado ao vivo e os eventos recentes | [Sincronização distribuída](/docs/sync) |
-| Conectores | Bases de dados externas e integrações fornecidas por plugins | [Conectores](/docs/connectors) |
-| Marketplace | Procurar artefactos instaláveis, gerir registos, rever pacotes instalados | [Marketplace](/docs/marketplace) |
-| Funções | Funções baseadas em capacidades e as funções de sistema incluídas | [Funções](/docs/roles) |
-| Exposição de dados | As colunas extra que o Builder dos painéis pode oferecer | [Exposição de dados](/docs/data-exposure) |
+![Abrir o menu de utilizador no canto inferior esquerdo.](settings-guide-user-menu.png)
 
-As definições lidas no arranque do servidor, como o endereço público, TLS, a base de dados, o armazenamento e os segredos, não estão aqui. Veja [Variáveis de ambiente](/docs/environment).
+![Escolher Settings.](settings-guide-settings-menu.png)
 
-Este manual cobre as páginas acima. Uma página de definições que não esteja aqui fica fora do âmbito atual da documentação integrada.
+![Selecionar General em Settings.](settings-guide-general-page.png)
 
-## Versão e verificação de atualizações
+### 2. Ler About
 
-1. Abra **Definições**. Abre em **Geral**.
-2. Leia o cartão **Sobre**. **Versão** é o que esta instalação executa. A linha por baixo, **Versão mais recente**, diz em que ponto está essa versão.
-3. Leia **Última verificação** por baixo do interruptor **Verificação automática de atualizações** para saber a idade dessa resposta.
+Leia a **Version** em execução, o ambiente e os serviços configurados em About.
 
-**Resultado esperado numa instalação nova:** o seu número de versão seguido de *atualizado*, ou *ainda não verificado* se a instalação arrancou há menos de um dia sem rede.
+![About mostra a versão em execução e os serviços configurados.](settings-guide-about.png)
 
-A linha **Versão mais recente** tem uma de seis formas:
+### 3. Ler Latest
 
-| Mostra | Significado |
-| --- | --- |
-| uma versão e *atualizado* | Executa a versão mais recente |
-| uma versão mais nova, a data de publicação e **Notas da versão** | Existe uma atualização. Segue-se uma ligação para o [procedimento de atualização planeada](/docs/upgrading) |
-| *nenhuma atualização encontrada* | A última verificação viu uma versão mais antiga do que a sua. Veja abaixo |
-| *verificação de atualizações desativada* | **Verificação automática de atualizações** está desligada |
-| *não é possível confirmar* | A última verificação falhou, ou não foi possível ler a versão em execução |
-| *ainda não verificado* | Não houve nenhuma verificação desde o arranque |
+Leia **Latest** e a hora da última verificação. Use as ligações disponíveis para notas de versão e procedimento ao planear uma atualização. Esta página não instala atualizações.
 
-*Nenhuma atualização encontrada* quer dizer que a última verificação bem-sucedida viu uma versão **mais antiga** do que a que executa. Por isso não tem nada para dizer. **Neste caso não aparece nenhum número de versão, de propósito.** Um número inferior ao seu não pede nenhuma ação, e lê-lo como um convite para voltar atrás seria um erro.
+![Ler Latest e a hora da última verificação de atualizações.](settings-guide-update-state.png)
 
-Isto acontece quando atualiza pouco depois de uma publicação. A verificação corre uma vez por dia, e a resposta em cache é anterior à sua versão. Corrige-se na verificação seguinte, ou logo se reiniciar o contentor api.
+**Resultado esperado:** conhece a versão em execução e o resultado atual da verificação do servidor.
 
-### O que faz a verificação
+## Alterar as verificações automáticas de atualizações
 
-A verificação está **ligada por predefinição**. Uma vez por dia transfere um pequeno ficheiro do GitHub, com um limite de 10 segundos para esse único pedido, e compara números de versão. Nunca transfere uma imagem e nunca reinicia nada. Atualizar é sempre algo que faz por si.
+Use esta tarefa para decidir se o servidor deve procurar versões disponíveis.
 
-**O que envia:** um pedido web normal por um ficheiro público. Nenhum nome de site, nenhuma versão, nenhum identificador. Como em qualquer pedido web, o servidor que responde vê o endereço IP da sua rede e a hora do pedido.
+### 1. Alterar Auto update check
 
-**Para a desligar,** desligue **Verificação automática de atualizações**. A instalação deixa de fazer qualquer pedido para fora, e a linha da versão mostra só o que executa. Um laboratório sem Internet pode deixá-la ligada. Uma falha é silenciosa, e a última resposta conhecida é mantida. Não há opção na linha de comandos para isto. É uma definição só do studio.
+Ligue ou desligue **Auto update check** em About. A alteração guarda imediatamente.
 
-**Na linha de comandos,** `openldr update check` mostra a mesma informação:
+![Auto update check determina se o servidor procura versões disponíveis.](settings-guide-update-switch.png)
 
-```bash
-./openldr update check
-```
+### 2. Ler o estado resultante
 
-Sai com **1** quando existe uma atualização e com **0** em todos os outros casos, incluindo uma verificação falhada ou não confirmada. O código 1 quer dizer "existe uma atualização", não um erro, por isso um script pode agir logo. O código **2** só aparece quando a verificação nem conseguiu correr, por exemplo com a base de dados inacessível. Assim uma verificação avariada nunca parece uma versão nova.
+Quando desligada, Latest indica **update check is off**. Ligar permite novamente as verificações. Não atualiza a instalação.
 
-## Ligar os widgets SQL
+![Desligar reflete-se em Latest. Não instala uma atualização.](settings-guide-update-off.png)
 
-Os widgets de painel escritos em SQL estão desligados numa instalação nova. Ligue-os quando alguém precisar, como em [Painéis, Exemplo 5](/docs/dashboard#exemplo-5-um-widget-escrito-em-sql).
+**Resultado esperado:** a escolha de verificação fica guardada.
 
-1. Em **Geral**, encontre **Indicadores de funcionalidades**.
-2. Ligue **SQL bruto no painel**. Aparece a mensagem **Guardado**. A alteração tem efeito imediato, sem reiniciar.
+## Ativar ou desativar uma função opcional
 
-**Resultado esperado:** o editor de widgets dos Painéis passa a oferecer SQL. Desligue-o e os widgets SQL deixam de correr. As consultas guardadas e aprovadas continuam a correr com ele desligado.
+Decida primeiro que funções opcionais a instalação deve oferecer. Leia a descrição antes de alterar um interruptor.
 
-O mesmo na linha de comandos:
+### 1. Alterar o interruptor da função
 
-```bash
-./openldr settings flags list
-./openldr settings flags set dashboard.raw_sql true
-```
+Em **Feature Flags**, ligue ou desligue a opção pretendida. O exemplo liga **Dashboard raw SQL**.
 
-## Indicadores de funcionalidades
+![Ligar ou desligar a função opcional. O exemplo ativa Dashboard raw SQL.](settings-guide-flag.png)
 
-| Indicador | Chave na linha de comandos | Predefinição | O que faz |
-| --- | --- | --- | --- |
-| SQL bruto no painel | `dashboard.raw_sql` | Desligado | Deixa os widgets correr SQL só de leitura no armazém PostgreSQL, MySQL ou SQL Server. O nó **SQL Query** dos fluxos de trabalho também precisa dele |
-| Gatilhos de escuta de fluxo de trabalho | `workflow.listeners_enabled` | Ligado | Corre os gatilhos de escuta (Postgres LISTEN, leitura de e-mail IMAP). Desligado, para todos os ouvintes na verificação seguinte |
-| Publicar conjuntos de dados de fluxo de trabalho | `workflow.dataset_publish_enabled` | Desligado | Publica os conjuntos de dados dos fluxos como tabelas reais no armazém Postgres, para o nó SQL e os painéis os poderem consultar |
+### 2. Verificar a mensagem de gravação
 
-## Limites e afinação
+A alteração guarda imediatamente. Verifique a mensagem **Saved**. Estas funções não têm um botão Save separado.
 
-Estes valores mudam logo, sem reiniciar. Um valor fora do intervalo permitido passa para o limite mais próximo.
+![As alterações dos interruptores de funções guardam imediatamente.](settings-guide-flag-saved.png)
 
-| Limite | Chave na linha de comandos | Predefinição | Intervalo permitido |
-| --- | --- | --- | --- |
-| Tempo limite de SQL do painel (ms) | `dashboard.sql_timeout_ms` | 5000 | 100 a 600000 |
-| Limite de linhas de SQL do painel | `dashboard.sql_row_cap` | 10000 | 1 a 1000000 |
-| Carga máxima do marketplace (bytes) | `marketplace.max_payload_bytes` | 67108864 (64 MB) | 1024 a 536870912 |
+**Resultado esperado:** a nova escolha aplica-se imediatamente. O exemplo repôs o estado desligado original após a captura.
 
-O limite de linhas age de duas formas. O SQL bruto devolve no máximo esse número de linhas. Uma consulta do Builder conta primeiro os seus grupos na base de dados, e devolve um erro se houver mais do que o limite.
+## Alterar um limite de execução
 
-```bash
-./openldr settings numbers list
-./openldr settings numbers set dashboard.sql_timeout_ms 10000
-```
+Use esta tarefa para ajustar um limite sem reiniciar. Leia a descrição e escolha um valor para a sua carga.
 
-## Zona de perigo
+### 1. Introduzir o valor
 
-O fundo de **Geral** tem ações que não se podem desfazer. Só tocam na base de dados interna. Os dados do armazém e as contas do Keycloak nunca são tocados.
+Em **Limits & tuning**, introduza o número pretendido. O exemplo altera **Dashboard SQL row cap** para `5000`.
 
-| Ação | O que faz | Linha de comandos |
-| --- | --- | --- |
-| Validação de dados | Define o rigor da verificação dos dados laboratoriais recebidos: Baixo, Médio ou Alto. Mais baixo guarda dados incompletos. Mais alto pode recusar dados que antes eram aceites | `./openldr settings validation set medium` |
-| Repor painéis | Elimina todos os painéis e recria o exemplo | `./openldr settings danger reset-dashboards --force` |
-| Limpar registo de auditoria | Elimina todos os eventos de auditoria e o histórico de execuções de fluxos | `./openldr settings danger clear-audit --force` |
-| Redefinição de fábrica | Apaga a base interna (formulários, conectores, painéis, fluxos, terminologia, utilizadores, auditoria) e recria as predefinições | `./openldr settings danger factory-reset --force` |
+![Introduzir o limite pretendido. O exemplo define um máximo de 5000 linhas.](settings-guide-number-value.png)
 
-No studio, cada reposição pede que escreva uma frase antes de correr. Na linha de comandos, cada uma recusa correr sem `--force`.
+### 2. Sair do campo para guardar
 
-## Num telemóvel
+Selecione outro campo ou prima Tab. Sair do campo numérico guarda o valor. O servidor limita os valores ao intervalo aceite.
 
-Num ecrã estreito, a lista de páginas de Definições passa para uma fila no topo. Deslize-a para o lado para chegar às últimas páginas, como **Exposição de dados**.
+![Sair do campo numérico guarda o valor.](settings-guide-number-saved.png)
+
+### 3. Verificar o valor guardado
+
+Reabra General para confirmar a persistência. Leia o valor que o servidor manteve.
+
+![O limite guardado mantém-se após reabrir General.](settings-guide-number-reopened.png)
+
+**Resultado esperado:** o limite numérico permanece guardado após reabrir General.
+
+## Alterar a validação dos dados recebidos
+
+Use esta tarefa para alterar que dados recebidos a instalação aceita. Aumentar o rigor pode rejeitar dados antes aceites. Reduzir permite mais dados incompletos.
+
+### 1. Abrir Data validation
+
+Desloque até **Danger Zone** e abra **Data validation**.
+
+![Abrir Data validation em Danger Zone.](settings-guide-validation-menu.png)
+
+### 2. Escolher o nível
+
+Escolha Low, Medium ou High conforme necessário. O exemplo muda High para **Medium**.
+
+![Escolher o nível necessário. O exemplo muda para Medium.](settings-guide-validation-level.png)
+
+### 3. Ler o efeito
+
+Leia o aviso de confirmação correspondente ao sentido da alteração.
+
+![Ler como o novo rigor afeta os dados recebidos.](settings-guide-validation-warning.png)
+
+### 4. Introduzir a frase de confirmação
+
+Introduza exatamente o nível em minúsculas apresentado. O exemplo escreve `medium`.
+
+![Introduzir a frase em minúsculas apresentada na confirmação.](settings-guide-validation-phrase.png)
+
+### 5. Aplicar a alteração
+
+Selecione **Apply**. Escolha Cancel para manter o nível anterior.
+
+![Escolher Apply para guardar o novo rigor.](settings-guide-validation-apply.png)
+
+**Resultado esperado:** Data validation apresenta o nível guardado.
+
+![Data validation apresenta agora o nível Medium guardado.](settings-guide-validation-result.png)
+
+## Repor todos os painéis no exemplo
+
+Use apenas para remover todos os painéis e repor o exemplo integrado. Esta operação é irreversível.
+
+### 1. Abrir os pontos da ação
+
+Em Danger Zone, selecione os pontos junto de **Reset dashboards**.
+
+![Abrir os pontos junto de Reset dashboards.](settings-guide-reset-dashboards-actions.png)
+
+### 2. Escolher Reset
+
+Selecione **Reset**.
+
+![Escolher Reset.](settings-guide-reset-dashboards-menu.png)
+
+### 3. Ler o que a ação remove
+
+Verifique o título e o aviso. Cancele se a ação não corresponde à sua intenção.
+
+![Ler o que Reset dashboards remove antes de confirmar.](settings-guide-reset-dashboards-warning.png)
+
+### 4. Introduzir a frase exata
+
+Introduza `reset dashboards` exatamente como apresentado.
+
+![Introduzir a frase de confirmação exata apresentada pela aplicação.](settings-guide-reset-dashboards-phrase.png)
+
+### 5. Confirmar Reset
+
+Selecione **Reset** para executar a operação. Aguarde a conclusão.
+
+![Confirmar Reset apenas para a operação pretendida.](settings-guide-reset-dashboards-confirm.png)
+
+**Resultado esperado:** todos os painéis são eliminados e o exemplo integrado é recriado.
+
+![A página indica a conclusão de Reset dashboards.](settings-guide-reset-dashboards-result.png)
+
+## Limpar eventos de auditoria e histórico de execuções
+
+Use apenas para remover permanentemente a auditoria e o histórico de execuções dos workflows. Esta operação é irreversível.
+
+### 1. Abrir os pontos da ação
+
+Em Danger Zone, selecione os pontos junto de **Clear audit log**.
+
+![Abrir os pontos junto de Clear audit log.](settings-guide-clear-audit-actions.png)
+
+### 2. Escolher Clear
+
+Selecione **Clear**.
+
+![Escolher Clear.](settings-guide-clear-audit-menu.png)
+
+### 3. Ler o que a ação remove
+
+Verifique o título e o aviso. Cancele se a ação não corresponde à sua intenção.
+
+![Ler o que Clear audit log remove antes de confirmar.](settings-guide-clear-audit-warning.png)
+
+### 4. Introduzir a frase exata
+
+Introduza `clear audit` exatamente como apresentado.
+
+![Introduzir a frase de confirmação exata apresentada pela aplicação.](settings-guide-clear-audit-phrase.png)
+
+### 5. Confirmar Clear
+
+Selecione **Clear** para executar a operação. Aguarde a conclusão.
+
+![Confirmar Clear apenas para a operação pretendida.](settings-guide-clear-audit-confirm.png)
+
+**Resultado esperado:** os eventos antigos e o histórico dos workflows são removidos. A própria limpeza escreve um novo evento de auditoria.
+
+![A página indica a conclusão de Clear audit log.](settings-guide-clear-audit-result.png)
+
+## Repor as predefinições internas de fábrica
+
+Use apenas para apagar todos os dados internos e os repor. Remove formulários, conectores, painéis, workflows, terminologia, utilizadores locais, auditoria e outros registos internos. Esta operação é irreversível.
+
+### 1. Abrir os pontos da ação
+
+Em Danger Zone, selecione os pontos junto de **Factory reset**.
+
+![Abrir os pontos junto de Factory reset.](settings-guide-factory-reset-actions.png)
+
+### 2. Escolher Factory reset
+
+Selecione **Factory reset**.
+
+![Escolher Factory reset.](settings-guide-factory-reset-menu.png)
+
+### 3. Ler o que a ação remove
+
+Verifique o título e o aviso. Cancele se a ação não corresponde à sua intenção.
+
+![Ler o que Factory reset remove antes de confirmar.](settings-guide-factory-reset-warning.png)
+
+### 4. Introduzir a frase exata
+
+Introduza `factory reset` exatamente como apresentado.
+
+![Introduzir a frase de confirmação exata apresentada pela aplicação.](settings-guide-factory-reset-phrase.png)
+
+### 5. Confirmar Factory reset
+
+Selecione **Factory reset** para executar a operação. Aguarde a conclusão.
+
+![Confirmar Factory reset apenas para a operação pretendida.](settings-guide-factory-reset-confirm.png)
+
+**Resultado esperado:** a base interna é apagada e as predefinições de fábrica são recriadas. Os dados externos de destino e as contas do fornecedor de identidade ficam fora desta reposição. Com o início de sessão próprio do OpenLDR, todas as contas e palavras-passe são também removidas. Para voltar a iniciar sessão é preciso um novo código de configuração obtido na linha de comandos do servidor.
+
+![A página indica a conclusão de Factory reset.](settings-guide-factory-reset-result.png)
+
+## Ler General num telemóvel
+
+Use a mesma página General no telemóvel. A página desloca-se verticalmente.
+
+### 1. Ler About
+
+Leia a versão e as informações de atualização perto do topo.
+
+![Ler as informações de General no telemóvel.](settings-guide-phone-about.png)
+
+### 2. Deslocar até aos limites
+
+Leia a descrição do campo antes de alterar um limite numérico.
+
+![Deslocar até aos limites. Os controlos mantêm-se dentro da largura do telemóvel.](settings-guide-phone-limit.png)
+
+### 3. Ler Danger Zone com atenção
+
+Desloque até à ação e leia a descrição antes de abrir os pontos.
+
+![Deslocar até Danger Zone e ler a descrição antes de abrir os pontos.](settings-guide-phone-danger.png)
+
+## Prática opcional
+
+Use uma instalação de teste descartável. Altere uma opção reversível ou um limite, confirme que guardou e reponha o valor. Não pratique manutenção destrutiva com dados do pessoal.
+
+## Limites
+
+A verificação de atualizações não instala uma versão. Os interruptores guardam imediatamente. Os campos numéricos guardam ao sair. As ações destrutivas afetam a base interna e não podem ser anuladas nesta página.
 
 ## Resolução de problemas
 
-- **Falta uma página no menu lateral.** A sua função não tem a capacidade dela. Peça a um administrador que veja a sua função em [Funções](/docs/roles).
-- **Falta um cartão em Geral.** A sua função não tem a capacidade dele. Veja a tabela em Quem pode fazer o quê.
-- **A linha Versão mais recente diz *não é possível confirmar*.** A instalação não chegou ao GitHub, ou a versão em execução não se leu. Nada mais é afetado.
-- **Um limite ficou guardado com outro número.** Estava fora do intervalo permitido e passou para o limite mais próximo.
-- **Os widgets SQL continuam a recusar correr.** Confirme que **SQL bruto no painel** está ligado. Depois confirme que a consulta do widget é só de leitura.
+**Falta um controlo.** Verifique a permissão separada para funções, alterações gerais ou ações Danger Zone.
+
+**Um valor muda após guardar.** O servidor limita-o ao intervalo aceite. Leia o valor guardado.
+
+**Uma confirmação permanece desativada.** Introduza a frase exata apresentada.
+
+**Latest não confirma uma atualização.** Leia o erro da última verificação e resolva a ligação de saída do servidor antes de confiar no resultado.
 
 ## Guias relacionados
 
-- [Laboratório](/docs/laboratory)
-- [Exposição de dados](/docs/data-exposure)
-- [Funções](/docs/roles)
-- [Sincronização distribuída](/docs/sync)
-- [Conectores](/docs/connectors)
-- [Marketplace](/docs/marketplace)
-- [Variáveis de ambiente](/docs/environment)
-- [Atualizações planeadas](/docs/upgrading)
+Leia [Verificações da configuração](/docs/setup-checks) para preparação e [Laboratório](/docs/laboratory) para os dados do laboratório emissor. Leia [Auditoria](/docs/audit) para as ações administrativas registadas.

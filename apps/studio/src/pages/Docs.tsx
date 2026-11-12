@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen, Download, ListTree } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +28,7 @@ import { Lightbox, type LightboxImage } from '../docs/Lightbox';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -79,12 +80,19 @@ function useActiveHeading(pane: RefObject<HTMLDivElement | null>, entries: TocEn
         const heading = document.getElementById(entry.id);
         if (heading && heading.getBoundingClientRect().top <= top) current = entry.id;
       }
+      // The final heading may be too close to the page end to reach the pane's top.
+      if (el.clientHeight > 0 && el.scrollHeight > el.clientHeight
+        && el.scrollTop + el.clientHeight >= el.scrollHeight - 2) current = entries[entries.length - 1].id;
       setActive(current);
     };
     const onScroll = () => { if (!frame) frame = requestAnimationFrame(update); };
     update();
     el.addEventListener('scroll', onScroll, { passive: true });
+    const observer = new ResizeObserver(onScroll);
+    observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
     return () => {
+      observer.disconnect();
       el.removeEventListener('scroll', onScroll);
       if (frame) cancelAnimationFrame(frame);
     };
@@ -93,32 +101,56 @@ function useActiveHeading(pane: RefObject<HTMLDivElement | null>, entries: TocEn
 }
 
 /** The right-hand "On this page" list. Only on wide screens; narrow ones get the toolbar menu. */
-function OnThisPage({ entries, active }: { entries: TocEntry[]; active: string | null }) {
+function OnThisPage({ entries, active, pane }: {
+  entries: TocEntry[]; active: string | null; pane: RefObject<HTMLDivElement | null>;
+}) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const reveal = useCallback((target: HTMLElement | null) => {
+    const list = listRef.current;
+    if (!list || !target || !list.clientHeight) return;
+    const bounds = list.getBoundingClientRect();
+    const item = target.getBoundingClientRect();
+    if (item.top < bounds.top) list.scrollTop -= bounds.top - item.top;
+    else if (item.bottom > bounds.bottom) list.scrollTop += item.bottom - bounds.bottom;
+  }, []);
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const followActive = () => reveal(list.querySelector<HTMLElement>('[aria-current="location"]'));
+    followActive();
+    const observer = new ResizeObserver(followActive);
+    observer.observe(list);
+    if (pane.current) observer.observe(pane.current);
+    return () => observer.disconnect();
+  }, [active, entries, pane, reveal]);
   return (
-    <nav aria-label="On this page" className="sticky top-0 hidden max-h-[calc(100dvh-8rem)] w-56 shrink-0 self-start overflow-y-auto xl:block">
-      <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+    <nav aria-label="On this page" className="sticky top-0 hidden max-h-[calc(100dvh-9rem)] w-56 shrink-0 self-start xl:flex xl:flex-col">
+      <div className="shrink-0 px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
         On this page
       </div>
-      {entries.map((entry) => (
-        <a
-          key={entry.id}
-          href={`#${entry.id}`}
-          aria-current={entry.id === active ? 'location' : undefined}
-          onClick={(event) => {
-            event.preventDefault();
-            goToHeading(entry.id);
-          }}
-          className={`block border-l-2 py-1 text-xs no-underline transition-colors ${
-            entry.level === 3 ? 'pl-6 pr-3' : 'px-3'
-          } ${
-            entry.id === active
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          {entry.text}
-        </a>
-      ))}
+      {/* Only code and keyboard focus move this list. Wheel input scrolls the article. */}
+      <div ref={listRef} className="min-h-0 overflow-hidden" onFocus={(event) => reveal(event.target)}>
+        {entries.map((entry) => (
+          <a
+            key={entry.id}
+            href={`#${entry.id}`}
+            aria-current={entry.id === active ? 'location' : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              goToHeading(entry.id);
+            }}
+            className={`block border-l-2 py-1 text-xs no-underline transition-colors ${
+              entry.level === 3 ? 'pl-6 pr-3' : 'px-3'
+            } ${
+              entry.id === active
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {entry.text}
+          </a>
+        ))}
+      </div>
     </nav>
   );
 }
@@ -137,13 +169,16 @@ function titleCase(value: string) {
 function GuideLink({
   section,
   activeSlug,
+  onSelect,
 }: {
   section: DocSection;
   activeSlug: string;
+  onSelect?: () => void;
 }) {
   return (
     <Link
       to={`/docs/${section.slug}`}
+      onClick={onSelect}
       aria-current={section.slug === activeSlug ? 'page' : undefined}
       className={`block border-l-2 px-3 py-2 text-sm no-underline transition-colors ${
         section.slug === activeSlug
@@ -163,7 +198,7 @@ function GuideLink({
 
 export function Docs() {
   const { slug } = useParams();
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const locale: Locale = (['en', 'fr', 'pt'] as const).includes(i18n.language as Locale)
     ? (i18n.language as Locale)
     : 'en';
@@ -173,10 +208,9 @@ export function Docs() {
   const [collapsed, setCollapsed] = useState(
     isNarrowViewport,
   );
-  // Also collapse when the viewport narrows later (rotation, resize). Only on the change, so the
-  // user can still expand it on a phone. Widening leaves it as the user set it.
+  // Close phone navigation on a route change or when the viewport first narrows.
   const narrow = useIsNarrowViewport();
-  useEffect(() => { if (narrow) setCollapsed(true); }, [narrow]);
+  useEffect(() => { if (narrow) setCollapsed(true); }, [narrow, slug]);
   const [lightbox, setLightbox] = useState<LightboxImage | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [version, setVersion] = useState(DEFAULT_DOC_VERSION);
@@ -204,7 +238,7 @@ export function Docs() {
     const frame = requestAnimationFrame(() => goToHeading(decodeURIComponent(hash.slice(1))));
     return () => cancelAnimationFrame(frame);
   }, [activeSlug, hash]);
-  const toc = useMemo(() => (section ? extractToc(section.content) : []), [section?.content]);
+  const toc = useMemo(() => (section ? extractToc(section.content).filter((entry) => entry.level === 2) : []), [section?.content]);
   const showToc = wantsToc(toc);
   const activeHeading = useActiveHeading(contentRef, showToc ? toc : []);
   const navSections = useMemo(() => {
@@ -241,91 +275,140 @@ export function Docs() {
     });
   };
 
+  const navigation = (
+    <>
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          className={narrow ? 'h-11 w-11 shrink-0' : undefined}
+          onClick={() => setCollapsed((c) => !c)}
+          aria-label={
+            collapsed ? 'Expand documentation sidebar' : 'Collapse documentation sidebar'
+          }
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="h-4 w-4" />
+          ) : (
+            <PanelLeftClose className="h-4 w-4" />
+          )}
+        </Button>
+        {!collapsed && (
+          <Input
+            className="min-w-0"
+            placeholder="Search…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Search documentation"
+          />
+        )}
+      </div>
+      {!collapsed && (
+        <div className="shrink-0 border-b border-border px-2 py-2">
+          <Select value={version} onValueChange={setVersion}>
+            <SelectTrigger
+              className="h-8 w-full gap-1 px-2 text-xs"
+              aria-label="Documentation version"
+            >
+              <span className="text-muted-foreground">Version</span>
+              <span className="ml-auto text-right"><SelectValue /></span>
+            </SelectTrigger>
+            <SelectContent align="start" className="w-[var(--radix-select-trigger-width)]">
+              {DOC_VERSIONS.map((docVersion) => (
+                <SelectItem key={docVersion} value={docVersion} className="text-xs">
+                  {docVersion}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      {!collapsed && (
+        <nav
+          aria-label="Documentation sections"
+          className="flex flex-1 flex-col overflow-y-auto py-1"
+        >
+          {query.trim() ? (
+            <>
+              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                Search results
+              </div>
+              {navSections.map((navSection) => (
+                <GuideLink
+                  key={navSection.slug}
+                  section={navSection}
+                  activeSlug={activeSlug}
+                  onSelect={() => { if (narrow) setCollapsed(true); }}
+                />
+              ))}
+            </>
+          ) : (
+            DOC_GROUPS.map((group) => ({
+              group,
+              items: navSections.filter((navSection) => navSection.group === group.id),
+            }))
+              .filter((entry) => entry.items.length > 0)
+              .map(({ group, items }, idx) => (
+                <div
+                  key={group.id}
+                  className={`pb-1${idx > 0 ? ' mt-1 border-t border-border pt-2' : ''}`}
+                >
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                    {group.titles?.[locale] ?? group.title}
+                  </div>
+                  {items.map((navSection) => (
+                    <GuideLink
+                      key={navSection.slug}
+                      section={navSection}
+                      activeSlug={activeSlug}
+                      onSelect={() => { if (narrow) setCollapsed(true); }}
+                    />
+                  ))}
+                </div>
+              ))
+          )}
+          {navSections.length === 0 && (
+            <p className="px-3 py-2 text-sm text-muted-foreground">No results.</p>
+          )}
+        </nav>
+      )}
+    </>
+  );
+
   return (
     <AppShell title="Documentation" fullBleed>
       {/* Edge-to-edge: no outer frame or padding — structure comes only from the
           sidebar border-r and the matching h-12 header separators (corlix style). */}
       <div className="ui-scope flex min-h-0 flex-1 overflow-hidden">
         {/* Inner sidebar — a border-r column (not a card), collapsible. */}
-        <aside
-          className={`flex shrink-0 flex-col border-r border-border transition-[width] duration-200 ease-in-out ${
-            collapsed ? 'w-12' : 'w-64'
-          }`}
-        >
-          <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setCollapsed((c) => !c)}
-              aria-label={
-                collapsed ? 'Expand documentation sidebar' : 'Collapse documentation sidebar'
-              }
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        {narrow ? (
+          <Sheet open={!collapsed} onOpenChange={(open) => setCollapsed(!open)}>
+            <aside className="flex w-12 shrink-0 flex-col border-r border-border">
+              <div className="flex h-12 shrink-0 items-center justify-center border-b border-border">
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-11 w-11" aria-label="Expand documentation sidebar">
+                    <PanelLeftOpen className="h-4 w-4" />
+                  </Button>
+                </SheetTrigger>
+              </div>
+            </aside>
+            <SheetContent
+              hideClose
+              aria-describedby={undefined}
+              className="left-0 right-auto h-dvh w-72 max-w-[calc(100vw-3rem)] gap-0 overflow-hidden border-l-0 border-r p-0"
             >
-              {collapsed ? (
-                <PanelLeftOpen className="h-4 w-4" />
-              ) : (
-                <PanelLeftClose className="h-4 w-4" />
-              )}
-            </Button>
-            {!collapsed && (
-              <Input
-                className="min-w-0"
-                placeholder="Search…"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                aria-label="Search documentation"
-              />
-            )}
-          </div>
-          {!collapsed && (
-            <nav
-              aria-label="Documentation sections"
-              className="flex flex-1 flex-col overflow-y-auto py-1"
-            >
-              {query.trim() ? (
-                <>
-                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
-                    Search results
-                  </div>
-                  {navSections.map((navSection) => (
-                    <GuideLink
-                      key={navSection.slug}
-                      section={navSection}
-                      activeSlug={activeSlug}
-                    />
-                  ))}
-                </>
-              ) : (
-                DOC_GROUPS.map((group) => ({
-                  group,
-                  items: navSections.filter((navSection) => navSection.group === group.id),
-                }))
-                  .filter((entry) => entry.items.length > 0)
-                  .map(({ group, items }, idx) => (
-                    <div
-                      key={group.id}
-                      className={`pb-1${idx > 0 ? ' mt-1 border-t border-border pt-2' : ''}`}
-                    >
-                      <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
-                        {group.titles?.[locale] ?? group.title}
-                      </div>
-                      {items.map((navSection) => (
-                        <GuideLink
-                          key={navSection.slug}
-                          section={navSection}
-                          activeSlug={activeSlug}
-                        />
-                      ))}
-                    </div>
-                  ))
-              )}
-              {navSections.length === 0 && (
-                <p className="px-3 py-2 text-sm text-muted-foreground">No results.</p>
-              )}
-            </nav>
-          )}
-        </aside>
+              <SheetTitle className="sr-only">{t('nav.docs')}</SheetTitle>
+              {navigation}
+            </SheetContent>
+          </Sheet>
+        ) : (
+          <aside
+            className={`flex shrink-0 flex-col border-r border-border transition-[width] duration-200 ease-in-out ${collapsed ? 'w-12' : 'w-64'}`}
+          >
+            {navigation}
+          </aside>
+        )}
 
         {/* Content — borderless; the toolbar matches the sidebar header height (h-12)
             so the two bottom borders line up across the page. */}
@@ -336,27 +419,11 @@ export function Docs() {
                 {exportError}
               </span>
             )}
-            <Select value={version} onValueChange={setVersion}>
-              <SelectTrigger
-                className="h-8 w-auto gap-1 px-2 text-xs"
-                aria-label="Documentation version"
-              >
-                <span className="text-muted-foreground">Version</span>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent align="end">
-                {DOC_VERSIONS.map((docVersion) => (
-                  <SelectItem key={docVersion} value={docVersion} className="text-xs">
-                    {docVersion}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             {showToc && (
-              // Narrow screens have no room for the right-hand list, so it lives here instead.
+              // Every task remains available, including those outside the pinned panel's view.
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label="On this page" className="xl:hidden">
+                  <Button variant="ghost" size="icon" aria-label="On this page">
                     <ListTree className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -476,7 +543,7 @@ export function Docs() {
               </>
             )}
             </div>
-            {showToc && <OnThisPage entries={toc} active={activeHeading} />}
+            {showToc && <OnThisPage entries={toc} active={activeHeading} pane={contentRef} />}
             </div>
           </div>
         </section>

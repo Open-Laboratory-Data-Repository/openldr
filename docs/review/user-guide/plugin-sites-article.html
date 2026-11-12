@@ -1,0 +1,58 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>System setup</span><span>Choose where a plugin appears</span><span>About 10 minutes</span></div>
+<h1>Plugin cards and side panels</h1>
+<p>Some installed plugins add a dashboard card or a side panel. Use a side panel to keep the plugin visible while moving between app pages.</p>
+<p>You see a plugin card and panel only when you may see that plugin. A plugin restricted to certain roles keeps those same restrictions here.</p>
+<p>Administrators with marketplace management access can switch a card or panel off for everyone in the lab. The plugin page and other work remain enabled.</p>
+<p>Use a plugin your organisation already installed. The pictures use the optional Reference Plugin on a test installation. Light theme keeps this sample plugin readable. No clinical sample data is needed.</p>
+<h2 id="dg-card">Read a plugin dashboard card</h2>
+<p>A plugin must declare a dashboard card before one can appear. Its content comes from that plugin.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Dashboard</h3><p>Read the plugin card beneath the dashboard widgets. Cards appear on dashboards outside the normal widget editor. You cannot move or resize them there.</p>__SHOT:dashboard:1__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The reference example reports Drawn in: widget. Your plugin shows its own content.</p></div>
+<h2 id="dg-panel">Open a panel while you work</h2>
+<p>A panel is available only when an enabled plugin declares one and you may access that plugin.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Side panels</h3><p>Select the <strong>Side panels</strong> button beside the notification bell. It appears only when a panel is available.</p>__SHOT:panel-button:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose a panel</h3><p>Select its title. The example is <strong>Reference panel</strong>.</p>__SHOT:panel-choice:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read the panel</h3><p>The panel opens on the right. The main page remains available beside it on desktop.</p>__SHOT:panel-open:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Move to another app page</h3><p>Choose another page in the main menu. The panel stays open with its current content. The example moves to Forms.</p>__SHOT:navigate:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Close the panel</h3><p>Select <strong>Close</strong> at the panel top right.</p>__SHOT:close:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Closing returns the space to the main page. Signing out or disabling the plugin or its panel also closes it.</p></div>
+<h2 id="dg-places">Switch a card or panel off</h2>
+<p>These switches apply to the whole lab. Each switch saves immediately. There is no separate Save action.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Marketplace</h3><p>Open <strong>Settings</strong>, then <strong>Marketplace</strong>.</p>__SHOT:marketplace:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Installed</h3><p>Use the <strong>Installed</strong> tab.</p>__SHOT:installed:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open the plugin</h3><p>Choose the installed plugin that supplies the card or panel.</p>__SHOT:plugin:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Open its actions</h3><p>Select the plugin detail dots.</p>__SHOT:actions:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Choose Places</h3><p>Select <strong>Places</strong>. This action appears only when the plugin declares a dashboard card or side panel.</p>__SHOT:places:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Change Dashboard card</h3><p>Turn <strong>Dashboard card</strong> off to hide that card. Turn it on to restore it.</p>__SHOT:card-switch:6__</section>
+<h2 id="dg-panel-place">Control the side panel separately</h2>
+<p>Continue in Places. Each placement switch controls that one location; it does not disable the whole plugin.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Check the saved state</h3><p>An off switch means the dashboard card is hidden. A failed save reports an error and keeps the previous state.</p>__SHOT:card-off:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Change Side panel separately</h3><p>Turn <strong>Side panel</strong> off to hide that panel. It has a separate switch.</p>__SHOT:panel-switch:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check the result</h3><p>Close Places and return to Dashboard. The example has hidden both places, while Reference Plugin remains in the main menu.</p>__SHOT:hidden:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The plugin page and its other work remain enabled. Each change appears in Audit as plugin.sites.update.</p></div>
+<h2 id="dg-phone">Use a side panel on a phone</h2>
+<p>At phone width, the panel covers the main page beneath the app header.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose the panel</h3><p>Open the header Side panels button and choose the panel.</p>__SHOT:phone-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read the panel</h3><p>Use the panel content. The underlying page is covered.</p>__SHOT:phone-panel:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Return to the app page</h3><p>Select <strong>Close</strong> at the panel top right.</p>__SHOT:phone-close:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The screenshots verify the 375px layout. A real phone must confirm access around retractable browser chrome.</p></div>
+<h2 id="dg-cli">Read or change places from the CLI</h2>
+<p>Follow <a href="start-here-review.html">Start here</a> for CLI setup. From <code>openldr_ce</code>, use the plugin id. A place is called <code>widget</code> for Dashboard card and <code>panel</code> for Side panel.</p>
+<pre><code>pnpm openldr market sites &lt;plugin-id&gt;
+pnpm openldr market sites &lt;plugin-id&gt; widget off
+pnpm openldr market sites &lt;plugin-id&gt; widget on
+pnpm openldr market sites &lt;plugin-id&gt; panel off
+pnpm openldr market sites &lt;plugin-id&gt; panel on</code></pre>
+<h2 id="dg-practice">Optional practice with Reference Plugin</h2>
+<p>Use your own installed plugin for normal work. In a disposable source installation, the reference plugin demonstrates a card, panel and separate plugin page. Build tools need Rust and its <code>wasm32-wasip1</code> target.</p>
+<p>From <code>openldr_ce</code>, run <code>pnpm build:ui-reference</code>, then <code>pnpm openldr plugin install reference-plugins/ui-reference/plugin.wasm</code>. Reload Studio. Dashboard shows Reference card and Side panels offers Reference panel. The reference plugin declares no publisher signature, so use it only in a test installation.</p>
+<p>The picture reads Drawn in: widget or Drawn in: panel according to its location. Its test note is fictional. Remove it afterward with <code>pnpm openldr plugin remove ui-reference</code>.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>No Side panels button.</strong> Check that an enabled, permitted plugin declares a panel and its Side panel switch is on.</p>
+<p><strong>No Places action.</strong> That plugin may not declare a card or panel. Places does not add a new capability to a plugin.</p>
+<p><strong>The card is missing.</strong> Check Dashboard card in Places, the plugin enabled state and your role access.</p>
+<p><strong>The reference sample is hard to read.</strong> Use light theme. The sample has fixed dark text; this preview does not change plugin source.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="marketplace-review.html">Marketplace</a> covers installation and plugin state. <a href="dashboard-review.html">Dashboards</a> covers ordinary dashboard widgets.</p>
+</article>

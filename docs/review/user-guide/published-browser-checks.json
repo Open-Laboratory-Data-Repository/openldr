@@ -1,0 +1,662 @@
+{
+  "pages": 81,
+  "results": [
+    {
+      "locale": "en",
+      "slug": "activity",
+      "steps": 25,
+      "images": 26,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "advanced-docs",
+      "steps": 9,
+      "images": 9,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "audit",
+      "steps": 20,
+      "images": 23,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "auth-providers",
+      "steps": 21,
+      "images": 21,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "connector-diagnose",
+      "steps": 16,
+      "images": 16,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "connectors",
+      "steps": 25,
+      "images": 26,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "data-exposure",
+      "steps": 18,
+      "images": 24,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "environment",
+      "steps": 8,
+      "images": 8,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "forms",
+      "steps": 70,
+      "images": 82,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "laboratory",
+      "steps": 14,
+      "images": 19,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "layouts",
+      "steps": 20,
+      "images": 29,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "marketplace",
+      "steps": 26,
+      "images": 27,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "patients",
+      "steps": 42,
+      "images": 57,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "plugin-sites",
+      "steps": 18,
+      "images": 18,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "query",
+      "steps": 53,
+      "images": 69,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "report-designer",
+      "steps": 43,
+      "images": 50,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "report-pipeline",
+      "steps": 47,
+      "images": 52,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "reports",
+      "steps": 53,
+      "images": 59,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "roles",
+      "steps": 21,
+      "images": 26,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "settings",
+      "steps": 33,
+      "images": 39,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "setup-checks",
+      "steps": 14,
+      "images": 18,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "sync",
+      "steps": 22,
+      "images": 22,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "test-catalog",
+      "steps": 59,
+      "images": 82,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "upgrading",
+      "steps": 12,
+      "images": 12,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "users",
+      "steps": 30,
+      "images": 38,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "v1-import",
+      "steps": 18,
+      "images": 18,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "en",
+      "slug": "workflows",
+      "steps": 38,
+      "images": 43,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "activity",
+      "steps": 25,
+      "images": 26,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "advanced-docs",
+      "steps": 9,
+      "images": 9,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "audit",
+      "steps": 20,
+      "images": 23,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "auth-providers",
+      "steps": 21,
+      "images": 21,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "connector-diagnose",
+      "steps": 16,
+      "images": 16,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "connectors",
+      "steps": 25,
+      "images": 26,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "data-exposure",
+      "steps": 18,
+      "images": 24,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "environment",
+      "steps": 8,
+      "images": 8,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "forms",
+      "steps": 70,
+      "images": 82,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "laboratory",
+      "steps": 14,
+      "images": 19,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "layouts",
+      "steps": 20,
+      "images": 29,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "marketplace",
+      "steps": 26,
+      "images": 27,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "patients",
+      "steps": 42,
+      "images": 57,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "plugin-sites",
+      "steps": 18,
+      "images": 18,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "query",
+      "steps": 53,
+      "images": 69,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "report-designer",
+      "steps": 43,
+      "images": 50,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "report-pipeline",
+      "steps": 47,
+      "images": 52,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "reports",
+      "steps": 53,
+      "images": 59,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "roles",
+      "steps": 21,
+      "images": 26,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "settings",
+      "steps": 33,
+      "images": 39,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "setup-checks",
+      "steps": 14,
+      "images": 18,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "sync",
+      "steps": 22,
+      "images": 22,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "test-catalog",
+      "steps": 59,
+      "images": 82,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "upgrading",
+      "steps": 12,
+      "images": 12,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "users",
+      "steps": 30,
+      "images": 38,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "v1-import",
+      "steps": 18,
+      "images": 18,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "fr",
+      "slug": "workflows",
+      "steps": 38,
+      "images": 43,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "activity",
+      "steps": 25,
+      "images": 26,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "advanced-docs",
+      "steps": 9,
+      "images": 9,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "audit",
+      "steps": 20,
+      "images": 23,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "auth-providers",
+      "steps": 21,
+      "images": 21,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "connector-diagnose",
+      "steps": 16,
+      "images": 16,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "connectors",
+      "steps": 25,
+      "images": 26,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "data-exposure",
+      "steps": 18,
+      "images": 24,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "environment",
+      "steps": 8,
+      "images": 8,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "forms",
+      "steps": 70,
+      "images": 82,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "laboratory",
+      "steps": 14,
+      "images": 19,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "layouts",
+      "steps": 20,
+      "images": 29,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "marketplace",
+      "steps": 26,
+      "images": 27,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "patients",
+      "steps": 42,
+      "images": 57,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "plugin-sites",
+      "steps": 18,
+      "images": 18,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "query",
+      "steps": 53,
+      "images": 69,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "report-designer",
+      "steps": 43,
+      "images": 50,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "report-pipeline",
+      "steps": 47,
+      "images": 52,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "reports",
+      "steps": 53,
+      "images": 59,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "roles",
+      "steps": 21,
+      "images": 26,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "settings",
+      "steps": 33,
+      "images": 39,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "setup-checks",
+      "steps": 14,
+      "images": 18,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "sync",
+      "steps": 22,
+      "images": 22,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "test-catalog",
+      "steps": 59,
+      "images": 82,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "upgrading",
+      "steps": 12,
+      "images": 12,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "users",
+      "steps": 30,
+      "images": 38,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "v1-import",
+      "steps": 18,
+      "images": 18,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    },
+    {
+      "locale": "pt",
+      "slug": "workflows",
+      "steps": 38,
+      "images": 43,
+      "nativeWidth": 5120,
+      "sameEnlargedFrame": true
+    }
+  ],
+  "phone": {
+    "width": 375,
+    "height": 812,
+    "overflow": false
+  },
+  "lightTheme": true,
+  "multiFocus": true,
+  "browserErrors": [],
+  "limits": "Headless layout does not prove retractable browser chrome. This does not exercise every download/export workflow or production deployment."
+}

@@ -1,0 +1,391 @@
+{
+  "pages": 32,
+  "menusMatch": true,
+  "results": [
+    {
+      "slug": "start-here",
+      "http": 200,
+      "nativeWidth": 2944,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "dashboard",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": false,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "user-preferences",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "terminology",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "facilities",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "test-catalog",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "patients",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "roles",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "connectors",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "connector-diagnose",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "workflows",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "activity",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "users",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "layouts",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "audit",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "setup-checks",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "laboratory",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "marketplace",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "plugin-sites",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "data-exposure",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "settings",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "report-pipeline",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "query",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "v1-import",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "sync",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "environment",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "upgrading",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "advanced-docs",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "auth-providers",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "forms",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "report-designer",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    },
+    {
+      "slug": "reports",
+      "http": 200,
+      "nativeWidth": 5120,
+      "sameFrame": true,
+      "themeSwitched": true,
+      "mobile": {
+        "height": 812,
+        "viewport": 812,
+        "overflow": false
+      }
+    }
+  ],
+  "limits": "Headless layout checks do not prove physical-phone browser chrome. Every-image native dimension checks are recorded in individual section results."
+}

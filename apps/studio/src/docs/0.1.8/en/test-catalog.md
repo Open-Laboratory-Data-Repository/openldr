@@ -1,263 +1,527 @@
 # Test catalog
 
-The **test catalog** is the national list of tests. Each test has a code, a name, a category, the specimen types it accepts and, when it has one, a LOINC code. A test with no LOINC code shows **No LOINC**.
+Keep a shared list of tests, decide which ones this lab offers, and link the codes received from your data sources. A catalog test and a result field are different things. One test can produce several result fields.
 
-Setting up the Test catalog is optional. OpenLDR can receive and process lab data before you configure it. We strongly recommend setting it up as you use the system, so tests can be matched across sources. Choosing tests in the Lab order form uses the configured catalog.
+**This setup is optional.** OpenLDR can receive and process lab data before you configure it. We strongly recommend setting it up during use. The Lab order form offers the tests enabled at this lab.
 
-The catalog does three jobs. It decides which tests the **Lab order** form offers. It lets reports count a test the same way whatever each lab system calls it. And it holds each test's result parameters and reference ranges.
+Use your own test codes, names, specimens and files. The screenshots use fictional examples. No documentation sample data is required. [Optional practice files](#optional-practice-with-fictional-data) are at the end.
 
-A fresh install ships no tests. This guide loads a small sample list, switches some tests on, and maps the docs sample data to it. It takes about 15 minutes. Select any picture or clip to enlarge it.
+Reading needs **Browse terminology**. Changes need **Manage terminology**. When the catalog comes from central, this lab can change local availability, specimens and names. It cannot change the shared test definitions.
 
-![Test catalog after the sample import: eight tests with their code, category, specimen types, LOINC code and whether this lab runs them.](test-catalog-list.png)
+The screenshots use an installation that owns its catalog. Result-field examples also use a small fictional result dictionary. Reference-band numbers are for documentation only. Use the ranges and code meanings approved for your actual tests.
 
-## Who can do what
+## Add a test to your catalog
 
-| Permission | What it allows |
-| --- | --- |
-| **Browse terminology** | Open **Test catalog** in the sidebar and read it |
-| **Manage terminology** | Add, edit, import, switch on and off, retire, and map codes |
+Use this for one new test when this installation owns its catalog. Search for an existing test before adding another code.
 
-## Before you start
+### 1. Open Test catalog
 
-The examples use two sample files. Both are made-up data for a test install.
+Select **Test catalog** in the main menu on the left.
 
-1. **The docs sample data**, for Example 3 and Example 4. See [Dashboards, Load the sample data](/docs/dashboard#load-the-sample-data). It holds 60 orders across five tests.
-2. **The sample test list**, a CSV of eight tests. Download it from `https://openldr.online/docs-samples/openldr-sample-test-catalog.csv`. In a source checkout it is `apps/web/public/docs-samples/openldr-sample-test-catalog.csv`.
+![Test catalog is in the main menu on the left.](test-catalog-guide-open-page.png)
 
-```csv
-code,name,short_name,loinc,category,specimen_types
-FBC,Full blood count,FBC,58410-2,Haematology,Blood
-MAL-RDT,Malaria rapid test,Malaria RDT,70569-9,Parasitology,Blood
-HIV-VL,HIV viral load,Viral load,20447-9,Molecular,Blood
-GLU,Blood glucose,Glucose,2345-7,Chemistry,Blood
-CREAT,Creatinine,,2160-0,Chemistry,Blood
-UA,Urinalysis,Urine dipstick,24356-8,Chemistry,Urine
-TB-XPERT,TB GeneXpert MTB/RIF,GeneXpert,,Molecular,Sputum
-CSF-CULT,CSF culture,,,Microbiology,CSF
+### 2. Open the Tests actions
+
+Select **Tests**, then open the dots beside its search and table controls.
+
+![Tests contains the catalog available to this installation.](test-catalog-guide-tests-tab.png)
+
+![Open the Tests page dots menu.](test-catalog-guide-page-actions-step-2.png)
+
+### 3. Choose Add test
+
+Select **Add test**. The test sheet opens.
+
+![Choose Add test to enter one test by hand.](test-catalog-guide-add-menu.png)
+
+### 4. Enter the code
+
+Enter the stable code from your own catalog. The fictional example uses `EXAMPLE-ALPHA`. Leave it empty only if the LOINC code should become the code. A saved code cannot be changed.
+
+![Use the stable code from your catalog. This example uses EXAMPLE-ALPHA.](test-catalog-guide-test-code.png)
+
+### 5. Enter the name
+
+Enter the name people should see. A short name is optional. The example uses `Example panel Alpha` and `Example Alpha`.
+
+![Enter the test name people should see.](test-catalog-guide-test-name.png)
+
+![A short name is optional.](test-catalog-guide-test-short-name.png)
+
+### 6. Choose the category
+
+Select the category that fits this test from the configured list. Categories come from Terminology.
+
+![Choose a category from the configured list.](test-catalog-guide-category-option.png)
+
+### 7. Choose accepted specimens
+
+Tick the specimen types this test accepts. Use the configured choices for your actual test.
+
+![Tick the specimen types this test accepts.](test-catalog-guide-specimen.png)
+
+## Finish and save the test
+
+Continue in the open test sheet. You can configure this lab and result fields after saving the shared definition.
+
+### 1. Check the LOINC field
+
+Enter a confirmed LOINC code if you have one, or leave it blank. When LOINC is loaded, search and select a term. Here it is not loaded, so typed codes are checked for format only.
+
+![LOINC is optional. If the dictionary is absent, this installation checks typed code format only.](test-catalog-guide-loinc.png)
+
+### 2. Open the sheet actions
+
+Select the dots in the test sheet, below its heading.
+
+![The test sheet has its own dots menu.](test-catalog-guide-sheet-actions.png)
+
+### 3. Choose Save
+
+Select **Save**. New tests use Save too.
+
+![Save creates the test. This lab can be configured afterward.](test-catalog-guide-save-menu.png)
+
+**Expected result:** The sheet closes and the new test appears in Tests. It starts Off at this lab unless you enabled it in the sheet.
+
+![The test appears in Tests. It starts Off at this lab.](test-catalog-guide-created.png)
+
+## Make a test available at this lab
+
+Enable the tests this lab actually performs. This changes local availability, which the Lab order form uses.
+
+### 1. Open the test row actions
+
+Select the dots at the right end of the test row.
+
+![Use the test row dots menu for local availability.](test-catalog-guide-row-actions.png)
+
+### 2. Choose Switch on at this lab
+
+Select **Switch on at this lab**. The same action becomes Switch off at this lab for an enabled test.
+
+![Switch on at this lab makes this test available here.](test-catalog-guide-enable-menu.png)
+
+**Expected result:** On at this lab reads On. Imported tests do not become enabled automatically.
+
+![The local availability column now reads On.](test-catalog-guide-enabled.png)
+
+## Set this lab's name and specimen choices
+
+Use local settings when this lab uses a different display name or accepts fewer specimens. A lab receiving the catalog from central can still change these settings.
+
+### 1. Choose Edit
+
+Open the row dots menu and select **Edit**. The saved code is shown without an editable input.
+
+![Edit opens the catalog and local settings.](test-catalog-guide-edit-menu.png)
+
+![An existing test keeps its code. Use its name and other editable fields for corrections.](test-catalog-guide-fixed-code.png)
+
+### 2. Check local availability
+
+Under **This lab**, use **On at this lab** to choose whether this lab offers the test.
+
+![This lab settings control whether this installation offers the test.](test-catalog-guide-local-enabled.png)
+
+### 3. Check local specimens
+
+Keep the specimen types this lab accepts. The local choices can narrow the catalog list. Keeping every specimen follows the catalog list.
+
+![This lab can narrow the catalog specimen choices.](test-catalog-guide-local-specimen.png)
+
+### 4. Enter a local name if needed
+
+Enter the local display name in the local-name field, or leave it blank to use the catalog name. The example uses `Alpha at this lab`.
+
+![A local name changes how this lab presents the test.](test-catalog-guide-local-name.png)
+
+### 5. Save the local settings
+
+Open the sheet dots menu and select **Save**.
+
+![Save stores the local settings alongside the existing test.](test-catalog-guide-local-save.png)
+
+**Expected result:** The lab settings are saved without changing the test code.
+
+## Find and export tests
+
+Search before creating another test. You can also export active catalog tests for review or later import.
+
+### 1. Search by code or name
+
+Use **Search code or name**. Search also matches short and local names. The example finds the test using its local name.
+
+![Search can find a test by its catalog or local name.](test-catalog-guide-search.png)
+
+### 2. Read the matching row
+
+Check the code and catalog name before editing. The test keeps its catalog name even when a local name matched your search.
+
+![The matching test remains visible under its catalog name.](test-catalog-guide-search-result.png)
+
+### 3. Choose Export CSV when you need a file
+
+Clear the search if you no longer need it. Open the Tests dots menu and select **Export CSV** to download active catalog tests. A central-managed lab can export too.
+
+![Export CSV downloads active catalog tests in an importable format.](test-catalog-guide-export.png)
+
+**Expected result:** The browser downloads a CSV in the columns the import wizard understands. Export contains active catalog tests, not just a visible row.
+
+## Choose and map your test-list file
+
+Use an import when you have a list in CSV or Excel .xlsx format. Tests match by code. An import does not retire tests absent from the file or change local lab settings.
+
+### 1. Choose Import
+
+On Tests, open the page dots menu and select **Import**.
+
+![Open the Tests page dots menu.](test-catalog-guide-page-actions-step-1.png)
+
+![Import opens the file review wizard.](test-catalog-guide-import-menu.png)
+
+### 2. Choose your file
+
+Select the file area and choose your own CSV or XLSX file. The wizard reads it and opens **Step 2 of 4: Columns**.
+
+![Choose your own CSV or XLSX file. Nothing is written before Apply.](test-catalog-guide-import-file.png)
+
+### 3. Check the Name column
+
+Check every suggested column. Name is required. Correct a field using its selector beside the label.
+
+![Check the suggested column assignments. Name is required.](test-catalog-guide-import-columns.png)
+
+### 4. Check absent and empty columns
+
+**Not in the file** leaves an existing field unchanged. An empty cell in a selected column clears that field. Do not map an empty column unless that is intended.
+
+![Not in the file leaves an existing field unchanged. An empty cell in a mapped column clears it.](test-catalog-guide-import-missing-column.png)
+
+### 5. Continue to Values
+
+Open the import sheet dots menu and select **Next**.
+
+![Next is in the import sheet dots menu.](test-catalog-guide-import-next-actions.png)
+
+![Next checks category and specimen values.](test-catalog-guide-import-next.png)
+
+## Resolve values and review the import
+
+The Values step lists category or specimen text that matched no configured choice. Decide what each text means before applying the file.
+
+### 1. Find unrecognised values
+
+Read the text and affected row count. A value left **Not chosen** causes its row to be refused. This example has an unrecognised category.
+
+![Unrecognised category text needs a decision before its row can be imported.](test-catalog-guide-import-unknown.png)
+
+### 2. Choose the correct category
+
+Select an existing category with the same meaning. Choose **Add as a new category** only when a new category is intended.
+
+![Choose an existing category, or Add as a new category when the meaning is new.](test-catalog-guide-import-new-category.png)
+
+### 3. Check a new category code
+
+When adding a category, check or change its generated code. This example adds a fictional category. Resolve unmatched specimens through their choices too.
+
+![Check the suggested code before adding the category.](test-catalog-guide-import-category-code.png)
+
+### 4. Continue to Review
+
+Open the sheet dots menu and select **Next**.
+
+![Next builds the reviewed counts with your value decisions.](test-catalog-guide-import-values-next.png)
+
+### 5. Read the counts and warnings
+
+Check New, Changed, Unchanged and Refused, any refusal reasons, and Categories to add. Use Back in the dots menu if you need to correct the file decisions.
+
+![Read the new, changed, unchanged and refused counts, plus any categories to add.](test-catalog-guide-import-review.png)
+
+### 6. Choose Apply
+
+When the review matches your intention, open the sheet dots menu and select **Apply**. Nothing is written before this action.
+
+![Apply writes only after you have reviewed the import.](test-catalog-guide-import-apply.png)
+
+**Expected result:** The sheet closes and imported tests appear. They start Off at this lab. Importing the identical file again reports unchanged rows, without duplicates.
+
+![Imported tests appear in Tests and start Off at this lab.](test-catalog-guide-import-result.png)
+
+![The identical file is recognised as unchanged rather than creating duplicate tests.](test-catalog-guide-repeat-review.png)
+
+## Choose the result fields for a test
+
+Do this when people will enter results through this test. Choices come from the installed result dictionary. If none are available, import your system's dictionary first. [Terminology](/docs/terminology) explains code lists and [Start here](/docs/start-here) explains the CLI. Optional practice includes a fictional dictionary.
+
+### 1. Open the test and choose its result fields
+
+Choose Edit from the test row menu. Tick the fields this test produces under its result parameters.
+
+![Edit opens the catalog and local settings.](test-catalog-guide-edit-menu.png)
+
+![Tick the result fields that this test produces. Choices come from your result dictionary.](test-catalog-guide-parameter-choice.png)
+
+### 2. Choose each result type
+
+Choose **Numeric**, **Coded** or **Text** for each selected result field. A coded field also needs its configured value set. The example uses Numeric.
+
+![Choose Numeric, Coded or Text for the result field.](test-catalog-guide-parameter-type.png)
+
+### 3. Open the numeric field actions
+
+For a numeric field needing a reference band, select the dots beside its result-type selector.
+
+![Numeric fields have their own range actions.](test-catalog-guide-parameter-actions.png)
+
+### 4. Choose Add range
+
+Select **Add range**. A reference-band form appears below the result field.
+
+![Add a range creates one reference band for this result field.](test-catalog-guide-add-range.png)
+
+## Set the reference band and save
+
+Use the bounds approved for your test, method and population. The example band and numbers are fictional and must not be used as clinical ranges.
+
+### 1. Name the band
+
+Enter a name that identifies this reference band. The example uses `Example band only`.
+
+![Name the reference band. This fictional band is for documentation only.](test-catalog-guide-range-name.png)
+
+### 2. Enter the approved bounds
+
+Enter the lower and upper bounds for your actual test. Blank bounds are open. The screenshot's 1 and 10 are documentation values only.
+
+![Use the lower and upper bounds approved for your actual method. The numbers here are fictional.](test-catalog-guide-range-bounds.png)
+
+### 3. Enter the unit
+
+Set the unit used by this band. Use the same meaning and scale as the actual result.
+
+![Set the unit used by this reference band.](test-catalog-guide-range-unit.png)
+
+### 4. Check sex and age restrictions
+
+Set any sex or age limits that apply. An unrestricted band should have no such restriction.
+
+![Sex and age limits restrict who this band applies to. Leave them open only for an unrestricted band.](test-catalog-guide-range-context.png)
+
+### 5. Save the test
+
+Open the test sheet dots menu and select **Save**.
+
+![Save stores the selected result fields and reference bands.](test-catalog-guide-parameter-save.png)
+
+**Expected result:** The selected fields, result types and reference bands are saved with the test.
+
+## Link a received test code to the catalog
+
+Do this after your normal lab data has arrived. If Observed is empty, you can build the catalog now and return later. Enabling a test at this lab and mapping a received code are separate actions.
+
+### 1. Open Observed
+
+Select **Observed** at the top. Tests lists the codes received with orders.
+
+![Observed lists test and result codes received from your data sources.](test-catalog-guide-observed-tab.png)
+
+![Each source code shows its current catalog mapping.](test-catalog-guide-observed-test-row.png)
+
+### 2. Choose Map to catalog test
+
+Open the received-code row dots menu and select **Map to catalog test**.
+
+![Open the dots on the source-code row.](test-catalog-guide-observed-row-actions.png)
+
+![Map to catalog test opens the destination picker.](test-catalog-guide-map-test-menu.png)
+
+### 3. Open the destination selector
+
+Select **Choose a catalog test**.
+
+![Choose a catalog test is the destination selector.](test-catalog-guide-map-picker.png)
+
+### 4. Search the catalog
+
+In **Search catalog tests**, search for the test this source code actually represents.
+
+![Search for the catalog test that this source code actually means.](test-catalog-guide-map-search.png)
+
+### 5. Select the correct test
+
+Choose the matching catalog test. Check its code as well as its name.
+
+![Select the matching catalog test.](test-catalog-guide-map-target.png)
+
+### 6. Save the mapping
+
+Open the mapping sheet dots menu and select **Save**.
+
+![The mapping sheet has its own dots menu.](test-catalog-guide-map-actions.png)
+
+![Save writes the mapping used by reports.](test-catalog-guide-map-save.png)
+
+**Expected result:** The received code shows its Catalog test. Reports can count the source code through this catalog identity.
+
+![The source code now shows its catalog test.](test-catalog-guide-mapped-test.png)
+
+## Match received result codes to the dictionary
+
+Result codes identify individual results. They are different from test codes. Exact-code matching is useful when the source and your result dictionary use the same codes. Existing mappings and ambiguous codes are left alone.
+
+### 1. Choose Results in Observed
+
+Select **Results** to see received result codes.
+
+![Results switches Observed from test codes to result codes.](test-catalog-guide-results-toggle.png)
+
+![Result codes are separate from test codes.](test-catalog-guide-result-code-row.png)
+
+### 2. Choose Map matching codes
+
+Open the Observed dots menu and select **Map matching codes**.
+
+![Open the Observed dots menu to match result codes.](test-catalog-guide-observed-actions.png)
+
+![Map matching codes checks exact matches against your result dictionary.](test-catalog-guide-match-menu.png)
+
+### 3. Choose the lab system
+
+Choose the source system whose result codes you want to match. If only one exists, it is selected automatically.
+
+![Choose the lab system whose result codes you want to match.](test-catalog-guide-match-system.png)
+
+### 4. Read the proposed matches
+
+Check each code, destination name and result count. Matching names do not replace checking the actual code meanings.
+
+![Read the proposed exact-code matches before applying them.](test-catalog-guide-match-preview.png)
+
+### 5. Open Matching actions
+
+Select the dots in the matching sheet.
+
+![Open Matching actions after checking the list.](test-catalog-guide-match-actions.png)
+
+### 6. Apply the matches
+
+Select **Map these codes**. For different codes, use Map to result field on the received-code row instead.
+
+![Map these codes applies the proposed matches.](test-catalog-guide-match-apply.png)
+
+**Expected result:** The matched code names its Result field. If the page reports a stale warehouse copy, its dots menu offers Rebuild warehouse copy.
+
+![The received result code now names its result field.](test-catalog-guide-matched-result.png)
+
+![Rebuild warehouse copy retries publishing mappings when the page reports a stale copy.](test-catalog-guide-rebuild-menu.png)
+
+## Link a result field to LOINC
+
+Use a confirmed code for the meaning of your real field. The fictional example only demonstrates the editor. Its illustrative LOINC entry is not a recommendation for your field. A lab receiving the dictionary from central cannot change these links.
+
+### 1. Open Result fields
+
+Select **Result fields**. Find the dictionary code and check its role and units.
+
+![Result fields lists fields from the installed result dictionary.](test-catalog-guide-result-fields-tab.png)
+
+![Result fields shows the dictionary code, role, units and LOINC link.](test-catalog-guide-result-field-row.png)
+
+### 2. Choose Link LOINC
+
+Open the field row dots menu and select **Link LOINC**.
+
+![Open the result-field row dots menu.](test-catalog-guide-result-field-actions.png)
+
+![Link LOINC opens the field link editor.](test-catalog-guide-loinc-link-menu.png)
+
+### 3. Enter or select the confirmed LOINC
+
+When LOINC is loaded, search and select it. Otherwise enter your confirmed code. This installation checks typed code format only. It does not prove the clinical meaning.
+
+![Enter the confirmed LOINC code for your real result field. A typed code is checked only for format when LOINC is not loaded.](test-catalog-guide-loinc-input.png)
+
+### 4. Save the link
+
+Open the LOINC link dots menu and select **Save**.
+
+![Use the LOINC link dots menu to save.](test-catalog-guide-loinc-actions.png)
+
+![Save stores the link. Check the meaning against your own terminology before using it.](test-catalog-guide-loinc-save.png)
+
+**Expected result:** The field row shows its LOINC code. Export CSV in the Result fields menu downloads the links.
+
+![The result-field row now shows the saved LOINC code.](test-catalog-guide-loinc-result.png)
+
+![Export CSV downloads the dictionary links for review or editing.](test-catalog-guide-result-export.png)
+
+## Use Test catalog on a phone
+
+The same tabs and actions remain available on a phone. Wide tables can scroll horizontally.
+
+### 1. Choose the tab
+
+Use Tests, Result fields or Observed at the top of the page.
+
+![Tests, Result fields and Observed remain at the top on a phone.](test-catalog-guide-phone-tests.png)
+
+### 2. Open the relevant actions
+
+In Tests, the page dots menu is beside the search and table controls. Each row still has its own menu.
+
+![The Tests dots menu stays beside the search and table controls.](test-catalog-guide-phone-actions.png)
+
+### 3. Choose received result codes
+
+In Observed, choose Results when you want received result codes rather than test codes.
+
+![Use Results to work with received result codes on a phone.](test-catalog-guide-phone-results.png)
+
+## Optional practice with fictional data
+
+Every task above can use your own data. Use these files only in a test installation. A test can be retired, but cannot be deleted. Do not import fictional tests into a live catalog.
+
+- [Download a two-test CSV](https://openldr.online/docs-samples/user-guide/test-catalog/example-tests.csv) for the import task.
+- [Download a one-field result dictionary](https://openldr.online/docs-samples/user-guide/test-catalog/example-result-fields.json) for the result-field tasks.
+- [Download four fictional lab resources](https://openldr.online/docs-samples/user-guide/test-catalog/example-lab-data.json) to populate Observed.
+
+To follow the pictures exactly, add EXAMPLE-ALPHA manually first. Importing the CSV alone creates Beta and Gamma. Use your own matching names instead if you skip the practice files.
+
+For the optional dictionary and lab-data bundle, first follow [Start here](/docs/start-here). Put the downloaded files in the installation's `data` folder. From an example development checkout:
+
+```shell
+cd ~/Downloads/openldr_ce
+pnpm openldr terminology import parameters data/example-result-fields.json
+pnpm openldr ingest data/example-lab-data.json
 ```
 
-> **Use a test install.** A test can be retired but never deleted. Imported tests stay in the catalog.
+For an installed Linux or macOS copy, use `./openldr` instead of `pnpm openldr`. On Windows, use `.\openldr.ps1` from your installation folder, such as `C:\openldr_ce`. Replace the example folder with your real folder. Start here shows the full platform steps.
 
-## Example 1: import a test list
+## Before changing shared catalog data
 
-![Choosing the file, checking the columns, adding Parasitology as a new category, and reaching the review.](test-catalog-import.mp4)
+A catalog received from central has read-only shared definitions. Local availability, local specimen choices and local names remain this lab's settings.
 
-1. Open **Test catalog**. The **Tests** tab is empty.
-2. Open the page's **⋯** menu and select **Import**.
-3. Drop the sample CSV on the sheet, or click to choose it. The sheet moves to **Step 2 of 4: Columns**.
-4. Check each field's column. Every header in the sample matches a field, so nothing needs changing. Open the sheet's **⋯** menu and select **Next**.
-5. **Step 3 of 4: Values** lists text that matched nothing. Here it is the category **"Parasitology" (1 row)**. Set it to **Add as a new category**. Select **Next**.
-6. **Step 4 of 4: Review** shows the counts.
+Import accepts at most 5,000 rows and 5 MB. Excel import reads the first worksheet. Tests match by code. A file does not retire tests absent from it or change local settings.
 
-**Expected result:** **New 8**, **Changed 0**, **Unchanged 0**, **Refused 0**, and **Categories to add: PARASITOLOGY (Parasitology)**. A note says LOINC is not loaded here, so LOINC codes were checked for their format only.
-
-![The review: 8 new tests, and one category to add.](test-catalog-review.png)
-
-7. Open the sheet's **⋯** menu and select **Apply**. **8 added, 0 changed.** appears, and so do the eight tests. Each reads **Off** under **On at this lab**.
-
-Had you left Parasitology on **Not chosen**, the review would show 7 new and 1 refused, with row 3, `MAL-RDT`, and the reason. Nothing is written before **Apply**, so you can go **Back** and fix it.
-
-Import the same file again and the review shows **Unchanged 8**. Tests match on their code.
-
-## Example 2: switch tests on at this lab
-
-The Lab order form offers only tests switched on here. Switch on the five tests the sample data uses.
-
-![Opening the Full blood count row menu and selecting Switch on at this lab.](test-catalog-switch-on.mp4)
-
-1. On the **Full blood count** row, open **⋯** and select **Switch on at this lab**. **FBC is on at this lab.** appears, and the row reads **On**.
-2. Do the same for **Malaria rapid test**, **HIV viral load**, **Blood glucose** and **Creatinine**.
-
-**Expected result:** five tests read **On**. Urinalysis, TB GeneXpert MTB/RIF and CSF culture stay **Off**. The **Tests** field on the Lab order now lists the five. See [Forms](/docs/forms).
-
-From the command line, the same is `./openldr test-catalog enable FBC`.
-
-## Example 3: map the lab's order codes
-
-Every lab system names its tests its own way. The docs sample data orders tests by LOINC code, for example `58410-2` for a full blood count. Map each code to the catalog test it means.
-
-![The Observed tab: five codes from the sample data, with how many requests each has, all unmapped.](test-catalog-observed.png)
-
-1. Open the **Observed** tab. It lists the five codes in the warehouse, with their description and request count: `58410-2` 18, `70569-9` 16, `20447-9` 11, `2345-7` 9, `2160-0` 6.
-2. On the `58410-2` row, open **⋯** and select **Map to catalog test**.
-3. Select **Choose a catalog test**, type `Full blood count`, and pick **Full blood count (FBC, 58410-2)**.
-4. Open the sheet's **⋯** menu and select **Save**. **58410-2 now maps to Full blood count** appears.
-5. Map the other four codes the same way.
-
-![Mapping 58410-2 to Full blood count.](test-catalog-map.mp4)
-
-**Expected result:** every row shows its catalog test under **Catalog test**, with the test's code and LOINC code underneath.
-
-![All five codes mapped.](test-catalog-mapped.png)
-
-## Example 4: count orders by catalog test
-
-Mappings are copied to the warehouse table `test_map`. A report joins it to count orders by catalog test, whatever each lab called the test. Open **Query**, pick **Target Warehouse (Postgres)**, and run:
-
-```sql
-select tm.catalog_name, count(*)
-from lab_requests lr
-join test_map tm on tm.level = 'test'
-  and tm.source_system = lr.panel_system
-  and tm.source_code = lr.panel_code
-group by tm.catalog_name
-order by 2 desc
-```
-
-**Expected result:** Full blood count 18, Malaria rapid test 16, HIV viral load 11, Blood glucose 9, Creatinine 6. That is 60 orders. See [Custom Queries](/docs/query) to save it for a report.
-
-## Who changes what
-
-An install that did not receive its catalog from central owns it. There you can add tests, edit them, and retire or restore them. A standalone lab is its own central.
-
-A lab that receives the catalog from central cannot change its tests. The page says so above the table. The lab can still switch tests on or off, narrow their specimens and set a local name. Sync never sends these settings back.
-
-## Finding tests
-
-Search matches the code, name, short name and local name. Use **Filter** for category, LOINC, **On at this lab** and status. Retired tests are hidden unless you filter for them.
-
-## Adding and editing a test
-
-1. Choose **Add test** from the ⋯ menu, or **Edit** from a row's ⋯ menu.
-2. Enter the code. Leave it empty to use the LOINC code. A code cannot change once saved.
-3. Enter the name, and a short name if you want one.
-4. Pick a category, and tick the specimen types the test accepts.
-5. Enter the LOINC code. When LOINC is loaded here you search it. Otherwise you type it, and only its format is checked.
-6. Under **This lab**, switch the test on, untick any specimen this lab does not take, and set a local name.
-7. Choose **Save** from the ⋯ menu at the top of the sheet.
-
-Specimen types come from CE's specimen-type list. Categories come from **Test categories** on the Terminology page.
-
-## Row actions
-
-The ⋯ menu on each row switches the test on or off at this lab. Where this install owns the catalog, it also retires or restores the test. Retiring is reversible, so it asks no confirmation.
-
-From the command line: `openldr test-catalog enable`, `disable`, `retire` or `restore`, followed by the code.
-
-## Importing a test list
-
-Where this install owns the catalog, choose **Import** from the ⋯ menu. The sheet has four steps. Back, Next, Apply and Close are in its ⋯ menu. Nothing is written before **Apply**.
-
-1. **File.** Drop a CSV or Excel (.xlsx) file, or click to choose one. CE reads the first worksheet of an Excel file. A file holds at most 5,000 tests and 5 MB.
-2. **Columns.** CE matches the headers to the fields. Check each one. Name is required. A field set to **Not in the file** is left alone on tests already in the catalog. An empty cell in a chosen column clears that field.
-3. **Values.** Category and specimen text match the lists by code or name, ignoring case and spacing. A specimen cell can hold several specimens, split with `;`. Choose what each unmatched text means. A category can be added: its code starts from the text, and you can change it. A row whose text is left unchosen is refused.
-4. **Review.** CE shows how many tests are new, changed, unchanged and refused, each refusal with its row and reason, and the categories it will add. Choose **Apply** to write them all at once.
-
-Tests match on their code, so importing the same file twice changes nothing. A test missing from the file is not retired. An import never changes a test's status or this lab's settings. When LOINC is not loaded here, LOINC codes are checked for their format only, and the review says so.
-
-## Exporting the catalog
-
-Choose **Export CSV** from the ⋯ menu. Any install can export, a lab that receives central's catalog included. The file holds the active tests in the columns an import reads: `code`, `name`, `short_name`, `loinc`, `category` and `specimen_types`. Edit it in a spreadsheet and import it back. A value that starts with `=` or `@` gets a leading `'`, so a spreadsheet does not run it as a formula.
-
-From the command line: `openldr test-catalog import <file>` shows what would change, and `--apply` writes it. `openldr test-catalog export` writes the CSV.
-
-On the command line, text that matched nothing is answered with `--value-map`, a JSON file. For the sample list:
-
-```json
-{"categories":[{"text":"Parasitology","kind":"new","code":"PARASITOLOGY","display":"Parasitology"}],"specimens":[]}
-```
-
-```bash
-./openldr test-catalog import data/openldr-sample-test-catalog.csv --value-map data/values.json --apply
-```
-
-An answer can also name an existing category: `{"text":"Parasitology","kind":"existing","code":"MICRO"}`. `--column-map` names the column for each field when the headers differ.
-
-## The Lab order
-
-The Lab order's **Tests** field lists this lab's tests: the catalog tests switched on here, under the local name when one is set. A retired test drops off the list. Switch tests on before anyone takes an order: the field is required, so an empty list lets no order through.
-
-Each test carries its own specimen. Open a test's row and choose from the specimens that test accepts, by this lab's narrower list where it set one. The order has no separate specimen field.
-
-A submitted order lists each test's LOINC code first, when the test has one, and then its catalog code. Reports that read an order's first code keep matching LOINC. A test with no LOINC code is sent under its catalog code.
-
-An install whose Lab order was edited in the form builder keeps its own Tests field. To use this list, set the field's value set to `urn:openldr:valueset:lab-tests` in the builder. From the command line, `openldr terminology expand urn:openldr:valueset:lab-tests` prints the list the Tests field offers.
-
-
-## Result parameters
-
-A test can name the result parameters it yields: haemoglobin, a CD4 count, a malaria RDT reading. The parameters come from this install's result dictionary, so nothing is typed by hand. Tick one in the test's sheet, then say whether its result is a number, a code from a list, or free text.
-
-A numeric parameter can carry reference ranges. Each range has a low, a high, a unit, and an optional name such as Highland women. It may also name a sex and an age window. A range row's ⋯ menu moves it up, moves it down or removes it, and the parameter's ⋯ menu adds one. Order decides which range starts selected at the bench. Two ranges on one parameter cannot share a name. A test that names no parameters still works: its sheet asks only for a specimen.
-
-From the command line, `openldr test-catalog params <code>` prints a test's parameters, and `--set <file>` replaces them from a JSON file.
-
-## Mapping lab test codes
-
-Each lab system names its tests its own way. DISA calls viral load `HIVVL`, `POCVR` or `POHVL`. Map each of those codes to the catalog test it means, and reports can count the catalog test whatever the lab called it.
-
-Open the **Observed** tab. It lists every test code in the warehouse, with its description, the number of requests and the date last seen. A code you mapped before any data arrived shows with 0 requests. Filter by **Unmapped**, **Mapped** or **Ambiguous**.
-
-To map a code, open its row's ⋯ menu and choose **Map to catalog test**. Pick the test, then choose **Save** from the sheet's ⋯ menu. **Clear mapping** in the same menu removes it.
-
-Codes match the way the warehouse database compares text. On Postgres that is exact, so `HIVVL` and `HIVVL ` (with a trailing space) are two codes. On MSSQL and MySQL with their default settings, upper and lower case count as the same, and MSSQL also ignores trailing spaces. On MSSQL and MySQL, two mappings whose codes differ only by case (`HIVVL` and `hivvl`) collide in `test_map`, and every rebuild fails until one is cleared. Map only one of them.
-
-A code is **Ambiguous** when it has two catalog mappings, for example one made on the Terminology page and one here. Reports leave it out until you map it again. When central has mapped a code, central's mapping is the one reports use, and a lab's own mapping for that code is ignored.
-
-A lab cannot change a mapping central sent down. Its row says **From central**.
-
-### Mapping many codes at once
-
-**Export CSV** from the tab's ⋯ menu writes every observed code. Fill in `catalog_code`, or `loinc` when you know only the LOINC code, then **Import CSV**. The import shows new, changed, unchanged and refused rows before it writes anything. A row with both columns blank is left as it is. A row is refused when the warehouse holds that code only with surrounding spaces, because the file reader trims cells. Map such a code on the Observed tab or with `openldr test-catalog map set`. On a lab, a row whose code central has mapped is refused unless it asks for the mapping central already has.
-
-### Reports
-
-Mappings are copied to the warehouse table `test_map`. A report joins it like this:
-
-```sql
-select tm.catalog_name, count(*)
-from lab_requests lr
-join test_map tm on tm.level = 'test'
-  and tm.source_system = lr.panel_system
-  and tm.source_code = lr.panel_code
-where tm.loinc = '25836-8'
-group by tm.catalog_name
-```
-
-The copy updates when a mapping or a catalog test changes, and at start-up. If an update fails, the tab says so. Choose **Rebuild warehouse copy** from its ⋯ menu.
-
-## Mapping lab result codes
-
-A test yields several results, and each lab system names those its own way too. DISA's viral load results come as `HIVVL`, `HIVVC`, `POCVR` and more. Map each result code to the result field it means, and a report can pick the result by what it is.
-
-Result fields come from the site's result dictionary. Import one with `openldr terminology import parameters <file>`. The **Result fields** tab lists every field with its role, units and LOINC code. To link a field to LOINC, open its row's ⋯ menu, choose **Link LOINC**, pick or type the code, then choose **Save** from the sheet's ⋯ menu. **Export CSV** and **Import CSV** in the tab's ⋯ menu link many fields at once, with `code` and `loinc` columns. A blank `loinc` leaves a link as it is. A lab that receives its dictionary from central cannot change the links.
-
-On the **Observed** tab, choose **Results** to list the result codes in the warehouse, with their result count. Map a code from its row's ⋯ menu with **Map to result field**. On a DISA site most result codes are the same as the dictionary's codes. **Map matching codes** in the tab's ⋯ menu maps them all at once. Pick the lab system, check the list, then choose **Map these codes**. It maps only unmapped codes. A code central has mapped, or one that is **Ambiguous**, is left alone.
-
-The result CSV has the columns `system, code, description, results, parameter_code, loinc`. Fill in `parameter_code`, or `loinc` when you know only that.
-
-Results entered in CE need no mapping. They already carry the dictionary's codes, and the warehouse copy maps each field to itself. The same goes for orders taken in CE: each catalog test maps to itself.
-
-A report that counts viral load copies across labs joins `test_map` like this:
-
-```sql
-select count(*)
-from lab_results l
-join test_map tm on tm.level = 'result'
-  and tm.source_system = l.observation_system
-  and tm.source_code = l.observation_code
-where tm.loinc = '20447-9'
-```
-
-A content pack can ship result mappings with a `result-mappings` step. Each entry names a lab code and a LOINC code, and the install maps the code to the one result field linked to that LOINC code. A code already mapped here is kept.
-
-## On a phone
-
-The catalog works on a phone. The table is wider than the screen, so scroll it sideways to reach each row's **⋯** menu, at the end of the row. The page's own **⋯** menu sits beside the search box. The import sheet fills the screen.
+Retiring a test hides it from the default active list. It can be restored. Catalog tests cannot be deleted. Use the Status filter when looking for retired tests.
 
 ## Troubleshooting
 
-- **Import refuses a row.** The review gives the row and the reason. Usually a category or specimen was left on **Not chosen**. Go **Back** to **Values** and choose.
-- **A test is missing from the Lab order.** It is **Off** at this lab, or retired. Switch it on.
-- **The Tests field on the Lab order is empty.** No test is switched on. A Lab order cannot be submitted without one.
-- **A code reads Ambiguous.** It has two catalog mappings. Reports leave it out until you map it again.
-- **A report counts 0 for a test.** Its lab code is not mapped. Check the **Observed** tab with the **Unmapped** filter.
-- **I cannot edit a test.** This install receives its catalog from central. You can still switch tests on or off, narrow specimens and set a local name.
-- **The Observed tab says the warehouse copy is stale.** Choose **Rebuild warehouse copy** from the tab's **⋯** menu.
+**Add test or Import is missing.** Check whether the catalog comes from central and whether your account can manage terminology. Read the ownership message above the table.
+
+**A new test is absent from Lab order.** Check On at this lab. Creating or importing a test does not automatically enable it.
+
+**The import refuses rows.** Read each row's reason in Review. Return to Values for unchosen category or specimen text. Check Name and the code or LOINC that supplies its identity.
+
+**No result parameters appear.** This installation has no usable result fields in its dictionary. Load the dictionary for your system first. The optional practice dictionary is only an example.
+
+**A code is still unmapped.** Check whether you selected Tests or Results. Mapping one level does not map the other.
+
+**The page reports a stale warehouse copy.** Open Observed actions and choose Rebuild warehouse copy. The page reports a failure if it cannot rebuild.
 
 ## Related guides
 
-- [Forms](/docs/forms)
-- [Terminology](/docs/terminology)
-- [Custom Queries](/docs/query)
-- [Reports](/docs/reports)
+[Terminology](/docs/terminology) explains configured code lists. [Facilities](/docs/facilities) explains facility codes. [Start here](/docs/start-here) explains installed and development CLI use.

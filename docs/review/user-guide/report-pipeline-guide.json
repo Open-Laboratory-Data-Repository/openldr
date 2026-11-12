@@ -1,0 +1,498 @@
+{
+  "title": "Scheduled reports with workflows",
+  "meta": [
+    "Data design",
+    "Build stored summaries and workbook output",
+    "About 35 minutes"
+  ],
+  "intro": [
+    "Use two workflows when a report needs prepared data and a workbook template. The first reads your source and saves a named dataset. The second loads those saved rows and fills your workbook.",
+    "Start with your own reporting query and workbook. No documentation sample data is required. The small warehouse count below also runs with an empty warehouse. The optional practice workbook is at the end.",
+    "You need <strong>Edit workflows</strong> and <strong>Run workflows</strong>. Configuring database or email connectors also needs <strong>Manage connectors</strong>. Read <a href=\"workflows-review.html\">Workflows</a> for the canvas controls.",
+    "Build and check workbook output before adding a delivery node. The pictures use a separate test installation. Email settings are shown for explanation only. No email was sent during this review."
+  ],
+  "tasks": [
+    {
+      "id": "extract",
+      "title": "Create the summary query",
+      "intro": [
+        "Use a read-only query that returns the columns your workbook needs. This introductory count returns one row even when there are no requests."
+      ],
+      "steps": [
+        [
+          "Create a workflow",
+          "Open Workflows, open Workflow actions and select <strong>New</strong>.",
+          [
+            "build-new"
+          ]
+        ],
+        [
+          "Name it",
+          "Set Workflow name to a useful name. This example uses <code>Build request summary</code>.",
+          [
+            "build-name"
+          ]
+        ],
+        [
+          "Add Manual Trigger",
+          "Search the Node library for Manual Trigger and drag it onto the canvas.",
+          [
+            "build-manual"
+          ]
+        ],
+        [
+          "Add SQL Query",
+          "Search for SQL Query and drag it beside the trigger. This node reads the reporting schema directly. Use a database node and a connector for another source.",
+          [
+            "build-sql-node"
+          ]
+        ],
+        [
+          "Connect the nodes",
+          "Drag the trigger output dot on the right to the SQL Query input dot on the left.",
+          [
+            "build-connect"
+          ]
+        ],
+        [
+          "Enter the SELECT",
+          "Select SQL Query, then its Configure gear. Enter <code>SELECT COUNT(*) AS requests FROM lab_requests</code>. Close the configuration panel to add the next node.",
+          [
+            "build-sql"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "store",
+      "title": "Save the result as a dataset",
+      "intro": [
+        "A dataset keeps the most recently materialized rows under one name. Choose a stable name before another workflow reads it."
+      ],
+      "steps": [
+        [
+          "Add Materialize Dataset",
+          "Search for Materialize Dataset and drag it after SQL Query.",
+          [
+            "build-materialize"
+          ]
+        ],
+        [
+          "Connect it to SQL Query",
+          "Drag SQL Query output to Materialize Dataset input.",
+          [
+            "build-materialize-connect"
+          ]
+        ],
+        [
+          "Name the dataset",
+          "Open Materialize Dataset configuration. Set <strong>Dataset name</strong> to your chosen name. The example uses <code>request_summary</code>.",
+          [
+            "dataset-name"
+          ]
+        ],
+        [
+          "Save the definition",
+          "Select <strong>Save</strong>.",
+          [
+            "build-save"
+          ]
+        ],
+        [
+          "Arm the workflow",
+          "Select <strong>Run</strong>.",
+          [
+            "build-run"
+          ]
+        ],
+        [
+          "Start the manual trigger",
+          "Select the play badge on Manual Trigger. Wait for Completed.",
+          [
+            "build-fire"
+          ]
+        ]
+      ],
+      "result": "The three-step run saves the current query rows under the dataset name.",
+      "resultShots": [
+        "build-completed"
+      ]
+    },
+    {
+      "id": "inspect",
+      "title": "Inspect and download the saved rows",
+      "intro": [
+        "Check the dataset before making workbook output. A count query has one row whose value can be zero."
+      ],
+      "steps": [
+        [
+          "Open Datasets",
+          "Select <strong>Datasets</strong> in the workflow toolbar.",
+          [
+            "datasets-button"
+          ]
+        ],
+        [
+          "Check the saved dataset",
+          "Read its name, row count and update time. Match the name to the Materialize Dataset setting.",
+          [
+            "dataset-row"
+          ]
+        ],
+        [
+          "Download CSV",
+          "Select <strong>CSV</strong> on that row to inspect the saved values in another tool.",
+          [
+            "dataset-csv"
+          ]
+        ]
+      ],
+      "result": "The downloaded CSV contains the rows the second workflow will load.",
+      "resultShots": []
+    },
+    {
+      "id": "load",
+      "title": "Build the workbook workflow",
+      "intro": [
+        "Use a second workflow to read the prepared rows. It can run after the first workflow has refreshed the dataset."
+      ],
+      "steps": [
+        [
+          "Create and name the workflow",
+          "Return to Workflows and choose New. Set a name such as <code>Create summary workbook</code>.",
+          [
+            "deliver-new",
+            "deliver-name"
+          ]
+        ],
+        [
+          "Add Manual Trigger",
+          "Drag Manual Trigger from the library onto the canvas.",
+          [
+            "deliver-manual"
+          ]
+        ],
+        [
+          "Add Load Dataset",
+          "Drag Load Dataset beside it.",
+          [
+            "deliver-load"
+          ]
+        ],
+        [
+          "Connect the trigger",
+          "Connect Manual Trigger output to Load Dataset input.",
+          [
+            "deliver-load-connect"
+          ]
+        ],
+        [
+          "Choose the saved dataset",
+          "Open Load Dataset configuration. Set Dataset name to the exact name written by the first workflow, such as <code>request_summary</code>. Close the panel.",
+          [
+            "load-name"
+          ]
+        ],
+        [
+          "Add Excel Template",
+          "Drag Excel Template onto the canvas after Load Dataset.",
+          [
+            "deliver-excel"
+          ]
+        ],
+        [
+          "Connect Excel Template",
+          "Connect Load Dataset output to Excel Template input.",
+          [
+            "deliver-excel-connect"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "template",
+      "title": "Configure your workbook template",
+      "intro": [
+        "Use your own .xlsx workbook. Put column headers above the cells that will receive data. Match the incoming field names to the workbook columns."
+      ],
+      "steps": [
+        [
+          "Save before uploading",
+          "Select Save. A template upload needs a saved workflow identifier.",
+          [
+            "template-save"
+          ]
+        ],
+        [
+          "Upload the template",
+          "Open Excel Template configuration, select <strong>Upload template</strong>, then choose your .xlsx file. The artifact key fills after upload.",
+          [
+            "template-upload",
+            "template-uploaded"
+          ]
+        ],
+        [
+          "Set the first data cell",
+          "Set <strong>Start cell</strong> to the top-left data cell. Use A2 when row one contains the headers.",
+          [
+            "start-cell"
+          ]
+        ],
+        [
+          "Map the columns in order",
+          "In <strong>Columns (ordered)</strong>, enter incoming field names separated by commas. The count example uses <code>requests</code> as its only field.",
+          [
+            "template-columns"
+          ]
+        ],
+        [
+          "Choose an optional filter header",
+          "Set <strong>Auto-filter header cell</strong> to A1 for a row-one filter, or leave it blank.",
+          [
+            "auto-filter"
+          ]
+        ],
+        [
+          "Name the output file",
+          "Set <strong>File name</strong>, such as <code>request-summary.xlsx</code>.",
+          [
+            "file-name"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "workbook",
+      "title": "Run and check the workbook",
+      "intro": [
+        "Confirm the generated file before scheduling or emailing it. Check real values, headers and formatting in your spreadsheet application."
+      ],
+      "steps": [
+        [
+          "Save the template settings",
+          "Select Save.",
+          [
+            "deliver-save"
+          ]
+        ],
+        [
+          "Arm the run",
+          "Select Run.",
+          [
+            "deliver-run"
+          ]
+        ],
+        [
+          "Start Manual Trigger",
+          "Select its play badge and wait for Completed.",
+          [
+            "deliver-fire"
+          ]
+        ],
+        [
+          "Download the generated file",
+          "Open Excel Template, select Output, then select the named workbook download.",
+          [
+            "workbook-download"
+          ]
+        ]
+      ],
+      "result": "The workbook contains the saved dataset rows. The example has Requests in A1 and numeric zero in A2.",
+      "resultShots": [
+        "deliver-completed"
+      ]
+    },
+    {
+      "id": "schedule",
+      "title": "Set a rebuild schedule",
+      "intro": [
+        "Add scheduling after a manual run produces the intended rows. A five-part cron expression sets minute, hour, day of month, month and weekday."
+      ],
+      "steps": [
+        [
+          "Add Schedule",
+          "Open the first workflow and drag Schedule from the Node library onto the canvas.",
+          [
+            "schedule-node"
+          ]
+        ],
+        [
+          "Set the cron expression",
+          "Open Schedule configuration. Set <strong>Cron Expression</strong> to your intended time. <code>0 6 * * *</code> means 06:00 each day in the chosen timezone.",
+          [
+            "schedule-cron"
+          ]
+        ],
+        [
+          "Set the timezone",
+          "Enter an IANA timezone such as <code>Africa/Dar_es_Salaam</code>. A blank Timezone uses UTC.",
+          [
+            "schedule-timezone"
+          ]
+        ],
+        [
+          "Connect the schedule",
+          "Close configuration and connect Schedule output to SQL Query input. The manual trigger can remain for an intentional manual run.",
+          [
+            "schedule-connect"
+          ]
+        ],
+        [
+          "Save the scheduled definition",
+          "Select Save when you intend to activate the connected schedule. Check History after its first due time.",
+          [
+            "schedule-save"
+          ]
+        ]
+      ],
+      "result": "The saved schedule determines when the dataset rebuilds. This review saved its settings and then disabled the test workflow. Clock-driven firing was not exercised.",
+      "resultShots": []
+    },
+    {
+      "id": "email",
+      "title": "Configure optional email delivery",
+      "intro": [
+        "Only add delivery after you have an approved email connector and recipients. The review shows an unused loopback connector and an example.invalid address. It did not save or run this email node."
+      ],
+      "steps": [
+        [
+          "Add and connect Send Email",
+          "Open the workbook workflow, add Send Email (SMTP), then connect Excel Template output to its input.",
+          [
+            "email-node",
+            "email-connect"
+          ]
+        ],
+        [
+          "Choose the email connector",
+          "Open the node configuration. Choose your approved SMTP connector. Gmail and Outlook have their own node types and matching connectors.",
+          [
+            "email-connector"
+          ]
+        ],
+        [
+          "Set the recipients",
+          "Enter approved recipients in To. Add Cc only when needed. Replace the example address with your real authorised destination.",
+          [
+            "email-to"
+          ]
+        ],
+        [
+          "Set the subject",
+          "Enter a clear Subject.",
+          [
+            "email-subject"
+          ]
+        ],
+        [
+          "Write the body",
+          "Enter the message Body.",
+          [
+            "email-body"
+          ]
+        ],
+        [
+          "Match the body format",
+          "Choose Plain text or HTML to match the text you wrote.",
+          [
+            "email-format"
+          ]
+        ],
+        [
+          "Attach the workbook field",
+          "Set <strong>Attachment field</strong> to <code>file</code>, the Excel Template output field. A blank value sends no attachment.",
+          [
+            "email-attachment"
+          ]
+        ]
+      ],
+      "result": "The settings identify the transport, recipients, content and attachment. Saving and running a connected email node sends real mail. Check the destination inbox only when your team has authorised that delivery test.",
+      "resultShots": []
+    },
+    {
+      "id": "phone",
+      "title": "Inspect reporting workflows on a phone",
+      "intro": [
+        "Build the canvas on a larger screen. On a phone, use the list and History to inspect an existing definition."
+      ],
+      "steps": [
+        [
+          "Find the workflows",
+          "Search their names in Workflows.",
+          [
+            "phone-find"
+          ]
+        ],
+        [
+          "Open the workbook workflow",
+          "Select its name in the list.",
+          [
+            "phone-open"
+          ]
+        ],
+        [
+          "Read History",
+          "Select History and check the run status and time.",
+          [
+            "phone-history"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "practice",
+      "title": "Optional practice workbook",
+      "paragraphs": [
+        "<a href=\"report-pipeline-evidence/example-summary-template.xlsx\" download>Download the one-column practice workbook</a>. It contains a Requests header in A1. It is for the read-only count example above and contains no patient data. Your own workbook can use different columns and formatting.",
+        "<a href=\"report-pipeline-evidence/generated-request-summary.xlsx\" download>Download the generated review workbook</a> to compare the expected output. This file came from the actual isolated workflow run, with zero requests in its warehouse."
+      ]
+    },
+    {
+      "id": "extend",
+      "title": "Adapt the summary to your own report",
+      "paragraphs": [
+        "Replace the count query with your approved SELECT and map its output fields to the workbook. For another database, use a matching Postgres, MySQL or Microsoft SQL connector node.",
+        "For reporting windows, set fields such as periodStart and periodEnd before the query, then read them with <code>{{ $json.periodStart }}</code>. Keep the query, parameter types and date boundaries consistent with your source.",
+        "Use Pivot when one incoming value must become several columns. Use Merge with Combine by key when joining two branches. Configure the actual keys and collision rules your data needs. These larger transformations were not exercised in this review.",
+        "Datasets can also be opened under Datasets in <a href=\"query-review.html\">Query</a>. Publishing workflow datasets to warehouse SQL is an optional Settings choice. Keep the dataset name consistent across both workflows."
+      ]
+    },
+    {
+      "id": "delivery",
+      "title": "Choose a delivery time",
+      "paragraphs": [
+        "Schedule the workbook workflow after the dataset refresh should have finished. Allow time for the source query. A schedule offset alone does not guarantee that an unusually slow first workflow finished. Check the saved dataset update time and History.",
+        "Manual Run also uses the currently stored dataset. It does not rebuild the first workflow automatically. Re-run the first workflow when you need fresh data."
+      ]
+    },
+    {
+      "id": "help",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>The dataset is missing.</strong> Run the first workflow and check Materialize Dataset for errors. Match the exact dataset name in Load Dataset.",
+        "<strong>The workbook is empty.</strong> Inspect the CSV and the incoming field names. A filtered query may legitimately return no rows.",
+        "<strong>Upload asks you to save first.</strong> Save the workflow, then upload again. The upload belongs to that saved workflow.",
+        "<strong>Values land in the wrong columns.</strong> Check Start cell and Columns (ordered). The mapping writes fields left to right in the stated order.",
+        "<strong>A schedule did not produce the expected file.</strong> Check that the workflow is enabled, the cron expression and timezone, then its History. A stored schedule is not proof that it fired.",
+        "<strong>An email lacks the workbook.</strong> Check the upstream Excel Template output and Attachment field. Confirm the real transport and recipient independently."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "<a href=\"workflows-review.html\">Workflows</a> explains the canvas and run history. <a href=\"query-review.html\">Query</a> browses stored datasets. <a href=\"connectors-review.html\">Connectors</a> configures source and delivery transports."
+      ]
+    }
+  ]
+}

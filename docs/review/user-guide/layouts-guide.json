@@ -1,0 +1,268 @@
+{
+  "title": "Layouts",
+  "meta": [
+    "Administration",
+    "Choose sidebar pages and a start page",
+    "About 15 minutes"
+  ],
+  "intro": [
+    "A layout is a named sidebar. Administrators choose its pages and optional start page, then make it a default for selected roles. Each person can choose another layout through their user menu.",
+    "A layout only hides pages. It never grants permission to open them. Docs remains available. Your role still controls access.",
+    "Use page selections that suit your staff. The pictures use a temporary Documentation review layout in a test installation. No sample data is required.",
+    "Edit general settings allows creating, editing and deleting layouts. View roles allows reading the role choices for defaults. Anyone signed in can choose an available layout."
+  ],
+  "tasks": [
+    {
+      "id": "create",
+      "title": "Create a sidebar for a team",
+      "intro": [
+        "Use this when a team needs a shorter sidebar and a suitable first page. Choose pages based on their work."
+      ],
+      "steps": [
+        [
+          "Open Settings and Layouts",
+          "Open your user menu at the bottom left, choose <strong>Settings</strong>, then select <strong>Layouts</strong>.",
+          [
+            "user-menu",
+            "settings-menu",
+            "layouts-page"
+          ]
+        ],
+        [
+          "Choose New layout",
+          "Open the page dots at the top right and select <strong>New layout</strong>.",
+          [
+            "page-actions",
+            "new-layout"
+          ]
+        ],
+        [
+          "Name the layout",
+          "Enter a clear <strong>Name</strong>. The example uses <code>Documentation review</code>.",
+          [
+            "name"
+          ]
+        ],
+        [
+          "Choose the pages",
+          "Select the pages this sidebar should show. Choose at least one. Docs always remains available and is not a checkbox.",
+          [
+            "pages"
+          ]
+        ],
+        [
+          "Choose the start page",
+          "Open <strong>Start page</strong> and choose a selected page. The example chooses Reports. The default option is Dashboard.",
+          [
+            "start-page"
+          ]
+        ],
+        [
+          "Choose any role defaults",
+          "Under <strong>Default for roles</strong>, select the roles that should use this layout by default. Leave them clear if people will choose it themselves.",
+          [
+            "role-default"
+          ]
+        ],
+        [
+          "Save the layout",
+          "Open the editor dots at the top right and select <strong>Save</strong>.",
+          [
+            "sheet-actions",
+            "save-layout"
+          ]
+        ]
+      ],
+      "result": "The table shows the saved layout, page count, start page and role defaults.",
+      "resultShots": [
+        "created-result"
+      ]
+    },
+    {
+      "id": "edit",
+      "title": "Change an existing layout",
+      "intro": [
+        "Use this when a team needs a different set of pages. Users who selected the layout receive its saved changes."
+      ],
+      "steps": [
+        [
+          "Open the row actions",
+          "Find the layout and select its row dots.",
+          [
+            "row-actions"
+          ]
+        ],
+        [
+          "Choose Edit",
+          "Select <strong>Edit</strong>.",
+          [
+            "edit-layout"
+          ]
+        ],
+        [
+          "Change its pages",
+          "Select or clear page checkboxes. The example adds <strong>Activity</strong>. Removing the selected start page clears that choice.",
+          [
+            "edit-page"
+          ]
+        ],
+        [
+          "Save the changes",
+          "Open the editor dots and select <strong>Save</strong>.",
+          [
+            "edit-save"
+          ]
+        ]
+      ],
+      "result": "The table reflects the saved page selection.",
+      "resultShots": [
+        "edited-result"
+      ]
+    },
+    {
+      "id": "pick",
+      "title": "Choose a layout for yourself",
+      "intro": [
+        "Use this when you prefer another available sidebar. Your personal choice overrides a role default."
+      ],
+      "steps": [
+        [
+          "Open your user menu",
+          "Select your user menu at the bottom left.",
+          [
+            "pick-user-menu"
+          ]
+        ],
+        [
+          "Open Layout",
+          "Open <strong>Layout</strong>. This menu appears when at least one named layout exists.",
+          [
+            "pick-layout-menu"
+          ]
+        ],
+        [
+          "Choose the named layout",
+          "Select the layout you want. The example chooses <strong>Documentation review</strong>.",
+          [
+            "pick-layout"
+          ]
+        ]
+      ],
+      "result": "The sidebar changes to the layout pages that your role can open. Docs stays visible. A personal Start page choice can override the layout start page.",
+      "resultShots": [
+        "picked-result"
+      ]
+    },
+    {
+      "id": "restore",
+      "title": "Return to the role default or full sidebar",
+      "intro": [
+        "Use this when you want the administrator's role default again, or all pages your role permits."
+      ],
+      "steps": [
+        [
+          "Choose Role default",
+          "Open your user menu, then Layout. Select <strong>Role default</strong> to clear your personal layout choice. The menu names the current default in brackets.",
+          [
+            "role-default-option"
+          ]
+        ],
+        [
+          "Choose Full sidebar when needed",
+          "To show every permitted page, open the same Layout menu and select <strong>Full sidebar</strong>.",
+          [
+            "full-sidebar"
+          ]
+        ]
+      ],
+      "result": "The full sidebar returns. Permissions still decide which pages appear.",
+      "resultShots": [
+        "full-result"
+      ]
+    },
+    {
+      "id": "delete",
+      "title": "Remove an unused layout",
+      "intro": [
+        "Use this when a named sidebar is no longer needed. Check the affected role defaults before deleting it."
+      ],
+      "steps": [
+        [
+          "Choose Delete",
+          "Open the correct layout's row dots and select <strong>Delete</strong>.",
+          [
+            "delete-layout"
+          ]
+        ],
+        [
+          "Confirm the fallback",
+          "Check the layout name. People who chose it return to their role default. Roles using it lose that default. Select <strong>Delete layout</strong> to confirm.",
+          [
+            "delete-confirm"
+          ]
+        ]
+      ],
+      "result": "The layout disappears from the list.",
+      "resultShots": [
+        "deleted-result"
+      ]
+    },
+    {
+      "id": "phone",
+      "title": "Edit layouts on a phone",
+      "intro": [
+        "Use the same Layouts page on a phone. The Settings section list scrolls horizontally."
+      ],
+      "steps": [
+        [
+          "Open Layouts",
+          "Select <strong>Layouts</strong> in the Settings section list.",
+          [
+            "phone-layouts"
+          ]
+        ],
+        [
+          "Open the editor",
+          "Open the layout row dots and choose Edit. Scroll the sheet to reach page and role choices.",
+          [
+            "phone-editor"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "practice",
+      "title": "Optional practice",
+      "paragraphs": [
+        "In a test installation, create <code>Documentation review</code> with Dashboard, Reports and Forms. Choose Reports as its start page. Try it through the user menu, restore Full sidebar, then delete the test layout."
+      ]
+    },
+    {
+      "id": "limits",
+      "title": "Limits",
+      "paragraphs": [
+        "Layouts do not grant permissions or change the underlying data. Sidebar pages keep their standard order. Personal layout and start-page choices can override a role default."
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>A selected page does not appear.</strong> Check whether your role can open it. Adding a page to a layout does not grant access.",
+        "<strong>The expected first page does not open.</strong> Check your personal Start page choice in the user menu.",
+        "<strong>Role defaults cannot be read.</strong> The editor keeps existing defaults. Ask an administrator with View roles to review them."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "Read <a href=\"./roles-review.html\">Roles</a> for page permissions. Read <a href=\"./preferences-review.html\">User preferences</a> for personal choices. Read <a href=\"./start-here-review.html\">Start here</a> for command-line setup."
+      ]
+    }
+  ]
+}

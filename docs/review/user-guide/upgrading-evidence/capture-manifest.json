@@ -1,0 +1,259 @@
+{
+  "capturedAt": "2026-11-12T14:11:50.884Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5189/studio/settings/general",
+  "steps": [
+    {
+      "id": "general",
+      "label": "Open Settings, then General to read the running version.",
+      "path": "upgrading-evidence/general.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 60,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "version",
+      "label": "Record the running version before choosing a target release.",
+      "path": "upgrading-evidence/version.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 464,
+          "y": 168.046875,
+          "width": 800,
+          "height": 251
+        }
+      ]
+    },
+    {
+      "id": "inventory",
+      "label": "Illustration. Record exact current images and configuration.",
+      "path": "upgrading-evidence/inventory.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 204.046875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "pin",
+      "label": "Illustration. Pin the approved application release before downtime.",
+      "path": "upgrading-evidence/pin.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 132.03125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "drain",
+      "label": "Illustration. Pause external writers, stop every API replica and confirm shutdown.",
+      "path": "upgrading-evidence/drain.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 480.078125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "stores",
+      "label": "Illustration. Stop identity and object-storage writers after the API.",
+      "path": "upgrading-evidence/stores.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 456.078125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "database-backup",
+      "label": "Illustration. Back up each database from the same stopped-write period.",
+      "path": "upgrading-evidence/database-backup.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 564.09375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "roles",
+      "label": "Illustration. Save roles and all configuration privately.",
+      "path": "upgrading-evidence/roles.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 552.09375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "restore",
+      "label": "Illustration. Restore into separate, isolated destinations.",
+      "path": "upgrading-evidence/restore.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 816.140625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "migrate",
+      "label": "Illustration. Run the pinned new image CLI before starting its API.",
+      "path": "upgrading-evidence/migrate.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 492.09375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "start",
+      "label": "Illustration. Start storage and identity, then pinned application services.",
+      "path": "upgrading-evidence/start.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 468.078125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "verify",
+      "label": "Illustration. Check the new application before resuming traffic.",
+      "path": "upgrading-evidence/verify.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 228.046875,
+          "height": 32
+        }
+      ]
+    }
+  ]
+}

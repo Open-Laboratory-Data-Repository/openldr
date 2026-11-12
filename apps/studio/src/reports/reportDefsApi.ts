@@ -7,9 +7,9 @@ export interface ReportDefInput {
   category: ReportCategory;
   designId: string;
   primaryQueryId: string;
-  summaryMetrics?: unknown[];
+  summaryMetrics?: unknown[] | null;
   chart?: unknown;
-  paramOptions?: Record<string, string>;
+  paramOptions?: Record<string, string> | null;
   status: 'draft' | 'published';
 }
 export interface ReportDefRecord extends ReportDefInput {

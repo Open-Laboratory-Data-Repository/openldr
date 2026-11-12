@@ -1,0 +1,112 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Data design</span><span>Build and inspect automated steps</span><span>About 35 minutes</span></div>
+<h1>Workflows</h1>
+<p>Build a workflow when you need OpenLDR to receive, check, transform, store or deliver data. A node is one step. Lines connect the output of one node to the input of another.</p>
+<p>Use your own records and reporting queries. No documentation sample data is required. The pictures use a separate test installation. Optional fictional practice files are at the end.</p>
+<p><strong>View workflows</strong> opens definitions and runs. <strong>Edit workflows</strong> creates and changes them. <strong>Run workflows</strong> starts manual runs. <strong>Manage workflow secrets</strong> changes webhook credentials.</p>
+<p>The shipped <strong>Ingest</strong> workflow also handles Forms submissions. Keep it enabled. Editing it affects every sender using its webhook. Replace a secret only when you are ready to update those senders.</p>
+<h2 id="dg-find">Find a workflow</h2>
+<p>Use this to open an existing definition before inspecting or changing it.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Workflows</h3><p>Select <strong>Workflows</strong> in the main menu.</p>__SHOT:open-page:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Find the workflow</h3><p>Use <strong>Search workflows</strong> to filter names. Clear the search to restore the list.</p>__SHOT:search:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open its row</h3><p>Select the workflow name. This example opens the shipped <strong>Ingest</strong> workflow.</p>__SHOT:ingest-row:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Fit the canvas</h3><p>Select <strong>Fit View</strong> at the bottom left. Use the plus and minus controls to zoom. Pan moves the canvas; Select draws a selection box.</p>__SHOT:fit:4__</section>
+<h2 id="dg-secret">Set the Ingest webhook secret</h2>
+<p>Use this when an authorised sender needs a credential you can copy. A saved secret cannot be revealed. Coordinate rotation with the senders first.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Select Ingest received</h3><p>Select the first node, <strong>Ingest received</strong>.</p>__SHOT:trigger:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open its settings</h3><p>Select the gear labelled <strong>Configure</strong> above the selected node.</p>__SHOT:configure:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Generate a new secret</h3><p>Under <strong>Secret</strong>, select <strong>Replace secret</strong>. An unsaved value instead offers <strong>Regenerate</strong>.</p>__SHOT:replace-secret:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Copy the new value</h3><p>Copy the new secret and keep it with your sender credentials. The URL and Header fields show where and how to send it.</p>__SHOT:copy-secret:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Save the workflow</h3><p>Select <strong>Save</strong> in the toolbar.</p>__SHOT:save:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Confirm the system change</h3><p>Check the system-workflow warning, then select <strong>Save anyway</strong> when you intend the change.</p>__SHOT:confirm-save:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The Workflow saved message confirms the write. Senders must use the newly saved secret.</p></div>
+__SHOT:saved:0__
+<h2 id="dg-history">Read a run and its webhook receipt</h2>
+<p>Use this after a sender has posted data. You can also inspect existing runs without sending anything new. The example is a real webhook run containing one fictional patient.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open History</h3><p>On the workflow canvas, select <strong>History</strong>.</p>__SHOT:history:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the run</h3><p>In <strong>Runs</strong>, select the row matching the source and time you need.</p>__SHOT:run-row:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read the outcome</h3><p>Check Completed or Failed, then each node status. In this Bundle example, Form Validate is skipped because the FHIR branch handled the input.</p>__SHOT:run-result:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose a node</h3><p>Select a node row to inspect the data it received and produced. The example selects <strong>Persist store</strong>.</p>__SHOT:run-node:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Inspect its output</h3><p>Select <strong>Output</strong>. Use <strong>Result</strong> or <strong>Logs</strong> for the other recorded details. A successful storage node does not prove a downstream recipient read the data.</p>__SHOT:run-output:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Inspect the accepted request</h3><p>Select <strong>Webhook receipts</strong>. Match the request identifier and status to the sender response. A queued or running receipt is not a completed run.</p>__SHOT:receipts:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> You can distinguish the accepted webhook request from the workflow execution and its node results.</p></div>
+<h2 id="dg-build">Build a warehouse-count workflow</h2>
+<p>Use this small read-only workflow to learn the canvas. It counts requests already in your warehouse. Zero is a valid result, so no sample data or database connector is needed.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Workflow actions</h3><p>Return to the Workflows list and open the dots labelled <strong>Workflow actions</strong>.</p>__SHOT:list-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose New</h3><p>Select <strong>New</strong>.</p>__SHOT:new:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Name the workflow</h3><p>Set <strong>Workflow name</strong> to a useful name. This example uses <code>Warehouse row count</code>.</p>__SHOT:name:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Find Manual Trigger</h3><p>In the Node library, search for <code>Manual Trigger</code>.</p>__SHOT:find-manual:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Add the trigger</h3><p>Drag <strong>Manual Trigger</strong> onto an empty part of the canvas.</p>__SHOT:manual-card:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Add SQL Query</h3><p>Search for <code>SQL Query</code> and drag it beside the trigger. Clear the library search when finished.</p>__SHOT:sql-card:6__</section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Connect the nodes</h3><p>Drag the dot on the right of Manual Trigger to the dot on the left of SQL Query. Confirm a line joins them.</p>__SHOT:connect:7__</section>
+<h2 id="dg-run-count">Configure and run the warehouse count</h2>
+<p>Continue with the two connected nodes. This read-only query counts requests already in your warehouse. Your count can differ from the example.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Enter the query</h3><p>Select SQL Query, then its Configure gear. In <strong>SQL (SELECT only)</strong>, enter <code>SELECT COUNT(*) AS requests FROM lab_requests</code>. This query reads the reporting schema.</p>__SHOT:sql:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Save the definition</h3><p>Select <strong>Save</strong>.</p>__SHOT:save-new:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Arm the run</h3><p>Select <strong>Run</strong>. The manual trigger waits for your next action.</p>__SHOT:run:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Start the trigger</h3><p>Select the play badge labelled <strong>Click to run</strong> on Manual Trigger.</p>__SHOT:fire-trigger:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Read the count</h3><p>After Completed appears, open SQL Query and select <strong>Output</strong>. Read the <code>requests</code> value. Your count can differ from the picture.</p>__SHOT:sql-output:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The run completes in two steps and outputs one item containing the current request count.</p></div>
+__SHOT:completed:0__
+<h2 id="dg-export">Export a workflow definition</h2>
+<p>Use this to keep a portable copy of a definition. Exported definitions can contain configuration, so review them before sharing.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the row actions</h3><p>Return to the list and open the dots on the workflow row.</p>__SHOT:row-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Export</h3><p>Select <strong>Export</strong>. The browser downloads a <code>.workflow.json</code> file. The list actions menu offers Import for this file format.</p>__SHOT:export:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> You have a JSON copy of the definition. Export does not run the workflow.</p></div>
+<h2 id="dg-duplicate">Make a separate copy</h2>
+<p>Use Duplicate before experimenting with a saved custom workflow. The copy has its own definition.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the row actions</h3><p>Open the dots beside the workflow you want to copy.</p>__SHOT:row-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Duplicate</h3><p>Select <strong>Duplicate</strong>. A new row ends with <strong>(copy)</strong>. Open it before making changes.</p>__SHOT:duplicate:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The original and the copy appear separately.</p></div>
+__SHOT:duplicate-result:0__
+<h2 id="dg-remove">Remove a custom workflow</h2>
+<p>Use this only when you no longer need the definition. Delete permanently removes the selected custom workflow. The example removes the disposable copy.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Delete</h3><p>Open the custom workflow row dots and select <strong>Delete</strong>.</p>__SHOT:delete:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the named workflow</h3><p>Read the name in the confirmation. Select <strong>Delete</strong> only for the definition you intend to remove.</p>__SHOT:delete-confirm:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The copy disappears and the original remains.</p></div>
+__SHOT:delete-result:0__
+<h2 id="dg-import">Import an exported definition</h2>
+<p>Use this to add a workflow from an exported JSON file. Check the configuration before running an imported definition.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Workflow actions</h3><p>Open the dots above the workflow list.</p>__SHOT:list-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Import and a file</h3><p>Select <strong>Import</strong>, then choose the exported <code>.workflow.json</code> file in your file picker.</p>__SHOT:import:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The imported custom workflow appears in the list. Import does not run it.</p></div>
+__SHOT:import-result:0__
+<h2 id="dg-phone">Find workflows on a phone</h2>
+<p>Use the workflow list on a phone. Build and configure canvas workflows on a larger screen.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Search the list</h3><p>Use <strong>Search workflows</strong> to find the saved definition.</p>__SHOT:phone-search:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the workflow</h3><p>Select its name. Use History when you need its runs. A larger screen is better for canvas editing.</p>__SHOT:phone-open:2__</section>
+<h2 id="dg-send">Send your own webhook payload</h2>
+<p>Use the URL shown in the webhook settings. Use HTTPS outside a local test installation. Send the saved secret only in <code>X-Webhook-Token</code>. Use an input your workflow accepts, such as a FHIR Bundle for Ingest.</p>
+<p>From your installation folder, put your approved payload in <code>data/your-payload.json</code>. Replace the host and secret below. Read <a href="start-here-review.html">Start here</a> for installed and development command locations.</p>
+<pre><code>curl -X POST https://your-host/api/workflows/hooks/ingest \
+  -H "Content-Type: application/json" \
+  -H "X-Webhook-Token: YOUR_SECRET" \
+  -H "Idempotency-Key: sender-request-123" \
+  -d @data/your-payload.json</code></pre>
+<p>A completed response contains <code>ok</code>, <code>runId</code> and <code>correlationId</code>. A 202 response means accepted, with a request identifier and polling URL. Follow that URL with the current token. Respect Retry-After. Reuse the same idempotency key and identical input for a retry. Different input with the same key returns 409.</p>
+<h2 id="dg-practice">Optional fictional practice files</h2>
+<p>Use these only in a test installation. <a href="workflows-evidence/example-patient.json" download>Download one fictional patient Bundle</a> to practise the webhook. Store it as <code>data/your-payload.json</code> in your installation folder, for example <code>~/Downloads/openldr_ce</code> or <code>C:\openldr_ce</code>. Use the command above with your test host and token.</p>
+<p><a href="workflows-evidence/warehouse-row-count.workflow.json" download>Download the two-node warehouse count workflow</a>. Import it through Workflow actions if you want a reference after building your own. Neither file is required for normal use.</p>
+<h2 id="dg-reference">Choose other nodes</h2>
+<p>The Node library groups triggers, databases, communication, files and transformations. Search by the node name. A grey Coming soon entry cannot run.</p>
+<p>Use Postgres, MySQL or Microsoft SQL with a matching enabled connector. SQL Query reads the reporting schema directly. Load Dataset reads saved workflow rows; Materialize Dataset replaces the rows saved under a dataset name.</p>
+<p>Use Edit Fields, Filter, Switch, Pivot or Merge to transform items. Most text settings can read the incoming item with <code>{{ $json.fieldName }}</code>. Match the field names to the actual input you inspected.</p>
+<p>File and delivery steps need their own setup. <a href="report-pipeline-review.html">Scheduled reports</a> covers datasets and Excel templates. Configure an approved email connector before adding delivery.</p>
+<h2 id="dg-recovery">Handle interrupted webhook requests</h2>
+<p>History shows receipts separately from runs. Queued work can resume after a restart. Disabling, deleting or changing a workflow can cancel queued work. Interrupted means the result is unknown.</p>
+<p>OpenLDR does not replay started work automatically. Check that the first worker stopped and reconcile outside effects before using a new request key. A failed connection does not prove nothing ran. Receipts remain after workflow deletion.</p>
+<p>Headless operators can use the CLI receipt commands below. Read <a href="start-here-review.html">Start here</a> for the installed launcher. In a development checkout, prefix these arguments with <code>pnpm openldr</code>.</p>
+<pre><code>openldr workflows receipts list WORKFLOW_ID --limit 25 --offset 0 --json
+openldr workflows receipts show REQUEST_ID --json</code></pre>
+<h2 id="dg-system-reset">Restore a shipped workflow</h2>
+<p>System workflows offer <strong>Reset to default</strong> instead of Delete. Reset discards the customised graph and requires confirmation. Export the current definition first if you need to keep it.</p>
+<p>Reset normally keeps the existing webhook secret. If the reset warning says it could not keep one, set a new secret and update every sender. This guide did not reset an operational workflow.</p>
+<h2 id="dg-help">Troubleshooting</h2>
+<p><strong>Run waits without starting.</strong> Select the play badge on the trigger after Run.</p>
+<p><strong>A secret is rejected.</strong> Check the saved value and current path. Replacing a secret requires Save and, for Ingest, Save anyway. A saved secret cannot be revealed.</p>
+<p><strong>A node fails.</strong> Inspect its input, configuration and logs in History. Check required connector settings and the field names entering it.</p>
+<p><strong>Form capture says the pipeline is unavailable.</strong> Check that the shipped Ingest workflow is enabled. Do not clear or delete its nodes to troubleshoot a sender.</p>
+<p><strong>A delivery reports success.</strong> Check the recipient system separately. Node completion does not prove a person received or read the result.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="activity-review.html">Activity</a> follows the payload lifecycle. <a href="report-pipeline-review.html">Scheduled reports</a> builds stored data and workbook output. <a href="connectors-review.html">Connectors</a> configures external systems.</p>
+</article>

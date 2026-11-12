@@ -1,126 +1,199 @@
 # Importar do OpenLDR v1
 
-O plugin **OpenLDR v1 import** copia pedidos, pacientes, resultados e resultados de antibiograma de uma base de dados SQL Server do OpenLDR v1 para o CE. A importação corre no servidor CE, página a página. Pode pará-la e continuar mais tarde, e voltar a corrê-la substitui os registos em vez de os duplicar.
+O plugin de importação OpenLDR v1 lê uma base SQL Server v1 e guarda em CE pedidos, pacientes, resultados e resultados de suscetibilidade antimicrobiana associados. Executa no servidor em páginas de pedidos.
 
-O plugin nunca abre ele próprio uma ligação a uma base de dados. Fornece consultas só de leitura. O CE corre-as num conector que autorizar, e guarda o que o plugin converte.
+Use a sua base v1 através de um conector Microsoft SQL só de leitura. Diagnostique-o primeiro. O plugin tem de estar instalado e um administrador tem de autorizar a leitura desse conector.
 
-Leva cerca de 10 minutos a ler. A importação de uma base v1 grande demora muito mais. Este guia ainda não tem imagens: o pacote do plugin não está publicado no marketplace, e é preciso uma base v1 para o mostrar a funcionar.
+Precisa de **Manage connectors** para conceder acesso à origem. A página do plugin destina-se ao papel de administrador do laboratório. Conheça o desfasamento UTC do laboratório de origem.
 
-## Quem pode fazer o quê
+As capturas usam um pedido, um paciente e um resultado de texto fictícios num SQL Server isolado. Demonstram uma simulação e uma importação reais desse pequeno conjunto. Não comprovam compatibilidade com todas as bases históricas v1. Os dados opcionais de prática encontram-se no fim.
 
-| Capacidade | O que permite |
-| --- | --- |
-| **Manage connectors** | Autorizar ou retirar o acesso do plugin a um conector |
-| Função Lab Admin | Abrir a página do plugin, correr verificações, ensaios e importações |
+## Autorizar o plugin a ler um conector
 
-## Antes de começar
+Instale o plugin através de Marketplace ou do ficheiro aprovado. Crie um conector Microsoft SQL com acesso SELECT às tabelas v1. A conta não deve alterar os registos de origem.
 
-- O plugin **OpenLDR v1 import** está instalado. Instale-o em **Definições**, **Marketplace**, ou com `openldr plugin install` para um ficheiro de plugin. Veja [Marketplace](/docs/marketplace).
-- Um conector Microsoft SQL aponta para a base v1. Veja [Ligar ao SQL Server e diagnosticar uma ligação](/docs/connector-diagnose). Corra primeiro **Diagnosticar** nele: todos os passos devem passar.
-- Saiba o desvio UTC do laboratório que escreveu os dados v1, por exemplo `+02:00`.
+### 1. Abrir Connectors
 
-## Exemplo 1: autorizar o plugin a ler o conector v1
+Abra **Settings** e depois **Connectors**. Use [Diagnosticar ligações](/docs/connector-diagnose) para verificar primeiro a ligação de origem.
 
-1. Abra **Definições** e depois **Conectores**.
-2. No conector SQL Server v1, abra **⋯** e escolha **Acesso de plugins**.
-3. Ligue o interruptor de `openldr-v1-import`.
+![Abrir Settings e depois Connectors.](v1-import-guide-connectors.png)
 
-**Resultado esperado:** o interruptor fica ligado. A autorização e a retirada ficam ambas no registo de auditoria, com quem as fez. Desligue o interruptor para o plugin deixar de ler esse conector.
+### 2. Abrir Plugin access
 
-Se o painel disser que nenhum plugin instalado importa deste tipo de conector, o plugin não está instalado, ou o conector não é Microsoft SQL.
+Na linha do conector v1, abra os pontos e escolha **Plugin access**.
 
-## Exemplo 2: verificar, ensaiar e importar
+![Escolher Plugin access para o conector da base v1.](v1-import-guide-access.png)
 
-Abra **OpenLDR v1 import** na barra lateral. A página tem cinco passos.
+### 3. Autorizar o importador
 
-| Passo | O que faz |
-| --- | --- |
-| 1. Origem | Escolha o conector. **Verificar a ligação** testa-o passo a passo. |
-| 2. Opções | Defina o fuso horário do site. As outras opções são opcionais. |
-| 3. Verificações | O CE conta as tabelas e linhas v1. Nada é importado. |
-| 4. Ensaio | O CE lê e converte alguns pedidos e não guarda nada. |
-| 5. Importação | Arranque a importação, acompanhe-a, pare-a ou retome-a. |
+Ligue o interruptor junto de `openldr-v1-import`. Cada alteração guarda imediatamente.
 
-1. **Origem.** Escolha o conector v1 e selecione **Verificar a ligação**. Todos os passos devem passar.
-2. **Opções.** Defina **Fuso horário do site**, por exemplo `+02:00`. Deixe o resto vazio para importar tudo.
-3. **Verificações.** Têm de ser encontradas **4 de 4** tabelas: `Requests`, `LabResults`, `Patients` e `ASTResults`. Se faltar alguma, veja o nome da base no passo Opções.
-4. **Ensaio.** Escreva `100` e escolha **Iniciar ensaio**. A página mostra quantos pedidos seriam guardados e quantos falharam, cada falha com um motivo. Pode continuar quando o ensaio terminar.
-5. **Importação.** Escolha **Iniciar importação**.
+![Autorizar openldr-v1-import a ler este conector.](v1-import-guide-allow.png)
 
-**Resultado esperado:** a página mostra os pedidos lidos, guardados e com falha, o número de registos e a velocidade. Os contadores avançam uma página de cada vez. Uma página tem 500 pedidos, por isso os números podem ficar parados algum tempo.
+### 4. Verificar o interruptor guardado
 
-- Pode sair da página. A importação continua no servidor. A página abre na importação em curso quando voltar.
-- **Parar** termina a importação depois da página em que está a trabalhar.
-- **Retomar** continua a partir do último pedido feito. Use-o depois de uma paragem, de uma falha ou de um reinício do servidor.
-- Um pedido já importado é substituído, não duplicado. Voltar a correr a importação é seguro.
+O interruptor permanece ligado. Desligue-o depois para revogar o acesso do plugin ao conector.
 
-### Opções
+![O interruptor autorizado permanece ligado após guardar.](v1-import-guide-allowed.png)
 
-| Opção | Significado |
-| --- | --- |
-| Fuso horário do local | Obrigatório. As datas v1 não têm fuso horário, por isso este valor define a hora guardada. Use a forma `+02:00`, ou `Z`. |
-| Base de dados | Deixe vazio para usar a base de dados definida no conector. |
-| Data inicial, Data final | Limitam a importação pela data de registo. Deixe ambas vazias para importar tudo. |
-| Códigos de painel | Códigos de painel v1 separados por vírgulas. Deixe vazio para todos os painéis. |
+**Resultado esperado:** o plugin pode oferecer este conector como origem. As concessões e revogações aparecem em Audit.
 
-## Pedidos com falha
+## Escolher e verificar a origem
 
-Um pedido com falha não para a importação. A página lista os primeiros 100 com um motivo. O CE guarda apenas um código de motivo, nunca o conteúdo da linha.
+Uma ligação bem-sucedida comprova o acesso de rede e a autenticação. A etapa Checks verifica depois as tabelas esperadas.
 
-| Código | Significado |
-| --- | --- |
-| `NO_REQUEST_ROWS` | O pedido não tem linhas na tabela Requests. |
-| `NO_OBR_SET_ID` | Uma linha de pedido não tem OBRSetID. |
-| `NO_OBX_ID` | Uma linha de resultado não tem OBXSetID ou OBXSubID. |
-| `BAD_REQUEST_ID` | O RequestID não pode ser usado como identificador de registo. |
-| `SAVE_FAILED` | O CE não conseguiu guardar o pedido. |
-| `INVALID_RESOURCE` | O plugin devolveu um registo que o CE não aceita. |
+### 1. Abrir o importador
 
-## Auditoria e Atividade
+Selecione **OpenLDR v1 import** no menu principal.
 
-- Cada importação aparece na página **Atividade** como uma única entrada. Mostra o plugin, quem a iniciou, e quantos pedidos foram importados ou falharam. O estado é Em curso, Parada, Concluída ou Falhou. Um ensaio não guarda nada e não é listado.
-- A página **Auditoria** regista cada autorização, remoção, início, paragem, retoma e fim, com quem o fez.
-- O CE escreve primeiro a entrada de auditoria. Se não puder ser escrita, o CE recusa autorizar um conector, e iniciar ou retomar uma importação.
-- Cada registo importado guarda o identificador da importação, o plugin e a sua versão, e o sistema de origem.
+![Abrir OpenLDR v1 import no menu principal.](v1-import-guide-plugin-nav.png)
 
-Uma importação não inicia um fluxo de trabalho para cada pedido. Os fluxos que reagem ao evento `data.persisted` não correm para os registos importados.
+### 2. Escolher o conector de origem
 
-## Na linha de comandos
+Em Source, selecione o conector que aponta para a base v1.
 
-Um servidor sem ecrã executa a mesma importação:
+![Selecionar o conector v1 autorizado.](v1-import-guide-source.png)
 
-```bash
-openldr import allow openldr-v1-import <connector-id>
+### 3. Verificar a ligação
+
+Selecione **Check connection**. Leia cada passo e aguarde **The connection works.** Corrija qualquer falha antes de continuar.
+
+![Check connection tem de passar antes de importar.](v1-import-guide-connection.png)
+
+**Resultado esperado:** a ligação selecionada funciona a partir do servidor CE. Ainda não foram importados dados da origem.
+
+## Definir a hora de origem e os limites da importação
+
+v1 guarda datas e horas locais sem fuso horário. Escolha o desfasamento que corresponde a essas datas e horas.
+
+### 1. Definir Site time zone
+
+Selecione Next para abrir Options. Introduza o desfasamento UTC do laboratório de origem, como `+02:00`. Use `Z` apenas para uma origem guardada em UTC. O exemplo fictício usa Z.
+
+![Definir o desfasamento UTC real da origem. Esta origem fictícia usa Z.](v1-import-guide-timezone.png)
+
+### 2. Escolher limites opcionais
+
+Database substitui a base do conector. From date e To date limitam as datas de registo. Panel codes é uma lista separada por vírgulas. Deixe os limites vazios apenas se pretende ler tudo.
+
+![Deixar os limites vazios apenas para importar tudo.](v1-import-guide-options.png)
+
+### 3. Executar as verificações das tabelas
+
+Selecione Next para abrir Checks. Leia as contagens de tabelas e linhas. Têm de ser encontradas **4 of 4** tabelas: Requests, LabResults, Patients e ASTResults.
+
+![Ler as contagens de tabelas e linhas antes de continuar.](v1-import-guide-checks.png)
+
+**Resultado esperado:** Checks conta tabelas e linhas sem importar. Se faltar uma tabela, verifique a base e o esquema de origem.
+
+## Experimentar uma simulação
+
+Uma simulação lê e transforma um número limitado de pedidos sem guardar os registos clínicos.
+
+### 1. Definir o limite de pedidos
+
+Selecione Next para abrir Dry run. Introduza um limite pequeno. O exemplo usa `100` num conjunto de um pedido.
+
+![Dry run limita os pedidos lidos sem guardar.](v1-import-guide-dry-limit.png)
+
+### 2. Iniciar a simulação
+
+Escolha **Start dry run**.
+
+![Escolher Start dry run.](v1-import-guide-dry-start.png)
+
+### 3. Ler o resultado
+
+Aguarde Finished. Verifique os pedidos lidos, transformados ou importados e as falhas. Leia os motivos antes de continuar.
+
+![Ler as contagens transformadas e falhadas da simulação.](v1-import-guide-dry-result.png)
+
+**Resultado esperado:** o conjunto fictício termina com um pedido bem-sucedido e nenhuma falha. Uma amostra bem-sucedida não garante a transformação de todos os pedidos de uma origem grande.
+
+## Importar a origem verificada
+
+Uma importação real guarda registos em CE. Mantenha uma cópia de segurança da base de origem e acorde o âmbito antes de começar.
+
+### 1. Rever o resumo da importação
+
+Selecione Next para abrir Import. Verifique o conector e as opções.
+
+![Verificar o conector e as opções antes da importação real.](v1-import-guide-import-summary.png)
+
+### 2. Iniciar a importação
+
+Escolha **Start import**. O servidor lê os pedidos página a página e guarda os registos transformados.
+
+![Start import guarda os registos transformados.](v1-import-guide-import-start.png)
+
+### 3. Ler as contagens finais
+
+Aguarde Finished ou examine um resultado parado ou falhado. O exemplo guarda um pedido sem falhas. Os contadores atualizam por página e podem ficar imóveis enquanto uma página executa.
+
+![O exemplo terminou com um pedido importado e nenhuma falha.](v1-import-guide-complete.png)
+
+### 4. Verificar Activity
+
+Abra **Activity**. A importação aparece com o estado e as contagens de pedidos. Uma simulação não aparece como atividade de importação.
+
+![A execução de importação aparece em Activity.](v1-import-guide-activity.png)
+
+**Resultado esperado:** os dados transformados ficam guardados em CE. Os registos conservam a proveniência do plugin e da execução. A base de origem permanece inalterada.
+
+## Ler uma importação num telemóvel
+
+Iniciar uma importação longa é mais fácil num computador. A página do plugin continua disponível no telemóvel.
+
+### 1. Abrir a página do importador
+
+Leia a etapa atual e o estado da execução. Desloque dentro da página nos resumos longos.
+
+![A página de importação adapta-se à largura do telemóvel.](v1-import-guide-phone.png)
+
+## Parar, retomar e repetir
+
+Uma importação ativa continua no servidor quando sai da página. Ao regressar, abre a execução atual. **Stop** termina após a página em curso. **Resume** continua após o último pedido concluído depois de uma paragem, falha ou reinício do servidor.
+
+Um pedido já importado é substituído, sem duplicação. Repetir uma importação atualiza dados. Reveja primeiro o âmbito e as opções. O pequeno conjunto das capturas terminou depressa demais para demonstrar Stop e Resume. Esses comandos foram verificados no código, sem captura numa execução longa.
+
+As falhas de um pedido não param os restantes. A página mostra os primeiros 100 motivos. Guarda códigos de motivo sem conteúdo das linhas de origem. A importação não emite data.persisted para cada pedido. Os workflows que escutam esse evento não executam para esses registos.
+
+## Importar pela linha de comandos
+
+Leia [Começar aqui](/docs/start-here) para configurar a CLI. A partir de `openldr_ce`, autorize apenas o conector pretendido. Faça uma simulação antes da importação real. Substitua o identificador e o desfasamento de origem.
+
+```shell
+pnpm openldr import allow openldr-v1-import <connector-id>
+pnpm openldr import start --plugin openldr-v1-import --connector <connector-id> --option tz=+02:00 --dry-run --limit 100
+pnpm openldr import start --plugin openldr-v1-import --connector <connector-id> --option tz=+02:00
+pnpm openldr import status openldr-v1-import
+pnpm openldr import allowed openldr-v1-import
 ```
 
-```bash
-openldr import start --plugin openldr-v1-import --connector <connector-id> --option tz=+02:00 --dry-run --limit 100
-```
+## Prática opcional com dados de origem fictícios
 
-```bash
-openldr import start --plugin openldr-v1-import --connector <connector-id> --option tz=+02:00
-```
+A utilização normal exige uma base v1 existente. Apenas num SQL Server descartável, [example-source.sql](https://openldr.online/docs-samples/user-guide/v1-import/example-source.sql) cria uma base separada `guide_v1`, as quatro tabelas esperadas, um pedido, um paciente e um resultado de texto fictícios. ASTResults está vazia. Este conjunto mínimo não é um esquema histórico v1 completo.
 
-`Ctrl+C` para a importação na página seguinte. Outros comandos: `openldr import status`, `stop`, `resume`, `failures`, `allowed` e `revoke`. Adicione `--json` para uma saída legível por máquina.
+O ficheiro cria uma base. Leia-o antes de executar e use um servidor descartável sem uma base chamada guide_v1. Peça ao operador uma conta só de leitura. O ficheiro não fornece credenciais de início de sessão.
 
-## Num telemóvel
-
-A página do plugin foi feita para caber num telemóvel. Arrancar uma importação longa continua a ser mais fácil num computador.
+No código-fonte, `pnpm build:v1-import` prepara o importador de referência. Exige Rust e o destino wasm32-wasip1. Instale o ficheiro com `pnpm openldr plugin install reference-plugins/openldr-v1-import/plugin.wasm`. A compilação sem assinatura destina-se a testes. Na utilização normal, use o pacote assinado aprovado pela organização.
 
 ## Resolução de problemas
 
-- **O plugin não está na barra lateral.** Instale-o a partir do Marketplace.
-- **Acesso de plugins não lista nada.** O conector não é Microsoft SQL, ou o plugin não está instalado.
-- **Verificar a ligação falha.** Corra **Diagnosticar** no conector e corrija o passo indicado.
-- **As verificações encontram menos de 4 de 4 tabelas.** O nome da base está errado. Defina-o no passo Opções, ou no conector.
-- **Os contadores não mexem.** Uma página tem 500 pedidos. Espere pela página seguinte antes de concluir que parou.
-- **A importação recusa arrancar.** O CE não conseguiu escrever a entrada de auditoria, e recusa autorizar, arrancar ou retomar sem ela. Veja o registo do servidor.
-- **Os fluxos não correram para os registos importados.** É normal. Uma importação não emite `data.persisted`.
+**Falta o importador no menu principal.** Verifique a instalação, o estado ativo do plugin e o acesso de administrador.
+
+**Plugin access está vazio.** Verifique que o conector é Microsoft SQL e que o importador está instalado.
+
+**Não existem origens.** Autorize o plugin no conector correto e reabra a página.
+
+**A ligação falha.** Use Diagnose do conector e corrija o primeiro passo que falhou.
+
+**Menos de quatro tabelas.** Verifique a substituição da base, os nomes das tabelas e as permissões de leitura. Uma ligação bem-sucedida não comprova o esquema v1.
+
+**Start ou Resume é recusado.** Leia o erro e o registo da API. O serviço exige uma entrada de auditoria antes de iniciar.
+
+**As contagens ficam imóveis.** Aguarde a página atual. Cada página pode conter 500 pedidos. Verifique os erros antes de concluir que uma importação grande ficou parada.
 
 ## Guias relacionados
 
-- [Ligar ao SQL Server e diagnosticar uma ligação](/docs/connector-diagnose)
-- [Conectores](/docs/connectors)
-- [Marketplace](/docs/marketplace)
-- [Atividade](/docs/activity)
-- [Auditoria](/docs/audit)
+[Diagnosticar ligações](/docs/connector-diagnose), [Conectores](/docs/connectors), [Mercado](/docs/marketplace), [Atividade](/docs/activity) e [Auditoria](/docs/audit).

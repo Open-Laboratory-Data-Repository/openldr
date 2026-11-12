@@ -68,7 +68,7 @@ const RAW: Omit<CapabilityMeta, never>[] = [
   { key: 'settings.feature_flags', group: 'settings', label: 'Manage feature flags', description: 'Toggle feature flags.' },
   { key: 'settings.danger_zone', group: 'settings', label: 'Danger zone', description: 'Run destructive maintenance actions.' },
   // Data Exposure
-  { key: 'data_exposure.manage', group: 'data_exposure', label: 'Manage data exposure', description: 'Control which table columns may be exposed through dashboards, queries, and reports.' },
+  { key: 'data_exposure.manage', group: 'data_exposure', label: 'Manage data exposure', description: 'Hide additional table columns in the dashboard builder. Built-in dimensions, raw SQL, and connector-backed reports are outside this policy.' },
   // Observability
   { key: 'activity.view', group: 'observability', label: 'View activity', description: 'See the payload-lifecycle activity feed.' },
   { key: 'notifications.view', group: 'observability', label: 'View notifications', description: 'Receive notifications and set preferences.' },

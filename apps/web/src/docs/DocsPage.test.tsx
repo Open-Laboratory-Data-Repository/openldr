@@ -1,5 +1,5 @@
 import { StrictMode } from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { DocsPage, stripLeadingH1 } from './DocsPage';
 
@@ -15,6 +15,25 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
+  it('follows the section reached by page scrolling', async () => {
+    renderDocs('/docs/requirements');
+    const headings = [...document.querySelectorAll<HTMLElement>('.doc-markdown h2')];
+    const positions = headings.map((_, index) => index < 2 ? -400 + index * 450 : 2000 + index * 100);
+    headings.forEach((heading, index) => { heading.getBoundingClientRect = () => ({ top: positions[index], bottom: positions[index] + 30, left: 0, right: 600, width: 600, height: 30, x: 0, y: positions[index], toJSON() {} }); });
+    fireEvent.scroll(window);
+    const nav = screen.getByRole('navigation', { name: 'On this page' });
+    await waitFor(() => expect(within(nav).getByRole('link', { name: headings[1].textContent! })).toHaveAttribute('aria-current', 'location'));
+    positions[2] = 80;
+    fireEvent.scroll(window);
+    await waitFor(() => expect(within(nav).getByRole('link', { name: headings[2].textContent! })).toHaveAttribute('aria-current', 'location'));
+    expect(within(nav).getByRole('link', { name: headings[1].textContent! })).not.toHaveAttribute('aria-current');
+  });
+
+  it('renders the installer illustration without stripping its media identifier', () => {
+    renderDocs('/docs/getting-started');
+    expect(screen.getByRole('img', { name: /Illustration of installer output/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Screenshot unavailable/)).toBeNull();
+  });
 
 
   it('leaves the studio user guides to the in-app docs', () => {
@@ -78,13 +97,13 @@ describe('DocsPage', () => {
       expect(screen.queryByRole('heading', { name })).toBeNull();
     }
     expect(screen.queryByRole('heading', { name: "Choisir l'authentification et l'administration" })).toBeNull();
-    expect(screen.getAllByText('openldr user assign-role SUBJECT lab_admin')).toHaveLength(1);
+    expect([...document.querySelectorAll('.doc-markdown pre code')].filter(node => node.textContent?.trim() === './openldr user assign-role SUBJECT lab_admin')).toHaveLength(1);
 
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'Documentation language' }), { key: 'Enter' });
     fireEvent.click(screen.getByRole('option', { name: 'Français' }));
     expect(screen.getByRole('heading', { name: "Choisir l'authentification et l'administration" })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Choose authentication and administration' })).toBeNull();
-    expect(screen.getAllByText('openldr user assign-role SUBJECT lab_admin')).toHaveLength(1);
+    expect([...document.querySelectorAll('.doc-markdown pre code')].filter(node => node.textContent?.trim() === './openldr user assign-role SUBJECT lab_admin')).toHaveLength(1);
     expect(window.localStorage.getItem('openldr.docs.lang')).toBe('fr');
     window.localStorage.removeItem('openldr.docs.lang');
   });
@@ -100,7 +119,7 @@ describe('DocsPage', () => {
     expect(screen.getByLabelText('Documentation version')).toBeInTheDocument();
     expect(screen.getByRole('article')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Install' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('table').parentElement).toHaveClass('overflow-x-auto');
+    for (const table of screen.getAllByRole('table')) expect(table.parentElement).toHaveClass('overflow-x-auto');
     expect(screen.getAllByRole('heading', { name: 'Install' })).toHaveLength(1);
   });
 
@@ -232,8 +251,8 @@ describe('DocsPage', () => {
   it('deduplicates generated heading ids for repeated markdown headings', () => {
     renderDocs('/docs/install');
 
-    expect(document.getElementById('demo-evaluation')).not.toBeNull();
-    expect(document.getElementById('demo-evaluation-1')).not.toBeNull();
-    expect(document.querySelectorAll('[id="demo-evaluation"]')).toHaveLength(1);
+    expect(document.getElementById('1-install-using-your-connection-details')).not.toBeNull();
+    expect(document.getElementById('1-install-using-your-connection-details-1')).not.toBeNull();
+    expect(document.querySelectorAll('[id="1-install-using-your-connection-details"]')).toHaveLength(1);
   });
 });

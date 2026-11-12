@@ -252,6 +252,10 @@ export function WorkflowPreview() {
         .workflow-preview-card { position: relative; display: grid; width: 76px; height: 76px; place-items: center; border: 2px solid #393939; border-radius: 15px; background: linear-gradient(145deg, #272727, #1c1c1c); box-shadow: 0 8px 22px rgba(0, 0, 0, .34), inset 0 1px rgba(255, 255, 255, .05); transition: border-color .22s ease, box-shadow .22s ease; }
         .workflow-preview-card.complete { border-color: #22c55e; box-shadow: 0 0 0 1px rgba(34, 197, 94, .22), 0 0 14px rgba(34, 197, 94, .18), inset 0 1px rgba(255, 255, 255, .05); }
         .workflow-preview-card.running { border-color: #393939; }
+        :root[data-theme='light'] .workflow-preview-card { border-color: #d4d4d8; background: linear-gradient(145deg, #ffffff, #f4f4f5); box-shadow: 0 8px 22px rgba(24, 24, 27, .09), inset 0 1px #fff; }
+        :root[data-theme='light'] .workflow-preview-card.complete { border-color: #16a34a; box-shadow: 0 0 0 1px rgba(22, 163, 74, .12), 0 4px 14px rgba(22, 163, 74, .1); }
+        :root[data-theme='light'] .workflow-preview-card > svg:not(.workflow-preview-progress) { color: #1685b0; }
+        :root[data-theme='light'] .workflow-preview-node.route .workflow-preview-card > svg:not(.workflow-preview-progress) { color: #a66b00; }
         .workflow-preview-card > svg:not(.workflow-preview-progress) { width: 34px; height: 34px; color: #29bdf3; stroke-width: 2.3; }
         .workflow-preview-node.route .workflow-preview-card > svg:not(.workflow-preview-progress) { color: #f6b100; }
         .workflow-preview-shell .react-flow__handle { width: 12px; height: 12px; border: 2px solid var(--bg); background: #25bdf3; }
@@ -259,7 +263,7 @@ export function WorkflowPreview() {
         .workflow-preview-progress { position: absolute; inset: -5px; width: 84px; height: 84px; overflow: visible; pointer-events: none; }
         .workflow-preview-progress rect { fill: none; stroke: #25bdf3; stroke-width: 3; stroke-linecap: round; stroke-dasharray: .23 .77; animation: workflow-preview-border-progress 1.15s linear infinite; }
         .workflow-preview-label { margin-top: 9px; font-size: 12px; font-weight: 600; line-height: 1.2; white-space: nowrap; }
-        .workflow-preview-subtitle { margin-top: 4px; color: #999; font-size: 10px; line-height: 1.2; }
+        .workflow-preview-subtitle { margin-top: 4px; color: var(--text-muted); font-size: 10px; line-height: 1.2; }
         .workflow-preview-packet { fill: #22c55e; stroke: #a6fac2; stroke-width: 1.4; filter: drop-shadow(0 0 9px rgba(34, 197, 94, .95)); }
         @keyframes workflow-preview-border-progress { to { stroke-dashoffset: -1; } }
         @media (prefers-reduced-motion: reduce) { .workflow-preview-progress rect { animation: none; } }

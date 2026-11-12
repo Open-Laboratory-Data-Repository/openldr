@@ -1,0 +1,7 @@
+assigned lab_admin to aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
+$ node packages/cli/dev.mjs user assign-role aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee lab_admin
+(node:339576) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":30,"time":1794492872966,"pid":339576,"hostname":"fredrick-Station","name":"openldr","msg":"sync disabled (not configured)"}
+
+EXIT 0

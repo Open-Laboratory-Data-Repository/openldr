@@ -1,92 +1,175 @@
 # Audit
 
-**Audit** enregistre qui a modifié quoi, et quand : flux de travail, formulaires, utilisateurs, rôles, rapports, connecteurs, paramètres, patients consultés, et plus. Chaque événement a un acteur, une action, l'objet touché, et souvent une copie de cet objet avant et après.
+Audit indique qui a réalisé une action, quand et sur quel élément. Les administrateurs et les contrôleurs l'utilisent pour examiner les changements et les accès.
 
-Les connexions et déconnexions sont gérées par Keycloak, pas par OpenLDR, qui ne voit jamais le mot de passe. Vous les trouvez dans la console d'administration de Keycloak, sous **Realm**, **Events**. Ce journal enregistre les authentifications refusées (`auth.failed`) et chaque action d'opérateur, y compris en ligne de commande, avec le type d'acteur `cli`.
+Vous avez besoin de View audit log. Utilisez les événements enregistrés par votre installation. Les captures montrent des modifications de comptes et de mises en page fictifs dans une installation de test. Aucune donnée d'exemple n'est nécessaire.
 
-Ce guide prend environ 10 minutes. Sélectionnez une image ou un clip pour l'agrandir.
+Audit est en lecture seule. Lire un événement ne le modifie pas. Before, After et Metadata apparaissent seulement si l'action a enregistré ces valeurs.
 
-![Audit : les événements les plus récents d'abord, avec Quand, Acteur, Action, Type d'entité et ID d'entité.](audit-tour.png)
+## Rechercher les événements d'une action
 
-## Qui peut faire quoi
+Utilisez cette tâche quand vous connaissez le type d'action à examiner. Vous pouvez aussi filtrer par auteur, élément ou date.
 
-Une seule autorisation couvre cette page : **View audit log**. Elle ne fait que lire. Rien ici ne peut modifier ni supprimer un événement.
+### 1. Ouvrir Audit
 
-## Avant de commencer
+Sélectionnez **Audit** dans le menu principal.
 
-L'exemple retrouve les modifications du flux **Ingest**. Si vous avez suivi [Flux de travail, exemple 1](/docs/workflows#exemple-1-preparer-le-webhook-ingest), il y en a au moins une. Sinon, prenez n'importe quel événement visible.
+![Choisir Audit dans le menu principal.](audit-guide-open-audit.png)
 
-## Exemple 1 : qui a modifié le flux Ingest ?
+### 2. Lire les colonnes
 
-![Filtrer sur ID d'entité wf-ingest et ouvrir l'événement le plus récent.](audit-filter-workflow.mp4)
+Lisez **When**, **Actor**, **Action**, **Entity type** et **Entity ID**. Une action comme user.update décrit l'opération enregistrée.
 
-1. Ouvrez **Audit**. Les événements les plus récents sont en haut.
-2. Sélectionnez **Filtrer**, puis **Ajouter un filtre**.
-3. Réglez la colonne sur **ID d'entité**, l'opérateur sur **Contient**, et la valeur sur `wf-ingest`.
-4. Sélectionnez **Appliquer**. Une pastille sous la barre d'outils montre le filtre.
-5. Sélectionnez la ligne la plus récente.
+![Lire When, Actor, Action et les détails de l'élément avant d'ouvrir un événement.](audit-guide-read-event-row.png)
 
-**Résultat attendu :** un événement `workflow.update` pour chaque enregistrement d'Ingest, par la personne qui l'a enregistré. La fiche montre l'identifiant de l'événement, l'heure, l'acteur, l'action, le type d'entité `workflow` et l'identifiant `wf-ingest`, puis **Before** : le flux tel qu'il était.
+### 3. Ouvrir Filter
 
-![Un événement : qui, quoi, quand, et le flux avant la modification.](audit-event.png)
+Sélectionnez **Filter** au-dessus du tableau.
 
-Chaque valeur a un bouton de copie, pour coller un identifiant dans un autre filtre ou un autre écran.
+![Utiliser Filter pour rechercher une action ou un auteur.](audit-guide-filter-open.png)
 
-## Filtrer, trier et colonnes
+### 4. Ajouter une règle
 
-- **Filtrer** ajoute des règles : une colonne, un opérateur et une valeur. Les colonnes de texte proposent **Égal à**, **Différent de**, **Contient** et d'autres. **Quand** propose des dates et des plages.
-- Chaque règle s'affiche en pastille sous la barre d'outils. Retirez une pastille pour enlever une règle, ou utilisez **Tout effacer**.
-- **Trier** classe par n'importe quelle colonne, dans un sens ou l'autre.
-- **Colonnes** masque et affiche des colonnes. **Réinitialiser** remet le tableau par défaut.
-- Le filtrage, le tri et la pagination se font sur le serveur, donc un grand journal reste rapide.
+Sélectionnez **Add filter**.
 
-Pour suivre une chaîne de modifications, partez de l'entité, ajoutez l'acteur, puis comparez les heures des événements de création, modification, exécution, publication et suppression.
+![Choisir Add filter.](audit-guide-filter-add.png)
 
-## Actions utiles à connaître
+### 5. Choisir Action
 
-| Action | Ce qui s'est passé |
-| --- | --- |
-| `workflow.create`, `workflow.update`, `workflow.delete` | Un flux a été créé, enregistré ou supprimé |
-| `dashboard.create`, `dashboard.update`, `dashboard.delete` | Un tableau de bord a été créé, enregistré ou supprimé |
-| `customQuery.create`, `customQuery.delete` | Une requête enregistrée a été créée ou supprimée |
-| `role.create`, `role.delete`, `role.capability.backfill` | Un rôle a été créé ou supprimé, ou a reçu une nouvelle capacité à une mise à jour |
-| `settings.flag.update` | Un réglage comme **SQL brut pour les tableaux de bord** a été changé |
-| `patients.list`, `patients.view` | Quelqu'un a listé ou ouvert des patients |
-| `user.status`, `user.status.failed` | Un compte a été activé ou désactivé, ou la tentative a échoué |
-| `auth.failed` | Un jeton de connexion a été refusé |
+Ouvrez le sélecteur de colonne et choisissez **Action**. Gardez **Equals** pour un nom d'action exact.
 
-## En ligne de commande
+![Choisir Action comme colonne de filtre.](audit-guide-filter-action.png)
 
-`openldr audit list` accepte les mêmes filtres et le même tri que la page, donc un script peut refaire n'importe quelle vue.
+### 6. Saisir l'action
 
-- `--where column:operator:value` peut être répété. Seuls les deux premiers deux-points séparent la valeur, donc une valeur peut contenir un deux-points, comme un identifiant ou une URL.
-- `--sort column` trie croissant, `--sort -column` trie décroissant. Il peut être répété.
-- Sur la colonne du temps, `eq` avec une date seule comme `2026-08-06` couvre toute la journée. `between` avec deux dates seules inclut tout le dernier jour.
+Saisissez l'action à examiner. L'exemple utilise `user.update` pour les changements de profil. Utilisez une action présente dans votre installation.
 
-La même recherche que l'exemple 1 :
+![Saisir le nom de l'action. L'exemple utilise user.update.](audit-guide-filter-value.png)
 
-```bash
-./openldr audit list --where entityId:like:wf-ingest --sort -occurredAt
-```
+### 7. Appliquer le filtre
 
-Tous les événements de formulaires, du plus récent au plus ancien :
+Sélectionnez **Apply**.
 
-```bash
-./openldr audit list --where action:like:form. --sort -occurredAt
-```
+![Choisir Apply pour demander les événements correspondants.](audit-guide-filter-apply.png)
 
-Une colonne inconnue, ou un opérateur que cette colonne n'accepte pas, est refusé avec un message qui nomme le problème. C'est la même vérification que sur la page.
+**Résultat attendu :** la liste montre les événements correspondants. Une liste vide indique qu'aucun événement ne correspond aux règles actuelles.
 
-## Dépannage
+![La liste contient les événements user.update correspondants.](audit-guide-filter-result.png)
 
-- **Aucun événement n'apparaît.** Élargissez la période, ou retirez un filtre à la fois.
-- **L'acteur est inattendu.** Un flux planifié ou une action du système a peut-être fait la modification.
-- **Avant et après sont vides.** Certains événements notent l'action sans copie complète.
-- **Trop d'événements.** Combinez un filtre sur l'entité et un filtre sur l'acteur.
-- **Je ne trouve pas une connexion.** Les connexions réussies sont dans les événements de Keycloak, pas ici.
+## Lire un événement et ses valeurs enregistrées
+
+Identifiez ainsi la fiche concernée et comparez les changements. Les détails enregistrés varient selon les actions.
+
+### 1. Ouvrir l'événement
+
+Sélectionnez la ligne correspondante. Dans le panneau, lisez l'identifiant de l'événement, l'horodatage, l'auteur, l'action et l'élément concerné.
+
+![Vérifier Event ID, Timestamp, Actor et l'élément concerné.](audit-guide-event-identifiers.png)
+
+### 2. Lire Before
+
+Descendez jusqu'à **Before**. Cette section contient les anciennes valeurs si l'action les a fournies. **None recorded.** indique qu'aucun instantané n'a été enregistré.
+
+![Before contient les anciennes valeurs si l'action les a fournies.](audit-guide-event-before.png)
+
+### 3. Lire After
+
+Descendez jusqu'à **After**. Comparez les valeurs enregistrées à Before. Ces copies enregistrées ne sont pas un éditeur.
+
+![After contient les valeurs enregistrées si l'action les a fournies.](audit-guide-event-after.png)
+
+### 4. Lire Metadata
+
+Descendez jusqu'à **Metadata** pour consulter le contexte supplémentaire enregistré.
+
+![Metadata contient le contexte supplémentaire enregistré par l'action.](audit-guide-event-metadata.png)
+
+### 5. Copier une référence si nécessaire
+
+Utilisez **Copy Event ID** près de l'identifiant pour conserver une référence dans votre enquête. Les autres valeurs renseignées disposent aussi de commandes de copie.
+
+![Utiliser la commande de copie près d'une valeur pour conserver une référence.](audit-guide-event-copy.png)
+
+### 6. Fermer le panneau
+
+Sélectionnez **Close** en haut à droite.
+
+![Close ramène à la liste filtrée.](audit-guide-event-close.png)
+
+**Résultat attendu :** vous retrouvez la même liste filtrée. L'événement d'audit reste inchangé.
+
+## Parcourir d'autres événements et actualiser la liste
+
+Utilisez cette tâche pour consulter une autre page ou les changements enregistrés depuis l'ouverture d'Audit.
+
+### 1. Effacer le filtre si nécessaire
+
+Ouvrez Filter et choisissez **Clear** pour retrouver tous les événements.
+
+![Clear retire les règles de filtre actives.](audit-guide-filter-clear.png)
+
+### 2. Choisir la taille de page
+
+Ouvrez **Rows per page** en bas et choisissez une taille. L'exemple choisit **10**.
+
+![Utiliser Rows per page pour changer le nombre d'événements affichés.](audit-guide-page-size.png)
+
+![Choisir la taille de page. L'exemple choisit 10.](audit-guide-ten-rows.png)
+
+### 3. Lire la page suivante
+
+Sélectionnez **Next page** lorsque cette commande est disponible.
+
+![Next page lit le groupe d'événements suivant.](audit-guide-next-page.png)
+
+### 4. Revenir à la page précédente
+
+Sélectionnez **Previous page**.
+
+![Previous page revient au groupe précédent.](audit-guide-previous-page.png)
+
+### 5. Actualiser la liste
+
+Ouvrez le menu à points de la page et choisissez **Refresh**. Les filtres actuels restent appliqués.
+
+![Ouvrir le menu à points d'Audit.](audit-guide-refresh-actions.png)
+
+![Choisir Refresh pour demander à nouveau la liste filtrée actuelle.](audit-guide-refresh-menu.png)
+
+**Résultat attendu :** le tableau lit la page demandée ou les événements actualisés depuis le serveur.
+
+## Lire les événements sur un téléphone
+
+Utilisez la même page Audit sur téléphone. Le tableau peut défiler horizontalement.
+
+### 1. Utiliser les filtres
+
+Utilisez **Filter** au-dessus du tableau pour réduire les résultats avant de lire les lignes larges.
+
+![Filter reste disponible au-dessus du tableau sur téléphone.](audit-guide-phone-filter.png)
+
+### 2. Ouvrir le panneau d'événement
+
+Sélectionnez une ligne. Faites défiler le panneau pour lire les identifiants et les copies enregistrées.
+
+![Le panneau utilise la largeur du téléphone et permet de parcourir les valeurs enregistrées.](audit-guide-phone-event.png)
+
+## Pratique facultative
+
+Dans une installation de test, effectuez un changement approuvé de profil ou de mise en page, puis recherchez son événement. Comparez Before et After lorsqu'ils sont présents. Aucun import de données d'audit n'est nécessaire.
+
+## Limites
+
+Cette page ne modifie, ne supprime et n'exporte pas les événements. Une copie absente ne prouve pas que l'action n'a rien changé. L'action n'a enregistré aucune copie.
+
+## Résolution de problèmes
+
+**Aucun événement ne correspond.** Vérifiez les filtres actifs ou choisissez Filter, puis Clear.
+
+**Un événement récent manque.** Choisissez Refresh et vérifiez les filtres et la page actuels.
+
+**Before ou After indique None recorded.** Utilisez l'auteur, l'action, l'élément et les métadonnées disponibles. Cette page ne peut pas récupérer la copie absente.
 
 ## Guides associés
 
-- [Utilisateurs et rôles](/docs/users)
-- [Flux de travail](/docs/workflows)
-- [Activité](/docs/activity)
+Consultez [Utilisateurs](/docs/users) pour les actions sur les comptes et [Rôles](/docs/roles) pour les permissions. Consultez [Commencer ici](/docs/start-here) pour configurer la ligne de commande.

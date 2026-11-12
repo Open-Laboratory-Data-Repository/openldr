@@ -1,0 +1,15 @@
+{
+  "declared": {
+    "widget": {
+      "title": "Reference card",
+      "height": "small"
+    },
+    "panel": {
+      "title": "Reference panel"
+    }
+  },
+  "off": [
+    "widget",
+    "panel"
+  ]
+}

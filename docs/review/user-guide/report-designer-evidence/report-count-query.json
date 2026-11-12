@@ -1,0 +1,25 @@
+{
+  "format": "openldr.custom-queries",
+  "version": 1,
+  "exportedAt": "2026-11-12T14:20:04.813Z",
+  "queries": [
+    {
+      "name": "Request count for reporting",
+      "sql": "SELECT COUNT(*) AS requests FROM lab_requests WHERE authored_at >= {{ param.from }} AND authored_at <= ({{ param.to }} || 'T23:59:59.999Z')",
+      "params": [
+        {
+          "id": "from",
+          "type": "text",
+          "label": "From",
+          "required": true
+        },
+        {
+          "id": "to",
+          "type": "text",
+          "label": "To",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

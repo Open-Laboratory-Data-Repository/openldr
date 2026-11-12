@@ -1,0 +1,79 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>System setup</span><span>Save and test connections</span><span>About 15 minutes</span></div>
+<h1>Connectors</h1>
+<p>Save a connection once, then select it in workflows, Custom Queries and reports. A connector stores the connection settings and encrypted credentials.</p>
+<p>You need <strong>Manage connectors</strong>. Use your own database or service account. The pictures use a fictional read-only reporting account on an isolated Postgres database.</p>
+<p>A fresh installation creates a target-warehouse connector for its configured database engine. These pictures use <strong>Target Warehouse (Postgres)</strong>. Built-in queries and reports use the warehouse connector. Check their dependencies before changing it.</p>
+<p>The host and port must be reachable from the OpenLDR server. In Docker, <code>localhost</code> means that container. Use your database service name and internal port when both services share a Docker network.</p>
+<p>Creating a connector does not import records or run a workflow. <a href="#dg-practice">Optional practice setup</a> is at the end.</p>
+<h2 id="dg-add">Choose the connection type</h2>
+<p>Use the settings and account prepared for the service you want OpenLDR to reach. Choose the connection type before entering its fields.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open your user menu</h3><p>Select your account menu at the bottom of the main sidebar.</p>__SHOT:open-user-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Settings</h3><p>Choose <strong>Settings</strong> from the account menu.</p>__SHOT:settings-menu:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open Connectors</h3><p>Select <strong>Connectors</strong> in Settings.</p>__SHOT:open:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Open the page actions</h3><p>Select the page dots above the table.</p>__SHOT:actions:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Choose Add connector</h3><p>Select <strong>Add connector</strong>.</p>__SHOT:add:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Name the connection</h3><p>Enter a name people can recognise when choosing a connector. The example uses <code>Example reporting database</code>. Keep passwords out of the name.</p>__SHOT:name:6__</section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Choose Host</h3><p>Set <strong>Category</strong> to <strong>Host</strong> for a built-in database, email or file connection.</p>__SHOT:host-option:7__</section>
+<section class="dg-step"><h3><span class="dg-number">8.</span> Choose the service type</h3><p>Set <strong>Database type</strong> to the actual service. The example uses <strong>Postgres</strong>. This list also contains email and file services.</p>__SHOT:type:8__</section>
+<h2 id="dg-details">Enter the connection details and save</h2>
+<p>Continue in the open connector sheet. The fields follow the service type you selected. This example uses Postgres.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Enter the database address</h3><p>Fill <strong>Host</strong>, <strong>Port</strong> and <strong>Database</strong>. The example address is specific to this test installation. Use your server address.</p>__SHOT:address:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Enter the account</h3><p>Fill <strong>User</strong> and <strong>Password</strong> with the database account. A connection test does not establish which tables that account may read.</p>__SHOT:account:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check transport encryption</h3><p>Match <strong>Use SSL</strong> to the database requirements. The local example leaves it off. Other service types have their own transport settings.</p>__SHOT:ssl:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Open the sheet actions</h3><p>Select the dots in the connector sheet header.</p>__SHOT:sheet-actions:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Save the connector</h3><p>Select <strong>Save</strong>.</p>__SHOT:save:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The connector appears in the list and starts enabled. The Allowed plugin host column is a plugin network restriction. It is not the saved database address.</p></div>
+__SHOT:created:0__
+<h2 id="dg-test">Test the saved connection</h2>
+<p>Run a test after creating a connector or changing its credentials.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Test</h3><p>Open the connector row dots and select <strong>Test</strong>.</p>__SHOT:test:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read the result</h3><p>Wait for <strong>Connection OK</strong> or a failure below the row menu. A successful connection does not prove a report query or email delivery succeeds.</p>__SHOT:test-result:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The test uses the saved credentials from the OpenLDR server. Test outcomes appear in Audit.</p></div>
+<h2 id="dg-edit">Change settings or credentials</h2>
+<p>Edit ordinary settings directly. Passwords stay blank after saving. Leave a password blank to keep it.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Edit</h3><p>On the correct connector row, open the dots and select <strong>Edit</strong>.</p>__SHOT:edit:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the stored fields</h3><p>Verify the host, port, database and user. A set password shows a placeholder. Type a new password only when replacing it.</p>__SHOT:stored:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Save the changes</h3><p>Open the sheet dots and select <strong>Save</strong>. The example leaves the password blank and keeps it. Test the connector again afterward.</p>__SHOT:save-kept:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The same connector remains available to its existing consumers. They use updated settings on their next run.</p></div>
+<h2 id="dg-disable">Find and temporarily disable a connection</h2>
+<p>Disable a connector when you need to stop its use without deleting its stored settings.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Search the list</h3><p>Use the search field to find a name, type or allowed plugin host.</p>__SHOT:search:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Turn Enabled off</h3><p>Switch off <strong>Enabled</strong> on the correct row. Queries and workflows that need it can fail while it is disabled.</p>__SHOT:toggle:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check the switch</h3><p>An off switch marks it disabled. Switch it on again when it may be used.</p>__SHOT:disabled:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Disabling keeps the saved connector and credentials. It does not remove dependencies.</p></div>
+<h2 id="dg-remove">Remove a connection you no longer need</h2>
+<p>Check dependent workflows, queries and reports before removal. Do not remove the warehouse connector just to clear the list.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Remove</h3><p>Open the row dots and select <strong>Remove</strong>.</p>__SHOT:remove:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the confirmation</h3><p>Check the connector name. Choose <strong>Remove</strong> to delete it, or <strong>Cancel</strong> to keep it. The picture keeps this example for later tasks.</p>__SHOT:remove-confirm:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Confirming Remove deletes the connector and stored credentials. Anything that still refers to it fails until reconfigured.</p></div>
+<h2 id="dg-phone">Use Connectors on a phone</h2>
+<p>The Host column is hidden at phone width. Open Edit to read a host connection address.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Find the connector row</h3><p>Use search, then the row dots or Enabled switch.</p>__SHOT:phone-list:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read or change its settings</h3><p>Choose <strong>Edit</strong> from the row dots. The sheet fills the phone screen. Scroll inside it for longer service forms.</p>__SHOT:phone-edit:2__</section>
+<h2 id="dg-types">Choose the right type</h2>
+<p><strong>SQL databases.</strong> Postgres, MySQL / MariaDB and Microsoft SQL have distinct connection settings. The selected connector controls the query dialect. For SQL Server instances and Windows domain accounts, use <a href="connector-diagnose-review.html">Diagnose connections</a>.</p>
+<p><strong>Other host services.</strong> MongoDB, Redis, SMTP Email, IMAP Email, Gmail, Microsoft Outlook and SFTP show the fields relevant to their type. Use service credentials supplied by your operator. Gmail and Outlook types require an existing application registration and refresh token. SMTP uses the sending account and relay settings.</p>
+<p><strong>Plugin destinations.</strong> Choose Category <strong>Plugin</strong>, select an installed sink plugin, then enter Base URL, Username and Password together. When editing, leave all three blank to keep them, or replace all three. Install a sink through <a href="marketplace-review.html">Marketplace</a> if the selector is empty.</p>
+<p>A node offers enabled connectors matching its required type. A missing connector can be disabled or have another type. Passwords do not belong in workflow labels or query text.</p>
+<h2 id="dg-cli">Use the command line</h2>
+<p>Follow <a href="start-here-review.html">Start here</a> for CLI setup. From <code>openldr_ce</code>, use the commands below. Get the id from the list. CLI add, inspect, update, test and remove support host connectors. Plugin destinations use Studio.</p>
+<p>An add file contains <code>name</code>, <code>type</code> and <code>config</code>. A patch file contains only fields to change. Omitted fields stay stored. Blank secrets keep existing values. Protect credential files and remove them after use.</p>
+<pre><code>pnpm openldr connectors list
+pnpm openldr connectors inspect &lt;id&gt;
+pnpm openldr connectors add --file new-connector.json
+pnpm openldr connectors update &lt;id&gt; --file connector-patch.json
+pnpm openldr connectors test &lt;id&gt;
+pnpm openldr connectors remove &lt;id&gt; --force</code></pre>
+<h2 id="dg-practice">Optional practice setup</h2>
+<p>The tasks work with your own service account. For a disposable installation, ask the database operator to create a small test table and a read-only role. The screenshots use two fictional rows in <code>guide_orders</code> and <code>guide_reader</code>.</p>
+<p>Do not copy the screenshot address or demonstration password into a real connector. Give a report account SELECT only on approved tables. Confirm both allowed and refused queries in your own database. This preview tested local Postgres connectivity. It did not test email delivery, cloud account authorization or file transfer.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>Connection refused or timeout.</strong> Check the address from the OpenLDR server and the database firewall. Open row dots, then Diagnose for host connections.</p>
+<p><strong>Authentication failed.</strong> Check the account and database. Replace the password through Edit and test again.</p>
+<p><strong>SSL or certificate error.</strong> Ask the service operator which transport settings are required. SQL Server shows Encrypt and Trust server certificate.</p>
+<p><strong>A test passes but a query fails.</strong> Read the query error or workflow run. The account may lack access, the SQL may use another dialect, or the query may exceed its deadline. SQL connector queries have a 30-second limit.</p>
+<p><strong>Old query results remain visible.</strong> Check the error beside the connector selector. An earlier result table does not prove the latest run succeeded.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="connector-diagnose-review.html">Diagnose connections</a> explains connection checks. <a href="start-here-review.html">Start here</a> explains the CLI. Workflows and Custom Queries use saved connectors.</p>
+</article>

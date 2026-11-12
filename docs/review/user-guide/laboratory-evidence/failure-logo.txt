@@ -1,0 +1,50 @@
+OpenLDR
+Dashboard
+Reports
+Report Designer
+Query
+Workflows
+Terminology
+Facilities
+Test catalog
+Patients
+Forms
+Users
+Audit
+Activity
+Docs
+D
+dev-admin
+lab_admin
+Settings
+1
+General
+Setup checks
+Laboratory
+Notifications
+Sites
+Distributed sync
+Connectors
+Marketplace
+Roles
+Layouts
+Data Exposure
+Laboratory identity
+
+Printed as the letterhead on every report.
+
+Use these in a report template: {{lab.name}} {{lab.address}} {{lab.contact}} {{lab.logo}}
+
+Laboratory name
+Address
+Contact
+Facility register
+Documentation register
+Time zone
+
+An IANA zone name, e.g. Africa/Dar_es_Salaam. A SQL Server warehouse takes Windows zone names instead, which this field rejects — on SQL Server leave this empty and type the zone into the Time zone filter on each report run.
+
+Logo
+—
+Choose file…
+Saved.

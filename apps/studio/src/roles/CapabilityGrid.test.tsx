@@ -1,6 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
-import '@/i18n';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, within, act } from '@testing-library/react';
+import i18n from '@/i18n';
+import { CAPABILITY_GROUPS } from '@openldr/rbac';
+import { en } from '@/i18n/en';
+import { fr } from '@/i18n/fr';
+import { pt } from '@/i18n/pt';
 import type { CapabilityGroup } from '@/api';
 import { CapabilityGrid } from './CapabilityGrid';
 
@@ -14,6 +18,21 @@ const groups: CapabilityGroup[] = [
 ];
 
 describe('CapabilityGrid (render smoke tests — selection logic itself is covered by capabilityGrid.model.test.ts)', () => {
+  afterEach(async () => { await act(async () => { await i18n.changeLanguage('en'); }); });
+
+  it.each([['en', en], ['fr', fr], ['pt', pt]] as const)(
+    'renders the shared Data Exposure policy description in %s', async (language, messages) => {
+      await act(async () => { await i18n.changeLanguage(language); });
+      render(<CapabilityGrid groups={CAPABILITY_GROUPS} selected={new Set()} onChange={vi.fn()} />);
+      const group = screen.getByTestId('capability-group-data_exposure');
+      expect(within(group).getByText(messages.settings.dataExposure.description)).toBeTruthy();
+      const metadata = CAPABILITY_GROUPS.flatMap((entry) => entry.capabilities)
+        .find((capability) => capability.key === 'data_exposure.manage');
+      expect(metadata?.description).toBe(en.settings.dataExposure.description);
+      expect(within(group).getByTestId('capability-data_exposure.manage')).not.toBeChecked();
+    },
+  );
+
   it('renders group cards and the selected/total counter', () => {
     render(<CapabilityGrid groups={groups} selected={new Set()} onChange={vi.fn()} />);
     expect(screen.getByText('Users')).toBeTruthy();

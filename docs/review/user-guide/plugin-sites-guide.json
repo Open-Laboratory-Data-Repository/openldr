@@ -1,0 +1,233 @@
+{
+  "title": "Plugin cards and side panels",
+  "meta": [
+    "System setup",
+    "Choose where a plugin appears",
+    "About 10 minutes"
+  ],
+  "intro": [
+    "Some installed plugins add a dashboard card or a side panel. Use a side panel to keep the plugin visible while moving between app pages.",
+    "You see a plugin card and panel only when you may see that plugin. A plugin restricted to certain roles keeps those same restrictions here.",
+    "Administrators with marketplace management access can switch a card or panel off for everyone in the lab. The plugin page and other work remain enabled.",
+    "Use a plugin your organisation already installed. The pictures use the optional Reference Plugin on a test installation. Light theme keeps this sample plugin readable. No clinical sample data is needed."
+  ],
+  "tasks": [
+    {
+      "id": "card",
+      "title": "Read a plugin dashboard card",
+      "intro": [
+        "A plugin must declare a dashboard card before one can appear. Its content comes from that plugin."
+      ],
+      "steps": [
+        [
+          "Open Dashboard",
+          "Read the plugin card beneath the dashboard widgets. Cards appear on dashboards outside the normal widget editor. You cannot move or resize them there.",
+          [
+            "dashboard"
+          ]
+        ]
+      ],
+      "result": "The reference example reports Drawn in: widget. Your plugin shows its own content.",
+      "resultShots": []
+    },
+    {
+      "id": "panel",
+      "title": "Open a panel while you work",
+      "intro": [
+        "A panel is available only when an enabled plugin declares one and you may access that plugin."
+      ],
+      "steps": [
+        [
+          "Open Side panels",
+          "Select the <strong>Side panels</strong> button beside the notification bell. It appears only when a panel is available.",
+          [
+            "panel-button"
+          ]
+        ],
+        [
+          "Choose a panel",
+          "Select its title. The example is <strong>Reference panel</strong>.",
+          [
+            "panel-choice"
+          ]
+        ],
+        [
+          "Read the panel",
+          "The panel opens on the right. The main page remains available beside it on desktop.",
+          [
+            "panel-open"
+          ]
+        ],
+        [
+          "Move to another app page",
+          "Choose another page in the main menu. The panel stays open with its current content. The example moves to Forms.",
+          [
+            "navigate"
+          ]
+        ],
+        [
+          "Close the panel",
+          "Select <strong>Close</strong> at the panel top right.",
+          [
+            "close"
+          ]
+        ]
+      ],
+      "result": "Closing returns the space to the main page. Signing out or disabling the plugin or its panel also closes it.",
+      "resultShots": []
+    },
+    {
+      "id": "places",
+      "title": "Switch a card or panel off",
+      "intro": [
+        "These switches apply to the whole lab. Each switch saves immediately. There is no separate Save action."
+      ],
+      "steps": [
+        [
+          "Open Marketplace",
+          "Open <strong>Settings</strong>, then <strong>Marketplace</strong>.",
+          [
+            "marketplace"
+          ]
+        ],
+        [
+          "Choose Installed",
+          "Use the <strong>Installed</strong> tab.",
+          [
+            "installed"
+          ]
+        ],
+        [
+          "Open the plugin",
+          "Choose the installed plugin that supplies the card or panel.",
+          [
+            "plugin"
+          ]
+        ],
+        [
+          "Open its actions",
+          "Select the plugin detail dots.",
+          [
+            "actions"
+          ]
+        ],
+        [
+          "Choose Places",
+          "Select <strong>Places</strong>. This action appears only when the plugin declares a dashboard card or side panel.",
+          [
+            "places"
+          ]
+        ],
+        [
+          "Change Dashboard card",
+          "Turn <strong>Dashboard card</strong> off to hide that card. Turn it on to restore it.",
+          [
+            "card-switch"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "panel-place",
+      "title": "Control the side panel separately",
+      "intro": [
+        "Continue in Places. Each placement switch controls that one location; it does not disable the whole plugin."
+      ],
+      "steps": [
+        [
+          "Check the saved state",
+          "An off switch means the dashboard card is hidden. A failed save reports an error and keeps the previous state.",
+          [
+            "card-off"
+          ]
+        ],
+        [
+          "Change Side panel separately",
+          "Turn <strong>Side panel</strong> off to hide that panel. It has a separate switch.",
+          [
+            "panel-switch"
+          ]
+        ],
+        [
+          "Check the result",
+          "Close Places and return to Dashboard. The example has hidden both places, while Reference Plugin remains in the main menu.",
+          [
+            "hidden"
+          ]
+        ]
+      ],
+      "result": "The plugin page and its other work remain enabled. Each change appears in Audit as plugin.sites.update.",
+      "resultShots": []
+    },
+    {
+      "id": "phone",
+      "title": "Use a side panel on a phone",
+      "intro": [
+        "At phone width, the panel covers the main page beneath the app header."
+      ],
+      "steps": [
+        [
+          "Choose the panel",
+          "Open the header Side panels button and choose the panel.",
+          [
+            "phone-menu"
+          ]
+        ],
+        [
+          "Read the panel",
+          "Use the panel content. The underlying page is covered.",
+          [
+            "phone-panel"
+          ]
+        ],
+        [
+          "Return to the app page",
+          "Select <strong>Close</strong> at the panel top right.",
+          [
+            "phone-close"
+          ]
+        ]
+      ],
+      "result": "The screenshots verify the 375px layout. A real phone must confirm access around retractable browser chrome.",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "cli",
+      "title": "Read or change places from the CLI",
+      "paragraphs": [
+        "Follow <a href=\"start-here-review.html\">Start here</a> for CLI setup. From <code>openldr_ce</code>, use the plugin id. A place is called <code>widget</code> for Dashboard card and <code>panel</code> for Side panel."
+      ],
+      "html": [
+        "<pre><code>pnpm openldr market sites &lt;plugin-id&gt;\npnpm openldr market sites &lt;plugin-id&gt; widget off\npnpm openldr market sites &lt;plugin-id&gt; widget on\npnpm openldr market sites &lt;plugin-id&gt; panel off\npnpm openldr market sites &lt;plugin-id&gt; panel on</code></pre>"
+      ]
+    },
+    {
+      "id": "practice",
+      "title": "Optional practice with Reference Plugin",
+      "paragraphs": [
+        "Use your own installed plugin for normal work. In a disposable source installation, the reference plugin demonstrates a card, panel and separate plugin page. Build tools need Rust and its <code>wasm32-wasip1</code> target.",
+        "From <code>openldr_ce</code>, run <code>pnpm build:ui-reference</code>, then <code>pnpm openldr plugin install reference-plugins/ui-reference/plugin.wasm</code>. Reload Studio. Dashboard shows Reference card and Side panels offers Reference panel. The reference plugin declares no publisher signature, so use it only in a test installation.",
+        "The picture reads Drawn in: widget or Drawn in: panel according to its location. Its test note is fictional. Remove it afterward with <code>pnpm openldr plugin remove ui-reference</code>."
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>No Side panels button.</strong> Check that an enabled, permitted plugin declares a panel and its Side panel switch is on.",
+        "<strong>No Places action.</strong> That plugin may not declare a card or panel. Places does not add a new capability to a plugin.",
+        "<strong>The card is missing.</strong> Check Dashboard card in Places, the plugin enabled state and your role access.",
+        "<strong>The reference sample is hard to read.</strong> Use light theme. The sample has fixed dark text; this preview does not change plugin source."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "<a href=\"marketplace-review.html\">Marketplace</a> covers installation and plugin state. <a href=\"dashboard-review.html\">Dashboards</a> covers ordinary dashboard widgets."
+      ]
+    }
+  ]
+}

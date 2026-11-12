@@ -1,0 +1,40 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>More help</span><span>Find server and developer instructions</span><span>About 5 minutes</span></div>
+<h1>Deployment and developer docs</h1>
+<p>Use the in-app manual for tasks inside Studio. Use deployment and developer documentation for installation, server configuration, source development and CLI operation.</p>
+<p>This page helps you find and save that material. It does not add a deployment editor to Studio or run maintenance commands. No sample data is required.</p>
+<h2 id="dg-find">Find deployment and developer guidance</h2>
+<p>Search the app manual when you need installation, CLI or server references.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Docs</h3><p>Select <strong>Docs</strong> in the main menu.</p>__SHOT:docs:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Search for the topic</h3><p>Enter <code>Deployment</code> in Search documentation. You can also search a more specific topic.</p>__SHOT:search:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open the matching guide</h3><p>Choose <strong>Deployment &amp; developer docs</strong>.</p>__SHOT:guide-link:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose the kind of instructions you need</h3><p>Read the guide. Installation, environment variables, Windows Server, development and the CLI are separate topics.</p>__SHOT:guide:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Follow the project reference</h3><p>Use the project website or the source-repository link. The source repository includes the deployment files and CLI. Check instructions against the release you run.</p>__SHOT:repository:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> You can choose the correct documentation without treating the in-app manual as a server administration console.</p></div>
+<h2 id="dg-save">Save instructions before downtime</h2>
+<p>Save any upgrade or recovery instructions outside Studio before stopping the services that provide this manual.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Download documentation</h3><p>Select the download button at the top of the guide.</p>__SHOT:download:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose This page</h3><p>Select <strong>This page</strong>. Choose All docs instead when you need the complete manual.</p>__SHOT:this-page:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose a file format</h3><p>Select Markdown, PDF or Word. The tested example downloads <strong>Markdown (.md)</strong>. Keep the file where you can read it while Studio is offline.</p>__SHOT:format:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The browser downloads a standalone copy of the selected scope. A documentation export is not a database or file backup.</p></div>
+<h2 id="dg-phone">Read the guide on a phone</h2>
+<p>The app manual adapts to phone width.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Read the selected topic</h3><p>Open the guide and scroll the reading pane. Use the header controls for navigation and download.</p>__SHOT:phone:1__</section>
+<h2 id="dg-where">Which guide to use</h2>
+<table><thead><tr><th>Task</th><th>Guide</th></tr></thead><tbody><tr><td>Install OpenLDR or choose server requirements</td><td>Website Requirements and Install.</td></tr><tr><td>Set domains, certificates or external stores</td><td><a href="environment-review.html">Environment variables</a> and the deployment documentation.</td></tr><tr><td>Run OpenLDR from source</td><td>Website Development, then the source checkout instructions for that release.</td></tr><tr><td>Use operator commands</td><td><a href="start-here-review.html">Start here</a> and CLI documentation.</td></tr><tr><td>Change identity provider or issuer address</td><td><a href="auth-providers-review.html">Authentication providers</a>.</td></tr><tr><td>Upgrade an existing deployment</td><td><a href="upgrading-review.html">Planned upgrades</a>.</td></tr><tr><td>Configure Studio behavior</td><td><a href="settings-review.html">Settings</a>.</td></tr></tbody></table>
+<h2 id="dg-model">Read model and source facts</h2>
+<p>The canonical FHIR store preserves clinical resources. The warehouse projects them into tables for queries and reports. Source facts remain empty when the source does not supply them.</p>
+<p>Common request facts have typed columns in lab_requests. Additional request attributes use lab_request_attributes with the request-attribute coding system. They are rows, not country-specific columns. Read these attributes through Custom Queries.</p>
+<p>The terminology file <code>packages/terminology/codesystems/openldr-request-attribute.json</code> supplies display names. Import it from a source checkout with <code>pnpm openldr terminology import resource packages/terminology/codesystems/openldr-request-attribute.json</code> when your deployment needs those labels. Attribute data can exist without the display-name dictionary.</p>
+<p>A result reported as below or above a limit stores that numeric limit in numeric_value and its comparison in numeric_comparator. Result status and data-absent fields describe cancelled or unavailable results. Qualify status with the correct table alias when a query joins tables that also have status columns.</p>
+<p>Free-text clinical_info is hidden from the dashboard builder by default. Review Data exposure before making it available. Connector SQL has its own database-account permissions.</p>
+<h2 id="dg-arrival">Arrival time and warehouse rebuilds</h2>
+<p>Use ingest_events when a report asks when a clinical resource reached OpenLDR. Projected table created_at values describe projection writes. They do not represent every arrival of corrected resource versions.</p>
+<p><code>pnpm openldr db reproject --force</code> rebuilds the warehouse from canonical resources, including the arrival ledger. It rewrites projected rows and refuses without --force. Plan its cost and timing before using it on a large deployment. The older terminology reproject command is deprecated and performs the same full rebuild.</p>
+<p>After a transient projection failure, durable retries reread the current canonical resource. A cycle retries up to 100 queued resources and continues new changes. Repeated failures wait longer, up to five minutes. A recovered dependency can clear the retry without operator action. A deliberate full rebuild remains a separate maintenance operation.</p>
+<h2 id="dg-limits">What this preview checks</h2>
+<p>The screenshots come from the real app manual. Markdown export was downloaded and inspected. External installation, Windows Server setup, source build instructions and destructive maintenance commands were not run by this navigation task.</p>
+<p>For deployment changes, follow the actual release documentation and verify the affected services. A link in Studio does not prove an external procedure has been tested on your server.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="start-here-review.html">Start here</a>, <a href="environment-review.html">Environment variables</a>, <a href="auth-providers-review.html">Authentication providers</a> and <a href="upgrading-review.html">Planned upgrades</a>.</p>
+</article>

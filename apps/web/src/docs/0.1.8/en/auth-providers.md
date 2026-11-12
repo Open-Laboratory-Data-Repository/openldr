@@ -2,6 +2,10 @@
 
 OpenLDR can sign people in three ways: with its own accounts, through Keycloak, or through a generic OpenID Connect, or OIDC, provider. `AUTH_ADAPTER` picks one. When it is not set, it is `keycloak`. Generic mode requires discovery and signed JWT access tokens. Opaque access tokens are unsupported. This guide does not certify a second provider's deployment configuration.
 
+<!-- operator-platform -->
+
+Run maintenance on the OpenLDR host, from your installed Compose folder. The examples use `~/Downloads/openldr_ce` on Linux/macOS and `C:\openldr_ce` in PowerShell. Replace these paths with your installation. The blue prompt is already shown by the terminal. Type the command only. Configuration snippets name the file to edit; they are not terminal commands. Pictures are examples, not proof that maintenance succeeded. Sample data is optional.
+
 ## Choose a sign-in mode
 
 | Mode | Where accounts and passwords live | Pick it when |
@@ -79,51 +83,87 @@ Without provider administration, manage accounts, passwords and provider session
 
 ## Configure a generic provider
 
-Use a fresh deployment with no identities bound to another issuer. Register a public browser client using authorization code with PKCE. PKCE binds the code exchange to the browser that started sign-in. Do not give Studio a client secret.
+Use a fresh deployment with no identities bound to another issuer. Keycloak is the default only when `AUTH_ADAPTER` is unset. Generic OIDC needs discovery and signed JWT access tokens; opaque tokens are unsupported. These steps do not certify any external provider. First sign-in screenshots remain deferred to the fresh install.
 
-Register `https://YOUR_HOST/studio/auth/callback` as the redirect URI and `https://YOUR_HOST/studio` as the logout return URI. Allow the Studio origin for browser discovery and token requests. The provider must publish OIDC discovery metadata and signing keys. Its access tokens must be JWTs with the configured issuer and audience.
+### 1. Register the browser client at your provider
 
-```dotenv
-AUTH_ADAPTER=oidc
-IDENTITY_ADMIN_ADAPTER=none
-OIDC_ISSUER_URL=https://YOUR_PROVIDER/ISSUER_PATH
-OIDC_AUDIENCE=openldr-api
-OIDC_WEB_CLIENT_ID=openldr-web
+Replace YOUR_HOST with the configured public address. PKCE binds the code exchange to the browser that started it. Allow the Studio origin for discovery and token calls. Do not give Studio a client secret. Provider screens differ, so this is a configuration example, not a provider screenshot.
+
+```text
+{{operator:auth-client}}
 ```
 
-`OIDC_SCOPES` defaults to `openid profile email`. Add the API scopes required by your provider and keep `openid`. Set `OIDC_RESOURCE` when the provider requires a resource URL to issue the API access token. Resource and scope values come from the provider configuration; OpenLDR does not infer them from `OIDC_AUDIENCE`.
+![Register the browser client at your provider.](guide:operator-auth-client)
 
-Replace the issuer, audience and client ID with provider values. Configure the provider to include that audience in access tokens. OpenLDR checks signatures, issuer, audience and expiry. An ID token is not an API access token.
+### 2. Set the provider values in the environment file
 
-`OIDC_INTERNAL_JWKS_URL` can explicitly supply an internal signing-key endpoint. It does not change the expected issuer. `OIDC_INTERNAL_ISSUER_URL` is Keycloak-specific; generic mode does not derive endpoints from it. Remove stale Keycloak settings from a generic deployment. Keycloak mode retains static metadata for proxies that block discovery.
+Replace issuer, audience and client ID with provider values. Keep openid in scopes; add provider-required API scopes and OIDC_RESOURCE only when needed. The provider must include the configured audience in access tokens. An ID token is not an API access token. Remove stale Keycloak-only settings. OIDC_INTERNAL_ISSUER_URL is ignored in generic mode; an explicit OIDC_INTERNAL_JWKS_URL changes key retrieval, not issuer validation.
 
-Restart application processes after changing configuration. If discovery has no logout endpoint, signing out clears the local session only. The provider session can remain active.
+```text
+{{operator:auth-config}}
+```
 
-## Grant the first administrator access
+![Set the provider values in the environment file.](guide:operator-auth-config)
+
+### 3. Recreate the API and read its startup result
+
+Resolve configuration or discovery errors before continuing. OpenLDR checks token signatures, issuer, audience and expiry. Without a provider logout endpoint, sign-out clears the local session but may leave the provider session active. Test actual sign-in separately during the fresh-install pass.
+
+```sh
+{{operator:auth-recreate}}
+```
+
+![Recreate the API and read its startup result.](guide:operator-auth-recreate)
+
+## Grant administrator access to a known account
 
 This section is for Keycloak and generic OIDC. Under local sign-in, the setup code creates the first administrator.
 
-Sign in once to create the local account. First login does not grant administrator access. On the server, find that account's provider subject using `openldr user list`. Check the subject against the intended provider account, then run:
+An account must already have completed its first provider login so it exists locally. That login does not automatically grant administrator access. This is an operator task after that prerequisite, not a sign-in walkthrough.
+
+### 1. Read the account and provider subject
+
+Match the subject to the intended provider account. Do not confuse subject with local user ID or username. Keep directory output private.
 
 ```sh
-openldr user assign-role SUBJECT lab_admin
+{{operator:auth-users}}
 ```
 
-Replace `SUBJECT` with the exact provider subject, not the local user ID. Sign in again and verify the assigned access. Later role changes use the same CLI command or Studio's user actions.
+![Read the account and provider subject.](guide:operator-auth-users)
 
-## Preserve the issuer
+### 2. Assign the local administrator role
 
-OpenLDR binds the application database to its issuer before authenticated services start. Later issuer changes stop startup. Changing the URL can change the identity namespace even when usernames match. The binding stays local and does not replicate through settings sync.
+Replace SUBJECT with the verified provider subject. This changes local authorization. Verify the resulting access with that account. Later changes use this command or the Studio user actions.
 
-On the first upgrade with this protection, keep the existing `OIDC_ISSUER_URL`. Historical user rows cannot prove their original issuer. The first binding records the configured value; it cannot detect an earlier configuration mistake. Keep the same issuer when restoring an existing application database.
-
-If the same provider only moved address, for example a new hostname or a switch to HTTPS, user IDs do not change. Set the new `OIDC_ISSUER_URL`, then run:
-
-```bash
-openldr auth rebind-issuer --force
+```sh
+{{operator:auth-role}}
 ```
 
-Without `--force` the command shows both issuers and changes nothing. With it, the command records an `auth.issuer.rebind` audit event. Do not use it to switch to a different provider. There is no automatic account migration. Moving identities between providers, remapping subjects and restoring provider identities need a separate operator-reviewed procedure. Database migration commands remain available without starting authenticated services.
+![Assign the local administrator role.](guide:operator-auth-role)
+
+## Preserve an existing issuer binding
+
+The application database binds to its issuer before authenticated services start. Keep that issuer on upgrades and restores. Usernames cannot prove historical issuer identity. The binding is local and is not replicated through settings sync. A different provider needs an explicit identity-migration procedure.
+
+### 1. Review the issuer move without changing it
+
+Only after the same provider changes hostname or protocol, set the new OIDC_ISSUER_URL and inspect this command’s old/new values. Without --force it does not change a mismatched binding. Resolve pending migrations first.
+
+```sh
+{{operator:auth-rebind-review}}
+```
+
+![Review the issuer move without changing it.](guide:operator-auth-rebind-review)
+
+### 2. Confirm only an unchanged provider identity
+
+Use --force only when this is the same provider and subject IDs are unchanged. It is not a provider-switch shortcut. Successful changes record auth.issuer.rebind. Restart and verify separately. This guide does not run the change on your host.
+
+```sh
+{{operator:auth-rebind}}
+```
+
+![Confirm only an unchanged provider identity.](guide:operator-auth-rebind)
 
 ## Troubleshooting local sign-in
 

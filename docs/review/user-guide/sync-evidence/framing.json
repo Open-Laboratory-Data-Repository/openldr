@@ -1,0 +1,426 @@
+[
+  {
+    "id": "sites",
+    "crop": [
+      103.5,
+      88.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 252,
+        "y": 220,
+        "width": 183,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "admin-unavailable",
+    "crop": [
+      430,
+      0,
+      850,
+      531.25
+    ],
+    "targets": [
+      {
+        "x": 464,
+        "y": 149,
+        "width": 800,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "open",
+    "crop": [
+      103.5,
+      128.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 252,
+        "y": 260,
+        "width": 183,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "settings",
+    "crop": [
+      261.296875,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 464,
+        "y": 65,
+        "width": 74.59375,
+        "height": 34
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "enabled",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1228,
+        "y": 117,
+        "width": 36,
+        "height": 20
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "direction",
+    "crop": [
+      715.578125,
+      140.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 885,
+        "y": 274,
+        "width": 141.15625,
+        "height": 32
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "central",
+    "crop": [
+      800,
+      89.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 880,
+        "y": 221,
+        "width": 384,
+        "height": 36
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "site",
+    "crop": [
+      800,
+      141.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 880,
+        "y": 273,
+        "width": 384,
+        "height": 36
+      }
+    ],
+    "step": 6,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "issuer",
+    "crop": [
+      800,
+      219.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 880,
+        "y": 325,
+        "width": 384,
+        "height": 36
+      },
+      {
+        "x": 880,
+        "y": 377,
+        "width": 384,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "secret",
+    "crop": [
+      800,
+      297.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 880,
+        "y": 429,
+        "width": 384,
+        "height": 36
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "interval",
+    "crop": [
+      800,
+      349.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 880,
+        "y": 481,
+        "width": 384,
+        "height": 36
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "actions",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1232,
+        "y": 66,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "save",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 107,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "activity",
+    "crop": [
+      336.765625,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 542.59375,
+        "y": 65,
+        "width": 68.34375,
+        "height": 34
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "now",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 107,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "failed-row",
+    "crop": [
+      398,
+      0,
+      882,
+      551.25
+    ],
+    "targets": [
+      {
+        "x": 448,
+        "y": 245,
+        "width": 832,
+        "height": 47
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "detail",
+    "crop": [
+      687,
+      0,
+      593,
+      370.625
+    ],
+    "targets": [
+      {
+        "x": 721,
+        "y": 25.265625,
+        "width": 543,
+        "height": 24
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "error",
+    "crop": [
+      800,
+      123.53125,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 885,
+        "y": 263.53125,
+        "width": 379,
+        "height": 20
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "disable-save",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 107,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "secret-kept",
+    "crop": [
+      800,
+      297.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 880,
+        "y": 429,
+        "width": 384,
+        "height": 36
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "phone-settings",
+    "crop": [
+      0,
+      242.8125,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 16,
+        "y": 342,
+        "width": 343,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "phone-activity",
+    "crop": [
+      0,
+      17.8125,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 94.59375,
+        "y": 118,
+        "width": 68.34375,
+        "height": 34
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  }
+]

@@ -1,0 +1,403 @@
+{
+  "capturedAt": "2026-11-12T14:02:53.346Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5189/studio/settings/connectors",
+  "steps": [
+    {
+      "id": "connectors",
+      "label": "Open Settings, then Connectors.",
+      "path": "v1-import-evidence/connectors.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 300,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "access",
+      "label": "Choose Plugin access for the v1 database connector.",
+      "path": "v1-import-evidence/access.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 429.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "allow",
+      "label": "Allow openldr-v1-import to read this connector.",
+      "path": "v1-import-evidence/allow.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 127.53125,
+          "width": 671,
+          "height": 64
+        }
+      ]
+    },
+    {
+      "id": "allowed",
+      "label": "The allowed switch stays on after saving.",
+      "path": "v1-import-evidence/allowed.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1220,
+          "y": 149.53125,
+          "width": 36,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "plugin-nav",
+      "label": "Open OpenLDR v1 import from the main menu.",
+      "path": "v1-import-evidence/plugin-nav.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 616,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "source",
+      "label": "Select the allowed v1 connector.",
+      "path": "v1-import-evidence/source.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 260,
+          "y": 183.6875,
+          "width": 760,
+          "height": 46.296875
+        }
+      ]
+    },
+    {
+      "id": "connection",
+      "label": "Check connection must pass before importing.",
+      "path": "v1-import-evidence/connection.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 260,
+          "y": 579.140625,
+          "width": 760,
+          "height": 20.296875
+        }
+      ]
+    },
+    {
+      "id": "timezone",
+      "label": "Set the actual source site UTC offset. This fictional source uses Z.",
+      "path": "v1-import-evidence/timezone.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 372,
+          "y": 147.390625,
+          "width": 320,
+          "height": 36.296875
+        }
+      ]
+    },
+    {
+      "id": "options",
+      "label": "Leave optional limits empty only when you intend to import everything.",
+      "path": "v1-import-evidence/options.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 372,
+          "y": 237.375,
+          "width": 320,
+          "height": 36.296875
+        },
+        {
+          "x": 372,
+          "y": 308.515625,
+          "width": 320,
+          "height": 38.296875
+        },
+        {
+          "x": 372,
+          "y": 358.8125,
+          "width": 320,
+          "height": 38.296875
+        },
+        {
+          "x": 372,
+          "y": 431.953125,
+          "width": 320,
+          "height": 36.296875
+        }
+      ]
+    },
+    {
+      "id": "checks",
+      "label": "Read table and row counts before moving on.",
+      "path": "v1-import-evidence/checks.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 261,
+          "y": 184.6875,
+          "width": 758,
+          "height": 39.296875
+        }
+      ]
+    },
+    {
+      "id": "dry-limit",
+      "label": "Dry run limits how many requests are read without saving.",
+      "path": "v1-import-evidence/dry-limit.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 377.15625,
+          "y": 183.6875,
+          "width": 140,
+          "height": 36.296875
+        }
+      ]
+    },
+    {
+      "id": "dry-start",
+      "label": "Choose Start dry run.",
+      "path": "v1-import-evidence/dry-start.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 260,
+          "y": 235.984375,
+          "width": 119.296875,
+          "height": 36.296875
+        }
+      ]
+    },
+    {
+      "id": "dry-result",
+      "label": "Read the dry-run mapped and failed counts.",
+      "path": "v1-import-evidence/dry-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 260,
+          "y": 288.28125,
+          "width": 760,
+          "height": 118.890625
+        }
+      ]
+    },
+    {
+      "id": "import-summary",
+      "label": "Check the connector and options before starting the real import.",
+      "path": "v1-import-evidence/import-summary.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 260,
+          "y": 203.984375,
+          "width": 368,
+          "height": 26.296875
+        }
+      ]
+    },
+    {
+      "id": "import-start",
+      "label": "Start import saves the mapped records.",
+      "path": "v1-import-evidence/import-start.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 260,
+          "y": 246.28125,
+          "width": 115.671875,
+          "height": 36.296875
+        }
+      ]
+    },
+    {
+      "id": "complete",
+      "label": "The example completed with one request imported and no failures.",
+      "path": "v1-import-evidence/complete.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 260,
+          "y": 246.28125,
+          "width": 760,
+          "height": 118.890625
+        }
+      ]
+    },
+    {
+      "id": "activity",
+      "label": "The import run appears in Activity.",
+      "path": "v1-import-evidence/activity.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 48,
+          "width": 1040,
+          "height": 752
+        }
+      ]
+    },
+    {
+      "id": "phone",
+      "label": "The import page adapts to phone width.",
+      "path": "v1-import-evidence/phone.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 16,
+          "y": 109.296875,
+          "width": 343,
+          "height": 26.09375
+        }
+      ]
+    }
+  ]
+}

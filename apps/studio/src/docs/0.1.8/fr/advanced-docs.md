@@ -1,61 +1,123 @@
-# Déploiement et documentation technique
+# Documentation de déploiement et de développement
 
-Ce manuel intégré couvre les tâches faites dans l'application par un utilisateur connecté. Le déploiement, la configuration et le développement sont documentés sur le **site OpenLDR**, dans sa section Docs :
+Utilisez le manuel intégré pour les tâches dans Studio. Consultez la documentation de déploiement et de développement pour l'installation, la configuration serveur, le développement et la CLI.
 
-- **Requirements & Install** : ce qu'il faut, et l'installeur en une ligne (y compris un domaine public avec un certificat Let's Encrypt).
-- **Environment variables** : chaque valeur du fichier `.env` du déploiement.
-- **Windows Server (WSL2)** : le déploiement sur Windows Server avec WSL2.
-- **Development** : lancer OpenLDR depuis les sources, avec rechargement à chaud.
-- **Command-line interface (CLI)** : la ligne de commande `openldr` de l'opérateur (base de données, terminologie, ingestion, plugins, rapports, utilisateurs, marketplace).
-  - **`openldr db reproject --force`** reconstruit tout le modèle de lecture de l'entrepôt depuis le stockage FHIR canonique, y compris le registre des arrivées `ingest_events`. Il refuse sans `--force`, car il réécrit chaque ligne projetée.
-  - **`openldr terminology reproject` est obsolète** et fait exactement la même chose. Il l'a toujours fait : malgré son nom, il n'a jamais reconstruit que `terminology_codes`. Utilisez `db reproject`.
-  - **`ingest_events` est le registre de l'arrivée des données dans OpenLDR.** Une ligne par arrivée de chaque ressource clinique, par ressource et version, reconstruite depuis le stockage canonique. La colonne `created_at` de `lab_requests`, `specimens` et des autres tables projetées n'est **pas** une heure d'arrivée : elle note la première écriture de la ligne par la projection, garde un seul horodatage quel que soit le nombre de corrections, et repart à zéro pour toute ligne réinsérée. Pour savoir « quand ces données nous sont arrivées », lisez `ingest_events`.
+Cette page vous aide à trouver et enregistrer ces documents. Elle n'ajoute aucun éditeur de déploiement dans Studio et n'exécute aucune commande de maintenance. Aucun exemple de données n'est requis.
 
-Tout cela se trouve sur le site du projet et dans le dépôt des sources : <https://github.com/Open-Laboratory-Data-Repository/openldr>.
+## Trouver les instructions de déploiement et de développement
 
-## Nouvelles tentatives de projection
+Recherchez dans le manuel les références d'installation, de CLI ou de serveur.
 
-Le service conserve les écritures échouées des ressources et du registre pour les réessayer automatiquement.
-Ces tentatives survivent au redémarrage et relisent la ressource canonique actuelle, suppressions comprises.
-Chaque cycle reprend au maximum 100 ressources en attente, puis traite les nouveaux changements.
-Les échecs répétés attendent 1, 2, 4 secondes, puis davantage, jusqu'à cinq minutes.
-Les tentatives continuent jusqu'au succès. Une ressource en échec ne bloque pas les changements valides suivants.
-Un nouveau changement de cette ressource peut déclencher une tentative avant la fin du délai.
-Si l'enregistrement d'une tentative échoue, le service conserve son curseur.
-Le succès supprime la tentative en attente. Les erreurs de capture auxiliaire sont journalisées sans nouvelle tentative.
-Après une panne temporaire, aucune intervention n'est nécessaire.
-Pour reconstruire toutes les tables de lecture, utilisez `openldr db reproject --force`.
+### 1. Ouvrir Docs
 
-## Faits de la demande et attributs de la demande
+Sélectionnez **Docs** dans le menu principal.
 
-Chaque demande de laboratoire porte, quand la source les envoie : le jeu OBR, l'heure d'analyse,
-le point de soin, le type de demande, qui l'a enregistrée et testée, le médecin demandeur, l'âge à
-la demande, l'information clinique, l'analyseur, et le code et le motif de rejet. Chaque rapport
-porte sa section et qui l'a autorisé.
+![Ouvrez Docs dans le menu principal.](advanced-docs-guide-docs.png)
 
-Les faits plus rares sont des lignes dans `lab_request_attributes`, une ligne par demande et
-attribut. Les codes d'attribut forment le système de codage `urn:openldr:cs:request-attribute`.
-Chargez-le une fois avec :
+### 2. Rechercher le sujet
 
-    openldr terminology import resource packages/terminology/codesystems/openldr-request-attribute.json
+Saisissez `Deployment` dans Search documentation. Vous pouvez rechercher un sujet plus précis.
 
-Exécutez cette commande depuis un dépôt source d'OpenLDR CE, où le fichier se trouve à ce chemin.
-Sans cet import, les lignes d'attribut sont quand même enregistrées. Seuls les noms d'affichage
-des codes manquent.
+![Recherchez la documentation par titre ou sujet.](advanced-docs-guide-search.png)
 
-Un fait que la source n'envoie pas reste vide. Rien n'est rempli à sa place.
+### 3. Ouvrir le guide correspondant
 
-Un résultat numérique hors de la plage de mesure de la méthode du laboratoire arrive sous la forme
-de la limite avec un comparateur, par exemple `< 20`. `lab_results.numeric_comparator` contient `<`, `<=`, `>=`
-ou `>`, et reste vide pour un nombre ordinaire. `numeric_value` contient alors la limite.
+Choisissez **Deployment & developer docs**.
 
-Chaque résultat porte son statut FHIR dans `lab_results.status`. Un test rejeté à la saisie des résultats est enregistré comme une ligne au statut `cancelled`, sans valeur, avec la raison dans `data_absent_code` et `data_absent_reason`, par exemple `HAEM` et `Haemolysed`. Pour compter les résultats, ajoutez `(l.status is null or l.status <> 'cancelled')` à la requête. Pour compter les tests rejetés, utilisez `l.status = 'cancelled'`. Préfixez `status` par l'alias de lab_results, car lab_requests, specimens et diagnostic_reports ont aussi une colonne `status` ; une requête plus ancienne qui les joint et utilise `status` seul doit être corrigée. Une installation mise à niveau depuis une version antérieure n'a pas de statut sur les lignes qu'elle contenait déjà. Lancez `openldr db reproject --force` une fois après la mise à niveau pour les remplir.
+![Choisissez Deployment & Developer Docs dans les résultats.](advanced-docs-guide-guide-link.png)
 
-`clinical_info` est masqué du générateur de tableaux de bord par défaut, car il peut contenir du
-texte libre ou un identifiant patient pseudonymisé. Démasquez-le dans Paramètres, puis Exposition
-des données. La table `lab_request_attributes` n'est pas dans le générateur de tableaux de bord
-du tout. Lisez-la avec des requêtes personnalisées.
+### 4. Choisir les instructions nécessaires
+
+Lisez le guide. L'installation, les variables d'environnement, Windows Server, le développement et la CLI sont des sujets distincts.
+
+![Lisez la rubrique de déploiement et de développement.](advanced-docs-guide-guide.png)
+
+### 5. Suivre la référence du projet
+
+Utilisez le [site OpenLDR](https://openldr.online/docs) ou le [dépôt source](https://github.com/Open-Laboratory-Data-Repository/openldr). Le dépôt contient les fichiers de déploiement et la CLI. Vérifiez que les instructions correspondent à votre version.
+
+![Utilisez le site du projet ou le dépôt source pour les documents de déploiement et de développement.](advanced-docs-guide-repository.png)
+
+**Résultat attendu :** vous pouvez choisir la documentation adaptée sans traiter le manuel intégré comme une console d'administration serveur.
+
+## Enregistrer les instructions avant une interruption
+
+Enregistrez les instructions de mise à niveau ou de récupération hors de Studio avant d'arrêter les services qui fournissent ce manuel.
+
+### 1. Ouvrir Download documentation
+
+Sélectionnez le bouton de téléchargement en haut du guide.
+
+![Téléchargez un guide avant de mettre Studio hors ligne.](advanced-docs-guide-download.png)
+
+### 2. Choisir This page
+
+Sélectionnez **This page**. Choisissez All docs si vous avez besoin du manuel complet.
+
+![Choisissez This page pour ce guide uniquement.](advanced-docs-guide-this-page.png)
+
+### 3. Choisir un format de fichier
+
+Sélectionnez Markdown, PDF ou Word. L'exemple testé télécharge **Markdown (.md)**. Conservez le fichier à un endroit accessible lorsque Studio est hors ligne.
+
+![Choisissez Markdown, PDF ou Word.](advanced-docs-guide-format.png)
+
+**Résultat attendu :** le navigateur télécharge une copie autonome du contenu choisi. Un export de documentation n'est pas une sauvegarde des bases ou des fichiers.
+
+## Lire le guide sur téléphone
+
+Le manuel intégré s'adapte à la largeur du téléphone.
+
+### 1. Lire le sujet sélectionné
+
+Ouvrez le guide et faites défiler la zone de lecture. Utilisez les commandes d'en-tête pour naviguer et télécharger.
+
+![Lisez le guide à la largeur d'un téléphone.](advanced-docs-guide-phone.png)
+
+## Choisir le guide adapté
+
+| Tâche | Guide |
+| --- | --- |
+| Installer OpenLDR ou choisir les ressources serveur | Rubriques Requirements et Install du site. |
+| Définir les domaines, certificats ou stockages externes | [Variables d'environnement](/docs/environment) et documentation de déploiement. |
+| Exécuter OpenLDR depuis les sources | Rubrique Development du site, puis instructions du dépôt source pour cette version. |
+| Utiliser les commandes d'exploitation | [Commencer ici](/docs/start-here) et documentation de la CLI. |
+| Changer de fournisseur d'identité ou d'adresse d'émetteur | [Fournisseurs d'authentification](/docs/auth-providers). |
+| Mettre à niveau une installation existante | [Mises à niveau planifiées](/docs/upgrading). |
+| Configurer le comportement de Studio | [Paramètres](/docs/settings). |
+
+## Lire les faits du modèle et des sources
+
+Le stockage FHIR canonique conserve les ressources cliniques. L'entrepôt les projette dans des tables pour les requêtes et les rapports. Les faits restent vides lorsque la source ne les fournit pas.
+
+Les faits courants des demandes ont des colonnes typées dans lab_requests. Les attributs supplémentaires utilisent lab_request_attributes avec le système de codes request-attribute. Ce sont des lignes, pas des colonnes propres à un pays. Lisez-les avec Custom Queries.
+
+Le fichier de terminologie `packages/terminology/codesystems/openldr-request-attribute.json` fournit les libellés. Importez-le depuis un dépôt source avec `pnpm openldr terminology import resource packages/terminology/codesystems/openldr-request-attribute.json` si votre installation en a besoin. Les attributs peuvent exister sans ce dictionnaire de libellés.
+
+Un résultat inférieur ou supérieur à une limite conserve cette limite numérique dans numeric_value et son comparateur dans numeric_comparator. L'état du résultat et les champs d'absence de données décrivent les résultats annulés ou indisponibles. Qualifiez status avec l'alias de table approprié si une jointure inclut plusieurs colonnes status.
+
+Le texte libre clinical_info est masqué par défaut dans le créateur de tableaux de bord. Consultez Data exposure avant de le rendre disponible. Le SQL des connecteurs dépend des permissions de leur compte de base de données.
+
+## Heure d'arrivée et reconstructions de l'entrepôt
+
+Utilisez ingest_events lorsqu'un rapport demande quand une ressource clinique est arrivée dans OpenLDR. Les valeurs created_at des tables projetées décrivent les écritures de projection. Elles ne représentent pas chaque arrivée d'une version corrigée.
+
+`pnpm openldr db reproject --force` reconstruit l'entrepôt depuis les ressources canoniques, y compris le journal des arrivées. La commande réécrit les lignes projetées et refuse sans --force. Prévoyez son coût et son créneau sur une grande installation. L'ancienne commande terminology reproject est obsolète et effectue la même reconstruction complète.
+
+Après un échec temporaire de projection, les tentatives persistantes relisent la ressource canonique actuelle. Chaque cycle réessaie jusqu'à 100 ressources en attente et poursuit les nouvelles modifications. Les échecs répétés attendent davantage, jusqu'à cinq minutes. Une dépendance rétablie peut permettre la reprise sans intervention. Une reconstruction complète reste une opération de maintenance distincte.
+
+## Limites des vérifications
+
+Les captures viennent du véritable manuel intégré. L'export Markdown a été téléchargé et inspecté. Les vérifications de navigation n'ont pas exécuté l'installation externe, la configuration Windows Server, la compilation des sources ou les commandes de maintenance destructives.
+
+Pour modifier un déploiement, suivez la documentation de sa version et vérifiez les services concernés. Un lien dans Studio ne prouve pas qu'une procédure externe a été testée sur votre serveur.
+
+## Dépannage
+
+**Un guide n'apparaît pas dans la recherche.** Vérifiez la langue et la version actuelles de la documentation, puis recherchez son titre ou son sujet.
+
+**Le téléchargement contient le mauvais guide.** Ouvrez le guide voulu et choisissez This page dans Download documentation.
 
 ## Guides associés
 
-- [Paramètres](/docs/settings)
+[Commencer ici](/docs/start-here), [Variables d'environnement](/docs/environment), [Fournisseurs d'authentification](/docs/auth-providers) et [Mises à niveau planifiées](/docs/upgrading).

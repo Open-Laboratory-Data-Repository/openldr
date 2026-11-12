@@ -1,0 +1,409 @@
+{
+  "capturedAt": "2026-11-12T13:50:54.930Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5189/studio/settings/connectors",
+  "steps": [
+    {
+      "id": "open",
+      "label": "Open Settings, then Connectors.",
+      "path": "connector-diagnose-evidence/open.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 300,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "diagnose",
+      "label": "Choose Diagnose from a host connector row.",
+      "path": "connector-diagnose-evidence/diagnose.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 340.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "passed",
+      "label": "Read the actual status of each diagnosis step.",
+      "path": "connector-diagnose-evidence/passed.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 127.53125,
+          "width": 671,
+          "height": 109
+        }
+      ]
+    },
+    {
+      "id": "login",
+      "label": "Port, Login and Server version confirm the tested connection.",
+      "path": "connector-diagnose-evidence/login.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 301.53125,
+          "width": 671,
+          "height": 65
+        },
+        {
+          "x": 609,
+          "y": 366.53125,
+          "width": 671,
+          "height": 48
+        },
+        {
+          "x": 609,
+          "y": 414.53125,
+          "width": 671,
+          "height": 64
+        }
+      ]
+    },
+    {
+      "id": "again",
+      "label": "Run again repeats the checks with saved settings.",
+      "path": "connector-diagnose-evidence/again.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1077,
+          "y": 66.25,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "add",
+      "label": "Choose Add connector for a SQL Server connection.",
+      "path": "connector-diagnose-evidence/add.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 158,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "sql-type",
+      "label": "Choose Microsoft SQL.",
+      "path": "connector-diagnose-evidence/sql-type.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 744.25,
+          "y": 344.5,
+          "width": 152.28125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "split",
+      "label": "A pasted server and instance are split into separate fields.",
+      "path": "connector-diagnose-evidence/split.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 755.609375,
+          "y": 287.53125,
+          "width": 500.390625,
+          "height": 36
+        },
+        {
+          "x": 755.609375,
+          "y": 335.53125,
+          "width": 500.390625,
+          "height": 36
+        },
+        {
+          "x": 755.609375,
+          "y": 383.53125,
+          "width": 500.390625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "login-fields",
+      "label": "Enter the database and login. Windows domain is only for a Windows account.",
+      "path": "connector-diagnose-evidence/login-fields.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 755.609375,
+          "y": 431.53125,
+          "width": 500.390625,
+          "height": 36
+        },
+        {
+          "x": 755.609375,
+          "y": 479.53125,
+          "width": 500.390625,
+          "height": 36
+        },
+        {
+          "x": 755.609375,
+          "y": 527.53125,
+          "width": 500.390625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "encryption",
+      "label": "Encrypt starts on. Match encryption and certificate settings to your server.",
+      "path": "connector-diagnose-evidence/encryption.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 633,
+          "y": 623.53125,
+          "width": 623,
+          "height": 20
+        },
+        {
+          "x": 633,
+          "y": 655.53125,
+          "width": 623,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "save",
+      "label": "Save stores settings before diagnosis.",
+      "path": "connector-diagnose-evidence/save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1077,
+          "y": 66.25,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "bad-diagnose",
+      "label": "Choose Diagnose on the saved named instance.",
+      "path": "connector-diagnose-evidence/bad-diagnose.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 283.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "browser-failure",
+      "label": "This deliberately absent instance fails at SQL Server Browser.",
+      "path": "connector-diagnose-evidence/browser-failure.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 301.53125,
+          "width": 671,
+          "height": 109
+        }
+      ]
+    },
+    {
+      "id": "skipped",
+      "label": "Later steps are skipped after the first failure.",
+      "path": "connector-diagnose-evidence/skipped.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 410.53125,
+          "width": 671,
+          "height": 48
+        },
+        {
+          "x": 609,
+          "y": 458.53125,
+          "width": 671,
+          "height": 48
+        },
+        {
+          "x": 609,
+          "y": 506.53125,
+          "width": 671,
+          "height": 47
+        }
+      ]
+    },
+    {
+      "id": "correction",
+      "label": "Check the server and instance. Alternatively clear Instance name and enter the real fixed TCP port.",
+      "path": "connector-diagnose-evidence/correction.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 755.609375,
+          "y": 287.53125,
+          "width": 500.390625,
+          "height": 36
+        },
+        {
+          "x": 755.609375,
+          "y": 335.53125,
+          "width": 500.390625,
+          "height": 36
+        },
+        {
+          "x": 755.609375,
+          "y": 383.53125,
+          "width": 500.390625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "phone",
+      "label": "The phone diagnosis sheet wraps each step message.",
+      "path": "connector-diagnose-evidence/phone.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 38.5,
+          "y": 381.53125,
+          "width": 336.5,
+          "height": 65
+        }
+      ]
+    }
+  ]
+}

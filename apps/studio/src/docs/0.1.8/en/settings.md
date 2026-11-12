@@ -1,153 +1,293 @@
 # Settings
 
-**Settings** holds the install-wide choices an administrator makes once and then rarely touches: the version and update check, feature flags, limits, the laboratory letterhead, sync, connectors, the marketplace, roles and which extra columns the dashboard Builder may offer.
+General settings shows application information, optional capabilities and runtime limits. It also contains data-validation settings and destructive maintenance actions.
 
-This guide covers the **General** page and points you to the guide for every other page. It takes about 5 minutes.
+You need View settings to open General. Edit general settings allows numeric limits and validation changes. Manage feature flags allows optional-capability switches. Danger zone allows destructive maintenance.
 
+Use your own approved operational choices. The pictures show an isolated test installation. The destructive examples ran only against that disposable installation, after verifying its database and identity-provider ownership. No practice data is required.
 
-## Who can do what
+Use the linked pages in Settings for Laboratory, Setup checks, Connectors, Roles, Layouts and Data Exposure. This guide covers General. Read [Start here](/docs/start-here) for command-line setup.
 
-Each page in Settings has its own permission. A page you lack the permission for is not listed in the side menu.
+## Read the running version and update state
 
-| Permission | What it unlocks on General |
-| --- | --- |
-| **View settings** | Opens Settings, General and Laboratory. Shows the **About** card |
-| **Edit general settings** | The **Auto update check** switch, **Limits & tuning**, **Data validation**, and saving the Laboratory page |
-| **Manage feature flags** | The **Feature Flags** card |
-| **Danger zone** | The three reset actions. Give it to as few people as you can |
+Use this when reporting a problem or deciding whether to schedule an upgrade.
 
-A card you lack the permission for is not shown at all.
+### 1. Open Settings and General
 
-## The pages in Settings
+Open your user menu at the bottom left, choose **Settings**, then select **General**.
 
-| Page | What it is for | Guide |
-| --- | --- | --- |
-| General | Version, update check, feature flags, limits, danger zone | This page |
-| Laboratory | Letterhead on every report, default facility register, time zone | [Laboratory](/docs/laboratory) |
-| Notifications | Which notifications you receive | Not documented yet |
-| Sites | The sites this install reports for | Not documented yet |
-| Distributed sync | Link a lab to a central server. Its **Settings** tab sets the connection and direction. Its **Activity** tab shows live status and recent events | [Distributed Sync](/docs/sync) |
-| Connectors | External databases and plugin-backed integrations | [Connectors](/docs/connectors) |
-| Marketplace | Browse installable artifacts, manage registries, review installed packages | [Marketplace](/docs/marketplace) |
-| Roles | Capability-based roles and the built-in system roles | [Roles](/docs/roles) |
-| Data Exposure | Which extra table columns the dashboard Builder may offer | [Data exposure](/docs/data-exposure) |
+![Open your user menu at the bottom left.](settings-guide-user-menu.png)
 
-Settings read when the server starts, such as the public address, TLS, the database, storage and secrets, are not here. See [Environment Variables](/docs/environment).
+![Choose Settings.](settings-guide-settings-menu.png)
 
-This manual covers the pages above. A settings page not covered here is outside the current in-app documentation.
+![Select General in Settings.](settings-guide-general-page.png)
 
-## Version and update check
+### 2. Read About
 
-1. Open **Settings**. It opens on **General**.
-2. Read the **About** card. **Version** is what this install runs. The line under it, **Latest**, says where that version stands.
-3. Read **Last checked** under the **Auto update check** switch to see how old that answer is.
+Read the running **Version**, environment and configured services in About.
 
-**Expected result on a fresh install:** your version number followed by *up to date*, or *not checked yet* if the install started less than a day ago with no network.
+![About shows the running version and configured services.](settings-guide-about.png)
 
-The **Latest** line reads one of six ways:
+### 3. Read Latest
 
-| It reads | Meaning |
-| --- | --- |
-| a version and *up to date* | You run the newest release |
-| a newer version, its release date and **Release notes** | An update exists. A link to the [planned upgrade procedure](/docs/upgrading) follows |
-| *no update found* | The last check saw an older release than yours. See below |
-| *update check is off* | **Auto update check** is switched off |
-| *cannot confirm* | The last check failed, or the running version could not be read |
-| *not checked yet* | No check has run since the install started |
+Read **Latest** and the last-check time. Use available release-note and upgrade-procedure links when planning an upgrade. This page does not install updates.
 
-*No update found* means the last successful check saw an **older** release than the one you are running, so it has nothing to tell you. **No version number is shown in this case, on purpose.** A number lower than yours is not something to act on, and reading it as an instruction to downgrade would be wrong.
+![Read the Latest value and the time of the last update check.](settings-guide-update-state.png)
 
-This happens when you upgrade shortly after a release, because the check runs once a day and the answer it cached predates your own version. It corrects itself at the next check, or at once if you restart the api container.
+**Expected result:** You have the running version and the server's current update-check result.
 
-### What the update check does
+## Change automatic update checks
 
-The check is **on by default**. Once a day it fetches a small file from GitHub, with a 10-second timeout on that one request, and compares version numbers. It never downloads an image and never restarts anything. Upgrading is always something you do yourself.
+Use this when deciding whether this server should check for available releases.
 
-**What it sends:** an ordinary web request for a public file. No site name, no version, no identifier. As with any web request, the server that answers can see your network's IP address and the time you asked.
+### 1. Change Auto update check
 
-**To turn it off,** switch off **Auto update check**. The install then makes no outbound request at all, and the version line shows only what you are running. An air-gapped lab can leave it on. A failed check is silent, and the last known answer is kept. There is no command-line switch for this. It is a Studio-only setting.
+Turn **Auto update check** on or off in About. The change saves immediately.
 
-**From the command line,** `openldr update check` prints the same information:
+![Auto update check changes whether this server checks for available releases.](settings-guide-update-switch.png)
 
-```bash
-./openldr update check
-```
+### 2. Read the resulting state
 
-It exits **1** when an update is available and **0** for every other outcome, including a failed or unconfirmed check. Exit 1 means "an update exists", not an error, so a script can act on it directly. Exit **2** comes only from the check failing to run at all, for example an unreachable database, so a broken check never looks like a new release.
+When off, Latest says **update check is off**. Turning it on allows checks again. It does not upgrade the installation.
 
-## Switch on SQL widgets
+![Turning it off is reflected in Latest. It does not install an update.](settings-guide-update-off.png)
 
-Dashboard widgets written in SQL are off on a fresh install. Switch them on when someone needs one, as in [Dashboards, Example 5](/docs/dashboard#example-5-a-widget-written-in-sql).
+**Expected result:** The update-check choice is saved.
 
-1. On **General**, find **Feature Flags**.
-2. Switch on **Dashboard raw SQL**. A **Saved** message appears. Changes take effect at once, with no restart.
+## Enable or disable an optional capability
 
-**Expected result:** the widget editor in Dashboards now offers SQL. Switch it off again and SQL widgets stop running. Approved stored queries still run when it is off.
+Use this after deciding which optional capabilities the installation should offer. Read the description before changing a switch.
 
-The same from the command line:
+### 1. Change the feature flag
 
-```bash
-./openldr settings flags list
-./openldr settings flags set dashboard.raw_sql true
-```
+In **Feature Flags**, turn the required switch on or off. The example turns on **Dashboard raw SQL**.
 
-## Feature flags
+![Turn the optional capability on or off. This example enables Dashboard raw SQL.](settings-guide-flag.png)
 
-| Flag | Command-line key | Default | What it does |
-| --- | --- | --- | --- |
-| Dashboard raw SQL | `dashboard.raw_sql` | Off | Lets dashboard widgets run read-only SQL against the PostgreSQL, MySQL or SQL Server warehouse. The workflow **SQL Query** node also needs it |
-| Workflow listener triggers | `workflow.listeners_enabled` | On | Runs listener triggers (Postgres LISTEN, IMAP email polling). Off stops every listener at the next check |
-| Publish workflow datasets | `workflow.dataset_publish_enabled` | Off | Publishes workflow datasets as real tables in the Postgres warehouse, so the SQL node and dashboards can query them |
+### 2. Check the save message
 
-## Limits & tuning
+The change saves immediately. Check the **Saved** message. There is no separate Save button for feature flags.
 
-These change at once, with no restart. A value outside the allowed range is moved to the nearest end of it.
+![Feature flag changes save immediately.](settings-guide-flag-saved.png)
 
-| Limit | Command-line key | Default | Allowed range |
-| --- | --- | --- | --- |
-| Dashboard SQL timeout (ms) | `dashboard.sql_timeout_ms` | 5000 | 100 to 600000 |
-| Dashboard SQL row cap | `dashboard.sql_row_cap` | 10000 | 1 to 1000000 |
-| Marketplace max payload (bytes) | `marketplace.max_payload_bytes` | 67108864 (64 MB) | 1024 to 536870912 |
+**Expected result:** The new flag applies immediately. The example restored its original off state after capture.
 
-The row cap works two ways. Raw SQL returns at most that many rows. A Builder query counts its groups in the database first and returns an error if there are more than the cap.
+## Change a runtime limit
 
-```bash
-./openldr settings numbers list
-./openldr settings numbers set dashboard.sql_timeout_ms 10000
-```
+Use this when you need to tune an operational limit without restarting. Read the setting description and choose a value for your workload.
 
-## Danger Zone
+### 1. Enter the value
 
-The bottom of **General** holds actions that cannot be undone. They touch the internal database only. Data in the warehouse and accounts in Keycloak are never touched.
+In **Limits & tuning**, enter the intended number. The example changes **Dashboard SQL row cap** to `5000`.
 
-| Action | What it does | Command line |
-| --- | --- | --- |
-| Data validation | Sets how strict the check on incoming lab data is: Low, Medium or High. Lower stores incomplete data. Higher may refuse data that was accepted before | `./openldr settings validation set medium` |
-| Reset dashboards | Deletes every dashboard and recreates the sample | `./openldr settings danger reset-dashboards --force` |
-| Clear audit log | Deletes every audit event and the workflow run history | `./openldr settings danger clear-audit --force` |
-| Factory reset | Wipes the internal database (forms, connectors, dashboards, workflows, terminology, users, audit) and reseeds the defaults | `./openldr settings danger factory-reset --force` |
+![Enter the intended runtime limit. This example sets a row cap of 5000.](settings-guide-number-value.png)
 
-In the studio, each reset asks you to type a phrase before it runs. On the command line, each refuses to run without `--force`.
+### 2. Leave the field to save
 
-## On a phone
+Select another field or press Tab. Leaving the number field saves it. The server limits values to the accepted range.
 
-On a narrow screen the list of Settings pages moves to a row across the top. Swipe it sideways to reach the pages at the end, such as **Data Exposure**.
+![Leaving the number field saves the value.](settings-guide-number-saved.png)
+
+### 3. Check the saved value
+
+Reopen General when you need to confirm persistence. Read the value the server kept.
+
+![The saved numeric limit remains after reopening General.](settings-guide-number-reopened.png)
+
+**Expected result:** The numeric limit remains saved after reopening General.
+
+## Change incoming-data validation
+
+Use this when changing which incoming lab data the installation accepts. Raising strictness may reject previously accepted data. Lowering it permits more incomplete data.
+
+### 1. Open Data validation
+
+Scroll to **Danger Zone** and open **Data validation**.
+
+![Open Data validation in Danger Zone.](settings-guide-validation-menu.png)
+
+### 2. Choose the level
+
+Choose Low, Medium or High as required. The example changes High to **Medium**.
+
+![Choose the required level. The example changes it to Medium.](settings-guide-validation-level.png)
+
+### 3. Read the effect
+
+Read the confirmation warning for the direction of your change.
+
+![Read how the new validation strictness affects incoming data.](settings-guide-validation-warning.png)
+
+### 4. Type the confirmation phrase
+
+Enter the exact lowercase level shown in the prompt. The example types `medium`.
+
+![Type the lowercase phrase shown in the confirmation.](settings-guide-validation-phrase.png)
+
+### 5. Apply the change
+
+Select **Apply**. Select Cancel to keep the previous level.
+
+![Choose Apply to save the new strictness.](settings-guide-validation-apply.png)
+
+**Expected result:** Data validation displays the saved level.
+
+![Data validation now displays the saved Medium level.](settings-guide-validation-result.png)
+
+## Reset all dashboards to the sample
+
+Use this only when every dashboard should be removed and the built-in sample restored. This cannot be undone.
+
+### 1. Open the action dots
+
+In Danger Zone, select the dots beside **Reset dashboards**.
+
+![Open the dots beside Reset dashboards.](settings-guide-reset-dashboards-actions.png)
+
+### 2. Choose Reset
+
+Select **Reset**.
+
+![Choose Reset.](settings-guide-reset-dashboards-menu.png)
+
+### 3. Read what the action removes
+
+Check the confirmation title and warning. Cancel if the action does not match your intent.
+
+![Read what Reset dashboards removes before confirming.](settings-guide-reset-dashboards-warning.png)
+
+### 4. Type the exact phrase
+
+Enter `reset dashboards` exactly as shown.
+
+![Type the exact confirmation phrase shown by the app.](settings-guide-reset-dashboards-phrase.png)
+
+### 5. Confirm Reset
+
+Select **Reset** to perform the operation. Wait for completion.
+
+![Confirm Reset only for the intended operation.](settings-guide-reset-dashboards-confirm.png)
+
+**Expected result:** Every dashboard is deleted and the built-in sample is recreated.
+
+![The page reports completion of Reset dashboards.](settings-guide-reset-dashboards-result.png)
+
+## Clear audit events and workflow run history
+
+Use this only when the audit trail and workflow run history should be permanently removed. This cannot be undone.
+
+### 1. Open the action dots
+
+In Danger Zone, select the dots beside **Clear audit log**.
+
+![Open the dots beside Clear audit log.](settings-guide-clear-audit-actions.png)
+
+### 2. Choose Clear
+
+Select **Clear**.
+
+![Choose Clear.](settings-guide-clear-audit-menu.png)
+
+### 3. Read what the action removes
+
+Check the confirmation title and warning. Cancel if the action does not match your intent.
+
+![Read what Clear audit log removes before confirming.](settings-guide-clear-audit-warning.png)
+
+### 4. Type the exact phrase
+
+Enter `clear audit` exactly as shown.
+
+![Type the exact confirmation phrase shown by the app.](settings-guide-clear-audit-phrase.png)
+
+### 5. Confirm Clear
+
+Select **Clear** to perform the operation. Wait for completion.
+
+![Confirm Clear only for the intended operation.](settings-guide-clear-audit-confirm.png)
+
+**Expected result:** Old audit events and workflow run history are removed. The clear operation itself writes a new audit event.
+
+![The page reports completion of Clear audit log.](settings-guide-clear-audit-result.png)
+
+## Restore internal factory defaults
+
+Use this only when all internal application data should be wiped and reseeded. It removes forms, connectors, dashboards, workflows, terminology, local users, audit data and other internal records. This cannot be undone.
+
+### 1. Open the action dots
+
+In Danger Zone, select the dots beside **Factory reset**.
+
+![Open the dots beside Factory reset.](settings-guide-factory-reset-actions.png)
+
+### 2. Choose Factory reset
+
+Select **Factory reset**.
+
+![Choose Factory reset.](settings-guide-factory-reset-menu.png)
+
+### 3. Read what the action removes
+
+Check the confirmation title and warning. Cancel if the action does not match your intent.
+
+![Read what Factory reset removes before confirming.](settings-guide-factory-reset-warning.png)
+
+### 4. Type the exact phrase
+
+Enter `factory reset` exactly as shown.
+
+![Type the exact confirmation phrase shown by the app.](settings-guide-factory-reset-phrase.png)
+
+### 5. Confirm Factory reset
+
+Select **Factory reset** to perform the operation. Wait for completion.
+
+![Confirm Factory reset only for the intended operation.](settings-guide-factory-reset-confirm.png)
+
+**Expected result:** The internal database is wiped and factory defaults are reseeded. External target data and identity-provider accounts are outside this reset. Under OpenLDR's own sign-in, every account and password is removed too. Signing in again needs a new setup code from the server's command line.
+
+![The page reports completion of Factory reset.](settings-guide-factory-reset-result.png)
+
+## Read General settings on a phone
+
+Use the same General page on a phone. The page scrolls vertically.
+
+### 1. Read About
+
+Read the version and update information near the top.
+
+![Read the General information on a phone.](settings-guide-phone-about.png)
+
+### 2. Scroll to the limits
+
+Read the field description before changing a numeric limit.
+
+![Scroll to the runtime limits. The controls remain within the phone width.](settings-guide-phone-limit.png)
+
+### 3. Read Danger Zone carefully
+
+Scroll to the action and read its description before opening the dots.
+
+![Scroll to Danger Zone and read the action description before opening its dots.](settings-guide-phone-danger.png)
+
+## Optional practice
+
+Use a disposable test installation. Change one reversible flag or numeric limit, confirm it saved, then restore it. Do not practise destructive maintenance against staff data.
+
+## Limits
+
+Update checking does not install a release. Feature switches save immediately. Numeric fields save when you leave them. Destructive actions affect the internal database and cannot be undone through this page.
 
 ## Troubleshooting
 
-- **A page is missing from the side menu.** Your role lacks its permission. Ask an administrator to check your role in [Roles](/docs/roles).
-- **A card is missing from General.** Your role lacks its permission. See the table under Who can do what.
-- **The Latest line says *cannot confirm*.** The install could not reach GitHub, or the running version was unreadable. Nothing else is affected.
-- **A limit saved as a different number.** It was outside the allowed range and was moved to the nearest end.
-- **SQL widgets still refuse to run.** Check **Dashboard raw SQL** is on. Then check the widget's query is read-only.
+**A control is absent.** Check the separate permission for feature flags, general edits or Danger Zone actions.
+
+**A numeric value changed after saving.** The server clamps it to the accepted range. Read the saved value.
+
+**A confirmation stays disabled.** Type the exact phrase displayed by the prompt.
+
+**Latest cannot confirm an update.** Read the displayed last-check error and resolve the server's outbound connection before relying on the result.
 
 ## Related guides
 
-- [Laboratory](/docs/laboratory)
-- [Data exposure](/docs/data-exposure)
-- [Roles](/docs/roles)
-- [Distributed Sync](/docs/sync)
-- [Connectors](/docs/connectors)
-- [Marketplace](/docs/marketplace)
-- [Environment Variables](/docs/environment)
-- [Planned upgrades](/docs/upgrading)
+Read [Setup checks](/docs/setup-checks) for readiness and [Laboratory](/docs/laboratory) for issuing-lab details. Read [Audit](/docs/audit) to inspect recorded administration actions.

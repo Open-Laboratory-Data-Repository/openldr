@@ -1,0 +1,19 @@
+{
+  "status": 400,
+  "body": {
+    "error": "[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"null\",\n    \"path\": [\n      \"summaryMetrics\"\n    ],\n    \"message\": \"Expected array, received null\"\n  },\n  {\n    \"code\": \"invalid_union\",\n    \"unionErrors\": [\n      {\n        \"issues\": [\n          {\n            \"code\": \"invalid_type\",\n            \"expected\": \"object\",\n            \"received\": \"null\",\n            \"path\": [\n              \"chart\"\n            ],\n            \"message\": \"Expected object, received null\"\n          }\n        ],\n        \"name\": \"ZodError\"\n      },\n      {\n        \"issues\": [\n          {\n            \"code\": \"invalid_type\",\n            \"expected\": \"object\",\n            \"received\": \"null\",\n            \"path\": [\n              \"chart\"\n            ],\n            \"message\": \"Expected object, received null\"\n          }\n        ],\n        \"name\": \"ZodError\"\n      },\n      {\n        \"issues\": [\n          {\n            \"code\": \"invalid_type\",\n            \"expected\": \"object\",\n            \"received\": \"null\",\n            \"path\": [\n              \"chart\"\n            ],\n            \"message\": \"Expected object, received null\"\n          }\n        ],\n        \"name\": \"ZodError\"\n      },\n      {\n        \"issues\": [\n          {\n            \"code\": \"invalid_type\",\n            \"expected\": \"object\",\n            \"received\": \"null\",\n            \"path\": [\n              \"chart\"\n            ],\n            \"message\": \"Expected object, received null\"\n          }\n        ],\n        \"name\": \"ZodError\"\n      }\n    ],\n    \"path\": [\n      \"chart\"\n    ],\n    \"message\": \"Invalid input\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"object\",\n    \"received\": \"null\",\n    \"path\": [\n      \"paramOptions\"\n    ],\n    \"message\": \"Expected object, received null\"\n  }\n]"
+  },
+  "record": {
+    "id": "r-docs-guide-unpublish",
+    "name": "Disposable report for unpublish",
+    "description": "Fictional documentation review entry",
+    "category": "operational",
+    "designId": "rt-1794493167238",
+    "primaryQueryId": "cq_31b5475a",
+    "summaryMetrics": null,
+    "chart": null,
+    "paramOptions": null,
+    "status": "published"
+  },
+  "note": "Actual UI request. No app fix or fixture normalization applied."
+}

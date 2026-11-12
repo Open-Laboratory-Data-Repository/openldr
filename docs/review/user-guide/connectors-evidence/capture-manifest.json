@@ -1,0 +1,577 @@
+{
+  "capturedAt": "2026-11-12T13:53:12.617Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5189/studio/settings/connectors",
+  "steps": [
+    {
+      "id": "open",
+      "label": "Open Settings, then Connectors.",
+      "path": "connectors-evidence/open.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 300,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "actions",
+      "label": "The page dots menu contains Add connector.",
+      "path": "connectors-evidence/actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 117,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "add",
+      "label": "Choose Add connector.",
+      "path": "connectors-evidence/add.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 158,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "name",
+      "label": "Use a name that identifies the database and its purpose.",
+      "path": "connectors-evidence/name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 717.5,
+          "y": 143.53125,
+          "width": 538.5,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "host-option",
+      "label": "Choose Host for built-in database, email or file connections.",
+      "path": "connectors-evidence/host-option.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 722.5,
+          "y": 264.5,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "type",
+      "label": "Choose the real service type. This example uses Postgres.",
+      "path": "connectors-evidence/type.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 739.296875,
+          "y": 239.53125,
+          "width": 516.703125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "address",
+      "label": "Enter the host, port and database reachable from the OpenLDR server.",
+      "path": "connectors-evidence/address.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 739.296875,
+          "y": 287.53125,
+          "width": 516.703125,
+          "height": 36
+        },
+        {
+          "x": 739.296875,
+          "y": 335.53125,
+          "width": 516.703125,
+          "height": 36
+        },
+        {
+          "x": 739.296875,
+          "y": 383.53125,
+          "width": 516.703125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "account",
+      "label": "Use the database account permitted to read the required data.",
+      "path": "connectors-evidence/account.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 739.296875,
+          "y": 431.53125,
+          "width": 516.703125,
+          "height": 36
+        },
+        {
+          "x": 739.296875,
+          "y": 479.53125,
+          "width": 516.703125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "ssl",
+      "label": "Match Use SSL to your database. The isolated example has no SSL.",
+      "path": "connectors-evidence/ssl.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 633,
+          "y": 527.53125,
+          "width": 623,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "sheet-actions",
+      "label": "Open the connector sheet dots menu.",
+      "path": "connectors-evidence/sheet-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1200,
+          "y": 25.265625,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "save",
+      "label": "Save stores the connector and encrypted credentials.",
+      "path": "connectors-evidence/save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1077,
+          "y": 66.25,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "created",
+      "label": "The saved row shows the name, type, allowed plugin host and enabled state.",
+      "path": "connectors-evidence/created.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 198,
+          "width": 832,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "test",
+      "label": "Test connection checks the saved credentials.",
+      "path": "connectors-evidence/test.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 251.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "test-result",
+      "label": "Connection OK confirms this server can connect using the saved account.",
+      "path": "connectors-evidence/test-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1158.15625,
+          "y": 246.5,
+          "width": 105.84375,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "edit",
+      "label": "Edit opens the saved ordinary settings.",
+      "path": "connectors-evidence/edit.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 347.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "stored",
+      "label": "Ordinary fields are visible. A stored password remains blank.",
+      "path": "connectors-evidence/stored.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 739.296875,
+          "y": 287.53125,
+          "width": 516.703125,
+          "height": 36
+        },
+        {
+          "x": 739.296875,
+          "y": 479.53125,
+          "width": 516.703125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "save-kept",
+      "label": "Save with the password blank keeps the stored password.",
+      "path": "connectors-evidence/save-kept.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1077,
+          "y": 66.25,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "search",
+      "label": "Search matches connector name, type and host.",
+      "path": "connectors-evidence/search.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 464,
+          "y": 117,
+          "width": 240,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "toggle",
+      "label": "Enabled can temporarily prevent use of this connector.",
+      "path": "connectors-evidence/toggle.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1069.1875,
+          "y": 214.5,
+          "width": 36,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "disabled",
+      "label": "An off switch marks the connector disabled.",
+      "path": "connectors-evidence/disabled.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1069.1875,
+          "y": 214.5,
+          "width": 36,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "remove",
+      "label": "Remove deletes the connector and its stored credentials.",
+      "path": "connectors-evidence/remove.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 379.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "remove-confirm",
+      "label": "Check the connector name before confirming removal.",
+      "path": "connectors-evidence/remove-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 285.734375,
+          "width": 448,
+          "height": 228.53125
+        }
+      ]
+    },
+    {
+      "id": "phone-list",
+      "label": "At phone width the name, type, switch and row dots fit.",
+      "path": "connectors-evidence/phone-list.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 0,
+          "y": 343,
+          "width": 375,
+          "height": 85
+        }
+      ]
+    },
+    {
+      "id": "phone-edit",
+      "label": "The edit sheet fills the phone viewport.",
+      "path": "connectors-evidence/phone-edit.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 168.796875,
+          "y": 175.53125,
+          "width": 182.203125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "open-user-menu",
+      "label": "Open your user menu at the bottom left.",
+      "path": "connectors-evidence/open-user-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 755.5,
+          "width": 223,
+          "height": 36.5
+        }
+      ]
+    },
+    {
+      "id": "settings-menu",
+      "label": "Choose Settings in your user menu.",
+      "path": "connectors-evidence/settings-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 13,
+          "y": 682.5,
+          "width": 198,
+          "height": 32
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Data design</span><span>Bind query output to printable pages</span><span>About 30 minutes</span></div>
+<h1>Report Designer</h1>
+<p>Use Report Designer to arrange printable elements, bind them to saved Custom Queries and create reports for the library. A design controls the page. A query supplies rows. Template parameters define the filters people enter when running a report.</p>
+<p>Start with your own saved query and intended page layout. No documentation sample data is required. The pictures use a zero-request reporting query in a separate test installation. Optional practice is at the end.</p>
+<p>You need <strong>Edit report templates</strong> to create, edit and publish designs. <strong>View reports</strong> opens the library, and <strong>Run reports</strong> executes its entries.</p>
+<p>Publishing a design revision and creating a library report are separate actions. Save the new design before either action.</p>
+<h2 id="dg-read">Inspect an existing report design</h2>
+<p>Use this to understand the connection between an existing table, its query and the filters the report exposes.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Report Designer</h3><p>Select Report Designer in the main menu.</p>__SHOT:open-page:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose a template</h3><p>Select an existing entry in Templates. The example opens Test Volume Over Time.</p>__SHOT:existing-template:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Select its table</h3><p>Select the table element on the printable page.</p>__SHOT:existing-table:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Read its Data settings</h3><p>Select Data in the right inspector. Check Bind query and the template Parameters below it.</p>__SHOT:existing-data-tab:4____SHOT:existing-binding:4__</section>
+<h2 id="dg-create">Create a separate table design</h2>
+<p>Use a new design for your report rather than changing a shared built-in definition.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose New template</h3><p>Open More actions above the canvas and select New template. The empty designer also offers New template.</p>__SHOT:actions:1____SHOT:new-template:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Name the design</h3><p>Enter a clear Report name, such as Request summary design.</p>__SHOT:design-name:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Insert a table</h3><p>Open More actions, point at Insert and select Table.</p>__SHOT:insert:3____SHOT:insert-table:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Select the table</h3><p>The inserted Table is selected. Drag it to the intended position and use its resize handles when you need another size. The example keeps its initial position.</p>__SHOT:new-table:4__</section>
+<h2 id="dg-bind">Choose the table query</h2>
+<p>Use a saved query that returns the intended columns. When that query has parameters, define matching template defaults before loading columns.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Data</h3><p>With the table selected, select Data in the inspector.</p>__SHOT:new-data-tab:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Bind the saved query</h3><p>Open Bind query and choose your Custom Query. The example uses Request count for reporting, with two required Text query parameters named from and to.</p>__SHOT:bind-query:2__</section>
+<h2 id="dg-parameters">Define the report filter and preview defaults</h2>
+<p>For Reports, the current date-range filter passes flat from and to values. The example query declares those as two required Text parameters. The template provides one Date range control. A workbench query declaring one daterange parameter currently fails when bound directly to Reports.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Add a template parameter</h3><p>Select Add parameter below the binding settings.</p>__SHOT:add-parameter:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Match the query key</h3><p>Set a unique template Key, such as period. This date-range control supplies the from and to values used by the reporting query.</p>__SHOT:parameter-key:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose the visible label</h3><p>Set Label to what people should see, such as Period.</p>__SHOT:parameter-label:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Match the parameter type</h3><p>Set Type to Date range. The reporting query itself uses two Text parameters named from and to.</p>__SHOT:parameter-type:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Set the default start</h3><p>Enter the default first included date. The example uses 2026-01-01.</p>__SHOT:parameter-from:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Set the default end</h3><p>Enter the default last included date. The example uses 2027-01-01. The reporting query includes the full end day, matching the report calendar and scheduler. These are preview defaults; report users can choose other values.</p>__SHOT:parameter-to:6__</section>
+<h2 id="dg-columns">Choose and preview the printed column</h2>
+<p>Load columns uses the template defaults to run the bound query. The count query returns a requests column even when the warehouse contains no requests.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Load the query columns</h3><p>Select Load columns. Read an error if the query or parameter defaults are invalid.</p>__SHOT:load-columns:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Include the column</h3><p>Tick requests to include it in the table. Choose the actual output columns needed by your own report.</p>__SHOT:include-column:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Set its printed label</h3><p>Enter a readable column label, such as Requests. This changes the printed label, not the query field.</p>__SHOT:column-label:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Load the page data</h3><p>Select Load pages above the canvas. It runs the bound data and calculates a physical page count.</p>__SHOT:load-pages:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Show loaded data</h3><p>Select Show data. Reload pages after edits when the count is stale.</p>__SHOT:show-data:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The table shows the real count. This installation prints one Requests column containing zero.</p></div>
+__SHOT:bound-result:0__
+<h2 id="dg-preview">Save and inspect the PDF</h2>
+<p>Save a new design explicitly. Then check the actual rendered page before publishing it.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Save the design</h3><p>Open More actions and select Save. Wait for Saved. After the first save, later edits also autosave.</p>__SHOT:save:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Preview</h3><p>Open More actions and select Preview.</p>__SHOT:preview:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check and download the rendered page</h3><p>Read the PDF preview and use Download when you need a local copy. Close the preview to return to editing.</p>__SHOT:preview-result:3____SHOT:preview-download:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The preview renders the current working design with query data. A draft design carries a DRAFT stamp.</p></div>
+<h2 id="dg-publish">Publish a saved revision</h2>
+<p>Publish after checking the saved design. A revision records the published state; it does not add a Reports library entry.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Publish the revision</h3><p>Open More actions and select Publish revision. Save first if the designer asks.</p>__SHOT:publish:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the published status</h3><p>Check the Published status beside the design name.</p>__SHOT:published:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The saved design has a published revision.</p></div>
+<h2 id="dg-versions">Inspect published versions</h2>
+<p>Use this to identify the saved revision before considering a restore.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Versions</h3><p>Open More actions and select Versions.</p>__SHOT:versions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read the revision row</h3><p>Check its version, publication time and publisher. Restore loads that snapshot into the working copy as an edit. It does not publish another revision. Close the sheet if no restore is needed.</p>__SHOT:version-row:2__</section>
+<h2 id="dg-library">Create the report library entry</h2>
+<p>Use this after the design and query are ready. The library report can have a different name from its design.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Create report from this design</h3><p>Open More actions and select Create report from this design.</p>__SHOT:create-report:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Name the report</h3><p>Enter the library Name. The example uses Request summary report.</p>__SHOT:report-name:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose its category</h3><p>Open Category and choose the category where people should find it, such as Operational.</p>__SHOT:report-category:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check the linked definitions</h3><p>Confirm Template and Primary query. The template controls Document layout; the primary query supplies Spreadsheet rows.</p>__SHOT:report-template:4____SHOT:report-query:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Create the library entry</h3><p>Open the sheet's Actions dots and select Create report.</p>__SHOT:report-actions:5____SHOT:report-create:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The named entry is available under its category in Reports. Open its Parameters and run it there. <a href="reports-review.html">Reports</a> covers that workflow.</p></div>
+<h2 id="dg-export">Export directly from the designer</h2>
+<p>Use these exports when you need output from the current design without opening its library report.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Export PDF</h3><p>Open More actions, point at Export and select PDF.</p>__SHOT:export-pdf:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Export Excel</h3><p>Open More actions, point at Export and select Excel. Bound table rows become workbook data.</p>__SHOT:export-excel:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The browser downloads the rendered PDF or workbook.</p></div>
+<h2 id="dg-layers">Control element visibility and locking</h2>
+<p>Layers provides direct controls for selected elements. Hiding affects output. Locking prevents movement.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Layers</h3><p>Select Layers in the inspector.</p>__SHOT:layers:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Hide an element when intended</h3><p>Use Hide Table, the eye control, for the selected table. Hidden elements do not appear in the canvas or PDF.</p>__SHOT:hide-layer:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Show it again</h3><p>Use Show Table to restore it.</p>__SHOT:show-layer:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Lock its position</h3><p>Use Lock Table to prevent movement while keeping it selectable.</p>__SHOT:lock-layer:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Unlock it again</h3><p>Use Unlock Table when you intend to move it. The review leaves the table visible and unlocked.</p>__SHOT:unlock-layer:5__</section>
+<h2 id="dg-phone">Inspect an existing design on a phone</h2>
+<p>Use a large screen for building page layouts. On a phone, find and inspect an existing template, or run its report in Reports.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Expand the Explorer</h3><p>Select Expand explorer on its narrow rail.</p>__SHOT:phone-explorer:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the existing template</h3><p>Select its name, then collapse the Explorer when you need canvas space.</p>__SHOT:phone-template:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open its actions</h3><p>Use More actions to inspect the available operations. Make layout edits on a larger screen.</p>__SHOT:phone-actions:3__</section>
+<h2 id="dg-layout">Choose page elements and layout tools</h2>
+<p>Insert also offers Text, Letterhead, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date, Cell grid and Chart. Select an element to edit its Properties. The one-table task above does not require those extra elements.</p>
+<p>Properties controls paper size, orientation and page numbers when no element is selected. It also controls element position, dimensions and appearance. Undo and Redo step through edits; zoom changes only your view.</p>
+<p>For a Chart or Cell grid, bind a query in Data and choose the corresponding label, value or cell columns in Properties. Check the rendered output with your own rows.</p>
+<p>Flow settings can place one element below another or control repeated content on continuation pages. Load pages after changing layout to check the physical page count. Show data displays only rows that fit the canvas page.</p>
+<h2 id="dg-content">Keep report text and query fields separate</h2>
+<p>A printed column label can differ from the query field name. Use the Data tab label fields for the visible wording. Keep binding keys matched to actual query output.</p>
+<p>The Print language selector in Properties edits one language's report text. Empty translations fall back to authored text. Query output itself is not translated by changing the design language.</p>
+<p>A Letterhead uses laboratory identity configured in Settings. It can give several designs the same logo, name and contact band.</p>
+<h2 id="dg-manage">Manage designs carefully</h2>
+<p>More actions includes Duplicate and Delete. Duplicate starts a separate design for a variation. Delete permanently removes a design after confirmation; check linked reports first.</p>
+<p>Versions Restore changes the working copy and can be undone. Preview the restored design before publishing deliberately. Publishing another revision does not require another library report for the same design.</p>
+<p>Create report from this design adds a separate library entry. It does not replace Publish revision. A published design absent from Reports still needs the library-creation step.</p>
+<h2 id="dg-practice">Optional practice reference</h2>
+<p><a href="report-designer-evidence/report-count-query.json" download>Download the optional reporting count query</a>. Import it through Query if you want a reference. It uses required Text parameters named from and to, which match Reports' current date-range input. It needs no patient sample data. Use your own approved query for normal reporting.</p>
+<p><a href="report-designer-evidence/published-summary.pdf" download>Download the actual published review PDF</a> or <a href="report-designer-evidence/summary-design.xlsx" download>its exported workbook</a> to compare the one-column result. These files contain only a zero count.</p>
+<h2 id="dg-help">Troubleshooting</h2>
+<p><strong>No columns appear.</strong> Choose Bind query, configure needed template defaults and select Load columns.</p>
+<p><strong>The canvas remains empty.</strong> Include at least one bound column, then Load pages and Show data. Read query errors before changing the layout.</p>
+<p><strong>The save status shows an error.</strong> Resolve it before publishing. A new template needs an explicit first Save.</p>
+<p><strong>Create report is unavailable.</strong> Save the design, then fill Name, Category, Template and Primary query in the New report sheet.</p>
+<p><strong>Preview and output differ from expected rows.</strong> Match template keys to query parameter identifiers and check the defaults and SQL date boundaries. The reporting example includes both calendar endpoints.</p>
+<p><strong>A table prints across several pages.</strong> Data can continue beyond the first page. Load pages and inspect the PDF to check the actual count.</p>
+<p><strong>Reports says required parameter: period.</strong> A Custom Query declaring one daterange parameter works in Query but currently receives no nested range from Reports. Use the reporting pattern of two Text query parameters named from and to, referenced by the SQL. Do not assume a successful designer preview proves a library run.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="query-review.html">Query</a> creates saved data queries. <a href="reports-review.html">Reports</a> runs library entries and schedules output. <a href="laboratory-review.html">Laboratory</a> configures shared identity values.</p>
+</article>

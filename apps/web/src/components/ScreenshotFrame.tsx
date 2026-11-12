@@ -1,3 +1,4 @@
+import { useWebsiteTheme } from './useWebsiteTheme';
 import { screenshotUrl } from '@/landing/screenshots';
 import { cn } from '@/lib/cn';
 
@@ -30,7 +31,10 @@ export function ScreenshotFrame({
   chrome = false,
   className,
 }: ScreenshotFrameProps) {
-  const url = screenshotUrl(name);
+  const theme = useWebsiteTheme();
+  const darkUrl = screenshotUrl(name);
+  const lightUrl = screenshotUrl(name.replace(/\.png$/, '-light.png'));
+  const url = theme === 'light' && lightUrl ? lightUrl : darkUrl;
 
   if (!url) {
     return (

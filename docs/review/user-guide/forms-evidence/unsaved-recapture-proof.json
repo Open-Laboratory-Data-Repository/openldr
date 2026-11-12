@@ -1,0 +1,6 @@
+{
+  "phase": "pack-evidence",
+  "persisted": false,
+  "submitted": false,
+  "purpose": "Capture the initial field labels on an unsaved prototype. Existing stored workflow proofs are separate."
+}

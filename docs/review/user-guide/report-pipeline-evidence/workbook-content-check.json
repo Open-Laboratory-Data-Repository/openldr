@@ -1,0 +1,15 @@
+{
+  "file": "generated-request-summary.xlsx",
+  "rows": [
+    [
+      "Requests"
+    ],
+    [
+      0
+    ]
+  ],
+  "filter": {
+    "ref": "A1:A2"
+  },
+  "result": "Header Requests and numeric zero verified in generated workbook."
+}

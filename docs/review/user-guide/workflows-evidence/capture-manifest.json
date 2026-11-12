@@ -1,0 +1,868 @@
+{
+  "capturedAt": "2026-11-12T13:52:11.675Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5187/studio/workflows",
+  "steps": [
+    {
+      "id": "open-page",
+      "label": "Open Workflows from the main menu.",
+      "path": "workflows-evidence/open-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 216,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "search",
+      "label": "Search filters the workflow names.",
+      "path": "workflows-evidence/search.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 56,
+          "width": 288,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "ingest-row",
+      "label": "Open the shipped Ingest workflow.",
+      "path": "workflows-evidence/ingest-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 157.5,
+          "width": 38.140625,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "fit",
+      "label": "Fit view brings the nodes into the canvas.",
+      "path": "workflows-evidence/fit.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 544,
+          "y": 758,
+          "width": 26,
+          "height": 26
+        }
+      ]
+    },
+    {
+      "id": "trigger",
+      "label": "Select the webhook trigger Ingest received.",
+      "path": "workflows-evidence/trigger.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 562,
+          "y": 434.5377197265625,
+          "width": 40.1201171875,
+          "height": 56.0589599609375
+        }
+      ]
+    },
+    {
+      "id": "configure",
+      "label": "Configure opens the selected node settings.",
+      "path": "workflows-evidence/configure.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 552.1651000976562,
+          "y": 396.5377502441406,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "replace-secret",
+      "label": "Replace secret generates a value you must copy before saving.",
+      "path": "workflows-evidence/replace-secret.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1155.28125,
+          "y": 638.71875,
+          "width": 108.71875,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "copy-secret",
+      "label": "Copy the new secret before saving. The saved value cannot be revealed.",
+      "path": "workflows-evidence/copy-secret.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 640.71875,
+          "width": 170.28125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "save",
+      "label": "Save stores the workflow and its new secret.",
+      "path": "workflows-evidence/save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1115.3125,
+          "y": 85.5,
+          "width": 73.359375,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "id": "confirm-save",
+      "label": "System workflows require an explicit Save anyway confirmation.",
+      "path": "workflows-evidence/confirm-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 723.71875,
+          "y": 473.265625,
+          "width": 115.28125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "saved",
+      "label": "The workflow saved message confirms this write.",
+      "path": "workflows-evidence/saved.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 940,
+          "y": 739.5,
+          "width": 98.484375,
+          "height": 19.5
+        }
+      ]
+    },
+    {
+      "id": "history",
+      "label": "History lists real workflow runs and accepted webhook receipts.",
+      "path": "workflows-evidence/history.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1023.96875,
+          "y": 85.5,
+          "width": 83.34375,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "id": "run-row",
+      "label": "Select the completed webhook run.",
+      "path": "workflows-evidence/run-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 681,
+          "y": 195.53125,
+          "width": 599,
+          "height": 46.5
+        }
+      ]
+    },
+    {
+      "id": "run-result",
+      "label": "The completed run shows which branch handled this Bundle.",
+      "path": "workflows-evidence/run-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 697,
+          "y": 179.53125,
+          "width": 80.03125,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "run-node",
+      "label": "Select a node execution to inspect its data.",
+      "path": "workflows-evidence/run-node.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 681,
+          "y": 449.65625,
+          "width": 599,
+          "height": 47.28125
+        }
+      ]
+    },
+    {
+      "id": "run-output",
+      "label": "Output contains the data passed on by the selected node.",
+      "path": "workflows-evidence/run-output.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 697,
+          "y": 552.71875,
+          "width": 45.03125,
+          "height": 25.5
+        }
+      ]
+    },
+    {
+      "id": "receipts",
+      "label": "Webhook receipts shows the accepted request and its final status.",
+      "path": "workflows-evidence/receipts.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 681,
+          "y": 252.53125,
+          "width": 599,
+          "height": 216
+        }
+      ]
+    },
+    {
+      "id": "list-actions",
+      "label": "Open Workflow actions to create or import.",
+      "path": "workflows-evidence/list-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 56,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "new",
+      "label": "New opens an empty canvas.",
+      "path": "workflows-evidence/new.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1113,
+          "y": 97,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "name",
+      "label": "Name the workflow before saving it.",
+      "path": "workflows-evidence/name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 83.5,
+          "width": 207,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "find-manual",
+      "label": "Search the Node library for Manual Trigger.",
+      "path": "workflows-evidence/find-manual.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 214.90625,
+          "width": 263,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "manual-card",
+      "label": "Drag Manual Trigger onto the canvas.",
+      "path": "workflows-evidence/manual-card.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 248,
+          "y": 296.90625,
+          "width": 271,
+          "height": 42.125
+        }
+      ]
+    },
+    {
+      "id": "sql-card",
+      "label": "Drag SQL Query to the right of the trigger.",
+      "path": "workflows-evidence/sql-card.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 248,
+          "y": 296.90625,
+          "width": 271,
+          "height": 42.125
+        }
+      ]
+    },
+    {
+      "id": "connect",
+      "label": "Connect the trigger output on its right to SQL Query input on its left.",
+      "path": "workflows-evidence/connect.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 886.375,
+          "y": 448.5,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "sql",
+      "label": "Use a read-only query against the reporting schema.",
+      "path": "workflows-evidence/sql.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1007.234375,
+          "y": 346.21875,
+          "width": 255.765625,
+          "height": 41.59375
+        }
+      ]
+    },
+    {
+      "id": "save-new",
+      "label": "Save creates the named workflow.",
+      "path": "workflows-evidence/save-new.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1115.3125,
+          "y": 85.5,
+          "width": 73.359375,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "id": "run",
+      "label": "Run arms the manual trigger.",
+      "path": "workflows-evidence/run.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1196.671875,
+          "y": 86.5,
+          "width": 67.328125,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "fire-trigger",
+      "label": "Select the play badge on the manual trigger to start execution.",
+      "path": "workflows-evidence/fire-trigger.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 718.375,
+          "y": 351,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "completed",
+      "label": "A successful run ends with Completed.",
+      "path": "workflows-evidence/completed.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 649.125,
+          "y": 759,
+          "width": 98.03125,
+          "height": 22
+        }
+      ]
+    },
+    {
+      "id": "sql-output",
+      "label": "The output contains the live request count, which can be zero.",
+      "path": "workflows-evidence/sql-output.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1056.59375,
+          "y": 301.609375,
+          "width": 72.25,
+          "height": 14
+        }
+      ]
+    },
+    {
+      "id": "row-actions",
+      "label": "Each workflow row has its own actions menu.",
+      "path": "workflows-evidence/row-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 263.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "export",
+      "label": "Export downloads the workflow definition as JSON.",
+      "path": "workflows-evidence/export.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 368.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-search",
+      "label": "Search workflows on a phone.",
+      "path": "workflows-evidence/phone-search.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 12,
+          "y": 56,
+          "width": 288,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-open",
+      "label": "Open an existing workflow from its row.",
+      "path": "workflows-evidence/phone-open.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 16,
+          "y": 157.5,
+          "width": 38.140625,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "duplicate",
+      "label": "Duplicate creates a separate workflow copy.",
+      "path": "workflows-evidence/duplicate.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 336.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "duplicate-result",
+      "label": "The separate copy has its own row.",
+      "path": "workflows-evidence/duplicate-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 328.5,
+          "width": 178.453125,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "delete",
+      "label": "Delete is available for custom workflows.",
+      "path": "workflows-evidence/delete.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 457.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "delete-confirm",
+      "label": "Confirm only the custom workflow copy you mean to remove.",
+      "path": "workflows-evidence/delete-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 766.53125,
+          "y": 443.265625,
+          "width": 72.46875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "delete-result",
+      "label": "The original workflow remains after deleting its copy.",
+      "path": "workflows-evidence/delete-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 271.5,
+          "width": 135.671875,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "import",
+      "label": "Import reads a previously exported definition.",
+      "path": "workflows-evidence/import.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1113,
+          "y": 129,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-result",
+      "label": "Import adds another custom definition. It does not run it.",
+      "path": "workflows-evidence/import-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 328.5,
+          "width": 135.671875,
+          "height": 16
+        }
+      ]
+    }
+  ]
+}

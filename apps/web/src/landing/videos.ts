@@ -18,9 +18,9 @@ import workflowsVideo from './videos/workflows.mp4?url';
 import workflowsPoster from './videos/workflows.jpg?url';
 
 export interface ProductVideo {
-  name: string;
+  name: 'dashboard' | 'query' | 'report-designer' | 'forms' | 'terminology' | 'national-codes' | 'workflows';
   label: string;
-  /** What the video shows, for the poster's alt text. */
+  /** What the video shows, for the thumbnail's accessible description. */
   description: string;
   video: string;
   poster: string;

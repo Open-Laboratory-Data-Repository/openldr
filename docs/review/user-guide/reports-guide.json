@@ -1,0 +1,612 @@
+{
+  "title": "Reports",
+  "meta": [
+    "Daily work",
+    "Run, export and schedule reports",
+    "About 30 minutes"
+  ],
+  "intro": [
+    "Use Reports to run a library entry with filters, read its Document or Spreadsheet, export output and inspect its history. A schedule saves an output file for a reporting period. It does not email that file.",
+    "Start with a report suited to your own received data. No documentation sample data is required. The pictures use the Request summary report created in Report Designer. Its test warehouse has zero requests, so the query returns one row containing zero.",
+    "You need <strong>View reports</strong> to open the library, <strong>Run reports</strong> to execute entries and <strong>Export reports</strong> to download outputs. <strong>Edit report templates</strong> permits schedule management, Edit template and report-management actions.",
+    "To add a library report, save a design and use Create report from this design in <a href=\"report-designer-review.html\">Report Designer</a>. Publish revision alone does not add a library entry."
+  ],
+  "tasks": [
+    {
+      "id": "find",
+      "title": "Find and open a report",
+      "intro": [
+        "Use the report name and category to choose the intended entry before setting filters."
+      ],
+      "steps": [
+        [
+          "Open Reports",
+          "Select Reports in the main menu.",
+          [
+            "open-page"
+          ]
+        ],
+        [
+          "Search the library",
+          "Enter part of the report name in Search reports. Clear it to restore the full library.",
+          [
+            "search"
+          ]
+        ],
+        [
+          "Select the report",
+          "Select its name under the category. The example is Request summary report under Operational.",
+          [
+            "select-report"
+          ]
+        ],
+        [
+          "Open its actions",
+          "Select Actions beside the selected report heading.",
+          [
+            "report-actions"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "run",
+      "title": "Choose filters and run the report",
+      "intro": [
+        "Choose dates and other filters that answer your reporting question. The query behind the example includes both selected calendar endpoints."
+      ],
+      "steps": [
+        [
+          "Open Parameters",
+          "Choose Parameters from the selected report Actions menu.",
+          [
+            "first-parameters"
+          ]
+        ],
+        [
+          "Open the date range",
+          "Select the Period control. Other reports may call this Date range or use different filters.",
+          [
+            "first-period"
+          ]
+        ],
+        [
+          "Choose the reporting dates",
+          "Choose a preset, such as This year, or use the month and year selectors and calendar to pick dates. Complete other required filters.",
+          [
+            "first-preset"
+          ]
+        ],
+        [
+          "Run the report",
+          "Select Run in the parameter sheet. Wait for the completed result.",
+          [
+            "first-run"
+          ]
+        ]
+      ],
+      "result": "Document renders the report with the selected values. The zero in this example is a valid query result.",
+      "resultShots": [
+        "document"
+      ]
+    },
+    {
+      "id": "download",
+      "title": "Download the document and spreadsheet",
+      "intro": [
+        "Use Document for the printable layout and Spreadsheet for exact query rows. Their column labels can differ because a design can relabel printed columns."
+      ],
+      "steps": [
+        [
+          "Download the PDF",
+          "In Document, use Download to save the PDF. Page arrows and zoom change your view.",
+          [
+            "pdf-download"
+          ]
+        ],
+        [
+          "Open Spreadsheet",
+          "Select Spreadsheet above the result.",
+          [
+            "spreadsheet-tab"
+          ]
+        ],
+        [
+          "Check the row values",
+          "Read the column labels and actual cells before exporting. The example shows requests equal to zero.",
+          [
+            "spreadsheet-result"
+          ]
+        ],
+        [
+          "Export CSV when you need the query output",
+          "Select Export CSV. It re-runs the report query with the parameters that produced the displayed run. Spreadsheet filters and sorting do not apply to CSV. Source changes since the run can affect the file.",
+          [
+            "export-csv"
+          ]
+        ],
+        [
+          "Export the filtered rows as XLSX",
+          "Select Export XLSX. It uses the loaded result with Spreadsheet filters and sorting across all pages. It includes all result columns, including fields hidden on screen.",
+          [
+            "export-xlsx"
+          ]
+        ]
+      ],
+      "result": "The browser downloads the chosen format. Choose the export whose row behavior matches your task.",
+      "resultShots": []
+    },
+    {
+      "id": "table",
+      "title": "Filter and arrange Spreadsheet rows",
+      "intro": [
+        "These controls change the loaded Spreadsheet view. They do not change the report definition or the Document layout."
+      ],
+      "steps": [
+        [
+          "Add a filter",
+          "Select Filter, then Add filter.",
+          [
+            "filter-add"
+          ]
+        ],
+        [
+          "Choose the column",
+          "Select the result column to filter. The example has one requests column.",
+          [
+            "filter-column"
+          ]
+        ],
+        [
+          "Set the rule value",
+          "Choose an operator and enter its value. The example uses Equals and 0.",
+          [
+            "filter-value"
+          ]
+        ],
+        [
+          "Apply the rule",
+          "Select Apply to update the shown rows.",
+          [
+            "filter-apply"
+          ]
+        ],
+        [
+          "Add a sort",
+          "Select Sort, then Add sort and choose a result column.",
+          [
+            "sort-add"
+          ]
+        ],
+        [
+          "Choose the direction",
+          "Use Asc or Desc and select Apply. This example has one row, so its order does not visibly change.",
+          [
+            "sort-order"
+          ]
+        ],
+        [
+          "Choose visible columns",
+          "Open Columns and use its checkboxes. The last visible column cannot be hidden. Close the menu when finished.",
+          [
+            "columns",
+            "column-options"
+          ]
+        ],
+        [
+          "Reset or use the pages",
+          "Reset clears the table rules and column changes. Use Rows per page and the arrows when the result spans more than one page.",
+          [
+            "reset-table",
+            "pagination"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "refresh",
+      "title": "Refresh a displayed result",
+      "intro": [
+        "Use this after data changes when you want the same reporting question run again."
+      ],
+      "steps": [
+        [
+          "Choose Refresh",
+          "Open the selected report Actions menu and choose Refresh. It uses the values that produced the displayed result, even if you have an unfinished parameter edit.",
+          [
+            "refresh"
+          ]
+        ]
+      ],
+      "result": "The query runs again. The new count may match the earlier count.",
+      "resultShots": []
+    },
+    {
+      "id": "history",
+      "title": "Inspect interactive run history",
+      "intro": [
+        "Use history to identify when a report was run or downloaded and which parameter values belonged to that run."
+      ],
+      "steps": [
+        [
+          "Open Run History",
+          "Open report Actions and choose Run History.",
+          [
+            "history"
+          ]
+        ],
+        [
+          "Read Activity",
+          "Check each format, row count, user and time. Preview is an interactive run; pdf, csv and xlsx identify downloads.",
+          [
+            "history-rows"
+          ]
+        ],
+        [
+          "Restore a previous parameter choice",
+          "Select an Activity row to put its parameters back into the report controls. Open Parameters and Run when you want a new result. Selecting history does not replay its stored output.",
+          [
+            "history-apply"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "schedule",
+      "title": "Create a report schedule",
+      "intro": [
+        "Use a schedule to save output for a reporting period. The schedule has no recipient field. Check its generated file before relying on automatic runs."
+      ],
+      "steps": [
+        [
+          "Open Schedules",
+          "Open report Actions and choose Schedules.",
+          [
+            "schedules"
+          ]
+        ],
+        [
+          "Choose New Schedule",
+          "Select New Schedule in the schedule sheet.",
+          [
+            "new-schedule"
+          ]
+        ],
+        [
+          "Choose the frequency",
+          "Set Frequency. The example chooses Weekly.",
+          [
+            "weekly"
+          ]
+        ],
+        [
+          "Choose its day",
+          "For Weekly, choose Day of week. The example uses Mon. Monthly instead offers days 1 to 28.",
+          [
+            "weekday"
+          ]
+        ],
+        [
+          "Choose the output format",
+          "Set Output format to CSV, XLSX or PDF. The example uses PDF.",
+          [
+            "schedule-format"
+          ]
+        ],
+        [
+          "Save the schedule",
+          "Open the schedule editor Actions dots and choose Save. The date window is calculated at run time rather than saved as fixed dates.",
+          [
+            "schedule-actions",
+            "schedule-save"
+          ]
+        ]
+      ],
+      "result": "The list shows the frequency, format, enabled switch and next due time.",
+      "resultShots": [
+        "schedule-saved"
+      ]
+    },
+    {
+      "id": "schedule-run",
+      "title": "Run a schedule now and download its saved output",
+      "intro": [
+        "Run now is useful for checking a new schedule. A queued message does not prove success. Inspect Scheduled Runs for the outcome."
+      ],
+      "steps": [
+        [
+          "Queue the run",
+          "Keep the schedule enabled and select Run now. A disabled schedule does not execute even if it shows a queued message.",
+          [
+            "schedule-run"
+          ]
+        ],
+        [
+          "Open Scheduled Runs",
+          "Close Schedules. Open report Actions, Run History and the Scheduled Runs tab. Reopen the sheet if the result has not arrived yet.",
+          [
+            "scheduled-tab"
+          ]
+        ],
+        [
+          "Read the status and period",
+          "Check OK or Failed and the recorded reporting period. A failed attempt has no output file.",
+          [
+            "scheduled-result"
+          ]
+        ],
+        [
+          "Download the successful output",
+          "Select Download on a successful saved run.",
+          [
+            "scheduled-download"
+          ]
+        ]
+      ],
+      "result": "The downloaded PDF is the saved schedule output. It does not replace the result currently displayed on the report page.",
+      "resultShots": []
+    },
+    {
+      "id": "schedule-manage",
+      "title": "Disable, change or remove a schedule",
+      "intro": [
+        "Use the controls on the correct schedule row. The review turns its disposable schedule off and removes it after checking the saved output."
+      ],
+      "steps": [
+        [
+          "Disable automatic runs",
+          "Open Schedules and turn off the row switch. A displayed Next date does not override the disabled switch.",
+          [
+            "schedule-toggle"
+          ]
+        ],
+        [
+          "Edit the saved schedule",
+          "Select Edit on the row.",
+          [
+            "schedule-edit"
+          ]
+        ],
+        [
+          "Save the intended changes",
+          "Change the required settings, then use that editor's Actions and Save. The example changes its disabled schedule format to XLSX.",
+          [
+            "schedule-edit-format",
+            "schedule-save"
+          ]
+        ],
+        [
+          "Remove an unneeded schedule",
+          "Select Delete on the correct schedule row.",
+          [
+            "schedule-delete"
+          ]
+        ],
+        [
+          "Confirm its removal",
+          "Read the confirmation and select Delete when you intend to remove that schedule.",
+          [
+            "schedule-delete-confirm"
+          ]
+        ]
+      ],
+      "result": "The selected schedule disappears. The review leaves no enabled or saved schedule for its report.",
+      "resultShots": []
+    },
+    {
+      "id": "pin",
+      "title": "Keep a report easy to find",
+      "intro": [
+        "Pins arrange the library in this browser. They do not change report data."
+      ],
+      "steps": [
+        [
+          "Pin the report",
+          "Point at the report row and select its star. It also appears under Pinned.",
+          [
+            "pin"
+          ]
+        ],
+        [
+          "Remove the pin",
+          "Select the filled star again when you no longer need it pinned.",
+          [
+            "unpin"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "edit",
+      "title": "Open the linked design",
+      "intro": [
+        "Use this when an authorised manager needs to change layout or template filters."
+      ],
+      "steps": [
+        [
+          "Choose Edit template",
+          "Open report Actions and select Edit template.",
+          [
+            "edit-template"
+          ]
+        ],
+        [
+          "Check the design name",
+          "Confirm that Report Designer opened the intended linked design before editing it.",
+          [
+            "edit-template-result"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "unpublish",
+      "title": "Check an Unpublish attempt",
+      "intro": [
+        "Unpublish is intended to hide an entry while keeping its design. In this review, a newly created custom entry returned Action failed and stayed published. This current failure is documented here; it was not repaired."
+      ],
+      "steps": [
+        [
+          "Choose Unpublish only for the intended entry",
+          "Open that report's Actions and select Unpublish when you intend to hide it. The pictured entry is disposable test content.",
+          [
+            "unpublish"
+          ]
+        ],
+        [
+          "Check the actual outcome",
+          "If Action failed appears, the entry has not been unpublished. Keep its name or identifier and report the problem. Do not treat this as a successful removal.",
+          [
+            "unpublish-failed"
+          ]
+        ]
+      ],
+      "result": "The reviewed new-entry case failed with HTTP 400 and remained published. Other report-management actions do not establish that Unpublish succeeded.",
+      "resultShots": []
+    },
+    {
+      "id": "delete",
+      "title": "Delete an unneeded library report",
+      "intro": [
+        "Delete permanently removes the selected library definition. Check that the team no longer needs it. The example removes a disposable entry and keeps the main report and its design."
+      ],
+      "steps": [
+        [
+          "Choose Delete report",
+          "Open the unneeded report's Actions and select Delete report.",
+          [
+            "delete-report"
+          ]
+        ],
+        [
+          "Confirm the named action",
+          "Read the confirmation, then choose Delete report only when you intend that removal.",
+          [
+            "delete-report-confirm"
+          ]
+        ]
+      ],
+      "result": "The entry disappears from the library. Its linked design remains available in Report Designer.",
+      "resultShots": []
+    },
+    {
+      "id": "phone",
+      "title": "Run an existing report on a phone",
+      "intro": [
+        "The library starts folded into a rail. Use it to choose the report, then give the result more screen space."
+      ],
+      "steps": [
+        [
+          "Expand the library",
+          "Select Expand library on the narrow rail.",
+          [
+            "phone-library"
+          ]
+        ],
+        [
+          "Find and choose the report",
+          "Search its name and select it. Collapse the library afterward.",
+          [
+            "phone-select"
+          ]
+        ],
+        [
+          "Choose dates",
+          "Open report Actions and Parameters. Open the date-range control and choose a preset or calendar dates. Presets wrap above a single month on a phone.",
+          [
+            "phone-dates"
+          ]
+        ],
+        [
+          "Run with the selected values",
+          "Select Run in the parameter sheet.",
+          [
+            "phone-run"
+          ]
+        ],
+        [
+          "Read Spreadsheet",
+          "After the run completes, select Spreadsheet and inspect the values. Wide tables can scroll horizontally.",
+          [
+            "phone-result"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "windows",
+      "title": "Understand schedule time and date windows",
+      "paragraphs": [
+        "Report schedules run at 06:00 UTC. This editor has no separate time or timezone setting. Next and Last display in the browser's timezone. A report's own timezone filter controls data grouping, not the schedule clock.",
+        "A newly saved Daily schedule starts tomorrow. Weekly uses the next chosen weekday, never today. Monthly uses the chosen day next month. Quarterly uses the first day of the next calendar quarter."
+      ],
+      "html": [
+        "<table><thead><tr><th>Frequency</th><th>Date window at run time</th></tr></thead><tbody><tr><td>Daily</td><td>The previous UTC day.</td></tr><tr><td>Weekly</td><td>The previous seven UTC days, ending yesterday.</td></tr><tr><td>Monthly</td><td>The previous calendar month in UTC.</td></tr><tr><td>Quarterly</td><td>The previous calendar quarter in UTC.</td></tr></tbody></table>",
+        "<p>Run now uses that same computed window. It does not reuse the report page's chosen date range. The reporting query should include the complete end day. The review's weekly run covered 5 to 11 November 2026.</p>"
+      ]
+    },
+    {
+      "id": "definitions",
+      "title": "Understand filters and report data",
+      "paragraphs": [
+        "Filters come from the design's template parameters. Change them in Report Designer. The primary query supplies Spreadsheet rows; the design's element bindings supply Document content. A report can therefore contain several bound tables while Spreadsheet shows its primary query.",
+        "The current Reports page supplies date filters as flat from and to values. A workbench Custom Query declaring one nested daterange parameter fails when bound directly here. The existing reporting pattern uses two Text query parameters named from and to, with one Date range control on the template. See Report Designer.",
+        "Different reports require different received data. A report needing specimens, organisms or susceptibility results cannot invent them from an unrelated order count. An empty result can be correct for the chosen filters or available source data.",
+        "For built-in reports, Facility generally means the testing laboratory. Read that report's filter help and query before assuming it groups the clinic that sent a request."
+      ]
+    },
+    {
+      "id": "cli",
+      "title": "Run a report from the CLI",
+      "paragraphs": [
+        "Read <a href=\"start-here-review.html\">Start here</a> for your platform's launcher. Use your actual installation folder, such as <code>~/Downloads/openldr_ce</code> or <code>C:\\openldr_ce</code>. A development checkout uses <code>pnpm openldr</code> instead of <code>openldr</code>."
+      ],
+      "html": [
+        "<pre><code>openldr report list\nopenldr report run REPORT_ID --param from=2026-01-01 --param to=2026-11-12 --json\nopenldr report run REPORT_ID --param from=2026-01-01 --param to=2026-11-12 --format pdf --out data/report.pdf</code></pre>",
+        "<p>Replace REPORT_ID with the entry listed by the first command. Replace dates and output paths with the values you intend. The reviewed CLI JSON run returned one row with requests equal to zero.</p>"
+      ]
+    },
+    {
+      "id": "practice",
+      "title": "Optional review output",
+      "paragraphs": [
+        "Normal use needs your reports and received data. No documentation bundle is required. To build the same small practice report, use the optional reporting query in <a href=\"report-designer-review.html#dg-practice\">Report Designer</a>.",
+        "The real review downloads are <a href=\"reports-evidence/request-summary.pdf\" download>the interactive PDF</a>, <a href=\"reports-evidence/request-summary.csv\" download>CSV</a>, <a href=\"reports-evidence/request-summary.xlsx\" download>XLSX</a> and <a href=\"reports-evidence/scheduled-request-summary.pdf\" download>the saved scheduled PDF</a>. They contain only a zero request count."
+      ]
+    },
+    {
+      "id": "help",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>The library is empty.</strong> Clear its search and check View reports. A design publication alone does not create a library entry.",
+        "<strong>Run is unavailable.</strong> Complete required filters and check Run reports. A custom query can still require values that the template did not mark required.",
+        "<strong>A report returns no rows.</strong> Check the date window, facility choice and the source records that report needs. A sample file is not a prerequisite for real reporting.",
+        "<strong>A custom report says required parameter: period.</strong> Check the date-parameter shape described above. A successful designer preview does not prove a Reports run.",
+        "<strong>A scheduled run is missing.</strong> Check the enabled switch, then close and reopen Scheduled Runs. A queued message alone is not proof of execution.",
+        "<strong>A scheduled run is Failed.</strong> On a computer, point at its status to read the recorded error. Correct the actual settings and try Run now again.",
+        "<strong>Unpublish says Action failed.</strong> The reviewed newly created report failed this action and stayed published. Report its identifier. This guide does not claim that operation succeeded."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "<a href=\"report-designer-review.html\">Report Designer</a> defines page layout and creates library entries. <a href=\"query-review.html\">Query</a> defines data. <a href=\"report-pipeline-review.html\">Scheduled reports with workflows</a> covers custom workbook and email workflows."
+      ]
+    }
+  ]
+}

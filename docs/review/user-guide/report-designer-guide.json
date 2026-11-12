@@ -1,0 +1,515 @@
+{
+  "title": "Report Designer",
+  "meta": [
+    "Data design",
+    "Bind query output to printable pages",
+    "About 30 minutes"
+  ],
+  "intro": [
+    "Use Report Designer to arrange printable elements, bind them to saved Custom Queries and create reports for the library. A design controls the page. A query supplies rows. Template parameters define the filters people enter when running a report.",
+    "Start with your own saved query and intended page layout. No documentation sample data is required. The pictures use a zero-request reporting query in a separate test installation. Optional practice is at the end.",
+    "You need <strong>Edit report templates</strong> to create, edit and publish designs. <strong>View reports</strong> opens the library, and <strong>Run reports</strong> executes its entries.",
+    "Publishing a design revision and creating a library report are separate actions. Save the new design before either action."
+  ],
+  "tasks": [
+    {
+      "id": "read",
+      "title": "Inspect an existing report design",
+      "intro": [
+        "Use this to understand the connection between an existing table, its query and the filters the report exposes."
+      ],
+      "steps": [
+        [
+          "Open Report Designer",
+          "Select Report Designer in the main menu.",
+          [
+            "open-page"
+          ]
+        ],
+        [
+          "Choose a template",
+          "Select an existing entry in Templates. The example opens Test Volume Over Time.",
+          [
+            "existing-template"
+          ]
+        ],
+        [
+          "Select its table",
+          "Select the table element on the printable page.",
+          [
+            "existing-table"
+          ]
+        ],
+        [
+          "Read its Data settings",
+          "Select Data in the right inspector. Check Bind query and the template Parameters below it.",
+          [
+            "existing-data-tab",
+            "existing-binding"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "create",
+      "title": "Create a separate table design",
+      "intro": [
+        "Use a new design for your report rather than changing a shared built-in definition."
+      ],
+      "steps": [
+        [
+          "Choose New template",
+          "Open More actions above the canvas and select New template. The empty designer also offers New template.",
+          [
+            "actions",
+            "new-template"
+          ]
+        ],
+        [
+          "Name the design",
+          "Enter a clear Report name, such as Request summary design.",
+          [
+            "design-name"
+          ]
+        ],
+        [
+          "Insert a table",
+          "Open More actions, point at Insert and select Table.",
+          [
+            "insert",
+            "insert-table"
+          ]
+        ],
+        [
+          "Select the table",
+          "The inserted Table is selected. Drag it to the intended position and use its resize handles when you need another size. The example keeps its initial position.",
+          [
+            "new-table"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "bind",
+      "title": "Choose the table query",
+      "intro": [
+        "Use a saved query that returns the intended columns. When that query has parameters, define matching template defaults before loading columns."
+      ],
+      "steps": [
+        [
+          "Open Data",
+          "With the table selected, select Data in the inspector.",
+          [
+            "new-data-tab"
+          ]
+        ],
+        [
+          "Bind the saved query",
+          "Open Bind query and choose your Custom Query. The example uses Request count for reporting, with two required Text query parameters named from and to.",
+          [
+            "bind-query"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "parameters",
+      "title": "Define the report filter and preview defaults",
+      "intro": [
+        "For Reports, the current date-range filter passes flat from and to values. The example query declares those as two required Text parameters. The template provides one Date range control. A workbench query declaring one daterange parameter currently fails when bound directly to Reports."
+      ],
+      "steps": [
+        [
+          "Add a template parameter",
+          "Select Add parameter below the binding settings.",
+          [
+            "add-parameter"
+          ]
+        ],
+        [
+          "Match the query key",
+          "Set a unique template Key, such as period. This date-range control supplies the from and to values used by the reporting query.",
+          [
+            "parameter-key"
+          ]
+        ],
+        [
+          "Choose the visible label",
+          "Set Label to what people should see, such as Period.",
+          [
+            "parameter-label"
+          ]
+        ],
+        [
+          "Match the parameter type",
+          "Set Type to Date range. The reporting query itself uses two Text parameters named from and to.",
+          [
+            "parameter-type"
+          ]
+        ],
+        [
+          "Set the default start",
+          "Enter the default first included date. The example uses 2026-01-01.",
+          [
+            "parameter-from"
+          ]
+        ],
+        [
+          "Set the default end",
+          "Enter the default last included date. The example uses 2027-01-01. The reporting query includes the full end day, matching the report calendar and scheduler. These are preview defaults; report users can choose other values.",
+          [
+            "parameter-to"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "columns",
+      "title": "Choose and preview the printed column",
+      "intro": [
+        "Load columns uses the template defaults to run the bound query. The count query returns a requests column even when the warehouse contains no requests."
+      ],
+      "steps": [
+        [
+          "Load the query columns",
+          "Select Load columns. Read an error if the query or parameter defaults are invalid.",
+          [
+            "load-columns"
+          ]
+        ],
+        [
+          "Include the column",
+          "Tick requests to include it in the table. Choose the actual output columns needed by your own report.",
+          [
+            "include-column"
+          ]
+        ],
+        [
+          "Set its printed label",
+          "Enter a readable column label, such as Requests. This changes the printed label, not the query field.",
+          [
+            "column-label"
+          ]
+        ],
+        [
+          "Load the page data",
+          "Select Load pages above the canvas. It runs the bound data and calculates a physical page count.",
+          [
+            "load-pages"
+          ]
+        ],
+        [
+          "Show loaded data",
+          "Select Show data. Reload pages after edits when the count is stale.",
+          [
+            "show-data"
+          ]
+        ]
+      ],
+      "result": "The table shows the real count. This installation prints one Requests column containing zero.",
+      "resultShots": [
+        "bound-result"
+      ]
+    },
+    {
+      "id": "preview",
+      "title": "Save and inspect the PDF",
+      "intro": [
+        "Save a new design explicitly. Then check the actual rendered page before publishing it."
+      ],
+      "steps": [
+        [
+          "Save the design",
+          "Open More actions and select Save. Wait for Saved. After the first save, later edits also autosave.",
+          [
+            "save"
+          ]
+        ],
+        [
+          "Open Preview",
+          "Open More actions and select Preview.",
+          [
+            "preview"
+          ]
+        ],
+        [
+          "Check and download the rendered page",
+          "Read the PDF preview and use Download when you need a local copy. Close the preview to return to editing.",
+          [
+            "preview-result",
+            "preview-download"
+          ]
+        ]
+      ],
+      "result": "The preview renders the current working design with query data. A draft design carries a DRAFT stamp.",
+      "resultShots": []
+    },
+    {
+      "id": "publish",
+      "title": "Publish a saved revision",
+      "intro": [
+        "Publish after checking the saved design. A revision records the published state; it does not add a Reports library entry."
+      ],
+      "steps": [
+        [
+          "Publish the revision",
+          "Open More actions and select Publish revision. Save first if the designer asks.",
+          [
+            "publish"
+          ]
+        ],
+        [
+          "Check the published status",
+          "Check the Published status beside the design name.",
+          [
+            "published"
+          ]
+        ]
+      ],
+      "result": "The saved design has a published revision.",
+      "resultShots": []
+    },
+    {
+      "id": "versions",
+      "title": "Inspect published versions",
+      "intro": [
+        "Use this to identify the saved revision before considering a restore."
+      ],
+      "steps": [
+        [
+          "Open Versions",
+          "Open More actions and select Versions.",
+          [
+            "versions"
+          ]
+        ],
+        [
+          "Read the revision row",
+          "Check its version, publication time and publisher. Restore loads that snapshot into the working copy as an edit. It does not publish another revision. Close the sheet if no restore is needed.",
+          [
+            "version-row"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "library",
+      "title": "Create the report library entry",
+      "intro": [
+        "Use this after the design and query are ready. The library report can have a different name from its design."
+      ],
+      "steps": [
+        [
+          "Choose Create report from this design",
+          "Open More actions and select Create report from this design.",
+          [
+            "create-report"
+          ]
+        ],
+        [
+          "Name the report",
+          "Enter the library Name. The example uses Request summary report.",
+          [
+            "report-name"
+          ]
+        ],
+        [
+          "Choose its category",
+          "Open Category and choose the category where people should find it, such as Operational.",
+          [
+            "report-category"
+          ]
+        ],
+        [
+          "Check the linked definitions",
+          "Confirm Template and Primary query. The template controls Document layout; the primary query supplies Spreadsheet rows.",
+          [
+            "report-template",
+            "report-query"
+          ]
+        ],
+        [
+          "Create the library entry",
+          "Open the sheet's Actions dots and select Create report.",
+          [
+            "report-actions",
+            "report-create"
+          ]
+        ]
+      ],
+      "result": "The named entry is available under its category in Reports. Open its Parameters and run it there. <a href=\"reports-review.html\">Reports</a> covers that workflow.",
+      "resultShots": []
+    },
+    {
+      "id": "export",
+      "title": "Export directly from the designer",
+      "intro": [
+        "Use these exports when you need output from the current design without opening its library report."
+      ],
+      "steps": [
+        [
+          "Export PDF",
+          "Open More actions, point at Export and select PDF.",
+          [
+            "export-pdf"
+          ]
+        ],
+        [
+          "Export Excel",
+          "Open More actions, point at Export and select Excel. Bound table rows become workbook data.",
+          [
+            "export-excel"
+          ]
+        ]
+      ],
+      "result": "The browser downloads the rendered PDF or workbook.",
+      "resultShots": []
+    },
+    {
+      "id": "layers",
+      "title": "Control element visibility and locking",
+      "intro": [
+        "Layers provides direct controls for selected elements. Hiding affects output. Locking prevents movement."
+      ],
+      "steps": [
+        [
+          "Open Layers",
+          "Select Layers in the inspector.",
+          [
+            "layers"
+          ]
+        ],
+        [
+          "Hide an element when intended",
+          "Use Hide Table, the eye control, for the selected table. Hidden elements do not appear in the canvas or PDF.",
+          [
+            "hide-layer"
+          ]
+        ],
+        [
+          "Show it again",
+          "Use Show Table to restore it.",
+          [
+            "show-layer"
+          ]
+        ],
+        [
+          "Lock its position",
+          "Use Lock Table to prevent movement while keeping it selectable.",
+          [
+            "lock-layer"
+          ]
+        ],
+        [
+          "Unlock it again",
+          "Use Unlock Table when you intend to move it. The review leaves the table visible and unlocked.",
+          [
+            "unlock-layer"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "phone",
+      "title": "Inspect an existing design on a phone",
+      "intro": [
+        "Use a large screen for building page layouts. On a phone, find and inspect an existing template, or run its report in Reports."
+      ],
+      "steps": [
+        [
+          "Expand the Explorer",
+          "Select Expand explorer on its narrow rail.",
+          [
+            "phone-explorer"
+          ]
+        ],
+        [
+          "Choose the existing template",
+          "Select its name, then collapse the Explorer when you need canvas space.",
+          [
+            "phone-template"
+          ]
+        ],
+        [
+          "Open its actions",
+          "Use More actions to inspect the available operations. Make layout edits on a larger screen.",
+          [
+            "phone-actions"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "layout",
+      "title": "Choose page elements and layout tools",
+      "paragraphs": [
+        "Insert also offers Text, Letterhead, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date, Cell grid and Chart. Select an element to edit its Properties. The one-table task above does not require those extra elements.",
+        "Properties controls paper size, orientation and page numbers when no element is selected. It also controls element position, dimensions and appearance. Undo and Redo step through edits; zoom changes only your view.",
+        "For a Chart or Cell grid, bind a query in Data and choose the corresponding label, value or cell columns in Properties. Check the rendered output with your own rows.",
+        "Flow settings can place one element below another or control repeated content on continuation pages. Load pages after changing layout to check the physical page count. Show data displays only rows that fit the canvas page."
+      ]
+    },
+    {
+      "id": "content",
+      "title": "Keep report text and query fields separate",
+      "paragraphs": [
+        "A printed column label can differ from the query field name. Use the Data tab label fields for the visible wording. Keep binding keys matched to actual query output.",
+        "The Print language selector in Properties edits one language's report text. Empty translations fall back to authored text. Query output itself is not translated by changing the design language.",
+        "A Letterhead uses laboratory identity configured in Settings. It can give several designs the same logo, name and contact band."
+      ]
+    },
+    {
+      "id": "manage",
+      "title": "Manage designs carefully",
+      "paragraphs": [
+        "More actions includes Duplicate and Delete. Duplicate starts a separate design for a variation. Delete permanently removes a design after confirmation; check linked reports first.",
+        "Versions Restore changes the working copy and can be undone. Preview the restored design before publishing deliberately. Publishing another revision does not require another library report for the same design.",
+        "Create report from this design adds a separate library entry. It does not replace Publish revision. A published design absent from Reports still needs the library-creation step."
+      ]
+    },
+    {
+      "id": "practice",
+      "title": "Optional practice reference",
+      "paragraphs": [
+        "<a href=\"report-designer-evidence/report-count-query.json\" download>Download the optional reporting count query</a>. Import it through Query if you want a reference. It uses required Text parameters named from and to, which match Reports' current date-range input. It needs no patient sample data. Use your own approved query for normal reporting.",
+        "<a href=\"report-designer-evidence/published-summary.pdf\" download>Download the actual published review PDF</a> or <a href=\"report-designer-evidence/summary-design.xlsx\" download>its exported workbook</a> to compare the one-column result. These files contain only a zero count."
+      ]
+    },
+    {
+      "id": "help",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>No columns appear.</strong> Choose Bind query, configure needed template defaults and select Load columns.",
+        "<strong>The canvas remains empty.</strong> Include at least one bound column, then Load pages and Show data. Read query errors before changing the layout.",
+        "<strong>The save status shows an error.</strong> Resolve it before publishing. A new template needs an explicit first Save.",
+        "<strong>Create report is unavailable.</strong> Save the design, then fill Name, Category, Template and Primary query in the New report sheet.",
+        "<strong>Preview and output differ from expected rows.</strong> Match template keys to query parameter identifiers and check the defaults and SQL date boundaries. The reporting example includes both calendar endpoints.",
+        "<strong>A table prints across several pages.</strong> Data can continue beyond the first page. Load pages and inspect the PDF to check the actual count.",
+        "<strong>Reports says required parameter: period.</strong> A Custom Query declaring one daterange parameter works in Query but currently receives no nested range from Reports. Use the reporting pattern of two Text query parameters named from and to, referenced by the SQL. Do not assume a successful designer preview proves a library run."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "<a href=\"query-review.html\">Query</a> creates saved data queries. <a href=\"reports-review.html\">Reports</a> runs library entries and schedules output. <a href=\"laboratory-review.html\">Laboratory</a> configures shared identity values."
+      ]
+    }
+  ]
+}

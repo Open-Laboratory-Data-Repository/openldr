@@ -97,6 +97,16 @@
   border-radius: var(--radius-lg);
 }
 
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server'], [data-guide='upgrading'], [data-guide='environment'], [data-guide='auth-providers'], [data-guide='load-data'], [data-guide='v1-import'], [data-guide='connector-diagnose'], [data-guide='cli'], [data-guide='development']) { font-size: 15px; line-height: 1.8; }
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server'], [data-guide='upgrading'], [data-guide='environment'], [data-guide='auth-providers'], [data-guide='load-data'], [data-guide='v1-import'], [data-guide='connector-diagnose'], [data-guide='cli'], [data-guide='development']) h1 { font-size: 32px; }
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server'], [data-guide='upgrading'], [data-guide='environment'], [data-guide='auth-providers'], [data-guide='load-data'], [data-guide='v1-import'], [data-guide='connector-diagnose'], [data-guide='cli'], [data-guide='development']) h2 { margin-top: 44px; padding-bottom: 10px; font-size: 22px; line-height: 1.4; }
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server'], [data-guide='upgrading'], [data-guide='environment'], [data-guide='auth-providers'], [data-guide='load-data'], [data-guide='v1-import'], [data-guide='connector-diagnose'], [data-guide='cli'], [data-guide='development']) p { margin: 14px 0; }
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server'], [data-guide='upgrading'], [data-guide='environment'], [data-guide='auth-providers'], [data-guide='load-data'], [data-guide='v1-import'], [data-guide='connector-diagnose'], [data-guide='cli'], [data-guide='development']) li { margin: 12px 0; padding-left: 4px; }
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server'], [data-guide='upgrading'], [data-guide='environment'], [data-guide='auth-providers'], [data-guide='load-data'], [data-guide='v1-import'], [data-guide='connector-diagnose'], [data-guide='cli'], [data-guide='development']) th,
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server'], [data-guide='upgrading'], [data-guide='environment'], [data-guide='auth-providers'], [data-guide='load-data'], [data-guide='v1-import'], [data-guide='connector-diagnose'], [data-guide='cli'], [data-guide='development']) td { padding: 12px; font-size: 14px; }
+.doc-content:is([data-guide='install'], [data-guide='requirements'], [data-guide='windows-server'], [data-guide='upgrading'], [data-guide='environment'], [data-guide='auth-providers'], [data-guide='load-data'], [data-guide='v1-import'], [data-guide='connector-diagnose'], [data-guide='cli'], [data-guide='development']) pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.doc-content:is([data-guide='install'], [data-guide='requirements'], [data-guide='windows-server'], [data-guide='upgrading'], [data-guide='environment'], [data-guide='auth-providers'], [data-guide='load-data'], [data-guide='v1-import'], [data-guide='connector-diagnose'], [data-guide='cli'], [data-guide='development']) h3 { margin-top: 28px; font-size: 18px; font-weight: 600; }
+
 /* shadcn token bridge — map shadcn's expected vars onto the existing palette.
    These reference the existing theme vars, so they auto-switch with data-theme. */
 :root {
@@ -156,3 +166,17 @@
   }
   input, select, textarea { font: inherit; color: inherit; }
 }
+
+/* The in-app guides use this same dotted frame. */
+.web-doc-dotted-frame { position: relative; display: block; padding: 24px; }
+.web-doc-dotted-dots {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--text-muted) 95%, transparent) 1.25px, transparent 1.5px);
+  background-size: 12px 12px; background-repeat: round;
+  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-composite: intersect;
+}
+:root[data-theme='dark'] .web-doc-dotted-dots { background-image: radial-gradient(circle, color-mix(in srgb, var(--text-muted) 35%, transparent) 1.25px, transparent 1.5px); }
+
+/* Long setting names and URL examples must fit phone-width guide text. */
+.doc-content :not(pre) > code { overflow-wrap: anywhere; }

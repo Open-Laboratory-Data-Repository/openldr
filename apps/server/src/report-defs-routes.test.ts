@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
+import { createReportStore } from '@openldr/db';
+import { makeMigratedDb } from '@openldr/db/testing';
 import { registerReportDefRoutes } from './report-defs-routes';
 import './auth-plugin';
 
@@ -108,5 +110,44 @@ describe('report-defs routes', () => {
     expect(del.statusCode).toBe(204);
     expect(ctx.__auditEvents.some((e: any) => e.action === 'report-def.delete')).toBe(true);
     expect((await app.inject({ method: 'GET', url: '/api/report-defs' })).json().length).toBe(0);
+  });
+
+  it.each([
+    { summaryMetrics: null, chart: null, paramOptions: null },
+    {
+      summaryMetrics: [{ id: 'total', label: 'Total', type: 'count' }],
+      chart: { type: 'bar', x: 'name', y: 'total' },
+      paramOptions: { facility: 'q-facilities' },
+    },
+  ])('round-trips published and draft status with persisted metadata: %j', async (metadata) => {
+    const db = await makeMigratedDb();
+    const ctx = fakeCtx();
+    ctx.reportDefs = createReportStore(db);
+    const app = appWith(ctx);
+    const original = { ...minimal, ...metadata, status: 'published' };
+    try {
+      await ctx.reportDefs.create(original);
+      const stored = await db.selectFrom('reports').selectAll().where('id', '=', 'r1').executeTakeFirstOrThrow();
+      if (metadata.chart === null) {
+        expect(stored).toMatchObject({ summary_metrics: null, chart: null, param_options: null });
+      }
+
+      for (const status of ['draft', 'published']) {
+        const get = await app.inject({ method: 'GET', url: '/api/report-defs/r1' });
+        expect(get.statusCode).toBe(200);
+        const update = await app.inject({
+          method: 'PUT', url: '/api/report-defs/r1', payload: { ...get.json<Record<string, unknown>>(), status },
+        });
+        expect(update.statusCode).toBe(200);
+        expect(update.json()).toEqual({ ...original, status });
+        expect(await ctx.reportDefs.get('r1')).toEqual({ ...original, status });
+      }
+      expect(ctx.__auditEvents.map((event: any) => event.action)).toEqual([
+        'report-def.update', 'report-def.update',
+      ]);
+    } finally {
+      await app.close();
+      await db.destroy();
+    }
   });
 });

@@ -1,0 +1,70 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Deployment</span><span>Configure sign-in and local access</span><span>About 20 minutes to prepare</span></div>
+<h1>Authentication providers</h1>
+<p>OpenLDR supports Keycloak and generic OpenID Connect, or OIDC, for sign-in. Generic OIDC uses provider discovery and signed JWT access tokens. Opaque access tokens are unsupported.</p>
+<p>Use a fresh deployment for a new identity provider. An existing application database belongs to its original issuer and provider subjects. Matching usernames do not make accounts from different providers interchangeable.</p>
+<p>The configuration pictures are labelled illustrations. The login pictures use a real isolated Keycloak provider through generic OIDC mode, with authentication enforced. Your provider can use a different login page. This proves the local test flow, not every provider deployment.</p>
+<p>You need server and provider administration access for initial configuration. Studio uses a public browser client and authorization code with PKCE. PKCE binds the code exchange to the browser that started sign-in. Do not give Studio a client secret.</p>
+<h2 id="dg-configure">Configure a fresh generic OIDC deployment</h2>
+<p>Register the browser client at your provider first. Use its actual issuer, audience, scopes and client id. Keep the server configuration private.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Register the browser client</h3><p>Use authorization code with PKCE. Register <code>https://YOUR_HOST/studio/auth/callback</code> as redirect URI and <code>https://YOUR_HOST/studio</code> as logout return URI. Permit the Studio origin for browser discovery and token requests.</p>__SHOT:client-registration:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose generic mode</h3><p>In the deployment .env, set <code>AUTH_ADAPTER=oidc</code> and <code>IDENTITY_ADMIN_ADAPTER=none</code>. Generic OIDC cannot use Keycloak administration.</p>__SHOT:auth-mode:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Set issuer, audience and client id</h3><p>Enter OIDC_ISSUER_URL, OIDC_AUDIENCE and OIDC_WEB_CLIENT_ID from the provider configuration. Access tokens must contain the expected issuer and audience. An ID token is not an API access token.</p>__SHOT:issuer-settings:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check requested scopes and resource</h3><p>OIDC_SCOPES defaults to <code>openid profile email</code>. Keep openid and add required API scopes. Set OIDC_RESOURCE only when the provider requires a resource indicator. OpenLDR does not infer it from audience.</p>__SHOT:scopes:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Recreate the affected application service</h3><p>Apply the startup configuration using your normal deployment command. Confirm the provider publishes discovery metadata and signing keys. Keep AUTH_DEV_BYPASS off.</p>__SHOT:restart:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The browser is configured to start provider sign-in. A valid configuration file alone does not establish a successful login.</p></div>
+<h2 id="dg-sign-in">Sign in through the provider</h2>
+<p>Open Studio using its configured public address. The example uses a fictional account on the isolated provider.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Studio</h3><p>Studio redirects to the configured provider. Check that you reached the expected provider before entering credentials.</p>__SHOT:provider:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Enter your username</h3><p>Use the account supplied by your organisation. The example uses <code>guide.operator</code>.</p>__SHOT:username:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Enter the provider password</h3><p>Use the provider's sign-in method. The screenshot password stays masked. Other providers can require additional authentication.</p>__SHOT:password:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose Sign In</h3><p>Select the provider's sign-in action. A successful code exchange returns to Studio.</p>__SHOT:sign-in:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Check your initial access</h3><p>A first login creates a local account. It does not grant administrator access. The example reaches Access denied for its requested page and still offers Docs and available navigation.</p>__SHOT:first-access:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The provider authenticated the account. Application permissions still come from local roles.</p></div>
+<h2 id="dg-administrator">Grant the first administrator local access</h2>
+<p>On the server, identify the account created by its first login. Use the exact provider subject, not a username or the local user id.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Find the account subject</h3><p>From <code>openldr_ce</code>, run <code>pnpm openldr user list</code>. Match the subject to the intended provider account. Follow <a href="start-here-review.html">Start here</a> for CLI setup.</p>__SHOT:list-subject:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Assign the administrator role</h3><p>Run <code>pnpm openldr user assign-role SUBJECT lab_admin</code> using that exact subject. This changes OpenLDR access. It does not make the user a provider administrator.</p>__SHOT:grant-role:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Verify the granted access</h3><p>Sign in again or reload the authenticated app, then check the permitted administration pages. In the test, Users appears after the local role assignment.</p>__SHOT:admin-access:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The selected local account has the assigned application role. The test CLI assignment exited successfully and the actual Users page opened.</p></div>
+<h2 id="dg-local">Manage local access without provider administration</h2>
+<p>Generic OIDC keeps local roles and access controls. Account creation, profile editing, password reset and provider sessions remain with the identity provider.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Users</h3><p>Select <strong>Users</strong>. Read the provider-administration notice above the table.</p>__SHOT:users:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the intended account</h3><p>Match the username and available identity information before changing local access.</p>__SHOT:user-row:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Use local row actions</h3><p>Open the row dots. <strong>Edit role</strong> changes OpenLDR roles. Disable blocks this account in OpenLDR. It does not disable the provider account or end its provider sessions.</p>__SHOT:local-actions:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Provider user administration is unavailable in this mode. Manage accounts and passwords through the provider administrator.</p></div>
+<h2 id="dg-sign-out">Sign out of Studio</h2>
+<p>Use the app user menu. Whether the provider session ends depends on the provider logout metadata.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open your user menu</h3><p>Select your user menu at the bottom left.</p>__SHOT:user-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Sign out</h3><p>Select <strong>Sign out</strong>. Studio clears its session and uses provider logout when available.</p>__SHOT:sign-out:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check the returned state</h3><p>In this test, the provider ended its session and requires a fresh login. Without a discovery logout endpoint, only the local session is cleared and the provider session can remain active.</p>__SHOT:signed-out:3__</section>
+<h2 id="dg-issuer">Check an issuer change before rebinding</h2>
+<p>A changed issuer stops authenticated service startup against an already-bound database. Preserve the issuer when restoring a deployment.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Read the refusal before forcing a change</h3><p>For the same provider moved to a new address, set the intended issuer and run <code>pnpm openldr auth rebind-issuer</code> without --force first. It reports a mismatch and refuses to change it. A different provider needs an identity-mapping procedure.</p>__SHOT:issuer-rebind:1__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Only a reviewed address move with unchanged provider subjects can use a forced rebind. This preview exercised the refusal, not a forced identity change.</p></div>
+<h2 id="dg-phone">Read authentication guidance on a phone</h2>
+<p>The authenticated documentation page adapts to phone width.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the guide</h3><p>Read Authentication providers in Docs. Provider login layout comes from the provider and needs its own phone check.</p>__SHOT:phone-docs:1__</section>
+<h2 id="dg-modes">Choose sign-in and administration modes</h2>
+<p>Administration defaults to keycloak in Keycloak mode and none in generic mode. Generic authentication with Keycloak administration is rejected. Do not confuse a public browser client with the separate confidential administration client.</p>
+<table><thead><tr><th>Configuration</th><th>Sign-in</th><th>Provider administration</th></tr></thead><tbody><tr><td><code>AUTH_ADAPTER=keycloak</code>, administration omitted or keycloak</td><td>Keycloak endpoint metadata</td><td>Available only with configured administration credentials. Sync client provisioning uses Keycloak.</td></tr><tr><td><code>AUTH_ADAPTER=keycloak</code>, <code>IDENTITY_ADMIN_ADAPTER=none</code></td><td>Keycloak endpoint metadata</td><td>Unavailable. Local application roles and access remain available.</td></tr><tr><td><code>AUTH_ADAPTER=oidc</code>, administration omitted or none</td><td>OIDC discovery</td><td>Unavailable. Generic machine-to-machine sync provisioning is outside this setup.</td></tr></tbody></table>
+<h2 id="dg-keys">Internal endpoints and token checks</h2>
+<p>OIDC_INTERNAL_JWKS_URL can explicitly configure an internal signing-key endpoint. It does not change the expected issuer. OIDC_INTERNAL_ISSUER_URL is Keycloak-specific. Generic mode does not derive endpoints from it. Remove stale Keycloak-only settings from a generic deployment.</p>
+<p>OpenLDR checks the API access-token signature, issuer, audience and expiry. Its browser session uses the configured scopes and optional resource. Successful sign-in at the provider does not guarantee the API receives the intended access token.</p>
+<h2 id="dg-binding">Preserve the identity namespace</h2>
+<p>OpenLDR binds the application database to its issuer before authenticated services start. It does not replicate that binding through settings sync. Changing the URL can change the identity namespace even when usernames match.</p>
+<p>On the first upgrade with issuer protection, preserve the existing OIDC_ISSUER_URL. Historical user rows cannot prove which issuer originally created them. The first binding records the configured value and cannot detect an earlier configuration mistake.</p>
+<p>If the same provider moved address and every subject stays unchanged, a reviewed <code>pnpm openldr auth rebind-issuer --force</code> changes the binding and records auth.issuer.rebind. This is not an automatic account migration. Switching providers, remapping subjects or restoring provider identities needs a separate reviewed procedure. Database migration commands remain available without authenticated service startup.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>Cannot reach the server.</strong> Check the app API and public configuration route. A provider login page does not prove the API is available.</p>
+<p><strong>Provider login succeeds but Studio has no access.</strong> Check the local account subject and role assignment. First login does not grant lab_admin.</p>
+<p><strong>Token rejected.</strong> Compare issuer, audience, signing keys, expiry, scopes and resource against the actual access token configuration. Do not paste tokens into shared logs or screenshots.</p>
+<p><strong>Redirect refused.</strong> Check the registered /studio/auth/callback URI and the exact public origin.</p>
+<p><strong>Issuer mismatch at startup.</strong> Restore the original issuer. Use forced rebind only for the same provider moved without subject changes.</p>
+<p><strong>New user, password reset or sync enrollment is missing.</strong> Generic mode has no provider administration. Use the identity provider for its accounts and sessions.</p>
+<h2 id="dg-tested">What this preview establishes</h2>
+<p>The real test used generic OIDC discovery, authorization code with PKCE, JWT access-token verification and local role assignment against an isolated Keycloak realm. Authentication bypass was off. No browser or API responses were mocked.</p>
+<p>The fictional provider account was disabled and its sessions revoked after capture. Passwords, client administration credentials and tokens remained outside the repository. This is not a certification of another provider, production TLS, MFA, silent renewal or recovery under outage.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="environment-review.html">Environment variables</a>, <a href="users-review.html">Users</a>, <a href="roles-review.html">Roles</a> and <a href="sync-review.html">Distributed sync</a>.</p>
+</article>

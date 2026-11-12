@@ -1,0 +1,7 @@
+$ node packages/cli/dev.mjs connectors remove 0e733b8a-f897-4385-8e21-43a5a6f4715c
+(node:40682) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Refusing to remove connector 0e733b8a-f897-4385-8e21-43a5a6f4715c without --force. Anything that uses it stops working.
+[ELIFECYCLE] Command failed with exit code 1.
+
+EXIT 1

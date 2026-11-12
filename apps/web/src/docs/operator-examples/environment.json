@@ -1,0 +1,24 @@
+{
+  "env-folder": {
+    "unix": "cd \"$HOME/Downloads/openldr_ce\"\nls -a",
+    "windows": "Set-Location C:\\openldr_ce\nGet-ChildItem -Force -Name"
+  },
+  "env-backup": {
+    "unix": "cp .env .env.before-change",
+    "windows": "Copy-Item .env .env.before-change"
+  },
+  "env-loglevel": {
+    "unix": "LOG_LEVEL=debug",
+    "file": ".env, edit this value and preserve other settings"
+  },
+  "env-check": {
+    "unix": "docker compose config --quiet"
+  },
+  "env-recreate": {
+    "unix": "docker compose up -d --force-recreate api\ndocker compose logs --tail 100 api"
+  },
+  "env-verify": {
+    "unix": "docker compose exec api printenv LOG_LEVEL\n./openldr health --json",
+    "windows": "docker compose exec api printenv LOG_LEVEL\n.\\openldr.ps1 health --json"
+  }
+}

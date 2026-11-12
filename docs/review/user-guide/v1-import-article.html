@@ -1,0 +1,68 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>System setup</span><span>Copy a v1 database into CE</span><span>About 15 minutes to prepare</span></div>
+<h1>Import from OpenLDR v1</h1>
+<p>The OpenLDR v1 import plugin reads a v1 SQL Server database and saves mapped requests, patients, results and antimicrobial susceptibility results into CE. It runs on the server in pages of requests.</p>
+<p>Use your own v1 database through a read-only Microsoft SQL connector. Diagnose it first. The plugin must be installed and an administrator must allow it to read that connector.</p>
+<p>You need <strong>Manage connectors</strong> to grant source access. The plugin page is for the lab administrator role. Know the UTC offset used by the source lab.</p>
+<p>The pictures use one fictional request, patient and text result on an isolated SQL Server. They establish an actual dry run and import of that small fixture. They do not establish compatibility with every historical v1 database. Optional practice data is at the end.</p>
+<h2 id="dg-allow">Allow the plugin to read a connector</h2>
+<p>Install the plugin through Marketplace or its approved plugin file. Create a Microsoft SQL connector with SELECT access to the v1 tables. The account should not change source records.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Connectors</h3><p>Open <strong>Settings</strong>, then <strong>Connectors</strong>. Use <a href="connector-diagnose-review.html">Diagnose connections</a> to check the source connection first.</p>__SHOT:connectors:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Plugin access</h3><p>On the v1 connector row, open the dots and choose <strong>Plugin access</strong>.</p>__SHOT:access:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Allow the importer</h3><p>Turn on the switch beside <code>openldr-v1-import</code>. Each switch saves immediately.</p>__SHOT:allow:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check the saved switch</h3><p>The switch stays on. Turn it off later to revoke the plugin's access to that connector.</p>__SHOT:allowed:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The plugin can now offer this connector as a source. Grant and revoke actions appear in Audit.</p></div>
+<h2 id="dg-source">Choose and check the source</h2>
+<p>A successful connection check establishes network access and login. The later Checks step establishes the expected tables.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the importer</h3><p>Select <strong>OpenLDR v1 import</strong> in the main menu.</p>__SHOT:plugin-nav:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the source connector</h3><p>On Source, select the connector that points to your v1 database.</p>__SHOT:source:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check the connection</h3><p>Select <strong>Check connection</strong>. Read each step and wait for <strong>The connection works.</strong> Correct any failure before proceeding.</p>__SHOT:connection:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The selected connection works from the CE server. No source data has been imported.</p></div>
+<h2 id="dg-options">Set the source time and import limits</h2>
+<p>v1 stores local date-times without a time zone. Choose the offset that describes those source timestamps.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Set Site time zone</h3><p>Select Next to open Options. Enter the source lab's UTC offset, such as <code>+02:00</code>. Use <code>Z</code> only for a source stored in UTC. The fictional example uses Z.</p>__SHOT:timezone:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose optional limits</h3><p>Database overrides the connector database. From date and To date limit registered dates. Panel codes is a comma-separated list. Leave limits empty only when you intend to read everything.</p>__SHOT:options:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Run the table checks</h3><p>Select Next to open Checks. Read the table and row counts. <strong>4 of 4</strong> tables must be found: Requests, LabResults, Patients and ASTResults.</p>__SHOT:checks:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Checks count source tables and rows without importing. If a table is missing, verify the database and source schema.</p></div>
+<h2 id="dg-dry">Try a dry run</h2>
+<p>A dry run reads and maps a limited number of requests without saving their clinical records.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Set the request limit</h3><p>Select Next to open Dry run. Enter a small request limit. The example uses <code>100</code> against a one-request fixture.</p>__SHOT:dry-limit:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Start the dry run</h3><p>Choose <strong>Start dry run</strong>.</p>__SHOT:dry-start:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read the result</h3><p>Wait for Finished. Check requests read, mapped or imported counts, and failures. Read the reasons before proceeding.</p>__SHOT:dry-result:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The fictional fixture finishes with one successful request and no failures. A successful sample does not guarantee that every request in a large source will map.</p></div>
+<h2 id="dg-import">Import the checked source</h2>
+<p>An actual import saves records in CE. Keep your source database backup and agree the import scope before starting.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Review the import summary</h3><p>Select Next to open Import. Check the connector and options.</p>__SHOT:import-summary:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Start the import</h3><p>Choose <strong>Start import</strong>. The server reads requests page by page and saves mapped records.</p>__SHOT:import-start:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read the completed counts</h3><p>Wait for Finished or inspect a stopped or failed result. The example saves one request with no failures. Counters update by page, so they can remain still while a page runs.</p>__SHOT:complete:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check Activity</h3><p>Open <strong>Activity</strong>. The import run appears with its status and request counts. A dry run is not listed as an import activity.</p>__SHOT:activity:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The mapped data is stored in CE. Imported records retain plugin and run provenance. The source database remains unchanged.</p></div>
+<h2 id="dg-phone">Read an import on a phone</h2>
+<p>Starting a long import is easier on a computer. The plugin page remains available on a phone.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the importer page</h3><p>Read the current step and run status. Scroll inside the page for longer summaries.</p>__SHOT:phone:1__</section>
+<h2 id="dg-resume">Stop, resume and repeat</h2>
+<p>An active import continues on the server when you leave the page. Returning opens the current run. <strong>Stop</strong> ends it after its current page. <strong>Resume</strong> continues after the last completed request following a stop, failure or server restart.</p>
+<p>A request already imported is replaced rather than duplicated. Repeating an import is a data update. Review your source scope and options first. The small screenshot fixture finished too quickly to demonstrate Stop and Resume. Those controls were checked in source, not captured during a long run.</p>
+<p>Failed requests do not stop other requests. The page shows the first 100 reasons. It stores reason codes without source row content. An import does not emit data.persisted for each imported request, so workflows listening for that event do not run for those records.</p>
+<h2 id="dg-cli">Run the import from the CLI</h2>
+<p>Follow <a href="start-here-review.html">Start here</a> for CLI setup. From <code>openldr_ce</code>, allow only the intended connector. Use a dry run before the actual import. Replace the id and source offset.</p>
+<pre><code>pnpm openldr import allow openldr-v1-import &lt;connector-id&gt;
+pnpm openldr import start --plugin openldr-v1-import --connector &lt;connector-id&gt; --option tz=+02:00 --dry-run --limit 100
+pnpm openldr import start --plugin openldr-v1-import --connector &lt;connector-id&gt; --option tz=+02:00
+pnpm openldr import status openldr-v1-import
+pnpm openldr import allowed openldr-v1-import</code></pre>
+<h2 id="dg-practice">Optional practice with fictional source data</h2>
+<p>Normal use needs an existing v1 database. For a disposable SQL Server only, <a href="v1-import-evidence/example-source.sql">example-source.sql</a> creates a separate <code>guide_v1</code> database, the four expected tables, one fictional request, one patient and one text result. ASTResults is empty. This is a minimal source fixture, not a complete historical v1 schema.</p>
+<p>The fixture creates a database. Read it before running and use a disposable server without a database named guide_v1. Ask your database operator to create a read-only account for it. No login credential is supplied in the file.</p>
+<p>In a source checkout, <code>pnpm build:v1-import</code> stages the reference importer. It needs Rust and the wasm32-wasip1 target. Install its staged file with <code>pnpm openldr plugin install reference-plugins/openldr-v1-import/plugin.wasm</code>. The unsigned build is for a test installation. Use your organisation's approved signed package in normal use.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>No importer in the main menu.</strong> Check plugin installation, enabled state and administrator access.</p>
+<p><strong>Plugin access is empty.</strong> Check that the connector is Microsoft SQL and the importer is installed.</p>
+<p><strong>No source choices.</strong> Allow the plugin on the correct connector, then reopen its page.</p>
+<p><strong>Connection fails.</strong> Use connector Diagnose and correct the first failed step.</p>
+<p><strong>Fewer than four tables.</strong> Check the database override, table names and read permissions. A connection success alone does not prove the v1 schema.</p>
+<p><strong>Start or Resume is refused.</strong> Read its error and the API log. The import service requires an audit entry before starting.</p>
+<p><strong>Counts stand still.</strong> Wait for the current page. Each page can contain 500 requests. Check errors before deciding a large import has stalled.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="connector-diagnose-review.html">Diagnose connections</a>, <a href="connectors-review.html">Connectors</a>, <a href="marketplace-review.html">Marketplace</a>, <a href="activity-review.html">Activity</a> and <a href="audit-review.html">Audit</a>.</p>
+</article>

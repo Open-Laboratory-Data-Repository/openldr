@@ -1,0 +1,20 @@
+{
+  "format": "openldr.custom-queries",
+  "version": 1,
+  "exportedAt": "2026-11-12T14:08:54.151Z",
+  "queries": [
+    {
+      "name": "Request count by period",
+      "sql": "SELECT COUNT(*) AS requests\nFROM lab_requests\nWHERE authored_at >= {{ param.from }}\n  AND authored_at < {{ param.to }}",
+      "params": [
+        {
+          "id": "period",
+          "type": "daterange",
+          "label": "Period",
+          "required": true
+        }
+      ],
+      "group": "Documentation examples"
+    }
+  ]
+}

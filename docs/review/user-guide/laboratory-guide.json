@@ -1,0 +1,204 @@
+{
+  "title": "Laboratory",
+  "meta": [
+    "Administration",
+    "Set issuing-laboratory details",
+    "About 10 minutes"
+  ],
+  "intro": [
+    "Laboratory stores the issuing laboratory name, address, contact details and logo used by report templates. It also sets the default facility register and the local time zone.",
+    "Use your real laboratory details and approved logo. The pictures show a fictional laboratory in a test installation. No practice data is required. You need View settings to open the page and Edit general settings to save it.",
+    "The issuing laboratory is the organisation producing reports. Facilities are the organisations sending work. Choosing a default register here does not create or import facilities."
+  ],
+  "tasks": [
+    {
+      "id": "identity",
+      "title": "Save your laboratory details",
+      "intro": [
+        "Use this after installation or when the issuing laboratory details change."
+      ],
+      "steps": [
+        [
+          "Open Settings and Laboratory",
+          "Open your user menu at the bottom left, choose <strong>Settings</strong>, then select <strong>Laboratory</strong>.",
+          [
+            "user-menu",
+            "settings-menu",
+            "laboratory-page"
+          ]
+        ],
+        [
+          "Enter the laboratory name",
+          "Enter your issuing laboratory name in <strong>Laboratory name</strong>. The example uses <code>Documentation laboratory</code>.",
+          [
+            "name"
+          ]
+        ],
+        [
+          "Enter the address",
+          "Enter the address for your letterhead in <strong>Address</strong>. It can contain more than one line.",
+          [
+            "address"
+          ]
+        ],
+        [
+          "Enter the contact details",
+          "Enter your approved contact details in <strong>Contact</strong>. The picture uses an example.invalid email address.",
+          [
+            "contact"
+          ]
+        ],
+        [
+          "Choose the facility register",
+          "In <strong>Facility register</strong>, select an existing registered source. If the needed source is absent, register it through Facilities first. This choice supplies the default register for the Facility form.",
+          [
+            "register"
+          ]
+        ],
+        [
+          "Set the time zone when applicable",
+          "For PostgreSQL or MySQL, enter a named time zone such as <code>Africa/Dar_es_Salaam</code>. Read the help below the field. SQL Server requires a Windows time-zone name in each report run instead, so leave this setting empty there.",
+          [
+            "timezone"
+          ]
+        ],
+        [
+          "Save the details",
+          "Open the page dots at the top right and select <strong>Save</strong>.",
+          [
+            "page-actions",
+            "save-identity"
+          ]
+        ]
+      ],
+      "result": "The saved details remain when you reopen Laboratory.",
+      "resultShots": [
+        "identity-result"
+      ]
+    },
+    {
+      "id": "clear",
+      "title": "Remove an old logo",
+      "intro": [
+        "Use this when the current logo should no longer appear in templates that use the laboratory logo."
+      ],
+      "steps": [
+        [
+          "Clear the draft logo",
+          "Select <strong>Clear</strong> beside Logo. This changes the draft only.",
+          [
+            "clear-logo"
+          ]
+        ],
+        [
+          "Save the removal",
+          "Open the page dots and select <strong>Save</strong>.",
+          [
+            "save-clear-logo"
+          ]
+        ]
+      ],
+      "result": "The saved laboratory settings no longer contain a logo.",
+      "resultShots": []
+    },
+    {
+      "id": "logo",
+      "title": "Upload the laboratory logo",
+      "intro": [
+        "Use a PNG or JPEG file up to 256 KB. Transparent PNG is useful for a letterhead logo."
+      ],
+      "steps": [
+        [
+          "Choose the image",
+          "Select <strong>Choose file\u2026</strong> beside Logo and select your approved local image.",
+          [
+            "choose-logo"
+          ]
+        ],
+        [
+          "Check the preview",
+          "Confirm that the expected image appears beside Logo. The picture reuses the test installation's shipped mark.",
+          [
+            "logo-preview"
+          ]
+        ],
+        [
+          "Save the logo",
+          "Open the page dots and select <strong>Save</strong>.",
+          [
+            "save-logo"
+          ]
+        ]
+      ],
+      "result": "The logo remains after reopening Laboratory. A report template must use the laboratory tokens to display these values.",
+      "resultShots": [
+        "logo-result"
+      ]
+    },
+    {
+      "id": "phone",
+      "title": "Change laboratory details on a phone",
+      "intro": [
+        "Use the same fields on a phone. The page scrolls vertically."
+      ],
+      "steps": [
+        [
+          "Edit the identity fields",
+          "Enter the laboratory name and other fields within the phone-width form.",
+          [
+            "phone-name"
+          ]
+        ],
+        [
+          "Scroll to Logo",
+          "Scroll down to the logo preview and Choose file control. Save changes through the page dots.",
+          [
+            "phone-logo"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "tokens",
+      "title": "Use the details in report templates",
+      "paragraphs": [
+        "Report templates can use <code>{{lab.name}}</code>, <code>{{lab.address}}</code>, <code>{{lab.contact}}</code> and <code>{{lab.logo}}</code>. The page prints these token names below its description. Use Report Designer to place them in a template. Saving Laboratory does not edit a template."
+      ]
+    },
+    {
+      "id": "practice",
+      "title": "Optional practice",
+      "paragraphs": [
+        "In a test installation, save a fictional laboratory name and example.invalid contact address. Reuse an approved test PNG or JPEG for the upload exercise. Restore your intended settings afterward."
+      ]
+    },
+    {
+      "id": "limits",
+      "title": "Limits",
+      "paragraphs": [
+        "The logo accepts PNG and JPEG, up to 256 KB. SVG, WebP and image web addresses are not accepted. The register picker lists existing sources; it cannot register one."
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>The register list is empty.</strong> Open Facilities and register the source before returning here.",
+        "<strong>The time zone is refused.</strong> Use a named zone, not a fixed offset. Follow the SQL Server exception shown below the field.",
+        "<strong>The logo is refused.</strong> Check its format and size. Choose a PNG or JPEG no larger than 256 KB.",
+        "<strong>A report does not show the saved details.</strong> Check whether its template uses the laboratory tokens."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "Read <a href=\"./facilities-review.html\">Facilities</a> to register a source. Read <a href=\"./setup-checks-review.html\">Setup checks</a> to review readiness. Read <a href=\"./start-here-review.html\">Start here</a> for command-line setup."
+      ]
+    }
+  ]
+}

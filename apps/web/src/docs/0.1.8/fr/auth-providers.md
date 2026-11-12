@@ -2,6 +2,10 @@
 
 OpenLDR peut connecter les personnes de trois façons : avec ses propres comptes, par Keycloak, ou par un fournisseur OpenID Connect générique, ou OIDC. `AUTH_ADAPTER` choisit l'une d'elles. S'il n'est pas défini, il vaut `keycloak`. Le mode générique exige la découverte OIDC et des jetons d'accès JWT signés. Les jetons opaques ne sont pas acceptés. Ce guide ne certifie pas la configuration d'un second fournisseur.
 
+<!-- operator-platform -->
+
+Effectuez la maintenance sur l'hôte OpenLDR, dans le dossier Compose installé. Les exemples utilisent `~/Downloads/openldr_ce` sous Linux/macOS et `C:\openldr_ce` dans PowerShell. Remplacez ces chemins. Le terminal affiche déjà l'invite bleue ; saisissez seulement la commande. Les extraits de configuration indiquent le fichier à modifier ; ce ne sont pas des commandes. Ces images ne prouvent pas une opération réussie. Les données de démonstration sont facultatives.
+
 ## Choisir un mode de connexion
 
 | Mode | Où vivent les comptes et les mots de passe | Choisissez-le quand |
@@ -79,51 +83,87 @@ Sans administration du fournisseur, gérez les comptes, mots de passe et session
 
 ## Configurer un fournisseur générique
 
-Utilisez un nouveau déploiement sans identités liées à un autre émetteur. Enregistrez un client public pour navigateur avec code d'autorisation et PKCE. PKCE lie l'échange du code au navigateur qui a lancé la connexion. Ne donnez aucun secret client à Studio.
+Utilisez une installation neuve sans identités liées à un autre émetteur. Keycloak est le défaut seulement quand `AUTH_ADAPTER` n'est pas défini. OIDC générique exige découverte et jetons JWT signés ; les jetons opaques sont refusés. Ce guide ne certifie aucun fournisseur externe. Les captures de première connexion restent différées.
 
-Enregistrez `https://YOUR_HOST/studio/auth/callback` comme URI de redirection et `https://YOUR_HOST/studio` comme URI de retour après déconnexion. Autorisez l'origine de Studio pour la découverte et les requêtes de jetons du navigateur. Le fournisseur doit publier les métadonnées OIDC et les clés de signature. Ses jetons d'accès doivent être des JWT avec l'émetteur et l'audience configurés.
+### 1. Enregistrer le client navigateur chez le fournisseur
 
-```dotenv
-AUTH_ADAPTER=oidc
-IDENTITY_ADMIN_ADAPTER=none
-OIDC_ISSUER_URL=https://YOUR_PROVIDER/ISSUER_PATH
-OIDC_AUDIENCE=openldr-api
-OIDC_WEB_CLIENT_ID=openldr-web
+Remplacez YOUR_HOST. PKCE lie l’échange au navigateur initial. Autorisez l’origine Studio pour découverte et jetons. Aucun secret client dans Studio. Les écrans fournisseurs varient ; ceci est un exemple de configuration.
+
+```text
+{{operator:auth-client}}
 ```
 
-`OIDC_SCOPES` vaut `openid profile email` par défaut. Ajoutez les scopes API exigés par le fournisseur et conservez `openid`. Définissez `OIDC_RESOURCE` si le fournisseur exige une URL de ressource pour émettre le jeton d’accès API. Ces valeurs viennent de sa configuration ; OpenLDR ne les déduit pas de `OIDC_AUDIENCE`.
+![Enregistrer le client navigateur chez le fournisseur.](guide:operator-auth-client)
 
-Remplacez l'émetteur, l'audience et l'identifiant client par les valeurs du fournisseur. Configurez cette audience dans les jetons d'accès. OpenLDR vérifie la signature, l'émetteur, l'audience et l'expiration. Un jeton d'identité ne remplace pas un jeton d'accès API.
+### 2. Définir les valeurs dans le fichier environnement
 
-`OIDC_INTERNAL_JWKS_URL` peut fournir explicitement une adresse interne pour les clés de signature. Cela ne change pas l'émetteur attendu. `OIDC_INTERNAL_ISSUER_URL` concerne Keycloak uniquement ; le mode générique n'en déduit aucune adresse. Retirez les anciens paramètres Keycloak d'un déploiement générique. Le mode Keycloak conserve des métadonnées statiques pour les proxys qui bloquent la découverte.
+Remplacez émetteur, audience et identifiant. Gardez openid ; ajoutez les portées API et OIDC_RESOURCE seulement si requis. Le jeton d’accès doit inclure l’audience. Un ID token n’est pas un jeton API. Retirez les paramètres Keycloak obsolètes. OIDC_INTERNAL_ISSUER_URL est ignoré en mode générique. OIDC_INTERNAL_JWKS_URL change la récupération des clés, pas l’émetteur attendu.
 
-Redémarrez les processus applicatifs après modification. Sans adresse de déconnexion dans les métadonnées, la déconnexion efface seulement la session locale. La session du fournisseur peut rester active.
+```text
+{{operator:auth-config}}
+```
 
-## Donner accès au premier administrateur
+![Définir les valeurs dans le fichier environnement.](guide:operator-auth-config)
+
+### 3. Recréer l’API et lire son démarrage
+
+Résolvez erreurs de configuration ou découverte. OpenLDR contrôle signature, émetteur, audience et expiration. Sans endpoint de déconnexion, la session locale s’efface mais celle du fournisseur peut rester. La connexion réelle sera testée séparément.
+
+```sh
+{{operator:auth-recreate}}
+```
+
+![Recréer l’API et lire son démarrage.](guide:operator-auth-recreate)
+
+## Accorder l’administration à un compte identifié
 
 Cette section concerne Keycloak et OIDC générique. En connexion locale, le code de configuration crée le premier administrateur.
 
-Connectez-vous une fois pour créer le compte local. Cette première connexion n'accorde aucun accès administrateur. Sur le serveur, trouvez le sujet du compte avec `openldr user list`. Vérifiez ce sujet auprès du fournisseur, puis lancez :
+Le compte doit déjà avoir effectué sa première connexion et exister localement. Cela ne donne pas automatiquement l’administration. Cette tâche opérateur suppose ce préalable, sans décrire la connexion.
+
+### 1. Lire le compte et son sujet fournisseur
+
+Vérifiez le sujet chez le fournisseur. Ne confondez pas sujet, identifiant local et nom. Gardez la sortie privée.
 
 ```sh
-openldr user assign-role SUBJECT lab_admin
+{{operator:auth-users}}
 ```
 
-Remplacez `SUBJECT` par le sujet exact du fournisseur, pas l'identifiant utilisateur local. Reconnectez-vous et vérifiez les droits. Les changements suivants utilisent cette commande ou les actions utilisateur de Studio.
+![Lire le compte et son sujet fournisseur.](guide:operator-auth-users)
 
-## Conserver l'émetteur
+### 2. Attribuer le rôle administrateur local
 
-OpenLDR lie la base applicative à son émetteur avant de démarrer les services authentifiés. Un changement ultérieur bloque le démarrage. Une nouvelle URL peut désigner d'autres identités, même avec les mêmes noms d'utilisateur. Ce lien reste local et ne passe pas par la synchronisation des paramètres.
+Remplacez SUBJECT par le sujet vérifié. Cela change les autorisations locales. Vérifiez l’accès obtenu. Utilisez ensuite cette commande ou les actions utilisateur Studio.
 
-Lors de la première mise à niveau avec cette protection, conservez `OIDC_ISSUER_URL`. Les anciennes lignes utilisateur ne prouvent pas leur émetteur d'origine. Le premier enregistrement conserve la valeur configurée et ne détecte pas une erreur antérieure. Gardez le même émetteur lors d'une restauration de la base applicative.
-
-Si le même fournisseur a seulement changé d'adresse, par exemple un nouveau nom d'hôte ou le passage à HTTPS, les identifiants des utilisateurs ne changent pas. Définissez la nouvelle `OIDC_ISSUER_URL`, puis exécutez :
-
-```bash
-openldr auth rebind-issuer --force
+```sh
+{{operator:auth-role}}
 ```
 
-Sans `--force`, la commande affiche les deux émetteurs et ne modifie rien. Avec `--force`, elle enregistre un événement d'audit `auth.issuer.rebind`. Ne l'utilisez pas pour passer à un autre fournisseur. Il n'existe aucune migration automatique des comptes. Le transfert entre fournisseurs, la correspondance des sujets et la restauration des identités exigent une procédure distincte validée par l'opérateur. Les commandes de migration de base restent disponibles sans démarrer les services authentifiés.
+![Attribuer le rôle administrateur local.](guide:operator-auth-role)
+
+## Préserver l’émetteur d’une base existante
+
+La base est liée à son émetteur avant le démarrage authentifié. Gardez-le lors des mises à niveau et restaurations. Les noms ne prouvent pas l’identité de l’ancien émetteur. La liaison reste locale et ne se synchronise pas. Un autre fournisseur exige une migration explicite.
+
+### 1. Examiner le déplacement sans le modifier
+
+Seulement si le même fournisseur change d’adresse ou protocole, définissez la nouvelle URL et examinez les valeurs ancienne/nouvelle. Sans --force la liaison divergente reste inchangée. Appliquez d’abord les migrations en attente.
+
+```sh
+{{operator:auth-rebind-review}}
+```
+
+![Examiner le déplacement sans le modifier.](guide:operator-auth-rebind-review)
+
+### 2. Confirmer seulement une identité fournisseur inchangée
+
+Utilisez --force seulement pour le même fournisseur avec sujets inchangés. Ce n’est pas un raccourci pour changer de fournisseur. L’événement auth.issuer.rebind enregistre la modification. Redémarrez et vérifiez séparément. Ce guide ne l’exécute pas sur votre hôte.
+
+```sh
+{{operator:auth-rebind}}
+```
+
+![Confirmer seulement une identité fournisseur inchangée.](guide:operator-auth-rebind)
 
 ## Dépannage de la connexion locale
 

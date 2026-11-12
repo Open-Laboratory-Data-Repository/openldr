@@ -114,11 +114,12 @@ function resolveRoute(route: string): string {
 // without one just skips it.
 const INNER_PANELS = ['Collapse library', 'Collapse node library', 'Collapse explorer'];
 
-async function capture(browser: Browser, shot: GalleryShot): Promise<void> {
-  const context = await browser.newContext({ baseURL: BASE_URL, viewport: VIEWPORT });
+async function capture(browser: Browser, shot: GalleryShot, theme: 'dark' | 'light' = 'dark'): Promise<void> {
+  const context = await browser.newContext({ baseURL: BASE_URL, viewport: VIEWPORT, deviceScaleFactor: 2 });
   const page = await context.newPage();
   try {
-    await preparePage(page, 'dark');
+    await page.route('**/api/me/preferences', route => route.fulfill({ json: { theme, sidebarCollapsed: true, language: 'en' } }));
+    await preparePage(page, theme);
     // The nav rail is the same on every screen and says nothing about the feature being shown.
     // Collapsed, it gives the content roughly 180px more width. This key is what the shell reads.
     await page.addInitScript(() => {
@@ -148,7 +149,8 @@ async function capture(browser: Browser, shot: GalleryShot): Promise<void> {
     await page.waitForTimeout(500);
 
     const target = shot.crop ? page.locator(shot.crop).first() : page;
-    await target.screenshot({ path: join(OUT, shot.name) });
+    const name = theme === 'light' ? shot.name.replace(/\.png$/, '-light.png') : shot.name;
+    await target.screenshot({ path: join(OUT, name) });
   } finally {
     await context.close();
   }
@@ -161,5 +163,6 @@ test.beforeAll(async ({ request }) => {
 for (const shot of SHOTS) {
   test(`gallery ${shot.name}`, async ({ browser }) => {
     await capture(browser, shot);
+    if (shot.name === 'dashboard.png') await capture(browser, shot, 'light');
   });
 }

@@ -1,0 +1,363 @@
+[
+  {
+    "id": "user-menu",
+    "crop": [
+      0,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 8,
+        "y": 755.5,
+        "width": 223,
+        "height": 36.5
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "settings-menu",
+    "crop": [
+      0,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 13,
+        "y": 682.5,
+        "width": 198,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "laboratory-page",
+    "crop": [
+      103.5,
+      8.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 252,
+        "y": 140,
+        "width": 183,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "name",
+    "crop": [
+      536.734375,
+      0,
+      743.265625,
+      464.541015625
+    ],
+    "targets": [
+      {
+        "x": 570.734375,
+        "y": 180.265625,
+        "width": 693.265625,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "address",
+    "crop": [
+      536.734375,
+      23.9951171875,
+      743.265625,
+      464.541015625
+    ],
+    "targets": [
+      {
+        "x": 570.734375,
+        "y": 224.265625,
+        "width": 693.265625,
+        "height": 64
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "contact",
+    "crop": [
+      536.734375,
+      83.9951171875,
+      743.265625,
+      464.541015625
+    ],
+    "targets": [
+      {
+        "x": 570.734375,
+        "y": 300.265625,
+        "width": 693.265625,
+        "height": 32
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "register",
+    "crop": [
+      428.125,
+      247.25,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 575.75,
+        "y": 381.25,
+        "width": 184.75,
+        "height": 32
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "timezone",
+    "crop": [
+      536.734375,
+      171.9951171875,
+      743.265625,
+      464.541015625
+    ],
+    "targets": [
+      {
+        "x": 570.734375,
+        "y": 388.265625,
+        "width": 693.265625,
+        "height": 32
+      }
+    ],
+    "step": 6,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "page-actions",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1232,
+        "y": 64,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "step": 7,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "save-identity",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 105,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 7,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "identity-result",
+    "crop": [
+      536.734375,
+      0,
+      743.265625,
+      464.541015625
+    ],
+    "targets": [
+      {
+        "x": 570.734375,
+        "y": 180.265625,
+        "width": 693.265625,
+        "height": 32
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "clear-logo",
+    "crop": [
+      541.515625,
+      362.515625,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 752.78125,
+        "y": 496.515625,
+        "width": 57.46875,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "save-clear-logo",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 105,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "choose-logo",
+    "crop": [
+      445.7578125,
+      362.515625,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 630.734375,
+        "y": 496.515625,
+        "width": 110.046875,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "logo-preview",
+    "crop": [
+      354.734375,
+      362.515625,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 570.734375,
+        "y": 488.515625,
+        "width": 48,
+        "height": 48
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "save-logo",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 105,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "logo-result",
+    "crop": [
+      354.734375,
+      362.515625,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 570.734375,
+        "y": 488.515625,
+        "width": 48,
+        "height": 48
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "phone-name",
+    "crop": [
+      0,
+      148.734375,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 122.734375,
+        "y": 249.921875,
+        "width": 236.265625,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "phone-logo",
+    "crop": [
+      0,
+      525.484375,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 182.734375,
+        "y": 626.671875,
+        "width": 110.046875,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  }
+]

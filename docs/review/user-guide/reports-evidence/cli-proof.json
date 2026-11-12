@@ -1,0 +1,17 @@
+{
+  "command": [
+    "pnpm",
+    "openldr",
+    "report",
+    "run",
+    "r-96b6adbb-96f2-4934-a38d-f186915558ed",
+    "--param",
+    "from=2026-01-01",
+    "--param",
+    "to=2026-11-12",
+    "--json"
+  ],
+  "exitCode": 0,
+  "stdout": "{\n  \"columns\": [\n    {\n      \"key\": \"requests\",\n      \"label\": \"requests\",\n      \"kind\": \"string\"\n    }\n  ],\n  \"rows\": [\n    {\n      \"requests\": 0\n    }\n  ],\n  \"chart\": {\n    \"type\": \"stat\",\n    \"value\": \"1\",\n    \"label\": \"rows\"\n  },\n  \"meta\": {\n    \"generatedAt\": \"2026-11-12T14:25:02.238Z\",\n    \"rowCount\": 1\n  }\n}\n",
+  "stderr": "$ node packages/cli/dev.mjs report run r-96b6adbb-96f2-4934-a38d-f186915558ed --param from=2026-01-01 --param to=2026-11-12 --json\n(node:439728) ExperimentalWarning: WASI is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n{\"level\":30,\"time\":1794493502224,\"pid\":439728,\"hostname\":\"fredrick-Station\",\"name\":\"openldr\",\"msg\":\"sync disabled (not configured)\"}\n"
+}

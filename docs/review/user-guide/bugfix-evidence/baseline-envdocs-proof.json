@@ -1,0 +1,19 @@
+{
+  "commit": "8a04b7b597a894899b7f2c383828ae8ef19df197",
+  "checkout": "unchanged main",
+  "command": "pnpm --filter @openldr/config exec vitest run src/env-docs.test.ts -t 'apps/studio/src/docs/0\\.1\\.8/(en|fr|pt)/environment\\.md lists every env var'",
+  "exitCode": 1,
+  "output": [
+    "\u2192 apps/studio/src/docs/0.1.8/en/environment.md has no row for: SYNC_ALLOW_INSECURE_TRANSPORT, OPENLDR_SITE_ID: expected [ \u2026(2) ] to deeply equal []",
+    "\u2192 apps/studio/src/docs/0.1.8/fr/environment.md has no row for: SYNC_ALLOW_INSECURE_TRANSPORT, OPENLDR_SITE_ID: expected [ \u2026(2) ] to deeply equal []",
+    "\u2192 apps/studio/src/docs/0.1.8/pt/environment.md has no row for: SYNC_ALLOW_INSECURE_TRANSPORT, OPENLDR_SITE_ID: expected [ \u2026(2) ] to deeply equal []",
+    "AssertionError: apps/studio/src/docs/0.1.8/en/environment.md has no row for: SYNC_ALLOW_INSECURE_TRANSPORT, OPENLDR_SITE_ID: expected [ \u2026(2) ] to deeply equal []",
+    "48|     expect(missing, `${page} has no row for: ${missing.join(', ')}`).t\u2026",
+    "AssertionError: apps/studio/src/docs/0.1.8/fr/environment.md has no row for: SYNC_ALLOW_INSECURE_TRANSPORT, OPENLDR_SITE_ID: expected [ \u2026(2) ] to deeply equal []",
+    "48|     expect(missing, `${page} has no row for: ${missing.join(', ')}`).t\u2026",
+    "AssertionError: apps/studio/src/docs/0.1.8/pt/environment.md has no row for: SYNC_ALLOW_INSECURE_TRANSPORT, OPENLDR_SITE_ID: expected [ \u2026(2) ] to deeply equal []",
+    "48|     expect(missing, `${page} has no row for: ${missing.join(', ')}`).t\u2026",
+    "Tests  3 failed | 5 skipped (8)"
+  ],
+  "cause": "Both names are already present, but the check requires backticks. No environment document changed in this repair."
+}

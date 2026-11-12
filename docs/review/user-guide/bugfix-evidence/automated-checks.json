@@ -1,0 +1,98 @@
+[
+  {
+    "command": "pnpm --filter @openldr/studio test src/docs src/pages/Docs.test.tsx src/pages/settings/Marketplace.test.tsx src/pages/settings/marketplace/PackageDetail.test.tsx src/reports/reportDefsApi.test.ts src/roles/CapabilityGrid.test.tsx src/pages/Forms.test.tsx src/pages/FormCapture.test.tsx",
+    "exitCode": 0,
+    "output": [
+      "Test Files  20 passed (20)",
+      "Tests  194 passed (194)"
+    ]
+  },
+  {
+    "command": "pnpm --filter @openldr/server test src/report-defs-routes.test.ts src/reports-routes.test.ts",
+    "exitCode": 0,
+    "output": [
+      "Test Files  2 passed (2)",
+      "Tests  46 passed (46)"
+    ]
+  },
+  {
+    "command": "pnpm --filter @openldr/bootstrap test src/reporting-date-params.test.ts src/reporting-data-driven.test.ts src/reporting-param-format.test.ts src/reporting-row-limit.test.ts src/report-scheduler.test.ts",
+    "exitCode": 0,
+    "output": [
+      "Test Files  5 passed (5)",
+      "Tests  76 passed (76)"
+    ]
+  },
+  {
+    "command": "pnpm --filter @openldr/reporting test src/report-def.test.ts",
+    "exitCode": 0,
+    "output": [
+      "Test Files  1 passed (1)",
+      "Tests  8 passed (8)"
+    ]
+  },
+  {
+    "command": "pnpm --filter @openldr/dashboards test src/custom-query-run.test.ts",
+    "exitCode": 0,
+    "output": [
+      "Test Files  1 passed (1)",
+      "Tests  19 passed (19)"
+    ]
+  },
+  {
+    "command": "pnpm --filter @openldr/rbac test",
+    "exitCode": 0,
+    "output": [
+      "Test Files  3 passed (3)",
+      "Tests  20 passed (20)"
+    ]
+  },
+  {
+    "command": "pnpm --filter @openldr/config test src/lab-identity.test.ts",
+    "exitCode": 0,
+    "output": [
+      "Test Files  1 passed (1)",
+      "Tests  22 passed (22)"
+    ]
+  },
+  {
+    "command": "pnpm --filter @openldr/web test src/docs",
+    "exitCode": 0,
+    "output": [
+      "Test Files  3 passed (3)",
+      "Tests  29 passed (29)"
+    ]
+  },
+  {
+    "command": "pnpm --dir e2e exec playwright test --config=../docs/review/user-guide/bugfix-evidence/reference-theme.config.cjs",
+    "exitCode": 0,
+    "output": [
+      "2 passed (1.0s)"
+    ]
+  },
+  {
+    "command": "pnpm --filter @openldr/studio build",
+    "exitCode": 0,
+    "output": [
+      "\u2713 built in 12.76s"
+    ]
+  },
+  {
+    "command": "pnpm --filter @openldr/web build",
+    "exitCode": 0,
+    "output": [
+      "\u2713 built in 7.92s"
+    ]
+  },
+  {
+    "command": "pnpm --filter @openldr/studio typecheck && pnpm --filter @openldr/bootstrap typecheck && pnpm --filter @openldr/server typecheck && pnpm --filter @openldr/reporting typecheck && pnpm --filter @openldr/rbac typecheck && pnpm --dir e2e exec tsc --noEmit",
+    "exitCode": 0,
+    "output": [
+      "$ tsc --noEmit",
+      "$ tsc --noEmit",
+      "$ tsc --noEmit",
+      "$ tsc --noEmit",
+      "$ tsc --noEmit"
+    ]
+  }
+]

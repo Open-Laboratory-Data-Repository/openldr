@@ -1,0 +1,20 @@
+{
+  "taskHeadings": 17,
+  "numberedArticleSteps": 59,
+  "desktop": {
+    "active": "Use Test catalog on a phone",
+    "listTop": 43,
+    "listHeight": 333,
+    "listScrollHeight": 472,
+    "activeVisible": true,
+    "articleTop": 34033,
+    "windowTop": 0,
+    "headerVisible": true
+  },
+  "mobile": {
+    "width": 375,
+    "height": 812,
+    "pageOverflow": false
+  },
+  "limits": "Headless layout cannot prove retractable phone browser chrome."
+}

@@ -1,0 +1,196 @@
+{
+  "capturedAt": "2026-11-12T14:08:04.807Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5189/studio/docs/advanced-docs",
+  "steps": [
+    {
+      "id": "docs",
+      "label": "Open Docs from the main menu.",
+      "path": "advanced-docs-evidence/docs.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 576,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "search",
+      "label": "Search documentation by title or topic.",
+      "path": "advanced-docs-evidence/search.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 284.5625,
+          "y": 53.5,
+          "width": 202.4375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "guide-link",
+      "label": "Choose Deployment & Developer Docs from the results.",
+      "path": "advanced-docs-evidence/guide-link.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 123,
+          "width": 255,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "guide",
+      "label": "Read the deployment and developer documentation entry.",
+      "path": "advanced-docs-evidence/guide.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 520,
+          "y": 158,
+          "width": 480,
+          "height": 38.390625
+        }
+      ]
+    },
+    {
+      "id": "repository",
+      "label": "Use the project website or source-repository link for deployment and development material.",
+      "path": "advanced-docs-evidence/repository.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 520,
+          "y": 439.609375,
+          "width": 375.875,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "download",
+      "label": "Download a guide before taking Studio offline.",
+      "path": "advanced-docs-evidence/download.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1240,
+          "y": 55.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "this-page",
+      "label": "Choose This page for this guide only.",
+      "path": "advanced-docs-evidence/this-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1117,
+          "y": 96.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "format",
+      "label": "Choose Markdown, PDF or Word.",
+      "path": "advanced-docs-evidence/format.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 962,
+          "y": 101.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone",
+      "label": "Read the guide at phone width.",
+      "path": "advanced-docs-evidence/phone.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 72,
+          "y": 188,
+          "width": 279,
+          "height": 76.78125
+        }
+      ]
+    }
+  ]
+}
