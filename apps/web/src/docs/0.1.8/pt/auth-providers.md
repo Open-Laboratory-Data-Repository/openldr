@@ -1,6 +1,8 @@
 # Fornecedores de autenticação
 
-O OpenLDR aceita Keycloak e OpenID Connect genérico, ou OIDC, para iniciar sessão. Keycloak continua a ser a opção predefinida. O modo genérico exige descoberta OIDC e tokens de acesso JWT assinados. Tokens opacos não são aceites. Este guia não certifica a configuração de um segundo fornecedor.
+<!-- operator-platform -->
+
+Faça a manutenção no anfitrião OpenLDR, na pasta Compose instalada. Os exemplos usam `~/Downloads/openldr_ce` no Linux/macOS e `C:\openldr_ce` no PowerShell. Substitua estes caminhos. O terminal já mostra o prompt azul; escreva apenas o comando. As ilustrações de ficheiros mostram texto para editar no ficheiro indicado. As imagens não provam uma operação concluída. Os dados de exemplo são opcionais.
 
 ## Escolher autenticação e administração
 
@@ -16,48 +18,82 @@ Sem administração do fornecedor, gira contas, palavras-passe e sessões no for
 
 ## Configurar um fornecedor genérico
 
-Use uma nova instalação sem identidades ligadas a outro emissor. Registe um cliente público de navegador com código de autorização e PKCE. PKCE associa a troca do código ao navegador que iniciou a sessão. Não forneça um segredo de cliente ao Studio.
+Use uma instalação nova sem identidades ligadas a outro emissor. Keycloak continua o padrão. OIDC genérico exige descoberta e tokens JWT assinados; tokens opacos não são suportados. Não certifica fornecedores externos. Capturas do primeiro início de sessão continuam adiadas.
 
-Registe `https://YOUR_HOST/studio/auth/callback` como URI de redirecionamento e `https://YOUR_HOST/studio` como URI de retorno após terminar sessão. Autorize a origem do Studio para descoberta e pedidos de tokens pelo navegador. O fornecedor deve publicar metadados OIDC e chaves de assinatura. Os tokens de acesso devem ser JWT com o emissor e a audiência configurados.
+### 1. Registar o cliente navegador no fornecedor
 
-```dotenv
-AUTH_ADAPTER=oidc
-IDENTITY_ADMIN_ADAPTER=none
-OIDC_ISSUER_URL=https://YOUR_PROVIDER/ISSUER_PATH
-OIDC_AUDIENCE=openldr-api
-OIDC_WEB_CLIENT_ID=openldr-web
+Substitua YOUR_HOST. PKCE liga a troca ao navegador inicial. Permita a origem Studio para descoberta e tokens. Não dê um segredo de cliente ao Studio. Ecrãs variam; isto é um exemplo de configuração.
+
+```text
+{{operator:auth-client}}
 ```
 
-`OIDC_SCOPES` usa `openid profile email` por omissão. Acrescente os scopes API exigidos pelo fornecedor e mantenha `openid`. Defina `OIDC_RESOURCE` se o fornecedor exigir um URL de recurso para emitir o token de acesso API. Estes valores vêm da configuração do fornecedor; o OpenLDR não os deduz de `OIDC_AUDIENCE`.
+![Registar o cliente navegador no fornecedor.](guide:operator-auth-client)
 
-Substitua emissor, audiência e identificador do cliente pelos valores do fornecedor. Configure essa audiência nos tokens de acesso. O OpenLDR verifica assinatura, emissor, audiência e expiração. Um token de identidade não substitui um token de acesso à API.
+### 2. Definir valores no ficheiro de ambiente
 
-`OIDC_INTERNAL_JWKS_URL` pode fornecer explicitamente um endereço interno para as chaves de assinatura. Não altera o emissor esperado. `OIDC_INTERNAL_ISSUER_URL` pertence apenas ao Keycloak; o modo genérico não deriva endereços desse valor. Remova definições antigas do Keycloak de uma instalação genérica. O modo Keycloak conserva metadados estáticos para proxies que bloqueiam a descoberta.
+Substitua emissor, audiência e identificador. Mantenha openid; acrescente âmbitos API e OIDC_RESOURCE apenas se necessário. O token de acesso deve incluir a audiência. Um ID token não é um token API. Retire parâmetros Keycloak antigos. OIDC_INTERNAL_ISSUER_URL é ignorado no modo genérico. OIDC_INTERNAL_JWKS_URL muda onde obter chaves, não o emissor esperado.
 
-Reinicie os processos da aplicação após alterar a configuração. Sem endereço de logout nos metadados, terminar sessão limpa apenas a sessão local. A sessão do fornecedor pode continuar ativa.
+```text
+{{operator:auth-config}}
+```
 
-## Dar acesso ao primeiro administrador
+![Definir valores no ficheiro de ambiente.](guide:operator-auth-config)
 
-Inicie sessão uma vez para criar a conta local. O primeiro acesso não concede direitos administrativos. No servidor, encontre o sujeito da conta com `openldr user list`. Confirme esse sujeito junto do fornecedor e execute:
+### 3. Recriar a API e ler o arranque
+
+Resolva erros de configuração ou descoberta. OpenLDR verifica assinatura, emissor, audiência e validade. Sem endpoint de saída, limpa a sessão local mas a do fornecedor pode continuar. Teste o início de sessão separadamente na instalação nova.
 
 ```sh
-openldr user assign-role SUBJECT lab_admin
+{{operator:auth-recreate}}
 ```
 
-Substitua `SUBJECT` pelo sujeito exato do fornecedor, não pelo identificador local do utilizador. Inicie sessão novamente e verifique os direitos. Alterações posteriores usam a mesma CLI ou as ações de utilizador do Studio.
+![Recriar a API e ler o arranque.](guide:operator-auth-recreate)
 
-## Conservar o emissor
+## Dar acesso administrativo a uma conta identificada
 
-O OpenLDR associa a base da aplicação ao emissor antes de iniciar serviços autenticados. Alterações posteriores bloqueiam o arranque. Outro URL pode identificar contas diferentes, mesmo com nomes iguais. A associação permanece local e não entra na sincronização de definições.
+A conta deve já ter feito a primeira autenticação e existir localmente. Isso não dá administração automaticamente. Esta tarefa pressupõe esse passo, sem descrever o início de sessão.
 
-Na primeira atualização com esta proteção, mantenha `OIDC_ISSUER_URL`. Os registos antigos não comprovam o emissor original. A primeira associação guarda o valor configurado e não deteta um erro anterior. Mantenha o mesmo emissor ao restaurar a base da aplicação.
+### 1. Ler a conta e o sujeito do fornecedor
 
-Se o mesmo fornecedor apenas mudou de endereço, por exemplo um novo nome de anfitrião ou a passagem para HTTPS, os identificadores dos utilizadores não mudam. Defina o novo `OIDC_ISSUER_URL` e execute:
+Confirme o sujeito no fornecedor. Não confunda com ID local ou nome. Mantenha a saída privada.
 
-```bash
-openldr auth rebind-issuer --force
+```sh
+{{operator:auth-users}}
 ```
 
-Sem `--force`, o comando mostra os dois emissores e não altera nada. Com `--force`, regista um evento de auditoria `auth.issuer.rebind`. Não o use para mudar para outro fornecedor. Não existe migração automática de contas. Transferir identidades entre fornecedores, mapear sujeitos e restaurar identidades exige outro procedimento aprovado pelo operador. Os comandos de migração da base continuam disponíveis sem iniciar serviços autenticados.
+![Ler a conta e o sujeito do fornecedor.](guide:operator-auth-users)
 
-Veja [Variáveis de ambiente](/docs/environment) e [Interface de linha de comandos](/docs/cli).
+### 2. Atribuir o papel administrativo local
+
+Substitua SUBJECT pelo sujeito verificado. Altera autorização local. Verifique o acesso resultante. Alterações seguintes usam este comando ou ações de utilizador Studio.
+
+```sh
+{{operator:auth-role}}
+```
+
+![Atribuir o papel administrativo local.](guide:operator-auth-role)
+
+## Preservar o emissor de uma base existente
+
+A base liga-se ao emissor antes de iniciar serviços autenticados. Mantenha-o ao atualizar e restaurar. Nomes não provam identidade histórica. A ligação é local e não se replica pela sincronização. Outro fornecedor exige migração explícita.
+
+### 1. Examinar a mudança sem a aplicar
+
+Só se o mesmo fornecedor mudar de endereço ou protocolo, defina o novo URL e examine os valores antigo/novo. Sem --force não altera a ligação divergente. Resolva primeiro migrações pendentes.
+
+```sh
+{{operator:auth-rebind-review}}
+```
+
+![Examinar a mudança sem a aplicar.](guide:operator-auth-rebind-review)
+
+### 2. Confirmar apenas uma identidade de fornecedor inalterada
+
+Use --force apenas para o mesmo fornecedor e sujeitos inalterados. Não é um atalho para mudar de fornecedor. Alterações registam auth.issuer.rebind. Reinicie e verifique separadamente. Este guia não executa a alteração no anfitrião.
+
+```sh
+{{operator:auth-rebind}}
+```
+
+![Confirmar apenas uma identidade de fornecedor inalterada.](guide:operator-auth-rebind)

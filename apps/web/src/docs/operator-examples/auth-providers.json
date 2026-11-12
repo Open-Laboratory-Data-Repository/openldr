@@ -1,0 +1,29 @@
+{
+  "auth-client": {
+    "unix": "Client type: public browser client\nFlow: authorization code with PKCE\nRedirect URI: https://YOUR_HOST/studio/auth/callback\nLogout return URI: https://YOUR_HOST/studio\nAccess token: signed JWT\nClient secret in Studio: none",
+    "file": "Identity provider, replace YOUR_HOST"
+  },
+  "auth-config": {
+    "unix": "AUTH_ADAPTER=oidc\nIDENTITY_ADMIN_ADAPTER=none\nOIDC_ISSUER_URL=https://YOUR_PROVIDER/ISSUER_PATH\nOIDC_AUDIENCE=openldr-api\nOIDC_WEB_CLIENT_ID=openldr-web\nOIDC_SCOPES=openid profile email",
+    "file": ".env, edit existing values; replace provider examples"
+  },
+  "auth-recreate": {
+    "unix": "docker compose config --quiet\ndocker compose up -d --force-recreate api\ndocker compose logs --tail 100 api"
+  },
+  "auth-users": {
+    "unix": "./openldr user list --json",
+    "windows": ".\\openldr.ps1 user list --json"
+  },
+  "auth-role": {
+    "unix": "./openldr user assign-role SUBJECT lab_admin",
+    "windows": ".\\openldr.ps1 user assign-role SUBJECT lab_admin"
+  },
+  "auth-rebind-review": {
+    "unix": "./openldr auth rebind-issuer",
+    "windows": ".\\openldr.ps1 auth rebind-issuer"
+  },
+  "auth-rebind": {
+    "unix": "./openldr auth rebind-issuer --force",
+    "windows": ".\\openldr.ps1 auth rebind-issuer --force"
+  }
+}

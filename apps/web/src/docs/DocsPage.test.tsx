@@ -97,13 +97,13 @@ describe('DocsPage', () => {
       expect(screen.queryByRole('heading', { name })).toBeNull();
     }
     expect(screen.queryByRole('heading', { name: "Choisir l'authentification et l'administration" })).toBeNull();
-    expect(screen.getAllByText('openldr user assign-role SUBJECT lab_admin')).toHaveLength(1);
+    expect([...document.querySelectorAll('.doc-markdown pre code')].filter(node => node.textContent?.trim() === './openldr user assign-role SUBJECT lab_admin')).toHaveLength(1);
 
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'Documentation language' }), { key: 'Enter' });
     fireEvent.click(screen.getByRole('option', { name: 'Français' }));
     expect(screen.getByRole('heading', { name: "Choisir l'authentification et l'administration" })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Choose authentication and administration' })).toBeNull();
-    expect(screen.getAllByText('openldr user assign-role SUBJECT lab_admin')).toHaveLength(1);
+    expect([...document.querySelectorAll('.doc-markdown pre code')].filter(node => node.textContent?.trim() === './openldr user assign-role SUBJECT lab_admin')).toHaveLength(1);
     expect(window.localStorage.getItem('openldr.docs.lang')).toBe('fr');
     window.localStorage.removeItem('openldr.docs.lang');
   });
