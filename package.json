@@ -14,6 +14,7 @@
     "test": "turbo test",
     "depcruise": "depcruise packages apps --config .dependency-cruiser.cjs",
     "openldr": "node packages/cli/dev.mjs",
+    "openldr-standalone": "node apps/standalone/dist/index.js",
     "cert": "sh deploy/letsencrypt.sh",
     "build:plugins": "node scripts/build-wasm-plugins.mjs",
     "build:v1-import": "node scripts/build-v1-import-plugin.mjs",

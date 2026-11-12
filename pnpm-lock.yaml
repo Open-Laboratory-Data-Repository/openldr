@@ -166,22 +166,49 @@ importers:
 
   apps/standalone:
     dependencies:
+      '@openldr/bootstrap':
+        specifier: workspace:*
+        version: link:../../packages/bootstrap
+      '@openldr/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@openldr/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@openldr/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@openldr/server':
+        specifier: workspace:*
+        version: link:../server
+      cpu-features:
+        specifier: ^0.0.10
+        version: 0.0.10
       embedded-postgres:
         specifier: 16.15.0-beta.19
         version: 16.15.0-beta.19
+      pdfkit:
+        specifier: ^0.15.0
+        version: 0.15.2
       pg:
         specifier: 8.21.0
         version: 8.21.0
+      quickjs-emscripten:
+        specifier: 0.32.0
+        version: 0.32.0
+      ssh2:
+        specifier: ^1.17.0
+        version: 1.17.0
     devDependencies:
       '@types/pg':
         specifier: 8.20.0
         version: 8.20.0
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(supports-color@7.2.0)(tsx@4.22.4)(typescript@5.7.2)
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.4
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -13457,6 +13484,34 @@ snapshots:
     optionalDependencies:
       postcss: 8.5.15
       typescript: 5.9.3
+    transitivePeerDependencies:
+      - jiti
+      - supports-color
+      - tsx
+      - yaml
+
+  tsup@8.5.1(jiti@2.7.0)(postcss@8.5.15)(supports-color@7.2.0)(tsx@4.22.4)(typescript@5.7.2):
+    dependencies:
+      bundle-require: 5.1.0(esbuild@0.27.7)
+      cac: 6.7.14
+      chokidar: 4.0.3
+      consola: 3.4.2
+      debug: 4.4.3(supports-color@7.2.0)
+      esbuild: 0.27.7
+      fix-dts-default-cjs-exports: 1.0.1
+      joycon: 3.1.1
+      picocolors: 1.1.1
+      postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)
+      resolve-from: 5.0.0
+      rollup: 4.61.1
+      source-map: 0.7.6
+      sucrase: 3.35.1
+      tinyexec: 0.3.2
+      tinyglobby: 0.2.17
+      tree-kill: 1.2.2
+    optionalDependencies:
+      postcss: 8.5.15
+      typescript: 5.7.2
     transitivePeerDependencies:
       - jiti
       - supports-color
