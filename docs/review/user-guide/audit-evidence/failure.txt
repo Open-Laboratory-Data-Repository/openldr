@@ -1,0 +1,37 @@
+OpenLDR
+Dashboard
+Reports
+Report Designer
+Query
+Workflows
+Terminology
+Facilities
+Test catalog
+Patients
+Forms
+Users
+Audit
+Activity
+Docs
+D
+dev-admin
+lab_admin
+Audit
+1
+Filter
+Sort
+Columns
+WHEN	ACTOR	ACTION	ENTITY TYPE	ENTITY ID
+12/11/2026, 16:54:53	dev-admin	layout.delete	layout	bd3edef3-7e79-43d7-9ee2-5ee66f6d577c
+12/11/2026, 16:54:34	dev-admin	layout.update	layout	bd3edef3-7e79-43d7-9ee2-5ee66f6d577c
+12/11/2026, 16:54:09	dev-admin	layout.create	layout	bd3edef3-7e79-43d7-9ee2-5ee66f6d577c
+12/11/2026, 16:52:39	98d39a17-dc15-43f4-af80-0be7e8169367	auth.failed	auth	wrong-audience
+12/11/2026, 16:52:22	dev-admin	user.force_logout	user	98d39a17-dc15-43f4-af80-0be7e8169367
+12/11/2026, 16:52:21	dev-admin	user.reset_password	user	98d39a17-dc15-43f4-af80-0be7e8169367
+12/11/2026, 16:52:18	dev-admin	user.status	user	98d39a17-dc15-43f4-af80-0be7e8169367
+12/11/2026, 16:52:16	dev-admin	user.status	user	98d39a17-dc15-43f4-af80-0be7e8169367
+12/11/2026, 16:52:08	dev-admin	user.update	user	98d39a17-dc15-43f4-af80-0be7e8169367
+12/11/2026, 16:51:28	dev-admin	user.create	user	98d39a17-dc15-43f4-af80-0be7e8169367
+14 events
+10
+11–14 of 14

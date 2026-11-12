@@ -1,0 +1,439 @@
+[
+  {
+    "id": "open-audit",
+    "crop": [
+      0,
+      364.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 8,
+        "y": 496,
+        "width": 223,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "read-event-row",
+    "crop": [
+      190,
+      0,
+      1090,
+      681.25
+    ],
+    "targets": [
+      {
+        "x": 240,
+        "y": 137,
+        "width": 1040,
+        "height": 47
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "filter-open",
+    "crop": [
+      48.3359375,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 252,
+        "y": 56,
+        "width": 72.671875,
+        "height": 32
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "filter-add",
+    "crop": [
+      68.6796875,
+      54.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 265,
+        "y": 190,
+        "width": 87.359375,
+        "height": 28
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "filter-action",
+    "crop": [
+      191.0,
+      88.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 372,
+        "y": 222,
+        "width": 118,
+        "height": 32
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "filter-value",
+    "crop": [
+      522.0,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 683,
+        "y": 119,
+        "width": 158,
+        "height": 32
+      }
+    ],
+    "step": 6,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "filter-apply",
+    "crop": [
+      611.984375,
+      50.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 824.96875,
+        "y": 186,
+        "width": 54.03125,
+        "height": 28
+      }
+    ],
+    "step": 7,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "filter-result",
+    "crop": [
+      408.359375,
+      42.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 608,
+        "y": 181.5,
+        "width": 80.71875,
+        "height": 22
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "event-identifiers",
+    "crop": [
+      559,
+      194.21875,
+      721,
+      450.625
+    ],
+    "targets": [
+      {
+        "x": 609,
+        "y": 397.53125,
+        "width": 671,
+        "height": 44
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "event-before",
+    "crop": [
+      559,
+      349.375,
+      721,
+      450.625
+    ],
+    "targets": [
+      {
+        "x": 609,
+        "y": 442.53125,
+        "width": 671,
+        "height": 285.359375
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "event-after",
+    "crop": [
+      559,
+      349.375,
+      721,
+      450.625
+    ],
+    "targets": [
+      {
+        "x": 609,
+        "y": 488.890625,
+        "width": 671,
+        "height": 311.359375
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "event-metadata",
+    "crop": [
+      559,
+      349.375,
+      721,
+      450.625
+    ],
+    "targets": [
+      {
+        "x": 609,
+        "y": 715.25,
+        "width": 671,
+        "height": 85
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "event-copy",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1236,
+        "y": 135.53125,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "event-close",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1236,
+        "y": 16,
+        "width": 28,
+        "height": 24
+      }
+    ],
+    "step": 6,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "filter-clear",
+    "crop": [
+      550.625,
+      50.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 764.28125,
+        "y": 186,
+        "width": 52.6875,
+        "height": 28
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "page-size",
+    "crop": [
+      800,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1023.21875,
+        "y": 762,
+        "width": 80,
+        "height": 28
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "ten-rows",
+    "crop": [
+      800,
+      495.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1028.25,
+        "y": 629,
+        "width": 118,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "next-page",
+    "crop": [
+      800,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1228,
+        "y": 760,
+        "width": 40,
+        "height": 32
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "previous-page",
+    "crop": [
+      800,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1184,
+        "y": 760,
+        "width": 40,
+        "height": 32
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "refresh-actions",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1236,
+        "y": 56,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "refresh-menu",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1113,
+        "y": 97,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "phone-filter",
+    "crop": [
+      0,
+      0,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 12,
+        "y": 100,
+        "width": 72.671875,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "phone-event",
+    "crop": [
+      0,
+      42.84375,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 38.5,
+        "y": 127.53125,
+        "width": 336.5,
+        "height": 65
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  }
+]

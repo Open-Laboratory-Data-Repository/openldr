@@ -1,0 +1,235 @@
+{
+  "title": "Audit",
+  "meta": [
+    "Administration",
+    "Read recorded changes and access events",
+    "About 10 minutes"
+  ],
+  "intro": [
+    "Audit records who performed an action, when it happened and which entity it affected. Administrators and reviewers use it to investigate changes and access events.",
+    "You need View audit log. Use the events already recorded by your installation. The pictures show changes to fictional accounts and layouts in a test installation. No sample data is required.",
+    "Audit is read-only. Reading an event does not change it. Before, After and Metadata appear only when that action recorded those values."
+  ],
+  "tasks": [
+    {
+      "id": "filter",
+      "title": "Find events for an action",
+      "intro": [
+        "Use this when you know the kind of action you need to investigate. You can also filter by actor, entity or time."
+      ],
+      "steps": [
+        [
+          "Open Audit",
+          "Select <strong>Audit</strong> in the main menu.",
+          [
+            "open-audit"
+          ]
+        ],
+        [
+          "Read the list columns",
+          "Read <strong>When</strong>, <strong>Actor</strong>, <strong>Action</strong>, <strong>Entity type</strong> and <strong>Entity ID</strong>. An action such as user.update describes the recorded operation.",
+          [
+            "read-event-row"
+          ]
+        ],
+        [
+          "Open Filter",
+          "Select <strong>Filter</strong> above the table.",
+          [
+            "filter-open"
+          ]
+        ],
+        [
+          "Add a rule",
+          "Select <strong>Add filter</strong>.",
+          [
+            "filter-add"
+          ]
+        ],
+        [
+          "Choose Action",
+          "Open the column selector and choose <strong>Action</strong>. Keep <strong>Equals</strong> for an exact action name.",
+          [
+            "filter-action"
+          ]
+        ],
+        [
+          "Enter the action",
+          "Enter the action to inspect. The example uses <code>user.update</code> for profile changes. Use an action present in your own installation.",
+          [
+            "filter-value"
+          ]
+        ],
+        [
+          "Apply the filter",
+          "Select <strong>Apply</strong>.",
+          [
+            "filter-apply"
+          ]
+        ]
+      ],
+      "result": "The list shows matching events. An empty result means no event matches the current rules.",
+      "resultShots": [
+        "filter-result"
+      ]
+    },
+    {
+      "id": "inspect",
+      "title": "Read an event and its recorded values",
+      "intro": [
+        "Use this to identify the affected record and compare changes. Different actions record different details."
+      ],
+      "steps": [
+        [
+          "Open the event",
+          "Select the matching event row. Read the event identifier, timestamp, actor, action and affected entity in the sheet.",
+          [
+            "event-identifiers"
+          ]
+        ],
+        [
+          "Read Before",
+          "Scroll to <strong>Before</strong>. It contains previous values when the action supplied them. <strong>None recorded.</strong> means no snapshot was recorded.",
+          [
+            "event-before"
+          ]
+        ],
+        [
+          "Read After",
+          "Scroll to <strong>After</strong>. Compare the saved values with Before. These are recorded snapshots, not an editor.",
+          [
+            "event-after"
+          ]
+        ],
+        [
+          "Read Metadata",
+          "Scroll to <strong>Metadata</strong> for any additional recorded context.",
+          [
+            "event-metadata"
+          ]
+        ],
+        [
+          "Copy an event reference when needed",
+          "Use <strong>Copy Event ID</strong> beside the identifier when recording a reference in your investigation. Other populated detail values also have copy controls.",
+          [
+            "event-copy"
+          ]
+        ],
+        [
+          "Close the sheet",
+          "Select <strong>Close</strong> at the top right.",
+          [
+            "event-close"
+          ]
+        ]
+      ],
+      "result": "You return to the same filtered event list. The audit record remains unchanged.",
+      "resultShots": []
+    },
+    {
+      "id": "browse",
+      "title": "Browse more events and refresh the list",
+      "intro": [
+        "Use this when you need events outside the current page or changes recorded after you opened Audit."
+      ],
+      "steps": [
+        [
+          "Clear the filter when needed",
+          "Open Filter and select <strong>Clear</strong> to return to all events.",
+          [
+            "filter-clear"
+          ]
+        ],
+        [
+          "Choose a page size",
+          "Open <strong>Rows per page</strong> at the bottom and select a size. The example chooses <strong>10</strong>.",
+          [
+            "page-size",
+            "ten-rows"
+          ]
+        ],
+        [
+          "Read the next page",
+          "Select <strong>Next page</strong> when it is enabled.",
+          [
+            "next-page"
+          ]
+        ],
+        [
+          "Return to the previous page",
+          "Select <strong>Previous page</strong>.",
+          [
+            "previous-page"
+          ]
+        ],
+        [
+          "Refresh the list",
+          "Open the page dots and select <strong>Refresh</strong>. The current filters still apply.",
+          [
+            "refresh-actions",
+            "refresh-menu"
+          ]
+        ]
+      ],
+      "result": "The table reads the requested page or refreshed events from the server.",
+      "resultShots": []
+    },
+    {
+      "id": "phone",
+      "title": "Read audit events on a phone",
+      "intro": [
+        "Use the same Audit page on a phone. The event table can scroll horizontally."
+      ],
+      "steps": [
+        [
+          "Use the filter controls",
+          "Use <strong>Filter</strong> above the table to narrow the results before reading wide rows.",
+          [
+            "phone-filter"
+          ]
+        ],
+        [
+          "Open the event sheet",
+          "Select an event row. Scroll the sheet to read identifiers and snapshots.",
+          [
+            "phone-event"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "practice",
+      "title": "Optional practice",
+      "paragraphs": [
+        "In a test installation, make an approved profile or layout change, then find its audit event. Compare the recorded Before and After values when present. No audit-data import is required."
+      ]
+    },
+    {
+      "id": "limits",
+      "title": "Limits",
+      "paragraphs": [
+        "This page does not edit, delete or export audit events. A missing snapshot does not prove that an action made no change. It means that action recorded no snapshot."
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>No audit events match.</strong> Review the active filter chips or choose Filter, then Clear.",
+        "<strong>A recent event is absent.</strong> Choose Refresh and check the current filters and page.",
+        "<strong>Before or After says None recorded.</strong> Use the actor, action, entity details and available metadata. That snapshot cannot be recovered through this page."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "Read <a href=\"./users-review.html\">Users</a> for account actions and <a href=\"./roles-review.html\">Roles</a> for permissions. Read <a href=\"./start-here-review.html\">Start here</a> for command-line setup."
+      ]
+    }
+  ]
+}

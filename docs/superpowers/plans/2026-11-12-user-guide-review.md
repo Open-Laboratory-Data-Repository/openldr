@@ -56,7 +56,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [x] Layouts
 - [x] Users and Roles
 - [x] Roles
-- [ ] Audit
+- [x] Audit
 - [ ] Settings
 - [ ] Setup checks
 - [ ] Laboratory

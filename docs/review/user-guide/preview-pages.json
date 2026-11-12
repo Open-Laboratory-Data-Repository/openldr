@@ -12,5 +12,6 @@
   "workflows": "workflows-review.html",
   "activity": "activity-review.html",
   "users": "users-review.html",
-  "layouts": "layouts-review.html"
+  "layouts": "layouts-review.html",
+  "audit": "audit-review.html"
 }
