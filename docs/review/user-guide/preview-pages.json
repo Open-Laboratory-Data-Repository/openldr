@@ -23,5 +23,6 @@
   "report-pipeline": "report-pipeline-review.html",
   "query": "query-review.html",
   "v1-import": "v1-import-review.html",
-  "sync": "sync-review.html"
+  "sync": "sync-review.html",
+  "environment": "environment-review.html"
 }

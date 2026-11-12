@@ -68,7 +68,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [x] Marketplace
 - [x] Plugin cards and side panels
 - [ ] Authentication providers
-- [ ] Environment Variables
+- [x] Environment Variables
 - [ ] Planned upgrades
 - [ ] Deployment & Developer Docs
 

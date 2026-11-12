@@ -1,0 +1,17 @@
+$ vitest run --testTimeout 30000 --hookTimeout 30000
+
+ RUN  v2.1.8 /home/fredrick/Projects/Repositories/openldr_ce/packages/config
+
+ ✓ src/feature-flags.test.ts (3 tests) 2ms
+ ✓ src/number-settings.test.ts (3 tests) 2ms
+ ✓ src/env-docs.test.ts (8 tests) 6ms
+ ✓ src/schema.test.ts (22 tests) 16ms
+ ✓ src/sync.test.ts (8 tests) 5ms
+ ✓ src/auth.test.ts (12 tests) 9ms
+ ✓ src/lab-identity.test.ts (22 tests) 25ms
+ ✓ src/load.test.ts (14 tests) 12ms
+
+ Test Files  8 passed (8)
+      Tests  92 passed (92)
+   Start at  17:10:10
+   Duration  552ms (transform 403ms, setup 0ms, collect 818ms, tests 77ms, environment 1ms, prepare 758ms)
