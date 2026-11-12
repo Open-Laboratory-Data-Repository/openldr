@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { resolveGitBash } from './git-bash';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, readFileSync, mkdtempSync, rmSync, chmodSync, existsSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdtempSync, mkdirSync, rmSync, chmodSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir, platform } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -271,13 +271,25 @@ describe('build-and-push.sh overwrite guard — gh failure handling', () => {
  * Ports are deliberately high: install.sh refuses a fresh install when 80/443 are already
  * bound, and this test must not depend on what the machine is running.
  */
-function installSh(args: string[]): { code: number; out: string; dir: string } {
+function installSh(args: string[], existingEnv?: string): { code: number; out: string; dir: string } {
   const bin = tempDir('openldr-fakebin-');
   const dir = join(tempDir('openldr-install-'), 'openldr');
+  // A re-run: the installer adopts an .env it finds and never rewrites it whole.
+  if (existingEnv !== undefined) {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '.env'), existingEnv);
+  }
 
   writeFileSync(
     join(bin, 'docker'),
-    ['#!/usr/bin/env bash', 'echo "FAKE-DOCKER: $*"', 'exit 0', ''].join('\n'),
+    [
+      '#!/usr/bin/env bash',
+      'echo "FAKE-DOCKER: $*"',
+      // The local-install summary asks the api container for a setup code.
+      'case "$*" in *"auth setup-code --json"*) echo \'{ "setupCode": "TEST-CODE-0001", "validForMinutes": 30 }\' ;; esac',
+      'exit 0',
+      '',
+    ].join('\n'),
   );
   // ⛔ Second line of defence. If the fake `docker` ever stops being found on PATH — measured
   // once, an MSYS PATH entry starting `C:/` splits at the drive-letter colon and the real
@@ -388,6 +400,124 @@ describe('install.sh storage keys', () => {
     expect(env).toMatch(/^S3_SECRET_ACCESS_KEY=[0-9a-f]{64}$/m);
     expect(env).toMatch(/^GARAGE_RPC_SECRET=[0-9a-f]{64}$/m);
     expect(env).toMatch(/^GARAGE_ADMIN_TOKEN=[0-9a-f]{64}$/m);
+  }, 60_000);
+});
+
+/** Keys of an .env, in file order. */
+function envKeys(text: string): string[] {
+  return text.split(/\r?\n/).map((l) => /^([A-Za-z_][A-Za-z0-9_]*)=/.exec(l)?.[1]).filter((k): k is string => !!k);
+}
+
+function envValue(text: string, key: string): string | undefined {
+  return new RegExp(`^${key}=(.*)$`, 'm').exec(text)?.[1];
+}
+
+// Every key install.sh wrote for a Postgres-target install before local sign-in existed.
+const KEYS_BEFORE_LOCAL_SIGN_IN = [
+  'OPENLDR_VERSION', 'SERVER_NAME', 'PUBLIC_ORIGIN', 'GATEWAY_HTTP_PORT', 'GATEWAY_HTTPS_PORT',
+  'COMPOSE_PROJECT_NAME', 'TLS_MODE', 'PORT', 'NODE_ENV', 'TRUST_PROXY', 'INTERNAL_DATABASE_URL',
+  'TARGET_STORE_ADAPTER', 'TARGET_DATABASE_URL', 'POSTGRES_PASSWORD', 'S3_ENDPOINT', 'S3_REGION',
+  'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY', 'S3_BUCKET', 'S3_FORCE_PATH_STYLE', 'GARAGE_RPC_SECRET',
+  'GARAGE_ADMIN_TOKEN', 'OIDC_ISSUER_URL', 'OIDC_INTERNAL_JWKS_URL', 'OIDC_INTERNAL_ISSUER_URL',
+  'OIDC_WEB_CLIENT_ID', 'KC_HOSTNAME', 'KEYCLOAK_ADMIN', 'KEYCLOAK_ADMIN_PASSWORD',
+  'KEYCLOAK_ADMIN_CLIENT_ID', 'KEYCLOAK_ADMIN_CLIENT_SECRET', 'INITIAL_LAB_ADMIN_PASSWORD',
+  'TLS_CERT_PATH', 'NODE_EXTRA_CA_CERTS', 'SECRETS_ENCRYPTION_KEY', 'MIGRATE_ON_START',
+  'SEED_ON_START', 'LETSENCRYPT_EMAIL', 'MARKETPLACE_REGISTRY_URL',
+];
+const KEYCLOAK_ONLY_KEY = /^(OIDC_|KC_|KEYCLOAK_|INITIAL_LAB_ADMIN_PASSWORD$)/;
+
+// The shape of an .env written by an installer from before this change: no AUTH_ADAPTER line
+// (so the server defaults to Keycloak) and no COMPOSE_PROFILES line.
+const ENV_BEFORE_LOCAL_SIGN_IN = [
+  'SERVER_NAME=localhost',
+  'PUBLIC_ORIGIN=https://localhost:18443',
+  'GATEWAY_HTTP_PORT=18080',
+  'GATEWAY_HTTPS_PORT=18443',
+  'OIDC_ISSUER_URL=https://localhost:18443/auth/realms/openldr',
+  'KC_HOSTNAME=https://localhost:18443/auth',
+  'KEYCLOAK_ADMIN_PASSWORD=kept-admin-password',
+  'KEYCLOAK_ADMIN_CLIENT_SECRET=kept-client-secret',
+  'INITIAL_LAB_ADMIN_PASSWORD=kept-lab-password',
+  'SECRETS_ENCRYPTION_KEY=a2VwdC1rZXkta2VwdC1rZXkta2VwdC1rZXkta2VwdC0=',
+  '',
+].join('\n');
+
+describe('install.sh sign-in mode', () => {
+  it('defaults to local sign-in and writes no Keycloak settings', () => {
+    const r = installSh(['--no-start']);
+    expect(r.code).toBe(0);
+    const env = readFileSync(join(r.dir, '.env'), 'utf8');
+    const expected = [...KEYS_BEFORE_LOCAL_SIGN_IN.filter((k) => !KEYCLOAK_ONLY_KEY.test(k)), 'AUTH_ADAPTER'];
+    expect(envKeys(env).sort()).toEqual(expected.sort());
+    expect(envValue(env, 'AUTH_ADAPTER')).toBe('local');
+    expect(envValue(env, 'SECRETS_ENCRYPTION_KEY')).toMatch(/^.{40,}$/);
+  }, 60_000);
+
+  it('with --auth keycloak writes the same keys as before, plus the mode and the keycloak profile', () => {
+    const r = installSh(['--no-start', '--auth', 'keycloak']);
+    expect(r.code).toBe(0);
+    const env = readFileSync(join(r.dir, '.env'), 'utf8');
+    expect(envKeys(env).sort()).toEqual([...KEYS_BEFORE_LOCAL_SIGN_IN, 'AUTH_ADAPTER', 'COMPOSE_PROFILES'].sort());
+    expect(envValue(env, 'AUTH_ADAPTER')).toBe('keycloak');
+    expect(envValue(env, 'COMPOSE_PROFILES')).toBe('keycloak');
+    expect(envValue(env, 'OIDC_ISSUER_URL')).toBe('https://localhost:18443/auth/realms/openldr');
+    expect(envValue(env, 'OIDC_INTERNAL_JWKS_URL')).toBe('http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs');
+    expect(envValue(env, 'OIDC_INTERNAL_ISSUER_URL')).toBe('http://keycloak:8080/auth/realms/openldr');
+    expect(envValue(env, 'OIDC_WEB_CLIENT_ID')).toBe('openldr-web');
+    expect(envValue(env, 'KC_HOSTNAME')).toBe('https://localhost:18443/auth');
+    expect(envValue(env, 'KEYCLOAK_ADMIN')).toBe('admin');
+    expect(envValue(env, 'KEYCLOAK_ADMIN_CLIENT_ID')).toBe('openldr-admin');
+    for (const k of ['KEYCLOAK_ADMIN_PASSWORD', 'KEYCLOAK_ADMIN_CLIENT_SECRET', 'INITIAL_LAB_ADMIN_PASSWORD']) {
+      expect(envValue(env, k)).toMatch(/^[A-Za-z0-9]{24}$/);
+    }
+  }, 60_000);
+
+  it('local: starts without Keycloak, does not wait for it, and prints a setup code', () => {
+    const r = installSh(['--ready-timeout', '1']);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/FAKE-DOCKER: compose -f docker-compose\.yml up -d/);
+    expect(r.out).not.toMatch(/--profile keycloak/);
+    expect(r.out).not.toMatch(/keycloak realm/);
+    // Only the fake docker answers `auth setup-code --json` with this code, so seeing it proves
+    // the installer asked the api container through the ./openldr wrapper.
+    expect(r.out).toMatch(/Setup code: TEST-CODE-0001/);
+    expect(r.out).toMatch(/valid for 30 minutes/);
+    expect(r.out).not.toMatch(/Keycloak admin password/);
+    expect(r.out).not.toMatch(/labadmin/);
+  }, 60_000);
+
+  it('keycloak: starts with the keycloak profile and still waits for the realm', () => {
+    const r = installSh(['--auth', 'keycloak', '--ready-timeout', '1']);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/FAKE-DOCKER: compose -f docker-compose\.yml --profile keycloak up -d/);
+    expect(r.out).toMatch(/keycloak realm still starting/);
+    expect(r.out).toMatch(/Keycloak admin password/);
+    expect(r.out).not.toMatch(/setup-code/);
+  }, 60_000);
+
+  // An install made before this change has no AUTH_ADAPTER line, so it runs Keycloak. The new
+  // compose file starts Keycloak only under its profile, so a re-run must turn the profile on and
+  // touch nothing else.
+  it('a re-run on an install from before this change keeps Keycloak running', () => {
+    const r = installSh(['--no-start'], ENV_BEFORE_LOCAL_SIGN_IN);
+    expect(r.code).toBe(0);
+    const env = readFileSync(join(r.dir, '.env'), 'utf8');
+    expect(env).toBe(`${ENV_BEFORE_LOCAL_SIGN_IN}COMPOSE_PROFILES=keycloak\n`);
+  }, 60_000);
+
+  it('refuses to move an existing install to another sign-in mode', () => {
+    const toKeycloak = installSh(['--no-start', '--auth', 'keycloak'], 'AUTH_ADAPTER=local\n');
+    expect(toKeycloak.code).toBe(2);
+    expect(toKeycloak.out).toMatch(/not supported/);
+    const toLocal = installSh(['--no-start', '--auth', 'local'], ENV_BEFORE_LOCAL_SIGN_IN);
+    expect(toLocal.code).toBe(2);
+    expect(toLocal.out).toMatch(/not supported/);
+  }, 60_000);
+
+  it('rejects a sign-in mode it does not install', () => {
+    const r = installSh(['--no-start', '--auth', 'oidc']);
+    expect(r.code).toBe(2);
+    expect(r.out).toMatch(/--auth must be 'local' or 'keycloak'/);
   }, 60_000);
 });
 

@@ -21,6 +21,9 @@
 #     required when -TargetDb mysql without -MysqlDemo; keep the password free of '#', spaces,
 #     or quote characters  -  they confuse Docker Compose's .env reader)
 #   -MysqlSsl true|false (default false)
+#   -Auth local|keycloak (sign-in for a new install. local keeps OpenLDR's own accounts and runs
+#     no Keycloak. Without it the installer asks when it has a console, and otherwise uses local.
+#     A re-run keeps the mode the install was made with.)
 param(
   [string]$Dir = "./openldr",
   # Default is the moving `latest` tag because no release has published latest.json yet - the
@@ -55,8 +58,17 @@ param(
   [string]$MysqlUser = '',
   [string]$MysqlPassword = '',
   [ValidateSet('true','false')]
-  [string]$MysqlSsl = 'false'
+  [string]$MysqlSsl = 'false',
+  # Empty until -Auth, the existing .env, or the question below decides it. Checked by hand below,
+  # not with ValidateSet: PowerShell applies ValidateSet to every later assignment too, and an
+  # existing install's .env may say `oidc`.
+  [string]$Auth = ''
 )
+
+if ($Auth -and (@('local', 'keycloak') -notcontains $Auth)) {
+  Write-Error "X -Auth must be 'local' or 'keycloak' (got '$Auth')"
+  exit 2
+}
 
 # Resolve `auto` to a concrete published version, so .env records exactly what this lab runs.
 if ($Version -eq "auto") {
@@ -136,6 +148,16 @@ if ($envExists) {
       }
     }
   }
+  # An existing install keeps its sign-in mode. The database records the mode it first started
+  # with and refuses another. No AUTH_ADAPTER line means keycloak: the server's default, and what
+  # every install made before -Auth runs.
+  $existingAuth = 'keycloak'
+  if ($existingEnv -match '(?m)^AUTH_ADAPTER=(.+?)\s*$') { $existingAuth = $Matches[1].Trim() }
+  if ($Auth -and ($Auth -ne $existingAuth)) {
+    Write-Error "X This install uses $existingAuth sign-in. Moving an install between sign-in modes is not supported. To start again with $Auth sign-in, install into a new directory."
+    exit 2
+  }
+  $Auth = $existingAuth
 }
 if ($HttpsPort -eq 443) { $Origin = "https://$ServerName" } else { $Origin = "https://${ServerName}:$HttpsPort" }
 
@@ -249,6 +271,20 @@ if (-not $envExists) {
   }
 }
 
+# Sign-in for a new install. Asked only with a console to answer it; otherwise local.
+if (-not $Auth) {
+  $Auth = 'local'
+  if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected -and -not [Console]::IsOutputRedirected) {
+    Write-Host ""
+    Write-Host "How should people sign in?"
+    Write-Host "  1) OpenLDR accounts, called local. No Keycloak runs. This is the default."
+    Write-Host "  2) Keycloak. Pick this for a sync central."
+    $answer = Read-Host "Choose 1 or 2 [1]"
+    if ($answer -eq '2' -or $answer -eq 'keycloak') { $Auth = 'keycloak' }
+  }
+  Write-Host "-> Sign-in: $Auth. To choose without the question, pass -Auth local or -Auth keycloak."
+}
+
 # 2. Scaffold
 Write-Host "-> Scaffolding $Dir"
 New-Item -ItemType Directory -Force -Path "$Dir/config/nginx/certs","$Dir/config/nginx/certs/central","$Dir/config/keycloak","$Dir/data" | Out-Null
@@ -264,8 +300,11 @@ $centralCa = "$Dir/config/nginx/certs/central/fullchain.pem"
 if (-not (Test-Path $centralCa)) { New-Item -ItemType File -Path $centralCa | Out-Null }
 function Fetch($rel, $out) { Invoke-WebRequest -UseBasicParsing "$RepoRaw/$rel" -OutFile $out }
 Fetch "deploy/install/docker-compose.yml" "$Dir/docker-compose.yml"
-Fetch "infra/keycloak/openldr-realm.json" "$Dir/config/keycloak/openldr-realm.json"
+# The realm is imported by Keycloak only, so a local install does not download it.
+if ($Auth -ne 'local') { Fetch "infra/keycloak/openldr-realm.json" "$Dir/config/keycloak/openldr-realm.json" }
 Fetch "scripts/init-target-db.sql" "$Dir/config/init-target-db.sql"
+# Fetched for every install: the postgres service mounts it whatever the sign-in mode, and Docker
+# turns a missing bind-mount source into a directory. Under local it makes an unused database.
 Fetch "scripts/init-keycloak-db.sql" "$Dir/config/init-keycloak-db.sql"
 Fetch "deploy/install/garage.toml" "$Dir/config/garage.toml"
 
@@ -296,12 +335,15 @@ if ($MysqlDemo) {
 # Register this deploy's origin as a valid OIDC redirect so studio login works behind the gateway.
 # The shipped realm lists localhost + dev URLs; a non-localhost host (or a non-default port) must be
 # added or Keycloak rejects the /studio/auth/callback redirect. webOrigins is already "+".
+# Keycloak only. Local sign-in has no realm.
 $realmPath = "$Dir/config/keycloak/openldr-realm.json"
-$realm = Get-Content $realmPath -Raw
-if ($realm -notmatch [regex]::Escape("`"$Origin/*`"")) {
-  $realm = $realm -replace '"redirectUris":\s*\[', "`"redirectUris`": [`"$Origin/*`", "
-  Set-Content -Path $realmPath -Value $realm -Encoding ascii
-  Write-Host "-> Registered $Origin/* as an OIDC redirect in the realm"
+if ($Auth -ne 'local') {
+  $realm = Get-Content $realmPath -Raw
+  if ($realm -notmatch [regex]::Escape("`"$Origin/*`"")) {
+    $realm = $realm -replace '"redirectUris":\s*\[', "`"redirectUris`": [`"$Origin/*`", "
+    Set-Content -Path $realmPath -Value $realm -Encoding ascii
+    Write-Host "-> Registered $Origin/* as an OIDC redirect in the realm"
+  }
 }
 
 # 3. Secrets + cert (never overwrite an existing .env)
@@ -328,7 +370,11 @@ function Hex([int]$n) {
 # actions (Distributed Sync site enrollment, password reset, force sign-out) fail with a 503. Generate
 # one -- reusing the existing .env value on a re-run so the on-disk import stays consistent with what
 # the app authenticates with -- substitute it into the realm import, and write it to .env below.
+# Both secrets below are Keycloak only. Local sign-in has no realm, no labadmin user and no
+# Keycloak admin, so it writes none of this.
 $kcAdminSecret = $null
+$labAdminPw = $null
+if ($Auth -ne 'local') {
 if ($envExists) {
   $existingKcLine = (Select-String -Path $envPath -Pattern '^KEYCLOAK_ADMIN_CLIENT_SECRET=').Line
   if ($existingKcLine) { $kcAdminSecret = $existingKcLine -replace '^KEYCLOAK_ADMIN_CLIENT_SECRET=', '' }
@@ -342,7 +388,6 @@ Set-Content -Path $realmPath -Value $realmSecretContent -Encoding ascii
 # must not import that guessable credential. Generate a per-install password -- reusing the existing
 # .env value on a re-run so the on-disk import stays consistent -- substitute it into the CREDENTIAL
 # value (the "username": "labadmin" line does not match this pattern), and surface it below.
-$labAdminPw = $null
 if ($envExists) {
   $existingLabLine = (Select-String -Path $envPath -Pattern '^INITIAL_LAB_ADMIN_PASSWORD=').Line
   if ($existingLabLine) { $labAdminPw = $existingLabLine -replace '^INITIAL_LAB_ADMIN_PASSWORD=', '' }
@@ -350,6 +395,7 @@ if ($envExists) {
 if (-not $labAdminPw) { $labAdminPw = Rand }
 $realmLabContent = (Get-Content $realmPath -Raw) -replace '"value": "labadmin"', "`"value`": `"$labAdminPw`""
 Set-Content -Path $realmPath -Value $realmLabContent -Encoding ascii
+}
 
 if (-not $envExists) {
   $pg = Rand; $kc = Rand; $s3k = "GK$(Hex 12)"; $s3s = Hex 32; $garageRpc = Hex 32; $garageAdmin = Hex 32
@@ -406,6 +452,28 @@ TARGET_DATABASE_URL=postgres://openldr:$pg@postgres:5432/openldr_target
 "@
   }
 
+  # Local sign-in writes no OIDC or Keycloak key. The server refuses an empty OIDC_ISSUER_URL, and
+  # needs SECRETS_ENCRYPTION_KEY, which is written below for every install. A Keycloak install
+  # writes the same keys as before, plus COMPOSE_PROFILES so `docker compose up` starts Keycloak.
+  if ($Auth -eq 'local') {
+    $authEnvBlock = "AUTH_ADAPTER=local"
+  } else {
+    $authEnvBlock = @"
+AUTH_ADAPTER=keycloak
+COMPOSE_PROFILES=keycloak
+OIDC_ISSUER_URL=$Origin/auth/realms/openldr
+OIDC_INTERNAL_JWKS_URL=http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs
+OIDC_INTERNAL_ISSUER_URL=http://keycloak:8080/auth/realms/openldr
+OIDC_WEB_CLIENT_ID=openldr-web
+KC_HOSTNAME=$Origin/auth
+KEYCLOAK_ADMIN=admin
+KEYCLOAK_ADMIN_PASSWORD=$kc
+KEYCLOAK_ADMIN_CLIENT_ID=openldr-admin
+KEYCLOAK_ADMIN_CLIENT_SECRET=$kcAdminSecret
+INITIAL_LAB_ADMIN_PASSWORD=$labAdminPw
+"@
+  }
+
   @"
 OPENLDR_VERSION=$Version
 SERVER_NAME=$ServerName
@@ -430,16 +498,7 @@ S3_BUCKET=openldr
 S3_FORCE_PATH_STYLE=true
 GARAGE_RPC_SECRET=$garageRpc
 GARAGE_ADMIN_TOKEN=$garageAdmin
-OIDC_ISSUER_URL=$Origin/auth/realms/openldr
-OIDC_INTERNAL_JWKS_URL=http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs
-OIDC_INTERNAL_ISSUER_URL=http://keycloak:8080/auth/realms/openldr
-OIDC_WEB_CLIENT_ID=openldr-web
-KC_HOSTNAME=$Origin/auth
-KEYCLOAK_ADMIN=admin
-KEYCLOAK_ADMIN_PASSWORD=$kc
-KEYCLOAK_ADMIN_CLIENT_ID=openldr-admin
-KEYCLOAK_ADMIN_CLIENT_SECRET=$kcAdminSecret
-INITIAL_LAB_ADMIN_PASSWORD=$labAdminPw
+$authEnvBlock
 TLS_CERT_PATH=/etc/openldr/tls-cert.pem
 NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem
 SECRETS_ENCRYPTION_KEY=$secretsKey
@@ -454,6 +513,26 @@ MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/Open-Laboratory-Data-
   Write-Host "-> Wrote $envPath (generated secrets, compose project '$projectName')"
 } else {
   Write-Host "-> Reusing existing $envPath"
+  # The compose file downloaded above starts Keycloak only under the `keycloak` profile. An install
+  # made before that has no COMPOSE_PROFILES line, so without this Keycloak would stop on the next
+  # `docker compose up` and sign-in would break. Add the profile, keep any others, change nothing else.
+  if ($Auth -ne 'local') {
+    $envText = Get-Content $envPath -Raw
+    $curProfiles = ''
+    $hasLine = $envText -match '(?m)^COMPOSE_PROFILES=(.*?)\s*$'
+    if ($hasLine) { $curProfiles = $Matches[1].Trim() }
+    if (-not (($curProfiles -split ',' | ForEach-Object { $_.Trim() }) -contains 'keycloak')) {
+      if ($hasLine) {
+        $newProfiles = if ($curProfiles) { "$curProfiles,keycloak" } else { 'keycloak' }
+        # Set-Content writes into the existing file, so the owner-only ACL set at install stays.
+        Set-Content -Path $envPath -Value ($envText -replace '(?m)^COMPOSE_PROFILES=.*$', "COMPOSE_PROFILES=$newProfiles") -NoNewline -Encoding ascii
+      } else {
+        $lead = if ($envText -and -not $envText.EndsWith("`n")) { "`r`n" } else { '' }
+        Add-Content -Path $envPath -Value "${lead}COMPOSE_PROFILES=keycloak" -Encoding ascii
+      }
+      Write-Host "-> Added the keycloak profile to COMPOSE_PROFILES in .env, so Keycloak keeps running"
+    }
+  }
 }
 
 $certDir = "$Dir/config/nginx/certs"
@@ -508,6 +587,9 @@ try {
   $ComposeFiles = @("-f", "docker-compose.yml")
   if ($MssqlDemo) { $ComposeFiles += @("-f", "docker-compose.mssql.yml") }
   if ($MysqlDemo) { $ComposeFiles += @("-f", "docker-compose.mysql.yml") }
+  # COMPOSE_PROFILES in .env already turns Keycloak on for a Keycloak install. The flag says it
+  # again so this command does not depend on that line.
+  if ($Auth -ne 'local') { $ComposeFiles += @("--profile", "keycloak") }
   if (-not $NoPull) {
     Write-Host "-> Pulling images (first run can take a few minutes)..."
     Invoke-NativeProcessChecked "docker" (@("compose") + $ComposeFiles + @("pull")) "docker compose pull failed (are the images published + public? see RELEASE.md)"
@@ -529,9 +611,12 @@ if ($ReadyTimeout -gt 0) {
   $checks = @(
     @{ Label = "gateway (TLS)";  Path = "/";                                                          Ok = $false },
     @{ Label = "studio";         Path = "/studio/";                                                    Ok = $false },
-    @{ Label = "api";            Path = "/health";                                                     Ok = $false },
-    @{ Label = "keycloak realm"; Path = "/auth/realms/openldr/.well-known/openid-configuration";       Ok = $false }
+    @{ Label = "api";            Path = "/health";                                                     Ok = $false }
   )
+  # Local sign-in runs no Keycloak, so there is no realm to wait for.
+  if ($Auth -ne 'local') {
+    $checks += @{ Label = "keycloak realm"; Path = "/auth/realms/openldr/.well-known/openid-configuration"; Ok = $false }
+  }
   $deadline = (Get-Date).AddSeconds($ReadyTimeout)
   $prevEAP = $ErrorActionPreference; $ErrorActionPreference = "Continue"
   try {
@@ -554,16 +639,40 @@ if ($ReadyTimeout -gt 0) {
   if (-not $ReadyOk) {
     Write-Host ""
     foreach ($c in ($checks | Where-Object { -not $_.Ok })) { Write-Host "   ! $($c.Label) still starting" }
-    Write-Host "   Give it another minute, or inspect: docker compose logs -f keycloak"
+    $logsOf = if ($Auth -eq 'local') { 'api' } else { 'keycloak' }
+    Write-Host "   Give it another minute, or inspect: docker compose logs -f $logsOf"
   }
 }
 Write-Host ""
 if ($ReadyOk) { Write-Host "OK OpenLDR is ready. Open $Origin" }
 else { Write-Host "OK OpenLDR is starting. Open $Origin" }
-$kcLine = (Select-String -Path $envPath -Pattern '^KEYCLOAK_ADMIN_PASSWORD=').Line
-if ($kcLine) { Write-Host "   Keycloak admin password: $($kcLine -replace '^KEYCLOAK_ADMIN_PASSWORD=','')" }
-$labLine = (Select-String -Path $envPath -Pattern '^INITIAL_LAB_ADMIN_PASSWORD=').Line
-if ($labLine) { Write-Host "   App sign-in: labadmin / $($labLine -replace '^INITIAL_LAB_ADMIN_PASSWORD=','')  (change it on first login)" }
+if ($Auth -eq 'local') {
+  # The first administrator is made in Studio with a setup code. Ask the api container for one with
+  # the same docker command openldr.ps1 runs (calling the .ps1 itself can be blocked by execution
+  # policy). --json, so the code can be picked out even if a log line lands in the same output.
+  $setupOut = ''
+  $prevEAP = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+  Push-Location $Dir
+  try {
+    $setupOut = (& docker compose exec -T -w / api node /app/cli/dist/index.js auth setup-code --json 2>&1 | Out-String)
+  } catch {
+    $setupOut = "$_"
+  } finally { Pop-Location; $ErrorActionPreference = $prevEAP }
+  if ($setupOut -match '"setupCode":\s*"([^"]+)"') {
+    Write-Host "   Setup code: $($Matches[1]), valid for 30 minutes"
+    Write-Host "   Open $Origin/studio/ and enter it on the Create the administrator page."
+    Write-Host "   For a new code, run: .\openldr.ps1 auth setup-code"
+  } elseif ($setupOut -match 'an administrator already exists') {
+    Write-Host "   An administrator already exists. Sign in at $Origin/studio/"
+  } else {
+    Write-Host "   Could not get a setup code yet. Once the api is up, run: .\openldr.ps1 auth setup-code"
+  }
+} else {
+  $kcLine = (Select-String -Path $envPath -Pattern '^KEYCLOAK_ADMIN_PASSWORD=').Line
+  if ($kcLine) { Write-Host "   Keycloak admin password: $($kcLine -replace '^KEYCLOAK_ADMIN_PASSWORD=','')" }
+  $labLine = (Select-String -Path $envPath -Pattern '^INITIAL_LAB_ADMIN_PASSWORD=').Line
+  if ($labLine) { Write-Host "   App sign-in: labadmin / $($labLine -replace '^INITIAL_LAB_ADMIN_PASSWORD=','')  (change it on first login)" }
+}
 if ($MssqlDemo) {
   $mssqlLine = (Select-String -Path $envPath -Pattern '^MSSQL_PASSWORD=').Line
   if ($mssqlLine) { Write-Host "   MSSQL (demo) SA password: $($mssqlLine -replace '^MSSQL_PASSWORD=','')" }
@@ -574,7 +683,9 @@ if ($MysqlDemo) {
   if ($mysqlLine) { Write-Host "   MySQL (demo) root password: $($mysqlLine -replace '^MYSQL_PASSWORD=','')" }
 }
 if ($HttpPort -ne 80 -or $HttpsPort -ne 443) { Write-Host "   Gateway ports: HTTP $HttpPort / HTTPS $HttpsPort" }
-Write-Host "   Distributed Sync: identity-admin client provisioned (unique secret in .env) -- site enrollment is ready."
+if ($Auth -ne 'local') {
+  Write-Host "   Distributed Sync: identity-admin client provisioned (unique secret in .env) -- site enrollment is ready."
+}
 Write-Host ""
 Write-Host "   For a public domain, install with: -ServerName your.domain.com"
 Write-Host "   For non-default ports, install with: -HttpPort 8080 -HttpsPort 8443"

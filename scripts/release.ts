@@ -367,7 +367,9 @@ async function main(): Promise<void> {
   // at the end: `cleanupPlan` decides which, `cleanUp` acts.
   const probe = mkdtempSync(join(tmpdir(), 'openldr-release-'));
   try {
-    run(BASH, ['install/install.sh', '--dir', toBashPath(probe), '--version', version, '--require-ready']);
+    // --auth local: without it the installer asks which sign-in to use whenever it has a
+    // terminal, and this step would wait on that question. local is what a new install gets.
+    run(BASH, ['install/install.sh', '--dir', toBashPath(probe), '--version', version, '--require-ready', '--auth', 'local']);
   } catch (err) {
     reportKeptStack(probe);
     throw err;
