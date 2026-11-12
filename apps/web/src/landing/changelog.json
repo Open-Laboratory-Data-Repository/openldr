@@ -6,6 +6,24 @@
       "version": null,
       "entries": [
         {
+          "hash": "4ae12e4f",
+          "type": "fix",
+          "scope": "activity",
+          "title": "List batches loaded with openldr ingest"
+        },
+        {
+          "hash": "7c39ae73",
+          "type": "fix",
+          "scope": "db",
+          "title": "Read Postgres counts and averages as numbers"
+        },
+        {
+          "hash": "476639b6",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Run the SQL Query node without the dashboard raw SQL switch"
+        },
+        {
           "hash": "2989b730",
           "type": "fix",
           "scope": "docs",
