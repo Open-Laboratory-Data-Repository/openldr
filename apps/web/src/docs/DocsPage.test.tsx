@@ -15,6 +15,19 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
+  it('renders and enlarges the Requirements checks without losing their illustrations', () => {
+    renderDocs('/docs/requirements');
+    const label = 'Illustrated runtime check. This example shows a Linux engine on an Intel/AMD 64-bit host.';
+    expect(document.querySelectorAll('.web-doc-dotted-frame')).toHaveLength(3);
+    expect(screen.queryByText(/Screenshot unavailable/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    const dialog = screen.getByRole('dialog', { name: label });
+    expect(within(dialog).getByRole('img', { name: label })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /Next image/ })).toBeNull();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('renders the installer illustration without stripping its media identifier', () => {
     renderDocs('/docs/getting-started');
     expect(screen.getByRole('img', { name: /Illustration of installer output/ })).toBeInTheDocument();

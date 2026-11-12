@@ -22,6 +22,8 @@ import {
 } from './content';
 import { extractToc, headingIdMaker, wantsToc, type TocEntry } from './toc';
 import { InstallResultIllustration } from './InstallResultIllustration';
+import { InstallGuideIllustration } from './InstallGuideIllustration';
+import { installScene } from './installGuide';
 
 function textContent(children: ReactNode): string {
   if (Array.isArray(children)) return children.map(textContent).join('');
@@ -108,6 +110,8 @@ function makeHeadingId(): (node: object | undefined, children: ReactNode) => str
 /** A clip (`x.mp4`) plays muted on a loop, with its `x.png` poster. A screenshot opens full size. */
 function DocMedia({ src, alt }: { src: string; alt: string }) {
   if (src === 'guide:install-result') return <InstallResultIllustration alt={alt} />;
+  const scene = installScene(src);
+  if (scene) return <InstallGuideIllustration scene={scene} platform="unix" alt={alt} />;
   const url = resolveMedia(src);
   if (!url) {
     return (
@@ -261,7 +265,7 @@ export function DocsPage() {
     setLocale(value as DocLocale);
     rememberLocale(value as DocLocale);
   };
-  const toc = useMemo(() => (body ? extractToc(stripLeadingH1(body)) : []), [body]);
+  const toc = useMemo(() => (body ? extractToc(stripLeadingH1(body)).filter(entry => key !== 'requirements' || entry.level === 2) : []), [body, key]);
   const showToc = wantsToc(toc);
 
   // Opening another page keeps the window's scroll position, which drops the reader into the
@@ -352,7 +356,7 @@ export function DocsPage() {
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={markdownComponents()}
-              urlTransform={(url, key) => key === 'src' && url === 'guide:install-result' ? url : defaultUrlTransform(url)}
+              urlTransform={(url, key) => key === 'src' && (url === 'guide:install-result' || installScene(url)) ? url : defaultUrlTransform(url)}
             >
               {stripLeadingH1(body)}
             </ReactMarkdown>

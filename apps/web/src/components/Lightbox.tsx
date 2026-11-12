@@ -6,7 +6,7 @@ interface LightboxProps {
   /** What one item is called, for the arrow buttons: "screenshot", "video". */
   itemNoun: string;
   onClose: () => void;
-  onStep: (delta: number) => void;
+  onStep?: (delta: number) => void;
   children: ReactNode;
 }
 
@@ -21,8 +21,8 @@ export function Lightbox({ label, itemNoun, onClose, onStep, children }: Lightbo
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
-      if (event.key === 'ArrowRight') onStep(1);
-      if (event.key === 'ArrowLeft') onStep(-1);
+      if (event.key === 'ArrowRight') onStep?.(1);
+      if (event.key === 'ArrowLeft') onStep?.(-1);
     };
     document.addEventListener('keydown', onKey);
     // The page behind must not scroll while the overlay is up.
@@ -57,23 +57,23 @@ export function Lightbox({ label, itemNoun, onClose, onStep, children }: Lightbo
 
       {/* Stop the click on the media itself from closing, so only the backdrop dismisses. */}
       <div className="flex min-h-0 flex-1 items-center gap-3" onClick={(event) => event.stopPropagation()}>
-        <button
+        {onStep ? <button
           type="button"
           aria-label={`Previous ${itemNoun}`}
           onClick={() => onStep(-1)}
           className="shrink-0 rounded-md border border-border p-1.5 text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft aria-hidden="true" className="h-4 w-4" />
-        </button>
+        </button> : null}
         {children}
-        <button
+        {onStep ? <button
           type="button"
           aria-label={`Next ${itemNoun}`}
           onClick={() => onStep(1)}
           className="shrink-0 rounded-md border border-border p-1.5 text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronRight aria-hidden="true" className="h-4 w-4" />
-        </button>
+        </button> : null}
       </div>
     </div>
   );

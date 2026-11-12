@@ -97,13 +97,13 @@
   border-radius: var(--radius-lg);
 }
 
-.doc-content[data-guide='getting-started'] { font-size: 15px; line-height: 1.8; }
-.doc-content[data-guide='getting-started'] h1 { font-size: 32px; }
-.doc-content[data-guide='getting-started'] h2 { margin-top: 44px; padding-bottom: 10px; font-size: 22px; line-height: 1.4; }
-.doc-content[data-guide='getting-started'] p { margin: 14px 0; }
-.doc-content[data-guide='getting-started'] li { margin: 12px 0; padding-left: 4px; }
-.doc-content[data-guide='getting-started'] th,
-.doc-content[data-guide='getting-started'] td { padding: 12px; font-size: 14px; }
+.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) { font-size: 15px; line-height: 1.8; }
+.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) h1 { font-size: 32px; }
+.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) h2 { margin-top: 44px; padding-bottom: 10px; font-size: 22px; line-height: 1.4; }
+.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) p { margin: 14px 0; }
+.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) li { margin: 12px 0; padding-left: 4px; }
+.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) th,
+.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) td { padding: 12px; font-size: 14px; }
 
 /* shadcn token bridge — map shadcn's expected vars onto the existing palette.
    These reference the existing theme vars, so they auto-switch with data-theme. */
@@ -164,3 +164,16 @@
   }
   input, select, textarea { font: inherit; color: inherit; }
 }
+
+.doc-content[data-guide='requirements'] pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.doc-content[data-guide='requirements'] h3 { margin-top: 28px; font-size: 18px; font-weight: 600; }
+
+.web-doc-dotted-frame { position: relative; display: block; padding: 24px; }
+.web-doc-dotted-dots {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--text-muted) 95%, transparent) 1.25px, transparent 1.5px);
+  background-size: 12px 12px; background-repeat: round;
+  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-composite: intersect;
+}
+:root[data-theme='dark'] .web-doc-dotted-dots { background-image: radial-gradient(circle, color-mix(in srgb, var(--text-muted) 35%, transparent) 1.25px, transparent 1.5px); }
