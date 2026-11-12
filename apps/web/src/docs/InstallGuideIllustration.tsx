@@ -7,10 +7,10 @@ import type { InstallPlatform, InstallScene } from './installGuide';
 import type { DocLocale } from './content';
 import { terminalTranscript } from './terminalTranscript';
 
-function Scene({ scene, platform, alt, expanded = false, command }: { scene: InstallScene; platform: InstallPlatform; alt: string; expanded?: boolean; command?: string }) {
+function Scene({ scene, platform, alt, expanded = false, command, file }: { scene: InstallScene; platform: InstallPlatform; alt: string; expanded?: boolean; command?: string; file?: string }) {
   const files = ['config', 'data', 'docker-compose.yml', platform === 'windows' ? 'openldr.ps1' : 'openldr'];
-  const lines = terminalTranscript(scene, platform, command);
-  const height = Math.max(488, 108 + lines.length * 30);
+  const lines = file ? (command ?? '').split('\n').flatMap(line => line.match(/.{1,70}/g) ?? ['']).map(text => ({ kind: 'output' as const, text, prompt: undefined, cursor: false })) : terminalTranscript(scene, platform, command);
+  const height = Math.max(488, (file ? 160 : 108) + lines.length * 30);
   const ratio = 928 / height;
   return (
     <DottedGuideFrame><svg viewBox={`40 40 928 ${height}`} role="img" aria-label={alt}
@@ -20,7 +20,13 @@ function Scene({ scene, platform, alt, expanded = false, command }: { scene: Ins
       <path d="M50 40H958Q968 40 968 50V82H40V50Q40 40 50 40" fill="var(--table-head)" />
       <path d="M40 82H968" stroke="var(--border)" />
       <g fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><path d="M846 61h12" /><rect x="890" y="55" width="11" height="11" rx="1" /><path d="m934 55 11 11m0-11-11 11" /></g>
-      {scene === 'folder' ? <>
+      {file ? <>
+        <rect x="60" y="97" width="888" height="38" rx="5" fill="var(--bg)" stroke="var(--border)" />
+        <text x="75" y="123" fontSize="18" fontFamily="ui-monospace, monospace" fill="var(--text-muted)">{file}</text>
+        <g fontFamily="ui-monospace, monospace" fontSize="20" fill="var(--text)" style={{ whiteSpace: 'pre' }}>
+          {lines.map((line, index) => <text key={index} x="70" y={177 + index * 30}>{line.text || '\u00a0'}</text>)}
+        </g>
+      </> : scene === 'folder' ? <>
         <rect x="67" y="102" width="871" height="40" rx="5" fill="var(--bg)" stroke="var(--border)" />
         <text x="86" y="129" fill="var(--text)" fontSize="21" fontFamily="ui-monospace, monospace">{platform === 'windows' ? 'C:\\openldr_ce' : '~/Downloads/openldr_ce'}</text>
         <path d="M40 158H968M215 158V528" stroke="var(--border)" />
@@ -41,7 +47,7 @@ function Scene({ scene, platform, alt, expanded = false, command }: { scene: Ins
 }
 
 /** These are illustrations of commands and files, not claims of a completed installation. */
-export function InstallGuideIllustration({ scene, platform, alt, command, locale = 'en' }: { scene: InstallScene; platform: InstallPlatform; alt: string; command?: string; locale?: DocLocale }) {
+export function InstallGuideIllustration({ scene, platform, alt, command, file, locale = 'en' }: { scene: InstallScene; platform: InstallPlatform; alt: string; command?: string; file?: string; locale?: DocLocale }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const close = () => { setOpen(false); trigger.current?.focus(); };
@@ -50,15 +56,15 @@ export function InstallGuideIllustration({ scene, platform, alt, command, locale
     fr: ['Invite : ne pas saisir', 'Commande : saisir puis appuyer sur Entrée', 'Sortie : lire sans saisir'],
     pt: ['Prompt: não escrever', 'Comando: escrever e premir Enter', 'Resultado: ler, não escrever'],
   }[locale];
-  const legend = scene !== 'folder' ? <span className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs" aria-label={locale === 'fr' ? 'Lire le terminal' : locale === 'pt' ? 'Ler o terminal' : 'Reading the terminal'}>
+  const legend = file ? <span className="mb-2 block text-xs text-muted-foreground">{{ en: 'File contents: edit in the named file, not the terminal.', fr: 'Contenu du fichier : modifier dans le fichier indiqué, pas dans le terminal.', pt: 'Conteúdo do ficheiro: editar no ficheiro indicado, não no terminal.' }[locale]}</span> : scene !== 'folder' ? <span className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs" aria-label={locale === 'fr' ? 'Lire le terminal' : locale === 'pt' ? 'Ler o terminal' : 'Reading the terminal'}>
       <span className="text-primary">{labels[0]}</span><span className="font-medium text-foreground">{labels[1]}</span><span className="text-muted-foreground">{labels[2]}</span>
     </span> : null;
   return <span className="my-6 block">
     {legend}
     <Button ref={trigger} variant="ghost" className="block h-auto w-full whitespace-normal p-0 hover:bg-transparent" aria-label={alt} onClick={() => setOpen(true)}>
-      <Scene scene={scene} platform={platform} alt={alt} command={command} />
+      <Scene scene={scene} platform={platform} alt={alt} command={command} file={file} />
     </Button>
     <span className="mt-1 block text-xs text-muted-foreground">{alt}</span>
-    {open ? createPortal(<Lightbox label={alt} itemNoun="image" onClose={close}><span className="flex min-h-0 flex-1 flex-col items-center justify-center">{legend}<Scene scene={scene} platform={platform} alt={alt} command={command} expanded /></span></Lightbox>, document.body) : null}
+    {open ? createPortal(<Lightbox label={alt} itemNoun="image" onClose={close}><span className="flex min-h-0 flex-1 flex-col items-center justify-center">{legend}<Scene scene={scene} platform={platform} alt={alt} command={command} file={file} expanded /></span></Lightbox>, document.body) : null}
   </span>;
 }

@@ -1,0 +1,73 @@
+{
+  "upgrade-folder": {
+    "unix": "cd \"$HOME/Downloads/openldr_ce\"\ndocker compose images\ndocker compose ps -a",
+    "windows": "Set-Location C:\\openldr_ce\ndocker compose images\ndocker compose ps -a"
+  },
+  "upgrade-private-copy": {
+    "unix": "mkdir -p \"$HOME/openldr-backups/BEFORE_UPGRADE\"\ncp -R .env docker-compose*.yml config data \"$HOME/openldr-backups/BEFORE_UPGRADE/\"",
+    "windows": "New-Item -ItemType Directory -Force \"$HOME\\openldr-backups\\BEFORE_UPGRADE\"\nCopy-Item .env,docker-compose*.yml,config,data \"$HOME\\openldr-backups\\BEFORE_UPGRADE\\\" -Recurse"
+  },
+  "upgrade-grace": {
+    "unix": "services:\n  api:\n    stop_grace_period: ${OPENLDR_STOP_GRACE_PERIOD:-5m}",
+    "file": "docker-compose.yml"
+  },
+  "upgrade-stop": {
+    "unix": "docker compose stop -t 300 api\ndocker compose ps -a api\ndocker compose logs --tail 100 api"
+  },
+  "upgrade-stores-stop": {
+    "unix": "docker compose stop keycloak storage"
+  },
+  "upgrade-dump": {
+    "unix": "docker compose exec -T postgres pg_dump -Fc -f /tmp/DB_NAME.dump -U DB_USER DB_NAME"
+  },
+  "upgrade-dump-copy": {
+    "unix": "docker compose cp postgres:/tmp/DB_NAME.dump \"$HOME/openldr-backups/BEFORE_UPGRADE/DB_NAME.dump\"",
+    "windows": "docker compose cp postgres:/tmp/DB_NAME.dump \"$HOME\\openldr-backups\\BEFORE_UPGRADE\\DB_NAME.dump\""
+  },
+  "upgrade-roles": {
+    "unix": "docker compose exec -T postgres pg_dumpall --globals-only -f /tmp/globals.sql -U DB_USER\ndocker compose cp postgres:/tmp/globals.sql \"$HOME/openldr-backups/BEFORE_UPGRADE/globals.sql\"",
+    "windows": "docker compose exec -T postgres pg_dumpall --globals-only -f /tmp/globals.sql -U DB_USER\ndocker compose cp postgres:/tmp/globals.sql \"$HOME\\openldr-backups\\BEFORE_UPGRADE\\globals.sql\""
+  },
+  "upgrade-restore": {
+    "unix": "pg_restore --list DB_NAME.dump\npg_restore --exit-on-error --dbname ISOLATED_RESTORE_DATABASE DB_NAME.dump"
+  },
+  "upgrade-minio-config": {
+    "unix": "services:\n  minio:\n    image: EXACT_PREVIOUS_MINIO_IMAGE\n    pull_policy: never\n    command: server /data\n    environment:\n      MINIO_ROOT_USER: OLD_KEY\n      MINIO_ROOT_PASSWORD: OLD_SECRET\n    volumes:\n      - miniodata:/data\nvolumes:\n  miniodata:",
+    "file": "docker-compose.yml, merge with the new services"
+  },
+  "upgrade-garage-key": {
+    "unix": "openssl rand -hex 12\nopenssl rand -hex 32"
+  },
+  "upgrade-garage-config": {
+    "unix": "S3_ACCESS_KEY_ID=GK_REPLACE_WITH_24_HEX_CHARACTERS\nS3_SECRET_ACCESS_KEY=REPLACE_WITH_64_HEX_CHARACTERS\nGARAGE_RPC_SECRET=REPLACE_WITH_ANOTHER_64_HEX_CHARACTERS\nGARAGE_ADMIN_TOKEN=REPLACE_WITH_ANOTHER_64_HEX_CHARACTERS\nS3_ENDPOINT=http://storage:3900",
+    "file": ".env, replace placeholders before saving"
+  },
+  "upgrade-version": {
+    "unix": "OPENLDR_VERSION=REPLACE_WITH_CHOSEN_RELEASE",
+    "file": ".env"
+  },
+  "upgrade-pull": {
+    "unix": "docker compose pull api studio web gateway"
+  },
+  "upgrade-migrate": {
+    "unix": "docker compose run --rm --no-deps api node /app/cli/dist/index.js db migrate"
+  },
+  "upgrade-stores": {
+    "unix": "docker compose up -d minio storage"
+  },
+  "upgrade-storage-copy": {
+    "unix": "docker compose run --rm --no-deps api node /app/cli/dist/index.js storage copy \\\n  --from-endpoint http://minio:9000 --from-key OLD_KEY \\\n  --from-secret OLD_SECRET --from-bucket SOURCE_BUCKET",
+    "windows": "docker compose run --rm --no-deps api node /app/cli/dist/index.js storage copy `\n  --from-endpoint http://minio:9000 --from-key OLD_KEY `\n  --from-secret OLD_SECRET --from-bucket SOURCE_BUCKET"
+  },
+  "upgrade-start": {
+    "unix": "docker compose up -d storage keycloak\ndocker compose up -d api studio web gateway\ndocker compose ps"
+  },
+  "upgrade-health": {
+    "unix": "./openldr health --json",
+    "windows": ".\\openldr.ps1 health --json"
+  },
+  "upgrade-reproject": {
+    "unix": "./openldr db reproject --force",
+    "windows": ".\\openldr.ps1 db reproject --force"
+  }
+}

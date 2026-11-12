@@ -25,6 +25,7 @@ import { InstallResultIllustration } from './InstallResultIllustration';
 import { InstallGuideIllustration } from './InstallGuideIllustration';
 import { INSTALL_PLATFORM_MARKER, installMarkdown, installScene, type InstallPlatform } from './installGuide';
 import { useWebsiteTheme } from '@/components/useWebsiteTheme';
+import { OPERATOR_PLATFORM_MARKER, OPERATOR_PAGES, operatorExample, operatorMarkdown, operatorText } from './operatorGuide';
 import { SERVER_COMMANDS, serverMarkdown, serverScene, serverPlatform } from './serverGuide';
 
 function textContent(children: ReactNode): string {
@@ -123,6 +124,8 @@ function InstallCapture({ src, alt }: { src: string; alt: string }) {
 
 function DocMedia({ src, alt, platform, locale }: { src: string; alt: string; platform: InstallPlatform; locale: DocLocale }) {
   if (src === 'guide:install-result') return <InstallResultIllustration alt={alt} locale={locale} />;
+  const example = operatorExample(src);
+  if (example) return <InstallGuideIllustration scene="terminal" platform={example.shell ?? platform} command={operatorText(example, platform)} file={example.file} alt={alt} locale={locale} />;
   const server = serverScene(src);
   if (server) return <InstallGuideIllustration scene="terminal" platform={serverPlatform(server)} command={SERVER_COMMANDS[server]} alt={alt} locale={locale} />;
   const scene = installScene(src);
@@ -329,15 +332,15 @@ export function DocsPage() {
   const [installPlatform, setInstallPlatform] = useState<InstallPlatform>('unix');
   const key = page && isDocSlug(page) ? page : 'getting-started';
   const doc = docPage(key, version, locale);
-  const body = doc ? serverMarkdown(installMarkdown(doc.body, installPlatform)) : null;
-  const showInstallPlatform = doc?.body.includes(INSTALL_PLATFORM_MARKER) ?? false;
+  const body = doc ? operatorMarkdown(serverMarkdown(installMarkdown(doc.body, installPlatform)), installPlatform) : null;
+  const showInstallPlatform = (doc?.body.includes(INSTALL_PLATFORM_MARKER) || doc?.body.includes(OPERATOR_PLATFORM_MARKER)) ?? false;
   const note = doc && doc.localeUsed !== locale ? ENGLISH_ONLY[locale] : '';
   const title = pageTitle(key, version, locale);
   const changeLocale = (value: string): void => {
     setLocale(value as DocLocale);
     rememberLocale(value as DocLocale);
   };
-  const toc = useMemo(() => (body ? extractToc(stripLeadingH1(body)).filter(entry => !(showInstallPlatform || key === 'requirements' || key === 'windows-server') || entry.level === 2) : []), [body, showInstallPlatform, key]);
+  const toc = useMemo(() => (body ? extractToc(stripLeadingH1(body)).filter(entry => !(showInstallPlatform || key === 'requirements' || key === 'windows-server' || OPERATOR_PAGES.includes(key)) || entry.level === 2) : []), [body, showInstallPlatform, key]);
   const showToc = wantsToc(toc);
 
   // Opening another page keeps the window's scroll position, which drops the reader into the
@@ -435,7 +438,7 @@ export function DocsPage() {
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={markdownComponents(installPlatform, locale)}
-              urlTransform={(url, key) => key === 'src' && (url === 'guide:install-result' || installScene(url) || serverScene(url)) ? url : defaultUrlTransform(url)}
+              urlTransform={(url, key) => key === 'src' && (url === 'guide:install-result' || installScene(url) || serverScene(url) || operatorExample(url)) ? url : defaultUrlTransform(url)}
             >
               {stripLeadingH1(body)}
             </ReactMarkdown>
