@@ -1,90 +1,100 @@
 # Interface en ligne de commande (CLI)
 
-OpenLDR fournit une interface en ligne de commande (CLI) d'exploitation, `openldr`, pour les tâches de base de données, de terminologie, d'ingestion, de plugins, de rapports, d'utilisateurs et de marketplace. Elle couvre tout ce que vous pouvez faire dans l'application, plus des opérations de plus bas niveau.
+<!-- operator-platform -->
 
-## L'exécuter
+Effectuez la maintenance sur l'hôte OpenLDR, dans le dossier Compose installé. Les exemples utilisent `~/Downloads/openldr_ce` sous Linux/macOS et `C:\openldr_ce` dans PowerShell. Remplacez ces chemins. Le terminal affiche déjà l'invite bleue ; saisissez seulement la commande. Les illustrations de fichiers montrent le texte à modifier dans le fichier indiqué. Ces images ne prouvent pas une opération réussie. Les données de démonstration sont facultatives.
 
-**Sur une pile installée**, l'installateur place un script `openldr` dans votre dossier d'installation. Lancez-le depuis ce dossier :
+## Utiliser le lanceur installé
 
-```
-./openldr <command>
-./openldr --help           # list every command group
-./openldr db --help        # drill into a group
-```
+Exécutez sur l’hôte OpenLDR. Un navigateur via Tailscale n’est pas un terminal sur cet hôte. Utilisez votre accès distant ou SSH configuré.
 
-Sous Windows, utilisez `.\openldr.ps1` à la place.
+### 1. Trouver le vrai dossier installé
 
-Le script exécute la CLI dans le conteneur `api`. Cela a une conséquence à connaître : **les commandes qui lisent ou écrivent des fichiers ne voient que le dossier `data`.** Placez un fichier dans `./data`, à côté du script, et nommez-le avec le préfixe `data/` :
-
-```
-./openldr ingest data/bundle.json
-./openldr sync export --out data/export.ndjson
-```
-
-Un chemin hors de `data/` ne sera pas trouvé. Un chemin `--out` hors de ce dossier échoue maintenant en général avec une erreur de permission, au lieu d'écrire dans le conteneur et de disparaître au redémarrage.
-
-Le script s'exécute sous l'utilisateur qui le lance. Cet utilisateur doit donc pouvoir écrire dans `./data`. Si l'installation a tourné avec `sudo`, `./data` appartient à root, et un `./openldr sync export --out data/x.ndjson` lancé plus tard sans root échoue avec `EACCES`. Pour corriger, donnez la propriété du dossier à l'utilisateur qui lance le script, ou lancez le script sous l'utilisateur propriétaire du dossier.
-
-Un opérateur sans accès au groupe `docker` doit lancer `sudo ./openldr`, ce qui fait tourner le processus du conteneur en root. Root peut écrire partout dans le conteneur. Un `--out` sans préfixe écrit alors en silence et se perd au redémarrage. C'est exactement l'échec que la règle `data/` doit empêcher. Préfixez toujours les chemins de sortie par `data/`.
-
-**Depuis une copie des sources**, lancez-la plutôt par l'espace de travail :
-
-```
-pnpm openldr <command>
-```
-
-La plupart des commandes de lecture acceptent `--json` pour une sortie lisible par une machine. Dans une pile déployée, les étapes courantes du cycle de vie (migration du schéma et chargement des données de départ) s'exécutent automatiquement au démarrage. Les actions d'administration et de la zone dangereuse sont aussi disponibles dans l'interface Studio, sous Paramètres.
-
-### Choisir le véritable dossier d'installation
-
-Exécutez la CLI installée sur l'ordinateur hébergeant OpenLDR. À distance, utilisez l'accès SSH ou le terminal distant que vous avez configuré. Ouvrir Studio avec Tailscale n'ouvre pas un terminal sur cet ordinateur.
-
-Si vous avez téléchargé et installé OpenLDR dans `~/Downloads/openldr_ce` sous Linux ou macOS :
+Remplacez le chemin. Vérifiez docker-compose.yml, data et openldr ou openldr.ps1. Ne supposez pas un exécutable global.
 
 ```sh
-cd ~/Downloads/openldr_ce
-ls
-./openldr --help
-./openldr ingest --help
+{{operator:cli-find}}
 ```
 
-Si vous l'avez installé dans `C:\openldr_ce` sous Windows, ouvrez PowerShell et exécutez :
+![Trouver le vrai dossier installé.](guide:operator-cli-find)
 
-```powershell
-cd C:\openldr_ce
-Get-ChildItem -Name
-.\openldr.ps1 --help
-.\openldr.ps1 ingest --help
-```
+### 2. Lire l’aide du lanceur
 
-Remplacez ce dossier d'exemple par le vôtre. Il contient `docker-compose.yml`, `data` et le lanceur. Exécutez une commande à la fois. Les commandes d'aide ne modifient aucun dossier. Le guide **Commencer ici** de l'application illustre chaque étape avec des images du terminal et du gestionnaire de fichiers.
-
-### Utiliser une copie du code source
-
-Utilisez la racine du dépôt, qui contient `package.json`, `pnpm-workspace.yaml`, `apps` et `packages`. Les mêmes chemins d'exemple s'appliquent au code source. Sous Linux ou macOS :
+L’aide liste les commandes sans modifier les données. Le lanceur exécute dans le conteneur api ; ce service et Docker doivent être disponibles.
 
 ```sh
-cd ~/Downloads/openldr_ce
-pnpm openldr --help
-pnpm openldr ingest --help
+{{operator:cli-help}}
 ```
 
-Sous Windows, utilisez `cd C:\openldr_ce`, puis les mêmes commandes `pnpm openldr`. Configurez d'abord les dépendances et `.env`, comme indiqué dans [Développement](/docs/development).
+![Lire l’aide du lanceur.](guide:operator-cli-help)
 
-La CLI source s'exécute sur l'ordinateur et utilise les bases et le stockage de `.env`. Ces services doivent être démarrés pour importer. Les serveurs de développement Studio et API ne sont pas nécessaires. La CLI source lit les fichiers locaux hors du dossier partagé `data`. Pour votre fichier JSON FHIR valide dans `files/my-file.json` :
+### 3. Lire les options de la commande choisie
+
+Utilisez --help à chaque niveau. Les lectures proposent souvent --json. Les exemples de modification ci-dessous sont des alternatives, pas un script successif. Utilisez --actor NAME pour identifier l’opérateur plutôt que le compte du conteneur dans l’audit.
 
 ```sh
-pnpm openldr fhir validate files/my-file.json
+{{operator:cli-group-help}}
 ```
 
-Cette validation n'importe rien. Pour écrire le fichier dans la base de développement, vérifiez `.env`, puis exécutez :
+![Lire les options de la commande choisie.](guide:operator-cli-group-help)
+
+## Fournir un fichier au CLI installé
+
+Les fichiers du conteneur api doivent utiliser le dossier partagé data. Entrées et sorties restent sous data/. Un chemin hôte externe n’est pas le même chemin dans le conteneur.
+
+### 1. Copier votre fichier approuvé dans data
+
+Remplacez chemin et nom. Le compte doit pouvoir écrire dans ce dossier. Une installation sous sudo peut appartenir à root ; utilisez le bon propriétaire ou corrigez-le délibérément, pas avec des droits globaux.
 
 ```sh
-pnpm openldr ingest files/my-file.json
-pnpm openldr pipeline status
+{{operator:cli-file}}
 ```
 
-L'essai Linux a importé une ressource Organization et indiqué un lot terminé. Votre identifiant et votre nombre de ressources dépendent du fichier.
+![Copier votre fichier approuvé dans data.](guide:operator-cli-file)
+
+### 2. Valider sans importer
+
+La validation lit sans importer. Corrigez les erreurs avant de poursuivre. Ne partagez pas d’identifiants patients réels dans les captures.
+
+```sh
+{{operator:cli-validate}}
+```
+
+![Valider sans importer.](guide:operator-cli-validate)
+
+### 3. Importer seulement si l’écriture est voulue
+
+Cela écrit dans la base configurée. Lisez le résultat et les commandes pipeline dans Charger et envoyer. Utilisez aussi data/ pour --out, même sous root, sinon les fichiers peuvent disparaître avec le conteneur.
+
+```sh
+{{operator:cli-import}}
+```
+
+![Importer seulement si l’écriture est voulue.](guide:operator-cli-import)
+
+## Utiliser le lanceur de développement
+
+Utilisez un dépôt source avec dépendances et .env configurés. Ce n’est pas le dossier Compose installé. Consultez Développement.
+
+### 1. Lancer l’aide depuis la racine du dépôt
+
+La racine contient package.json, pnpm-workspace.yaml, apps et packages. Le CLI utilise les services de .env sans nécessiter les serveurs API ou Studio de développement.
+
+```sh
+{{operator:cli-dev-help}}
+```
+
+![Lancer l’aide depuis la racine du dépôt.](guide:operator-cli-dev-help)
+
+### 2. Utiliser un chemin de fichier hôte
+
+Remplacez par votre chemin hôte réel. Le développement n’est pas limité au partage data installé. Le chargement d’exemples reste facultatif.
+
+```sh
+{{operator:cli-dev-validate}}
+```
+
+![Utiliser un chemin de fichier hôte.](guide:operator-cli-dev-validate)
 
 ## Corriger une erreur de la CLI installée
 
@@ -96,6 +106,18 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `failed to connect to the docker API` avec une adresse `DOCKER_HOST` incorrecte | Exécutez `docker info`. Si cette valeur forcée est incorrecte, retirez-la avec `unset DOCKER_HOST`, puis réessayez `docker info` et l'aide CLI. Sous PowerShell : `$env:DOCKER_HOST = $null`. Cela ne démarre pas Docker. |
 | `service "api" is not running` | Vérifiez `docker compose ps -a api`, exécutez `docker compose up -d api`, puis réessayez l'aide. L'essai prouve la reprise du lanceur, pas le démarrage HTTP complet de l'application. |
 | `ingest failed: ENOENT` avec un fichier à côté du lanceur | Déplacez le fichier dans le dossier `data` de l'installation. Exécutez `./openldr fhir validate data/my-file.json`, puis importez ce chemin si vous le souhaitez. La CLI de développement lit les chemins locaux ordinaires. |
+| `workflows` | Voir `workflows --help` pour les options opérateur. |
+| `connectors` | Voir `connectors --help` pour les options opérateur. |
+| `import` | Voir `import --help` pour les options opérateur. |
+| `doctor` | Voir `doctor --help` pour les options opérateur. |
+| `auth` | Voir `auth --help` pour les options opérateur. |
+| `roles` | Voir `roles --help` pour les options opérateur. |
+| `data-exposure` | Voir `data-exposure --help` pour les options opérateur. |
+| `layouts` | Voir `layouts --help` pour les options opérateur. |
+| `report-design` | Voir `report-design --help` pour les options opérateur. |
+| `report-def` | Voir `report-def --help` pour les options opérateur. |
+| `export` | Voir `export --help` pour les options opérateur. |
+
 
 ## Groupes de commandes
 
@@ -133,24 +155,35 @@ Les commandes CLI qui modifient des données (`sync enroll/rotate/revoke`, `user
 
 Mettre une base de données à jour après avoir récupéré de nouvelles migrations (non destructif, garde les données) :
 
+### 1. Appliquer les migrations en attente
+
 ```
-./openldr db migrate
+{{operator:cli-fr-1}}
 ```
+
+![Appliquer les migrations en attente.](guide:operator-cli-fr-1)
 
 Réinitialiser et remplir une base de développement (`db reset` **supprime et recrée** le schéma) :
 
+### 2. Réinitialiser seulement une base jetable voulue
+
 ```
-./openldr db reset
-./openldr db seed
+{{operator:cli-fr-2}}
 ```
+
+![Réinitialiser seulement une base jetable voulue.](guide:operator-cli-fr-2)
 
 `db seed` refuse de s'exécuter quand des migrations sont en attente, et nomme ce qui manque. Lancez d'abord `db migrate`.
 
 Reconstruire le modèle de lecture de l'entrepôt à partir du magasin FHIR canonique (`db reproject` **réécrit chaque ligne projetée**, donc la commande refuse de s'exécuter sans `--force`) :
 
+### 3. Reconstruire l’entrepôt seulement si requis
+
 ```
-./openldr db reproject --force
+{{operator:cli-fr-3}}
 ```
+
+![Reconstruire l’entrepôt seulement si requis.](guide:operator-cli-fr-3)
 
 Elle affiche deux comptes distincts : les ressources canoniques réécrites, et les arrivées enregistrées dans le registre d'ingestion (une par version d'une ressource clinique). Ce sont des unités différentes, pas le même nombre. Comme `db seed`, elle refuse de s'exécuter quand des migrations sont en attente, au lieu d'aller jusqu'au bout sur un schéma en retard. Utilisez-la pour compléter les données après une mise à niveau qui ajoute une table à l'entrepôt.
 
@@ -158,35 +191,43 @@ Elle affiche deux comptes distincts : les ressources canoniques réécrites, et 
 
 Installer et lancer un plugin d'ingestion, puis ingérer un fichier avec :
 
+### 4. Installer un convertisseur approuvé et importer
+
 ```
-./openldr plugin install data/plugin.wasm
-./openldr ingest data/results.sqlite --plugin whonet-sqlite
+{{operator:cli-fr-4}}
 ```
+
+![Installer un convertisseur approuvé et importer.](guide:operator-cli-fr-4)
 
 Créer un utilisateur local et lui attribuer des rôles :
 
+### 5. Choisir l’opération utilisateur voulue
+
 ```
-./openldr user create --username alice --name "Alice" --email alice@example.org --role lab_technician
-./openldr user set-role <id> lab_admin
+{{operator:cli-fr-5}}
 ```
+
+![Choisir l’opération utilisateur voulue.](guide:operator-cli-fr-5)
 
 Basculer un indicateur de fonctionnalité :
 
+### 6. Lire ou modifier un indicateur choisi
+
 ```
-./openldr settings flags list
-./openldr settings flags set dashboard.raw_sql true
+{{operator:cli-fr-6}}
 ```
+
+![Lire ou modifier un indicateur choisi.](guide:operator-cli-fr-6)
 
 Lancer un rapport :
 
-```
-./openldr report list
-./openldr report run <id>
+### 7. Exécuter un rapport ou exporter dans le partage
 
-# PDF in the design's own text, then in French
-./openldr report run <id> --format pdf --out report.pdf
-./openldr report run <id> --format pdf --lang fr --out rapport.pdf
 ```
+{{operator:cli-fr-7}}
+```
+
+![Exécuter un rapport ou exporter dans le partage.](guide:operator-cli-fr-7)
 
 Pour un rapport avec un filtre Date range, fournissez les deux dates avec `--param from=2026-01-01 --param to=2026-11-12`. Le service de rapports associe ces valeurs à la plage de dates déclarée par la requête enregistrée. Choisissez les dates de votre rapport.
 
@@ -194,16 +235,13 @@ Pour un rapport avec un filtre Date range, fournissez les deux dates avec `--par
 
 Inscrire un laboratoire sur le serveur central, puis y connecter un laboratoire :
 
-```
-# On central: mint the lab's client + secret (printed once)
-./openldr sync enroll lab-site-01 --central-url https://central.example.org
+### 8. Configurer le partenaire de synchronisation
 
-# On the lab: apply the credentials, then check status
-./openldr settings sync set clientId sync-lab-site-01
-./openldr settings sync set mode bidirectional
-./openldr settings sync set enabled true
-./openldr sync status
 ```
+{{operator:cli-fr-8}}
+```
+
+![Configurer le partenaire de synchronisation.](guide:operator-cli-fr-8)
 
 > La synchronisation distribuée relie des laboratoires à un serveur central : les données opérationnelles remontent vers un miroir en lecture seule, la configuration de référence et la terminologie descendent. L'inscription crée un client Keycloak par laboratoire. Elle exige que le compte de service d'administration du realm central ait `manage-clients`/`view-clients`.
 
@@ -281,9 +319,13 @@ Utilisez Suivant pour atteindre les comptes au-delà des 100 premiers. Chaque re
 
 Pour un accès sans interface, lancez :
 
+### 9. Choisir l’opération utilisateur voulue
+
 ```sh
-openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
+{{operator:cli-fr-9}}
 ```
+
+![Choisir l’opération utilisateur voulue.](guide:operator-cli-fr-9)
 
 Le JSON contient `rows`, `offset`, `limit`, `total: null` et `hasMore`. Ajoutez `limit` à `offset` tant que `hasMore` vaut true. Omettez `--enabled` pour inclure les deux statuts. `openldr user list` liste toujours les comptes locaux.
 
@@ -297,54 +339,67 @@ Le central conserve le catalogue. Un laboratoire le reçoit par la synchronisati
 
 Lister le catalogue en ligne de commande :
 
+### 10. Utiliser le catalogue avec vos codes
+
 ```sh
-openldr test-catalog list --search viral --category MOL --loinc linked --enabled on --json
+{{operator:cli-fr-10}}
 ```
+
+![Utiliser le catalogue avec vos codes.](guide:operator-cli-fr-10)
 
 Les examens retirés sont masqués, sauf si vous passez `--status retired` ou `--status all`. `--loinc none` liste les examens sans code LOINC. `--limit` vaut 25 par défaut et 200 au plus. Paginez avec `--offset`. Le JSON contient `rows`, `total` et `ownedHere`. `ownedHere` vaut false quand cette installation a reçu son catalogue du central.
 
 Activer ou désactiver un examen dans ce laboratoire, ou le retirer et le rétablir, par son code :
 
+### 11. Utiliser le catalogue avec vos codes
+
 ```sh
-openldr test-catalog enable HIVVL
-openldr test-catalog retire HIVVL --json
+{{operator:cli-fr-11}}
 ```
+
+![Utiliser le catalogue avec vos codes.](guide:operator-cli-fr-11)
 
 `enable` et `disable` fonctionnent sur toute installation. `retire` et `restore` ne fonctionnent que là où cette installation possède le catalogue. Le retrait est réversible, donc aucune de ces commandes ne prend `--force`. Chacune est enregistrée dans le journal d'audit au nom de l'utilisateur CLI.
 
 Importer une liste d'examens depuis un fichier CSV ou Excel (.xlsx) :
 
+### 12. Utiliser le catalogue avec vos codes
+
 ```sh
-openldr test-catalog import national-tests.xlsx
-openldr test-catalog import national-tests.xlsx --value-map answers.json --apply
+{{operator:cli-fr-12}}
 ```
+
+![Utiliser le catalogue avec vos codes.](guide:operator-cli-fr-12)
 
 Sans `--apply`, rien n'est écrit. La commande affiche le nombre de lignes nouvelles, modifiées, inchangées et refusées, chaque refus avec son numéro de ligne, ainsi que tout texte de catégorie ou de prélèvement qui ne correspond à rien. Les colonnes sont reconnues par leur en-tête. Pour les nommer vous-même, passez `--column-map` avec un fichier JSON comme `{"code": "Test code", "name": "Test name"}`. Répondez au texte non reconnu avec `--value-map` :
 
+### 13. Enregistrer la correspondance dans le fichier JSON
+
 ```json
-{
-  "categories": [{ "text": "Virology", "kind": "new", "code": "VIRO", "display": "Virology" }],
-  "specimens": [{ "text": "Plasma", "system": "urn:openldr:cs:local", "code": "BLD" }]
-}
+{{operator:cli-fr-13}}
 ```
+
+![Enregistrer la correspondance dans le fichier JSON.](guide:operator-cli-fr-13)
 
 Une réponse de catégorie est `"kind": "existing"` avec un `code`, ou `"kind": "new"` avec un `code` et un `display`. Seule une installation qui possède le catalogue peut importer. Un import appliqué est enregistré dans le journal d'audit au nom de l'utilisateur CLI. Exportez les examens actifs en CSV, vers la sortie standard ou vers un fichier :
 
+### 14. Utiliser le catalogue avec vos codes
+
 ```sh
-openldr test-catalog export --out catalog.csv
+{{operator:cli-fr-14}}
 ```
+
+![Utiliser le catalogue avec vos codes.](guide:operator-cli-fr-14)
 
 Associer les codes d'examen du laboratoire aux examens du catalogue. Voir **Associer les codes de test du laboratoire** dans le guide Catalogue des examens de l'application. Le système est une URN, comme le montre la colonne Système de l'onglet Observés. Pour les données DISA, c'est `urn:openldr:disa` :
 
+### 15. Utiliser le catalogue avec vos codes
+
 ```sh
-openldr test-catalog map list --status unmapped --json
-openldr test-catalog map set urn:openldr:disa POCVR HIVVL
-openldr test-catalog map clear urn:openldr:disa POCVR --force
-openldr test-catalog map export --out mappings.csv
-openldr test-catalog map import mappings.csv
-openldr test-catalog map import mappings.csv --apply --force
-openldr test-catalog map rebuild --apply
+{{operator:cli-fr-15}}
 ```
+
+![Utiliser le catalogue avec vos codes.](guide:operator-cli-fr-15)
 
 - `map list` liste les codes d'examen du laboratoire présents dans l'entrepôt, avec leur correspondance dans le catalogue. `--status` accepte `unmapped`, `mapped`, `ambiguous` ou `all`. `--search`, `--limit` (de 1 à 200, 25 par défaut) et `--offset` filtrent et paginent la liste.
 - `map set <system> <code> <catalog-code>` associe un code à un examen du catalogue.
@@ -355,25 +410,26 @@ openldr test-catalog map rebuild --apply
 
 Les codes de résultat utilisent les mêmes commandes avec `--level result`. La cible est un code de champ de résultat :
 
+### 16. Utiliser le catalogue avec vos codes
+
 ```sh
-openldr test-catalog map list --level result --status unmapped
-openldr test-catalog map set urn:openldr:disa HIVVC HIVVL --level result
-openldr test-catalog map match urn:openldr:disa
-openldr test-catalog map match urn:openldr:disa --apply --force
+{{operator:cli-fr-16}}
 ```
+
+![Utiliser le catalogue avec vos codes.](guide:operator-cli-fr-16)
 
 - `--level result` sur `map list`, `set`, `clear`, `export` et `import` agit sur les codes de résultat. Le CSV des résultats a les colonnes `system, code, description, results, parameter_code, loinc`.
 - `map match <system>` liste chaque code de résultat non associé de ce système de laboratoire qui est égal à un code de champ de résultat. `--apply --force` les associe. La commande refuse `--apply` sans `--force`.
 
 Lier les champs de résultat à LOINC :
 
+### 17. Utiliser le catalogue avec vos codes
+
 ```sh
-openldr test-catalog result-fields list --loinc none
-openldr test-catalog result-fields link HIVVL 20447-9
-openldr test-catalog result-fields unlink HIVVL --force
-openldr test-catalog result-fields export --out result-fields.csv
-openldr test-catalog result-fields import result-fields.csv --apply --force
+{{operator:cli-fr-17}}
 ```
+
+![Utiliser le catalogue avec vos codes.](guide:operator-cli-fr-17)
 
 - `result-fields list` liste les champs avec leur rôle, leurs unités et leur lien LOINC. `--loinc` accepte `linked`, `none` ou `all`, et `--role` accepte `result`, `specimen`, `metadata` ou `admin`.
 - `result-fields unlink` refuse de s'exécuter sans `--force`. `result-fields import` affiche un aperçu, sauf si `--apply --force` est donné. Un laboratoire qui reçoit son dictionnaire du central ne peut pas modifier les liens.
@@ -383,10 +439,13 @@ Chaque changement est enregistré dans le journal d'audit au nom de l'utilisateu
 
 ## Installer un pack de contenu
 
+### 18. Prévisualiser un pack approuvé avant installation
+
 ```sh
-openldr market install <bundle-dir> --dry-run
-openldr market install <bundle-dir>
+{{operator:cli-fr-18}}
 ```
+
+![Prévisualiser un pack approuvé avant installation.](guide:operator-cli-fr-18)
 
 `--dry-run` lance les vérifications et affiche les étapes. Pour chaque étape de liaison de codes, elle affiche combien de codes elle lierait. Pour chaque étape test-mappings ou result-mappings, elle liste les correspondances qu'elle créerait, garderait et ignorerait. Elle n'écrit rien. Un pack de contenu doit être signé par un éditeur. Réinstaller un pack déjà installé demande `--force`. Un pack dont la dernière installation a échoué s'installe de nouveau sans cette option. `openldr market update` accepte les mêmes options. Elle installe une version plus récente d'un pack installé sans `--force`. Elle refuse la même version ou une version plus ancienne, ainsi qu'un pack non installé, sauf si vous passez `--force`. `--json` affiche une sortie lisible par une machine. `openldr market list` affiche les packs avec leur statut. La CLI enregistre l'acteur sous `cli`.
 

@@ -29,19 +29,9 @@ O instalador cria a configuração, gera palavras-passe e inicia os serviços. E
 
 O endereço ilustrado é o predefinido numa instalação local. Para aceder a partir de outros computadores, configure um nome de anfitrião com [Instalar](/docs/install). Noutro computador, `localhost` refere-se a esse computador, não ao anfitrião OpenLDR.
 
-## Iniciar sessão no Studio
+## Primeiro início de sessão
 
-Crie o primeiro administrador com o código de configuração. Essa conta inicia a sua sessão no Studio.
-
-1. Abra o endereço apresentado pelo instalador. Numa instalação remota, use o nome de anfitrião configurado. O Studio mostra a página **Criar o administrador**.
-2. Introduza o código em **Código de configuração**. Se tiver expirado, execute `./openldr auth setup-code` na pasta `openldr/` para obter um novo. No Windows, execute `.\openldr.ps1 auth setup-code`.
-3. Escolha um nome de utilizador e uma palavra-passe e selecione **Criar o administrador**. Fica com sessão iniciada como administrador.
-
-Uma instalação feita com `--auth keycloak` não tem código de configuração. O seu instalador mostra, em vez disso, uma palavra-passe de administrador do Keycloak e uma linha **App sign-in**. Inicie sessão como `labadmin` com a palavra-passe da linha **App sign-in** e escolha uma nova palavra-passe quando lhe for pedido. A palavra-passe de administrador do Keycloak serve separadamente para gerir a autenticação.
-
-**Resultado esperado:** O Studio abre. Uma nova instalação inclui um painel de exemplo, salvo se escolheu a opção sem dados iniciais. Numa atualização, os dados e as permissões existentes determinam o que aparece.
-
-A instalação local predefinida usa um certificado autoassinado. É esperado um aviso do navegador neste caso. Confirme que abriu o endereço da sua própria instalação antes de o aceitar. Consulte [Instalar](/docs/install) para obter um certificado reconhecido pelos navegadores.
+O percurso ilustrado do primeiro início de sessão fica adiado até à captura numa instalação nova. Conserve o código de configuração apresentado pelo instalador para essa tarefa. Uma instalação feita com `--auth keycloak` apresenta credenciais **App sign-in** em vez do código de configuração. Consulte [Instalar](/docs/install) para o endereço configurado e os certificados, e [Fornecedores de autenticação](/docs/auth-providers) para a utilização do código de configuração.
 
 ## Continuar na aplicação
 

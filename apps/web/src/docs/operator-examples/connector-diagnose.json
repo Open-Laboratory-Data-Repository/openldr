@@ -1,0 +1,14 @@
+{
+  "diagnose-list": {
+    "unix": "./openldr connectors list --json",
+    "windows": ".\\openldr.ps1 connectors list --json"
+  },
+  "diagnose-cli": {
+    "unix": "./openldr connectors diagnose CONNECTOR_ID --json",
+    "windows": ".\\openldr.ps1 connectors diagnose CONNECTOR_ID --json"
+  },
+  "diagnose-inspect": {
+    "unix": "./openldr connectors inspect CONNECTOR_ID",
+    "windows": ".\\openldr.ps1 connectors inspect CONNECTOR_ID"
+  }
+}

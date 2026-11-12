@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "20849315",
+          "type": "fix",
+          "scope": "web",
+          "title": "Keep reference variables and code values on one line"
+        },
+        {
           "hash": "6f82520a",
           "type": "fix",
           "scope": "web",

@@ -29,19 +29,9 @@ L'installateur crée la configuration, génère les mots de passe et démarre le
 
 L'adresse illustrée est celle d'une installation locale par défaut. Pour un accès depuis d'autres ordinateurs, configurez un nom d'hôte avec [Installation](/docs/install). Sur un autre ordinateur, `localhost` désigne cet ordinateur, pas votre hôte OpenLDR.
 
-## Se connecter à Studio
+## Première connexion
 
-Créez le premier administrateur avec le code de configuration. Ce compte vous connecte à Studio.
-
-1. Ouvrez l'adresse affichée par l'installateur. Pour une installation distante, utilisez le nom d'hôte configuré. Studio affiche la page **Créer l'administrateur**.
-2. Saisissez le code dans **Code de configuration**. S'il a expiré, lancez `./openldr auth setup-code` dans le dossier `openldr/` pour en obtenir un nouveau. Sous Windows, lancez `.\openldr.ps1 auth setup-code`.
-3. Choisissez un nom d'utilisateur et un mot de passe, puis sélectionnez **Créer l'administrateur**. Vous êtes alors connecté en tant qu'administrateur.
-
-Une installation faite avec `--auth keycloak` n'a pas de code de configuration. Son installateur affiche à la place un mot de passe administrateur Keycloak et une ligne **App sign-in**. Connectez-vous avec `labadmin` et le mot de passe de la ligne **App sign-in**, puis choisissez un nouveau mot de passe quand il vous est demandé. Le mot de passe administrateur Keycloak sert séparément à gérer l'authentification.
-
-**Résultat attendu :** Studio s'ouvre. Une nouvelle installation comprend un tableau de bord d'exemple, sauf si vous avez choisi l'option sans données initiales. Après une mise à niveau, les données et les droits existants déterminent ce qui s'affiche.
-
-L'installation locale par défaut utilise un certificat auto-signé. Un avertissement du navigateur est attendu dans ce cas. Vérifiez que vous avez ouvert l'adresse de votre propre installation avant de l'accepter. Consultez [Installation](/docs/install) pour un certificat reconnu par les navigateurs.
+Le parcours illustré de première connexion attend une capture sur une installation neuve. Conservez le code de configuration affiché par le programme d'installation pour cette étape. Une installation faite avec `--auth keycloak` affiche des identifiants **App sign-in** à la place du code de configuration. Consultez [Installation](/docs/install) pour l'adresse configurée et les certificats, et [Fournisseurs d'authentification](/docs/auth-providers) pour l'usage du code de configuration.
 
 ## Continuer dans l'application
 

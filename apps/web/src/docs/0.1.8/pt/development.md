@@ -1,142 +1,306 @@
 # Desenvolvimento
 
-Execute o OpenLDR a partir do código-fonte para desenvolver sobre ele. O repositório é um
-monorepo pnpm + Turbo: a API de backend (`apps/server`), a aplicação Studio (`apps/studio`),
-este site de apresentação e documentação (`apps/web`) e pacotes partilhados. Os serviços de suporte (Postgres, Keycloak e o serviço de armazenamento, Garage) correm no
-Docker. As aplicações correm no seu anfitrião, com recarregamento automático.
+<!-- operator-platform -->
 
-## Pré-requisitos
+Execute a API, o Studio e o site público a partir do código. Os exemplos usam `~/Downloads/openldr_ce` no Linux/macOS e `C:\openldr_ce` no PowerShell. Substitua-os pelo seu caminho. O terminal já fornece o prompt azul; escreva apenas o comando. As linhas atenuadas são saídas. Os excertos de configuração indicam o ficheiro e aparecem uma só vez. As imagens ilustram comandos, sem provar uma instalação bem-sucedida. Os dados de exemplo são opcionais.
 
-- **git**
-- **Node.js 20+**
-- **pnpm** (ou Corepack: `corepack enable`)
-- **Docker** com o plugin Compose (para os serviços de suporte)
+## Preparar uma cópia de desenvolvimento separada
 
-## Início rápido (arranque de uma linha)
+Use um computador de desenvolvimento e bases separadas. As aplicações correm nesse computador; o Docker executa Postgres, Garage e Keycloak. Instale Git, Node.js 22.13+ e Docker com Compose. O repositório fixa pnpm 11.22.0, que exige Node 22.13+. Instale pnpm pelas [instruções oficiais](https://pnpm.io/installation). Se o Node incluir Corepack, `corepack enable` ativa o lançador pnpm. Abra um terminal após instalar estas ferramentas.
 
-O script de arranque para programadores clona o repositório, instala as dependências,
-arranca os serviços de suporte, escreve um `.env` de desenvolvimento e inicializa a base de
-dados.
+### 1. Verificar as ferramentas
 
-**Linux / macOS**
-```
-curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/development.sh | bash
+Execute cada comando separadamente. Os comandos de versão mostram as versões instaladas. `docker info` também deve mostrar uma secção Server com resposta. Pare se faltar um comando ou se o Docker não ligar.
+
+```sh
+{{operator:dev-tools}}
 ```
 
-**Windows (PowerShell)**
-```
-irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/development.ps1 | iex
-```
+![Verificar as ferramentas.](guide:operator-dev-tools)
 
-Opções úteis: `--dir <path>` onde clonar, `--branch <name>` que ramo usar, `--seed` também
-carrega os dados de exemplo do WHONET, `--reset-db` força uma base de dados nova
-(destrutivo), `--no-services` não arranca o Docker nem a base de dados. (Na PowerShell:
-`-Dir`, `-Branch`, `-Seed`, `-ResetDb`, `-NoServices`.)
+### 2. Clonar para uma pasta livre
 
-## Configuração manual
+Este exemplo descarrega o código para `openldr_ce`. A pasta Downloads deve existir no Linux/macOS. Escolha outra pasta principal existente se necessário. Não clone para a pasta Compose instalada.
 
-Se preferir fazer à mão:
-
-```
-git clone https://github.com/Open-Laboratory-Data-Repository/openldr.git
-cd openldr
-pnpm install
-
-# dev config — enables a no-login dev admin so you don't need to configure Keycloak
-cp .env.example .env
-printf '\nAUTH_DEV_BYPASS=true\n' >> .env   # required: the bypass is off unless you set it
-
-# backing services (Postgres :5433, S3 storage (Garage) :9010, Keycloak :8180)
-docker compose up -d
-
-# create the schema and seed the starter set (forms, workflows, terminology)
-pnpm openldr db reset
-pnpm openldr db seed
+```sh
+{{operator:dev-clone}}
 ```
 
-Se o seu `.env` for anterior à 0.1.11, altere `S3_ACCESS_KEY_ID` e `S3_SECRET_ACCESS_KEY` para os valores de `.env.example`.
+![Clonar para uma pasta livre.](guide:operator-dev-clone)
 
-> Em desenvolvimento, a base de dados **não** é migrada automaticamente
-> (`MIGRATE_ON_START` está desligado). Por isso, **depois de qualquer pull que traga novas
-> migrações, execute `pnpm openldr db migrate`**. Não é destrutivo e mantém os seus dados.
-> Se a aplicação mostrar dados vazios ou o servidor registar `relation "…" does not exist`,
-> é esta a solução. `db seed` recusa correr sobre um esquema atrasado em relação ao código
-> e indica o que está pendente.
->
-> Use `pnpm openldr db reset` apenas quando quiser mesmo começar do zero: este comando
-> **elimina e recria o esquema**, e destrói tudo na sua base de dados de desenvolvimento.
+### 3. Entrar na cópia
 
-## Executar as aplicações
+Use o caminho escolhido em toda a página. Os comandos `pnpm` seguintes partem desta raiz, onde existem `package.json` e `pnpm-workspace.yaml`.
 
-Cada aplicação corre no seu próprio terminal, a partir da raiz do repositório:
-
-```
-pnpm -C apps/server dev   # API        → http://localhost:3000
-pnpm -C apps/studio dev   # Studio app → http://localhost:5173/studio
-pnpm -C apps/web dev      # This site  → http://localhost:5174
+```sh
+{{operator:dev-folder}}
 ```
 
-O Studio encaminha `/api` para o servidor na porta 3000. As duas portas do Vite estão
-fixadas no `vite.config.ts` de cada aplicação com `strictPort`. Assim, um conflito de
-portas falha de forma visível, em vez de mudar uma aplicação para outra porta sem aviso.
-Com `AUTH_DEV_BYPASS` ligado, o Studio abre logo como administrador de desenvolvimento, sem
-início de sessão. Retire-o do `.env` para testar o fluxo real do Keycloak.
+![Entrar na cópia.](guide:operator-dev-folder)
 
-### Aceder ao servidor de desenvolvimento a partir de outro dispositivo
+### 4. Instalar as dependências
 
-O Vite fica ligado a localhost, por isso um telemóvel na mesma rede não consegue abrir o
-Studio. Defina `DEV_HOST` no `.env` da raiz do repositório com o endereço a que o quer
-ligar:
+O ficheiro de bloqueio escolhe as versões. Se o pnpm rejeitar a versão do Node, atualize o Node antes de tentar novamente. Não apague esse ficheiro para contornar um erro.
 
-```
-DEV_HOST=127.0.0.1
+```sh
+{{operator:dev-dependencies}}
 ```
 
-`apps/studio/vite.config.ts` lê-o a partir desse ficheiro. O `.env` está no gitignore, por
-isso nenhum endereço específico de uma máquina vai parar a um ficheiro versionado. Deixe-o
-por definir para manter a omissão, só localhost. Só são lidas as variáveis com nome
-`DEV_*`, o que mantém o resto do `.env` fora da configuração do Vite.
+![Instalar as dependências.](guide:operator-dev-dependencies)
 
-> `AUTH_DEV_BYPASS` fica **desligado até o definir explicitamente**. Não é ativado por
-> `NODE_ENV=development`. Se o Studio lhe pedir para iniciar sessão numa cópia existente,
-> acrescente `AUTH_DEV_BYPASS=true` ao `.env`. Quando está ligado, o servidor regista um
-> aviso no arranque e o Studio mostra uma faixa, porque nesse modo a API não exige
-> autenticação.
+## Configurar e inicializar os serviços de desenvolvimento
 
-## Comandos úteis
+Estes passos constituem a preparação manual. O script automático é uma alternativa, não um passo adicional. Os dados de exemplo continuam opcionais.
 
-| Comando | O que faz |
-| --- | --- |
-| `pnpm test` | Executa os conjuntos de testes do workspace. |
-| `pnpm typecheck` | Verifica os tipos de todos os pacotes e aplicações. |
-| `pnpm build` | Compila tudo (Turbo). |
-| `pnpm openldr db migrate` | Aplica as migrações pendentes. Não é destrutivo: execute-o depois de um pull. |
-| `pnpm openldr db reset` | Elimina e recria o esquema da base de dados de desenvolvimento (**destrutivo**). |
-| `pnpm openldr db seed` | Cria os formulários, fluxos de trabalho e terminologias por omissão. |
-| `pnpm -C apps/studio test` | Executa apenas os testes do Studio. |
+### 1. Criar o ficheiro de configuração local
 
-## Construir plugins
+Copie `.env.example` apenas se não existir `.env`. Este comando conserva um ficheiro existente. Verifique depois os URL das bases. Devem identificar as suas bases de desenvolvimento.
 
-Os plugins são escritos em Rust e compilados para WebAssembly. O código-fonte está em `wasm/`.
+```sh
+{{operator:dev-copy-env}}
+```
 
-1. Instale o Rust com o [rustup](https://rustup.rs).
-2. Adicione o destino WebAssembly: `rustup target add wasm32-wasip1`.
-3. Se um terminal disser que não encontra o `cargo`, carregue o Rust nesse terminal: `source "$HOME/.cargo/env"`.
-4. Construa um plugin:
+![Criar o ficheiro de configuração local.](guide:operator-dev-copy-env)
 
-| Comando | O que constrói |
-| --- | --- |
-| `pnpm build:test-sink` | O pequeno plugin de teste, em `reference-plugins/test-sink/`. |
-| `pnpm build:ui-reference` | O plugin de teste com uma página, um cartão no painel e um painel lateral, em `reference-plugins/ui-reference/`. |
-| `pnpm build:plugins` | O plugin WHONET e os outros plugins de referência. O plugin WHONET precisa também do clang e de um sysroot WASI. |
+### 2. Gerar uma chave de encriptação
 
-Instale um plugin construído com `pnpm openldr plugin install reference-plugins/<name>/plugin.wasm`.
+O Node mostra uma chave aleatória nova. Copie a saída para o passo seguinte. Conserve a chave existente se a base já contiver segredos de conectores encriptados. Outra chave não conseguirá lê-los.
 
-Os testes Rust dos plugins correm em `wasm/`, por exemplo `cargo test -p openldr-v1-import`. A barreira de testes do turbo não os corre, por isso corra-os quando alterar um plugin.
+```sh
+{{operator:dev-key}}
+```
 
-### Cartão e painel lateral de um plugin
+![Gerar uma chave de encriptação.](guide:operator-dev-key)
+
+### 3. Configurar a autenticação de desenvolvimento
+
+Edite `.env` num editor. Cole a chave após `SECRETS_ENCRYPTION_KEY=`. O texto abaixo não é uma chave. `AUTH_DEV_BYPASS=true` desativa a autenticação da API e abre o Studio como administrador de desenvolvimento. Use este modo apenas num ambiente isolado. Conserve os outros valores do `.env.example` atual, incluindo as credenciais Garage de desenvolvimento.
+
+```text
+{{operator:dev-env}}
+```
+
+![Configurar a autenticação de desenvolvimento.](guide:operator-dev-env)
+
+### 4. Iniciar os serviços Docker
+
+Inicie o Docker e execute os comandos pela ordem indicada. Aguarde até Postgres aceitar ligações e o armazenamento estar saudável. Um contentor em execução não prova que o serviço esteja pronto. Consulte `docker compose logs SERVICE_NAME` se falhar.
+
+```sh
+{{operator:dev-services}}
+```
+
+![Iniciar os serviços Docker.](guide:operator-dev-services)
+
+### 5. Migrar e inicializar o esquema
+
+A migração aplica alterações ao esquema sem apagar os dados. A inicialização adiciona definições predefinidas, como formulários, workflows e terminologia. Não exige registos laboratoriais de exemplo. Pare se algum comando falhar.
+
+```sh
+{{operator:dev-migrate}}
+```
+
+![Migrar e inicializar o esquema.](guide:operator-dev-migrate)
+
+## Executar as aplicações e a CLI
+
+Use um terminal separado para cada servidor de desenvolvimento. Entre na mesma raiz do repositório em cada um. Mantenha os servidores ativos enquanto usa as páginas.
+
+### 1. Iniciar a API
+
+A API usa normalmente `http://localhost:3000`. O servidor mostra um aviso quando a autenticação está desativada. Leia os erros de arranque antes de abrir o Studio.
+
+```sh
+{{operator:dev-api}}
+```
+
+![Iniciar a API.](guide:operator-dev-api)
+
+### 2. Iniciar o Studio
+
+Abra `http://localhost:5173/studio/`. O Studio encaminha os pedidos `/api` para a porta 3000. O modo de desenvolvimento abre a aplicação sem início de sessão e mostra um aviso. As capturas do primeiro início de sessão aguardam uma instalação nova.
+
+```sh
+{{operator:dev-studio}}
+```
+
+![Iniciar o Studio.](guide:operator-dev-studio)
+
+### 3. Iniciar o site público
+
+Abra `http://localhost:5174/`. O Studio usa 5173 e este site usa 5174. Num conflito, ambos param em vez de escolher outra porta. Pare o processo antigo nessa porta antes de tentar novamente.
+
+```sh
+{{operator:dev-web}}
+```
+
+![Iniciar o site público.](guide:operator-dev-web)
+
+### 4. Executar a CLI a partir do código
+
+O lançador do código é `pnpm openldr`, a partir da raiz do repositório. Lê `.env` e liga aos serviços Docker. Não exige uma página Studio aberta. Consulte o [guia da CLI](/docs/cli) para comandos e caminhos.
+
+```sh
+{{operator:dev-cli}}
+```
+
+![Executar a CLI a partir do código.](guide:operator-dev-cli)
+
+## Abrir o site de desenvolvimento noutro dispositivo
+
+Este passo é opcional. Uma API de desenvolvimento sem autenticação deve ficar numa rede privada. A API já escuta em todas as interfaces; verifique a firewall antes de permitir acesso remoto.
+
+### 1. Configurar o endereço de escuta Vite
+
+Edite `.env`. `0.0.0.0` faz ambos os servidores Vite escutarem em todas as interfaces IPv4. Pode usar o endereço privado ou Tailscale do computador. `127.0.0.1` aceita apenas ligações locais.
+
+```text
+{{operator:dev-remote}}
+```
+
+![Configurar o endereço de escuta Vite.](guide:operator-dev-remote)
+
+### 2. Reiniciar o servidor de desenvolvimento
+
+Prima Ctrl+C no terminal Studio e volte a iniciá-lo. Reinicie também o site público se necessário. No outro dispositivo, abra `http://YOUR_PRIVATE_HOST:5173/studio/` com o seu endereço. Não use `0.0.0.0` nem `localhost` como endereço remoto.
+
+```sh
+{{operator:dev-restart}}
+```
+
+![Reiniciar o servidor de desenvolvimento.](guide:operator-dev-restart)
+
+## Atualizar ou repor o desenvolvimento
+
+Migre após obter alterações ao esquema. A reposição é uma escolha destrutiva separada.
+
+### 1. Atualizar sem apagar os dados
+
+Consulte primeiro `git status`. Guarde as suas alterações antes do pull. Pare se Git ou a instalação falhar. Migre antes de iniciar a API atualizada. `db seed` recusa um esquema atrasado e não substitui a migração.
+
+```sh
+{{operator:dev-update}}
+```
+
+![Atualizar sem apagar os dados.](guide:operator-dev-update)
+
+### 2. Verificar a aplicação alterada
+
+Este exemplo verifica o site público. Escolha o pacote afetado para outras alterações. Na raiz, `pnpm test`, `pnpm typecheck` e `pnpm build` executam as tarefas do repositório. Os testes Rust são separados.
+
+```sh
+{{operator:dev-check}}
+```
+
+![Verificar a aplicação alterada.](guide:operator-dev-check)
+
+### 3. Repor apenas uma base descartável
+
+Opcional e destrutivo. Verifique os dois URL das bases. Estes comandos apagam e recriam o esquema e carregam as definições. Não os use para reparar uma migração em falta. `pnpm e2e:seed` e `pnpm docs:seed` também repõem dados e compilam extensões; são conjuntos de teste opcionais.
+
+```sh
+{{operator:dev-reset}}
+```
+
+![Repor apenas uma base descartável.](guide:operator-dev-reset)
+
+## Usar o script em vez da preparação manual
+
+Use esta alternativa numa instalação de desenvolvimento isolada. O script cria `.env` apenas se não existir. Um `.env` novo provoca a reposição, mesmo que a base predefinida já exista. Um `.env` existente evita-a, salvo pedido explícito. Confirme este comportamento antes de usar bases existentes.
+
+### 1. Descarregar o script
+
+Descarregue para uma pasta temporária. Escolha a plataforma correta acima. Descarregar o ficheiro não o executa.
+
+```sh
+{{operator:dev-bootstrap-download}}
+```
+
+![Descarregar o script.](guide:operator-dev-bootstrap-download)
+
+### 2. Ler antes de executar
+
+Leia o ficheiro. Em `less`, prima q para sair. Verifique a pasta de destino, a criação de `.env` e as condições de reposição. Se seguiu a preparação manual, ignore esta alternativa.
+
+```sh
+{{operator:dev-bootstrap-read}}
+```
+
+![Ler antes de executar.](guide:operator-dev-bootstrap-read)
+
+### 3. Executar com um destino explícito
+
+Use uma pasta de desenvolvimento nova. O script instala dependências, inicia os serviços e inicializa a base nova. Não inicia a API nem o Studio. Continue em Executar as aplicações acima. Só adicione a opção de dados de exemplo se aceitar a preparação destrutiva.
+
+```sh
+{{operator:dev-bootstrap-run}}
+```
+
+![Executar com um destino explícito.](guide:operator-dev-bootstrap-run)
+
+## Compilar e testar uma extensão de referência
+
+Opcional. Instale Rust com [rustup](https://rustup.rs). Reabra o terminal se faltar `cargo`. Use a extensão de teste numa instalação de desenvolvimento.
+
+### 1. Adicionar o destino WebAssembly
+
+Execute a partir da raiz. As extensões atuais usam `wasm32-wasip1`. Não são necessários dados laboratoriais de exemplo.
+
+```sh
+{{operator:dev-rust}}
+```
+
+![Adicionar o destino WebAssembly.](guide:operator-dev-rust)
+
+### 2. Compilar a extensão de teste
+
+Este exemplo Rust não precisa das ferramentas C do WHONET. O script escreve `plugin.wasm` e `manifest.json` em `reference-plugins/test-sink/`.
+
+```sh
+{{operator:dev-plugin-build}}
+```
+
+![Compilar a extensão de teste.](guide:operator-dev-plugin-build)
+
+### 3. Executar os testes Rust
+
+O comando de testes JavaScript não executa estes testes Rust. Teste o pacote Rust quando o alterar.
+
+```sh
+{{operator:dev-plugin-test}}
+```
+
+![Executar os testes Rust.](guide:operator-dev-plugin-test)
+
+### 4. Instalar apenas no sistema de teste
+
+Estes comandos escrevem no registo e armazenamento de desenvolvimento. Verifique `.env`. Antes de os executar, adicione `MARKETPLACE_DEV_ALLOW_UNSIGNED=true` ao `.env` do teste isolado e reinicie a API. Mantenha o manifesto junto do ficheiro WASM. Esta compilação não está assinada; reserve a opção de desenvolvimento sem assinatura a um sistema isolado. Use pacotes assinados e aprovados numa instalação normal.
+
+```sh
+{{operator:dev-plugin-install}}
+```
+
+![Instalar apenas no sistema de teste.](guide:operator-dev-plugin-install)
+
+## Opções do script e comandos de compilação
+
+| Linux/macOS | PowerShell | Efeito |
+| --- | --- | --- |
+| `--dir PATH` | `-Dir PATH` | Escolher a pasta do repositório. |
+| `--branch NAME` | `-Branch NAME` | Escolher o ramo de um clone novo. |
+| `--no-services` | `-NoServices` | Ignorar Docker e a inicialização das bases. |
+| `--reset-db` | `-ResetDb` | Repor uma base de desenvolvimento existente. Destrutivo. |
+| `--seed` | `-Seed` | Na inicialização, executar a preparação destrutiva WHONET. Exige ferramentas de compilação. |
+
+`pnpm build:ui-reference` compila a extensão com página, cartão e painel. `pnpm build:v1-import` compila o importador v1. `pnpm build:plugins` compila WHONET e as outras extensões de referência. WHONET também exige clang e um sysroot WASI.
+
+Para um pacote local sem assinatura num sistema de teste isolado, adicione `MARKETPLACE_DEV_ALLOW_UNSIGNED=true` ao respetivo `.env` e reinicie a API. Mantenha esta opção desativada nas instalações normais. Veja [Variáveis de ambiente](/docs/environment).
+
+## Cartão e painel lateral de um plugin
 
 Um plugin com página própria (`ui.entry` no manifesto) pode também mostrar essa página como cartão no painel e como painel lateral. Declare-os em `ui.sites`:
+
+**`manifest.json`, excerto**
 
 ```json
 "ui": {
@@ -160,31 +324,8 @@ A Documentação do estúdio explica o que os utilizadores veem, em **Cartões e
 
 ## Contribuir
 
-As contribuições são bem-vindas. Por agora: faça um fork do repositório, crie um ramo de
-funcionalidade, mantenha os testes e as verificações de tipos a passar (`pnpm test`,
-`pnpm typecheck`) e abra um pull request contra `main` que descreva a alteração.
+Crie um fork e um ramo de trabalho. Execute os testes, verificações de tipos e compilações relevantes. Abra um pull request para `main` com a alteração e a validação.
 
-**Convenção das rotas do servidor:** a compressão das respostas está registada para todo o
-servidor, por isso cada handler de rota assíncrono tem de fazer `return reply.send(...)`.
-Um `reply.send(payload)` sem `return` devolve um corpo **vazio** sem qualquer aviso quando
-o conteúdo passa de cerca de 1KB e o envio se torna assíncrono. O `return` é essencial, não
-uma questão de estilo. O mecanismo está explicado no bloco de comentários no topo de
-`apps/server/src/sync-routes.ts`.
+As rotas assíncronas do servidor devem usar `return reply.send(...)`. Use `await reply.send(...)` quando uma função auxiliar precisar de outro valor de retorno. Uma chamada isolada ou com `void` não espera pela compressão assíncrona e pode enviar um corpo vazio. Veja o comentário no início de `apps/server/src/sync-routes.ts`.
 
-Use antes `await reply.send(...)` quando a função ainda tiver de resolver para outra coisa,
-por exemplo um helper de autenticação que indica "já respondido" ao resolver `undefined`.
-Ambas as formas esperam pelo thenable da resposta, e é isso que as torna seguras.
-`void reply.send(...)` **não** conta como confirmação: descarta esse thenable sem esperar
-por ele, por isso falha exatamente como um envio sem `return`. Um handler síncrono
-(`setNotFoundHandler`, `setErrorHandler`) nunca chega a este mecanismo e não é afetado.
-
-Isto é imposto pela regra ESLint `openldr/require-return-reply-send`
-(`apps/server/eslint-rules/`). Assim, `pnpm --filter @openldr/server lint` falha com um
-envio sem `return` ou com `void` numa função assíncrona. A regra existe porque nenhum tipo
-de teste apanha isto: os dados dos testes unitários ficam abaixo do limite de 1KB, por isso
-o erro fica invisível até para um teste que usa o `buildApp` real. Só um conjunto de testes
-de aceitação com HTTP real o deteta.
-
-> Um guia de contribuição mais completo (convenções de código, processo de revisão e uma
-> lista de verificação para pull requests) ainda está a ser escrito. Volte mais tarde, ou
-> abra uma issue para iniciar uma discussão.
+`pnpm --filter @openldr/server lint` aplica a regra `openldr/require-return-reply-send`. Teste respostas grandes por HTTP real ao alterar o seu tratamento. Os pequenos conteúdos dos testes unitários não exercitam a compressão assíncrona.

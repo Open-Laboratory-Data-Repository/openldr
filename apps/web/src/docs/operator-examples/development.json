@@ -1,0 +1,85 @@
+{
+  "dev-tools": {
+    "unix": "git --version\nnode --version\npnpm --version\ndocker compose version\ndocker info"
+  },
+  "dev-clone": {
+    "unix": "git clone https://github.com/Open-Laboratory-Data-Repository/openldr.git ~/Downloads/openldr_ce",
+    "windows": "git clone https://github.com/Open-Laboratory-Data-Repository/openldr.git C:\\openldr_ce"
+  },
+  "dev-folder": {
+    "unix": "cd ~/Downloads/openldr_ce",
+    "windows": "Set-Location C:\\openldr_ce"
+  },
+  "dev-dependencies": {
+    "unix": "pnpm install --frozen-lockfile"
+  },
+  "dev-copy-env": {
+    "unix": "test -e .env || cp .env.example .env",
+    "windows": "if (!(Test-Path .env)) { Copy-Item .env.example .env }"
+  },
+  "dev-key": {
+    "unix": "node -e \"console.log(require('node:crypto').randomBytes(32).toString('base64'))\""
+  },
+  "dev-env": {
+    "unix": "AUTH_DEV_BYPASS=true\nSECRETS_ENCRYPTION_KEY=PASTE_YOUR_GENERATED_KEY",
+    "file": ".env"
+  },
+  "dev-services": {
+    "unix": "docker compose up -d\ndocker compose ps\ndocker compose exec -T postgres pg_isready -U openldr"
+  },
+  "dev-migrate": {
+    "unix": "pnpm openldr db migrate\npnpm openldr db seed"
+  },
+  "dev-api": {
+    "unix": "pnpm -C apps/server dev"
+  },
+  "dev-studio": {
+    "unix": "pnpm -C apps/studio dev"
+  },
+  "dev-web": {
+    "unix": "pnpm -C apps/web dev"
+  },
+  "dev-cli": {
+    "unix": "pnpm openldr health\npnpm openldr --help"
+  },
+  "dev-remote": {
+    "unix": "DEV_HOST=0.0.0.0",
+    "file": ".env"
+  },
+  "dev-restart": {
+    "unix": "pnpm -C apps/studio dev"
+  },
+  "dev-update": {
+    "unix": "git status --short\ngit pull --ff-only\npnpm install --frozen-lockfile\npnpm openldr db migrate"
+  },
+  "dev-check": {
+    "unix": "pnpm --filter @openldr/web test\npnpm --filter @openldr/web typecheck\npnpm --filter @openldr/web build"
+  },
+  "dev-reset": {
+    "unix": "pnpm openldr db reset --force\npnpm openldr db seed"
+  },
+  "dev-bootstrap-download": {
+    "unix": "curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/development.sh -o development.sh",
+    "windows": "Invoke-WebRequest https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/development.ps1 -OutFile development.ps1"
+  },
+  "dev-bootstrap-read": {
+    "unix": "less development.sh",
+    "windows": "Get-Content .\\development.ps1"
+  },
+  "dev-bootstrap-run": {
+    "unix": "bash development.sh --dir ~/Downloads/openldr_ce",
+    "windows": ".\\development.ps1 -Dir C:\\openldr_ce"
+  },
+  "dev-rust": {
+    "unix": "rustc --version\ncargo --version\nrustup target add wasm32-wasip1"
+  },
+  "dev-plugin-build": {
+    "unix": "pnpm build:test-sink"
+  },
+  "dev-plugin-test": {
+    "unix": "cargo test --manifest-path wasm/Cargo.toml -p test-sink"
+  },
+  "dev-plugin-install": {
+    "unix": "pnpm openldr plugin install reference-plugins/test-sink/plugin.wasm\npnpm openldr plugin list"
+  }
+}

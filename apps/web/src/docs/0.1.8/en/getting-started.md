@@ -29,19 +29,9 @@ The installer creates the configuration, generates passwords and starts the serv
 
 The illustrated address is the default for a local installation. If you need access from other computers, configure a hostname with [Install](/docs/install). On another computer, `localhost` refers to that computer, not your OpenLDR host.
 
-## Sign in to Studio
+## First sign-in
 
-Create the first administrator with the setup code. That account signs you in to Studio.
-
-1. Open the address the installer printed. For a remote installation, use the hostname you configured. Studio shows the **Create the administrator** page.
-2. Enter the setup code in **Setup code**. If it has run out, run `./openldr auth setup-code` in the `openldr/` folder for a new one. On Windows, run `.\openldr.ps1 auth setup-code`.
-3. Choose a username and a password, then select **Create the administrator**. You are now signed in as the administrator.
-
-An install made with `--auth keycloak` has no setup code. Its installer prints a Keycloak admin password and an **App sign-in** line instead. Sign in as `labadmin` with the password on the **App sign-in** line, and choose a new password when asked. The Keycloak admin password is a separate credential for managing authentication.
-
-**Expected result:** Studio opens. A new installation includes a sample dashboard unless you chose the seedless option. Existing data and permissions determine what you see on an upgraded installation.
-
-The default local installation uses a self-signed certificate. A browser warning is expected for that setup. Check that you opened your own installation's address before accepting it. See [Install](/docs/install) for a trusted certificate.
+The illustrated first-sign-in walkthrough is deferred until it can be captured on a fresh installation. Keep the setup code the installer printed for that task. An install made with `--auth keycloak` prints **App sign-in** credentials instead of a setup code. See [Install](/docs/install) for the configured address and certificate setup, and [Authentication providers](/docs/auth-providers) for how the setup code is used.
 
 ## Continue in the app
 

@@ -180,3 +180,6 @@
 
 /* Long setting names and URL examples must fit phone-width guide text. */
 .doc-content :not(pre) > code { overflow-wrap: anywhere; }
+
+/* Keep reference identifiers and values intact inside the table scroll area. */
+.doc-content table code { white-space: nowrap; overflow-wrap: normal; }
