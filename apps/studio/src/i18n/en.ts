@@ -10,6 +10,9 @@ export const en = {
     password: 'Password',
     invalid: 'Those details are wrong, or the account is locked for a few minutes.',
     tooMany: 'Too many attempts. Wait a minute and try again.',
+    unreachable: 'Could not reach the server. Try again.',
+    signOutFailed: 'Sign-out did not reach the server. Your session may still be open in this browser.',
+    signOutRetry: 'Try signing out again',
   },
   workflowReceipts: {
   "title": "Webhook receipts",

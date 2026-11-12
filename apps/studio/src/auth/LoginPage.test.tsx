@@ -58,13 +58,39 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText('Password')).toHaveValue('');
   });
 
-  it('says the server cannot be reached when the request throws', async () => {
+  it('asks the person to try again when the request throws (network failure or 5xx)', async () => {
     login.mockRejectedValue(new TypeError('Failed to fetch'));
     render(<LoginPage onSignedIn={vi.fn()} />);
     fill('ada', 'pw');
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(await screen.findByText('Cannot reach the server. Please reload.')).toBeInTheDocument();
+    expect(await screen.findByText('Could not reach the server. Try again.')).toBeInTheDocument();
+    expect(screen.queryByText('Cannot reach the server. Please reload.')).toBeNull();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+  });
+
+  it('sends nothing and shows no message when a field is empty', async () => {
+    render(<LoginPage onSignedIn={vi.fn()} />);
+    fill('ada', '');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    fill('', 'pw');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await Promise.resolve();
+    expect(login).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+  });
+
+  it('shows no sign-out warning by default', () => {
+    render(<LoginPage onSignedIn={vi.fn()} />);
+    expect(screen.queryByText(/Sign-out did not reach the server/)).toBeNull();
+  });
+
+  it('shows the sign-out warning with a retry that calls onRetrySignOut', async () => {
+    const onRetrySignOut = vi.fn().mockResolvedValue(undefined);
+    render(<LoginPage onSignedIn={vi.fn()} signOutFailed onRetrySignOut={onRetrySignOut} />);
+    expect(screen.getByText('Sign-out did not reach the server. Your session may still be open in this browser.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try signing out again' }));
+    await waitFor(() => expect(onRetrySignOut).toHaveBeenCalledTimes(1));
   });
 
   it('disables the button while the request runs', async () => {

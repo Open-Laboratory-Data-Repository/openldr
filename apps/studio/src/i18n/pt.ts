@@ -12,6 +12,9 @@ export const pt: EnShape = {
     password: 'Palavra-passe',
     invalid: 'Estes dados estão errados, ou a conta está bloqueada durante alguns minutos.',
     tooMany: 'Demasiadas tentativas. Aguarde um minuto e tente novamente.',
+    unreachable: 'Não foi possível contactar o servidor. Tente novamente.',
+    signOutFailed: 'O fim de sessão não chegou ao servidor. A sua sessão pode ainda estar aberta neste navegador.',
+    signOutRetry: 'Tentar terminar sessão novamente',
   },
   workflowReceipts: {
   "title": "Recibos webhook",

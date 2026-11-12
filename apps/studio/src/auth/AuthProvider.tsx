@@ -54,6 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const oidcRef = useRef<OidcClient | null>(null);
   // Local sign-in (AUTH_ADAPTER=local). `localScreen` is the pre-app screen to show, or null.
   const [localScreen, setLocalScreen] = useState<'login' | 'change' | null>(null);
+  /** The last sign-out did not reach the server. The sign-in page warns and offers a retry. */
+  const [signOutFailed, setSignOutFailed] = useState(false);
   const localModeRef = useRef(false);
   /** Stops the running refresh timer. Null when no local session is running. */
   const localStopRef = useRef<(() => void) | null>(null);
@@ -81,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const openLocalSession = async (session: LocalSession) => {
+    setSignOutFailed(false);
     keepLocalSession(session);
     if (session.mustChangePassword) {
       setLocalScreen('change');
@@ -192,8 +195,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = () => {
     if (localModeRef.current) {
       // Stop the timer first, so no refresh can run during sign-out and sign the person back in.
+      // Whatever the server answers, this tab stops acting as the user. When the server did not
+      // end the session, its cookie is still alive, so the sign-in page says so.
       stopLocalTimer();
-      void localLogout().finally(showLocalSignIn);
+      void localLogout().then((ended) => {
+        setSignOutFailed(!ended);
+        showLocalSignIn();
+      });
       return;
     }
     void oidcRef.current?.signoutRedirect().then((result) => {
@@ -203,7 +211,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   if (localScreen) {
     // Task 10 shows the forced password change page for 'change'. Until then, the sign-in page.
-    return <LoginPage onSignedIn={(session) => { void openLocalSession(session); }} />;
+    return (
+      <LoginPage
+        onSignedIn={(session) => { void openLocalSession(session); }}
+        signOutFailed={signOutFailed}
+        onRetrySignOut={async () => { if (await localLogout()) setSignOutFailed(false); }}
+      />
+    );
   }
 
   if (localSignout) {

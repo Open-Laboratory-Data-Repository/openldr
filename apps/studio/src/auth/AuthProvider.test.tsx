@@ -176,7 +176,7 @@ describe('AuthProvider under local sign-in', () => {
       ended = onEnded;
       return stop;
     });
-    vi.mocked(localLogout).mockResolvedValue();
+    vi.mocked(localLogout).mockResolvedValue(true);
     vi.mocked(getMe).mockResolvedValue({ id: 'u', username: 'ada', displayName: null, roles: [] } as never);
     vi.mocked(getMyCapabilities).mockResolvedValue([]);
   });
@@ -263,6 +263,49 @@ describe('AuthProvider under local sign-in', () => {
     expect(stop).toHaveBeenCalled();
     expect(getAccessToken()).toBeNull();
     expect(screen.queryByText('app')).toBeNull();
+    expect(screen.queryByText(/Sign-out did not reach the server/)).toBeNull();
+  });
+
+  it('warns and offers a retry when sign-out did not reach the server; a working retry removes the warning', async () => {
+    mockConfig(localConfig);
+    mockLocalRefresh({ accessToken: 't', expiresIn: 600, mustChangePassword: false });
+    vi.mocked(localLogout).mockResolvedValueOnce(false);
+    renderApp();
+    fireEvent.click(await screen.findByText('Leave'));
+    expect(await screen.findByText(/Sign-out did not reach the server/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Username or email')).toBeInTheDocument();
+    expect(screen.queryByText('app')).toBeNull();
+    expect(stop).toHaveBeenCalled();
+    expect(getAccessToken()).toBeNull();
+
+    vi.mocked(localLogout).mockResolvedValueOnce(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Try signing out again' }));
+    await waitFor(() => expect(localLogout).toHaveBeenCalledTimes(2));
+    expect(screen.getByText(/Sign-out did not reach the server/)).toBeInTheDocument();
+
+    vi.mocked(localLogout).mockResolvedValueOnce(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Try signing out again' }));
+    await waitFor(() => expect(screen.queryByText(/Sign-out did not reach the server/)).toBeNull());
+    expect(localLogout).toHaveBeenCalledTimes(3);
+    expect(getAccessToken()).toBeNull();
+  });
+
+  it('removes the sign-out warning after a successful sign-in', async () => {
+    mockConfig(localConfig);
+    mockLocalRefresh({ accessToken: 't', expiresIn: 600, mustChangePassword: false });
+    vi.mocked(localLogout).mockResolvedValueOnce(false);
+    renderApp();
+    fireEvent.click(await screen.findByText('Leave'));
+    await screen.findByText(/Sign-out did not reach the server/);
+    vi.mocked(localLogin).mockResolvedValue({ accessToken: 'again', expiresIn: 600, mustChangePassword: false });
+    fireEvent.change(screen.getByLabelText('Username or email'), { target: { value: 'ada' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct horse' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByText('app')).toBeInTheDocument();
+    // Return to the sign-in page by a path that does not touch the flag itself: the session ends.
+    act(() => ended?.());
+    await screen.findByLabelText('Username or email');
+    expect(screen.queryByText(/Sign-out did not reach the server/)).toBeNull();
   });
 
   it('stops the refresh timer on unmount', async () => {

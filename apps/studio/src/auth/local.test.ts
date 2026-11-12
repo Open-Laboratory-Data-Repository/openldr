@@ -61,12 +61,16 @@ describe('local sign-in calls', () => {
     await expect(localRefresh()).rejects.toThrow();
   });
 
-  it('logout posts and never throws', async () => {
+  it('logout returns true on 204, false on a 500 or a thrown request, and never throws', async () => {
     fetchMock.mockResolvedValueOnce(reply(204));
-    await localLogout();
-    expect(fetchMock.mock.calls[0]![0]).toBe('/api/auth/logout');
+    expect(await localLogout()).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/auth/logout');
+    expect(init.credentials).toBe('same-origin');
+    fetchMock.mockResolvedValueOnce(reply(500, { error: 'boom' }));
+    expect(await localLogout()).toBe(false);
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
-    await expect(localLogout()).resolves.toBeUndefined();
+    expect(await localLogout()).toBe(false);
   });
 
   it('change password sends the bearer token and maps the answers', async () => {

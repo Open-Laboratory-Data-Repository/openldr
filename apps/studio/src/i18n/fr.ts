@@ -12,6 +12,9 @@ export const fr: EnShape = {
     password: 'Mot de passe',
     invalid: 'Ces informations sont incorrectes, ou le compte est verrouillé pour quelques minutes.',
     tooMany: 'Trop de tentatives. Attendez une minute et réessayez.',
+    unreachable: 'Impossible de joindre le serveur. Réessayez.',
+    signOutFailed: "La déconnexion n'a pas atteint le serveur. Votre session est peut-être encore ouverte dans ce navigateur.",
+    signOutRetry: 'Réessayer la déconnexion',
   },
   workflowReceipts: {
   "title": "Reçus webhook",

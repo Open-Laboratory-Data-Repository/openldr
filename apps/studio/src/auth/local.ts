@@ -60,12 +60,16 @@ export async function localRefresh(): Promise<LocalSession | null> {
   return null;
 }
 
-/** Ends the session on the server. Never throws: signing out in the browser must still happen. */
-export async function localLogout(): Promise<void> {
+/**
+ * Ends the session on the server. True when the server answered 2xx. False on any other status
+ * or a failed request: the server session and its cookie may then still be alive.
+ * Never throws, because signing out in the browser must still happen.
+ */
+export async function localLogout(): Promise<boolean> {
   try {
-    await post('/api/auth/logout');
+    return (await post('/api/auth/logout')).ok;
   } catch {
-    // The server session then lives until its idle limit. The browser still signs out.
+    return false;
   }
 }
 
