@@ -61,6 +61,8 @@ The gateway uses host ports **80 and 443 by default**. They must be available, o
 
 These checks are read-only. Open Terminal on Linux/macOS or PowerShell on Windows. Run them on the computer hosting Docker.
 
+The blue text ending in `$` or `>` is the **prompt**. The terminal displays it; do not type it. Type the command after it and press **Enter**. The lighter lines below are **output** from the program; read them, do not type them. For example, `docker --version` is a command and `Docker version 29.5.2, build 79eb04c` is its response. Copyable code blocks contain commands only. Names, paths and versions in your terminal may differ. Some illustrations show commands without their output; wait for each command to finish before running the next.
+
 ### 1. Check the container operating system and processor
 
 ```

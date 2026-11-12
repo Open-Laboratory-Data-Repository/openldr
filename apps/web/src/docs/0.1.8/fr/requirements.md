@@ -61,6 +61,8 @@ La passerelle utilise les ports hôte **80 et 443 par défaut**. Ils doivent êt
 
 Ces vérifications ne modifient rien. Ouvrez Terminal sur Linux/macOS ou PowerShell sur Windows. Exécutez-les sur l'ordinateur qui héberge Docker.
 
+Le texte bleu terminé par `$` ou `>` est l'**invite**. Le terminal l'affiche ; ne le saisissez pas. Saisissez la commande après l'invite et appuyez sur **Entrée**. Les lignes plus discrètes dessous sont la **sortie** du programme ; lisez-les sans les saisir. Par exemple, `docker --version` est une commande et `Docker version 29.5.2, build 79eb04c` est sa réponse. Les blocs à copier contiennent uniquement les commandes. Noms, chemins et versions peuvent différer. Certaines illustrations montrent les commandes sans leur sortie ; attendez la fin de chacune avant la suivante.
+
 ### 1. Vérifier le système et le processeur des conteneurs
 
 ```

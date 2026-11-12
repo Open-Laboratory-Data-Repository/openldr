@@ -1,5 +1,5 @@
 import { StrictMode } from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { DocsPage, stripLeadingH1 } from './DocsPage';
 
@@ -15,17 +15,18 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
-  it('renders and enlarges the Requirements checks without losing their illustrations', () => {
+  it('follows the section reached by page scrolling', async () => {
     renderDocs('/docs/requirements');
-    const label = 'Illustrated runtime check. This example shows a Linux engine on an Intel/AMD 64-bit host.';
-    expect(document.querySelectorAll('.web-doc-dotted-frame')).toHaveLength(3);
-    expect(screen.queryByText(/Screenshot unavailable/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: label }));
-    const dialog = screen.getByRole('dialog', { name: label });
-    expect(within(dialog).getByRole('img', { name: label })).toBeInTheDocument();
-    expect(within(dialog).queryByRole('button', { name: /Next image/ })).toBeNull();
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByRole('dialog')).toBeNull();
+    const headings = [...document.querySelectorAll<HTMLElement>('.doc-markdown h2')];
+    const positions = headings.map((_, index) => index < 2 ? -400 + index * 450 : 2000 + index * 100);
+    headings.forEach((heading, index) => { heading.getBoundingClientRect = () => ({ top: positions[index], bottom: positions[index] + 30, left: 0, right: 600, width: 600, height: 30, x: 0, y: positions[index], toJSON() {} }); });
+    fireEvent.scroll(window);
+    const nav = screen.getByRole('navigation', { name: 'On this page' });
+    await waitFor(() => expect(within(nav).getByRole('link', { name: headings[1].textContent! })).toHaveAttribute('aria-current', 'location'));
+    positions[2] = 80;
+    fireEvent.scroll(window);
+    await waitFor(() => expect(within(nav).getByRole('link', { name: headings[2].textContent! })).toHaveAttribute('aria-current', 'location'));
+    expect(within(nav).getByRole('link', { name: headings[1].textContent! })).not.toHaveAttribute('aria-current');
   });
 
   it('renders the installer illustration without stripping its media identifier', () => {
@@ -118,7 +119,7 @@ describe('DocsPage', () => {
     expect(screen.getByLabelText('Documentation version')).toBeInTheDocument();
     expect(screen.getByRole('article')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Install' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('table').parentElement).toHaveClass('overflow-x-auto');
+    for (const table of screen.getAllByRole('table')) expect(table.parentElement).toHaveClass('overflow-x-auto');
     expect(screen.getAllByRole('heading', { name: 'Install' })).toHaveLength(1);
   });
 
@@ -250,8 +251,8 @@ describe('DocsPage', () => {
   it('deduplicates generated heading ids for repeated markdown headings', () => {
     renderDocs('/docs/install');
 
-    expect(document.getElementById('demo-evaluation')).not.toBeNull();
-    expect(document.getElementById('demo-evaluation-1')).not.toBeNull();
-    expect(document.querySelectorAll('[id="demo-evaluation"]')).toHaveLength(1);
+    expect(document.getElementById('1-install-using-your-connection-details')).not.toBeNull();
+    expect(document.getElementById('1-install-using-your-connection-details-1')).not.toBeNull();
+    expect(document.querySelectorAll('[id="1-install-using-your-connection-details"]')).toHaveLength(1);
   });
 });

@@ -97,13 +97,15 @@
   border-radius: var(--radius-lg);
 }
 
-.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) { font-size: 15px; line-height: 1.8; }
-.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) h1 { font-size: 32px; }
-.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) h2 { margin-top: 44px; padding-bottom: 10px; font-size: 22px; line-height: 1.4; }
-.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) p { margin: 14px 0; }
-.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) li { margin: 12px 0; padding-left: 4px; }
-.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) th,
-.doc-content:is([data-guide='getting-started'], [data-guide='requirements']) td { padding: 12px; font-size: 14px; }
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server']) { font-size: 15px; line-height: 1.8; }
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server']) h1 { font-size: 32px; }
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server']) h2 { margin-top: 44px; padding-bottom: 10px; font-size: 22px; line-height: 1.4; }
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server']) p { margin: 14px 0; }
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server']) li { margin: 12px 0; padding-left: 4px; }
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server']) th,
+.doc-content:is([data-guide='getting-started'], [data-guide='install'], [data-guide='requirements'], [data-guide='windows-server']) td { padding: 12px; font-size: 14px; }
+.doc-content:is([data-guide='install'], [data-guide='requirements'], [data-guide='windows-server']) pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.doc-content:is([data-guide='install'], [data-guide='requirements'], [data-guide='windows-server']) h3 { margin-top: 28px; font-size: 18px; font-weight: 600; }
 
 /* shadcn token bridge — map shadcn's expected vars onto the existing palette.
    These reference the existing theme vars, so they auto-switch with data-theme. */
@@ -165,9 +167,7 @@
   input, select, textarea { font: inherit; color: inherit; }
 }
 
-.doc-content[data-guide='requirements'] pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-.doc-content[data-guide='requirements'] h3 { margin-top: 28px; font-size: 18px; font-weight: 600; }
-
+/* The in-app guides use this same dotted frame. */
 .web-doc-dotted-frame { position: relative; display: block; padding: 24px; }
 .web-doc-dotted-dots {
   position: absolute; inset: 0; pointer-events: none;

@@ -61,6 +61,8 @@ A porta de entrada usa as portas do anfitrião **80 e 443 por omissão**. Devem 
 
 Estas verificações não alteram dados. Abra Terminal no Linux/macOS ou PowerShell no Windows. Execute-as no computador que aloja o Docker.
 
+O texto azul terminado em `$` ou `>` é o **prompt**. O terminal mostra-o; não o escreva. Escreva o comando a seguir e prima **Enter**. As linhas mais discretas abaixo são o **resultado** do programa; leia-as sem as escrever. Por exemplo, `docker --version` é um comando e `Docker version 29.5.2, build 79eb04c` é a resposta. Os blocos para copiar contêm apenas comandos. Os nomes, caminhos e versões podem ser diferentes. Algumas ilustrações mostram comandos sem o resultado; espere que cada comando termine antes do seguinte.
+
 ### 1. Verificar o sistema e o processador dos contentores
 
 ```
