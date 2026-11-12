@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "c2475623",
+          "type": "feat",
+          "scope": "docs",
+          "title": "Add themed fading surrounds to Start here illustrations"
+        },
+        {
           "hash": "4ae12e4f",
           "type": "fix",
           "scope": "activity",
