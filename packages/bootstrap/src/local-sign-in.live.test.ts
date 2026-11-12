@@ -121,7 +121,7 @@ describe.skipIf(!url)('local sign-in on PostgreSQL', () => {
     const f = await fixture();
     try {
       await bindAuthIssuer(f.one.db, 'http://kc/realms/openldr');
-      await expect(bindAuthIssuer(f.two.db, LOCAL_ISSUER)).rejects.toThrow(/differs from the issuer bound to this database/);
+      await expect(bindAuthIssuer(f.two.db, LOCAL_ISSUER)).rejects.toThrow(/set up with another sign-in provider \(http:\/\/kc\/realms\/openldr\)\. Local sign-in cannot take it over/);
       expect(await readAuthIssuerBinding(f.one.db)).toBe('http://kc/realms/openldr');
     } finally { await f.close(); }
   }, 60000);
@@ -183,7 +183,7 @@ describe.skipIf(!url)('local sign-in on PostgreSQL', () => {
     const f = await fixture();
     try {
       await bindAuthIssuer(f.one.db, 'http://kc/realms/openldr');
-      await expect(createAppContext(localConfig(f.schema, randomBytes(32)))).rejects.toThrow(/differs from the issuer bound to this database/);
+      await expect(createAppContext(localConfig(f.schema, randomBytes(32)))).rejects.toThrow(/set up with another sign-in provider \(http:\/\/kc\/realms\/openldr\)\. Local sign-in cannot take it over/);
       const keys = await sql<{ n: number }>`select count(*)::int as n from auth_signing_keys`.execute(f.one.db);
       expect(keys.rows[0]!.n).toBe(0);
     } finally { await f.close(); }
