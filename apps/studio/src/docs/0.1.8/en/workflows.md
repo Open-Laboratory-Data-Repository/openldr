@@ -117,7 +117,7 @@ ORDER BY orders DESC
 
 ![The Postgres node's output: one item per row.](workflows-build-output.png)
 
-Numbers from SQL arrive as text, for example `"18"`. A later node that does sums may need to convert them.
+From Postgres, counts and averages arrive as numbers, for example `18`. From MySQL, a decimal such as an average still arrives as text, for example `"18.5"`. Convert it before a node does sums with it.
 
 To finish this guide, delete the workflow: in the list, open its row menu and select **Delete**.
 

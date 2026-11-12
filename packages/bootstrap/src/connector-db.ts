@@ -1,6 +1,7 @@
 import { sql, Kysely } from 'kysely';
 import type { TargetSchema } from '@openldr/ports';
 import pg from 'pg';
+import { pgNumberTypes } from '@openldr/adapter-db-store';
 import { createMssqlStore } from '@openldr/adapter-mssql-store';
 import { createPool, createConnection, type ConnectionOptions } from 'mysql2';
 
@@ -77,6 +78,8 @@ export function createConnectorDb(
       statement_timeout: queryTimeoutMs,
       // Allow the server cancellation to arrive first. The client bound also covers a stalled socket.
       query_timeout: queryTimeoutMs + 1000,
+      // COUNT(*) and AVG() as numbers, not text (bug 13). See pgNumberTypes.
+      types: pgNumberTypes as never,
     });
     let closed = false;
     return {

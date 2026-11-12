@@ -119,7 +119,7 @@ ORDER BY orders DESC
 
 ![A saída do nó Postgres: um item por linha.](workflows-build-output.png)
 
-Os números vindos do SQL chegam como texto, por exemplo `"18"`. Um nó seguinte que faça somas pode ter de os converter.
+Do Postgres, as contagens e as médias chegam como números, por exemplo `18`. Do MySQL, um decimal como uma média ainda chega como texto, por exemplo `"18.5"`. Converta-o antes de um nó fazer somas com ele.
 
 Para terminar este guia, elimine o fluxo: na lista, abra o menu da sua linha e selecione **Delete**.
 

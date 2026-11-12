@@ -119,7 +119,7 @@ ORDER BY orders DESC
 
 ![La sortie du nœud Postgres : un élément par ligne.](workflows-build-output.png)
 
-Les nombres venus du SQL arrivent comme du texte, par exemple `"18"`. Un nœud suivant qui fait des sommes devra peut-être les convertir.
+Depuis Postgres, les comptes et les moyennes arrivent comme des nombres, par exemple `18`. Depuis MySQL, un décimal comme une moyenne arrive encore comme du texte, par exemple `"18.5"`. Convertissez-le avant qu'un nœud fasse des sommes avec.
 
 Pour terminer ce guide, supprimez le flux : dans la liste, ouvrez le menu de sa ligne et sélectionnez **Delete**.
 

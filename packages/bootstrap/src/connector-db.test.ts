@@ -123,3 +123,22 @@ describe('microsoft-sql instance and Windows login', () => {
     expect(() => createConnectorDb('microsoft-sql', { host: 'LABSRV', port: 'not-a-port' })).toThrow(/invalid connector port/);
   });
 });
+
+// Bug 13: the Postgres node and the Query page read COUNT(*) and AVG() as text through this pool.
+// Against a real Postgres, only when one is configured (the dev install's TARGET_DATABASE_URL).
+const liveUrl = process.env.TARGET_DATABASE_URL;
+describe.skipIf(!liveUrl)('a Postgres connector against a real database', () => {
+  it('returns COUNT and AVG as numbers, and text as text', async () => {
+    const u = new URL(liveUrl!);
+    const db = createConnectorDb('postgres', {
+      host: u.hostname, port: u.port || '5432', database: u.pathname.slice(1),
+      user: decodeURIComponent(u.username), password: decodeURIComponent(u.password),
+    });
+    try {
+      const { rows } = await db.query("select count(*) as n, avg(y) as third, '10234' as code from (values (1), (2), (4)) as u(y)");
+      expect(rows[0]).toEqual({ n: 3, third: 2.3333333333333335, code: '10234' });
+    } finally {
+      await db.close();
+    }
+  });
+});
