@@ -1,0 +1,1309 @@
+{
+  "capturedAt": "2026-11-12T14:26:36.947Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5187/studio/reports",
+  "steps": [
+    {
+      "id": "open-page",
+      "label": "Open Reports from the main menu.",
+      "path": "reports-evidence/open-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 96,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "search",
+      "label": "Search the library by report name.",
+      "path": "reports-evidence/search.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 248,
+          "y": 56,
+          "width": 174,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "select-report",
+      "label": "Select the report under its category.",
+      "path": "reports-evidence/select-report.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 254,
+          "y": 133,
+          "width": 103.34375,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "report-actions",
+      "label": "The selected report has its own Actions menu.",
+      "path": "reports-evidence/report-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 60,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "first-parameters",
+      "label": "Parameters opens the report filters.",
+      "path": "reports-evidence/first-parameters.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1093,
+          "y": 133,
+          "width": 166,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "first-period",
+      "label": "Open the date-range control for the report period.",
+      "path": "reports-evidence/first-period.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 849,
+          "y": 159.28125,
+          "width": 98.6875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "first-preset",
+      "label": "Choose a preset or select your own calendar dates.",
+      "path": "reports-evidence/first-preset.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 620,
+          "y": 316.25,
+          "width": 106.0625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "first-run",
+      "label": "Run executes the report with the selected filters.",
+      "path": "reports-evidence/first-run.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1206.3125,
+          "y": 159.28125,
+          "width": 57.6875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "document",
+      "label": "Document renders the selected run as a PDF.",
+      "path": "reports-evidence/document.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 528.5,
+          "y": 232.875,
+          "width": 380,
+          "height": 140
+        }
+      ]
+    },
+    {
+      "id": "pdf-download",
+      "label": "Download saves the PDF for this run.",
+      "path": "reports-evidence/pdf-download.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1178.625,
+          "y": 169.875,
+          "width": 89.375,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "spreadsheet-tab",
+      "label": "Spreadsheet shows query rows in a table.",
+      "path": "reports-evidence/spreadsheet-tab.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 574.25,
+          "y": 120.375,
+          "width": 101.734375,
+          "height": 41.5
+        }
+      ]
+    },
+    {
+      "id": "spreadsheet-result",
+      "label": "Read the actual count in the spreadsheet row.",
+      "path": "reports-evidence/spreadsheet-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 471,
+          "y": 250.875,
+          "width": 809,
+          "height": 44.5
+        }
+      ]
+    },
+    {
+      "id": "export-csv",
+      "label": "Export CSV runs the report query with its current run parameters.",
+      "path": "reports-evidence/export-csv.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 745.046875,
+          "y": 169.875,
+          "width": 88.703125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "export-xlsx",
+      "label": "Export XLSX downloads the current spreadsheet filtering and sort.",
+      "path": "reports-evidence/export-xlsx.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 841.75,
+          "y": 169.875,
+          "width": 122.703125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "refresh",
+      "label": "Refresh re-runs using the values that produced the displayed result.",
+      "path": "reports-evidence/refresh.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1093,
+          "y": 101,
+          "width": 166,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "history",
+      "label": "Run History lists the interactive runs and saved schedule attempts.",
+      "path": "reports-evidence/history.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1093,
+          "y": 174,
+          "width": 166,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "history-rows",
+      "label": "Read format, row count, user and time for each interactive run.",
+      "path": "reports-evidence/history-rows.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 721,
+          "y": 195.53125,
+          "width": 559,
+          "height": 47
+        }
+      ]
+    },
+    {
+      "id": "history-apply",
+      "label": "Selecting an activity row restores its parameters. It does not replay the old output.",
+      "path": "reports-evidence/history-apply.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 721,
+          "y": 195.53125,
+          "width": 122.03125,
+          "height": 47
+        }
+      ]
+    },
+    {
+      "id": "table-parameters",
+      "label": "Parameters opens the report filters.",
+      "path": "reports-evidence/table-parameters.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1093,
+          "y": 133,
+          "width": 166,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "table-period",
+      "label": "Open the date-range control for the report period.",
+      "path": "reports-evidence/table-period.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 849,
+          "y": 159.28125,
+          "width": 98.6875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "table-preset",
+      "label": "Choose a preset or select your own calendar dates.",
+      "path": "reports-evidence/table-preset.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 620,
+          "y": 316.25,
+          "width": 106.0625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "table-run",
+      "label": "Run executes the report with the selected filters.",
+      "path": "reports-evidence/table-run.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1206.3125,
+          "y": 159.28125,
+          "width": 57.6875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "filter-add",
+      "label": "Add filter creates a spreadsheet rule.",
+      "path": "reports-evidence/filter-add.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 500,
+          "y": 304,
+          "width": 87.359375,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "filter-column",
+      "label": "Choose the result column to filter.",
+      "path": "reports-evidence/filter-column.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 602,
+          "y": 233,
+          "width": 176,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "filter-value",
+      "label": "Enter a value appropriate to your result column.",
+      "path": "reports-evidence/filter-value.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 918,
+          "y": 233,
+          "width": 158,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "filter-apply",
+      "label": "Apply changes the rows shown in Spreadsheet.",
+      "path": "reports-evidence/filter-apply.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1059.96875,
+          "y": 300,
+          "width": 54.03125,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "sort-add",
+      "label": "Choose Add sort to order the loaded spreadsheet rows.",
+      "path": "reports-evidence/sort-add.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 608.25,
+          "y": 304,
+          "width": 291.96875,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "sort-order",
+      "label": "Asc sorts from smaller values upward; select it to switch direction.",
+      "path": "reports-evidence/sort-order.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 867.234375,
+          "y": 240,
+          "width": 52.015625,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "columns",
+      "label": "Columns changes which fields are visible on the page.",
+      "path": "reports-evidence/columns.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 698.8125,
+          "y": 169.875,
+          "width": 93.359375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "column-options",
+      "label": "Use the checkboxes for the fields you need. The last visible column cannot be hidden.",
+      "path": "reports-evidence/column-options.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 711.75,
+          "y": 219,
+          "width": 16,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "reset-table",
+      "label": "Reset clears spreadsheet filters, sorting and column changes.",
+      "path": "reports-evidence/reset-table.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 800.171875,
+          "y": 169.875,
+          "width": 55.359375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "pagination",
+      "label": "Use the table page size and arrows when there are more rows.",
+      "path": "reports-evidence/pagination.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1036.5625,
+          "y": 762,
+          "width": 80,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "schedules",
+      "label": "Schedules manages automatic output for this report.",
+      "path": "reports-evidence/schedules.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1093,
+          "y": 206,
+          "width": 166,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "new-schedule",
+      "label": "New Schedule opens the schedule settings.",
+      "path": "reports-evidence/new-schedule.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1123.71875,
+          "y": 35.265625,
+          "width": 140.28125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "weekly",
+      "label": "Choose the schedule frequency.",
+      "path": "reports-evidence/weekly.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 899.5,
+          "y": 172.5,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "weekday",
+      "label": "Choose the weekday for the weekly schedule.",
+      "path": "reports-evidence/weekday.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 899.5,
+          "y": 188.5,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "schedule-format",
+      "label": "Choose the saved output format.",
+      "path": "reports-evidence/schedule-format.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 899.5,
+          "y": 300.5,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "schedule-actions",
+      "label": "The schedule editor has its own Actions menu.",
+      "path": "reports-evidence/schedule-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1200,
+          "y": 25.265625,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "schedule-save",
+      "label": "Save records the schedule.",
+      "path": "reports-evidence/schedule-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1077,
+          "y": 66.25,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "schedule-saved",
+      "label": "The saved schedule shows its cadence, format and next due time.",
+      "path": "reports-evidence/schedule-saved.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 742,
+          "y": 120.671875,
+          "width": 85.328125,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "schedule-run",
+      "label": "Run now queues an immediate run. Check Scheduled Runs for the result.",
+      "path": "reports-evidence/schedule-run.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1139,
+          "y": 122.921875,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "scheduled-tab",
+      "label": "Scheduled Runs separates saved schedule outputs from interactive activity.",
+      "path": "reports-evidence/scheduled-tab.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 805.34375,
+          "y": 120.03125,
+          "width": 126.75,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "scheduled-result",
+      "label": "Check OK and the recorded date window before downloading.",
+      "path": "reports-evidence/scheduled-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 839.109375,
+          "y": 211.03125,
+          "width": 35.34375,
+          "height": 22
+        }
+      ]
+    },
+    {
+      "id": "scheduled-download",
+      "label": "Download fetches the successful saved output.",
+      "path": "reports-evidence/scheduled-download.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1130.578125,
+          "y": 208.03125,
+          "width": 103.375,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "schedule-toggle",
+      "label": "Turn the switch off to stop future automatic runs.",
+      "path": "reports-evidence/schedule-toggle.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1091,
+          "y": 128.921875,
+          "width": 36,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "schedule-edit",
+      "label": "Edit changes the saved cadence, filters or format.",
+      "path": "reports-evidence/schedule-edit.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1183,
+          "y": 122.921875,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "schedule-edit-format",
+      "label": "This disabled example changes the future format to XLSX.",
+      "path": "reports-evidence/schedule-edit-format.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 894.59375,
+          "y": 195.53125,
+          "width": 361.40625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "schedule-delete",
+      "label": "Delete removes only the selected schedule.",
+      "path": "reports-evidence/schedule-delete.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1227,
+          "y": 122.921875,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "schedule-delete-confirm",
+      "label": "Confirm the schedule removal when it is no longer needed.",
+      "path": "reports-evidence/schedule-delete-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 766.53125,
+          "y": 415.265625,
+          "width": 72.46875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "pin",
+      "label": "Pin the report to keep it near the top of this browser library.",
+      "path": "reports-evidence/pin.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 432,
+          "y": 132,
+          "width": 26,
+          "height": 22
+        }
+      ]
+    },
+    {
+      "id": "unpin",
+      "label": "Select the filled star again to remove the pin.",
+      "path": "reports-evidence/unpin.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 432,
+          "y": 132,
+          "width": 26,
+          "height": 22
+        }
+      ]
+    },
+    {
+      "id": "edit-template",
+      "label": "Edit template opens the linked Report Designer layout.",
+      "path": "reports-evidence/edit-template.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1093,
+          "y": 247,
+          "width": 166,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "edit-template-result",
+      "label": "The linked template opens for an authorised manager.",
+      "path": "reports-evidence/edit-template-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 492,
+          "y": 51.5,
+          "width": 125.140625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "unpublish",
+      "label": "Unpublish attempts to remove the report from the library.",
+      "path": "reports-evidence/unpublish.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1093,
+          "y": 288,
+          "width": 166,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "unpublish-failed",
+      "label": "New custom reports currently can show Action failed instead of unpublishing.",
+      "path": "reports-evidence/unpublish-failed.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 940,
+          "y": 739.5,
+          "width": 77.546875,
+          "height": 19.5
+        }
+      ]
+    },
+    {
+      "id": "delete-report",
+      "label": "Delete report permanently removes the selected library entry.",
+      "path": "reports-evidence/delete-report.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1093,
+          "y": 320,
+          "width": 166,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "delete-report-confirm",
+      "label": "Confirm only the report entry you intend to remove.",
+      "path": "reports-evidence/delete-report-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 726.0625,
+          "y": 453.265625,
+          "width": 112.9375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "phone-library",
+      "label": "Expand the library rail on a phone.",
+      "path": "reports-evidence/phone-library.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 4,
+          "y": 56,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-select",
+      "label": "Search for and open the report.",
+      "path": "reports-evidence/phone-select.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 14,
+          "y": 133,
+          "width": 103.34375,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "phone-dates",
+      "label": "Presets wrap above the single-month phone calendar.",
+      "path": "reports-evidence/phone-dates.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 27.75,
+          "y": 244.25,
+          "width": 73.359375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-run",
+      "label": "Run remains available in the report parameter sheet.",
+      "path": "reports-evidence/phone-run.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 301.3125,
+          "y": 159.28125,
+          "width": 57.6875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "phone-result",
+      "label": "Spreadsheet shows the same completed query result on a phone.",
+      "path": "reports-evidence/phone-result.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 41,
+          "y": 294.875,
+          "width": 334,
+          "height": 44.5
+        }
+      ]
+    }
+  ]
+}

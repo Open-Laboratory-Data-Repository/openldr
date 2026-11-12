@@ -1,0 +1,20 @@
+{
+  "runs": [
+    {
+      "id": "c68b9dff-2e4d-41d9-a1b4-48c0bf1e02a4",
+      "scheduleId": "68426b25-f507-4e0f-864d-2e561f4e15bf",
+      "reportId": "r-96b6adbb-96f2-4934-a38d-f186915558ed",
+      "reportName": "Request summary report",
+      "runAt": "2026-11-12T14:23:26.198Z",
+      "periodStart": "2026-11-05T00:00:00.000Z",
+      "periodEnd": "2026-11-11T23:59:59.999Z",
+      "outputFormat": "pdf",
+      "objectKey": "report-schedules/68426b25-f507-4e0f-864d-2e561f4e15bf/c68b9dff-2e4d-41d9-a1b4-48c0bf1e02a4.pdf",
+      "byteSize": 1566,
+      "rowCount": 1,
+      "status": "success",
+      "errorMessage": null
+    }
+  ],
+  "total": 1
+}

@@ -1,0 +1,1822 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/charts/; img-src 'self' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Reports guide preview</title>
+<style>:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 16px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans:
+    -apple-system-body, ui-sans-serif, -apple-system, system-ui, "Segoe UI",
+    Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji",
+    "Segoe UI Symbol";
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 8px);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 2);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'%3E%3Cpath d='M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z'/%3E%3C/svg%3E");
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html > body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-weight: var(--font-weight-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+  text-underline-offset: 2px;
+  font-weight: inherit;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+li,
+.table {
+  font-family: var(--font-sans);
+}
+
+h1 {
+  font-size: calc(var(--font-size-base) * 1.5);
+  line-height: 1.3333333333;
+}
+
+h2 {
+  font-size: calc(var(--font-size-base) * 1.25);
+  line-height: 1.4;
+}
+h3 {
+  font-size: calc(var(--font-size-base) * 1.125);
+  line-height: 1.5555555556;
+}
+h4 {
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+h5,
+h6 {
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+b,
+strong,
+th {
+  font-weight: 600;
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+pre,
+pre code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: calc(var(--font-size-base) * 0.875);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-family: var(--font-sans);
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.table :is(th, td):not(:last-child) {
+  padding-inline-end: calc(var(--font-size-base) * 1.5);
+}
+
+.table-responsive > .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead :is(th, td) {
+  border-bottom-color: var(--border-strong, var(--input));
+  padding-block: calc(var(--font-size-base) / 2);
+  line-height: var(--font-size-base);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+.table tbody :is(th, td) {
+  padding-block: calc(var(--font-size-base) * 0.625);
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 8px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align="right"]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align="center"]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+.widget {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  box-shadow: 0 0 0 0.5px var(--border-strong, var(--border));
+  color: var(--foreground);
+  background: var(--background);
+}
+
+#widget > :not(.card, .widget, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  border: 1px solid var(--border);
+  corner-shape: var(--corner-shape);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-sans);
+  padding: 5px 12px;
+  border-color: color-mix(
+    in oklab,
+    light-dark(var(--primary-foreground), var(--foreground)) 5%,
+    transparent
+  );
+  border-radius: var(--radius-2xl);
+  color: light-dark(var(--primary-foreground), var(--foreground));
+  background: light-dark(var(--foreground), var(--popover));
+  box-shadow: 0 8px 18px rgb(15 23 42 / 20%);
+  letter-spacing: -0.15px;
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted-foreground));
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-family: var(--font-sans);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1;
+}
+
+small,
+.text-small {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls > .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls > .form-label > :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+/* Match inline alignment without overriding a containing flex or grid layout. */
+.btn,
+.nav-link,
+.form-control,
+.form-select,
+.form-range,
+.form-check {
+  vertical-align: middle;
+}
+
+.btn,
+.nav-link {
+  --btn-size: calc(12px + 2 * var(--control-spacing, 12px));
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: inherit;
+  font-family: var(--font-sans);
+  height: fit-content;
+  min-height: var(--btn-size);
+  padding-inline: var(--control-spacing, 12px);
+  border-color: transparent;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.btn {
+  border-color: var(--border);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+}
+
+/* Codex Button size="compact"; appearance stays with the button variant. */
+.btn-sm {
+  --btn-size: 24px;
+  padding-inline: 8px;
+  font-size: calc(var(--font-size-base) * 12 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 12 / 16), 1px);
+  line-height: 16px;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-link:not(:disabled):not([aria-disabled="true"]):hover {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.btn-primary {
+  border-color: var(--border);
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: border-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: border-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--muted-foreground);
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+/* Shared preview chrome; product styles stay inside each variant. */
+.viz-dotted-background {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--foreground) 14%, transparent) 0.8px,
+    transparent 0.8px
+  );
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+.viz-carousel {
+  position: relative;
+  min-width: 0;
+}
+
+.viz-carousel:has(> .viz-carousel-controls) {
+  min-height: calc(60px + var(--viz-carousel-picker-height, 0px));
+  padding-bottom: 60px;
+}
+
+.viz-carousel > [data-variant][hidden] {
+  display: none !important;
+}
+
+.viz-carousel > [data-variant] {
+  isolation: isolate;
+}
+
+.viz-carousel-controls {
+  --viz-carousel-hover: light-dark(
+    color-mix(in srgb, var(--foreground) 5.4%, transparent),
+    color-mix(in srgb, var(--foreground) 7.8%, transparent)
+  );
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  /* Leave room for the host's design-controls launcher at the trailing edge. */
+  max-width: calc(100% - 96px);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+  /* Match the settings dropdown chrome independently of the content font size. */
+  font-size: 13px;
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+/* Keep authored mockup button styles out of the shared carousel chrome. */
+.viz-carousel-controls button,
+.viz-carousel-picker > summary {
+  display: flex !important;
+  height: auto !important;
+  min-height: 30px;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px;
+  padding: 0 6px !important;
+  -webkit-app-region: no-drag;
+  border: 0 !important;
+  border-radius: 14px !important;
+  color: inherit !important;
+  background: transparent !important;
+  font: inherit !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-picker > summary {
+  position: relative;
+  isolation: isolate;
+}
+
+.viz-carousel-controls > button {
+  --icon-size: 16px;
+  width: 30px !important;
+  padding: 0 !important;
+}
+
+.viz-carousel-picker > summary {
+  padding-inline: 12px !important;
+}
+
+.viz-carousel-controls .viz-carousel-caret {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin: 0;
+  color: inherit;
+  transform: rotate(180deg);
+}
+
+.viz-carousel-controls > button > svg,
+.viz-carousel-controls .viz-carousel-caret,
+.viz-carousel-count {
+  opacity: 0.5;
+}
+
+.viz-carousel-controls > button::before,
+.viz-carousel-picker > summary::before {
+  position: absolute;
+  z-index: -1;
+  inset: 3px;
+  border-radius: 12px;
+  content: "";
+  pointer-events: none;
+}
+
+.viz-carousel-controls > button:hover::before,
+.viz-carousel-picker > summary:hover::before {
+  background: var(--viz-carousel-hover);
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-controls [data-lucide],
+.viz-carousel-controls .lucide {
+  flex-shrink: 0;
+}
+
+.viz-carousel-picker {
+  min-width: 0;
+}
+
+.viz-carousel-picker > summary {
+  min-width: 0;
+  list-style: none;
+}
+
+.viz-carousel-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.viz-carousel-count {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.viz-carousel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-carousel-options {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: 0 4px 12px light-dark(rgb(0 0 0 / 6%), rgb(0 0 0 / 25%));
+}
+
+.viz-carousel-options > button {
+  border-radius: max(0px, calc(var(--radius-lg) - 5px)) !important;
+  width: 100% !important;
+  min-height: 28px;
+  justify-content: flex-start !important;
+  padding: 4px 8px !important;
+  font-size: var(--font-size-small) !important;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.viz-carousel-options > [aria-current="true"],
+.viz-carousel-options > button:hover {
+  background: var(--viz-carousel-hover) !important;
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding-inline: calc(4px + var(--control-spacing, 12px) / 2);
+  border-color: var(--input);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--popover) 96%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.4285714286;
+}
+.form-control:is(
+  [type="file"],
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"],
+  [type="color"]
+) {
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  line-height: 18px;
+}
+.form-control:is(
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"]
+) {
+  padding-inline: var(--control-spacing, 12px);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type="file"] {
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+  padding: 0;
+}
+
+.form-control[type="file"]::file-selector-button {
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+  min-height: calc(10px + 2 * var(--control-spacing, 12px));
+  padding-inline: var(--control-spacing, 12px);
+  margin-inline-end: var(--control-spacing, 12px);
+}
+
+.form-control[type="file"]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type="color"] {
+  width: 40px;
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  resize: vertical;
+  min-height: 96px;
+  padding: 8px 10px;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: none;
+}
+.form-control:disabled {
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  opacity: 1;
+}
+.form-control[aria-invalid="true"] {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 20%, transparent);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: fit-content;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  margin: 0;
+  /* The secondary icon role is 14px at compact density and 16px at web density. */
+  --icon-size: calc(10px + var(--control-spacing, 12px) / 2);
+  /* Settings dropdowns retain a 12px inset and a 4px text-to-chevron gap. */
+  padding: 0 calc(16px + var(--icon-size)) 0 12px;
+  outline: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    );
+  background-position:
+    calc(100% - 12px - var(--icon-size) / 2) 50%,
+    calc(100% - 12px - var(--icon-size) * 0.18) 50%;
+  background-repeat: no-repeat;
+  background-size: calc(var(--icon-size) * 0.32) calc(var(--icon-size) * 0.32);
+  cursor: var(--cursor-interaction, default);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.form-select :is(option, optgroup) {
+  color: var(--popover-foreground);
+  background-color: var(--popover);
+}
+
+.form-select :is(option, optgroup):disabled {
+  color: var(--muted-foreground);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.form-select:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.form-select:disabled {
+  opacity: 0.4;
+}
+
+.form-check {
+  display: flex;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+  corner-shape: round;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  width: calc(10px + var(--control-spacing, 12px) / 2);
+  height: calc(10px + var(--control-spacing, 12px) / 2);
+  border-color: var(--border-strong, var(--input));
+  border-radius: calc(var(--radius-sm) / 2);
+  background-color: transparent;
+  color: var(--foreground);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:is(:checked, :indeterminate) {
+  border-color: var(--border-strong, var(--input));
+  background-color: color-mix(in srgb, var(--popover) 96%, transparent);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: "";
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+  background-color: var(--foreground);
+}
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:indeterminate::before {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 65%;
+  height: 6.65%;
+  margin: auto;
+  border-radius: var(--radius-full);
+  background: var(--foreground);
+  mask: none;
+  content: "";
+}
+
+.form-check-input[type="radio"] {
+  border-radius: var(--radius-full);
+  width: 16px;
+  height: 16px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--input);
+}
+
+.form-check-input[type="radio"]:checked {
+  border: 0;
+  background: radial-gradient(
+    circle,
+    var(--primary-foreground) 0 3px,
+    var(--foreground) 3px
+  );
+  box-shadow: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.form-check:not(.form-switch) .form-check-input[type="checkbox"]:focus-visible {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+.form-check:not(.form-switch) .form-check-input[type="radio"]:disabled,
+.form-check:not(.form-switch)
+  .form-check-input[type="radio"]:disabled
+  + .form-check-label {
+  opacity: 0.5;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  content: "";
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+  border-color: #fff;
+  background: #fff;
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--blue);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+  outline: none;
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--primary);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  outline: none;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: transparent;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  margin-top: -9px;
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Outline the native track and thumb, preserving the larger input hit area. */
+.form-range:focus-visible::-webkit-slider-runnable-track {
+  outline: 2px auto Highlight;
+  outline-color: -webkit-focus-ring-color;
+}
+
+.form-range::-moz-range-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+.form-range:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed="true"],
+  [aria-selected="true"],
+  .is-selected
+) {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--blue);
+}
+
+.btn.viz-tile:is([aria-pressed="true"], [aria-selected="true"], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.viz-carousel-controls :is(button, summary):focus-visible {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Web recipes are the default, including on renderers without inline style queries. */
+@supports (border-radius: if(style(--corner-shape: round): 1px; else: 2px)) {
+  /* Match the host's proportional text-sm scale at every text preference. */
+  .tooltip,
+  .viz-badge,
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 14 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 13 / 14), 1px)
+    );
+  }
+
+  .btn-sm {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 12 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 12 / 14), 1px)
+    );
+  }
+
+  .btn,
+  .nav-link,
+  .form-select {
+    border-radius: if(
+      style(--corner-shape: round): var(--radius-full); else: var(--radius-lg)
+    );
+  }
+
+  .form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+    border-radius: if(
+      style(--corner-shape: round): calc(var(--radius-sm) / 2);
+        else: calc(var(--radius-lg) * 0.4)
+    );
+  }
+
+  .tooltip {
+    font-weight: if(
+      style(--corner-shape: round): 600; else: var(--font-weight-normal)
+    );
+  }
+}
+
+@media (pointer: coarse) {
+  .viz-carousel:has(> .viz-carousel-controls) {
+    min-height: calc(76px + var(--viz-carousel-picker-height, 0px));
+    padding-bottom: 76px;
+  }
+
+  .btn,
+  .nav-link,
+  .viz-carousel-controls button,
+  .viz-carousel-picker > summary,
+  .form-control,
+  .form-select {
+    --btn-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+  .form-control:is(
+    [type="file"],
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="week"],
+    [type="time"],
+    [type="color"]
+  ) {
+    height: 44px;
+    min-height: 44px;
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+
+  .form-control[type="file"]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type="color"] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="time"],
+    [type="week"]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: "";
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget > svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html>body{padding:0}
+:root{--guide-preview-height:100dvh}</style>
+</head>
+<body>
+<style>
+#reports-evidence-guide { --dg-bg:light-dark(#fff,#171717); --dg-pane:light-dark(#fafafa,#1a1a1a); --dg-text:light-dark(#18181b,#fafafa); --dg-muted:light-dark(#71717a,#a0a0a0); --dg-border:light-dark(#e4e4e7,#2e2e2e); --dg-rule:light-dark(#eee,#242424); --dg-brand:#4682b4; --dg-link:light-dark(#276594,#73a9d5); --dg-wash:light-dark(#eaf0f6,#1e2a32); color:var(--dg-text); font:14px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color-scheme:light dark; }
+#reports-evidence-guide * { box-sizing:border-box; }
+#reports-evidence-guide .dg-app { display:flex; flex-direction:column; height:var(--guide-preview-height,840px); min-height:0; border:1px solid var(--dg-border); background:var(--dg-bg); }
+#reports-evidence-guide .dg-head { display:flex; align-items:center; gap:16px; height:48px; padding:0 18px; flex-shrink:0; border-bottom:1px solid var(--dg-border); }
+#reports-evidence-guide .dg-head strong { font-size:16px; font-weight:600; }
+#reports-evidence-guide .dg-review { margin-left:12px; color:var(--dg-muted); font-size:12px; }
+#reports-evidence-guide .dg-head-icons { margin-left:auto; display:flex; align-items:center; gap:20px; color:var(--dg-muted); padding-right:80px; }
+#reports-evidence-guide .dg-main { display:flex; min-height:0; flex:1; }
+#reports-evidence-guide .dg-sidebar { width:256px; flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid var(--dg-border); }
+#reports-evidence-guide .dg-search { height:48px; display:flex; align-items:center; gap:8px; padding:0 10px; border-bottom:1px solid var(--dg-border); flex-shrink:0; }
+#reports-evidence-guide .dg-search input { min-width:0; width:100%; border:1px solid var(--dg-border); border-radius:6px; padding:7px 10px; background:transparent; color:var(--dg-text); font:inherit; }
+#reports-evidence-guide .dg-docnav { overflow:auto; min-height:0; padding:4px 0 16px; }
+#reports-evidence-guide .dg-group { margin-top:5px; padding-top:8px; border-top:1px solid var(--dg-border); }
+#reports-evidence-guide .dg-group:first-child { border:0; margin:0; }
+#reports-evidence-guide .dg-group-label { display:block; padding:4px 12px; text-transform:uppercase; font-size:10px; color:var(--dg-muted); font-weight:600; letter-spacing:.03em; }
+#reports-evidence-guide .dg-navitem { display:block; padding:8px 12px; color:var(--dg-text); text-decoration:none; }
+#reports-evidence-guide .dg-selected { border-left:2px solid var(--dg-brand); background:var(--dg-wash); color:var(--dg-link); padding-left:10px; }
+#reports-evidence-guide .dg-content { min-width:0; flex:1; display:flex; flex-direction:column; }
+#reports-evidence-guide .dg-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:12px; height:48px; flex-shrink:0; border-bottom:1px solid var(--dg-border); padding:0 12px; }
+#reports-evidence-guide .dg-version { font-size:12px; border:1px solid var(--dg-border); border-radius:6px; padding:4px 9px; color:var(--dg-muted); }
+#reports-evidence-guide .dg-version b { color:var(--dg-text); font-weight:500; }
+#reports-evidence-guide button { font:inherit; color:inherit; cursor:inherit; }
+#reports-evidence-guide .dg-iconbtn { border:0; background:none; padding:5px; display:inline-flex; align-items:center; border-radius:4px; color:var(--dg-muted); }
+#reports-evidence-guide .dg-iconbtn:hover { background:var(--dg-wash); }
+#reports-evidence-guide .dg-scroll { min-height:0; flex:1; overflow:auto; padding:24px; scroll-behavior:smooth; }
+#reports-evidence-guide .dg-columns { display:grid; grid-template-columns:minmax(0,1fr) 224px; gap:32px; align-items:start; }
+#reports-evidence-guide .dg-article { min-width:0; }
+#reports-evidence-guide h1 { font-size:24px; line-height:1.3; margin:0 0 12px; font-weight:600; }
+#reports-evidence-guide h2 { font-size:18px; font-weight:600; margin:30px 0 10px; padding-bottom:5px; border-bottom:1px solid var(--dg-rule); scroll-margin-top:12px; }
+#reports-evidence-guide h3 { font-size:15px; font-weight:500; margin:0 0 8px; }
+#reports-evidence-guide p { margin:8px 0; }
+#reports-evidence-guide .dg-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; color:var(--dg-muted); }
+#reports-evidence-guide .dg-meta span { border:1px solid var(--dg-border); border-radius:5px; padding:1px 7px; font-size:11px; }
+#reports-evidence-guide .dg-intro { color:var(--dg-muted); }
+#reports-evidence-guide .dg-example { border-left:2px solid var(--dg-brand); padding-left:12px; margin:18px 0; }
+#reports-evidence-guide .dg-example p { margin:4px 0; }
+#reports-evidence-guide .dg-onpage { position:sticky; top:0; color:var(--dg-muted); font-size:12px; }
+#reports-evidence-guide .dg-onpage > p { text-transform:uppercase; font-size:10px; letter-spacing:.03em; margin:5px 0 12px; }
+#reports-evidence-guide .dg-onpage a { display:block; color:inherit; text-decoration:none; padding:6px 0 6px 12px; border-left:2px solid transparent; }
+#reports-evidence-guide .dg-onpage a:hover,#reports-evidence-guide .dg-onpage a[aria-current] { color:var(--dg-link); border-color:var(--dg-brand); }
+#reports-evidence-guide .dg-onpage small { display:block; font-size:11px; margin:24px 0 0 12px; }
+#reports-evidence-guide .dg-loop { margin:14px 0 22px; max-width:500px; }
+#reports-evidence-guide .dg-loop video { width:100%; display:block; border:1px solid var(--dg-border); border-radius:6px; background:#171717; }
+#reports-evidence-guide .dg-loop-control { display:flex; justify-content:space-between; align-items:center; gap:12px; color:var(--dg-muted); font-size:11px; margin-top:5px; }
+#reports-evidence-guide .dg-loop-control button { border:0; padding:3px 0; color:var(--dg-link); background:none; }
+#reports-evidence-guide .dg-step { padding:17px 0 18px; border-bottom:1px solid var(--dg-rule); }
+#reports-evidence-guide .dg-step:last-child { border-bottom:0; }
+#reports-evidence-guide .dg-number { color:var(--dg-muted); display:inline-block; min-width:22px; font-variant-numeric:tabular-nums; }
+#reports-evidence-guide .dg-step p { margin:4px 0 10px 22px; }
+#reports-evidence-guide .dg-shot { margin:10px 0 0 22px; max-width:500px; }
+#reports-evidence-guide .dg-shot button { display:block; width:100%; padding:0; border:1px solid var(--dg-border); border-radius:6px; overflow:hidden; background:#171717; }
+#reports-evidence-guide .dg-shot img { display:block; width:100%; max-height:300px; object-fit:contain; object-position:left center; }
+#reports-evidence-guide figcaption { color:var(--dg-muted); font-size:11px; margin-top:6px; }
+#reports-evidence-guide .dg-result { padding:12px 14px; border-left:2px solid var(--dg-brand); background:var(--dg-pane); margin:18px 0; }
+#reports-evidence-guide .dg-result p { margin:3px 0; }
+#reports-evidence-guide code { display:inline-block; max-width:100%; box-sizing:border-box; overflow-wrap:anywhere; font:12px/1.6 ui-monospace,monospace; background:var(--dg-pane); padding:2px 5px; border:1px solid var(--dg-border); border-radius:4px; }
+#reports-evidence-guide pre { margin:12px 0; padding:12px; background:var(--dg-pane); border:1px solid var(--dg-border); border-radius:6px; white-space:pre-wrap; overflow-wrap:anywhere; }
+#reports-evidence-guide pre code { background:none; border:0; padding:0; }
+#reports-evidence-guide .dg-config { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 18px; margin:14px 0; }
+#reports-evidence-guide .dg-config dt { color:var(--dg-muted); }
+#reports-evidence-guide .dg-config dd { margin:0; }
+#reports-evidence-guide .dg-onpage .dg-subtoc { padding-left:24px; }
+#reports-evidence-guide details { padding:12px 0; border-bottom:1px solid var(--dg-rule); }
+#reports-evidence-guide summary { font-weight:500; cursor:inherit; }
+#reports-evidence-guide details p { color:var(--dg-muted); }
+#reports-evidence-guide .dg-return { color:var(--dg-link); text-decoration:none; display:inline-block; margin-top:22px; }
+#reports-evidence-guide .dg-lightbox { position:absolute; inset:0; z-index:20; background:rgba(0,0,0,.92); display:flex; align-items:center; justify-content:center; padding:40px 16px 16px; }
+#reports-evidence-guide .dg-lightbox img { max-width:100%; max-height:100%; object-fit:contain; }
+#reports-evidence-guide .dg-lightbox button { position:absolute; right:14px; top:8px; background:#242424; color:#fff; border:1px solid #555; border-radius:5px; padding:5px 10px; }
+#reports-evidence-guide .dg-app { position:relative; }
+#reports-evidence-guide [hidden] { display:none !important; }
+#reports-evidence-guide.dg-folded .dg-sidebar { display:none; }
+@media(max-width:1279px) { #reports-evidence-guide .dg-columns { grid-template-columns:minmax(0,1fr); } #reports-evidence-guide .dg-onpage { display:none; } }
+@media(max-width:600px) { #reports-evidence-guide .dg-sidebar { display:none; } #reports-evidence-guide .dg-scroll { padding:18px; } #reports-evidence-guide .dg-head { padding:0 12px; } #reports-evidence-guide .dg-head-icons { padding-right:0; gap:12px; } #reports-evidence-guide .dg-review { display:none; } #reports-evidence-guide .dg-shot { margin-left:0; } #reports-evidence-guide .dg-step p { margin-left:0; } }
+@media(prefers-reduced-motion:reduce) { #reports-evidence-guide .dg-scroll { scroll-behavior:auto; } }
+</style>
+<div id="reports-evidence-guide" aria-label="Facilities user guide preview">
+ <div class="dg-app">
+  <header class="dg-head"><strong>Documentation</strong><span class="dg-review">Reports guide preview</span><div class="dg-head-icons"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-right" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M15 3v18"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bell" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg><button type="button" class="dg-iconbtn cursor-interaction" data-theme-toggle aria-label="Switch preview theme"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></button></div></header>
+  <div class="dg-main">
+   <aside class="dg-sidebar">
+    <div class="dg-search"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Collapse documentation sidebar" data-collapse><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-close" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m16 15-3-3 3-3"></path></svg></button><input type="search" placeholder="Search…" aria-label="Search documentation" data-search></div>
+    <nav class="dg-docnav" aria-label="Documentation sections"><div class="dg-group"><span class="dg-group-label">Start here</span><a class="dg-navitem" href="start-here-review.html">Start Here</a></div><div class="dg-group"><span class="dg-group-label">Set up your system</span><a class="dg-navitem" href="terminology-review.html">Terminology</a><a class="dg-navitem" href="facilities-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Facilities</a><a class="dg-navitem" href="test-catalog-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Test catalog</a><a class="dg-navitem" href="patients-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Patients</a><a class="dg-navitem" href="forms-review.html">Forms</a><a class="dg-navitem" href="workflows-review.html">Workflows</a></div><div class="dg-group"><span class="dg-group-label">Daily work</span><a class="dg-navitem" href="dashboard-review.html">Dashboards</a><a class="dg-navitem dg-selected" href="#dg-top" aria-current="page">Reports</a><a class="dg-navitem" href="activity-review.html">Activity</a></div><div class="dg-group"><span class="dg-group-label">Build and manage</span><a class="dg-navitem" href="report-pipeline-review.html">Scheduled reports with workflows</a><a class="dg-navitem" href="query-review.html">Custom Queries</a><a class="dg-navitem" href="report-designer-review.html">Report Designer</a></div><div class="dg-group"><span class="dg-group-label">Administration</span><a class="dg-navitem" href="layouts-review.html">Layouts</a><a class="dg-navitem" href="users-review.html">Users and Roles</a><a class="dg-navitem" href="roles-review.html">Roles</a><a class="dg-navitem" href="audit-review.html">Audit</a><a class="dg-navitem" href="settings-review.html">Settings</a><a class="dg-navitem" href="setup-checks-review.html">Setup checks</a><a class="dg-navitem" href="laboratory-review.html">Laboratory</a><a class="dg-navitem" href="data-exposure-review.html">Data exposure</a><a class="dg-navitem" href="sync-review.html">Distributed Sync</a><a class="dg-navitem" href="connectors-review.html">Connectors</a><a class="dg-navitem" href="connector-diagnose-review.html">Connect to SQL Server and diagnose a connection</a><a class="dg-navitem" href="v1-import-review.html">Import from OpenLDR v1</a><a class="dg-navitem" href="marketplace-review.html">Marketplace</a><a class="dg-navitem" href="plugin-sites-review.html">Plugin cards and side panels</a><a class="dg-navitem" href="auth-providers-review.html">Authentication providers</a><a class="dg-navitem" href="environment-review.html">Environment Variables</a><a class="dg-navitem" href="upgrading-review.html">Planned upgrades</a></div><div class="dg-group"><span class="dg-group-label">Personal settings</span><a class="dg-navitem" href="preferences-review.html">Your preferences</a></div><div class="dg-group"><span class="dg-group-label">More</span><a class="dg-navitem" href="advanced-docs-review.html">Deployment &amp; Developer Docs</a></div></nav>
+   </aside>
+   <section class="dg-content">
+    <div class="dg-toolbar"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Show documentation sidebar" data-expand hidden><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-open" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m14 9 3 3-3 3"></path></svg></button><span class="dg-version">Version <b>0.1.8</b></span><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg></div>
+    <div class="dg-scroll" data-reading-pane>
+     <div class="dg-columns">
+      <article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Daily work</span><span>Run, export and schedule reports</span><span>About 30 minutes</span></div>
+<h1>Reports</h1>
+<p>Use Reports to run a library entry with filters, read its Document or Spreadsheet, export output and inspect its history. A schedule saves an output file for a reporting period. It does not email that file.</p>
+<p>Start with a report suited to your own received data. No documentation sample data is required. The pictures use the Request summary report created in Report Designer. Its test warehouse has zero requests, so the query returns one row containing zero.</p>
+<p>You need <strong>View reports</strong> to open the library, <strong>Run reports</strong> to execute entries and <strong>Export reports</strong> to download outputs. <strong>Edit report templates</strong> permits schedule management, Edit template and report-management actions.</p>
+<p>To add a library report, save a design and use Create report from this design in <a href="report-designer-review.html">Report Designer</a>. Publish revision alone does not add a library entry.</p>
+<h2 id="dg-find">Find and open a report</h2>
+<p>Use the report name and category to choose the intended entry before setting filters.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Reports</h3><p>Select Reports in the main menu.</p><figure class="dg-shot dg-context-shot" data-shot-id="open-page"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open Reports from the main menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:0.0%;top:0.0%"><img class="fc-background" data-evidence="open-page" alt="Open Reports from the main menu."><img class="fc-sharp" data-evidence="open-page" alt="" aria-hidden="true" style="clip-path:inset(12.0% 81.953125% 83.5% 0.625%)"><span class="fc-ring" aria-hidden="true" style="left:0.625%;top:12.0%;width:17.421875%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Open Reports from the main menu.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Search the library</h3><p>Enter part of the report name in Search reports. Clear it to restore the full library.</p><figure class="dg-shot dg-context-shot" data-shot-id="search"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Search the library by report name."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-19.791666666666664%;top:0.0%"><img class="fc-background" data-evidence="search" alt="Search the library by report name."><img class="fc-sharp" data-evidence="search" alt="" aria-hidden="true" style="clip-path:inset(7.000000000000001% 67.03125% 89.0% 19.375%)"><span class="fc-ring" aria-hidden="true" style="left:19.375%;top:7.000000000000001%;width:13.593749999999998%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Search the library by report name.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Select the report</h3><p>Select its name under the category. The example is Request summary report under Operational.</p><figure class="dg-shot dg-context-shot" data-shot-id="select-report"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Select the report under its category."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-13.681640625%;top:0.0%"><img class="fc-background" data-evidence="select-report" alt="Select the report under its category."><img class="fc-sharp" data-evidence="select-report" alt="" aria-hidden="true" style="clip-path:inset(16.625% 72.08251953125% 80.875% 19.84375%)"><span class="fc-ring" aria-hidden="true" style="left:19.84375%;top:16.625%;width:8.07373046875%;height:2.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Select the report under its category.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Open its actions</h3><p>Select Actions beside the selected report heading.</p><figure class="dg-shot dg-context-shot" data-shot-id="report-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The selected report has its own Actions menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="report-actions" alt="The selected report has its own Actions menu."><img class="fc-sharp" data-evidence="report-actions" alt="" aria-hidden="true" style="clip-path:inset(7.5% 1.25% 88.5% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:7.5%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">4</span></span></span></span></button><figcaption>The selected report has its own Actions menu.</figcaption></figure></section>
+<h2 id="dg-run">Choose filters and run the report</h2>
+<p>Choose dates and other filters that answer your reporting question. The query behind the example includes both selected calendar endpoints.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Parameters</h3><p>Choose Parameters from the selected report Actions menu.</p><figure class="dg-shot dg-context-shot" data-shot-id="first-parameters"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Parameters opens the report filters."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="first-parameters" alt="Parameters opens the report filters."><img class="fc-sharp" data-evidence="first-parameters" alt="" aria-hidden="true" style="clip-path:inset(16.625% 1.640625% 79.375% 85.390625%)"><span class="fc-ring" aria-hidden="true" style="left:85.390625%;top:16.625%;width:12.968750000000002%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Parameters opens the report filters.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the date range</h3><p>Select the Period control. Other reports may call this Date range or use different filters.</p><figure class="dg-shot dg-context-shot" data-shot-id="first-period"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the date-range control for the report period."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-137.15494791666666%;top:-9.09375%"><img class="fc-background" data-evidence="first-period" alt="Open the date-range control for the report period."><img class="fc-sharp" data-evidence="first-period" alt="" aria-hidden="true" style="clip-path:inset(19.91015625% 25.961914062500004% 75.58984375% 66.328125%)"><span class="fc-ring" aria-hidden="true" style="left:66.328125%;top:19.91015625%;width:7.7099609375%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Open the date-range control for the report period.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose the reporting dates</h3><p>Choose a preset, such as This year, or use the month and year selectors and calendar to pick dates. Complete other required filters.</p><figure class="dg-shot dg-context-shot" data-shot-id="first-preset"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose a preset or select your own calendar dates."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-90.21484375%;top:-60.75000000000001%"><img class="fc-background" data-evidence="first-preset" alt="Choose a preset or select your own calendar dates."><img class="fc-sharp" data-evidence="first-preset" alt="" aria-hidden="true" style="clip-path:inset(39.53125% 43.2763671875% 56.46875% 48.4375%)"><span class="fc-ring" aria-hidden="true" style="left:48.4375%;top:39.53125%;width:8.2861328125%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Choose a preset or select your own calendar dates.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Run the report</h3><p>Select Run in the parameter sheet. Wait for the completed result.</p><figure class="dg-shot dg-context-shot" data-shot-id="first-run"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Run executes the report with the selected filters."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-9.09375%"><img class="fc-background" data-evidence="first-run" alt="Run executes the report with the selected filters."><img class="fc-sharp" data-evidence="first-run" alt="" aria-hidden="true" style="clip-path:inset(19.91015625% 1.25% 75.58984375% 94.2431640625%)"><span class="fc-ring" aria-hidden="true" style="left:94.2431640625%;top:19.91015625%;width:4.5068359375%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">4</span></span></span></span></button><figcaption>Run executes the report with the selected filters.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> Document renders the report with the selected values. The zero in this example is a valid query result.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="document"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Document renders the selected run as a PDF."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-99.6875%;top:-50.958333333333336%"><img class="fc-background" data-evidence="document" alt="Document renders the selected run as a PDF."><img class="fc-sharp" data-evidence="document" alt="" aria-hidden="true" style="clip-path:inset(29.109375% 29.0234375% 53.390625% 41.2890625%)"><span class="fc-ring" aria-hidden="true" style="left:41.2890625%;top:29.109375%;width:29.6875%;height:17.5%"></span></span></span></button><figcaption>Document renders the selected run as a PDF.</figcaption></figure>
+<h2 id="dg-download">Download the document and spreadsheet</h2>
+<p>Use Document for the printable layout and Spreadsheet for exact query rows. Their column labels can differ because a design can relabel printed columns.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Download the PDF</h3><p>In Document, use Download to save the PDF. Page arrows and zoom change your view.</p><figure class="dg-shot dg-context-shot" data-shot-id="pdf-download"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Download saves the PDF for this run."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-10.625%"><img class="fc-background" data-evidence="pdf-download" alt="Download saves the PDF for this run."><img class="fc-sharp" data-evidence="pdf-download" alt="" aria-hidden="true" style="clip-path:inset(21.234375% 0.9375% 75.765625% 92.080078125%)"><span class="fc-ring" aria-hidden="true" style="left:92.080078125%;top:21.234375%;width:6.982421875%;height:3.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Download saves the PDF for this run.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Spreadsheet</h3><p>Select Spreadsheet above the result.</p><figure class="dg-shot dg-context-shot" data-shot-id="spreadsheet-tab"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Spreadsheet shows query rows in a table."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-80.23274739583334%;top:0.0%"><img class="fc-background" data-evidence="spreadsheet-tab" alt="Spreadsheet shows query rows in a table."><img class="fc-sharp" data-evidence="spreadsheet-tab" alt="" aria-hidden="true" style="clip-path:inset(15.046875000000002% 47.188720703125% 79.765625% 44.86328125%)"><span class="fc-ring" aria-hidden="true" style="left:44.86328125%;top:15.046875000000002%;width:7.947998046875%;height:5.1875%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Spreadsheet shows query rows in a table.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check the row values</h3><p>Read the column labels and actual cells before exporting. The example shows requests equal to zero.</p><figure class="dg-shot dg-context-shot" data-shot-id="spreadsheet-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Read the actual count in the spreadsheet row."><span class="fc-screenshot"><span class="fc-scene" style="width:149.0104772991851%;height:149.0104772991851%;left:-49.0104772991851%;top:-0.8731082654249126%"><img class="fc-background" data-evidence="spreadsheet-result" alt="Read the actual count in the spreadsheet row."><img class="fc-sharp" data-evidence="spreadsheet-result" alt="" aria-hidden="true" style="clip-path:inset(31.359375% 0.0% 63.07812499999999% 36.796875%)"><span class="fc-ring" aria-hidden="true" style="left:36.796875%;top:31.359375%;width:63.20312500000001%;height:5.5625%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">3</span></span></span></span></button><figcaption>Read the actual count in the spreadsheet row.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Export CSV when you need the query output</h3><p>Select Export CSV. It re-runs the report query with the parameters that produced the displayed run. Spreadsheet filters and sorting do not apply to CSV. Source changes since the run can affect the file.</p><figure class="dg-shot dg-context-shot" data-shot-id="export-csv"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Export CSV runs the report query with its current run parameters."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-114.4580078125%;top:-11.958333333333334%"><img class="fc-background" data-evidence="export-csv" alt="Export CSV runs the report query with its current run parameters."><img class="fc-sharp" data-evidence="export-csv" alt="" aria-hidden="true" style="clip-path:inset(21.234375% 34.86328125% 74.765625% 58.206787109375%)"><span class="fc-ring" aria-hidden="true" style="left:58.206787109375%;top:21.234375%;width:6.929931640625001%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Export CSV runs the report query with its current run parameters.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Export the filtered rows as XLSX</h3><p>Select Export XLSX. It uses the loaded result with Spreadsheet filters and sorting across all pages. It includes all result columns, including fields hidden on screen.</p><figure class="dg-shot dg-context-shot" data-shot-id="export-xlsx"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Export XLSX downloads the current spreadsheet filtering and sort."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-138.14615885416666%;top:-11.958333333333334%"><img class="fc-background" data-evidence="export-xlsx" alt="Export XLSX downloads the current spreadsheet filtering and sort."><img class="fc-sharp" data-evidence="export-xlsx" alt="" aria-hidden="true" style="clip-path:inset(21.234375% 24.652099609375% 74.765625% 65.76171875%)"><span class="fc-ring" aria-hidden="true" style="left:65.76171875%;top:21.234375%;width:9.586181640625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Export XLSX downloads the current spreadsheet filtering and sort.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The browser downloads the chosen format. Choose the export whose row behavior matches your task.</p></div>
+<h2 id="dg-table">Filter and arrange Spreadsheet rows</h2>
+<p>These controls change the loaded Spreadsheet view. They do not change the report definition or the Document layout.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Add a filter</h3><p>Select Filter, then Add filter.</p><figure class="dg-shot dg-context-shot" data-shot-id="filter-add"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Add filter creates a spreadsheet rule."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-63.2666015625%;top:-56.00000000000001%"><img class="fc-background" data-evidence="filter-add" alt="Add filter creates a spreadsheet rule."><img class="fc-sharp" data-evidence="filter-add" alt="" aria-hidden="true" style="clip-path:inset(38.0% 54.11254882812499% 58.5% 39.0625%)"><span class="fc-ring" aria-hidden="true" style="left:39.0625%;top:38.0%;width:6.824951171875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Add filter creates a spreadsheet rule.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the column</h3><p>Select the result column to filter. The example has one requests column.</p><figure class="dg-shot dg-context-shot" data-shot-id="filter-column"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the result column to filter."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-93.75%;top:-33.0%"><img class="fc-background" data-evidence="filter-column" alt="Choose the result column to filter."><img class="fc-sharp" data-evidence="filter-column" alt="" aria-hidden="true" style="clip-path:inset(29.125% 39.21875% 66.875% 47.03125%)"><span class="fc-ring" aria-hidden="true" style="left:47.03125%;top:29.125%;width:13.750000000000002%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Choose the result column to filter.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Set the rule value</h3><p>Choose an operator and enter its value. The example uses Equals and 0.</p><figure class="dg-shot dg-context-shot" data-shot-id="filter-value"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Enter a value appropriate to your result column."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-157.70833333333334%;top:-33.0%"><img class="fc-background" data-evidence="filter-value" alt="Enter a value appropriate to your result column."><img class="fc-sharp" data-evidence="filter-value" alt="" aria-hidden="true" style="clip-path:inset(29.125% 15.937499999999998% 66.875% 71.71875%)"><span class="fc-ring" aria-hidden="true" style="left:71.71875%;top:29.125%;width:12.34375%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Enter a value appropriate to your result column.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Apply the rule</h3><p>Select Apply to update the shown rows.</p><figure class="dg-shot dg-context-shot" data-shot-id="filter-apply"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Apply changes the rows shown in Spreadsheet."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-54.666666666666664%"><img class="fc-background" data-evidence="filter-apply" alt="Apply changes the rows shown in Spreadsheet."><img class="fc-sharp" data-evidence="filter-apply" alt="" aria-hidden="true" style="clip-path:inset(37.5% 12.968750000000002% 59.0% 82.81005859375%)"><span class="fc-ring" aria-hidden="true" style="left:82.81005859375%;top:37.5%;width:4.22119140625%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Apply changes the rows shown in Spreadsheet.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Add a sort</h3><p>Select Sort, then Add sort and choose a result column.</p><figure class="dg-shot dg-context-shot" data-shot-id="sort-add"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Add sort to order the loaded spreadsheet rows."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-107.13216145833333%;top:-56.00000000000001%"><img class="fc-background" data-evidence="sort-add" alt="Choose Add sort to order the loaded spreadsheet rows."><img class="fc-sharp" data-evidence="sort-add" alt="" aria-hidden="true" style="clip-path:inset(38.0% 29.67041015625% 58.5% 47.51953125%)"><span class="fc-ring" aria-hidden="true" style="left:47.51953125%;top:38.0%;width:22.81005859375%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Choose Add sort to order the loaded spreadsheet rows.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Choose the direction</h3><p>Use Asc or Desc and select Apply. This example has one row, so its order does not visibly change.</p><figure class="dg-shot dg-context-shot" data-shot-id="sort-order"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Asc sorts from smaller values upward; select it to switch direction."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-136.09212239583331%;top:-34.66666666666667%"><img class="fc-background" data-evidence="sort-order" alt="Asc sorts from smaller values upward; select it to switch direction."><img class="fc-sharp" data-evidence="sort-order" alt="" aria-hidden="true" style="clip-path:inset(30.0% 28.183593750000004% 66.5% 67.752685546875%)"><span class="fc-ring" aria-hidden="true" style="left:67.752685546875%;top:30.0%;width:4.063720703125%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Asc sorts from smaller values upward; select it to switch direction.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Choose visible columns</h3><p>Open Columns and use its checkboxes. The last visible column cannot be hidden. Close the menu when finished.</p><figure class="dg-shot dg-context-shot" data-shot-id="columns"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Columns changes which fields are visible on the page."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-105.31087239583334%;top:-11.958333333333334%"><img class="fc-background" data-evidence="columns" alt="Columns changes which fields are visible on the page."><img class="fc-sharp" data-evidence="columns" alt="" aria-hidden="true" style="clip-path:inset(21.234375% 38.111572265625% 74.765625% 54.59472656249999%)"><span class="fc-ring" aria-hidden="true" style="left:54.59472656249999%;top:21.234375%;width:7.293701171875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">7</span></span></span></span></button><figcaption>Columns changes which fields are visible on the page.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="column-options"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use the checkboxes for the fields you need. The last visible column cannot be hidden."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-99.94791666666667%;top:-25.666666666666664%"><img class="fc-background" data-evidence="column-options" alt="Use the checkboxes for the fields you need. The last visible column cannot be hidden."><img class="fc-sharp" data-evidence="column-options" alt="" aria-hidden="true" style="clip-path:inset(27.375% 43.14453125% 70.625% 55.60546875%)"><span class="fc-ring" aria-hidden="true" style="left:55.60546875%;top:27.375%;width:1.25%;height:2.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">7</span></span></span></span></button><figcaption>Use the checkboxes for the fields you need. The last visible column cannot be hidden.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">8.</span> Reset or use the pages</h3><p>Reset clears the table rules and column changes. Use Rows per page and the arrows when the result spans more than one page.</p><figure class="dg-shot dg-context-shot" data-shot-id="reset-table"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Reset clears spreadsheet filters, sorting and column changes."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-122.46907552083333%;top:-11.958333333333334%"><img class="fc-background" data-evidence="reset-table" alt="Reset clears spreadsheet filters, sorting and column changes."><img class="fc-sharp" data-evidence="reset-table" alt="" aria-hidden="true" style="clip-path:inset(21.234375% 33.16162109375% 74.765625% 62.51342773437501%)"><span class="fc-ring" aria-hidden="true" style="left:62.51342773437501%;top:21.234375%;width:4.324951171875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">8</span></span></span></span></button><figcaption>Reset clears spreadsheet filters, sorting and column changes.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="pagination"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use the table page size and arrows when there are more rows."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="pagination" alt="Use the table page size and arrows when there are more rows."><img class="fc-sharp" data-evidence="pagination" alt="" aria-hidden="true" style="clip-path:inset(95.25% 12.7685546875% 1.25% 80.9814453125%)"><span class="fc-ring" aria-hidden="true" style="left:80.9814453125%;top:95.25%;width:6.25%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">8</span></span></span></span></button><figcaption>Use the table page size and arrows when there are more rows.</figcaption></figure></section>
+<h2 id="dg-refresh">Refresh a displayed result</h2>
+<p>Use this after data changes when you want the same reporting question run again.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Refresh</h3><p>Open the selected report Actions menu and choose Refresh. It uses the values that produced the displayed result, even if you have an unfinished parameter edit.</p><figure class="dg-shot dg-context-shot" data-shot-id="refresh"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Refresh re-runs using the values that produced the displayed result."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="refresh" alt="Refresh re-runs using the values that produced the displayed result."><img class="fc-sharp" data-evidence="refresh" alt="" aria-hidden="true" style="clip-path:inset(12.625% 1.640625% 83.375% 85.390625%)"><span class="fc-ring" aria-hidden="true" style="left:85.390625%;top:12.625%;width:12.968750000000002%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Refresh re-runs using the values that produced the displayed result.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The query runs again. The new count may match the earlier count.</p></div>
+<h2 id="dg-history">Inspect interactive run history</h2>
+<p>Use history to identify when a report was run or downloaded and which parameter values belonged to that run.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Run History</h3><p>Open report Actions and choose Run History.</p><figure class="dg-shot dg-context-shot" data-shot-id="history"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Run History lists the interactive runs and saved schedule attempts."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-13.333333333333334%"><img class="fc-background" data-evidence="history" alt="Run History lists the interactive runs and saved schedule attempts."><img class="fc-sharp" data-evidence="history" alt="" aria-hidden="true" style="clip-path:inset(21.75% 1.640625% 74.25% 85.390625%)"><span class="fc-ring" aria-hidden="true" style="left:85.390625%;top:21.75%;width:12.968750000000002%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Run History lists the interactive runs and saved schedule attempts.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read Activity</h3><p>Check each format, row count, user and time. Preview is an interactive run; pdf, csv and xlsx identify downloads.</p><figure class="dg-shot dg-context-shot" data-shot-id="history-rows"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Read format, row count, user and time for each interactive run."><span class="fc-screenshot"><span class="fc-scene" style="width:210.18062397372742%;height:210.18062397372742%;left:-110.18062397372744%;top:-7.545155993431855%"><img class="fc-background" data-evidence="history-rows" alt="Read format, row count, user and time for each interactive run."><img class="fc-sharp" data-evidence="history-rows" alt="" aria-hidden="true" style="clip-path:inset(24.44140625% 0.0% 69.68359375% 56.32812499999999%)"><span class="fc-ring" aria-hidden="true" style="left:56.32812499999999%;top:24.44140625%;width:43.671875%;height:5.875%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Read format, row count, user and time for each interactive run.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Restore a previous parameter choice</h3><p>Select an Activity row to put its parameters back into the report controls. Open Parameters and Run when you want a new result. Selecting history does not replay its stored output.</p><figure class="dg-shot dg-context-shot" data-shot-id="history-apply"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Selecting an activity row restores its parameters. It does not replay the old output."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-112.919921875%;top:-23.010416666666668%"><img class="fc-background" data-evidence="history-apply" alt="Selecting an activity row restores its parameters. It does not replay the old output."><img class="fc-sharp" data-evidence="history-apply" alt="" aria-hidden="true" style="clip-path:inset(24.44140625% 34.13818359375% 69.68359375% 56.32812499999999%)"><span class="fc-ring" aria-hidden="true" style="left:56.32812499999999%;top:24.44140625%;width:9.53369140625%;height:5.875%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Selecting an activity row restores its parameters. It does not replay the old output.</figcaption></figure></section>
+<h2 id="dg-schedule">Create a report schedule</h2>
+<p>Use a schedule to save output for a reporting period. The schedule has no recipient field. Check its generated file before relying on automatic runs.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Schedules</h3><p>Open report Actions and choose Schedules.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedules"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Schedules manages automatic output for this report."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-24.0%"><img class="fc-background" data-evidence="schedules" alt="Schedules manages automatic output for this report."><img class="fc-sharp" data-evidence="schedules" alt="" aria-hidden="true" style="clip-path:inset(25.75% 1.640625% 70.25% 85.390625%)"><span class="fc-ring" aria-hidden="true" style="left:85.390625%;top:25.75%;width:12.968750000000002%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Schedules manages automatic output for this report.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose New Schedule</h3><p>Select New Schedule in the schedule sheet.</p><figure class="dg-shot dg-context-shot" data-shot-id="new-schedule"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge New Schedule opens the schedule settings."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="new-schedule" alt="New Schedule opens the schedule settings."><img class="fc-sharp" data-evidence="new-schedule" alt="" aria-hidden="true" style="clip-path:inset(4.408203125% 1.25% 91.591796875% 87.79052734375%)"><span class="fc-ring" aria-hidden="true" style="left:87.79052734375%;top:4.408203125%;width:10.95947265625%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>New Schedule opens the schedule settings.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose the frequency</h3><p>Set Frequency. The example chooses Weekly.</p><figure class="dg-shot dg-context-shot" data-shot-id="weekly"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the schedule frequency."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-149.6875%;top:-12.833333333333332%"><img class="fc-background" data-evidence="weekly" alt="Choose the schedule frequency."><img class="fc-sharp" data-evidence="weekly" alt="" aria-hidden="true" style="clip-path:inset(21.5625% 20.5078125% 74.4375% 70.2734375%)"><span class="fc-ring" aria-hidden="true" style="left:70.2734375%;top:21.5625%;width:9.21875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Choose the schedule frequency.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose its day</h3><p>For Weekly, choose Day of week. The example uses Mon. Monthly instead offers days 1 to 28.</p><figure class="dg-shot dg-context-shot" data-shot-id="weekday"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the weekday for the weekly schedule."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-149.6875%;top:-18.166666666666668%"><img class="fc-background" data-evidence="weekday" alt="Choose the weekday for the weekly schedule."><img class="fc-sharp" data-evidence="weekday" alt="" aria-hidden="true" style="clip-path:inset(23.5625% 20.5078125% 72.4375% 70.2734375%)"><span class="fc-ring" aria-hidden="true" style="left:70.2734375%;top:23.5625%;width:9.21875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Choose the weekday for the weekly schedule.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Choose the output format</h3><p>Set Output format to CSV, XLSX or PDF. The example uses PDF.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedule-format"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the saved output format."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-149.6875%;top:-55.50000000000001%"><img class="fc-background" data-evidence="schedule-format" alt="Choose the saved output format."><img class="fc-sharp" data-evidence="schedule-format" alt="" aria-hidden="true" style="clip-path:inset(37.5625% 20.5078125% 58.4375% 70.2734375%)"><span class="fc-ring" aria-hidden="true" style="left:70.2734375%;top:37.5625%;width:9.21875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Choose the saved output format.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Save the schedule</h3><p>Open the schedule editor Actions dots and choose Save. The date window is calculated at run time rather than saved as fixed dates.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedule-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The schedule editor has its own Actions menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="schedule-actions" alt="The schedule editor has its own Actions menu."><img class="fc-sharp" data-evidence="schedule-actions" alt="" aria-hidden="true" style="clip-path:inset(3.1582031250000004% 3.75% 92.841796875% 93.75%)"><span class="fc-ring" aria-hidden="true" style="left:93.75%;top:3.1582031250000004%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>The schedule editor has its own Actions menu.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="schedule-save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Save records the schedule."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="schedule-save" alt="Save records the schedule."><img class="fc-sharp" data-evidence="schedule-save" alt="" aria-hidden="true" style="clip-path:inset(8.28125% 4.140625% 87.71875% 84.140625%)"><span class="fc-ring" aria-hidden="true" style="left:84.140625%;top:8.28125%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Save records the schedule.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The list shows the frequency, format, enabled switch and next due time.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="schedule-saved"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The saved schedule shows its cadence, format and next due time."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-113.4716796875%;top:0.0%"><img class="fc-background" data-evidence="schedule-saved" alt="The saved schedule shows its cadence, format and next due time."><img class="fc-sharp" data-evidence="schedule-saved" alt="" aria-hidden="true" style="clip-path:inset(15.083984375% 35.364990234375% 82.416015625% 57.96875%)"><span class="fc-ring" aria-hidden="true" style="left:57.96875%;top:15.083984375%;width:6.666259765625%;height:2.5%"></span></span></span></button><figcaption>The saved schedule shows its cadence, format and next due time.</figcaption></figure>
+<h2 id="dg-schedule-run">Run a schedule now and download its saved output</h2>
+<p>Run now is useful for checking a new schedule. A queued message does not prove success. Inspect Scheduled Runs for the outcome.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Queue the run</h3><p>Keep the schedule enabled and select Run now. A disabled schedule does not execute even if it shows a queued message.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedule-run"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Run now queues an immediate run. Check Scheduled Runs for the result."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="schedule-run" alt="Run now queues an immediate run. Check Scheduled Runs for the result."><img class="fc-sharp" data-evidence="schedule-run" alt="" aria-hidden="true" style="clip-path:inset(15.365234375% 8.515625% 80.634765625% 88.984375%)"><span class="fc-ring" aria-hidden="true" style="left:88.984375%;top:15.365234375%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Run now queues an immediate run. Check Scheduled Runs for the result.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Scheduled Runs</h3><p>Close Schedules. Open report Actions, Run History and the Scheduled Runs tab. Reopen the sheet if the result has not arrived yet.</p><figure class="dg-shot dg-context-shot" data-shot-id="scheduled-tab"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Scheduled Runs separates saved schedule outputs from interactive activity."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-130.98307291666666%;top:0.0%"><img class="fc-background" data-evidence="scheduled-tab" alt="Scheduled Runs separates saved schedule outputs from interactive activity."><img class="fc-sharp" data-evidence="scheduled-tab" alt="" aria-hidden="true" style="clip-path:inset(15.003906249999998% 27.18017578125% 80.74609375% 62.91748046875%)"><span class="fc-ring" aria-hidden="true" style="left:62.91748046875%;top:15.003906249999998%;width:9.90234375%;height:4.25%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Scheduled Runs separates saved schedule outputs from interactive activity.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read the status and period</h3><p>Check OK or Failed and the recorded reporting period. A failed attempt has no output file.</p><figure class="dg-shot dg-context-shot" data-shot-id="scheduled-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Check OK and the recorded date window before downloading."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-128.49609375%;top:-24.010416666666668%"><img class="fc-background" data-evidence="scheduled-result" alt="Check OK and the recorded date window before downloading."><img class="fc-sharp" data-evidence="scheduled-result" alt="" aria-hidden="true" style="clip-path:inset(26.37890625% 31.683349609375% 70.87109375% 65.555419921875%)"><span class="fc-ring" aria-hidden="true" style="left:65.555419921875%;top:26.37890625%;width:2.76123046875%;height:2.75%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Check OK and the recorded date window before downloading.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Download the successful output</h3><p>Select Download on a successful saved run.</p><figure class="dg-shot dg-context-shot" data-shot-id="scheduled-download"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Download fetches the successful saved output."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-24.010416666666668%"><img class="fc-background" data-evidence="scheduled-download" alt="Download fetches the successful saved output."><img class="fc-sharp" data-evidence="scheduled-download" alt="" aria-hidden="true" style="clip-path:inset(26.003906249999996% 3.597412109375% 70.49609375% 88.326416015625%)"><span class="fc-ring" aria-hidden="true" style="left:88.326416015625%;top:26.003906249999996%;width:8.076171875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Download fetches the successful saved output.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The downloaded PDF is the saved schedule output. It does not replace the result currently displayed on the report page.</p></div>
+<h2 id="dg-schedule-manage">Disable, change or remove a schedule</h2>
+<p>Use the controls on the correct schedule row. The review turns its disposable schedule off and removes it after checking the saved output.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Disable automatic runs</h3><p>Open Schedules and turn off the row switch. A displayed Next date does not override the disabled switch.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedule-toggle"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Turn the switch off to stop future automatic runs."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="schedule-toggle" alt="Turn the switch off to stop future automatic runs."><img class="fc-sharp" data-evidence="schedule-toggle" alt="" aria-hidden="true" style="clip-path:inset(16.115234375% 11.953125% 81.384765625% 85.234375%)"><span class="fc-ring" aria-hidden="true" style="left:85.234375%;top:16.115234375%;width:2.8125%;height:2.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Turn the switch off to stop future automatic runs.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Edit the saved schedule</h3><p>Select Edit on the row.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedule-edit"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Edit changes the saved cadence, filters or format."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="schedule-edit" alt="Edit changes the saved cadence, filters or format."><img class="fc-sharp" data-evidence="schedule-edit" alt="" aria-hidden="true" style="clip-path:inset(15.365234375% 5.078125% 80.634765625% 92.421875%)"><span class="fc-ring" aria-hidden="true" style="left:92.421875%;top:15.365234375%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Edit changes the saved cadence, filters or format.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Save the intended changes</h3><p>Change the required settings, then use that editor's Actions and Save. The example changes its disabled schedule format to XLSX.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedule-edit-format"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge This disabled example changes the future format to XLSX."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-21.177083333333332%"><img class="fc-background" data-evidence="schedule-edit-format" alt="This disabled example changes the future format to XLSX."><img class="fc-sharp" data-evidence="schedule-edit-format" alt="" aria-hidden="true" style="clip-path:inset(24.44140625% 1.875% 71.05859375% 69.89013671875%)"><span class="fc-ring" aria-hidden="true" style="left:69.89013671875%;top:24.44140625%;width:28.23486328125%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>This disabled example changes the future format to XLSX.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="schedule-save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Save records the schedule."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="schedule-save" alt="Save records the schedule."><img class="fc-sharp" data-evidence="schedule-save" alt="" aria-hidden="true" style="clip-path:inset(8.28125% 4.140625% 87.71875% 84.140625%)"><span class="fc-ring" aria-hidden="true" style="left:84.140625%;top:8.28125%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Save records the schedule.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Remove an unneeded schedule</h3><p>Select Delete on the correct schedule row.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedule-delete"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Delete removes only the selected schedule."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="schedule-delete" alt="Delete removes only the selected schedule."><img class="fc-sharp" data-evidence="schedule-delete" alt="" aria-hidden="true" style="clip-path:inset(15.365234375% 1.640625% 80.634765625% 95.859375%)"><span class="fc-ring" aria-hidden="true" style="left:95.859375%;top:15.365234375%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">4</span></span></span></span></button><figcaption>Delete removes only the selected schedule.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Confirm its removal</h3><p>Read the confirmation and select Delete when you intend to remove that schedule.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedule-delete-confirm"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Confirm the schedule removal when it is no longer needed."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-117.24283854166666%;top:-94.421875%"><img class="fc-background" data-evidence="schedule-delete-confirm" alt="Confirm the schedule removal when it is no longer needed."><img class="fc-sharp" data-evidence="schedule-delete-confirm" alt="" aria-hidden="true" style="clip-path:inset(51.908203125% 34.453125% 43.591796875% 59.88525390625%)"><span class="fc-ring" aria-hidden="true" style="left:59.88525390625%;top:51.908203125%;width:5.66162109375%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Confirm the schedule removal when it is no longer needed.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The selected schedule disappears. The review leaves no enabled or saved schedule for its report.</p></div>
+<h2 id="dg-pin">Keep a report easy to find</h2>
+<p>Pins arrange the library in this browser. They do not change report data.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Pin the report</h3><p>Point at the report row and select its star. It also appears under Pinned.</p><figure class="dg-shot dg-context-shot" data-shot-id="pin"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Pin the report to keep it near the top of this browser library."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-42.70833333333333%;top:0.0%"><img class="fc-background" data-evidence="pin" alt="Pin the report to keep it near the top of this browser library."><img class="fc-sharp" data-evidence="pin" alt="" aria-hidden="true" style="clip-path:inset(16.5% 64.21875% 80.75% 33.75%)"><span class="fc-ring" aria-hidden="true" style="left:33.75%;top:16.5%;width:2.03125%;height:2.75%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Pin the report to keep it near the top of this browser library.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Remove the pin</h3><p>Select the filled star again when you no longer need it pinned.</p><figure class="dg-shot dg-context-shot" data-shot-id="unpin"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Select the filled star again to remove the pin."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-42.70833333333333%;top:0.0%"><img class="fc-background" data-evidence="unpin" alt="Select the filled star again to remove the pin."><img class="fc-sharp" data-evidence="unpin" alt="" aria-hidden="true" style="clip-path:inset(16.5% 64.21875% 80.75% 33.75%)"><span class="fc-ring" aria-hidden="true" style="left:33.75%;top:16.5%;width:2.03125%;height:2.75%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Select the filled star again to remove the pin.</figcaption></figure></section>
+<h2 id="dg-edit">Open the linked design</h2>
+<p>Use this when an authorised manager needs to change layout or template filters.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Edit template</h3><p>Open report Actions and select Edit template.</p><figure class="dg-shot dg-context-shot" data-shot-id="edit-template"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Edit template opens the linked Report Designer layout."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-37.666666666666664%"><img class="fc-background" data-evidence="edit-template" alt="Edit template opens the linked Report Designer layout."><img class="fc-sharp" data-evidence="edit-template" alt="" aria-hidden="true" style="clip-path:inset(30.875000000000004% 1.640625% 65.125% 85.390625%)"><span class="fc-ring" aria-hidden="true" style="left:85.390625%;top:30.875000000000004%;width:12.968750000000002%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Edit template opens the linked Report Designer layout.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the design name</h3><p>Confirm that Report Designer opened the intended linked design before editing it.</p><figure class="dg-shot dg-context-shot" data-shot-id="edit-template-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The linked template opens for an authorised manager."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-65.53548177083334%;top:0.0%"><img class="fc-background" data-evidence="edit-template-result" alt="The linked template opens for an authorised manager."><img class="fc-sharp" data-evidence="edit-template-result" alt="" aria-hidden="true" style="clip-path:inset(6.4375% 51.785888671875% 89.5625% 38.4375%)"><span class="fc-ring" aria-hidden="true" style="left:38.4375%;top:6.4375%;width:9.776611328125%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>The linked template opens for an authorised manager.</figcaption></figure></section>
+<h2 id="dg-unpublish">Check an Unpublish attempt</h2>
+<p>Unpublish is intended to hide an entry while keeping its design. In this review, a newly created custom entry returned Action failed and stayed published. This current failure is documented here; it was not repaired.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Unpublish only for the intended entry</h3><p>Open that report's Actions and select Unpublish when you intend to hide it. The pictured entry is disposable test content.</p><figure class="dg-shot dg-context-shot" data-shot-id="unpublish"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Unpublish attempts to remove the report from the library."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-51.33333333333333%"><img class="fc-background" data-evidence="unpublish" alt="Unpublish attempts to remove the report from the library."><img class="fc-sharp" data-evidence="unpublish" alt="" aria-hidden="true" style="clip-path:inset(36.0% 1.640625% 60.0% 85.390625%)"><span class="fc-ring" aria-hidden="true" style="left:85.390625%;top:36.0%;width:12.968750000000002%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Unpublish attempts to remove the report from the library.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the actual outcome</h3><p>If Action failed appears, the entry has not been unpublished. Keep its name or identifier and report the problem. Do not treat this as a successful removal.</p><figure class="dg-shot dg-context-shot" data-shot-id="unpublish-failed"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge New custom reports currently can show Action failed instead of unpublishing."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-153.9111328125%;top:-166.66666666666669%"><img class="fc-background" data-evidence="unpublish-failed" alt="New custom reports currently can show Action failed instead of unpublishing."><img class="fc-sharp" data-evidence="unpublish-failed" alt="" aria-hidden="true" style="clip-path:inset(92.4375% 20.504150390625% 5.125% 73.4375%)"><span class="fc-ring" aria-hidden="true" style="left:73.4375%;top:92.4375%;width:6.058349609375%;height:2.4375%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>New custom reports currently can show Action failed instead of unpublishing.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The reviewed new-entry case failed with HTTP 400 and remained published. Other report-management actions do not establish that Unpublish succeeded.</p></div>
+<h2 id="dg-delete">Delete an unneeded library report</h2>
+<p>Delete permanently removes the selected library definition. Check that the team no longer needs it. The example removes a disposable entry and keeps the main report and its design.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Delete report</h3><p>Open the unneeded report's Actions and select Delete report.</p><figure class="dg-shot dg-context-shot" data-shot-id="delete-report"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Delete report permanently removes the selected library entry."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-62.0%"><img class="fc-background" data-evidence="delete-report" alt="Delete report permanently removes the selected library entry."><img class="fc-sharp" data-evidence="delete-report" alt="" aria-hidden="true" style="clip-path:inset(40.0% 1.640625% 56.00000000000001% 85.390625%)"><span class="fc-ring" aria-hidden="true" style="left:85.390625%;top:40.0%;width:12.968750000000002%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Delete report permanently removes the selected library entry.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the named action</h3><p>Read the confirmation, then choose Delete report only when you intend that removal.</p><figure class="dg-shot dg-context-shot" data-shot-id="delete-report-confirm"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Confirm only the report entry you intend to remove."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-113.02734375000001%;top:-107.08854166666666%"><img class="fc-background" data-evidence="delete-report-confirm" alt="Confirm only the report entry you intend to remove."><img class="fc-sharp" data-evidence="delete-report-confirm" alt="" aria-hidden="true" style="clip-path:inset(56.65820312499999% 34.453125% 38.841796875% 56.7236328125%)"><span class="fc-ring" aria-hidden="true" style="left:56.7236328125%;top:56.65820312499999%;width:8.8232421875%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Confirm only the report entry you intend to remove.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The entry disappears from the library. Its linked design remains available in Report Designer.</p></div>
+<h2 id="dg-phone">Run an existing report on a phone</h2>
+<p>The library starts folded into a rail. Use it to choose the report, then give the result more screen space.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Expand the library</h3><p>Select Expand library on the narrow rail.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-library"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Expand the library rail on a phone."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:0.0%"><img class="fc-background" data-evidence="phone-library" alt="Expand the library rail on a phone."><img class="fc-sharp" data-evidence="phone-library" alt="" aria-hidden="true" style="clip-path:inset(6.896551724137931% 90.4% 89.16256157635468% 1.0666666666666667%)"><span class="fc-ring" aria-hidden="true" style="left:1.0666666666666667%;top:6.896551724137931%;width:8.533333333333333%;height:3.9408866995073892%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Expand the library rail on a phone.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Find and choose the report</h3><p>Search its name and select it. Collapse the library afterward.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-select"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Search for and open the report."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:-11.013333333333334%"><img class="fc-background" data-evidence="phone-select" alt="Search for and open the report."><img class="fc-sharp" data-evidence="phone-select" alt="" aria-hidden="true" style="clip-path:inset(16.379310344827587% 68.70833333333334% 81.1576354679803% 3.733333333333334%)"><span class="fc-ring" aria-hidden="true" style="left:3.733333333333334%;top:16.379310344827587%;width:27.558333333333334%;height:2.4630541871921183%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Search for and open the report.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose dates</h3><p>Open report Actions and Parameters. Open the date-range control and choose a preset or calendar dates. Presets wrap above a single month on a phone.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-dates"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Presets wrap above the single-month phone calendar."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:-61.040000000000006%"><img class="fc-background" data-evidence="phone-dates" alt="Presets wrap above the single-month phone calendar."><img class="fc-sharp" data-evidence="phone-dates" alt="" aria-hidden="true" style="clip-path:inset(30.08004926108374% 73.0375% 65.97906403940887% 7.3999999999999995%)"><span class="fc-ring" aria-hidden="true" style="left:7.3999999999999995%;top:30.08004926108374%;width:19.5625%;height:3.9408866995073892%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Presets wrap above the single-month phone calendar.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Run with the selected values</h3><p>Select Run in the parameter sheet.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-run"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Run remains available in the report parameter sheet."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:-25.64%"><img class="fc-background" data-evidence="phone-run" alt="Run remains available in the report parameter sheet."><img class="fc-sharp" data-evidence="phone-run" alt="" aria-hidden="true" style="clip-path:inset(19.61591748768473% 4.266666666666667% 75.95058497536947% 80.35%)"><span class="fc-ring" aria-hidden="true" style="left:80.35%;top:19.61591748768473%;width:15.383333333333333%;height:4.433497536945813%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">4</span></span></span></span></button><figcaption>Run remains available in the report parameter sheet.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Read Spreadsheet</h3><p>After the run completes, select Spreadsheet and inspect the values. Wide tables can scroll horizontally.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Spreadsheet shows the same completed query result on a phone."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:-85.30666666666666%"><img class="fc-background" data-evidence="phone-result" alt="Spreadsheet shows the same completed query result on a phone."><img class="fc-sharp" data-evidence="phone-result" alt="" aria-hidden="true" style="clip-path:inset(36.314655172413794% 0.0% 58.205049261083744% 10.933333333333334%)"><span class="fc-ring" aria-hidden="true" style="left:10.933333333333334%;top:36.314655172413794%;width:89.06666666666668%;height:5.4802955665024635%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">5</span></span></span></span></button><figcaption>Spreadsheet shows the same completed query result on a phone.</figcaption></figure></section>
+<h2 id="dg-windows">Understand schedule time and date windows</h2>
+<p>Report schedules run at 06:00 UTC. This editor has no separate time or timezone setting. Next and Last display in the browser's timezone. A report's own timezone filter controls data grouping, not the schedule clock.</p>
+<p>A newly saved Daily schedule starts tomorrow. Weekly uses the next chosen weekday, never today. Monthly uses the chosen day next month. Quarterly uses the first day of the next calendar quarter.</p>
+<table><thead><tr><th>Frequency</th><th>Date window at run time</th></tr></thead><tbody><tr><td>Daily</td><td>The previous UTC day.</td></tr><tr><td>Weekly</td><td>The previous seven UTC days, ending yesterday.</td></tr><tr><td>Monthly</td><td>The previous calendar month in UTC.</td></tr><tr><td>Quarterly</td><td>The previous calendar quarter in UTC.</td></tr></tbody></table>
+<p>Run now uses that same computed window. It does not reuse the report page's chosen date range. The reporting query should include the complete end day. The review's weekly run covered 5 to 11 November 2026.</p>
+<h2 id="dg-definitions">Understand filters and report data</h2>
+<p>Filters come from the design's template parameters. Change them in Report Designer. The primary query supplies Spreadsheet rows; the design's element bindings supply Document content. A report can therefore contain several bound tables while Spreadsheet shows its primary query.</p>
+<p>The current Reports page supplies date filters as flat from and to values. A workbench Custom Query declaring one nested daterange parameter fails when bound directly here. The existing reporting pattern uses two Text query parameters named from and to, with one Date range control on the template. See Report Designer.</p>
+<p>Different reports require different received data. A report needing specimens, organisms or susceptibility results cannot invent them from an unrelated order count. An empty result can be correct for the chosen filters or available source data.</p>
+<p>For built-in reports, Facility generally means the testing laboratory. Read that report's filter help and query before assuming it groups the clinic that sent a request.</p>
+<h2 id="dg-cli">Run a report from the CLI</h2>
+<p>Read <a href="start-here-review.html">Start here</a> for your platform's launcher. Use your actual installation folder, such as <code>~/Downloads/openldr_ce</code> or <code>C:\openldr_ce</code>. A development checkout uses <code>pnpm openldr</code> instead of <code>openldr</code>.</p>
+<pre><code>openldr report list
+openldr report run REPORT_ID --param from=2026-01-01 --param to=2026-11-12 --json
+openldr report run REPORT_ID --param from=2026-01-01 --param to=2026-11-12 --format pdf --out data/report.pdf</code></pre>
+<p>Replace REPORT_ID with the entry listed by the first command. Replace dates and output paths with the values you intend. The reviewed CLI JSON run returned one row with requests equal to zero.</p>
+<h2 id="dg-practice">Optional review output</h2>
+<p>Normal use needs your reports and received data. No documentation bundle is required. To build the same small practice report, use the optional reporting query in <a href="report-designer-review.html#dg-practice">Report Designer</a>.</p>
+<p>The real review downloads are <a href="reports-evidence/request-summary.pdf" download>the interactive PDF</a>, <a href="reports-evidence/request-summary.csv" download>CSV</a>, <a href="reports-evidence/request-summary.xlsx" download>XLSX</a> and <a href="reports-evidence/scheduled-request-summary.pdf" download>the saved scheduled PDF</a>. They contain only a zero request count.</p>
+<h2 id="dg-help">Troubleshooting</h2>
+<p><strong>The library is empty.</strong> Clear its search and check View reports. A design publication alone does not create a library entry.</p>
+<p><strong>Run is unavailable.</strong> Complete required filters and check Run reports. A custom query can still require values that the template did not mark required.</p>
+<p><strong>A report returns no rows.</strong> Check the date window, facility choice and the source records that report needs. A sample file is not a prerequisite for real reporting.</p>
+<p><strong>A custom report says required parameter: period.</strong> Check the date-parameter shape described above. A successful designer preview does not prove a Reports run.</p>
+<p><strong>A scheduled run is missing.</strong> Check the enabled switch, then close and reopen Scheduled Runs. A queued message alone is not proof of execution.</p>
+<p><strong>A scheduled run is Failed.</strong> On a computer, point at its status to read the recorded error. Correct the actual settings and try Run now again.</p>
+<p><strong>Unpublish says Action failed.</strong> The reviewed newly created report failed this action and stayed published. Report its identifier. This guide does not claim that operation succeeded.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="report-designer-review.html">Report Designer</a> defines page layout and creates library entries. <a href="query-review.html">Query</a> defines data. <a href="report-pipeline-review.html">Scheduled reports with workflows</a> covers custom workbook and email workflows.</p>
+</article>
+
+      <nav class="dg-onpage" aria-label="On this page"><p>On this page</p><a href="#dg-find">Find and open a report</a><a href="#dg-run">Choose filters and run the report</a><a href="#dg-download">Download the document and spreadsheet</a><a href="#dg-table">Filter and arrange Spreadsheet rows</a><a href="#dg-refresh">Refresh a displayed result</a><a href="#dg-history">Inspect interactive run history</a><a href="#dg-schedule">Create a report schedule</a><a href="#dg-schedule-run">Run a schedule now and download its saved output</a><a href="#dg-schedule-manage">Disable, change or remove a schedule</a><a href="#dg-pin">Keep a report easy to find</a><a href="#dg-edit">Open the linked design</a><a href="#dg-unpublish">Check an Unpublish attempt</a><a href="#dg-delete">Delete an unneeded library report</a><a href="#dg-phone">Run an existing report on a phone</a><a href="#dg-windows">Understand schedule time and date windows</a><a href="#dg-definitions">Understand filters and report data</a><a href="#dg-cli">Run a report from the CLI</a><a href="#dg-practice">Optional review output</a><a href="#dg-help">Troubleshooting</a><a href="#dg-related">Related guides</a><small>Click any screenshot to enlarge it.</small></nav>
+     </div>
+    </div>
+   </section>
+  </div>
+  <div class="dg-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" hidden><button type="button" class="cursor-interaction" data-close-lightbox>Close</button><div data-lightbox-content></div></div>
+ </div>
+</div>
+<script type="application/json" id="facilities-evidence-assets">{"open-page":"./reports-evidence/open-page.png","search":"./reports-evidence/search.png","select-report":"./reports-evidence/select-report.png","report-actions":"./reports-evidence/report-actions.png","first-parameters":"./reports-evidence/first-parameters.png","first-period":"./reports-evidence/first-period.png","first-preset":"./reports-evidence/first-preset.png","first-run":"./reports-evidence/first-run.png","document":"./reports-evidence/document.png","pdf-download":"./reports-evidence/pdf-download.png","spreadsheet-tab":"./reports-evidence/spreadsheet-tab.png","spreadsheet-result":"./reports-evidence/spreadsheet-result.png","export-csv":"./reports-evidence/export-csv.png","export-xlsx":"./reports-evidence/export-xlsx.png","filter-add":"./reports-evidence/filter-add.png","filter-column":"./reports-evidence/filter-column.png","filter-value":"./reports-evidence/filter-value.png","filter-apply":"./reports-evidence/filter-apply.png","sort-add":"./reports-evidence/sort-add.png","sort-order":"./reports-evidence/sort-order.png","columns":"./reports-evidence/columns.png","column-options":"./reports-evidence/column-options.png","reset-table":"./reports-evidence/reset-table.png","pagination":"./reports-evidence/pagination.png","refresh":"./reports-evidence/refresh.png","history":"./reports-evidence/history.png","history-rows":"./reports-evidence/history-rows.png","history-apply":"./reports-evidence/history-apply.png","schedules":"./reports-evidence/schedules.png","new-schedule":"./reports-evidence/new-schedule.png","weekly":"./reports-evidence/weekly.png","weekday":"./reports-evidence/weekday.png","schedule-format":"./reports-evidence/schedule-format.png","schedule-actions":"./reports-evidence/schedule-actions.png","schedule-save":"./reports-evidence/schedule-save.png","schedule-saved":"./reports-evidence/schedule-saved.png","schedule-run":"./reports-evidence/schedule-run.png","scheduled-tab":"./reports-evidence/scheduled-tab.png","scheduled-result":"./reports-evidence/scheduled-result.png","scheduled-download":"./reports-evidence/scheduled-download.png","schedule-toggle":"./reports-evidence/schedule-toggle.png","schedule-edit":"./reports-evidence/schedule-edit.png","schedule-edit-format":"./reports-evidence/schedule-edit-format.png","schedule-delete":"./reports-evidence/schedule-delete.png","schedule-delete-confirm":"./reports-evidence/schedule-delete-confirm.png","pin":"./reports-evidence/pin.png","unpin":"./reports-evidence/unpin.png","edit-template":"./reports-evidence/edit-template.png","edit-template-result":"./reports-evidence/edit-template-result.png","unpublish":"./reports-evidence/unpublish.png","unpublish-failed":"./reports-evidence/unpublish-failed.png","delete-report":"./reports-evidence/delete-report.png","delete-report-confirm":"./reports-evidence/delete-report-confirm.png","phone-library":"./reports-evidence/phone-library.png","phone-select":"./reports-evidence/phone-select.png","phone-dates":"./reports-evidence/phone-dates.png","phone-run":"./reports-evidence/phone-run.png","phone-result":"./reports-evidence/phone-result.png"}</script>
+<script>
+(() => {
+ const root = document.getElementById('reports-evidence-guide');
+ const assets = JSON.parse(document.getElementById('facilities-evidence-assets').textContent);
+ root.querySelectorAll('img[data-evidence]').forEach(img=>{img.loading='lazy';img.decoding='async';img.src=assets[img.dataset.evidence];});
+ const pane = root.querySelector('[data-reading-pane]');
+ let previewTheme='dark';
+ function applyTheme(){root.style.colorScheme=previewTheme;root.querySelector('[data-theme-toggle]').setAttribute('aria-label','Switch to '+(previewTheme==='dark'?'light':'dark')+' mode');}
+ applyTheme();
+ root.querySelector('[data-theme-toggle]').addEventListener('click',()=>{previewTheme=previewTheme==='dark'?'light':'dark';applyTheme();});
+ const box = root.querySelector('.dg-lightbox');
+ let previousFocus = null;
+ function closeBox() { box.hidden = true; root.querySelector('.dg-main').inert=false; if(previousFocus) previousFocus.focus(); }
+ root.querySelector('[data-close-lightbox]').addEventListener('click', closeBox);
+ root.addEventListener('keydown', event => { if(event.key==='Escape' && !box.hidden) closeBox(); if(event.key==='Tab' && !box.hidden) {event.preventDefault();box.querySelector('button').focus();} });
+ root.querySelectorAll('[data-enlarge]').forEach(button => button.addEventListener('click', () => {
+  previousFocus = button;
+  const content = box.querySelector('[data-lightbox-content]');
+  const frame = button.querySelector('.fc-screenshot');
+  content.replaceChildren();
+  content.className = frame ? 'dg-context-shot' : '';
+  if(frame) {
+   content.dataset.shotId = button.closest('[data-shot-id]').dataset.shotId;
+   content.append(frame.cloneNode(true));
+  } else {
+   delete content.dataset.shotId;
+   content.append(button.querySelector('img').cloneNode(true));
+  }
+  box.hidden = false;
+  root.querySelector('.dg-main').inert=true;
+  box.querySelector('button').focus();
+ }));
+ root.querySelectorAll('a[href^="#dg-"]').forEach(link => link.addEventListener('click', event => {
+  const target = root.querySelector(link.getAttribute('href'));
+  if(!target) return;
+  event.preventDefault();
+  pane.scrollTo({top:target.getBoundingClientRect().top-pane.getBoundingClientRect().top+pane.scrollTop-12,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});
+  root.querySelectorAll('.dg-onpage a').forEach(item => item.removeAttribute('aria-current'));
+  if(link.closest('.dg-onpage')) link.setAttribute('aria-current','location');
+ }));
+ root.querySelectorAll('[data-play-loop]').forEach(button => button.addEventListener('click', () => {
+  const video=button.closest('figure').querySelector('video');
+  if(video.paused) video.play().then(()=>button.textContent='Pause loop').catch(()=>button.textContent='Play loop');
+  else {video.pause();button.textContent='Play loop';}
+ }));
+ root.querySelectorAll('.dg-loop').forEach(figure=>{
+  const video=figure.querySelector('video');
+  const button=figure.querySelector('[data-play-loop]');
+  video.addEventListener('play',()=>{button.textContent='Pause loop';});
+  video.addEventListener('pause',()=>{button.textContent='Play loop';});
+  if(!matchMedia('(prefers-reduced-motion:reduce)').matches) {
+   video.autoplay=true;
+   video.play().catch(()=>{button.textContent='Play loop';});
+  }
+ });
+ const expand = root.querySelector('[data-expand]');
+ root.querySelector('[data-collapse]').addEventListener('click',()=>{root.classList.add('dg-folded');expand.hidden=false;});
+ expand.addEventListener('click',()=>{root.classList.remove('dg-folded');expand.hidden=true;});
+ root.querySelector('[data-search]').addEventListener('input',event=>{
+  const query=event.target.value.trim().toLowerCase();
+  root.querySelectorAll('.dg-navitem').forEach(item=>{item.hidden=!!query&&!item.textContent.toLowerCase().includes(query);});
+ });
+
+})();
+</script>
+<style>
+#reports-evidence-guide .dg-context-shot { max-width:500px; }
+#reports-evidence-guide .fc-screenshot { display:block; position:relative; width:100%; aspect-ratio:8/5; container-type:inline-size; overflow:hidden; background:var(--dg-bg); }
+#reports-evidence-guide .dg-context-shot img { position:absolute; inset:0; display:block; width:100%; height:100%; max-height:none; object-fit:fill; }
+#reports-evidence-guide .fc-scene { position:absolute; display:block; }
+#reports-evidence-guide .fc-background { filter:blur(.25cqw); opacity:.9; }
+#reports-evidence-guide .fc-sharp { pointer-events:none; }
+#reports-evidence-guide .fc-ring { position:absolute; display:block; border:2px solid var(--dg-link); border-radius:3px; pointer-events:none; }
+#reports-evidence-guide .fc-marker { position:absolute; right:calc(100% + 3px); top:-4px; display:flex; align-items:center; justify-content:center; width:19px; height:19px; border-radius:50%; background:var(--dg-link); color:var(--dg-bg); font:500 11px/1 Arial,sans-serif; }
+#reports-evidence-guide [data-shot-id="open-dashboard"] .fc-marker { left:calc(100% + 3px); right:auto; }
+#reports-evidence-guide .dg-lightbox .dg-context-shot { margin:0; width:min(100%,calc((min(var(--guide-preview-height,840px),100dvh) - 64px)*1.6)); max-width:none; }
+</style>
+<style>#reports-evidence-guide .fc-marker{left:calc(100% + 3px);right:auto}#reports-evidence-guide .dg-head-icons{padding-right:0}@media(max-width:900px){#reports-evidence-guide .fc-marker{left:auto!important;right:4px!important}}</style>
+</body></html>

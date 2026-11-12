@@ -48,7 +48,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [x] Patients
 - [x] Forms
 - [x] Workflows
-- [ ] Reports
+- [x] Reports
 - [x] Activity
 - [x] Scheduled reports with workflows
 - [x] Custom Queries

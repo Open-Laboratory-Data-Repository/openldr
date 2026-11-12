@@ -1,0 +1,128 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Daily work</span><span>Run, export and schedule reports</span><span>About 30 minutes</span></div>
+<h1>Reports</h1>
+<p>Use Reports to run a library entry with filters, read its Document or Spreadsheet, export output and inspect its history. A schedule saves an output file for a reporting period. It does not email that file.</p>
+<p>Start with a report suited to your own received data. No documentation sample data is required. The pictures use the Request summary report created in Report Designer. Its test warehouse has zero requests, so the query returns one row containing zero.</p>
+<p>You need <strong>View reports</strong> to open the library, <strong>Run reports</strong> to execute entries and <strong>Export reports</strong> to download outputs. <strong>Edit report templates</strong> permits schedule management, Edit template and report-management actions.</p>
+<p>To add a library report, save a design and use Create report from this design in <a href="report-designer-review.html">Report Designer</a>. Publish revision alone does not add a library entry.</p>
+<h2 id="dg-find">Find and open a report</h2>
+<p>Use the report name and category to choose the intended entry before setting filters.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Reports</h3><p>Select Reports in the main menu.</p>__SHOT:open-page:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Search the library</h3><p>Enter part of the report name in Search reports. Clear it to restore the full library.</p>__SHOT:search:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Select the report</h3><p>Select its name under the category. The example is Request summary report under Operational.</p>__SHOT:select-report:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Open its actions</h3><p>Select Actions beside the selected report heading.</p>__SHOT:report-actions:4__</section>
+<h2 id="dg-run">Choose filters and run the report</h2>
+<p>Choose dates and other filters that answer your reporting question. The query behind the example includes both selected calendar endpoints.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Parameters</h3><p>Choose Parameters from the selected report Actions menu.</p>__SHOT:first-parameters:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the date range</h3><p>Select the Period control. Other reports may call this Date range or use different filters.</p>__SHOT:first-period:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose the reporting dates</h3><p>Choose a preset, such as This year, or use the month and year selectors and calendar to pick dates. Complete other required filters.</p>__SHOT:first-preset:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Run the report</h3><p>Select Run in the parameter sheet. Wait for the completed result.</p>__SHOT:first-run:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Document renders the report with the selected values. The zero in this example is a valid query result.</p></div>
+__SHOT:document:0__
+<h2 id="dg-download">Download the document and spreadsheet</h2>
+<p>Use Document for the printable layout and Spreadsheet for exact query rows. Their column labels can differ because a design can relabel printed columns.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Download the PDF</h3><p>In Document, use Download to save the PDF. Page arrows and zoom change your view.</p>__SHOT:pdf-download:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Spreadsheet</h3><p>Select Spreadsheet above the result.</p>__SHOT:spreadsheet-tab:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check the row values</h3><p>Read the column labels and actual cells before exporting. The example shows requests equal to zero.</p>__SHOT:spreadsheet-result:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Export CSV when you need the query output</h3><p>Select Export CSV. It re-runs the report query with the parameters that produced the displayed run. Spreadsheet filters and sorting do not apply to CSV. Source changes since the run can affect the file.</p>__SHOT:export-csv:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Export the filtered rows as XLSX</h3><p>Select Export XLSX. It uses the loaded result with Spreadsheet filters and sorting across all pages. It includes all result columns, including fields hidden on screen.</p>__SHOT:export-xlsx:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The browser downloads the chosen format. Choose the export whose row behavior matches your task.</p></div>
+<h2 id="dg-table">Filter and arrange Spreadsheet rows</h2>
+<p>These controls change the loaded Spreadsheet view. They do not change the report definition or the Document layout.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Add a filter</h3><p>Select Filter, then Add filter.</p>__SHOT:filter-add:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the column</h3><p>Select the result column to filter. The example has one requests column.</p>__SHOT:filter-column:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Set the rule value</h3><p>Choose an operator and enter its value. The example uses Equals and 0.</p>__SHOT:filter-value:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Apply the rule</h3><p>Select Apply to update the shown rows.</p>__SHOT:filter-apply:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Add a sort</h3><p>Select Sort, then Add sort and choose a result column.</p>__SHOT:sort-add:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Choose the direction</h3><p>Use Asc or Desc and select Apply. This example has one row, so its order does not visibly change.</p>__SHOT:sort-order:6__</section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Choose visible columns</h3><p>Open Columns and use its checkboxes. The last visible column cannot be hidden. Close the menu when finished.</p>__SHOT:columns:7____SHOT:column-options:7__</section>
+<section class="dg-step"><h3><span class="dg-number">8.</span> Reset or use the pages</h3><p>Reset clears the table rules and column changes. Use Rows per page and the arrows when the result spans more than one page.</p>__SHOT:reset-table:8____SHOT:pagination:8__</section>
+<h2 id="dg-refresh">Refresh a displayed result</h2>
+<p>Use this after data changes when you want the same reporting question run again.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Refresh</h3><p>Open the selected report Actions menu and choose Refresh. It uses the values that produced the displayed result, even if you have an unfinished parameter edit.</p>__SHOT:refresh:1__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The query runs again. The new count may match the earlier count.</p></div>
+<h2 id="dg-history">Inspect interactive run history</h2>
+<p>Use history to identify when a report was run or downloaded and which parameter values belonged to that run.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Run History</h3><p>Open report Actions and choose Run History.</p>__SHOT:history:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read Activity</h3><p>Check each format, row count, user and time. Preview is an interactive run; pdf, csv and xlsx identify downloads.</p>__SHOT:history-rows:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Restore a previous parameter choice</h3><p>Select an Activity row to put its parameters back into the report controls. Open Parameters and Run when you want a new result. Selecting history does not replay its stored output.</p>__SHOT:history-apply:3__</section>
+<h2 id="dg-schedule">Create a report schedule</h2>
+<p>Use a schedule to save output for a reporting period. The schedule has no recipient field. Check its generated file before relying on automatic runs.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Schedules</h3><p>Open report Actions and choose Schedules.</p>__SHOT:schedules:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose New Schedule</h3><p>Select New Schedule in the schedule sheet.</p>__SHOT:new-schedule:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose the frequency</h3><p>Set Frequency. The example chooses Weekly.</p>__SHOT:weekly:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose its day</h3><p>For Weekly, choose Day of week. The example uses Mon. Monthly instead offers days 1 to 28.</p>__SHOT:weekday:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Choose the output format</h3><p>Set Output format to CSV, XLSX or PDF. The example uses PDF.</p>__SHOT:schedule-format:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Save the schedule</h3><p>Open the schedule editor Actions dots and choose Save. The date window is calculated at run time rather than saved as fixed dates.</p>__SHOT:schedule-actions:6____SHOT:schedule-save:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The list shows the frequency, format, enabled switch and next due time.</p></div>
+__SHOT:schedule-saved:0__
+<h2 id="dg-schedule-run">Run a schedule now and download its saved output</h2>
+<p>Run now is useful for checking a new schedule. A queued message does not prove success. Inspect Scheduled Runs for the outcome.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Queue the run</h3><p>Keep the schedule enabled and select Run now. A disabled schedule does not execute even if it shows a queued message.</p>__SHOT:schedule-run:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Scheduled Runs</h3><p>Close Schedules. Open report Actions, Run History and the Scheduled Runs tab. Reopen the sheet if the result has not arrived yet.</p>__SHOT:scheduled-tab:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read the status and period</h3><p>Check OK or Failed and the recorded reporting period. A failed attempt has no output file.</p>__SHOT:scheduled-result:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Download the successful output</h3><p>Select Download on a successful saved run.</p>__SHOT:scheduled-download:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The downloaded PDF is the saved schedule output. It does not replace the result currently displayed on the report page.</p></div>
+<h2 id="dg-schedule-manage">Disable, change or remove a schedule</h2>
+<p>Use the controls on the correct schedule row. The review turns its disposable schedule off and removes it after checking the saved output.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Disable automatic runs</h3><p>Open Schedules and turn off the row switch. A displayed Next date does not override the disabled switch.</p>__SHOT:schedule-toggle:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Edit the saved schedule</h3><p>Select Edit on the row.</p>__SHOT:schedule-edit:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Save the intended changes</h3><p>Change the required settings, then use that editor's Actions and Save. The example changes its disabled schedule format to XLSX.</p>__SHOT:schedule-edit-format:3____SHOT:schedule-save:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Remove an unneeded schedule</h3><p>Select Delete on the correct schedule row.</p>__SHOT:schedule-delete:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Confirm its removal</h3><p>Read the confirmation and select Delete when you intend to remove that schedule.</p>__SHOT:schedule-delete-confirm:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The selected schedule disappears. The review leaves no enabled or saved schedule for its report.</p></div>
+<h2 id="dg-pin">Keep a report easy to find</h2>
+<p>Pins arrange the library in this browser. They do not change report data.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Pin the report</h3><p>Point at the report row and select its star. It also appears under Pinned.</p>__SHOT:pin:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Remove the pin</h3><p>Select the filled star again when you no longer need it pinned.</p>__SHOT:unpin:2__</section>
+<h2 id="dg-edit">Open the linked design</h2>
+<p>Use this when an authorised manager needs to change layout or template filters.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Edit template</h3><p>Open report Actions and select Edit template.</p>__SHOT:edit-template:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the design name</h3><p>Confirm that Report Designer opened the intended linked design before editing it.</p>__SHOT:edit-template-result:2__</section>
+<h2 id="dg-unpublish">Check an Unpublish attempt</h2>
+<p>Unpublish is intended to hide an entry while keeping its design. In this review, a newly created custom entry returned Action failed and stayed published. This current failure is documented here; it was not repaired.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Unpublish only for the intended entry</h3><p>Open that report's Actions and select Unpublish when you intend to hide it. The pictured entry is disposable test content.</p>__SHOT:unpublish:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the actual outcome</h3><p>If Action failed appears, the entry has not been unpublished. Keep its name or identifier and report the problem. Do not treat this as a successful removal.</p>__SHOT:unpublish-failed:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The reviewed new-entry case failed with HTTP 400 and remained published. Other report-management actions do not establish that Unpublish succeeded.</p></div>
+<h2 id="dg-delete">Delete an unneeded library report</h2>
+<p>Delete permanently removes the selected library definition. Check that the team no longer needs it. The example removes a disposable entry and keeps the main report and its design.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Delete report</h3><p>Open the unneeded report's Actions and select Delete report.</p>__SHOT:delete-report:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the named action</h3><p>Read the confirmation, then choose Delete report only when you intend that removal.</p>__SHOT:delete-report-confirm:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The entry disappears from the library. Its linked design remains available in Report Designer.</p></div>
+<h2 id="dg-phone">Run an existing report on a phone</h2>
+<p>The library starts folded into a rail. Use it to choose the report, then give the result more screen space.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Expand the library</h3><p>Select Expand library on the narrow rail.</p>__SHOT:phone-library:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Find and choose the report</h3><p>Search its name and select it. Collapse the library afterward.</p>__SHOT:phone-select:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose dates</h3><p>Open report Actions and Parameters. Open the date-range control and choose a preset or calendar dates. Presets wrap above a single month on a phone.</p>__SHOT:phone-dates:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Run with the selected values</h3><p>Select Run in the parameter sheet.</p>__SHOT:phone-run:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Read Spreadsheet</h3><p>After the run completes, select Spreadsheet and inspect the values. Wide tables can scroll horizontally.</p>__SHOT:phone-result:5__</section>
+<h2 id="dg-windows">Understand schedule time and date windows</h2>
+<p>Report schedules run at 06:00 UTC. This editor has no separate time or timezone setting. Next and Last display in the browser's timezone. A report's own timezone filter controls data grouping, not the schedule clock.</p>
+<p>A newly saved Daily schedule starts tomorrow. Weekly uses the next chosen weekday, never today. Monthly uses the chosen day next month. Quarterly uses the first day of the next calendar quarter.</p>
+<table><thead><tr><th>Frequency</th><th>Date window at run time</th></tr></thead><tbody><tr><td>Daily</td><td>The previous UTC day.</td></tr><tr><td>Weekly</td><td>The previous seven UTC days, ending yesterday.</td></tr><tr><td>Monthly</td><td>The previous calendar month in UTC.</td></tr><tr><td>Quarterly</td><td>The previous calendar quarter in UTC.</td></tr></tbody></table>
+<p>Run now uses that same computed window. It does not reuse the report page's chosen date range. The reporting query should include the complete end day. The review's weekly run covered 5 to 11 November 2026.</p>
+<h2 id="dg-definitions">Understand filters and report data</h2>
+<p>Filters come from the design's template parameters. Change them in Report Designer. The primary query supplies Spreadsheet rows; the design's element bindings supply Document content. A report can therefore contain several bound tables while Spreadsheet shows its primary query.</p>
+<p>The current Reports page supplies date filters as flat from and to values. A workbench Custom Query declaring one nested daterange parameter fails when bound directly here. The existing reporting pattern uses two Text query parameters named from and to, with one Date range control on the template. See Report Designer.</p>
+<p>Different reports require different received data. A report needing specimens, organisms or susceptibility results cannot invent them from an unrelated order count. An empty result can be correct for the chosen filters or available source data.</p>
+<p>For built-in reports, Facility generally means the testing laboratory. Read that report's filter help and query before assuming it groups the clinic that sent a request.</p>
+<h2 id="dg-cli">Run a report from the CLI</h2>
+<p>Read <a href="start-here-review.html">Start here</a> for your platform's launcher. Use your actual installation folder, such as <code>~/Downloads/openldr_ce</code> or <code>C:\openldr_ce</code>. A development checkout uses <code>pnpm openldr</code> instead of <code>openldr</code>.</p>
+<pre><code>openldr report list
+openldr report run REPORT_ID --param from=2026-01-01 --param to=2026-11-12 --json
+openldr report run REPORT_ID --param from=2026-01-01 --param to=2026-11-12 --format pdf --out data/report.pdf</code></pre>
+<p>Replace REPORT_ID with the entry listed by the first command. Replace dates and output paths with the values you intend. The reviewed CLI JSON run returned one row with requests equal to zero.</p>
+<h2 id="dg-practice">Optional review output</h2>
+<p>Normal use needs your reports and received data. No documentation bundle is required. To build the same small practice report, use the optional reporting query in <a href="report-designer-review.html#dg-practice">Report Designer</a>.</p>
+<p>The real review downloads are <a href="reports-evidence/request-summary.pdf" download>the interactive PDF</a>, <a href="reports-evidence/request-summary.csv" download>CSV</a>, <a href="reports-evidence/request-summary.xlsx" download>XLSX</a> and <a href="reports-evidence/scheduled-request-summary.pdf" download>the saved scheduled PDF</a>. They contain only a zero request count.</p>
+<h2 id="dg-help">Troubleshooting</h2>
+<p><strong>The library is empty.</strong> Clear its search and check View reports. A design publication alone does not create a library entry.</p>
+<p><strong>Run is unavailable.</strong> Complete required filters and check Run reports. A custom query can still require values that the template did not mark required.</p>
+<p><strong>A report returns no rows.</strong> Check the date window, facility choice and the source records that report needs. A sample file is not a prerequisite for real reporting.</p>
+<p><strong>A custom report says required parameter: period.</strong> Check the date-parameter shape described above. A successful designer preview does not prove a Reports run.</p>
+<p><strong>A scheduled run is missing.</strong> Check the enabled switch, then close and reopen Scheduled Runs. A queued message alone is not proof of execution.</p>
+<p><strong>A scheduled run is Failed.</strong> On a computer, point at its status to read the recorded error. Correct the actual settings and try Run now again.</p>
+<p><strong>Unpublish says Action failed.</strong> The reviewed newly created report failed this action and stayed published. Report its identifier. This guide does not claim that operation succeeded.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="report-designer-review.html">Report Designer</a> defines page layout and creates library entries. <a href="query-review.html">Query</a> defines data. <a href="report-pipeline-review.html">Scheduled reports with workflows</a> covers custom workbook and email workflows.</p>
+</article>

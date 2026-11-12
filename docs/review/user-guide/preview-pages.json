@@ -29,5 +29,6 @@
   "advanced-docs": "advanced-docs-review.html",
   "auth-providers": "auth-providers-review.html",
   "forms": "forms-review.html",
-  "report-designer": "report-designer-review.html"
+  "report-designer": "report-designer-review.html",
+  "reports": "reports-review.html"
 }
