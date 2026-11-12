@@ -310,3 +310,5 @@ The active capture installation is separate from the normal app:
 Never run the general sample reset commands against the populated installation.
 
 Next section is Test catalog. Remaining sections stay in preview until the operator approves publication.
+
+Facilities publication commit: 4e9981a0. Changelog generation and push follow this commit.

@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "4e9981a0",
+          "type": "feat",
+          "scope": "docs",
+          "title": "Publish Facilities guide with native step screenshots"
+        },
+        {
           "hash": "e0d8d59c",
           "type": "feat",
           "scope": "docs",

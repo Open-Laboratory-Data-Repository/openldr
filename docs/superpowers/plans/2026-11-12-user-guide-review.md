@@ -34,7 +34,7 @@ Record unsupported or untested actions rather than guessing. A physical phone is
 - [x] Copy the native images, add Facilities focus metadata and declare captured image names.
 - [x] Keep optional download files available through the public docs samples folder.
 - [x] Run documentation integrity tests, Studio typecheck, build and browser publication checks.
-- [ ] Commit on main. Run `pnpm make:changelog`, commit any resulting change, push and verify the remote SHA.
+- [x] Commit on main. Run `pnpm make:changelog`, commit any resulting change, push and verify the remote SHA.
 
 ## Remaining sections
 
