@@ -39,6 +39,7 @@ The selected tests passed 194 Studio, 46 server, 76 bootstrap, 8 reporting, 19 q
 20 permission, 22 logo and 29 web-doc checks. Two browser theme tests passed.
 Studio, bootstrap, server, reporting, permission and browser-test typechecks returned zero.
 Studio and web production builds returned zero. Existing dependency and bundle-size warnings remain.
+[Merged checks](bugfix-evidence/merged-checks.json) also passed 54 Studio, 46 server and 31 reporting-date tests on main.
 These checks cover the changed behavior. They are not a full repository test run.
 
 Run these scripts from the repository root against the isolated app on ports 3010 and 5190.
