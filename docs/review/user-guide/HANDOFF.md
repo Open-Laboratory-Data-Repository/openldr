@@ -1,5 +1,9 @@
 ## Latest checkpoint, 2026-11-12
 
+The latest navigation change places Version below Search with its value on the right.
+Phone documentation navigation opens as a Sheet over the article and closes after guide selection.
+See [navigation validation](DOCS-NAVIGATION-VALIDATION.md) for commands, window sizes and screenshots.
+
 The seven approved app repairs and task-only contents menu are recorded in [repair validation](BUGFIX-VALIDATION.md).
 Repair commit `30d9e025` and changelog checkpoint `a4220d3c` reached remote main.
 Merged checks passed 54 Studio, 46 server and 31 reporting-date tests.

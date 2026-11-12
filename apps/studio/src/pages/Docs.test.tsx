@@ -286,4 +286,39 @@ describe('DocsLayout narrow viewport', () => {
     resizeTo(375);
     expect(screen.getByRole('button', { name: 'Expand documentation sidebar' })).toBeInTheDocument();
   });
+
+  it('opens phone navigation as a sheet and closes it after choosing a guide', async () => {
+    resizeTo(375);
+    renderAt('/docs');
+    fireEvent.click(screen.getByRole('button', { name: 'Expand documentation sidebar' }));
+    const drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getByRole('textbox', { name: 'Search documentation' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('combobox', { name: 'Documentation version' })).toBeInTheDocument();
+    fireEvent.click(within(drawer).getByRole('link', { name: 'Terminology' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('heading', { level: 1, name: 'Terminology' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand documentation sidebar' }));
+    const reopened = await screen.findByRole('dialog');
+    fireEvent.click(within(reopened).getByRole('link', { name: 'Terminology' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('closes the phone sheet on Escape and changes to inline navigation when widened', async () => {
+    resizeTo(375);
+    renderAt('/docs');
+    const open = () => fireEvent.click(screen.getByRole('button', { name: 'Expand documentation sidebar' }));
+    open();
+    const drawer = await screen.findByRole('dialog');
+    fireEvent.keyDown(drawer, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    open();
+    await screen.findByRole('dialog');
+    resizeTo(1024);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('navigation', { name: 'Documentation sections' })).toBeInTheDocument();
+    resizeTo(375);
+    expect(screen.queryByRole('navigation', { name: 'Documentation sections' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Expand documentation sidebar' })).toBeInTheDocument();
+  });
+
 });
