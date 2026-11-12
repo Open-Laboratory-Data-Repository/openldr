@@ -93,31 +93,33 @@ function useActiveHeading(pane: RefObject<HTMLDivElement | null>, entries: TocEn
 }
 
 /** The right-hand "On this page" list. Only on wide screens; narrow ones get the toolbar menu. */
-function OnThisPage({ entries, active }: { entries: TocEntry[]; active: string | null }) {
-  const listRef = useRef<HTMLDivElement>(null);
+function OnThisPage({ entries, active, pane }: {
+  entries: TocEntry[]; active: string | null; pane: RefObject<HTMLDivElement | null>;
+}) {
+  const navRef = useRef<HTMLElement>(null);
+  const [fits, setFits] = useState(false);
   useEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    const keepActiveVisible = () => {
-      if (!list.clientHeight) return;
-      const link = list.querySelector<HTMLAnchorElement>('[aria-current="location"]');
-      if (!link) return;
-      const bounds = list.getBoundingClientRect();
-      const item = link.getBoundingClientRect();
-      if (item.top < bounds.top) list.scrollTop -= bounds.top - item.top;
-      else if (item.bottom > bounds.bottom) list.scrollTop += item.bottom - bounds.bottom;
+    const nav = navRef.current;
+    const content = pane.current;
+    if (!nav || !content) return;
+    // A tall contents list must scroll with the article so all links stay reachable.
+    const measure = () => {
+      const style = getComputedStyle(content);
+      const inset = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+      setFits(nav.offsetHeight <= content.clientHeight - inset);
     };
-    keepActiveVisible();
-    const observer = new ResizeObserver(keepActiveVisible);
-    observer.observe(list);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    observer.observe(content);
     return () => observer.disconnect();
-  }, [active]);
+  }, [pane, entries]);
   return (
-    <nav aria-label="On this page" className="sticky top-0 hidden max-h-[calc(100dvh-9rem)] w-56 shrink-0 self-start xl:flex xl:flex-col">
+    <nav ref={navRef} aria-label="On this page" className={`hidden w-56 shrink-0 self-start xl:block${fits ? ' sticky top-0' : ''}`}>
       <div className="shrink-0 px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
         On this page
       </div>
-      <div ref={listRef} className="min-h-0 overflow-y-auto">
+      <div>
         {entries.map((entry) => (
           <a
             key={entry.id}
@@ -496,7 +498,7 @@ export function Docs() {
               </>
             )}
             </div>
-            {showToc && <OnThisPage entries={toc} active={activeHeading} />}
+            {showToc && <OnThisPage entries={toc} active={activeHeading} pane={contentRef} />}
             </div>
           </div>
         </section>

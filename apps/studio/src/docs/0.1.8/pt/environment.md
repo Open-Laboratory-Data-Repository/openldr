@@ -152,7 +152,7 @@ Ative as capacidades do anfitrião apenas para utilizadores e instalações que 
 
 MARKETPLACE_REGISTRY_URL ou MARKETPLACE_REGISTRY_DIR inicia o primeiro registo apenas quando nenhum existe. Depois, use Marketplace, Registries. A publicação exige o token, o repositório e a pasta local de preparação em conjunto.
 
-OPENLDR_SITE_ID fornece um identificador de site alternativo quando não existe Site ID guardado. As definições de sincronização guardadas têm prioridade. SYNC_ALLOW_INSECURE_TRANSPORT é false por predefinição. Use HTTPS para um central em serviço.
+`OPENLDR_SITE_ID` fornece um identificador de site alternativo quando não existe Site ID guardado. As definições de sincronização guardadas têm prioridade. `SYNC_ALLOW_INSECURE_TRANSPORT` é false por predefinição. Use HTTPS para um central em serviço.
 
 | Variável | Predefinição ou origem | Significado |
 | --- | --- | --- |

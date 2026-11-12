@@ -173,7 +173,7 @@ describe('DocsLayout', () => {
     expect(within(await screen.findByRole('menu')).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['First part', 'Second part', 'Third part']);
   });
 
-  it('keeps the active task visible without scrolling the article to its heading', async () => {
+  it('highlights the active task without scrolling either the menu or the article', async () => {
     renderAt('/docs/audit');
     const list = screen.getByRole('navigation', { name: 'On this page' });
     const first = within(list).getByRole('link', { name: 'First part' });
@@ -196,7 +196,7 @@ describe('DocsLayout', () => {
     thirdRect.mockImplementation(() => rect(10, 30));
     fireEvent.scroll(pane);
     await waitFor(() => expect(third).toHaveAttribute('aria-current', 'location'));
-    expect(scroller.scrollTop).toBe(80);
+    expect(scroller.scrollTop).toBe(0);
     expect(pane.scrollTop).toBe(222);
   });
 

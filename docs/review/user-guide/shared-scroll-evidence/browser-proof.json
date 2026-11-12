@@ -1,0 +1,43 @@
+{
+  "sizes": [
+    {
+      "height": 1100,
+      "navHeight": 495,
+      "position": "sticky",
+      "scrollAreas": 0
+    },
+    {
+      "height": 500,
+      "navHeight": 495,
+      "position": "static",
+      "scrollAreas": 0,
+      "paneScrollForLastLink": 305,
+      "innerScrollTop": 0
+    },
+    {
+      "height": 350,
+      "navHeight": 495,
+      "position": "static",
+      "scrollAreas": 0,
+      "paneScrollForLastLink": 380,
+      "innerScrollTop": 0
+    },
+    {
+      "height": 1100,
+      "navHeight": 495,
+      "position": "sticky",
+      "scrollAreas": 0
+    }
+  ],
+  "limits": "Headless browser layout only. Physical phone chrome was not tested.",
+  "shortArticle": {
+    "height": 404,
+    "scrollHeight": 543,
+    "lastTaskReachedWithPageScroll": true
+  },
+  "phone": {
+    "width": 375,
+    "height": 812,
+    "horizontalOverflow": false
+  }
+}

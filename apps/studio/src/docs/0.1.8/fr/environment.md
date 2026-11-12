@@ -152,7 +152,7 @@ Activez les capacités de l'hôte uniquement pour les utilisateurs et installati
 
 MARKETPLACE_REGISTRY_URL ou MARKETPLACE_REGISTRY_DIR initialise le premier registre seulement si aucun n'existe. Ensuite, utilisez Marketplace, Registries. La publication exige ensemble le jeton, le dépôt et le répertoire local de préparation.
 
-OPENLDR_SITE_ID fournit un identifiant de site de secours si aucun Site ID n'est enregistré. Les paramètres de synchronisation enregistrés ont priorité. SYNC_ALLOW_INSECURE_TRANSPORT vaut false par défaut. Utilisez HTTPS pour un central actif.
+`OPENLDR_SITE_ID` fournit un identifiant de site de secours si aucun Site ID n'est enregistré. Les paramètres de synchronisation enregistrés ont priorité. `SYNC_ALLOW_INSECURE_TRANSPORT` vaut false par défaut. Utilisez HTTPS pour un central actif.
 
 | Variable | Valeur par défaut ou source | Signification |
 | --- | --- | --- |

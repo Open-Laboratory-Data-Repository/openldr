@@ -3,7 +3,9 @@
 The seven approved app repairs and task-only contents menu are recorded in [repair validation](BUGFIX-VALIDATION.md).
 Repair commit `30d9e025` and changelog checkpoint `a4220d3c` reached remote main.
 Merged checks passed 54 Studio, 46 server and 31 reporting-date tests.
-Three unrelated environment-doc formatting checks fail on unchanged main and remain outside this scope.
+The later shared-scroll repair removes the independent contents scrollbar on short windows.
+All eight environment-doc checks now pass, including the three earlier formatting failures.
+See [shared-scroll validation](SHARED-SCROLL-VALIDATION.md) for the latest commands and screenshots.
 Updated published guides are the editing source. Do not regenerate them from the archived preview drafts.
 The test app uses Studio 5190 and API 3010 with separate review databases and bucket.
 Those running services and private credentials are not carried by Git.

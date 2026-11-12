@@ -1,0 +1,57 @@
+[
+  {
+    "phase": "tests",
+    "command": "pnpm --filter @openldr/studio test src/pages/Docs.test.tsx src/docs && pnpm --filter @openldr/config test src/env-docs.test.ts",
+    "exitCode": 0,
+    "output": [
+      "Test Files  14 passed (14)",
+      "Tests  110 passed (110)",
+      "Test Files  1 passed (1)",
+      "Tests  8 passed (8)"
+    ]
+  },
+  {
+    "phase": "build",
+    "command": "pnpm --filter @openldr/studio typecheck && pnpm --filter @openldr/studio build",
+    "exitCode": 0,
+    "output": [
+      "\u2713 built in 10.77s"
+    ]
+  },
+  {
+    "phase": "browser",
+    "command": "node docs/review/user-guide/shared-scroll-evidence/check-docs-scroll.cjs",
+    "exitCode": 0,
+    "output": [
+      "SHARED SCROLL PASS: four resize checks; wheel scrolls article; all tasks reachable; active task highlighted; phone menu has 17 tasks"
+    ]
+  },
+  {
+    "phase": "before-browser",
+    "command": "node docs/review/user-guide/shared-scroll-evidence/check-docs-scroll.cjs",
+    "exitCode": 1,
+    "output": [
+      "Error: Contents still has an independent scroll area: {\"height\":1100,\"navHeight\":495,\"position\":\"sticky\",\"scrollAreas\":1}"
+    ]
+  },
+  {
+    "phase": "before-environment",
+    "command": "pnpm --filter @openldr/config test src/env-docs.test.ts",
+    "exitCode": 1,
+    "output": [
+      "Test Files  1 failed (1)",
+      "Tests  3 failed | 5 passed (8)"
+    ]
+  },
+  {
+    "phase": "before-component",
+    "command": "pnpm --filter @openldr/studio test src/pages/Docs.test.tsx",
+    "exitCode": 1,
+    "output": [
+      "\u2192 expected 80 to be +0 // Object.is equality",
+      "AssertionError: expected 80 to be +0 // Object.is equality",
+      "Test Files  1 failed (1)",
+      "Tests  1 failed | 14 passed (15)"
+    ]
+  }
+]

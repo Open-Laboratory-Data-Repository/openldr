@@ -152,7 +152,7 @@ Enable host-level capabilities only for the users and installations that need th
 
 MARKETPLACE_REGISTRY_URL or MARKETPLACE_REGISTRY_DIR seeds the initial registry only when none exist. Afterward, use Marketplace, Registries. Publishing requires its token, repository and local staging directory together.
 
-OPENLDR_SITE_ID supplies a fallback site stamp when no saved Site ID exists. Saved sync settings take precedence. SYNC_ALLOW_INSECURE_TRANSPORT defaults false. Use HTTPS for a live central.
+`OPENLDR_SITE_ID` supplies a fallback site stamp when no saved Site ID exists. Saved sync settings take precedence. `SYNC_ALLOW_INSECURE_TRANSPORT` defaults false. Use HTTPS for a live central.
 
 | Variable | Default or source | Meaning |
 | --- | --- | --- |

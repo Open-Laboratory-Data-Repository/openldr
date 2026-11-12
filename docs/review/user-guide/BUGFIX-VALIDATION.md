@@ -1,3 +1,6 @@
+The later [shared-scroll repair](SHARED-SCROLL-VALIDATION.md) replaces the inner contents scrollbar.
+It also resolves the three environment-doc formatting failures recorded below.
+
 # Guide review repairs
 
 The operator approved B1-B7 and the contents-menu change on 2026-11-12.
