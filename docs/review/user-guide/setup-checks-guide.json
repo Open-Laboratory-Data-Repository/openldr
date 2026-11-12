@@ -1,0 +1,195 @@
+{
+  "title": "Setup checks",
+  "meta": [
+    "Administration",
+    "Check installation readiness",
+    "About 10 minutes"
+  ],
+  "intro": [
+    "Setup checks reviews the services and settings this installation needs. Use it after installation or configuration changes, then follow the advice beside each warning or failure.",
+    "You need View settings. Changing a linked setting may need another permission. These checks use the same list as <code>openldr doctor</code>. Read <a href=\"./start-here-review.html\">Start here</a> for command-line setup.",
+    "Use your own installation results. The pictures show an isolated development installation with deliberate missing configuration. No sample data is required."
+  ],
+  "tasks": [
+    {
+      "id": "read",
+      "title": "Read the current readiness report",
+      "intro": [
+        "Use this before treating an installation as ready for staff. The checks run when the page opens."
+      ],
+      "steps": [
+        [
+          "Open Settings and Setup checks",
+          "Open your user menu at the bottom left, choose <strong>Settings</strong>, then select <strong>Setup checks</strong>.",
+          [
+            "user-menu",
+            "settings-menu",
+            "setup-page"
+          ]
+        ],
+        [
+          "Read the summary",
+          "Read the number of failed checks and warnings. If neither exists, the summary says All checks passed.",
+          [
+            "summary"
+          ]
+        ],
+        [
+          "Read failed checks first",
+          "Read the service detail and suggested next action. This test installation reports a blob-storage service failure. Follow the advice for your own result.",
+          [
+            "failed-service"
+          ]
+        ],
+        [
+          "Read the warnings",
+          "A warning needs review even when the service is available. The example warns that Laboratory name still uses the shipped default.",
+          [
+            "warning"
+          ]
+        ],
+        [
+          "Check skipped items",
+          "<strong>Skipped</strong> means the check did not apply. It does not mean that an unused feature has been configured.",
+          [
+            "skipped"
+          ]
+        ]
+      ],
+      "result": "You know which checks need attention and which advice applies to this installation.",
+      "resultShots": []
+    },
+    {
+      "id": "correct",
+      "title": "Follow a warning and check the correction",
+      "intro": [
+        "Use a linked setting page to correct a problem. This example corrects a laboratory name and missing time zone on PostgreSQL."
+      ],
+      "steps": [
+        [
+          "Open the linked page",
+          "Select <strong>Open Laboratory</strong> beside the Laboratory name warning.",
+          [
+            "open-laboratory"
+          ]
+        ],
+        [
+          "Enter the laboratory name",
+          "Enter your actual issuing laboratory name. The picture uses <code>Documentation laboratory</code> in a test installation.",
+          [
+            "correct-name"
+          ]
+        ],
+        [
+          "Set the time zone when applicable",
+          "For PostgreSQL or MySQL, enter your named local time zone. The example uses <code>Africa/Dar_es_Salaam</code>. On SQL Server, follow the page advice and supply the Windows zone in each report run instead.",
+          [
+            "correct-zone"
+          ]
+        ],
+        [
+          "Save the correction",
+          "Open the Laboratory page dots and select <strong>Save</strong>.",
+          [
+            "laboratory-actions",
+            "laboratory-save"
+          ]
+        ],
+        [
+          "Return to Setup checks",
+          "Select <strong>Setup checks</strong> in Settings. Opening it runs the checks again.",
+          [
+            "corrected-result"
+          ]
+        ]
+      ],
+      "result": "The corrected Laboratory name and Time zone checks show Passed. Other warnings or failures still need attention.",
+      "resultShots": []
+    },
+    {
+      "id": "rerun",
+      "title": "Run the checks again",
+      "intro": [
+        "Use this after configuration changes or after a service recovers."
+      ],
+      "steps": [
+        [
+          "Open the page actions",
+          "Select the dots at the top right of Setup checks.",
+          [
+            "setup-actions"
+          ]
+        ],
+        [
+          "Choose Run again",
+          "Select <strong>Run again</strong>. Wait for the checks to finish.",
+          [
+            "run-again"
+          ]
+        ]
+      ],
+      "result": "The new summary shows the current result. Read the remaining failed checks and warnings.",
+      "resultShots": [
+        "rerun-result"
+      ]
+    },
+    {
+      "id": "phone",
+      "title": "Read setup checks on a phone",
+      "intro": [
+        "Use the same page on a phone. Each check includes its status and advice."
+      ],
+      "steps": [
+        [
+          "Read the summary",
+          "Open Setup checks and read the summary at the top.",
+          [
+            "phone-summary"
+          ]
+        ],
+        [
+          "Scroll through the checks",
+          "Read each check detail and any link or next action.",
+          [
+            "phone-check"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "practice",
+      "title": "Optional practice",
+      "paragraphs": [
+        "No practice records are required. In a test installation, correct a genuine laboratory-name or time-zone warning, save it, then run the checks again. Do not introduce a service failure for this exercise."
+      ]
+    },
+    {
+      "id": "limits",
+      "title": "Limits",
+      "paragraphs": [
+        "The report describes the checks at the time they ran. All checks passed does not prove every report, feed or staff workflow. Some repairs need server configuration outside Studio."
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>The checks could not run.</strong> Check the API connection and server log, then try Run again.",
+        "<strong>Services failed.</strong> Follow the displayed health-command advice and inspect the named service.",
+        "<strong>Sign-in warns that it is switched off.</strong> Turn off the development authentication bypass in server configuration before real use.",
+        "<strong>A linked page is unavailable.</strong> Ask an administrator with permission to edit that setting."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "Read <a href=\"./laboratory-review.html\">Laboratory</a> for issuing-lab details. Read <a href=\"./connectors-review.html\">Connectors</a> for connection tests. Read <a href=\"./start-here-review.html\">Start here</a> for installation and command-line setup."
+      ]
+    }
+  ]
+}

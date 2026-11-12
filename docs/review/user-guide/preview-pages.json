@@ -13,5 +13,6 @@
   "activity": "activity-review.html",
   "users": "users-review.html",
   "layouts": "layouts-review.html",
-  "audit": "audit-review.html"
+  "audit": "audit-review.html",
+  "setup-checks": "setup-checks-review.html"
 }

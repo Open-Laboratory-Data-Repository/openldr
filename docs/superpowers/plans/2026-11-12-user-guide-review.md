@@ -58,7 +58,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [x] Roles
 - [x] Audit
 - [ ] Settings
-- [ ] Setup checks
+- [x] Setup checks
 - [ ] Laboratory
 - [ ] Data exposure
 - [ ] Distributed Sync

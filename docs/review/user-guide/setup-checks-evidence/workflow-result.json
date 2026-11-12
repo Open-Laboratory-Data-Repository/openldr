@@ -1,0 +1,90 @@
+{
+  "before": {
+    "ok": false,
+    "checks": [
+      {
+        "id": "adapters",
+        "status": "fail",
+        "hint": "adapterDown",
+        "detail": "blob"
+      },
+      {
+        "id": "signIn",
+        "status": "warn",
+        "hint": "signInOff"
+      },
+      {
+        "id": "secretsKey",
+        "status": "pass"
+      },
+      {
+        "id": "labName",
+        "status": "warn",
+        "hint": "labNameDefault",
+        "fix": "/settings/laboratory"
+      },
+      {
+        "id": "timeZone",
+        "status": "warn",
+        "hint": "timeZoneEmpty",
+        "fix": "/settings/laboratory"
+      },
+      {
+        "id": "connectors",
+        "status": "pass",
+        "detail": "1 of 1"
+      },
+      {
+        "id": "sync",
+        "status": "skip"
+      },
+      {
+        "id": "facilities",
+        "status": "skip"
+      }
+    ]
+  },
+  "after": {
+    "ok": false,
+    "checks": [
+      {
+        "id": "adapters",
+        "status": "fail",
+        "hint": "adapterDown",
+        "detail": "blob"
+      },
+      {
+        "id": "signIn",
+        "status": "warn",
+        "hint": "signInOff"
+      },
+      {
+        "id": "secretsKey",
+        "status": "pass"
+      },
+      {
+        "id": "labName",
+        "status": "pass",
+        "detail": "Documentation laboratory"
+      },
+      {
+        "id": "timeZone",
+        "status": "pass",
+        "detail": "Africa/Dar_es_Salaam"
+      },
+      {
+        "id": "connectors",
+        "status": "pass",
+        "detail": "1 of 1"
+      },
+      {
+        "id": "sync",
+        "status": "skip"
+      },
+      {
+        "id": "facilities",
+        "status": "skip"
+      }
+    ]
+  }
+}
