@@ -75,7 +75,10 @@ const DEFAULT_PORT = 3000;
 const DEFAULT_HOST = '127.0.0.1';
 /** Where a new install's Postgres port search starts. */
 const PREFERRED_PG_PORT = 54320;
-const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost']);
+/** Hosts that reach only this computer. No plain-HTTP warning for these. */
+const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+/** Hosts whose printed address says `localhost`: this computer, or every address it has. */
+const SHOWN_AS_LOCALHOST = new Set(['127.0.0.1', 'localhost', '::1', '0.0.0.0', '::']);
 
 export const STOPPED = 'Stopped.';
 export const STOPPED_FORCED = 'Stopped, but the server did not finish in 60 seconds. Work in flight will be retried.';
@@ -155,6 +158,28 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * The address to open. A server on one specific address answers only there, so that address is
+ * shown. The local machine and the all-addresses hosts are shown as `localhost`. An IPv6
+ * address goes in square brackets.
+ */
+export function servedAddress(host: string, port: number): string {
+  const name = SHOWN_AS_LOCALHOST.has(host) ? 'localhost' : host.includes(':') ? `[${host}]` : host;
+  return `http://${name}:${port}/studio/`;
+}
+
+/** A stop that ran every step, but at least one step failed. Something may be left behind. */
+export class StopError extends Error {
+  readonly result: StopResult;
+  readonly problems: string[];
+  constructor(result: StopResult, problems: string[]) {
+    super(`The stop did not finish cleanly. ${problems.map((p) => (/[.!?]$/.test(p) ? p : `${p}.`)).join(' ')}`);
+    this.name = 'StopError';
+    this.result = result;
+    this.problems = problems;
+  }
+}
+
 function portTakenMessage(port: number): string {
   return `Port ${port} is already in use. Choose another with --port.`;
 }
@@ -189,7 +214,7 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
   if (!existsSync(join(deps.studioDist, 'index.html'))) throw new Error(STUDIO_MISSING);
   await ensureFolders(paths);
 
-  const address = `http://localhost:${opts.port}/studio/`;
+  const address = servedAddress(opts.host, opts.port);
   const token = newControlToken();
   /** Values that must never reach an error message. */
   const secrets: string[] = [token];
@@ -206,15 +231,24 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
   const forced = new Promise<'forced'>((r) => (forceNow = () => r('forced')));
   let stopping: Promise<StopResult> | undefined;
   let resolveDone!: (r: StopResult) => void;
-  const done = new Promise<StopResult>((r) => (resolveDone = r));
+  let rejectDone!: (err: unknown) => void;
+  const done = new Promise<StopResult>((resolvePromise, reject) => {
+    resolveDone = resolvePromise;
+    rejectDone = reject;
+  });
+  // Marked as handled: a failed start rejects it with nobody reading it. index.ts reads it.
+  done.catch(() => {});
 
-  const report = (err: unknown) => deps.print(`While stopping: ${hideSecrets(err, secrets).message}`);
-
-  /** Undoes what is running, newest first. Never rejects. */
+  /**
+   * Undoes what is running, newest first. Every step runs even when one before it failed. Rejects
+   * with a StopError when a step failed, since something may be left behind.
+   */
   const teardown = async (): Promise<StopResult> => {
     // A stop asked for while the start is still running waits for it, so nothing starts after it.
     await started;
     let result: StopResult = 'clean';
+    const problems: string[] = [];
+    const note = (what: string, err: unknown) => problems.push(`${what}: ${hideSecrets(err, secrets).message}`);
     if (server) {
       const running = server;
       let timer: NodeJS.Timeout | undefined;
@@ -222,7 +256,7 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       const closed = running.close().then(
         () => 'closed' as const,
         (err: unknown) => {
-          report(err);
+          note('The server did not close cleanly', err);
           return 'closed' as const;
         },
       );
@@ -236,7 +270,7 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       try {
         await running.stop();
       } catch (err) {
-        report(err);
+        note('Postgres did not stop', err);
       }
       pg = undefined;
     }
@@ -244,11 +278,12 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       try {
         await releaseLock(paths, token);
       } catch (err) {
-        report(err);
+        note(`The lock ${paths.lockFile} was not removed`, err);
       }
       lockTaken = false;
     }
     for (const remove of removers.splice(0)) remove();
+    if (problems.length > 0) throw new StopError(result, problems);
     return result;
   };
 
@@ -257,11 +292,18 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
     if (!stopping) {
       stopping = teardown();
       // The control port closes last, after the answer to a `stop` request has been written.
-      // Not inside onStop: close() waits for that answer, which waits for onStop.
-      void stopping.then(async (result) => {
-        await control.close();
-        resolveDone(result);
-      });
+      // Not inside onStop: close() waits for that answer, which waits for onStop. A stop that
+      // failed gives the asker no answer: the control port drops it, and `stop` reports that.
+      void stopping.then(
+        async (result) => {
+          await control.close();
+          resolveDone(result);
+        },
+        async (err: unknown) => {
+          await control.close();
+          rejectDone(err);
+        },
+      );
     }
     return stopping;
   };
@@ -273,7 +315,14 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
     // 3. The lock. Held before anything touches the cluster.
     try {
       lockTaken = true;
-      await acquireLock(paths, { pid: process.pid, address, startedAt: deps.now().toISOString(), controlPort: control.port, token });
+      await acquireLock(paths, {
+        pid: process.pid,
+        address,
+        startedAt: deps.now().toISOString(),
+        controlPort: control.port,
+        token,
+        httpPort: opts.port,
+      });
     } catch (err) {
       if (err instanceof AlreadyRunningError) {
         // The message is built from two fields: the lock also holds the other launcher's token.
@@ -295,9 +344,13 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
     await deps.stopLeftoverPostgres({ clusterDir: paths.cluster, settings });
     pg = await deps.startPostgres({ clusterDir: paths.cluster, logFile: paths.postgresLog, settings });
     // Postgres runs in its own session and outlives this process unless told to stop. This hook
-    // covers an exit that skips the normal stop, such as a crash handler or a second Ctrl+C
-    // during the start. It is added as soon as Postgres runs, not after the next steps, so no
-    // exit leaves Postgres behind. It does nothing once Postgres has stopped.
+    // tells it to stop when this process exits by process.exit or by running out of work, without
+    // the normal stop: a crash handler, a second Ctrl+C during the start, a third signal. It is
+    // added as soon as Postgres runs, not after the next steps. It does nothing once Postgres has
+    // stopped. It cannot run when the process dies without exiting: SIGKILL, a signal with no
+    // handler, or a power cut. Signals that end a session (SIGINT, SIGTERM, SIGHUP) have handlers
+    // in index.ts for that reason. After a SIGKILL or a power cut, the next start stops the
+    // leftover Postgres.
     const exitHook = () => pg?.stopSync();
     process.on('exit', exitHook);
     removers.push(() => process.off('exit', exitHook));
@@ -358,9 +411,15 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
   } catch (err) {
     // Server, Postgres, lock, listeners, then the control port.
     markStarted();
-    await stop();
+    let undo: unknown;
+    await stop().catch((e: unknown) => {
+      undo = e;
+    });
     await control.close();
-    throw hideSecrets(err, secrets);
+    const failure = hideSecrets(err, secrets);
+    // An undo that left something behind is said too, after the reason the start failed.
+    if (undo instanceof StopError) throw new Error(`${failure.message}\n${undo.message}`);
+    throw failure;
   }
 }
 
@@ -418,7 +477,9 @@ export async function runCli(opts: { dataDir?: string; args: string[] }, print: 
   );
   const settings = postgresSettings(state);
   const secrets = [state.secretsKey, state.pgSuperPassword, state.pgAppPassword];
-  const port = Number(new URL(lock.address).port) || DEFAULT_PORT;
+  // The lock carries the HTTP port. A lock from before that field gets the default; the CLI
+  // serves nothing on it.
+  const port = lock.httpPort ?? DEFAULT_PORT;
   const { LOG_FILE: _serverLog, ...env } = buildEnvironment({
     paths,
     state,
@@ -496,6 +557,12 @@ function parseOptions(command: string, args: string[], withListen: boolean) {
   }
 }
 
+/** An empty or blank --host or --data-dir is refused before anything starts. */
+function notBlank(command: string, flag: string, value: string | undefined): string | undefined {
+  if (value !== undefined && value.trim() === '') throw new UsageError(`${command}: ${flag} cannot be empty.`);
+  return value;
+}
+
 /**
  * Reads the launcher's arguments, without the node and script paths. For `cli`, a `--data-dir`
  * right after `cli` is the launcher's, an optional `--` follows, and the rest goes to the CLI.
@@ -516,24 +583,74 @@ export function parseCommandLine(argv: string[]): CommandLine {
       dataDir = rest[i]!.slice('--data-dir='.length);
       i += 1;
     }
+    notBlank(command, '--data-dir', dataDir);
     if (rest[i] === '--') i += 1;
     return { command, ...(dataDir !== undefined ? { dataDir } : {}), args: rest.slice(i) };
   }
 
   if (command === 'start') {
     const values = parseOptions(command, rest, true);
+    const dataDir = notBlank(command, '--data-dir', values['data-dir']);
     return {
       command,
       port: values.port === undefined ? DEFAULT_PORT : parsePort(values.port),
-      host: values.host ?? DEFAULT_HOST,
-      ...(values['data-dir'] !== undefined ? { dataDir: values['data-dir'] } : {}),
+      host: notBlank(command, '--host', values.host) ?? DEFAULT_HOST,
+      ...(dataDir !== undefined ? { dataDir } : {}),
     };
   }
 
   if (command === 'stop' || command === 'status') {
     const values = parseOptions(command, rest, false);
-    return { command, ...(values['data-dir'] !== undefined ? { dataDir: values['data-dir'] } : {}) };
+    const dataDir = notBlank(command, '--data-dir', values['data-dir']);
+    return { command, ...(dataDir !== undefined ? { dataDir } : {}) };
   }
 
   throw new UsageError(`Unknown command: ${command}`);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Signals
+
+/** The signals that end a session: Ctrl+C, a service manager's stop, and a closed terminal. */
+export const STOP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
+export const STOPPING_AFTER_START = 'Stopping once the start has finished.';
+
+export interface SignalSource {
+  on(event: (typeof STOP_SIGNALS)[number], listener: () => void): unknown;
+}
+
+/**
+ * Maps stop signals onto a launcher. Each of SIGINT, SIGTERM and SIGHUP counts the same.
+ * - While the start runs: the first prints a line and stops the launcher once it has started.
+ *   The second exits at once with code 130; the exit hook then tells Postgres to stop.
+ * - Once started: the first calls `stop()`, the second `stop(true)`, the third exits with code 1.
+ *   The exit hook then tells Postgres to shut down again.
+ * The outcome of a stop is read from `launcher.done`. SIGHUP and SIGTERM on Windows are unproven.
+ */
+export function handleSignals(opts: {
+  source: SignalSource;
+  print: (line: string) => void;
+  exit: (code: number) => void;
+}): { attach(launcher: Launcher): void } {
+  let launcher: Launcher | undefined;
+  let count = 0;
+  const ask = (l: Launcher, force: boolean) => void l.stop(force).catch(() => {});
+  const onSignal = () => {
+    count += 1;
+    if (!launcher) {
+      if (count === 1) opts.print(STOPPING_AFTER_START);
+      else opts.exit(130);
+      return;
+    }
+    if (count === 1) ask(launcher, false);
+    else if (count === 2) ask(launcher, true);
+    else opts.exit(1);
+  };
+  for (const signal of STOP_SIGNALS) opts.source.on(signal, onSignal);
+  return {
+    attach(l) {
+      launcher = l;
+      if (count > 0) ask(l, count > 1);
+    },
+  };
 }

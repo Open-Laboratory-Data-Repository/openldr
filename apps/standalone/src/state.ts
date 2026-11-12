@@ -41,6 +41,8 @@ export interface LockInfo {
   startedAt: string;
   controlPort: number;
   token: string;
+  /** The HTTP port the server listens on. Missing from locks written before it was added. */
+  httpPort?: number;
 }
 
 export class StateFileError extends Error {
@@ -327,7 +329,10 @@ function parseLock(text: string): LockInfo | null {
   if (!Number.isInteger(d.pid) || (d.pid as number) < 1) return null;
   if (!isNonEmptyString(d.address) || !isNonEmptyString(d.startedAt) || !isNonEmptyString(d.token)) return null;
   if (!isPort(d.controlPort)) return null;
-  return { pid: d.pid as number, address: d.address, startedAt: d.startedAt, controlPort: d.controlPort, token: d.token };
+  if (d.httpPort !== undefined && !isPort(d.httpPort)) return null;
+  const info: LockInfo = { pid: d.pid as number, address: d.address, startedAt: d.startedAt, controlPort: d.controlPort, token: d.token };
+  if (d.httpPort !== undefined) info.httpPort = d.httpPort;
+  return info;
 }
 
 // ---------------------------------------------------------------------------------------------

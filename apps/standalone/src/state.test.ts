@@ -214,6 +214,18 @@ describe('lock', () => {
     expect(await readLock(paths)).toBeNull();
   });
 
+  it('reads the HTTP port when the lock has one, and still reads a lock written without it', async () => {
+    const base = { pid: 1, address: 'http://localhost:80/studio/', startedAt: 's', controlPort: 40000, token: 't' };
+    await writeFile(paths.lockFile, JSON.stringify({ ...base, httpPort: 80 }));
+    expect(await readLock(paths)).toEqual({ ...base, httpPort: 80 });
+    await writeFile(paths.lockFile, JSON.stringify(base));
+    const old = await readLock(paths);
+    expect(old).toEqual(base);
+    expect(old).not.toHaveProperty('httpPort');
+    await writeFile(paths.lockFile, JSON.stringify({ ...base, httpPort: 0 }));
+    expect(await readLock(paths)).toBeNull();
+  });
+
   it('writes the lock owner-only and reads it back', async () => {
     const info = await liveLock(101);
     await acquireLock(paths, info);

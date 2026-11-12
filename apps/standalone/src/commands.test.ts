@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer, type AddressInfo, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -8,11 +9,15 @@ import type { Config } from '@openldr/config';
 import type { RunningServer } from '@openldr/server/start';
 import {
   STOP_WAIT_MS,
+  StopError,
+  UsageError,
+  handleSignals,
   parseCommandLine,
   runCli,
   runStart,
   runStatus,
   runStop,
+  servedAddress,
   type Launcher,
   type LauncherDeps,
 } from './commands.js';
@@ -108,8 +113,8 @@ afterEach(async () => {
   vi.restoreAllMocks();
   await Promise.all(
     launchers.splice(0).map(async (l) => {
-      await l.stop(true);
-      await l.done;
+      await l.stop(true).catch(() => {});
+      await l.done.catch(() => {});
     }),
   );
   await Promise.all(controls.splice(0).map((c) => c.close()));
@@ -131,7 +136,7 @@ interface Fakes {
   deps: LauncherDeps;
 }
 
-function fakes(o: { setupRequired?: boolean; closeNever?: boolean; setupFails?: boolean } = {}): Fakes {
+function fakes(o: { setupRequired?: boolean; closeNever?: boolean; setupFails?: boolean; pgStopFails?: boolean } = {}): Fakes {
   const f: Fakes = {
     order: [],
     printed: [],
@@ -163,6 +168,7 @@ function fakes(o: { setupRequired?: boolean; closeNever?: boolean; setupFails?: 
         ...postgresUrls(opts.settings),
         stop: async () => {
           f.order.push((await readLock(paths)) ? 'pg.stop' : 'pg.stop (lock already gone)');
+          if (o.pgStopFails) throw new Error(`postgres would not stop, password ${opts.settings.appPassword}`);
           f.pg.stopped = true;
         },
         stopSync: () => {
@@ -726,7 +732,209 @@ describe('runCli', () => {
   });
 });
 
+describe('the address really served', () => {
+  it('prints and records a specific IPv4 host, and status and cli still find the launcher', async () => {
+    const f = fakes();
+    const l = await start(f.deps, { host: '127.0.0.2' });
+    const served = `http://127.0.0.2:${PORT}/studio/`;
+    expect(l.address).toBe(served);
+    expect(f.printed).toContain(`OpenLDR is running at ${served}`);
+    expect(await readLock(paths)).toMatchObject({ address: served, httpPort: PORT });
+
+    const printed: string[] = [];
+    expect(await runStatus({ dataDir: root }, (line) => printed.push(line))).toBe(0);
+    expect(printed).toContain(`OpenLDR is running at ${served}`);
+
+    let port: string | undefined;
+    cli.run = async () => {
+      port = process.env.PORT;
+    };
+    expect(await runCli({ dataDir: root, args: ['doctor'] }, () => {})).toBe(0);
+    expect(port).toBe(String(PORT));
+  });
+
+  it('shows localhost for 0.0.0.0, and for ::1 with no plain-HTTP warning', async () => {
+    const wide = fakes();
+    const l = await start(wide.deps, { host: '0.0.0.0' });
+    expect(l.address).toBe(ADDRESS);
+    expect(wide.printed).toContain(`OpenLDR is running at ${ADDRESS}`);
+    await stopped(l);
+
+    const loop6 = fakes();
+    const l6 = await start(loop6.deps, { host: '::1' });
+    expect(l6.address).toBe(ADDRESS);
+    expect(await readLock(paths)).toMatchObject({ address: ADDRESS });
+    expect(loop6.printed.join('\n')).not.toContain('plain HTTP');
+    expect(loop6.server.cfg?.LISTEN_HOST).toBe('::1');
+  });
+
+  it('puts an IPv6 address in square brackets', () => {
+    expect(servedAddress('fd7a:115c:a1e0::1', 3000)).toBe('http://[fd7a:115c:a1e0::1]:3000/studio/');
+    expect(servedAddress('::', 3000)).toBe('http://localhost:3000/studio/');
+    expect(servedAddress('100.64.0.7', 80)).toBe('http://100.64.0.7:80/studio/');
+  });
+
+  it('gives the CLI the HTTP port from the lock, port 80 included', async () => {
+    const token = newControlToken();
+    const control = await startControl({ token, onStop: async () => 'clean' });
+    controls.push(control);
+    await acquireLock(paths, {
+      pid: process.pid,
+      address: 'http://localhost:80/studio/',
+      startedAt: STARTED_AT.toISOString(),
+      controlPort: control.port,
+      token,
+      httpPort: 80,
+    });
+    let port: string | undefined;
+    cli.run = async () => {
+      port = process.env.PORT;
+    };
+    expect(await runCli({ dataDir: root, args: ['doctor'] }, () => {})).toBe(0);
+    expect(port).toBe('80');
+  });
+});
+
+describe('a stop that leaves something behind', () => {
+  it('rejects with what failed, and done rejects with the same error', async () => {
+    const f = fakes({ pgStopFails: true });
+    const l = await start(f.deps);
+    launchers.splice(launchers.indexOf(l), 1);
+    const err = await l.stop().then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(StopError);
+    const message = (err as Error).message;
+    expect(message).toMatch(/^The stop did not finish cleanly\. Postgres did not stop: postgres would not stop/);
+    expect(message).not.toContain(state.pgAppPassword);
+    await expect(l.done).rejects.toBe(err);
+    // The steps after the failed one still ran.
+    expect(await readLock(paths)).toBeNull();
+  });
+
+  it('stop returns 1 with one line, and sends no signal', async () => {
+    const kill = vi.spyOn(process, 'kill');
+    const f = fakes({ pgStopFails: true });
+    const l = await start(f.deps);
+    launchers.splice(launchers.indexOf(l), 1);
+    const printed: string[] = [];
+    expect(await runStop({ dataDir: root }, (line) => printed.push(line))).toBe(1);
+    expect(printed).toHaveLength(1);
+    expect(printed[0]).toMatch(/^Could not confirm that OpenLDR stopped: /);
+    expect(printed[0]).not.toMatch(/^Stopped/);
+    await expect(l.done).rejects.toBeInstanceOf(StopError);
+    expect(kill).not.toHaveBeenCalled();
+  });
+
+  it('a failed start whose undo also failed says both', async () => {
+    const f = fakes({ pgStopFails: true });
+    f.deps.startServer = async () => {
+      throw new Error('boom');
+    };
+    await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrowError(
+      /^boom\nThe stop did not finish cleanly\. Postgres did not stop: /,
+    );
+    expect(await readLock(paths)).toBeNull();
+  });
+});
+
+describe('handleSignals', () => {
+  function fakeLauncher() {
+    const calls: boolean[] = [];
+    const launcher: Launcher = {
+      address: ADDRESS,
+      stop: async (force?: boolean) => {
+        calls.push(Boolean(force));
+        return 'clean';
+      },
+      done: Promise.resolve('clean'),
+    };
+    return { calls, launcher };
+  }
+
+  function wire() {
+    const source = new EventEmitter();
+    const printed: string[] = [];
+    const exits: number[] = [];
+    const signals = handleSignals({ source, print: (l) => printed.push(l), exit: (c) => exits.push(c) });
+    return { source, printed, exits, signals };
+  }
+
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
+    it(`${signal}: the first stops, the second forces, the third exits with code 1`, () => {
+      const { source, exits, signals } = wire();
+      const { calls, launcher } = fakeLauncher();
+      signals.attach(launcher);
+      source.emit(signal);
+      expect(calls).toEqual([false]);
+      source.emit(signal);
+      expect(calls).toEqual([false, true]);
+      expect(exits).toEqual([]);
+      source.emit(signal);
+      expect(calls).toEqual([false, true]);
+      expect(exits).toEqual([1]);
+    });
+  }
+
+  it('mixed signals count together', () => {
+    const { source, exits, signals } = wire();
+    const { calls, launcher } = fakeLauncher();
+    signals.attach(launcher);
+    source.emit('SIGHUP');
+    source.emit('SIGINT');
+    source.emit('SIGTERM');
+    expect(calls).toEqual([false, true]);
+    expect(exits).toEqual([1]);
+  });
+
+  it('a signal during the start prints one line, then stops once the launcher is there', () => {
+    const { source, printed, exits, signals } = wire();
+    source.emit('SIGINT');
+    expect(printed).toEqual(['Stopping once the start has finished.']);
+    expect(exits).toEqual([]);
+    const { calls, launcher } = fakeLauncher();
+    signals.attach(launcher);
+    expect(calls).toEqual([false]);
+    source.emit('SIGINT');
+    expect(calls).toEqual([false, true]);
+  });
+
+  it('a second signal during the start exits at once with code 130', () => {
+    const { source, printed, exits } = wire();
+    source.emit('SIGHUP');
+    source.emit('SIGHUP');
+    expect(printed).toEqual(['Stopping once the start has finished.']);
+    expect(exits).toEqual([130]);
+  });
+
+  it('a stop that rejects does not become an unhandled rejection', async () => {
+    const { source, signals } = wire();
+    const unhandled: unknown[] = [];
+    const onUnhandled = (e: unknown) => unhandled.push(e);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      signals.attach({ address: ADDRESS, stop: () => Promise.reject(new Error('stop boom')), done: Promise.resolve('clean') });
+      source.emit('SIGINT');
+      await new Promise((r) => setTimeout(r, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+});
+
 describe('parseCommandLine', () => {
+  it('refuses an empty --host and an empty --data-dir', () => {
+    expect(() => parseCommandLine(['start', '--host', ''])).toThrow(UsageError);
+    expect(() => parseCommandLine(['start', '--host', ''])).toThrow('start: --host cannot be empty.');
+    expect(() => parseCommandLine(['start', '--data-dir', ''])).toThrow('start: --data-dir cannot be empty.');
+    expect(() => parseCommandLine(['stop', '--data-dir', ' '])).toThrow('stop: --data-dir cannot be empty.');
+    expect(() => parseCommandLine(['status', '--data-dir='])).toThrow('status: --data-dir cannot be empty.');
+    expect(() => parseCommandLine(['cli', '--data-dir=', '--', 'doctor'])).toThrow('cli: --data-dir cannot be empty.');
+    expect(() => parseCommandLine(['cli', '--data-dir', '', 'doctor'])).toThrow('cli: --data-dir cannot be empty.');
+  });
+
   it('takes the CLI arguments with and without the -- separator', () => {
     expect(parseCommandLine(['cli', '--', 'doctor'])).toEqual({ command: 'cli', args: ['doctor'] });
     expect(parseCommandLine(['cli', 'doctor'])).toEqual({ command: 'cli', args: ['doctor'] });
