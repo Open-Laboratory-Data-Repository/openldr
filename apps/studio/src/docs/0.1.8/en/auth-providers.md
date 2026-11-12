@@ -2,6 +2,8 @@
 
 OpenLDR supports Keycloak and generic OpenID Connect, or OIDC, for sign-in. Keycloak remains the default. Generic mode requires discovery and signed JWT access tokens. Opaque access tokens are unsupported. This guide does not certify a second provider's deployment configuration.
 
+A third mode, `AUTH_ADAPTER=local`, keeps accounts and passwords in OpenLDR itself, with no Keycloak. This guide does not cover it. See [Sign-in and passwords](/docs/sign-in) for using it, and the OpenLDR website's Authentication providers page for setting it up.
+
 ## Choose authentication and administration
 
 | Configuration | Sign-in | Provider administration | Sync client provisioning |

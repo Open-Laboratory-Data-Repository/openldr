@@ -64,7 +64,7 @@ Veja [Laboratório](/docs/laboratory) para o nome, o logótipo e o fuso horário
 | Verificação | O que vê | Se não estiver cumprida |
 | --- | --- | --- |
 | Serviços | O início de sessão, o armazenamento de ficheiros, os eventos e o armazém respondem. | O CE não consegue servir nem guardar dados. Corra `openldr health` no servidor para ver que serviço está parado. |
-| Início de sessão | O início de sessão está ligado. | Com `AUTH_DEV_BYPASS` ligado, qualquer pessoa que chegue ao servidor é administrador. Falha numa instalação de produção e é aviso nas outras. |
+| Início de sessão | O início de sessão está ligado. Com o início de sessão próprio do OpenLDR, existe um administrador. | Com `AUTH_DEV_BYPASS` ligado, qualquer pessoa que chegue ao servidor é administrador. Falha numa instalação de produção e é aviso nas outras. Com o início de sessão próprio do OpenLDR, a verificação também avisa enquanto não existir nenhum administrador. |
 | Chave dos segredos | `SECRETS_ENCRYPTION_KEY` está definido. | Um conector com palavra-passe não pode ser guardado nem lido. |
 | Nome do laboratório | O nome está definido e não é o predefinido. | Os relatórios imprimem o nome do produto como laboratório emissor. |
 | Fuso horário | Há um fuso horário definido. | O relatório mensal de transmissão conta os dias em UTC, por isso as chegadas à noite caem no dia errado. |
@@ -119,6 +119,7 @@ A página funciona num telemóvel. A mensagem de cada verificação passa para b
 - **Serviços falhou.** Corra `openldr health` no servidor para ver que serviço está parado.
 - **Conectores falhou.** A verificação diz qual é o conector. Corra **Diagnosticar** nele.
 - **Sincronização com o central falhou.** O último ciclo falhou. **Definições**, **Sincronização distribuída**, **Atividade** diz porquê. Veja [Sincronização distribuída](/docs/sync).
+- **Início de sessão avisa que ainda não existe nenhum administrador.** A instalação usa o início de sessão próprio do OpenLDR, e ninguém terminou a configuração. O `openldr doctor` mostra `No administrator exists yet. Run "openldr auth setup-code", then open studio to create one.` Até lá, o Studio mostra a página **Criar o administrador**, e não esta página. Veja [Início de sessão e palavras-passe](/docs/sign-in).
 - **Uma verificação não conseguiu correr.** O registo do servidor tem o motivo.
 
 ## Guias relacionados

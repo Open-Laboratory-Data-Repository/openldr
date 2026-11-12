@@ -63,7 +63,7 @@ bundled containers. Change them only when pointing at external infrastructure.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `AUTH_ADAPTER` | `keycloak` | Sign-in mode: `keycloak` or `oidc`. See [Authentication providers](/docs/auth-providers). |
+| `AUTH_ADAPTER` | `keycloak` | Sign-in mode: `local`, `keycloak` or `oidc`. See [Authentication providers](/docs/auth-providers). |
 | `BLOB_ADAPTER` | `minio` | Object-storage backend for uploads and artifacts. `minio` selects the S3 adapter, which also works with Garage. |
 | `EVENTING_ADAPTER` | `pg` | Event store used by workflow triggers. |
 | `TARGET_STORE_ADAPTER` | `pg` | Analytics warehouse engine: `pg`, `mssql`, or `mysql`. |
@@ -96,8 +96,8 @@ Keycloak is the default. Generic OIDC uses discovery and JWT access tokens. See 
 
 | Variable | Purpose |
 | --- | --- |
-| `IDENTITY_ADMIN_ADAPTER` | `keycloak` or `none`. Defaults to `keycloak` for Keycloak auth, `none` for generic OIDC. |
-| `OIDC_ISSUER_URL` | Public issuer URL. Keep the existing value on upgrade. Later changes block startup. |
+| `IDENTITY_ADMIN_ADAPTER` | `keycloak`, `local` or `none`. Defaults to `keycloak` for Keycloak auth, `local` for local sign-in, `none` for generic OIDC. |
+| `OIDC_ISSUER_URL` | Public issuer URL. Required for `keycloak` and `oidc`, not used by `local`. Keep the existing value on upgrade. Later changes block startup. |
 | `OIDC_INTERNAL_ISSUER_URL` | Keycloak-only internal realm base URL. Generic OIDC ignores this value. |
 | `OIDC_INTERNAL_JWKS_URL` | Explicit internal signing-key endpoint override. Does not change the expected issuer. |
 | `OIDC_AUDIENCE` | Expected token audience. |

@@ -2,6 +2,8 @@
 
 O OpenLDR aceita Keycloak e OpenID Connect genérico, ou OIDC, para iniciar sessão. Keycloak continua a ser a opção predefinida. O modo genérico exige descoberta OIDC e tokens de acesso JWT assinados. Tokens opacos não são aceites. Este guia não certifica a configuração de um segundo fornecedor.
 
+Um terceiro modo, `AUTH_ADAPTER=local`, guarda as contas e as palavras-passe no próprio OpenLDR, sem Keycloak. Este guia não o cobre. Veja [Início de sessão e palavras-passe](/docs/sign-in) para o usar, e a página Fornecedores de autenticação do site do OpenLDR para o configurar.
+
 ## Escolher autenticação e administração
 
 | Configuração | Início de sessão | Administração do fornecedor | Criação de clientes de sincronização |

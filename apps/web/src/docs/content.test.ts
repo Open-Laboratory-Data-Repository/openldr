@@ -21,6 +21,17 @@ describe('website docs content', () => {
     }
   });
 
+  it('documents local sign-in, its setup code and the admin password recovery in every language', () => {
+    for (const locale of ['en', 'fr', 'pt'] as const) {
+      const body = docPage('auth-providers', DEFAULT_DOC_VERSION, locale)!.body;
+      expect(body, locale).toContain('AUTH_ADAPTER=local');
+      expect(body, locale).toContain('openldr auth setup-code');
+      expect(body, locale).toContain('openldr user reset-password <username> --force');
+      const cli = docPage('cli', DEFAULT_DOC_VERSION, locale)!.body;
+      expect(cli, locale).toContain('openldr user end-sessions <username>');
+    }
+  });
+
   it('takes each page title from the file in the reader\'s language', () => {
     expect(pageTitle('upgrading', '0.1.8', 'en')).toBe('Planned upgrades');
     expect(pageTitle('upgrading', '0.1.8', 'fr')).toBe('Mises à niveau planifiées');

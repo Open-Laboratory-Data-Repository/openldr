@@ -65,7 +65,7 @@ infrastructure externe.
 
 | Variable | Défaut | Rôle |
 | --- | --- | --- |
-| `AUTH_ADAPTER` | `keycloak` | Mode de connexion : `keycloak` ou `oidc`. Voir [Fournisseurs d'authentification](/docs/auth-providers). |
+| `AUTH_ADAPTER` | `keycloak` | Mode de connexion : `local`, `keycloak` ou `oidc`. Voir [Fournisseurs d'authentification](/docs/auth-providers). |
 | `BLOB_ADAPTER` | `minio` | Stockage objet des téléversements et des artefacts. `minio` sélectionne l'adaptateur S3, qui fonctionne aussi avec Garage. |
 | `EVENTING_ADAPTER` | `pg` | Magasin d'événements utilisé par les déclencheurs de workflow. |
 | `TARGET_STORE_ADAPTER` | `pg` | Moteur de l'entrepôt analytique : `pg`, `mssql` ou `mysql`. |
@@ -101,8 +101,8 @@ place, les limites d'administration et la protection de l'émetteur.
 
 | Variable | Rôle |
 | --- | --- |
-| `IDENTITY_ADMIN_ADAPTER` | `keycloak` ou `none`. Vaut `keycloak` par défaut avec Keycloak, `none` avec OIDC générique. |
-| `OIDC_ISSUER_URL` | URL publique de l'émetteur. Gardez la valeur existante lors d'une mise à jour. Un changement ultérieur bloque le démarrage. |
+| `IDENTITY_ADMIN_ADAPTER` | `keycloak`, `local` ou `none`. Vaut `keycloak` par défaut avec Keycloak, `local` avec la connexion locale, `none` avec OIDC générique. |
+| `OIDC_ISSUER_URL` | URL publique de l'émetteur. Obligatoire pour `keycloak` et `oidc`, inutilisée par `local`. Gardez la valeur existante lors d'une mise à jour. Un changement ultérieur bloque le démarrage. |
 | `OIDC_INTERNAL_ISSUER_URL` | URL interne de base du realm, pour Keycloak uniquement. OIDC générique ignore cette valeur. |
 | `OIDC_INTERNAL_JWKS_URL` | Remplace l'adresse interne des clés de signature. Ne change pas l'émetteur attendu. |
 | `OIDC_AUDIENCE` | Audience attendue du jeton. |

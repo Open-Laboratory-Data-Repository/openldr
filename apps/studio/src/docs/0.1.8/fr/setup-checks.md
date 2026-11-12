@@ -64,7 +64,7 @@ Voir [Laboratoire](/docs/laboratory) pour le nom, le logo et le fuseau horaire.
 | Vérification | Ce qu'elle regarde | Si ce n'est pas le cas |
 | --- | --- | --- |
 | Services | La connexion, le stockage des fichiers, les événements et l'entrepôt répondent. | CE ne peut ni servir ni stocker de données. Lancez `openldr health` sur le serveur pour voir quel service est arrêté. |
-| Connexion des utilisateurs | La connexion est activée. | Avec `AUTH_DEV_BYPASS` activé, toute personne qui joint le serveur est administrateur. C'est un échec en production et un avertissement ailleurs. |
+| Connexion des utilisateurs | La connexion est activée. Avec la connexion propre à OpenLDR, un administrateur existe. | Avec `AUTH_DEV_BYPASS` activé, toute personne qui joint le serveur est administrateur. C'est un échec en production et un avertissement ailleurs. Avec la connexion propre à OpenLDR, la vérification avertit aussi tant qu'aucun administrateur n'existe. |
 | Clé des secrets | `SECRETS_ENCRYPTION_KEY` est défini. | Un connecteur qui contient un mot de passe ne peut être ni enregistré ni lu. |
 | Nom du laboratoire | Le nom est défini, et n'est pas celui fourni par défaut. | Les rapports impriment le nom du produit comme laboratoire émetteur. |
 | Fuseau horaire | Un fuseau horaire est défini. | Le rapport mensuel de transmission compte les jours en UTC, donc les arrivées du soir tombent le mauvais jour. |
@@ -119,6 +119,7 @@ La page fonctionne sur un téléphone. Le message de chaque vérification passe 
 - **Services en échec.** Lancez `openldr health` sur le serveur pour voir quel service est arrêté.
 - **Connecteurs en échec.** La vérification nomme le connecteur. Lancez **Diagnostiquer** dessus.
 - **Synchronisation avec le central en échec.** Le dernier cycle a échoué. **Paramètres**, **Synchronisation distribuée**, **Activité** dit pourquoi. Voir [Synchronisation distribuée](/docs/sync).
+- **La connexion des utilisateurs avertit qu'aucun administrateur n'existe.** L'installation utilise la connexion propre à OpenLDR, et personne n'a terminé la configuration. `openldr doctor` affiche `No administrator exists yet. Run "openldr auth setup-code", then open studio to create one.` Jusque-là, Studio affiche sa page **Créer l'administrateur**, et non cette page. Voir [Connexion et mots de passe](/docs/sign-in).
 - **Une vérification n'a pas pu s'exécuter.** Le journal du serveur en donne la raison.
 
 ## Guides associés

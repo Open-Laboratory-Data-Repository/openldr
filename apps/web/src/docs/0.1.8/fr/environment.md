@@ -49,7 +49,7 @@ Les adaptateurs choisissent l'implémentation de chaque sous-système. Les valeu
 
 | Variable | Par défaut | Rôle |
 | --- | --- | --- |
-| `AUTH_ADAPTER` | `keycloak` | Mode de connexion : `keycloak` ou `oidc`. Voir [Fournisseurs d'authentification](/docs/auth-providers). |
+| `AUTH_ADAPTER` | `keycloak` | Mode de connexion : `local`, `keycloak` ou `oidc`. Voir [Fournisseurs d'authentification](/docs/auth-providers). |
 | `BLOB_ADAPTER` | `minio` | Stockage d'objets pour les fichiers envoyés et les artefacts. `minio` choisit l'adaptateur S3, qui fonctionne aussi avec Garage. |
 | `EVENTING_ADAPTER` | `pg` | Magasin d'événements utilisé par les déclencheurs de flux de travail. |
 | `TARGET_STORE_ADAPTER` | `pg` | Moteur de l'entrepôt analytique : `pg`, `mssql` ou `mysql`. |
@@ -77,8 +77,8 @@ Keycloak est le choix par défaut. L'OIDC générique utilise la découverte et 
 
 | Variable | Rôle |
 | --- | --- |
-| `IDENTITY_ADMIN_ADAPTER` | `keycloak` ou `none`. Vaut `keycloak` par défaut avec l'authentification Keycloak, et `none` avec l'OIDC générique. |
-| `OIDC_ISSUER_URL` | URL publique de l'émetteur. Gardez la valeur existante lors d'une mise à niveau. Un changement ultérieur bloque le démarrage. |
+| `IDENTITY_ADMIN_ADAPTER` | `keycloak`, `local` ou `none`. Vaut `keycloak` par défaut avec l'authentification Keycloak, `local` avec la connexion locale, et `none` avec l'OIDC générique. |
+| `OIDC_ISSUER_URL` | URL publique de l'émetteur. Obligatoire pour `keycloak` et `oidc`, inutilisée par `local`. Gardez la valeur existante lors d'une mise à niveau. Un changement ultérieur bloque le démarrage. |
 | `OIDC_INTERNAL_ISSUER_URL` | URL de base interne du realm, pour Keycloak uniquement. L'OIDC générique ignore cette valeur. |
 | `OIDC_INTERNAL_JWKS_URL` | Remplacement explicite du point de terminaison interne des clés de signature. Ne change pas l'émetteur attendu. |
 | `TLS_CERT_PATH` | Chemin du certificat TLS public de ce serveur (PEM). Quand elle est définie, la page Sites peut proposer le certificat au téléchargement, pour qu'un laboratoire distant fasse confiance à un serveur central auto-signé. L'installateur monte le certificat et définit cette variable automatiquement. |

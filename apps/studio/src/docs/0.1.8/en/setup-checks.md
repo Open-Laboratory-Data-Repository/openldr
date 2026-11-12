@@ -64,7 +64,7 @@ See [Laboratory](/docs/laboratory) for the name, logo and time zone.
 | Check | What it looks at | If it is not met |
 | --- | --- | --- |
 | Services | Sign-in, file storage, eventing and the warehouse answer. | CE cannot serve or store data. Run `openldr health` on the server to see which service is down. |
-| Sign-in | Sign-in is switched on. | With `AUTH_DEV_BYPASS` on, anyone who reaches the server is an administrator. This fails on a production install and warns elsewhere. |
+| Sign-in | Sign-in is switched on. Under OpenLDR's own sign-in, an administrator exists. | With `AUTH_DEV_BYPASS` on, anyone who reaches the server is an administrator. This fails on a production install and warns elsewhere. Under OpenLDR's own sign-in, the check also warns while no administrator exists yet. |
 | Secrets key | `SECRETS_ENCRYPTION_KEY` is set. | A connector that holds a password cannot be saved or read. |
 | Laboratory name | The name is set, and is not the shipped default. | Reports print the product name as the issuing laboratory. |
 | Time zone | A time zone is set. | The monthly transmission report counts days in UTC, so evening arrivals land on the wrong day. |
@@ -119,6 +119,7 @@ The page works on a phone. Each check's message wraps under its name, and the st
 - **Services failed.** Run `openldr health` on the server to see which service is down.
 - **Connectors failed.** The check names the connector. Run **Diagnose** on it.
 - **Sync with central failed.** The last cycle failed. **Settings**, **Distributed sync**, **Activity** shows why. See [Distributed Sync](/docs/sync).
+- **Sign-in warns that no administrator exists yet.** The install uses OpenLDR's own sign-in, and nobody has finished setup. `openldr doctor` prints `No administrator exists yet. Run "openldr auth setup-code", then open studio to create one.` Studio shows its **Create the administrator** page until then, not this page. See [Sign-in and passwords](/docs/sign-in).
 - **A check says it could not run.** The server log has the reason.
 
 ## Related guides

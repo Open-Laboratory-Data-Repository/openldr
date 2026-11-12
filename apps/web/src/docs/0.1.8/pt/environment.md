@@ -65,7 +65,7 @@ correspondem aos contentores incluídos. Altere-os apenas para usar infraestrutu
 
 | Variável | Omissão | Finalidade |
 | --- | --- | --- |
-| `AUTH_ADAPTER` | `keycloak` | Modo de início de sessão: `keycloak` ou `oidc`. Consulte [Fornecedores de autenticação](/docs/auth-providers). |
+| `AUTH_ADAPTER` | `keycloak` | Modo de início de sessão: `local`, `keycloak` ou `oidc`. Consulte [Fornecedores de autenticação](/docs/auth-providers). |
 | `BLOB_ADAPTER` | `minio` | Armazenamento de objetos para ficheiros carregados e artefactos. `minio` seleciona o adaptador S3, que também funciona com o Garage. |
 | `EVENTING_ADAPTER` | `pg` | Armazém de eventos usado pelos gatilhos dos fluxos de trabalho. |
 | `TARGET_STORE_ADAPTER` | `pg` | Motor do armazém analítico: `pg`, `mssql` ou `mysql`. |
@@ -95,8 +95,8 @@ O Keycloak é o modo por omissão. O OIDC genérico usa descoberta e tokens de a
 
 | Variável | Finalidade |
 | --- | --- |
-| `IDENTITY_ADMIN_ADAPTER` | `keycloak` ou `none`. Por omissão, `keycloak` com autenticação Keycloak e `none` com OIDC genérico. |
-| `OIDC_ISSUER_URL` | URL público do emissor. Mantenha o valor existente numa atualização. Uma alteração posterior impede o arranque. |
+| `IDENTITY_ADMIN_ADAPTER` | `keycloak`, `local` ou `none`. Por omissão, `keycloak` com autenticação Keycloak, `local` com início de sessão local e `none` com OIDC genérico. |
+| `OIDC_ISSUER_URL` | URL público do emissor. Obrigatório para `keycloak` e `oidc`, não usado por `local`. Mantenha o valor existente numa atualização. Uma alteração posterior impede o arranque. |
 | `OIDC_INTERNAL_ISSUER_URL` | URL interno base do realm, apenas para Keycloak. O OIDC genérico ignora este valor. |
 | `OIDC_INTERNAL_JWKS_URL` | Substitui explicitamente o endereço interno das chaves de assinatura. Não altera o emissor esperado. |
 | `TLS_CERT_PATH` | Caminho do certificado TLS público deste servidor (PEM). Quando definido, a página Sites permite transferi-lo, para que um laboratório remoto confie num servidor central autoassinado. O instalador monta o certificado e define esta variável automaticamente. |

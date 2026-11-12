@@ -2,6 +2,8 @@
 
 OpenLDR accepte Keycloak et OpenID Connect générique, ou OIDC, pour la connexion. Keycloak reste le choix par défaut. Le mode générique exige la découverte OIDC et des jetons d'accès JWT signés. Les jetons opaques ne sont pas acceptés. Ce guide ne certifie pas la configuration d'un second fournisseur.
 
+Un troisième mode, `AUTH_ADAPTER=local`, garde les comptes et les mots de passe dans OpenLDR lui-même, sans Keycloak. Ce guide ne le couvre pas. Voir [Connexion et mots de passe](/docs/sign-in) pour l'utiliser, et la page Fournisseurs d'authentification du site OpenLDR pour le mettre en place.
+
 ## Choisir l'authentification et l'administration
 
 | Configuration | Connexion | Administration du fournisseur | Création des clients de synchronisation |
