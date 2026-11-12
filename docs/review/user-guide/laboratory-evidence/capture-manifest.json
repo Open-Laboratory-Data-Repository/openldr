@@ -1,0 +1,406 @@
+{
+  "capturedAt": "2026-11-12T14:00:26.221Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5188/studio/settings/laboratory",
+  "steps": [
+    {
+      "id": "user-menu",
+      "label": "Open your user menu at the bottom left.",
+      "path": "laboratory-evidence/user-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 755.5,
+          "width": 223,
+          "height": 36.5
+        }
+      ]
+    },
+    {
+      "id": "settings-menu",
+      "label": "Choose Settings.",
+      "path": "laboratory-evidence/settings-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 13,
+          "y": 682.5,
+          "width": 198,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "laboratory-page",
+      "label": "Select Laboratory in Settings.",
+      "path": "laboratory-evidence/laboratory-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 140,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "name",
+      "label": "Enter your issuing laboratory name.",
+      "path": "laboratory-evidence/name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 570.734375,
+          "y": 180.265625,
+          "width": 693.265625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "address",
+      "label": "Enter the address your report templates should print.",
+      "path": "laboratory-evidence/address.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 570.734375,
+          "y": 224.265625,
+          "width": 693.265625,
+          "height": 64
+        }
+      ]
+    },
+    {
+      "id": "contact",
+      "label": "Enter the contact information for the issuing laboratory.",
+      "path": "laboratory-evidence/contact.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 570.734375,
+          "y": 300.265625,
+          "width": 693.265625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "register",
+      "label": "Choose an existing register. Register a source through Facilities if the needed one is absent.",
+      "path": "laboratory-evidence/register.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 575.75,
+          "y": 381.25,
+          "width": 184.75,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "timezone",
+      "label": "Enter your named time zone on PostgreSQL or MySQL. Read the SQL Server exception below.",
+      "path": "laboratory-evidence/timezone.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 570.734375,
+          "y": 388.265625,
+          "width": 693.265625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "page-actions",
+      "label": "Open the Laboratory page dots menu.",
+      "path": "laboratory-evidence/page-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 64,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "save-identity",
+      "label": "Choose Save to keep the laboratory settings.",
+      "path": "laboratory-evidence/save-identity.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 105,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "identity-result",
+      "label": "The saved laboratory identity remains after reopening the page.",
+      "path": "laboratory-evidence/identity-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 570.734375,
+          "y": 180.265625,
+          "width": 693.265625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "clear-logo",
+      "label": "Clear removes the current logo from the draft.",
+      "path": "laboratory-evidence/clear-logo.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 752.78125,
+          "y": 496.515625,
+          "width": 57.46875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "save-clear-logo",
+      "label": "Choose Save to keep the laboratory settings.",
+      "path": "laboratory-evidence/save-clear-logo.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 105,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-name",
+      "label": "Laboratory fields fit the phone width.",
+      "path": "laboratory-evidence/phone-name.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 122.734375,
+          "y": 249.921875,
+          "width": 236.265625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-logo",
+      "label": "Scroll to Logo. The preview and controls remain available.",
+      "path": "laboratory-evidence/phone-logo.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 182.734375,
+          "y": 626.671875,
+          "width": 110.046875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "choose-logo",
+      "label": "Choose file opens an image file selection.",
+      "path": "laboratory-evidence/choose-logo.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 630.734375,
+          "y": 496.515625,
+          "width": 110.046875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "logo-preview",
+      "label": "The chosen PNG appears in the preview before saving.",
+      "path": "laboratory-evidence/logo-preview.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 570.734375,
+          "y": 488.515625,
+          "width": 48,
+          "height": 48
+        }
+      ]
+    },
+    {
+      "id": "save-logo",
+      "label": "Choose Save to keep the laboratory settings.",
+      "path": "laboratory-evidence/save-logo.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 105,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "logo-result",
+      "label": "The saved logo remains after reopening Laboratory.",
+      "path": "laboratory-evidence/logo-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 570.734375,
+          "y": 488.515625,
+          "width": 48,
+          "height": 48
+        }
+      ]
+    }
+  ]
+}

@@ -14,5 +14,6 @@
   "users": "users-review.html",
   "layouts": "layouts-review.html",
   "audit": "audit-review.html",
-  "setup-checks": "setup-checks-review.html"
+  "setup-checks": "setup-checks-review.html",
+  "laboratory": "laboratory-review.html"
 }

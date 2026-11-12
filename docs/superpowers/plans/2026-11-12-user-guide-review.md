@@ -59,7 +59,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [x] Audit
 - [ ] Settings
 - [x] Setup checks
-- [ ] Laboratory
+- [x] Laboratory
 - [ ] Data exposure
 - [ ] Distributed Sync
 - [x] Connectors

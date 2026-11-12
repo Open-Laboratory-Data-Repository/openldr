@@ -1,0 +1,13 @@
+{
+  "identity": {
+    "lab.name": "Documentation laboratory",
+    "lab.address": "Example Road\nTest installation",
+    "lab.contact": "laboratory@example.invalid",
+    "lab.facilitySystem": "urn:example:facilities:admin-guide",
+    "lab.timezone": "Africa/Dar_es_Salaam"
+  },
+  "logoBeforePresent": true,
+  "logoClearedAndSaved": true,
+  "uploadedLogoMime": "image/png",
+  "uploadedLogoSaved": true
+}
