@@ -1,0 +1,23 @@
+{
+  "mainCommit": "30d9e025",
+  "checks": [
+    {
+      "command": "pnpm --filter @openldr/studio test src/pages/Docs.test.tsx src/pages/settings/Marketplace.test.tsx src/reports/reportDefsApi.test.ts src/roles/CapabilityGrid.test.tsx",
+      "exitCode": 0,
+      "output": [
+        "Test Files  4 passed (4)",
+        "Tests  54 passed (54)"
+      ]
+    },
+    {
+      "command": "pnpm --filter @openldr/server test src/report-defs-routes.test.ts src/reports-routes.test.ts && pnpm --filter @openldr/bootstrap test src/reporting-date-params.test.ts",
+      "exitCode": 0,
+      "output": [
+        "Test Files  2 passed (2)",
+        "Tests  46 passed (46)",
+        "Test Files  1 passed (1)",
+        "Tests  31 passed (31)"
+      ]
+    }
+  ]
+}

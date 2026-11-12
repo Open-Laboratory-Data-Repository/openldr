@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "30d9e025",
+          "type": "fix",
+          "scope": "",
+          "title": "Correct report dates, package actions and guide navigation"
+        },
+        {
           "hash": "4e9981a0",
           "type": "feat",
           "scope": "docs",
