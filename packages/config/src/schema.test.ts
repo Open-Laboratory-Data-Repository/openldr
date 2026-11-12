@@ -108,3 +108,30 @@ describe('auth config', () => {
     expect(ConfigSchema.parse({ ...base }).TLS_CERT_PATH).toBeUndefined();
   });
 });
+
+describe('local sign-in config', () => {
+  // 32 bytes, base64. Only presence is checked at boot.
+  const VALID_KEY = Buffer.alloc(32, 7).toString('base64');
+  const parse = (env: Record<string, unknown>) => ConfigSchema.parse(env);
+
+  it('accepts local sign-in with no OIDC issuer', () => {
+    const { OIDC_ISSUER_URL: _drop, ...rest } = base;
+    const cfg = parse({ ...rest, AUTH_ADAPTER: 'local', SECRETS_ENCRYPTION_KEY: VALID_KEY });
+    expect(cfg.AUTH_ADAPTER).toBe('local');
+  });
+  it('refuses local sign-in with no secrets key', () => {
+    expect(() => parse({ ...base, AUTH_ADAPTER: 'local', SECRETS_ENCRYPTION_KEY: undefined })).toThrow(/SECRETS_ENCRYPTION_KEY/);
+  });
+  it('still requires an issuer for keycloak and oidc', () => {
+    const { OIDC_ISSUER_URL: _drop, ...rest } = base;
+    expect(() => parse({ ...rest, AUTH_ADAPTER: 'keycloak' })).toThrow(/OIDC_ISSUER_URL/);
+    expect(() => parse({ ...rest, AUTH_ADAPTER: 'oidc' })).toThrow(/OIDC_ISSUER_URL/);
+  });
+  it('refuses mixed admin adapters', () => {
+    expect(() => parse({ ...base, AUTH_ADAPTER: 'local', IDENTITY_ADMIN_ADAPTER: 'keycloak', SECRETS_ENCRYPTION_KEY: VALID_KEY })).toThrow();
+    expect(() => parse({ ...base, AUTH_ADAPTER: 'keycloak', IDENTITY_ADMIN_ADAPTER: 'local' })).toThrow();
+  });
+  it('keeps keycloak as the default', () => {
+    expect(parse(base).AUTH_ADAPTER).toBe('keycloak');
+  });
+});

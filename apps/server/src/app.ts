@@ -7,7 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import { registerErrorHandler } from './error-handler';
 import fastifyStatic from '@fastify/static';
 import compress from '@fastify/compress';
-import { resolveAuthCapabilities, type AuthSelectionConfig } from '@openldr/config';
+import { requireOidcIssuer, resolveAuthCapabilities, type AuthSelectionConfig } from '@openldr/config';
 import { appError } from '@openldr/core';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerReportRoutes } from './reports-routes';
@@ -48,7 +48,7 @@ import { readAppVersion } from './version';
 export function registerConfigRoute(
   app: FastifyInstance<any, any, any, any>,
   ctx: {
-    cfg: AuthSelectionConfig & { TARGET_STORE_ADAPTER: string; AUTH_DEV_BYPASS: boolean; OIDC_ISSUER_URL: string; OIDC_WEB_CLIENT_ID: string; OIDC_AUDIENCE?: string; OIDC_RESOURCE?: string; OIDC_SCOPES?: string };
+    cfg: AuthSelectionConfig & { TARGET_STORE_ADAPTER: string; AUTH_DEV_BYPASS: boolean; OIDC_ISSUER_URL?: string; OIDC_WEB_CLIENT_ID: string; OIDC_AUDIENCE?: string; OIDC_RESOURCE?: string; OIDC_SCOPES?: string };
     featureFlags: { get(id: string): Promise<boolean> };
   },
 ): void {
@@ -61,7 +61,7 @@ export function registerConfigRoute(
     authCapabilities: resolveAuthCapabilities(ctx.cfg),
     oidc: {
       mode: ctx.cfg.AUTH_ADAPTER ?? 'keycloak',
-      issuerUrl: ctx.cfg.OIDC_ISSUER_URL,
+      issuerUrl: requireOidcIssuer(ctx.cfg),
       clientId: ctx.cfg.OIDC_WEB_CLIENT_ID,
       audience: ctx.cfg.OIDC_AUDIENCE ?? null,
       resource: ctx.cfg.OIDC_RESOURCE ?? null,

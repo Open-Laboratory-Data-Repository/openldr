@@ -1,5 +1,5 @@
 import { createDbContext, createAppContext, recordAuditEvent, readAuthIssuerBinding, rebindAuthIssuer } from '@openldr/bootstrap';
-import { loadConfig } from '@openldr/config';
+import { loadConfig, requireOidcIssuer } from '@openldr/config';
 import { cliActor } from './cli-actor';
 
 interface RebindOpts {
@@ -15,7 +15,7 @@ function emit(json: boolean, payload: unknown, human: string): void {
  *  Uses the database context only: the app context refuses to start while the issuers differ. */
 export async function runAuthRebindIssuer(opts: RebindOpts): Promise<number> {
   const cfg = loadConfig();
-  const to = cfg.OIDC_ISSUER_URL;
+  const to = requireOidcIssuer(cfg);
   const ctx = await createDbContext(cfg);
   try {
     const pending = await ctx.pendingMigrations();

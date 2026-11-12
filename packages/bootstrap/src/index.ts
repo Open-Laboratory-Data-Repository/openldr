@@ -8,7 +8,7 @@ import { bindAuthIssuer } from './auth-issuer-binding';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import { toS3BucketConfig } from './s3-config';
-import type { Config } from '@openldr/config';
+import { requireOidcIssuer, type Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
 import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
@@ -640,10 +640,14 @@ export interface AppContextOptions {
 export async function createAppContext(cfg: Config, opts: AppContextOptions = {}): Promise<AppContext> {
   const logger = createLogger({ level: cfg.LOG_LEVEL });
 
+  // createAuth accepts only keycloak and oidc until the local adapter is wired in.
+  if (cfg.AUTH_ADAPTER === 'local' || cfg.IDENTITY_ADMIN_ADAPTER === 'local') {
+    throw new Error('local sign-in is not wired yet');
+  }
   const auth = createAuth({
     mode: cfg.AUTH_ADAPTER,
     identityAdminAdapter: cfg.IDENTITY_ADMIN_ADAPTER,
-    issuerUrl: cfg.OIDC_ISSUER_URL,
+    issuerUrl: requireOidcIssuer(cfg),
     audience: cfg.OIDC_AUDIENCE,
     internalJwksUrl: cfg.OIDC_INTERNAL_JWKS_URL,
     internalIssuerUrl: cfg.OIDC_INTERNAL_ISSUER_URL,
@@ -652,7 +656,7 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   });
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   try {
-    if (!cfg.AUTH_DEV_BYPASS) await bindAuthIssuer(internal.db, cfg.OIDC_ISSUER_URL);
+    if (!cfg.AUTH_DEV_BYPASS) await bindAuthIssuer(internal.db, requireOidcIssuer(cfg));
   } catch (error) {
     await internal.close();
     throw error;

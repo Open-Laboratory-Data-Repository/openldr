@@ -45,7 +45,7 @@ it.each([
   registerConfigRoute(app, { cfg: { AUTH_ADAPTER: mode, IDENTITY_ADMIN_ADAPTER: admin, KEYCLOAK_ADMIN_CLIENT_ID: 'admin', KEYCLOAK_ADMIN_CLIENT_SECRET: secret, TARGET_STORE_ADAPTER: 'pg', AUTH_DEV_BYPASS: false, OIDC_ISSUER_URL: 'https://id.example', OIDC_WEB_CLIENT_ID: 'web' }, featureFlags: { get: async () => false } } as any);
   const response = await app.inject({ method: 'GET', url: '/api/config' });
   expect(response.json().oidc.mode).toBe(mode);
-  expect(response.json().authCapabilities).toEqual({ identityAdmin: available, syncClientAdmin: available });
+  expect(response.json().authCapabilities).toEqual({ identityAdmin: available, syncClientAdmin: available, passwordResetEmail: available });
   expect(response.body).not.toContain('secret');
   expect(response.body).not.toContain('KEYCLOAK');
   await app.close();

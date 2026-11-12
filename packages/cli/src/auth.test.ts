@@ -13,7 +13,8 @@ const mocks = vi.hoisted(() => ({
 const NEW_ISSUER = 'https://lab.example.org/auth/realms/openldr';
 const OLD_ISSUER = 'https://192.168.1.20:8443/auth/realms/openldr';
 
-vi.mock('@openldr/config', () => ({
+vi.mock('@openldr/config', async (importOriginal) => ({
+  requireOidcIssuer: (await importOriginal<typeof import('@openldr/config')>()).requireOidcIssuer,
   loadConfig: vi.fn(() => ({ OIDC_ISSUER_URL: NEW_ISSUER })),
 }));
 

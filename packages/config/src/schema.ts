@@ -32,8 +32,8 @@ export const ConfigSchema = z
     // after migration. Off by default; the prod demo turns it on so it comes up populated.
     SEED_ON_START: envBoolean(false),
 
-    AUTH_ADAPTER: z.enum(['keycloak', 'oidc']).default('keycloak'),
-    IDENTITY_ADMIN_ADAPTER: z.enum(['keycloak', 'none']).optional(),
+    AUTH_ADAPTER: z.enum(['keycloak', 'oidc', 'local']).default('keycloak'),
+    IDENTITY_ADMIN_ADAPTER: z.enum(['keycloak', 'none', 'local']).optional(),
     BLOB_ADAPTER: z.enum(['minio']).default('minio'),
     EVENTING_ADAPTER: z.enum(['pg']).default('pg'),
     TARGET_STORE_ADAPTER: z.enum(['pg', 'mssql', 'mysql']).default('pg'),
@@ -72,8 +72,9 @@ export const ConfigSchema = z
     // Working dir for terminology distribution download + extraction (needs disk headroom for SNOMED).
     TERMINOLOGY_WORK_DIR: z.string().optional(),
 
-    // OIDC issuer URL. Keycloak mode uses the realm base URL.
-    OIDC_ISSUER_URL: z.string().url(),
+    // OIDC issuer URL. Keycloak mode uses the realm base URL. Required for keycloak and oidc
+    // (checked below). Local sign-in has no external issuer.
+    OIDC_ISSUER_URL: z.string().url().optional(),
     OIDC_WEB_CLIENT_ID: z.string().min(1).default('openldr-web'),
     OIDC_AUDIENCE: z.string().min(1).optional(),
     OIDC_RESOURCE: z.string().url().max(2048).optional(),
@@ -198,8 +199,18 @@ export const ConfigSchema = z
     SECRETS_ENCRYPTION_KEY: z.string().optional(),
   })
   .superRefine((cfg, ctx) => {
-    if (cfg.AUTH_ADAPTER === 'oidc' && cfg.IDENTITY_ADMIN_ADAPTER === 'keycloak') {
+    if (cfg.AUTH_ADAPTER !== 'keycloak' && cfg.IDENTITY_ADMIN_ADAPTER === 'keycloak') {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['IDENTITY_ADMIN_ADAPTER'], message: 'Keycloak administration requires AUTH_ADAPTER=keycloak' });
+    }
+    if (cfg.AUTH_ADAPTER !== 'local' && cfg.IDENTITY_ADMIN_ADAPTER === 'local') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['IDENTITY_ADMIN_ADAPTER'], message: 'Local account administration requires AUTH_ADAPTER=local' });
+    }
+    if (cfg.AUTH_ADAPTER !== 'local' && !cfg.OIDC_ISSUER_URL) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['OIDC_ISSUER_URL'], message: `OIDC_ISSUER_URL is required when AUTH_ADAPTER=${cfg.AUTH_ADAPTER}` });
+    }
+    // Local sign-in seals its token signing key with this key, so it cannot start without it.
+    if (cfg.AUTH_ADAPTER === 'local' && !cfg.SECRETS_ENCRYPTION_KEY) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['SECRETS_ENCRYPTION_KEY'], message: 'SECRETS_ENCRYPTION_KEY is required when AUTH_ADAPTER=local' });
     }
     if (cfg.TARGET_STORE_ADAPTER === 'mssql') {
       for (const key of ['MSSQL_HOST', 'MSSQL_DATABASE', 'MSSQL_USER', 'MSSQL_PASSWORD'] as const) {
