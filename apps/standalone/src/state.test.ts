@@ -310,11 +310,13 @@ describe('lock', () => {
     expect(await leftovers()).toEqual([]);
   });
 
-  it('lets only one of two acquires at once win over the same dead lock, 50 times', { timeout: 60000 }, async () => {
+  it('lets only one of two acquires at once win over the same dead lock, 50 times', { timeout: 10000 }, async () => {
     // The dead lock's port is held by a server that drops each connection after 20 ms, so each
-    // check of the dead lock takes that long. With a varying head start, one acquire reads the
-    // dead lock while the other is already replacing it: the window where unlink-then-create
-    // lets both win.
+    // check of the dead lock takes about 70 ms (three pings, two 5 ms pauses). With a head start
+    // of 0 to 27 ms, one acquire reads the dead lock while the other is already replacing it:
+    // the window where unlink-then-create lets both win. Short timing keeps 50 rounds to a few
+    // seconds; the production defaults are covered by the third-ping test.
+    const fast = { pingTimeoutMs: 500, pauseMs: 5 };
     const slow = createServer((s) => void setTimeout(() => s.destroy(), 20));
     others.push(slow);
     await new Promise<void>((r) => slow.listen(0, '127.0.0.1', () => r()));
@@ -325,8 +327,8 @@ describe('lock', () => {
       await writeFile(paths.lockFile, JSON.stringify(dead));
       const a = await liveLock(300 + round * 2);
       const b = await liveLock(301 + round * 2);
-      const later = new Promise<void>((r) => setTimeout(r, (round % 10) * 3)).then(() => acquireLock(paths, b));
-      const results = await Promise.allSettled([acquireLock(paths, a), later]);
+      const later = new Promise<void>((r) => setTimeout(r, (round % 10) * 3)).then(() => acquireLock(paths, b, fast));
+      const results = await Promise.allSettled([acquireLock(paths, a, fast), later]);
       const won = results.filter((r) => r.status === 'fulfilled');
       const lost = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
       expect(won, `round ${round}`).toHaveLength(1);

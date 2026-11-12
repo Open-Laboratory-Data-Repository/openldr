@@ -61,9 +61,18 @@ export class AlreadyRunningError extends Error {
 const IS_WINDOWS = process.platform === 'win32';
 /** How many times acquireLock tries before it gives up. */
 const LOCK_ROUNDS = 3;
-/** Failed pings in a row before a lock counts as dead, and the pause between them. */
-const LIVE_PINGS = 3;
-const LIVE_PAUSE_MS = 250;
+/**
+ * How a lock is judged live. Production callers pass nothing and get the defaults: three pings
+ * of up to 2000 ms each, 250 ms apart. Tests pass shorter values.
+ */
+export interface LiveCheckTiming {
+  pingTimeoutMs?: number;
+  pauseMs?: number;
+  attempts?: number;
+}
+const DEFAULT_PING_TIMEOUT_MS = 2000;
+const DEFAULT_PAUSE_MS = 250;
+const DEFAULT_ATTEMPTS = 3;
 
 // ---------------------------------------------------------------------------------------------
 // Where the data folder is
@@ -207,7 +216,7 @@ export async function readLock(paths: StandalonePaths): Promise<LockInfo | null>
  * only removed when what was moved is the lock that was judged dead. Hard links on Windows are
  * unproven.
  */
-export async function acquireLock(paths: StandalonePaths, info: LockInfo): Promise<void> {
+export async function acquireLock(paths: StandalonePaths, info: LockInfo, timing: LiveCheckTiming = {}): Promise<void> {
   const text = `${JSON.stringify(info)}\n`;
   for (let round = 0; round < LOCK_ROUNDS; round += 1) {
     if (await createLock(paths, text)) return;
@@ -215,7 +224,7 @@ export async function acquireLock(paths: StandalonePaths, info: LockInfo): Promi
     const seen = await readIfThere(paths.lockFile);
     if (seen === null) continue;
     const current = parseLock(seen);
-    if (current && (await isLockLive(current))) throw new AlreadyRunningError(current);
+    if (current && (await isLockLive(current, timing))) throw new AlreadyRunningError(current);
 
     // Dead. Move it aside rather than unlink it: two launchers that both judged the same lock
     // dead must not both delete and both win.
@@ -232,7 +241,7 @@ export async function acquireLock(paths: StandalonePaths, info: LockInfo): Promi
       if (moved !== null && moved !== seen) {
         // Another launcher's fresh lock was moved. Put it back if that launcher is alive.
         const fresh = parseLock(moved);
-        if (fresh && (await isLockLive(fresh))) {
+        if (fresh && (await isLockLive(fresh, timing))) {
           try {
             await link(aside, paths.lockFile);
           } catch (e) {
@@ -264,10 +273,15 @@ export async function acquireLock(paths: StandalonePaths, info: LockInfo): Promi
  * next launcher would stop its Postgres. So it takes three failed pings in a row, with a short
  * pause between them. `status` uses this too.
  */
-export async function isLockLive(info: LockInfo): Promise<boolean> {
-  for (let attempt = 0; attempt < LIVE_PINGS; attempt += 1) {
-    if (attempt > 0) await sleep(LIVE_PAUSE_MS);
-    if (await pingControl(info)) return true;
+export async function isLockLive(info: LockInfo, timing: LiveCheckTiming = {}): Promise<boolean> {
+  const {
+    pingTimeoutMs = DEFAULT_PING_TIMEOUT_MS,
+    pauseMs = DEFAULT_PAUSE_MS,
+    attempts = DEFAULT_ATTEMPTS,
+  } = timing;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (attempt > 0) await sleep(pauseMs);
+    if (await pingControl(info, pingTimeoutMs)) return true;
   }
   return false;
 }
