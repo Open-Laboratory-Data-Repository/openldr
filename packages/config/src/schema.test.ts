@@ -131,6 +131,13 @@ describe('local sign-in config', () => {
     expect(() => parse({ ...base, AUTH_ADAPTER: 'local', IDENTITY_ADMIN_ADAPTER: 'keycloak', SECRETS_ENCRYPTION_KEY: VALID_KEY })).toThrow();
     expect(() => parse({ ...base, AUTH_ADAPTER: 'keycloak', IDENTITY_ADMIN_ADAPTER: 'local' })).toThrow();
   });
+  it('refuses IDENTITY_ADMIN_ADAPTER=none under local sign-in', () => {
+    expect(() => parse({ ...base, AUTH_ADAPTER: 'local', IDENTITY_ADMIN_ADAPTER: 'none', SECRETS_ENCRYPTION_KEY: VALID_KEY }))
+      .toThrow('local sign-in manages its own users; leave IDENTITY_ADMIN_ADAPTER unset');
+    expect(parse({ ...base, AUTH_ADAPTER: 'local', SECRETS_ENCRYPTION_KEY: VALID_KEY }).IDENTITY_ADMIN_ADAPTER).toBeUndefined();
+    expect(parse({ ...base, AUTH_ADAPTER: 'local', IDENTITY_ADMIN_ADAPTER: 'local', SECRETS_ENCRYPTION_KEY: VALID_KEY }).IDENTITY_ADMIN_ADAPTER).toBe('local');
+    expect(parse({ ...base, AUTH_ADAPTER: 'oidc', IDENTITY_ADMIN_ADAPTER: 'none' }).IDENTITY_ADMIN_ADAPTER).toBe('none');
+  });
   it('keeps keycloak as the default', () => {
     expect(parse(base).AUTH_ADAPTER).toBe('keycloak');
   });

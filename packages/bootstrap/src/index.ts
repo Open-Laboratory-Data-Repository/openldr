@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import * as XLSX from 'xlsx';
 import pg from 'pg';
 import { Kysely, sql } from 'kysely';
-import { createAuth } from '@openldr/adapter-auth';
+import { createAuth, createLocalAuth, LOCAL_ISSUER, type LocalSignIn } from '@openldr/adapter-auth';
 import { bindAuthIssuer } from './auth-issuer-binding';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
@@ -11,7 +11,7 @@ import { toS3BucketConfig } from './s3-config';
 import { requireOidcIssuer, type Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
-import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -467,6 +467,8 @@ function createOntologyApi(ontologyStore: OntologyStore) {
 export interface AppContext {
   logger: Logger;
   auth: AuthPort;
+  /** Sign-in, sessions and first-admin setup. Set only when AUTH_ADAPTER=local. */
+  localSignIn?: LocalSignIn;
   blob: BlobStoragePort;
   eventing: EventingPort;
   store: TargetStorePort;
@@ -640,23 +642,42 @@ export interface AppContextOptions {
 export async function createAppContext(cfg: Config, opts: AppContextOptions = {}): Promise<AppContext> {
   const logger = createLogger({ level: cfg.LOG_LEVEL });
 
-  // createAuth accepts only keycloak and oidc until the local adapter is wired in.
-  if (cfg.AUTH_ADAPTER === 'local' || cfg.IDENTITY_ADMIN_ADAPTER === 'local') {
-    throw new Error('local sign-in is not wired yet');
-  }
-  const auth = createAuth({
-    mode: cfg.AUTH_ADAPTER,
-    identityAdminAdapter: cfg.IDENTITY_ADMIN_ADAPTER,
-    issuerUrl: requireOidcIssuer(cfg),
-    audience: cfg.OIDC_AUDIENCE,
-    internalJwksUrl: cfg.OIDC_INTERNAL_JWKS_URL,
-    internalIssuerUrl: cfg.OIDC_INTERNAL_ISSUER_URL,
-    adminClientId: cfg.KEYCLOAK_ADMIN_CLIENT_ID,
-    adminClientSecret: cfg.KEYCLOAK_ADMIN_CLIENT_SECRET,
-  });
+  // The internal database comes first, because local sign-in keeps its accounts, sessions and
+  // signing key there. Creating the pool opens no connection.
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
+  const users = createUserStore(internal.db, { withSubjectLock: internal.withAccountStatusLock });
+  const roles = createRoleStore(internal.db);
+  let auth: AuthPort;
+  let localSignIn: LocalSignIn | undefined;
   try {
-    if (!cfg.AUTH_DEV_BYPASS) await bindAuthIssuer(internal.db, requireOidcIssuer(cfg));
+    if (cfg.AUTH_ADAPTER === 'local') {
+      // Bind first, so a database bound to another issuer is refused before anything is written.
+      if (!cfg.AUTH_DEV_BYPASS) await bindAuthIssuer(internal.db, LOCAL_ISSUER);
+      const local = await createLocalAuth({
+        store: createLocalAuthStore(internal.db),
+        users,
+        roles,
+        secretKey: parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''),
+        ping: async () => { await sql`select 1`.execute(internal.db); },
+      });
+      auth = local.auth;
+      localSignIn = local.signIn;
+    } else {
+      // The schema already refuses this pair. The check narrows the type for createAuth.
+      const identityAdminAdapter = cfg.IDENTITY_ADMIN_ADAPTER;
+      if (identityAdminAdapter === 'local') throw new Error('Local account administration requires AUTH_ADAPTER=local');
+      auth = createAuth({
+        mode: cfg.AUTH_ADAPTER,
+        identityAdminAdapter,
+        issuerUrl: requireOidcIssuer(cfg),
+        audience: cfg.OIDC_AUDIENCE,
+        internalJwksUrl: cfg.OIDC_INTERNAL_JWKS_URL,
+        internalIssuerUrl: cfg.OIDC_INTERNAL_ISSUER_URL,
+        adminClientId: cfg.KEYCLOAK_ADMIN_CLIENT_ID,
+        adminClientSecret: cfg.KEYCLOAK_ADMIN_CLIENT_SECRET,
+      });
+      if (!cfg.AUTH_DEV_BYPASS) await bindAuthIssuer(internal.db, requireOidcIssuer(cfg));
+    }
   } catch (error) {
     await internal.close();
     throw error;
@@ -670,8 +691,6 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const reportRuns = createReportRunStore(internal.db);
   const reportSchedules = createReportScheduleStore(internal.db);
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
-  const users = createUserStore(internal.db, { withSubjectLock: internal.withAccountStatusLock });
-  const roles = createRoleStore(internal.db);
   // RBAC Task 4: seed the 5 system roles (lab_admin/lab_manager/data_analyst/system_auditor/
   // lab_technician) on every boot. Deliberately UNCONDITIONAL — NOT routed through seedDatabase()/
   // SEED_ON_START (apps/server/src/index.ts), because that flag defaults to false and only guards
@@ -1810,6 +1829,7 @@ const reporting: ReportingApi = {
   return {
     logger,
     auth,
+    localSignIn,
     blob,
     eventing,
     store,
@@ -2114,6 +2134,10 @@ export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
 export { inspectConnectorConfig, updateConnectorConfig, hostConnectorPatchSchema, hostConnectorCreateSchema, createHostConnector, testHostConnector, removeConnector, type ConnectorConfigView, type HostConnectorInput } from './connector-config';
 
 export { setAccountStatus, AccountNotFoundError } from './account-status';
+export {
+  createSetupCode, createLocalAccount, resetLocalPassword, endLocalSessions, generateTemporaryPassword,
+  LocalSignInNotEnabledError, SetupAlreadyDoneError, UnknownUserError,
+} from './local-accounts';
 
 
 export { listUserDirectory, directoryPageInput } from './user-directory';

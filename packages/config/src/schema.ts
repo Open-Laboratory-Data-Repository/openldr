@@ -205,6 +205,11 @@ export const ConfigSchema = z
     if (cfg.AUTH_ADAPTER !== 'local' && cfg.IDENTITY_ADMIN_ADAPTER === 'local') {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['IDENTITY_ADMIN_ADAPTER'], message: 'Local account administration requires AUTH_ADAPTER=local' });
     }
+    // The local adapter always serves user management, so `none` would hide the Users page
+    // while the server still allowed the calls.
+    if (cfg.AUTH_ADAPTER === 'local' && cfg.IDENTITY_ADMIN_ADAPTER === 'none') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['IDENTITY_ADMIN_ADAPTER'], message: 'local sign-in manages its own users; leave IDENTITY_ADMIN_ADAPTER unset' });
+    }
     if (cfg.AUTH_ADAPTER !== 'local' && !cfg.OIDC_ISSUER_URL) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['OIDC_ISSUER_URL'], message: `OIDC_ISSUER_URL is required when AUTH_ADAPTER=${cfg.AUTH_ADAPTER}` });
     }
