@@ -1,0 +1,317 @@
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { createServer, type AddressInfo, type Server } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { inspect } from 'node:util';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { newControlToken, startControl, type ControlServer } from './control.js';
+import {
+  AlreadyRunningError,
+  StateFileError,
+  acquireLock,
+  ensureFolders,
+  loadOrCreateState,
+  pathsFor,
+  readLock,
+  releaseLock,
+  resolveDataDir,
+  type LockInfo,
+  type StandalonePaths,
+} from './state.js';
+
+const dirs: string[] = [];
+const controls: ControlServer[] = [];
+const others: Server[] = [];
+let paths: StandalonePaths;
+let pickCalls = 0;
+const pick = async () => {
+  pickCalls += 1;
+  return 54329;
+};
+
+async function tempRoot(): Promise<string> {
+  const d = await mkdtemp(join(tmpdir(), 'openldr-sa-state-'));
+  dirs.push(d);
+  return d;
+}
+
+beforeEach(async () => {
+  pickCalls = 0;
+  paths = pathsFor(join(await tempRoot(), 'data'));
+  await ensureFolders(paths);
+});
+
+afterEach(async () => {
+  await Promise.all(controls.splice(0).map((c) => c.close()));
+  await Promise.all(others.splice(0).map((s) => new Promise<void>((r) => (s.listening ? s.close(() => r()) : r()))));
+  await Promise.all(dirs.splice(0).map((d) => rm(d, { recursive: true, force: true })));
+});
+
+/** A lock held by a launcher whose control server is running. */
+async function liveLock(pid: number): Promise<LockInfo> {
+  const token = newControlToken();
+  const c = await startControl({ token, onStop: async () => 'clean' });
+  controls.push(c);
+  return { pid, address: `http://127.0.0.1:${3990 + (pid % 8)}`, startedAt: new Date().toISOString(), controlPort: c.port, token };
+}
+
+/** A port that nothing listens on. */
+async function deadPort(): Promise<number> {
+  const s = createServer();
+  await new Promise<void>((r) => s.listen(0, '127.0.0.1', () => r()));
+  const { port } = s.address() as AddressInfo;
+  await new Promise<void>((r) => s.close(() => r()));
+  return port;
+}
+
+async function deadLock(): Promise<LockInfo> {
+  return { pid: 999999, address: 'http://127.0.0.1:3990', startedAt: '2026-11-01T00:00:00.000Z', controlPort: await deadPort(), token: newControlToken() };
+}
+
+const mode = async (p: string) => (await stat(p)).mode & 0o777;
+const leftovers = async () => (await readdir(paths.root)).filter((n) => n !== 'standalone.lock' && !['blobs', 'logs', 'crash'].includes(n));
+
+describe('resolveDataDir', () => {
+  it('prefers the flag, then OPENLDR_HOME, then the OS default', () => {
+    expect(resolveDataDir({ flag: '/a', env: { OPENLDR_HOME: '/b' }, platform: 'linux', homedir: '/h' })).toBe('/a');
+    expect(resolveDataDir({ env: { OPENLDR_HOME: '/b' }, platform: 'linux', homedir: '/h' })).toBe('/b');
+    expect(resolveDataDir({ env: {}, platform: 'linux', homedir: '/h' })).toBe('/h/.local/share/openldr');
+    expect(resolveDataDir({ env: { XDG_DATA_HOME: '/x' }, platform: 'linux', homedir: '/h' })).toBe('/x/openldr');
+    expect(resolveDataDir({ env: {}, platform: 'darwin', homedir: '/h' })).toBe('/h/Library/Application Support/OpenLDR');
+  });
+
+  it('builds the Windows default from LOCALAPPDATA, else from the home folder (strings only, unproven on Windows)', () => {
+    expect(resolveDataDir({ env: { LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local' }, platform: 'win32', homedir: 'C:\\Users\\u' })).toBe(
+      'C:\\Users\\u\\AppData\\Local\\OpenLDR',
+    );
+    expect(resolveDataDir({ env: {}, platform: 'win32', homedir: 'C:\\Users\\u' })).toBe('C:\\Users\\u\\AppData\\Local\\OpenLDR');
+  });
+
+  it('makes a relative flag absolute', () => {
+    expect(resolveDataDir({ flag: 'rel/data', env: {}, platform: 'linux', homedir: '/h' })).toBe(resolve(process.cwd(), 'rel/data'));
+    expect(resolveDataDir({ env: { OPENLDR_HOME: 'rel/home' }, platform: 'linux', homedir: '/h' })).toBe(resolve(process.cwd(), 'rel/home'));
+  });
+
+  it('treats an empty flag or OPENLDR_HOME as unset, and ignores a relative XDG_DATA_HOME', () => {
+    expect(resolveDataDir({ flag: '', env: { OPENLDR_HOME: '' }, platform: 'linux', homedir: '/h' })).toBe('/h/.local/share/openldr');
+    expect(resolveDataDir({ env: { XDG_DATA_HOME: 'x' }, platform: 'linux', homedir: '/h' })).toBe('/h/.local/share/openldr');
+  });
+});
+
+describe('folders and state file', () => {
+  it('lays out the data folder', () => {
+    const p = pathsFor('/d');
+    expect(p).toEqual({
+      root: '/d',
+      cluster: '/d/postgres',
+      blobs: '/d/blobs',
+      logs: '/d/logs',
+      crash: '/d/crash',
+      stateFile: '/d/standalone.json',
+      lockFile: '/d/standalone.lock',
+      serverLog: '/d/logs/server.log',
+      postgresLog: '/d/logs/postgres.log',
+    });
+  });
+
+  it('creates the root owner-only and the state file owner-only', async () => {
+    expect(await mode(paths.root)).toBe(0o700);
+    for (const d of [paths.blobs, paths.logs, paths.crash]) expect((await stat(d)).isDirectory()).toBe(true);
+    await loadOrCreateState(paths, pick);
+    expect(await mode(paths.stateFile)).toBe(0o600);
+    expect(await leftovers()).toEqual(['standalone.json']);
+  });
+
+  it('makes an existing data folder owner-only', async () => {
+    const root = join(await tempRoot(), 'open');
+    await mkdir(root, { mode: 0o755 });
+    await chmod(root, 0o755);
+    expect(await mode(root)).toBe(0o755);
+    await ensureFolders(pathsFor(root));
+    expect(await mode(root)).toBe(0o700);
+  });
+
+  it('creates a state with a key parseSecretKey accepts, and returns the same one next time', async () => {
+    const first = await loadOrCreateState(paths, pick);
+    // parseSecretKey (packages/core/src/crypto.ts) accepts a string whose base64 decodes to 32 bytes.
+    expect(Buffer.from(first.secretsKey, 'base64')).toHaveLength(32);
+    expect(Buffer.from(first.secretsKey, 'base64').toString('base64')).toBe(first.secretsKey);
+    for (const pw of [first.pgSuperPassword, first.pgAppPassword]) {
+      expect(pw).toMatch(/^[A-Za-z0-9_-]{32}$/);
+      expect(Buffer.from(pw, 'base64url')).toHaveLength(24);
+    }
+    expect(first.pgSuperPassword).not.toBe(first.pgAppPassword);
+    expect(first).toMatchObject({ version: 1, pgPort: 54329 });
+    const second = await loadOrCreateState(paths, pick);
+    expect(second).toEqual(first);
+    expect(pickCalls).toBe(1);
+  });
+
+  it('refuses a damaged state file and leaves it untouched', async () => {
+    await writeFile(paths.stateFile, '{ not json');
+    const err = await loadOrCreateState(paths, pick).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(StateFileError);
+    expect((err as Error).message).toContain(paths.stateFile);
+    expect(await readFile(paths.stateFile, 'utf8')).toBe('{ not json');
+  });
+
+  it('refuses a state file with a missing field', async () => {
+    const good = await loadOrCreateState(paths, pick);
+    const { pgAppPassword: _gone, ...missing } = good;
+    const bad: Record<string, unknown>[] = [
+      missing,
+      { ...good, version: 2 },
+      { ...good, pgPort: 0 },
+      { ...good, pgPort: 65536 },
+      { ...good, pgPort: 5432.5 },
+      { ...good, pgPort: '5432' },
+      { ...good, secretsKey: '' },
+      { ...good, pgSuperPassword: 7 },
+    ];
+    for (const shape of bad) {
+      const text = JSON.stringify(shape);
+      await writeFile(paths.stateFile, text);
+      const err = await loadOrCreateState(paths, pick).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(StateFileError);
+      const message = (err as Error).message;
+      expect(message).toContain(paths.stateFile);
+      for (const secret of [good.secretsKey, good.pgSuperPassword, good.pgAppPassword]) expect(message).not.toContain(secret);
+      expect(await readFile(paths.stateFile, 'utf8')).toBe(text);
+    }
+    await writeFile(paths.stateFile, '[]');
+    await expect(loadOrCreateState(paths, pick)).rejects.toBeInstanceOf(StateFileError);
+  });
+
+  it('refuses to make new secrets over an existing database', async () => {
+    await mkdir(paths.cluster);
+    await writeFile(join(paths.cluster, 'PG_VERSION'), '16\n');
+    const err = await loadOrCreateState(paths, pick).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(StateFileError);
+    expect((err as Error).message).toContain(paths.stateFile);
+    expect((err as Error).message).toContain(paths.cluster);
+    expect(pickCalls).toBe(0);
+    await expect(stat(paths.stateFile)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
+
+describe('lock', () => {
+  it('reads null for a missing lock and for one that is not a lock', async () => {
+    expect(await readLock(paths)).toBeNull();
+    await writeFile(paths.lockFile, '{ not json');
+    expect(await readLock(paths)).toBeNull();
+    await writeFile(paths.lockFile, JSON.stringify({ pid: 1, address: 'a', startedAt: 's', controlPort: 0, token: 't' }));
+    expect(await readLock(paths)).toBeNull();
+  });
+
+  it('writes the lock owner-only and reads it back', async () => {
+    const info = await liveLock(101);
+    await acquireLock(paths, info);
+    expect(await mode(paths.lockFile)).toBe(0o600);
+    expect(await readLock(paths)).toEqual(info);
+    expect(await leftovers()).toEqual([]);
+  });
+
+  it('refuses a second lock while the first control server runs, and names the process and address only', async () => {
+    const first = await liveLock(101);
+    await acquireLock(paths, first);
+    const second = await liveLock(102);
+    const err = await acquireLock(paths, second).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AlreadyRunningError);
+    expect((err as AlreadyRunningError).info).toEqual(first);
+    const message = (err as Error).message;
+    expect(message).toContain('101');
+    expect(message).toContain(first.address);
+    for (const shown of [message, inspect(err), String(err)]) {
+      expect(shown).not.toContain(first.token);
+      expect(shown).not.toContain(second.token);
+    }
+    expect(await readLock(paths)).toEqual(first);
+    expect(await leftovers()).toEqual([]);
+  });
+
+  it('replaces a lock whose control port has nothing listening', async () => {
+    await writeFile(paths.lockFile, JSON.stringify(await deadLock()));
+    const mine = await liveLock(103);
+    await acquireLock(paths, mine);
+    expect(await readLock(paths)).toEqual(mine);
+    expect(await leftovers()).toEqual([]);
+  });
+
+  it('replaces a lock whose port is held by a server that does not know the token', async () => {
+    const other = await liveLock(104);
+    const impostor = { ...other, token: newControlToken() };
+    await writeFile(paths.lockFile, JSON.stringify(impostor));
+    // destroy, not end: a server that never reads never sees the client hang up.
+    const stranger = createServer((s) => s.destroy());
+    others.push(stranger);
+    await new Promise<void>((r) => stranger.listen(0, '127.0.0.1', () => r()));
+    const second = { ...impostor, controlPort: (stranger.address() as AddressInfo).port };
+    const mine = await liveLock(105);
+    await acquireLock(paths, mine);
+    expect(await readLock(paths)).toEqual(mine);
+    await writeFile(paths.lockFile, JSON.stringify(second));
+    const mine2 = await liveLock(106);
+    await acquireLock(paths, mine2);
+    expect(await readLock(paths)).toEqual(mine2);
+  });
+
+  it('replaces a lock file that is not a lock', async () => {
+    await writeFile(paths.lockFile, 'garbage');
+    const mine = await liveLock(107);
+    await acquireLock(paths, mine);
+    expect(await readLock(paths)).toEqual(mine);
+  });
+
+  it('lets only one of two acquires at once win on an empty folder', async () => {
+    const a = await liveLock(201);
+    const b = await liveLock(202);
+    const results = await Promise.allSettled([acquireLock(paths, a), acquireLock(paths, b)]);
+    const won = results.filter((r) => r.status === 'fulfilled');
+    const lost = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    expect(won).toHaveLength(1);
+    expect(lost).toHaveLength(1);
+    expect(lost[0]!.reason).toBeInstanceOf(AlreadyRunningError);
+    const winner = results[0]!.status === 'fulfilled' ? a : b;
+    expect(await readLock(paths)).toEqual(winner);
+    expect(await leftovers()).toEqual([]);
+  });
+
+  it('lets only one of two acquires at once win over the same dead lock, 50 times', { timeout: 60000 }, async () => {
+    // The dead lock's port is held by a server that drops each connection after 20 ms, so each
+    // check of the dead lock takes that long. With a varying head start, one acquire reads the
+    // dead lock while the other is already replacing it: the window where unlink-then-create
+    // lets both win.
+    const slow = createServer((s) => void setTimeout(() => s.destroy(), 20));
+    others.push(slow);
+    await new Promise<void>((r) => slow.listen(0, '127.0.0.1', () => r()));
+    const slowPort = (slow.address() as AddressInfo).port;
+    for (let round = 0; round < 50; round += 1) {
+      const dead = await deadLock();
+      if (round % 2 === 0) dead.controlPort = slowPort;
+      await writeFile(paths.lockFile, JSON.stringify(dead));
+      const a = await liveLock(300 + round * 2);
+      const b = await liveLock(301 + round * 2);
+      const later = new Promise<void>((r) => setTimeout(r, (round % 10) * 3)).then(() => acquireLock(paths, b));
+      const results = await Promise.allSettled([acquireLock(paths, a), later]);
+      const won = results.filter((r) => r.status === 'fulfilled');
+      const lost = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      expect(won, `round ${round}`).toHaveLength(1);
+      expect(lost[0]!.reason, `round ${round}`).toBeInstanceOf(AlreadyRunningError);
+      const winner = results[0]!.status === 'fulfilled' ? a : b;
+      expect(await readLock(paths), `round ${round}`).toEqual(winner);
+      expect(await leftovers(), `round ${round}`).toEqual([]);
+      await releaseLock(paths, winner.token);
+      await Promise.all(controls.splice(0).map((c) => c.close()));
+    }
+  });
+
+  it('releases only a lock that holds the given token', async () => {
+    const info = await liveLock(401);
+    await acquireLock(paths, info);
+    await releaseLock(paths, newControlToken());
+    expect(await readLock(paths)).toEqual(info);
+    await releaseLock(paths, info.token);
+    expect(await readLock(paths)).toBeNull();
+    await releaseLock(paths, info.token); // nothing to release is not an error
+  });
+});
