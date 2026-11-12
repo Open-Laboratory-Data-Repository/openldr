@@ -24,5 +24,6 @@
   "query": "query-review.html",
   "v1-import": "v1-import-review.html",
   "sync": "sync-review.html",
-  "environment": "environment-review.html"
+  "environment": "environment-review.html",
+  "upgrading": "upgrading-review.html"
 }

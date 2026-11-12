@@ -69,7 +69,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [x] Plugin cards and side panels
 - [ ] Authentication providers
 - [x] Environment Variables
-- [ ] Planned upgrades
+- [x] Planned upgrades
 - [ ] Deployment & Developer Docs
 
 ## Recovery

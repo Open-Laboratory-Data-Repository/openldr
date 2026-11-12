@@ -1,0 +1,54 @@
+{
+  "sourceBucket": "openldr-docs-system-review",
+  "restoredBucket": "openldr-docs-system-restore",
+  "objects": [
+    {
+      "key": "plugins/openldr-v1-import/0.1.0/manifest.json",
+      "bytes": 1042,
+      "sha256": "4e1958789179b6f5825a2c4153e70a4e1a8c4b41ba4d6c0e10bda74fa26f5416",
+      "restoredChecksumMatches": true
+    },
+    {
+      "key": "plugins/openldr-v1-import/0.1.0/plugin.wasm",
+      "bytes": 353996,
+      "sha256": "506bcc0dc6a4e7b7c34248b98be76d7f48928f16063fbfcf3bfe616aee7fd49b",
+      "restoredChecksumMatches": true
+    },
+    {
+      "key": "plugins/openldr-v1-import/0.1.0/ui.html",
+      "bytes": 53009,
+      "sha256": "cfb5a1d06e8fe760c850f015984ab9a574874cbfe4bc83d63177fcf240c83cb9",
+      "restoredChecksumMatches": true
+    },
+    {
+      "key": "plugins/test-sink/0.1.0/manifest.json",
+      "bytes": 1780,
+      "sha256": "b249a82b5fd77f6e75dca1000b8fa26d9e293b186eaf72591fd5b98345fb41f7",
+      "restoredChecksumMatches": true
+    },
+    {
+      "key": "plugins/test-sink/0.1.0/plugin.wasm",
+      "bytes": 174977,
+      "sha256": "ae99e2196fc39e2fd8988e396f4e89cc9995632c2489247337e305a2e868868d",
+      "restoredChecksumMatches": true
+    },
+    {
+      "key": "plugins/ui-reference/0.1.0/manifest.json",
+      "bytes": 869,
+      "sha256": "7a1405f8ebf3466b208323120d5ed8d9fa0e7e5a6dae9850bcad151244ccd672",
+      "restoredChecksumMatches": true
+    },
+    {
+      "key": "plugins/ui-reference/0.1.0/plugin.wasm",
+      "bytes": 174977,
+      "sha256": "ae99e2196fc39e2fd8988e396f4e89cc9995632c2489247337e305a2e868868d",
+      "restoredChecksumMatches": true
+    },
+    {
+      "key": "plugins/ui-reference/0.1.0/ui.html",
+      "bytes": 1844,
+      "sha256": "2070f45662ad7adb6464f17a857195d12b28406586fed993f00dfedee2005b97",
+      "restoredChecksumMatches": true
+    }
+  ]
+}
