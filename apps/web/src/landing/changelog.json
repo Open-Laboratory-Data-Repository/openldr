@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "dac33f47",
+          "type": "fix",
+          "scope": "docs",
+          "title": "Balance illustration dots across edges and themes"
+        },
+        {
           "hash": "c2475623",
           "type": "feat",
           "scope": "docs",
