@@ -142,7 +142,7 @@ flowchart LR
 
 ## Getting Started
 
-Three paths, in increasing order of effort.
+Four paths. The first three are in increasing order of effort. The fourth runs without Docker.
 
 ### 1. Install the published stack (no clone, no build)
 
@@ -197,6 +197,22 @@ Opt-in backing services:
 docker compose --profile mssql up -d
 docker compose --profile dhis2 up -d
 ```
+
+### 4. Run without Docker on one computer
+
+One command starts a bundled Postgres 16 and the server. All data stays in one folder, `~/.local/share/openldr` on Linux. Sign-in is OpenLDR's own. Only Linux has been tested. There is no installer yet, so you run it from a built checkout:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter @openldr/studio build
+pnpm --filter @openldr/standalone build
+pnpm openldr-standalone start      # prints the address and a setup code. Ctrl+C stops it.
+pnpm openldr-standalone status
+pnpm openldr-standalone stop
+pnpm openldr-standalone cli -- doctor
+```
+
+`pnpm openldr` does not reach this install. It reads the checkout's `.env`. Use `pnpm openldr-standalone cli` instead. It serves plain HTTP with no TLS. The full guide, with its limits and backup steps, is the web docs page [Run without Docker](apps/web/src/docs/0.1.8/en/standalone.md).
 
 ### Verification commands
 
