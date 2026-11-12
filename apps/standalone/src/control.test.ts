@@ -1,6 +1,7 @@
 import { createServer, connect, type AddressInfo, type Server, type Socket } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { newControlToken, pingControl, requestStop, startControl, type ControlServer } from './control.js';
+import { isLockLive } from './state.js';
 
 const controls: ControlServer[] = [];
 const others: Server[] = [];
@@ -61,6 +62,25 @@ function raw(port: number, text: string | null): Promise<{ reply: string; ms: nu
   });
 }
 
+/** Opens `n` connections one after another that never send anything, as a hostile local process would. */
+async function hostile(port: number, n: number): Promise<{ sock: Socket; closed: boolean }[]> {
+  const held: { sock: Socket; closed: boolean }[] = [];
+  for (let i = 0; i < n; i += 1) {
+    const sock = connect(port, '127.0.0.1');
+    otherSockets.push(sock);
+    const h = { sock, closed: false };
+    sock.on('error', () => {});
+    sock.on('close', () => (h.closed = true));
+    sock.resume();
+    await new Promise<void>((r) => {
+      sock.once('connect', () => r());
+      sock.once('close', () => r());
+    });
+    held.push(h);
+  }
+  return held;
+}
+
 function deferred<T>() {
   let resolve!: (v: T) => void;
   const promise = new Promise<T>((r) => (resolve = r));
@@ -119,12 +139,28 @@ describe('control channel', () => {
     expect((await raw(c.port, `ping ${'x'.repeat(300)}\n`)).reply).toBe('');
   });
 
-  it('closes a connection that sends nothing for 5 seconds', { timeout: 15000 }, async () => {
+  it('closes a connection that sends nothing within 2 seconds', async () => {
     const c = await control(newControlToken());
     const { reply, ms } = await raw(c.port, null);
     expect(reply).toBe('');
-    expect(ms).toBeGreaterThanOrEqual(4900);
-    expect(ms).toBeLessThan(8000);
+    expect(ms).toBeGreaterThanOrEqual(1900);
+    expect(ms).toBeLessThan(3000);
+  });
+
+  it('closes a connection that trickles one byte every 500 ms at 2 seconds', async () => {
+    const c = await control(newControlToken());
+    const started = Date.now();
+    const sock = connect(c.port, '127.0.0.1');
+    otherSockets.push(sock);
+    sock.on('error', () => {});
+    const timer = setInterval(() => sock.write('p'), 500);
+    const ms = await new Promise<number>((resolve) => {
+      sock.on('close', () => resolve(Date.now() - started));
+      setTimeout(() => resolve(-1), 4000);
+    });
+    clearInterval(timer);
+    expect(ms).toBeGreaterThanOrEqual(1900);
+    expect(ms).toBeLessThan(2600);
   });
 
   it('runs onStop on stop and returns its result', async () => {
@@ -227,17 +263,44 @@ describe('control channel', () => {
     await stop;
   });
 
-  it('limits how many connections it holds at once', async () => {
+  it('still answers ping and stop while 16 idle connections are held open', async () => {
+    const token = newControlToken();
+    const c = await control(token);
+    const idle = await hostile(c.port, 16);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await pingControl({ controlPort: c.port, token })).toBe(true);
+    expect(await isLockLive({ pid: 1, address: 'a', startedAt: 's', controlPort: c.port, token })).toBe(true);
+    expect(await requestStop({ controlPort: c.port, token }, 2000)).toBe('clean');
+    expect(idle.length).toBe(16);
+  });
+
+  it('holds at most 16 connections that have not sent a request', async () => {
     const c = await control(newControlToken());
-    // Each raw connection sends nothing; the server closes the ones over the limit at once.
-    const conns = Array.from({ length: 24 }, () => raw(c.port, null));
-    const quick = await Promise.race([
-      Promise.any(conns.map((p) => p.then((r) => (r.ms < 1000 ? r : Promise.reject(new Error('slow')))))),
-      new Promise((r) => setTimeout(() => r('none'), 2000)),
-    ]);
-    expect(quick).not.toBe('none');
-    await c.close();
-    await Promise.allSettled(conns);
+    const idle = await hostile(c.port, 40);
+    await new Promise((r) => setTimeout(r, 200));
+    const open = idle.filter((h) => !h.closed);
+    expect(open.length).toBe(16);
+    // The oldest were dropped first.
+    expect(idle.slice(24).every((h) => !h.closed)).toBe(true);
+  });
+
+  it('never drops a stop asker waiting for its answer when idle connections pile up', async () => {
+    const token = newControlToken();
+    const gate = deferred<void>();
+    const started = deferred<void>();
+    const c = await control(token, async () => {
+      started.resolve();
+      await gate.promise;
+      return 'clean';
+    });
+    const stop = requestStop({ controlPort: c.port, token }, 5000);
+    await started.promise;
+    await hostile(c.port, 20);
+    await new Promise((r) => setTimeout(r, 50));
+    // The control port is still reachable during the stop, and the asker is still there.
+    expect(await pingControl({ controlPort: c.port, token })).toBe(true);
+    gate.resolve();
+    expect(await stop).toBe('clean');
   });
 
   it('still sends the stop answer when onStop itself calls close()', async () => {

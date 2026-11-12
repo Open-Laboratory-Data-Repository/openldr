@@ -73,6 +73,7 @@ export interface LiveCheckTiming {
 const DEFAULT_PING_TIMEOUT_MS = 2000;
 const DEFAULT_PAUSE_MS = 250;
 const DEFAULT_ATTEMPTS = 3;
+const MIN_PING_TIMEOUT_MS = 100;
 
 // ---------------------------------------------------------------------------------------------
 // Where the data folder is
@@ -235,7 +236,9 @@ export async function acquireLock(paths: StandalonePaths, info: LockInfo, timing
       if (errorCode(e) === 'ENOENT') continue;
       throw e;
     }
-    let keepAside = false;
+    // The moved copy is deleted only once this block knows what it was. On any unexpected error
+    // it may be the only copy of a running launcher's lock, so it is kept for a person.
+    let known = false;
     try {
       const moved = await readIfThere(aside);
       if (moved !== null && moved !== seen) {
@@ -245,20 +248,22 @@ export async function acquireLock(paths: StandalonePaths, info: LockInfo, timing
           try {
             await link(aside, paths.lockFile);
           } catch (e) {
-            if (errorCode(e) !== 'EEXIST') {
-              // The only copy of a running launcher's lock. Keep it so a person can put it back.
-              keepAside = true;
-              throw new Error(
-                `Could not put back the lock of a running launcher (${errorCode(e) ?? 'unknown error'}). ` +
-                  `It is kept in ${aside}. Rename that file to ${paths.lockFile}.`,
-              );
-            }
+            if (errorCode(e) !== 'EEXIST') throw e;
           }
+          known = true;
           throw new AlreadyRunningError(fresh);
         }
       }
+      known = true;
+    } catch (e) {
+      if (known) throw e;
+      throw new Error(
+        `Could not finish replacing the lock ${paths.lockFile} (${errorCode(e) ?? 'unknown error'}). ` +
+          `The lock that was moved is kept in ${aside}. If a launcher is running on this data folder, ` +
+          `rename that file back to ${paths.lockFile}.`,
+      );
     } finally {
-      if (!keepAside) await rm(aside, { force: true });
+      if (known) await rm(aside, { force: true });
     }
   }
   throw new Error(
@@ -274,11 +279,10 @@ export async function acquireLock(paths: StandalonePaths, info: LockInfo, timing
  * pause between them. `status` uses this too.
  */
 export async function isLockLive(info: LockInfo, timing: LiveCheckTiming = {}): Promise<boolean> {
-  const {
-    pingTimeoutMs = DEFAULT_PING_TIMEOUT_MS,
-    pauseMs = DEFAULT_PAUSE_MS,
-    attempts = DEFAULT_ATTEMPTS,
-  } = timing;
+  // Clamped, so no setting can make a live lock count as dead without asking it at all.
+  const attempts = Math.max(1, Math.floor(timing.attempts ?? DEFAULT_ATTEMPTS) || 1);
+  const pingTimeoutMs = Math.max(MIN_PING_TIMEOUT_MS, timing.pingTimeoutMs ?? DEFAULT_PING_TIMEOUT_MS) || MIN_PING_TIMEOUT_MS;
+  const pauseMs = Math.max(0, timing.pauseMs ?? DEFAULT_PAUSE_MS) || 0;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (attempt > 0) await sleep(pauseMs);
     if (await pingControl(info, pingTimeoutMs)) return true;

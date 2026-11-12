@@ -27,13 +27,16 @@ type StopResult = 'clean' | 'forced';
 const HOST = '127.0.0.1';
 /** Longest request or reply line, in bytes, without its newline. */
 const MAX_LINE = 256;
-/** A connection that sends no request within this time is closed. */
-const IDLE_MS = 5000;
+/** A connection must send its whole request line within this time of being accepted. */
+const REQUEST_DEADLINE_MS = 2000;
 const DEFAULT_PING_MS = 2000;
 /** How long a stop answer that is written waits for the asker to hang up before it is dropped. */
 const FLUSH_MS = 2000;
-/** Most connections held at once. The control port has one or two honest callers. */
-const MAX_CONNECTIONS = 16;
+/**
+ * Most connections held that have not sent a request yet. A new one past this drops the oldest,
+ * so idle connections from another local process can never keep a real request out.
+ */
+const MAX_WAITING = 16;
 
 /** 24 random bytes in base64url. */
 export function newControlToken(): string {
@@ -44,6 +47,8 @@ export function newControlToken(): string {
 export function startControl(opts: { token: string; onStop: () => Promise<StopResult> }): Promise<ControlServer> {
   const expected = Buffer.from(opts.token, 'utf8');
   const sockets = new Set<Socket>();
+  /** Sockets that have not sent a request yet, oldest first. */
+  const waiting = new Set<Socket>();
   /** Sockets that asked to stop, each with a promise that resolves when that socket has closed. */
   const answering = new Map<Socket, Promise<void>>();
   let stopping: Promise<StopResult> | undefined;
@@ -57,13 +62,22 @@ export function startControl(opts: { token: string; onStop: () => Promise<StopRe
   };
 
   const server = createServer((sock) => {
+    if (waiting.size >= MAX_WAITING) {
+      const oldest = waiting.values().next().value as Socket;
+      waiting.delete(oldest);
+      oldest.destroy();
+    }
     sockets.add(sock);
+    waiting.add(sock);
+    // An absolute deadline from accept, not an idle timer: a byte now and then does not extend it.
+    const deadline = setTimeout(() => sock.destroy(), REQUEST_DEADLINE_MS);
     sock.on('close', () => {
+      clearTimeout(deadline);
       sockets.delete(sock);
+      waiting.delete(sock);
       answering.delete(sock);
     });
     sock.on('error', () => {});
-    sock.setTimeout(IDLE_MS, () => sock.destroy());
 
     let buf = Buffer.alloc(0);
     let handled = false;
@@ -76,7 +90,8 @@ export function startControl(opts: { token: string; onStop: () => Promise<StopRe
         return;
       }
       handled = true;
-      sock.setTimeout(0);
+      clearTimeout(deadline);
+      waiting.delete(sock);
       if (nl > MAX_LINE) return void sock.destroy();
       const parts = buf.subarray(0, nl).toString('utf8').split(' ');
       if (parts.length !== 2 || !tokenMatches(parts[1]!)) return void sock.destroy();
@@ -91,7 +106,6 @@ export function startControl(opts: { token: string; onStop: () => Promise<StopRe
       );
     });
   });
-  server.maxConnections = MAX_CONNECTIONS;
 
   /**
    * Stops listening and drops connections that have not asked to stop. Every call, the first or

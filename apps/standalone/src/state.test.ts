@@ -23,6 +23,8 @@ import {
 const dirs: string[] = [];
 const controls: ControlServer[] = [];
 const others: Server[] = [];
+/** Folders a test made read-only. Made writable again before the temp folders are removed. */
+const readOnlyDirs: string[] = [];
 let paths: StandalonePaths;
 let pickCalls = 0;
 const pick = async () => {
@@ -43,6 +45,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  for (const d of readOnlyDirs.splice(0)) await chmod(d, 0o700).catch(() => {});
   await Promise.all(controls.splice(0).map((c) => c.close()));
   await Promise.all(others.splice(0).map((s) => new Promise<void>((r) => (s.listening ? s.close(() => r()) : r()))));
   await Promise.all(dirs.splice(0).map((d) => rm(d, { recursive: true, force: true })));
@@ -285,9 +288,69 @@ describe('lock', () => {
     expect(await readLock(paths)).toEqual(held);
   });
 
-  it('counts a lock as dead after three refused pings', async () => {
+  it('counts a lock as dead only after three failed pings', async () => {
+    let connections = 0;
+    const deaf = createServer((s) => {
+      connections += 1;
+      s.destroy();
+    });
+    others.push(deaf);
+    await new Promise<void>((r) => deaf.listen(0, '127.0.0.1', () => r()));
+    const lock = { ...(await deadLock()), controlPort: (deaf.address() as AddressInfo).port };
+    expect(await isLockLive(lock)).toBe(false);
+    expect(connections).toBe(3);
     expect(await isLockLive(await deadLock())).toBe(false);
   });
+
+  it('never makes fewer than one ping, a ping shorter than 100 ms, or a negative pause', async () => {
+    const live = await liveLock(109);
+    expect(await isLockLive(live, { attempts: 0 })).toBe(true);
+    expect(await isLockLive(live, { attempts: -3, pingTimeoutMs: 0, pauseMs: -5 })).toBe(true);
+    expect(await isLockLive(live, { attempts: Number.NaN, pingTimeoutMs: Number.NaN, pauseMs: Number.NaN })).toBe(true);
+  });
+
+  it.skipIf(process.getuid?.() === 0)(
+    'keeps the moved lock when putting a live one back fails, and names where it is',
+    async () => {
+      // The lock goes in a subfolder so that folder alone can be made read-only: the link back
+      // then fails with EACCES while the moved copy, in the root, could still be deleted.
+      const lockDir = join(paths.root, 'lockdir');
+      await mkdir(lockDir);
+      readOnlyDirs.push(lockDir);
+      const p = { ...paths, lockFile: join(lockDir, 'standalone.lock') };
+
+      const fresh = { ...(await deadLock()), pid: 2, token: newControlToken() };
+      const freshServer = createServer((s) => {
+        s.resume();
+        void chmod(lockDir, 0o500).then(() => s.end('pong\n'));
+      });
+      others.push(freshServer);
+      await new Promise<void>((r) => freshServer.listen(0, '127.0.0.1', () => r()));
+      fresh.controlPort = (freshServer.address() as AddressInfo).port;
+
+      // The dead lock's port: on the first ping, another launcher's fresh lock replaces it.
+      let swapped = false;
+      const deadServer = createServer((s) => {
+        if (swapped) return void s.destroy();
+        swapped = true;
+        void writeFile(p.lockFile, JSON.stringify(fresh)).then(() => s.destroy());
+      });
+      others.push(deadServer);
+      await new Promise<void>((r) => deadServer.listen(0, '127.0.0.1', () => r()));
+      const dead = { ...(await deadLock()), controlPort: (deadServer.address() as AddressInfo).port };
+      await writeFile(p.lockFile, JSON.stringify(dead));
+
+      const err = await acquireLock(p, await liveLock(110), { pingTimeoutMs: 500, pauseMs: 5 }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(err).not.toBeInstanceOf(AlreadyRunningError);
+      const kept = (await readdir(paths.root)).filter((n) => n.startsWith('.standalone.lock.'));
+      expect(kept).toHaveLength(1);
+      const keptPath = join(paths.root, kept[0]!);
+      expect(JSON.parse(await readFile(keptPath, 'utf8'))).toEqual(fresh);
+      expect((err as Error).message).toContain(keptPath);
+      expect((err as Error).message).not.toContain(fresh.token);
+    },
+  );
 
   it('replaces a lock file that is not a lock', async () => {
     await writeFile(paths.lockFile, 'garbage');
