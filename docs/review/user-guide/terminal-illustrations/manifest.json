@@ -1,0 +1,557 @@
+{
+  "notes": "Generated terminal illustrations with operating-system-specific chrome. Worked examples use C:\\openldr_ce on Windows and ~/Downloads/openldr_ce on Linux/macOS. Readers must substitute their own installation location. Help excerpts derive from source CLI help. No installed stack was invoked.",
+  "steps": [
+    {
+      "id": "terminal-linux-launch",
+      "path": "./terminal-illustrations/terminal-linux-launch.webp",
+      "crop_dimensions": [
+        720,
+        252
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "launch",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-linux-ready",
+      "path": "./terminal-illustrations/terminal-linux-ready.webp",
+      "crop_dimensions": [
+        720,
+        259
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "ready",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-linux-folder",
+      "path": "./terminal-illustrations/terminal-linux-folder.webp",
+      "crop_dimensions": [
+        720,
+        316
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "folder",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-linux-cd",
+      "path": "./terminal-illustrations/terminal-linux-cd.webp",
+      "crop_dimensions": [
+        720,
+        259
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "cd",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-linux-changed",
+      "path": "./terminal-illustrations/terminal-linux-changed.webp",
+      "crop_dimensions": [
+        720,
+        259
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "changed",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-linux-files",
+      "path": "./terminal-illustrations/terminal-linux-files.webp",
+      "crop_dimensions": [
+        720,
+        259
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "files",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-linux-help",
+      "path": "./terminal-illustrations/terminal-linux-help.webp",
+      "crop_dimensions": [
+        720,
+        259
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "help",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-linux-help-result",
+      "path": "./terminal-illustrations/terminal-linux-help-result.webp",
+      "crop_dimensions": [
+        720,
+        389
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "help-result",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-linux-ingest",
+      "path": "./terminal-illustrations/terminal-linux-ingest.webp",
+      "crop_dimensions": [
+        720,
+        259
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "ingest",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-linux-ingest-result",
+      "path": "./terminal-illustrations/terminal-linux-ingest-result.webp",
+      "crop_dimensions": [
+        720,
+        365
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "ingest-result",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-launch",
+      "path": "./terminal-illustrations/terminal-mac-launch.webp",
+      "crop_dimensions": [
+        720,
+        246
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "launch",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-ready",
+      "path": "./terminal-illustrations/terminal-mac-ready.webp",
+      "crop_dimensions": [
+        720,
+        228
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "ready",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-folder",
+      "path": "./terminal-illustrations/terminal-mac-folder.webp",
+      "crop_dimensions": [
+        720,
+        310
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "folder",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-cd",
+      "path": "./terminal-illustrations/terminal-mac-cd.webp",
+      "crop_dimensions": [
+        720,
+        228
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "cd",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-changed",
+      "path": "./terminal-illustrations/terminal-mac-changed.webp",
+      "crop_dimensions": [
+        720,
+        228
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "changed",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-files",
+      "path": "./terminal-illustrations/terminal-mac-files.webp",
+      "crop_dimensions": [
+        720,
+        228
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "files",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-help",
+      "path": "./terminal-illustrations/terminal-mac-help.webp",
+      "crop_dimensions": [
+        720,
+        228
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "help",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-help-result",
+      "path": "./terminal-illustrations/terminal-mac-help-result.webp",
+      "crop_dimensions": [
+        720,
+        358
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "help-result",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-ingest",
+      "path": "./terminal-illustrations/terminal-mac-ingest.webp",
+      "crop_dimensions": [
+        720,
+        228
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "ingest",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-ingest-result",
+      "path": "./terminal-illustrations/terminal-mac-ingest-result.webp",
+      "crop_dimensions": [
+        720,
+        334
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "ingest-result",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-launch",
+      "path": "./terminal-illustrations/terminal-windows-launch.webp",
+      "crop_dimensions": [
+        720,
+        261
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "launch",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-ready",
+      "path": "./terminal-illustrations/terminal-windows-ready.webp",
+      "crop_dimensions": [
+        720,
+        243
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "ready",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-folder",
+      "path": "./terminal-illustrations/terminal-windows-folder.webp",
+      "crop_dimensions": [
+        720,
+        325
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "folder",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-cd",
+      "path": "./terminal-illustrations/terminal-windows-cd.webp",
+      "crop_dimensions": [
+        720,
+        243
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "cd",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-changed",
+      "path": "./terminal-illustrations/terminal-windows-changed.webp",
+      "crop_dimensions": [
+        720,
+        243
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "changed",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-files",
+      "path": "./terminal-illustrations/terminal-windows-files.webp",
+      "crop_dimensions": [
+        720,
+        253
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "files",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-help",
+      "path": "./terminal-illustrations/terminal-windows-help.webp",
+      "crop_dimensions": [
+        720,
+        243
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "help",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-help-result",
+      "path": "./terminal-illustrations/terminal-windows-help-result.webp",
+      "crop_dimensions": [
+        720,
+        373
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "help-result",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-ingest",
+      "path": "./terminal-illustrations/terminal-windows-ingest.webp",
+      "crop_dimensions": [
+        720,
+        243
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "ingest",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-ingest-result",
+      "path": "./terminal-illustrations/terminal-windows-ingest-result.webp",
+      "crop_dimensions": [
+        720,
+        349
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "ingest-result",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-linux-dev-root",
+      "path": "./terminal-illustrations/terminal-linux-dev-root.webp",
+      "crop_dimensions": [
+        720,
+        259
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "dev-root",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-linux-dev-help",
+      "path": "./terminal-illustrations/terminal-linux-dev-help.webp",
+      "crop_dimensions": [
+        720,
+        263
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "dev-help",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-linux-dev-file",
+      "path": "./terminal-illustrations/terminal-linux-dev-file.webp",
+      "crop_dimensions": [
+        720,
+        262
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "dev-file",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-linux-dev-import",
+      "path": "./terminal-illustrations/terminal-linux-dev-import.webp",
+      "crop_dimensions": [
+        720,
+        262
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "dev-import",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-dev-root",
+      "path": "./terminal-illustrations/terminal-mac-dev-root.webp",
+      "crop_dimensions": [
+        720,
+        228
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "mac",
+      "stage": "dev-root",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-dev-help",
+      "path": "./terminal-illustrations/terminal-mac-dev-help.webp",
+      "crop_dimensions": [
+        720,
+        232
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "mac",
+      "stage": "dev-help",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-dev-file",
+      "path": "./terminal-illustrations/terminal-mac-dev-file.webp",
+      "crop_dimensions": [
+        720,
+        228
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "mac",
+      "stage": "dev-file",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-mac-dev-import",
+      "path": "./terminal-illustrations/terminal-mac-dev-import.webp",
+      "crop_dimensions": [
+        720,
+        228
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "mac",
+      "stage": "dev-import",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-dev-root",
+      "path": "./terminal-illustrations/terminal-windows-dev-root.webp",
+      "crop_dimensions": [
+        720,
+        293
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "windows",
+      "stage": "dev-root",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-dev-help",
+      "path": "./terminal-illustrations/terminal-windows-dev-help.webp",
+      "crop_dimensions": [
+        720,
+        247
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "windows",
+      "stage": "dev-help",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-dev-file",
+      "path": "./terminal-illustrations/terminal-windows-dev-file.webp",
+      "crop_dimensions": [
+        720,
+        243
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "windows",
+      "stage": "dev-file",
+      "mime": "image/webp"
+    },
+    {
+      "id": "terminal-windows-dev-import",
+      "path": "./terminal-illustrations/terminal-windows-dev-import.webp",
+      "crop_dimensions": [
+        720,
+        243
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "windows",
+      "stage": "dev-import",
+      "mime": "image/webp"
+    },
+    {
+      "id": "proof-wrong-folder",
+      "path": "./terminal-illustrations/proof-wrong-folder.webp",
+      "crop_dimensions": [
+        720,
+        259
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "proof-wrong-folder",
+      "mime": "image/webp"
+    },
+    {
+      "id": "proof-docker",
+      "path": "./terminal-illustrations/proof-docker.webp",
+      "crop_dimensions": [
+        720,
+        307
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "proof-docker",
+      "mime": "image/webp"
+    },
+    {
+      "id": "proof-api",
+      "path": "./terminal-illustrations/proof-api.webp",
+      "crop_dimensions": [
+        720,
+        263
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "proof-api",
+      "mime": "image/webp"
+    },
+    {
+      "id": "proof-file",
+      "path": "./terminal-illustrations/proof-file.webp",
+      "crop_dimensions": [
+        720,
+        352
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "proof-file",
+      "mime": "image/webp"
+    }
+  ]
+}

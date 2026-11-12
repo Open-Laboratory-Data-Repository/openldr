@@ -1,0 +1,189 @@
+<article class="dg-article" id="sh-top">
+ <div class="dg-meta"><span>All users</span><span>Beginner</span></div>
+ <h1>Start here</h1>
+ <p>OpenLDR Studio is the browser app for your lab's records. Open it to use dashboards, reports and forms.</p>
+ <p class="dg-intro">Start by getting access to Studio. If another guide asks you to run a command, use the CLI walkthrough below first. You do not need sample data to follow this page.</p>
+
+ <h2 id="sh-sign-in">Open Studio</h2>
+ <p>Get the Studio address and an account from your administrator. Open that address in your browser, then sign in.</p>
+ <p>You can use Studio from another computer or a phone. If your organisation requires Tailscale or a VPN, connect before opening the address.</p>
+ <p>Once you have signed in, <a href="dashboard-review.html">continue with the Dashboard guide</a>, or read on if you need the command line.</p>
+
+ <h2 id="sh-cli">Use the command line</h2>
+ <p>The command-line interface, or CLI, runs OpenLDR tasks from typed commands. You enter them in a terminal window.</p>
+ <p>Use the CLI to import files and maintain your installation. Follow the installed walkthrough below, or <a href="#sh-cli-dev">jump to the development checkout walkthrough</a> if you run OpenLDR from source.</p>
+ <p>In this walkthrough, you will open a terminal and ask OpenLDR for help. These help commands do not import or change records.</p>
+
+ <h3 id="sh-cli-server">Before you begin</h3>
+ <p>You need access to the computer hosting OpenLDR and its actual installation folder. Run the installed CLI from that folder, which contains <code>docker-compose.yml</code> and the OpenLDR command file. The installed CLI uses Docker, so Docker and OpenLDR must be running. Your account must have permission to use Docker.</p>
+ <p>Use the terminal on the computer where you installed OpenLDR. If you are working remotely, connect to that computer before running the installed commands.</p>
+ <details class="cursor-interaction"><summary>I am connecting to a remote server</summary><p>Opening Studio through Tailscale gives you access to the browser app. Run commands through your existing SSH or remote terminal access to that computer.</p><p>SSH opens a secure terminal session on another computer. Use the server address, account and sign-in method you configured. A connection command can look like:</p><pre><code>ssh username@server-address</code></pre><p>Replace <code>username</code> and <code>server-address</code> with your connection details. After connecting, follow the steps for the server's operating system.</p></details>
+
+ <div class="dg-platform-picker" role="group" aria-label="Operating system for the illustrated walkthrough">
+  <span>Show instructions for</span>
+  <button type="button" class="cursor-interaction" data-cli-platform="linux" aria-pressed="true">Linux</button>
+  <button type="button" class="cursor-interaction" data-cli-platform="mac" aria-pressed="false">macOS</button>
+  <button type="button" class="cursor-interaction" data-cli-platform="windows" aria-pressed="false">Windows</button>
+ </div>
+ <div class="dg-example"><p>If you downloaded OpenLDR and installed it in <code data-cli-path>~/Downloads/openldr_ce</code>, the commands below show how to use that installation.</p><p>If you installed it somewhere else, replace this example path with your actual installation folder throughout the guide.</p><p data-cli-path-explanation>Here, ~ means your home folder. ~/Downloads/openldr_ce means the openldr_ce folder inside your Downloads folder.</p></div>
+ <p class="dg-illustration-note">These are illustrated examples. The same installation location appears in the commands, prompts and file examples. Select a picture to enlarge it.</p>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-open"><span class="dg-number">1.</span>Open a terminal</h3>
+  <p data-cli-launch>Press the Super key, often the Windows-logo key. Type Terminal in the applications search, then select Terminal. These Linux pictures use Ubuntu as an example.</p>
+  <p>A terminal window opens. The line ending in <code data-cli-prompt-end>$</code> is the <strong>prompt</strong>. The vertical line after it is the cursor. This is where your typing appears.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the new terminal illustration"><img src="__IMAGE:terminal-linux-ready__" data-terminal-stage="ready" alt="Illustrated new terminal with a prompt and cursor ready for typing."></button><figcaption>Your name and computer name may be different. Type after the prompt.</figcaption></figure>
+  <p>Do not type the prompt. If you make a typing mistake, use <strong>Backspace</strong> to correct it before pressing Enter.</p>
+ </section>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-folder"><span class="dg-number">2.</span>Go to the installation folder</h3>
+  <p>OpenLDR's installed command file is in its installation folder. The commands in this guide must run from that folder. Opening a terminal alone does not put you there.</p>
+  <p>For this example, OpenLDR is installed in <code data-cli-path>~/Downloads/openldr_ce</code>. Use the location you chose during installation.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the example installation folder"><img src="__IMAGE:terminal-linux-folder__" data-terminal-stage="folder" alt="Illustrated file browser showing the example OpenLDR installation and its files."></button><figcaption>This is the example installation folder. Your actual folder must contain the installed OpenLDR files.</figcaption></figure>
+  <p><code>cd</code> changes the folder your terminal is using. In your terminal, type the command below and press <strong>Enter</strong>. Substitute your actual location if it differs.</p>
+  <pre><code data-cli-cd>cd ~/Downloads/openldr_ce</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the change-folder command illustration"><img src="__IMAGE:terminal-linux-cd__" data-terminal-stage="cd" alt="Illustrated terminal with cd pointing to the example installation folder."></button><figcaption>There is a space after cd. The rest of the command is the installation location.</figcaption></figure>
+  <p>The terminal usually prints no success message for <code>cd</code>. A new prompt appears. If an error appears instead, check the folder location before continuing.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the changed-folder illustration"><img src="__IMAGE:terminal-linux-changed__" data-terminal-stage="changed" alt="Illustrated terminal after changing to the example installation folder."></button><figcaption>The new prompt shows that you changed folders. Check its files next.</figcaption></figure>
+ </section>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-check"><span class="dg-number">3.</span>Check that this is the right folder</h3>
+  <p>List the files in the folder. Type the following command and press <strong>Enter</strong>.</p>
+  <pre><code data-cli-list>ls</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the installation folder listing illustration"><img src="__IMAGE:terminal-linux-files__" data-terminal-stage="files" alt="Illustrated terminal listing the data folder, docker-compose.yml and the OpenLDR command file."></button><figcaption>This illustration shows the files you need. Your folder may contain other files too.</figcaption></figure>
+  <div class="dg-result"><p><strong>Check before continuing</strong></p><p>Look for <code>docker-compose.yml</code>, the <code>data</code> folder, and <code data-cli-wrapper>openldr</code>. If these are missing, return to the folder created by your installer.</p></div>
+ </section>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-help"><span class="dg-number">4.</span>Ask OpenLDR for help</h3>
+  <p>Stay in the installation folder you checked in step 3. Now run your first OpenLDR command. It displays help without changing records.</p>
+  <pre><code data-cli-help>./openldr --help</code></pre>
+  <p>Type the command at the new prompt and press <strong>Enter</strong>. Keep the space before <code>--help</code> and both hyphens.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the first OpenLDR command illustration"><img src="__IMAGE:terminal-linux-help__" data-terminal-stage="help" alt="Illustrated terminal with the OpenLDR help command typed before pressing Enter."></button><figcaption>The command is ready. Press Enter to run it.</figcaption></figure>
+  <div class="dg-result"><p><strong>Expected result</strong></p><p>The terminal prints a usage line, options and a list of commands. The picture below shows an excerpt.</p></div>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the OpenLDR help output illustration"><img src="__IMAGE:terminal-linux-help-result__" data-terminal-stage="help-result" alt="Illustrated excerpt of OpenLDR help output with Usage, Options and Commands."></button><figcaption>Scroll in your terminal to read the full output. When the prompt returns, you can type again.</figcaption></figure>
+ </section>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-command-help"><span class="dg-number">5.</span>Get help for one command</h3>
+  <p>The <code>ingest</code> command imports a file. Add <code>--help</code> to read its instructions without importing anything.</p>
+  <pre><code data-cli-ingest-help>./openldr ingest --help</code></pre>
+  <p>Type this at the prompt, then press <strong>Enter</strong>.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the command-specific help illustration"><img src="__IMAGE:terminal-linux-ingest__" data-terminal-stage="ingest" alt="Illustrated terminal with ingest --help typed before pressing Enter."></button><figcaption>There is a space between the program, command name and option.</figcaption></figure>
+  <div class="dg-result"><p><strong>Expected result</strong></p><p>The usage line now names <code>ingest</code>. The options underneath apply to that command.</p></div>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the ingest help output illustration"><img src="__IMAGE:terminal-linux-ingest-result__" data-terminal-stage="ingest-result" alt="Illustrated ingest help output with a required file placeholder and command options."></button><figcaption><code>&lt;file&gt;</code> means a required file path. <code>[options]</code> means optional settings. Do not type these brackets.</figcaption></figure>
+  <p>You have reached the end of the first-command walkthrough. No file has been imported. Continue below to learn how file paths work before following an import guide.</p>
+ </section>
+ <p class="dg-illustration-note">More help opening a terminal: <a href="https://ubuntu.com/desktop/docs/en/26.04/tutorial/the-linux-command-line-for-beginners/">Ubuntu</a>, <a href="https://support.apple.com/guide/mac-help/mchlp1008/mac">macOS Spotlight</a>, <a href="https://learn.microsoft.com/en-us/powershell/scripting/windows-powershell/starting-windows-powershell">Windows PowerShell</a>.</p>
+
+ <h2 id="sh-cli-dev">Use the CLI in a development checkout</h2>
+ <p>Use this walkthrough when you run OpenLDR from its source code. You will run the CLI through <code>pnpm</code>, check a file, then import it when you are ready.</p>
+ <p>Start with a development checkout whose dependencies and <code>.env</code> are already configured. This walkthrough was checked with Node.js 24 and the checkout's pinned pnpm 11.22.0.</p>
+ <p>The development CLI runs on your computer. It uses the databases and storage configured in that checkout's <code>.env</code>. It does not need the Studio or API development server to be running.</p>
+ <p>The operating-system choice above also changes the paths and pictures in this section.</p>
+
+ <section class="dg-step">
+  <h3><span class="dg-number">1.</span>Open the source checkout in your terminal</h3>
+  <p>For this example, the source checkout is at <code data-cli-dev-path>~/Downloads/openldr_ce</code>. Substitute the location where you cloned the repository.</p>
+  <pre><code data-cli-dev-cd>cd ~/Downloads/openldr_ce</code></pre>
+  <p>This folder contains <code>package.json</code>, <code>pnpm-workspace.yaml</code>, <code>apps</code> and <code>packages</code>. Use this repository root for the following commands.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development checkout illustration"><img src="__IMAGE:terminal-linux-dev-root__" data-terminal-stage="dev-root" alt="Illustrated terminal in the source checkout, listing its package.json and workspace folders."></button><figcaption>The source checkout has the workspace files. It uses the pnpm command below.</figcaption></figure>
+ </section>
+ <section class="dg-step">
+  <h3><span class="dg-number">2.</span>Run the development CLI</h3>
+  <p>Ask for help, then read the import command's help. Enter one command at a time.</p>
+  <pre><code>pnpm openldr --help
+pnpm openldr ingest --help</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development help examples"><img src="__IMAGE:terminal-linux-dev-help__" data-terminal-stage="dev-help" alt="Illustrated source commands pnpm openldr --help and pnpm openldr ingest --help with their usage lines."></button><figcaption>These commands display help. They do not import data.</figcaption></figure>
+  <p><code>pnpm openldr</code> runs <code>packages/cli/dev.mjs</code> from this checkout. Use that prefix for CLI commands while developing.</p>
+ </section>
+ <section class="dg-step">
+  <h3><span class="dg-number">3.</span>Check a file on your computer</h3>
+  <p>The development CLI can read ordinary local paths. Files do not have to be in Docker's shared <code>data</code> folder.</p>
+  <p>For example, if your own FHIR JSON file is at <code data-cli-dev-file>~/Downloads/openldr_ce/files/my-file.json</code>, validate it from the repository root:</p>
+  <pre><code>pnpm openldr fhir validate files/my-file.json</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development file validation example"><img src="__IMAGE:terminal-linux-dev-file__" data-terminal-stage="dev-file" alt="Illustrated development CLI reading files/my-file.json outside the Docker data folder and reporting all valid."></button><figcaption>The test file was valid. Your result depends on the contents of your own file. Validation does not import it.</figcaption></figure>
+ </section>
+ <section class="dg-step">
+  <h3><span class="dg-number">4.</span>Import into your development database</h3>
+  <p>Use this step when you intend to import the file. Check that the checkout's <code>.env</code> points to your development databases and storage. Those backing services must be running.</p>
+  <pre><code>pnpm openldr ingest files/my-file.json
+pnpm openldr pipeline status</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development import result"><img src="__IMAGE:terminal-linux-dev-import__" data-terminal-stage="dev-import" alt="Illustrated source CLI importing a file and showing its completed batch in pipeline status."></button><figcaption>The tested file produced a completed batch with one resource. Your batch ID and count will differ.</figcaption></figure>
+  <p>For the other CLI commands in these guides, keep the <code>pnpm openldr</code> prefix and use paths on your computer.</p>
+ </section>
+
+ <h2 id="sh-files">Use file paths in an installed setup</h2>
+ <p>Before you import a file, check what each part of the command means. This example uses a placeholder filename:</p>
+ <pre><code data-cli-import>./openldr ingest data/my-file.json</code></pre>
+ <dl class="dg-config"><dt><code data-cli-prefix>./openldr</code></dt><dd>Starts the installed CLI.</dd><dt><code>ingest</code></dt><dd>Imports a file into OpenLDR.</dd><dt><code>data/my-file.json</code></dt><dd>The file to import. Replace it with the path to your actual file.</dd></dl>
+ <p>In this example, put the file at <code data-cli-example-file>~/Downloads/openldr_ce/data/my-file.json</code>, inside the same installation folder used above:</p>
+ <pre><code data-cli-file-tree>~/Downloads/openldr_ce/
+  docker-compose.yml
+  openldr
+  data/
+    my-file.json</code></pre>
+ <p>Run the command from <code data-cli-path>~/Downloads/openldr_ce</code>. Keep the <code>data/</code> prefix in the file argument because it is relative to the installation folder.</p>
+ <p>The installed CLI runs inside OpenLDR's API container. The <code>data</code> folder is shared with that container. This lets the command read files you place there.</p>
+ <p>If OpenLDR is on a remote server, place the file in that server's installation folder. Saving it on your laptop does not put it on the server.</p>
+ <p>For commands that write files, use an output path under <code>data/</code> too. Put quotation marks around a path containing spaces, such as <code>"data/my file.json"</code>.</p>
+ <p>Each task's guide explains which file format and command options to use. The example above explains the path only. Running an import command writes records.</p>
+
+ <h2 id="sh-problems">Fix an installed CLI command</h2>
+ <p>Start in the folder where you installed OpenLDR. Match the error below before changing anything. The commands follow the operating-system choice above.</p>
+ <p class="dg-illustration-note">These error messages and recoveries were reproduced on Linux with the installed launcher and the real CLI. The transcript pictures show that Linux test. Windows and macOS wording can differ.</p>
+
+ <details class="cursor-interaction" open>
+  <summary>The launcher or Compose configuration cannot be found</summary>
+  <p>You may see <code>./openldr: not found</code>, or <code>no configuration file provided: not found</code>.</p>
+  <p>The first error means the launcher is not in your current folder. The second occurred when the launcher was called from another folder, so Docker Compose could not find the installation's configuration.</p>
+  <p>Return to the actual installation folder. In this guide's example, run:</p>
+  <pre><code data-cli-fix-folder>cd ~/Downloads/openldr_ce
+./openldr --help</code></pre>
+  <p>The help usage line confirms that the launcher ran. If it still cannot be found, list the folder's files as shown in step 3. Check for <code data-cli-wrapper>openldr</code> and <code>docker-compose.yml</code>.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested wrong-folder recovery"><img src="__IMAGE:proof-wrong-folder__" alt="Illustrated Linux transcript showing launcher not found, changing into the installation folder, then successful CLI help."></button><figcaption>Tested result: returning to the installation folder restored the help command.</figcaption></figure>
+ </details>
+
+ <details class="cursor-interaction">
+  <summary>Docker is using an unreachable connection address</summary>
+  <p>The test reported <code>failed to connect to the docker API</code>. This happened before OpenLDR started because <code>DOCKER_HOST</code> pointed to a socket that did not exist.</p>
+  <p>Run <code>docker info</code> to check the Docker connection. Read the address in its error. If you previously set <code>DOCKER_HOST</code> and that value is now wrong, clear it in this terminal:</p>
+  <pre><code data-cli-clear-docker-host>unset DOCKER_HOST</code></pre>
+  <p>This clears the override for the current terminal. Use it only when that override is the cause. It does not start a stopped Docker engine.</p>
+  <pre><code data-cli-check-docker>docker info
+./openldr --help</code></pre>
+  <p>The test recovered after clearing the incorrect address. If <code>docker info</code> still fails, Docker is not yet reachable. Read that Docker error before retrying OpenLDR.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested Docker connection recovery"><img src="__IMAGE:proof-docker__" alt="Illustrated Linux transcript showing an unreachable Docker socket, clearing DOCKER_HOST, and successful CLI help."></button><figcaption>The test used a deliberately missing Docker socket. The running Docker engine was left untouched.</figcaption></figure>
+ </details>
+
+ <details class="cursor-interaction">
+  <summary>Docker says service api is not running</summary>
+  <p>The exact tested error was <code>service "api" is not running</code>. Docker was reachable, but the installation's API container was stopped. The installed CLI runs inside that container.</p>
+  <p>From your installation folder, inspect the container and start it again:</p>
+  <pre><code>docker compose ps -a api
+docker compose up -d api</code></pre>
+  <p>Then run the help command again:</p>
+  <pre><code data-cli-help>./openldr --help</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested stopped-container recovery"><img src="__IMAGE:proof-api__" alt="Illustrated Linux transcript showing the stopped API error, starting the API service, and successful CLI help."></button><figcaption>Tested result: starting the stopped container restored the help command.</figcaption></figure>
+ </details>
+
+ <details class="cursor-interaction">
+  <summary>The import reports ENOENT for my file</summary>
+  <p>The test reported <code>ingest failed: ENOENT: no such file or directory, open 'my-file.json'</code>.</p>
+  <p>The file existed on the computer, beside the launcher. The installed CLI could not see it because only the installation's <code>data</code> folder was shared with its container.</p>
+  <p>Move the file into that <code>data</code> folder. In this guide's example, its full location becomes <code data-cli-example-file>~/Downloads/openldr_ce/data/my-file.json</code>.</p>
+  <p>Check the moved file without importing it:</p>
+  <pre><code data-cli-validate-installed>./openldr fhir validate data/my-file.json</code></pre>
+  <p>For a valid FHIR JSON file, the result includes <code>all valid</code>. If you intend to import it, retry with the shared path:</p>
+  <pre><code data-cli-import>./openldr ingest data/my-file.json</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested missing-file recovery"><img src="__IMAGE:proof-file__" alt="Illustrated Linux transcript showing ENOENT outside the shared data folder, moving the file, successful validation and a completed import."></button><figcaption>The same file failed outside data, then validated and imported after moving into it.</figcaption></figure>
+  <p>This shared-folder rule applies to the installed Docker launcher. The development CLI can read normal local paths, as shown in the development walkthrough.</p>
+ </details>
+
+ <h2 id="sh-next">Continue with a task</h2>
+ <p>The Dashboard guide explains how to create a dashboard and add widgets using your own data. You can configure them before records arrive. Optional sample exercises come after the main instructions.</p>
+ <p><a class="dg-return cursor-interaction" href="dashboard-review.html">Open the Dashboard guide</a></p>
+ <a class="dg-return cursor-interaction" href="#sh-top">Back to the top</a>
+</article>

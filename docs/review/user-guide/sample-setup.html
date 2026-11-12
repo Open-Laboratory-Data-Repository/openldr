@@ -1,0 +1,21 @@
+<h3 id="dg-samples">Load the practice records</h3>
+<p>The optional exercises below use <strong>60 fictional orders</strong> dated September and October 2026. Loading these records lets you check the exact results quoted in those exercises.</p>
+<p>Use an empty test installation for this practice. The examples use <code>~/Downloads/openldr_ce</code> on Linux or macOS and <code>C:\openldr_ce</code> on Windows. Substitute your actual installation folder if it differs.</p>
+<p>For opening a terminal, changing folders and running commands, follow <a href="start-here-review.html#sh-cli">the installed CLI walkthrough in Start here</a>. If you run from source, follow <a href="start-here-review.html#sh-cli-dev">the development CLI walkthrough</a>, then use the source-checkout instructions below.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span>Download the sample file</h3><p>Save the sample in the test installation's <code>data</code> folder. Choose the commands for your operating system.</p>
+<details class="cursor-interaction" open><summary>Linux or macOS</summary><pre><code>cd ~/Downloads/openldr_ce
+curl -fL \
+  https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/apps/web/public/docs-samples/openldr-sample-lab-data.json \
+  -o data/openldr-sample-lab-data.json</code></pre><p>The example saves it at <code>~/Downloads/openldr_ce/data/openldr-sample-lab-data.json</code>.</p></details>
+<details class="cursor-interaction"><summary>Windows PowerShell</summary><pre><code>cd C:\openldr_ce
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/apps/web/public/docs-samples/openldr-sample-lab-data.json" -OutFile data/openldr-sample-lab-data.json</code></pre><p>The example saves it at <code>C:\openldr_ce\data\openldr-sample-lab-data.json</code>.</p></details>
+</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span>Import the records</h3><p>Run the import from the same installation folder. This command writes the practice records into that test installation.</p>
+<details class="cursor-interaction" open><summary>Linux or macOS</summary><pre><code>cd ~/Downloads/openldr_ce
+./openldr ingest data/openldr-sample-lab-data.json</code></pre></details>
+<details class="cursor-interaction"><summary>Windows PowerShell</summary><pre><code>cd C:\openldr_ce
+.\openldr.ps1 ingest data/openldr-sample-lab-data.json</code></pre></details>
+</section>
+<div class="dg-result"><p><strong>Expected result</strong></p><p>The command reports <strong>226 resources</strong>:</p><pre><code>batch &lt;id&gt;: done (226 resources)</code></pre><p>Allow a few seconds for the records to appear. The charts you build below will then use the sample's 60 orders.</p></div>
+<details class="cursor-interaction"><summary>Running from a source checkout?</summary><p>The sample file is already included, so you can skip the download above. Use your test checkout at <code>~/Downloads/openldr_ce</code> or <code>C:\openldr_ce</code>. From that repository root, run:</p><pre><code>pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-lab-data.json</code></pre><p>The development CLI uses the databases configured in that checkout's <code>.env</code>. See <a href="start-here-review.html#sh-cli-dev">Start here for the development CLI steps</a>.</p></details>
+<details class="cursor-interaction"><summary>Do I also need the facility and test-catalog samples?</summary><p>These optional exercises use only this lab-data file. The facility register and test list are used in their own guides.</p></details>

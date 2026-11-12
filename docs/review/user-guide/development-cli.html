@@ -1,0 +1,36 @@
+ <h2 id="sh-cli-dev">Use the CLI in a development checkout</h2>
+ <p>Use this walkthrough when you run OpenLDR from its source code. You will run the CLI through <code>pnpm</code>, check a file, then import it when you are ready.</p>
+ <p>Start with a development checkout whose dependencies and <code>.env</code> are already configured. This walkthrough was checked with Node.js 24 and the checkout's pinned pnpm 11.22.0.</p>
+ <p>The development CLI runs on your computer. It uses the databases and storage configured in that checkout's <code>.env</code>. It does not need the Studio or API development server to be running.</p>
+ <p>The operating-system choice above also changes the paths and pictures in this section.</p>
+
+ <section class="dg-step">
+  <h3><span class="dg-number">1.</span>Open the source checkout in your terminal</h3>
+  <p>For this example, the source checkout is at <code data-cli-dev-path>~/Downloads/openldr_ce</code>. Substitute the location where you cloned the repository.</p>
+  <pre><code data-cli-dev-cd>cd ~/Downloads/openldr_ce</code></pre>
+  <p>This folder contains <code>package.json</code>, <code>pnpm-workspace.yaml</code>, <code>apps</code> and <code>packages</code>. Use this repository root for the following commands.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development checkout illustration"><img src="__IMAGE:terminal-linux-dev-root__" data-terminal-stage="dev-root" alt="Illustrated terminal in the source checkout, listing its package.json and workspace folders."></button><figcaption>The source checkout has the workspace files. It uses the pnpm command below.</figcaption></figure>
+ </section>
+ <section class="dg-step">
+  <h3><span class="dg-number">2.</span>Run the development CLI</h3>
+  <p>Ask for help, then read the import command's help. Enter one command at a time.</p>
+  <pre><code>pnpm openldr --help
+pnpm openldr ingest --help</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development help examples"><img src="__IMAGE:terminal-linux-dev-help__" data-terminal-stage="dev-help" alt="Illustrated source commands pnpm openldr --help and pnpm openldr ingest --help with their usage lines."></button><figcaption>These commands display help. They do not import data.</figcaption></figure>
+  <p><code>pnpm openldr</code> runs <code>packages/cli/dev.mjs</code> from this checkout. Use that prefix for CLI commands while developing.</p>
+ </section>
+ <section class="dg-step">
+  <h3><span class="dg-number">3.</span>Check a file on your computer</h3>
+  <p>The development CLI can read ordinary local paths. Files do not have to be in Docker's shared <code>data</code> folder.</p>
+  <p>For example, if your own FHIR JSON file is at <code data-cli-dev-file>~/Downloads/openldr_ce/files/my-file.json</code>, validate it from the repository root:</p>
+  <pre><code>pnpm openldr fhir validate files/my-file.json</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development file validation example"><img src="__IMAGE:terminal-linux-dev-file__" data-terminal-stage="dev-file" alt="Illustrated development CLI reading files/my-file.json outside the Docker data folder and reporting all valid."></button><figcaption>The test file was valid. Your result depends on the contents of your own file. Validation does not import it.</figcaption></figure>
+ </section>
+ <section class="dg-step">
+  <h3><span class="dg-number">4.</span>Import into your development database</h3>
+  <p>Use this step when you intend to import the file. Check that the checkout's <code>.env</code> points to your development databases and storage. Those backing services must be running.</p>
+  <pre><code>pnpm openldr ingest files/my-file.json
+pnpm openldr pipeline status</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development import result"><img src="__IMAGE:terminal-linux-dev-import__" data-terminal-stage="dev-import" alt="Illustrated source CLI importing a file and showing its completed batch in pipeline status."></button><figcaption>The tested file produced a completed batch with one resource. Your batch ID and count will differ.</figcaption></figure>
+  <p>For the other CLI commands in these guides, keep the <code>pnpm openldr</code> prefix and use paths on your computer.</p>
+ </section>

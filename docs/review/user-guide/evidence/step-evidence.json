@@ -1,0 +1,509 @@
+{
+  "notes": [
+    "Frames come from existing actual app recordings, not a new browser run.",
+    "The first two filter navigation actions are not recorded. Their controls are visible in the first frame.",
+    "Images were only cropped and encoded. No controls or values were added."
+  ],
+  "steps": [
+    {
+      "id": "filter-step-1-dashboard",
+      "title": "Open Dashboard",
+      "path": "./evidence/filter-step-1-dashboard.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-filters.mp4",
+      "timestamp_seconds": 0,
+      "full_frame": "./evidence/filter-base-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        0,
+        0,
+        445,
+        165
+      ],
+      "crop_dimensions": [
+        445,
+        165
+      ],
+      "bytes": 11295,
+      "evidence_kind": "control-visible",
+      "note": "The Dashboard navigation item is visible and selected. The clip starts after navigation."
+    },
+    {
+      "id": "filter-step-2-selector",
+      "title": "Choose Lab Overview (Sample)",
+      "path": "./evidence/filter-step-2-selector.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-filters.mp4",
+      "timestamp_seconds": 0,
+      "full_frame": "./evidence/filter-base-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        215,
+        38,
+        450,
+        104
+      ],
+      "crop_dimensions": [
+        235,
+        66
+      ],
+      "bytes": 3527,
+      "evidence_kind": "selection-visible",
+      "note": "The selector already shows Lab Overview (Sample). Opening this selector is not recorded."
+    },
+    {
+      "id": "filter-step-3-calendar",
+      "title": "Choose 1 October through 31 October 2026",
+      "path": "./evidence/filter-step-3-calendar.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-filters.mp4",
+      "timestamp_seconds": 2.9,
+      "full_frame": "./evidence/filter-period-calendar-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        225,
+        95,
+        815,
+        485
+      ],
+      "crop_dimensions": [
+        590,
+        390
+      ],
+      "bytes": 32081,
+      "evidence_kind": "recorded-action",
+      "note": "October calendar, selected first day, and cursor on the last day are visible."
+    },
+    {
+      "id": "filter-step-3-selected",
+      "title": "Check the selected date range",
+      "path": "./evidence/filter-step-3-selected.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-filters.mp4",
+      "timestamp_seconds": 3.4,
+      "full_frame": "./evidence/filter-period-selected-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        225,
+        95,
+        815,
+        485
+      ],
+      "crop_dimensions": [
+        590,
+        390
+      ],
+      "bytes": 39207,
+      "evidence_kind": "selection-visible",
+      "note": "The October date range is selected in the calendar."
+    },
+    {
+      "id": "filter-step-4-test",
+      "title": "Choose HIV viral load",
+      "path": "./evidence/filter-step-4-test.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-filters.mp4",
+      "timestamp_seconds": 5.2,
+      "full_frame": "./evidence/filter-test-menu-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        405,
+        100,
+        665,
+        335
+      ],
+      "crop_dimensions": [
+        260,
+        235
+      ],
+      "bytes": 10582,
+      "evidence_kind": "recorded-action",
+      "note": "The open Test menu shows HIV viral load as an available choice."
+    },
+    {
+      "id": "filter-step-5-priority",
+      "title": "Choose urgent",
+      "path": "./evidence/filter-step-5-priority.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-filters.mp4",
+      "timestamp_seconds": 7.4,
+      "full_frame": "./evidence/filter-priority-menu-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        405,
+        100,
+        710,
+        305
+      ],
+      "crop_dimensions": [
+        305,
+        205
+      ],
+      "bytes": 8884,
+      "evidence_kind": "recorded-action",
+      "note": "The open Priority menu shows urgent as an available choice."
+    },
+    {
+      "id": "filter-result",
+      "title": "Check Total Orders and Distinct Patients",
+      "path": "./evidence/filter-result.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-filters.mp4",
+      "timestamp_seconds": 8.8,
+      "full_frame": "./evidence/filter-result-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        225,
+        95,
+        1008,
+        337
+      ],
+      "crop_dimensions": [
+        783,
+        242
+      ],
+      "bytes": 19794,
+      "evidence_kind": "result-visible",
+      "note": "The selected filters and totals 1, 1 and 4 are visible."
+    },
+    {
+      "id": "bar-step-1-new-dashboard",
+      "title": "Choose New dashboard",
+      "path": "./evidence/bar-step-1-new-dashboard.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-new-widget.mp4",
+      "timestamp_seconds": 1.1,
+      "full_frame": "./evidence/widget-new-menu-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        1000,
+        35,
+        1278,
+        245
+      ],
+      "crop_dimensions": [
+        278,
+        210
+      ],
+      "bytes": 8996,
+      "evidence_kind": "recorded-action",
+      "note": "Dashboard dots menu is open and New dashboard is visible."
+    },
+    {
+      "id": "bar-step-2-add-widget",
+      "title": "Choose Add widget",
+      "path": "./evidence/bar-step-2-add-widget.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-new-widget.mp4",
+      "timestamp_seconds": 3.1,
+      "full_frame": "./evidence/widget-add-menu-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        1000,
+        68,
+        1278,
+        420
+      ],
+      "crop_dimensions": [
+        278,
+        352
+      ],
+      "bytes": 15854,
+      "evidence_kind": "recorded-action",
+      "note": "New dashboard is in edit mode. Add widget is visible in its open dots menu."
+    },
+    {
+      "id": "bar-step-3-title",
+      "title": "Enter Orders by test",
+      "path": "./evidence/bar-step-3-title.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-new-widget.mp4",
+      "timestamp_seconds": 6.2,
+      "full_frame": "./evidence/widget-title-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        38,
+        30,
+        740,
+        170
+      ],
+      "crop_dimensions": [
+        702,
+        140
+      ],
+      "bytes": 10569,
+      "evidence_kind": "selection-visible",
+      "note": "The completed title and Test Orders data selection are visible."
+    },
+    {
+      "id": "bar-step-4-defaults",
+      "title": "Keep Test Orders and Count",
+      "path": "./evidence/bar-step-4-defaults.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-new-widget.mp4",
+      "timestamp_seconds": 6.2,
+      "full_frame": "./evidence/widget-title-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        45,
+        82,
+        740,
+        338
+      ],
+      "crop_dimensions": [
+        695,
+        256
+      ],
+      "bytes": 14814,
+      "evidence_kind": "selection-visible",
+      "note": "The Data and Summarize controls show Test Orders and Count."
+    },
+    {
+      "id": "bar-step-5-group-button",
+      "title": "Select Group by",
+      "path": "./evidence/bar-step-5-group-button.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-new-widget.mp4",
+      "timestamp_seconds": 6.4,
+      "full_frame": "./evidence/widget-group-button-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        45,
+        225,
+        740,
+        415
+      ],
+      "crop_dimensions": [
+        695,
+        190
+      ],
+      "bytes": 15317,
+      "evidence_kind": "control-visible",
+      "note": "The toolbar contains the Group by button. Inspect in context before annotating its exact location."
+    },
+    {
+      "id": "bar-step-5-group-menu",
+      "title": "Choose Test for Group by",
+      "path": "./evidence/bar-step-5-group-menu.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-new-widget.mp4",
+      "timestamp_seconds": 7.6,
+      "full_frame": "./evidence/widget-group-menu-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        44,
+        302,
+        740,
+        548
+      ],
+      "crop_dimensions": [
+        696,
+        246
+      ],
+      "bytes": 11578,
+      "evidence_kind": "recorded-action",
+      "note": "The Group by dropdown is open with Test visible."
+    },
+    {
+      "id": "bar-step-5-selected",
+      "title": "Check the grouping",
+      "path": "./evidence/bar-step-5-selected.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-new-widget.mp4",
+      "timestamp_seconds": 8.5,
+      "full_frame": "./evidence/widget-group-selected-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        44,
+        302,
+        740,
+        570
+      ],
+      "crop_dimensions": [
+        696,
+        268
+      ],
+      "bytes": 15986,
+      "evidence_kind": "selection-visible",
+      "note": "Group by is Test and the five result rows are visible."
+    },
+    {
+      "id": "bar-step-6-chart-menu",
+      "title": "Open Charts",
+      "path": "./evidence/bar-step-6-chart-menu.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-new-widget.mp4",
+      "timestamp_seconds": 10,
+      "full_frame": "./evidence/widget-chart-menu-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        550,
+        340,
+        740,
+        565
+      ],
+      "crop_dimensions": [
+        190,
+        225
+      ],
+      "bytes": 5431,
+      "evidence_kind": "recorded-action",
+      "note": "Editor dots menu is open with Charts visible."
+    },
+    {
+      "id": "bar-step-6-bar-picker",
+      "title": "Choose Bar",
+      "path": "./evidence/bar-step-6-bar-picker.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-new-widget.mp4",
+      "timestamp_seconds": 10.7,
+      "full_frame": "./evidence/widget-chart-picker-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        940,
+        0,
+        1280,
+        350
+      ],
+      "crop_dimensions": [
+        340,
+        350
+      ],
+      "bytes": 11070,
+      "evidence_kind": "recorded-action",
+      "note": "The Visualization Type sheet is open and Bar is visible."
+    },
+    {
+      "id": "bar-step-7-save",
+      "title": "Choose Save",
+      "path": "./evidence/bar-step-7-save.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-new-widget.mp4",
+      "timestamp_seconds": 12.65,
+      "full_frame": "./evidence/widget-save-menu-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        550,
+        340,
+        740,
+        565
+      ],
+      "crop_dimensions": [
+        190,
+        225
+      ],
+      "bytes": 5448,
+      "evidence_kind": "recorded-action",
+      "note": "Editor dots menu is open and Save is highlighted."
+    },
+    {
+      "id": "bar-result",
+      "title": "Check the saved bar chart",
+      "path": "./evidence/bar-result.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-new-widget.mp4",
+      "timestamp_seconds": 14.4,
+      "full_frame": "./evidence/widget-result-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        224,
+        135,
+        745,
+        470
+      ],
+      "crop_dimensions": [
+        521,
+        335
+      ],
+      "bytes": 19604,
+      "evidence_kind": "result-visible",
+      "note": "The saved chart has five bars. Full blood count reaches 18."
+    },
+    {
+      "id": "dashboard-created",
+      "title": "Check the new empty dashboard",
+      "path": "./evidence/dashboard-created.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-new-widget.mp4",
+      "timestamp_seconds": 2.4,
+      "full_frame": "./evidence/dashboard-created-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        212,
+        35,
+        1278,
+        335
+      ],
+      "crop_dimensions": [
+        1066,
+        300
+      ],
+      "bytes": 35906,
+      "evidence_kind": "result-visible",
+      "note": "New dashboard was created. The selector shows New dashboard and the empty edit grid is visible before Add widget is opened."
+    },
+    {
+      "id": "widget-date-grain",
+      "title": "Choose a grain for a date field",
+      "path": "./evidence/grain-date.jpg",
+      "source_video": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-trend.mp4",
+      "timestamp_seconds": 7.2,
+      "full_frame": "./evidence/grain-date-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        48,
+        166,
+        736,
+        309
+      ],
+      "crop_dimensions": [
+        688,
+        143
+      ],
+      "bytes": 8205,
+      "evidence_kind": "selection-visible",
+      "note": "Actual recorded Group by control shows Authored. Grain is visible immediately below and set to week. Entire controls retained to show both dropdown arrows."
+    }
+  ]
+}

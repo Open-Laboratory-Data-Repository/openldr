@@ -1,0 +1,28 @@
+<style>
+#dashboard-create-focus-guide .dg-context-shot { max-width:500px; }
+#dashboard-create-focus-guide .fc-screenshot { display:block; position:relative; width:100%; aspect-ratio:8/5; overflow:hidden; background:var(--dg-bg); }
+#dashboard-create-focus-guide .dg-context-shot img { position:absolute; inset:0; display:block; width:100%; height:100%; max-height:none; object-fit:fill; }
+#dashboard-create-focus-guide .fc-background { filter:blur(1.25px); opacity:.9; }
+#dashboard-create-focus-guide .fc-sharp { pointer-events:none; }
+#dashboard-create-focus-guide .fc-ring { position:absolute; display:block; border:2px solid var(--dg-link); border-radius:3px; pointer-events:none; }
+#dashboard-create-focus-guide .fc-marker { position:absolute; right:calc(100% + 3px); top:-4px; display:flex; align-items:center; justify-content:center; width:19px; height:19px; border-radius:50%; background:var(--dg-link); color:var(--dg-bg); font:500 11px/1 Arial,sans-serif; }
+#dashboard-create-focus-guide [data-shot-id="open-dashboard"] .fc-marker { left:calc(100% + 3px); right:auto; }
+#dashboard-create-focus-guide .fc-preview-controls { display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin:18px 0 0; color:var(--dg-muted); font-size:12px; }
+#dashboard-create-focus-guide .fc-preview-controls span { margin-right:6px; }
+#dashboard-create-focus-guide .fc-preview-controls button { color:var(--dg-text); padding:5px 10px; background:var(--dg-pane); border:1px solid var(--dg-border); border-radius:5px; }
+#dashboard-create-focus-guide .fc-preview-controls button[aria-pressed="true"] { border-color:var(--dg-brand); background:var(--dg-wash); }
+#dashboard-create-focus-guide .fc-preview-note { color:var(--dg-muted); font-size:12px; }
+#dashboard-create-focus-guide.fc-clear .fc-background { filter:none; opacity:1; }
+#dashboard-create-focus-guide.fc-clear .fc-sharp { visibility:hidden; }
+@media(pointer:coarse) { #dashboard-create-focus-guide .fc-preview-controls button { min-height:44px; } }
+</style>
+<script>
+(() => {
+ const root=document.getElementById('dashboard-create-focus-guide');
+ root.querySelectorAll('[data-focus-mode]').forEach(button=>button.addEventListener('click',()=>{
+  const clear=button.dataset.focusMode==='clear';
+  root.classList.toggle('fc-clear',clear);
+  root.querySelectorAll('[data-focus-mode]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
+ }));
+})();
+</script>

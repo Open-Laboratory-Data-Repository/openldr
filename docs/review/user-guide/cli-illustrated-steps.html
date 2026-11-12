@@ -1,0 +1,59 @@
+ <div class="dg-platform-picker" role="group" aria-label="Operating system for the illustrated walkthrough">
+  <span>Show instructions for</span>
+  <button type="button" class="cursor-interaction" data-cli-platform="linux" aria-pressed="true">Linux</button>
+  <button type="button" class="cursor-interaction" data-cli-platform="mac" aria-pressed="false">macOS</button>
+  <button type="button" class="cursor-interaction" data-cli-platform="windows" aria-pressed="false">Windows</button>
+ </div>
+ <div class="dg-example"><p>If you downloaded OpenLDR and installed it in <code data-cli-path>~/Downloads/openldr_ce</code>, the commands below show how to use that installation.</p><p>If you installed it somewhere else, replace this example path with your actual installation folder throughout the guide.</p><p data-cli-path-explanation>Here, ~ means your home folder. ~/Downloads/openldr_ce means the openldr_ce folder inside your Downloads folder.</p></div>
+ <p class="dg-illustration-note">These are illustrated examples. The same installation location appears in the commands, prompts and file examples. Select a picture to enlarge it.</p>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-open"><span class="dg-number">1.</span>Open a terminal</h3>
+  <p data-cli-launch>Press the Super key, often the Windows-logo key. Type Terminal in the applications search, then select Terminal. These Linux pictures use Ubuntu as an example.</p>
+  <p>A terminal window opens. The line ending in <code data-cli-prompt-end>$</code> is the <strong>prompt</strong>. The vertical line after it is the cursor. This is where your typing appears.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the new terminal illustration"><img src="__IMAGE:terminal-linux-ready__" data-terminal-stage="ready" alt="Illustrated new terminal with a prompt and cursor ready for typing."></button><figcaption>Your name and computer name may be different. Type after the prompt.</figcaption></figure>
+  <p>Do not type the prompt. If you make a typing mistake, use <strong>Backspace</strong> to correct it before pressing Enter.</p>
+ </section>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-folder"><span class="dg-number">2.</span>Go to the installation folder</h3>
+  <p>OpenLDR's installed command file is in its installation folder. The commands in this guide must run from that folder. Opening a terminal alone does not put you there.</p>
+  <p>For this example, OpenLDR is installed in <code data-cli-path>~/Downloads/openldr_ce</code>. Use the location you chose during installation.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the example installation folder"><img src="__IMAGE:terminal-linux-folder__" data-terminal-stage="folder" alt="Illustrated file browser showing the example OpenLDR installation and its files."></button><figcaption>This is the example installation folder. Your actual folder must contain the installed OpenLDR files.</figcaption></figure>
+  <p><code>cd</code> changes the folder your terminal is using. In your terminal, type the command below and press <strong>Enter</strong>. Substitute your actual location if it differs.</p>
+  <pre><code data-cli-cd>cd ~/Downloads/openldr_ce</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the change-folder command illustration"><img src="__IMAGE:terminal-linux-cd__" data-terminal-stage="cd" alt="Illustrated terminal with cd pointing to the example installation folder."></button><figcaption>There is a space after cd. The rest of the command is the installation location.</figcaption></figure>
+  <p>The terminal usually prints no success message for <code>cd</code>. A new prompt appears. If an error appears instead, check the folder location before continuing.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the changed-folder illustration"><img src="__IMAGE:terminal-linux-changed__" data-terminal-stage="changed" alt="Illustrated terminal after changing to the example installation folder."></button><figcaption>The new prompt shows that you changed folders. Check its files next.</figcaption></figure>
+ </section>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-check"><span class="dg-number">3.</span>Check that this is the right folder</h3>
+  <p>List the files in the folder. Type the following command and press <strong>Enter</strong>.</p>
+  <pre><code data-cli-list>ls</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the installation folder listing illustration"><img src="__IMAGE:terminal-linux-files__" data-terminal-stage="files" alt="Illustrated terminal listing the data folder, docker-compose.yml and the OpenLDR command file."></button><figcaption>This illustration shows the files you need. Your folder may contain other files too.</figcaption></figure>
+  <div class="dg-result"><p><strong>Check before continuing</strong></p><p>Look for <code>docker-compose.yml</code>, the <code>data</code> folder, and <code data-cli-wrapper>openldr</code>. If these are missing, return to the folder created by your installer.</p></div>
+ </section>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-help"><span class="dg-number">4.</span>Ask OpenLDR for help</h3>
+  <p>Stay in the installation folder you checked in step 3. Now run your first OpenLDR command. It displays help without changing records.</p>
+  <pre><code data-cli-help>./openldr --help</code></pre>
+  <p>Type the command at the new prompt and press <strong>Enter</strong>. Keep the space before <code>--help</code> and both hyphens.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the first OpenLDR command illustration"><img src="__IMAGE:terminal-linux-help__" data-terminal-stage="help" alt="Illustrated terminal with the OpenLDR help command typed before pressing Enter."></button><figcaption>The command is ready. Press Enter to run it.</figcaption></figure>
+  <div class="dg-result"><p><strong>Expected result</strong></p><p>The terminal prints a usage line, options and a list of commands. The picture below shows an excerpt.</p></div>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the OpenLDR help output illustration"><img src="__IMAGE:terminal-linux-help-result__" data-terminal-stage="help-result" alt="Illustrated excerpt of OpenLDR help output with Usage, Options and Commands."></button><figcaption>Scroll in your terminal to read the full output. When the prompt returns, you can type again.</figcaption></figure>
+ </section>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-command-help"><span class="dg-number">5.</span>Get help for one command</h3>
+  <p>The <code>ingest</code> command imports a file. Add <code>--help</code> to read its instructions without importing anything.</p>
+  <pre><code data-cli-ingest-help>./openldr ingest --help</code></pre>
+  <p>Type this at the prompt, then press <strong>Enter</strong>.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the command-specific help illustration"><img src="__IMAGE:terminal-linux-ingest__" data-terminal-stage="ingest" alt="Illustrated terminal with ingest --help typed before pressing Enter."></button><figcaption>There is a space between the program, command name and option.</figcaption></figure>
+  <div class="dg-result"><p><strong>Expected result</strong></p><p>The usage line now names <code>ingest</code>. The options underneath apply to that command.</p></div>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the ingest help output illustration"><img src="__IMAGE:terminal-linux-ingest-result__" data-terminal-stage="ingest-result" alt="Illustrated ingest help output with a required file placeholder and command options."></button><figcaption><code>&lt;file&gt;</code> means a required file path. <code>[options]</code> means optional settings. Do not type these brackets.</figcaption></figure>
+  <p>You have reached the end of the first-command walkthrough. No file has been imported. Continue below to learn how file paths work before following an import guide.</p>
+ </section>
+ <p class="dg-illustration-note">More help opening a terminal: <a href="https://ubuntu.com/desktop/docs/en/26.04/tutorial/the-linux-command-line-for-beginners/">Ubuntu</a>, <a href="https://support.apple.com/guide/mac-help/mchlp1008/mac">macOS Spotlight</a>, <a href="https://learn.microsoft.com/en-us/powershell/scripting/windows-powershell/starting-windows-powershell">Windows PowerShell</a>.</p>
+

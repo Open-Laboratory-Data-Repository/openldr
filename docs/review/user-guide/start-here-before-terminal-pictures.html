@@ -1,0 +1,95 @@
+<article class="dg-article" id="sh-top">
+ <div class="dg-meta"><span>All users</span><span>Beginner</span></div>
+ <h1>Start here</h1>
+ <p>OpenLDR Studio is the browser app for your lab's records. Open it to use dashboards, reports and forms.</p>
+ <p class="dg-intro">Start by getting access to Studio. If another guide asks you to run a command, use the CLI walkthrough below first. You do not need sample data to follow this page.</p>
+
+ <h2 id="sh-sign-in">Open Studio</h2>
+ <p>Get the Studio address and an account from your administrator. Open that address in your browser, then sign in.</p>
+ <p>You can use Studio from another computer or a phone. If your organisation requires Tailscale or a VPN, connect before opening the address.</p>
+ <p>Once you have signed in, <a href="dashboard-review.html">continue with the Dashboard guide</a>, or read on if you need the command line.</p>
+
+ <h2 id="sh-cli">Use the command line</h2>
+ <p>The command-line interface, or CLI, runs OpenLDR tasks from typed commands. You enter them in a terminal window.</p>
+ <p>Operators use the CLI to import files and maintain an installation. Each guide explains when you need it.</p>
+ <p>In this walkthrough, you will open a terminal and ask OpenLDR for help. These help commands do not import or change records.</p>
+
+ <h3 id="sh-cli-server">Before you begin</h3>
+ <p>You need access to the computer hosting OpenLDR and the folder where it was installed. The installed CLI uses Docker, so Docker and OpenLDR must be running. Your account must have permission to use Docker.</p>
+ <p>If you only have browser access, ask your administrator to run the command for you.</p>
+ <details class="cursor-interaction"><summary>I am connecting to a remote server</summary><p>Opening Studio through Tailscale gives you access to the browser app. To run commands on its server, ask your administrator for terminal access.</p><p>They may provide an SSH connection. SSH opens a secure terminal session on another computer. Use their connection instructions. A connection command can look like:</p><pre><code>ssh username@server-address</code></pre><p>Replace <code>username</code> and <code>server-address</code> with the details you received. After connecting, follow the steps for the server's operating system.</p></details>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-open"><span class="dg-number">1.</span>Open a terminal</h3>
+  <p>Open a terminal on the computer hosting OpenLDR. If you connected through SSH, you are already in its terminal.</p>
+  <dl class="dg-config"><dt>Windows</dt><dd>Open Start, search for PowerShell, then open Windows PowerShell.</dd><dt>macOS</dt><dd>Open Applications, then Utilities, then Terminal.</dd><dt>Linux</dt><dd>Open your applications menu and search for Terminal.</dd></dl>
+  <p>Type each command and press <strong>Enter</strong>. Copy only the command. Leave out prompt symbols such as <code>$</code> or <code>&gt;</code>.</p>
+ </section>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-folder"><span class="dg-number">2.</span>Go to the installation folder</h3>
+  <p>Ask the person who installed OpenLDR for this folder's location. Replace the example path below with that location. Keep the quotation marks if the path contains spaces.</p>
+  <p><code>cd</code> changes the folder your terminal is using.</p>
+  <details class="cursor-interaction" open><summary>Linux or macOS</summary><pre><code>cd "/path/to/openldr"
+ls</code></pre><p><code>ls</code> lists the files in that folder.</p></details>
+  <details class="cursor-interaction"><summary>Windows PowerShell</summary><pre><code>cd "C:\path\to\openldr"
+Get-ChildItem</code></pre><p><code>Get-ChildItem</code> lists the files in that folder.</p></details>
+  <div class="dg-result"><p><strong>Check before continuing</strong></p><p>The folder should contain <code>docker-compose.yml</code>, a <code>data</code> folder, and either <code>openldr</code> or <code>openldr.ps1</code>. If these are missing, check the folder with your administrator.</p></div>
+ </section>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-help"><span class="dg-number">3.</span>Ask OpenLDR for help</h3>
+  <p>Run the command for your operating system from the same terminal.</p>
+  <details class="cursor-interaction" open><summary>Linux or macOS</summary><pre><code>./openldr --help</code></pre><p><code>./openldr</code> runs the OpenLDR command file in the current folder.</p></details>
+  <details class="cursor-interaction"><summary>Windows PowerShell</summary><pre><code>.\openldr.ps1 --help</code></pre><p><code>.\openldr.ps1</code> runs the Windows command file in the current folder.</p></details>
+  <div class="dg-result"><p><strong>Expected result</strong></p><p>The terminal shows this usage line, followed by options and a list of commands:</p><pre><code>Usage: openldr [options] [command]</code></pre><p>When the prompt returns, you can type the next command.</p></div>
+ </section>
+
+ <section class="dg-step">
+  <h3 id="sh-cli-command-help"><span class="dg-number">4.</span>Read help for a specific command</h3>
+  <p>Use <code>ingest --help</code> to see what the file-import command accepts. This displays instructions without importing anything.</p>
+  <details class="cursor-interaction" open><summary>Linux or macOS</summary><pre><code>./openldr ingest --help</code></pre></details>
+  <details class="cursor-interaction"><summary>Windows PowerShell</summary><pre><code>.\openldr.ps1 ingest --help</code></pre></details>
+  <div class="dg-result"><p><strong>Expected result</strong></p><pre><code>Usage: openldr ingest [options] &lt;file&gt;</code></pre><p><code>&lt;file&gt;</code> is a required file path. Options in square brackets are optional. Neither set of brackets belongs in the command you type.</p></div>
+ </section>
+
+ <details class="cursor-interaction"><summary>I run OpenLDR from a source checkout</summary><p>Use the repository folder and the project's <code>pnpm openldr</code> command. This assumes the development dependencies are installed.</p><pre><code>cd "/path/to/openldr_ce"
+pnpm openldr --help
+pnpm openldr ingest --help</code></pre><p>In later guides, replace the <code>./openldr</code> prefix with <code>pnpm openldr</code>. File paths refer to the computer running this command.</p></details>
+
+ <h2 id="sh-files">Understand commands and file paths</h2>
+ <p>Before you import a file, check what each part of the command means. This example uses a placeholder filename:</p>
+ <pre><code>./openldr ingest data/my-file.json</code></pre>
+ <dl class="dg-config"><dt><code>./openldr</code></dt><dd>Starts the installed CLI.</dd><dt><code>ingest</code></dt><dd>Imports a file into OpenLDR.</dd><dt><code>data/my-file.json</code></dt><dd>The file to import. Replace it with the path to your actual file.</dd></dl>
+ <p>For a Docker installation, put the file in the installation's <code>data</code> folder. For example:</p>
+ <pre><code>openldr/
+  docker-compose.yml
+  openldr
+  data/
+    my-file.json</code></pre>
+ <p>On Windows, the command file is <code>openldr.ps1</code>. Keep the <code>data/</code> prefix when supplying the file path:</p>
+ <pre><code>.\openldr.ps1 ingest data/my-file.json</code></pre>
+ <p>The installed CLI runs inside OpenLDR's API container. The <code>data</code> folder is shared with that container. This lets the command read files you place there.</p>
+ <p>If OpenLDR is on a remote server, place the file in that server's installation folder. Saving it on your laptop does not put it on the server.</p>
+ <p>For commands that write files, use an output path under <code>data/</code> too. Put quotation marks around a path containing spaces, such as <code>"data/my file.json"</code>.</p>
+ <p>Each task's guide explains which file format and command options to use. The example above explains the path only. Running an import command writes records.</p>
+
+ <h2 id="sh-phone">Use Studio on a phone</h2>
+ <p>Use the same Studio address and account on your phone. Connect to your organisation's VPN first if required.</p>
+ <p>The main menu starts folded to leave room for the page. Here is how to switch pages.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span>Open the main menu</h3><p>Select the menu button at the top left.</p><figure class="dg-shot" style="max-width:__WIDTH:phone-menu-button__px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the phone menu button"><img src="__IMAGE:phone-menu-button__" alt="The main menu button at the top left of the phone header."></button><figcaption>The menu button is shown here on Dashboard.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span>Choose a page</h3><p>Select the page you want. The menu closes after you choose it.</p><figure class="dg-shot" style="max-width:__WIDTH:phone-menu__px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the open phone menu"><img src="__IMAGE:phone-menu__" alt="The opened Studio menu on a phone."></button><figcaption>Available pages depend on your account's access and layout.</figcaption></figure></section>
+
+ <h2 id="sh-problems">If you get stuck</h2>
+ <details class="cursor-interaction"><summary>I cannot open Studio</summary><p>Check the address your administrator supplied. If the installation requires Tailscale or a VPN, check that you are connected. If the page still does not open, give your administrator the address and the error you see.</p></details>
+ <details class="cursor-interaction"><summary>The OpenLDR command cannot be found</summary><p>Repeat step 2 and check that the command file is listed. Use <code>./openldr</code> on Linux or macOS, or <code>.\openldr.ps1</code> in PowerShell. Running <code>openldr</code> by itself does not select the file in your current folder.</p></details>
+ <details class="cursor-interaction"><summary>The CLI cannot connect to Docker</summary><p>Ask your administrator to check that Docker and the OpenLDR installation are running. Your account also needs permission to use Docker. Include the exact error message.</p></details>
+ <details class="cursor-interaction"><summary>PowerShell will not run openldr.ps1</summary><p>Copy the error message and ask your administrator to check how scripts are allowed to run on that computer.</p></details>
+ <details class="cursor-interaction"><summary>An import cannot find my file</summary><p>Check the filename, spelling and extension. For a Docker installation, put the file in the installation's <code>data</code> folder and include <code>data/</code> in the command. For a remote installation, check the server's folder.</p></details>
+ <details class="cursor-interaction"><summary>I need help with an error</summary><p>Share the command you ran and its complete error message with your administrator or support contact. For a browser task, include the page and the action you tried.</p></details>
+
+ <h2 id="sh-next">Continue with a task</h2>
+ <p>The Dashboard guide explains how to create a dashboard and add widgets using your own data. You can configure them before records arrive. Optional sample exercises come after the main instructions.</p>
+ <p><a class="dg-return cursor-interaction" href="dashboard-review.html">Open the Dashboard guide</a></p>
+ <a class="dg-return cursor-interaction" href="#sh-top">Back to the top</a>
+</article>
