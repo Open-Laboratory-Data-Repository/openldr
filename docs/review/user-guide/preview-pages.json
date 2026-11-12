@@ -16,5 +16,6 @@
   "audit": "audit-review.html",
   "setup-checks": "setup-checks-review.html",
   "laboratory": "laboratory-review.html",
-  "marketplace": "marketplace-review.html"
+  "marketplace": "marketplace-review.html",
+  "plugin-sites": "plugin-sites-review.html"
 }

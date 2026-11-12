@@ -1,0 +1,385 @@
+{
+  "capturedAt": "2026-11-12T13:59:55.059Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5189/studio/",
+  "steps": [
+    {
+      "id": "dashboard",
+      "label": "A declared plugin card appears beneath the dashboard widgets.",
+      "path": "plugin-sites-evidence/dashboard.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 257,
+          "y": 623,
+          "width": 494,
+          "height": 160
+        }
+      ]
+    },
+    {
+      "id": "panel-button",
+      "label": "Side panels appears when an available plugin declares a panel.",
+      "path": "plugin-sites-evidence/panel-button.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1144,
+          "y": 7.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "panel-choice",
+      "label": "Choose the panel by its title.",
+      "path": "plugin-sites-evidence/panel-choice.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1021,
+          "y": 48.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "panel-open",
+      "label": "The side panel opens beside the current page.",
+      "path": "plugin-sites-evidence/panel-open.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 913,
+          "y": 71.609375,
+          "width": 351,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "navigate",
+      "label": "The panel stays open while you change the main page.",
+      "path": "plugin-sites-evidence/navigate.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 913,
+          "y": 71.609375,
+          "width": 351,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "close",
+      "label": "Close returns the space to the main page.",
+      "path": "plugin-sites-evidence/close.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 64,
+          "width": 28,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "marketplace",
+      "label": "Open Settings, then Marketplace.",
+      "path": "plugin-sites-evidence/marketplace.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 340,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "installed",
+      "label": "Choose Installed to find the plugin.",
+      "path": "plugin-sites-evidence/installed.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 538.6875,
+          "y": 49,
+          "width": 97.1875,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "plugin",
+      "label": "Open the installed plugin card.",
+      "path": "plugin-sites-evidence/plugin.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 751.65625,
+          "y": 182,
+          "width": 74.703125,
+          "height": 19.25
+        }
+      ]
+    },
+    {
+      "id": "actions",
+      "label": "Open the plugin detail dots.",
+      "path": "plugin-sites-evidence/actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 64,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "places",
+      "label": "Places appears only for a plugin declaring a card or panel.",
+      "path": "plugin-sites-evidence/places.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 105,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "card-switch",
+      "label": "Dashboard card saves immediately when changed.",
+      "path": "plugin-sites-evidence/card-switch.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 911.75,
+          "y": 152.53125,
+          "width": 344.25,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "card-off",
+      "label": "The card switch is now off for the whole lab.",
+      "path": "plugin-sites-evidence/card-off.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 911.75,
+          "y": 152.53125,
+          "width": 36,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "panel-switch",
+      "label": "Side panel can be switched separately.",
+      "path": "plugin-sites-evidence/panel-switch.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 911.75,
+          "y": 206.53125,
+          "width": 344.25,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "hidden",
+      "label": "The disabled places disappear while the plugin page remains available.",
+      "path": "plugin-sites-evidence/hidden.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 656,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "phone-menu",
+      "label": "Use the header Side panels button on a phone.",
+      "path": "plugin-sites-evidence/phone-menu.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 132,
+          "y": 48.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-panel",
+      "label": "A phone panel covers the page beneath the header.",
+      "path": "plugin-sites-evidence/phone-panel.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 17,
+          "y": 71.609375,
+          "width": 342,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "phone-close",
+      "label": "Close the panel to return to the main page.",
+      "path": "plugin-sites-evidence/phone-close.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 331,
+          "y": 64,
+          "width": 28,
+          "height": 24
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,344 @@
+[
+  {
+    "id": "dashboard",
+    "crop": [
+      232.0,
+      460.0,
+      544,
+      340.0
+    ],
+    "targets": [
+      {
+        "x": 257,
+        "y": 623,
+        "width": 494,
+        "height": 160
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "panel-button",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1144,
+        "y": 7.5,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "panel-choice",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1021,
+        "y": 48.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "panel-open",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 913,
+        "y": 71.609375,
+        "width": 351,
+        "height": 20
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "navigate",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 913,
+        "y": 71.609375,
+        "width": 351,
+        "height": 20
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "close",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1236,
+        "y": 64,
+        "width": 28,
+        "height": 24
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "marketplace",
+    "crop": [
+      103.5,
+      208.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 252,
+        "y": 340,
+        "width": 183,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "installed",
+    "crop": [
+      347.28125,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 538.6875,
+        "y": 49,
+        "width": 97.1875,
+        "height": 34
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "plugin",
+    "crop": [
+      549.0078125,
+      41.625,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 751.65625,
+        "y": 182,
+        "width": 74.703125,
+        "height": 19.25
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "actions",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1232,
+        "y": 64,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "places",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 105,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "card-switch",
+    "crop": [
+      800,
+      14.53125,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 911.75,
+        "y": 152.53125,
+        "width": 344.25,
+        "height": 24
+      }
+    ],
+    "step": 6,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "card-off",
+    "crop": [
+      689.75,
+      12.53125,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 911.75,
+        "y": 152.53125,
+        "width": 36,
+        "height": 20
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "panel-switch",
+    "crop": [
+      800,
+      68.53125,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 911.75,
+        "y": 206.53125,
+        "width": 344.25,
+        "height": 24
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "hidden",
+    "crop": [
+      0,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 8,
+        "y": 656,
+        "width": 223,
+        "height": 36
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "phone-menu",
+    "crop": [
+      0,
+      0,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 132,
+        "y": 48.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "phone-panel",
+    "crop": [
+      0,
+      0,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 17,
+        "y": 71.609375,
+        "width": 342,
+        "height": 20
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "phone-close",
+    "crop": [
+      0,
+      0,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 331,
+        "y": 64,
+        "width": 28,
+        "height": 24
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "before"
+  }
+]
