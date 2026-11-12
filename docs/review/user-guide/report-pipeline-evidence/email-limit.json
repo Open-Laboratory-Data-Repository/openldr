@@ -1,0 +1,6 @@
+{
+  "saved": false,
+  "executed": false,
+  "recipient": "reviewer@example.invalid",
+  "note": "Configuration photographed only. No email sent. No email nodes saved. Connector points at unused loopback port 19925."
+}

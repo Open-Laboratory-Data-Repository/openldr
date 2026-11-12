@@ -19,5 +19,6 @@
   "marketplace": "marketplace-review.html",
   "plugin-sites": "plugin-sites-review.html",
   "data-exposure": "data-exposure-review.html",
-  "settings": "settings-review.html"
+  "settings": "settings-review.html",
+  "report-pipeline": "report-pipeline-review.html"
 }

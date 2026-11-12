@@ -1,0 +1,1794 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/charts/; img-src 'self' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Scheduled reports with workflows guide preview</title>
+<style>:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 16px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans:
+    -apple-system-body, ui-sans-serif, -apple-system, system-ui, "Segoe UI",
+    Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji",
+    "Segoe UI Symbol";
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 8px);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 2);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'%3E%3Cpath d='M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z'/%3E%3C/svg%3E");
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html > body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-weight: var(--font-weight-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+  text-underline-offset: 2px;
+  font-weight: inherit;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+li,
+.table {
+  font-family: var(--font-sans);
+}
+
+h1 {
+  font-size: calc(var(--font-size-base) * 1.5);
+  line-height: 1.3333333333;
+}
+
+h2 {
+  font-size: calc(var(--font-size-base) * 1.25);
+  line-height: 1.4;
+}
+h3 {
+  font-size: calc(var(--font-size-base) * 1.125);
+  line-height: 1.5555555556;
+}
+h4 {
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+h5,
+h6 {
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+b,
+strong,
+th {
+  font-weight: 600;
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+pre,
+pre code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: calc(var(--font-size-base) * 0.875);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-family: var(--font-sans);
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.table :is(th, td):not(:last-child) {
+  padding-inline-end: calc(var(--font-size-base) * 1.5);
+}
+
+.table-responsive > .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead :is(th, td) {
+  border-bottom-color: var(--border-strong, var(--input));
+  padding-block: calc(var(--font-size-base) / 2);
+  line-height: var(--font-size-base);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+.table tbody :is(th, td) {
+  padding-block: calc(var(--font-size-base) * 0.625);
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 8px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align="right"]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align="center"]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+.widget {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  box-shadow: 0 0 0 0.5px var(--border-strong, var(--border));
+  color: var(--foreground);
+  background: var(--background);
+}
+
+#widget > :not(.card, .widget, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  border: 1px solid var(--border);
+  corner-shape: var(--corner-shape);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-sans);
+  padding: 5px 12px;
+  border-color: color-mix(
+    in oklab,
+    light-dark(var(--primary-foreground), var(--foreground)) 5%,
+    transparent
+  );
+  border-radius: var(--radius-2xl);
+  color: light-dark(var(--primary-foreground), var(--foreground));
+  background: light-dark(var(--foreground), var(--popover));
+  box-shadow: 0 8px 18px rgb(15 23 42 / 20%);
+  letter-spacing: -0.15px;
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted-foreground));
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-family: var(--font-sans);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1;
+}
+
+small,
+.text-small {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls > .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls > .form-label > :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+/* Match inline alignment without overriding a containing flex or grid layout. */
+.btn,
+.nav-link,
+.form-control,
+.form-select,
+.form-range,
+.form-check {
+  vertical-align: middle;
+}
+
+.btn,
+.nav-link {
+  --btn-size: calc(12px + 2 * var(--control-spacing, 12px));
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: inherit;
+  font-family: var(--font-sans);
+  height: fit-content;
+  min-height: var(--btn-size);
+  padding-inline: var(--control-spacing, 12px);
+  border-color: transparent;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.btn {
+  border-color: var(--border);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+}
+
+/* Codex Button size="compact"; appearance stays with the button variant. */
+.btn-sm {
+  --btn-size: 24px;
+  padding-inline: 8px;
+  font-size: calc(var(--font-size-base) * 12 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 12 / 16), 1px);
+  line-height: 16px;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-link:not(:disabled):not([aria-disabled="true"]):hover {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.btn-primary {
+  border-color: var(--border);
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: border-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: border-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--muted-foreground);
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+/* Shared preview chrome; product styles stay inside each variant. */
+.viz-dotted-background {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--foreground) 14%, transparent) 0.8px,
+    transparent 0.8px
+  );
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+.viz-carousel {
+  position: relative;
+  min-width: 0;
+}
+
+.viz-carousel:has(> .viz-carousel-controls) {
+  min-height: calc(60px + var(--viz-carousel-picker-height, 0px));
+  padding-bottom: 60px;
+}
+
+.viz-carousel > [data-variant][hidden] {
+  display: none !important;
+}
+
+.viz-carousel > [data-variant] {
+  isolation: isolate;
+}
+
+.viz-carousel-controls {
+  --viz-carousel-hover: light-dark(
+    color-mix(in srgb, var(--foreground) 5.4%, transparent),
+    color-mix(in srgb, var(--foreground) 7.8%, transparent)
+  );
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  /* Leave room for the host's design-controls launcher at the trailing edge. */
+  max-width: calc(100% - 96px);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+  /* Match the settings dropdown chrome independently of the content font size. */
+  font-size: 13px;
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+/* Keep authored mockup button styles out of the shared carousel chrome. */
+.viz-carousel-controls button,
+.viz-carousel-picker > summary {
+  display: flex !important;
+  height: auto !important;
+  min-height: 30px;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px;
+  padding: 0 6px !important;
+  -webkit-app-region: no-drag;
+  border: 0 !important;
+  border-radius: 14px !important;
+  color: inherit !important;
+  background: transparent !important;
+  font: inherit !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-picker > summary {
+  position: relative;
+  isolation: isolate;
+}
+
+.viz-carousel-controls > button {
+  --icon-size: 16px;
+  width: 30px !important;
+  padding: 0 !important;
+}
+
+.viz-carousel-picker > summary {
+  padding-inline: 12px !important;
+}
+
+.viz-carousel-controls .viz-carousel-caret {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin: 0;
+  color: inherit;
+  transform: rotate(180deg);
+}
+
+.viz-carousel-controls > button > svg,
+.viz-carousel-controls .viz-carousel-caret,
+.viz-carousel-count {
+  opacity: 0.5;
+}
+
+.viz-carousel-controls > button::before,
+.viz-carousel-picker > summary::before {
+  position: absolute;
+  z-index: -1;
+  inset: 3px;
+  border-radius: 12px;
+  content: "";
+  pointer-events: none;
+}
+
+.viz-carousel-controls > button:hover::before,
+.viz-carousel-picker > summary:hover::before {
+  background: var(--viz-carousel-hover);
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-controls [data-lucide],
+.viz-carousel-controls .lucide {
+  flex-shrink: 0;
+}
+
+.viz-carousel-picker {
+  min-width: 0;
+}
+
+.viz-carousel-picker > summary {
+  min-width: 0;
+  list-style: none;
+}
+
+.viz-carousel-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.viz-carousel-count {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.viz-carousel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-carousel-options {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: 0 4px 12px light-dark(rgb(0 0 0 / 6%), rgb(0 0 0 / 25%));
+}
+
+.viz-carousel-options > button {
+  border-radius: max(0px, calc(var(--radius-lg) - 5px)) !important;
+  width: 100% !important;
+  min-height: 28px;
+  justify-content: flex-start !important;
+  padding: 4px 8px !important;
+  font-size: var(--font-size-small) !important;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.viz-carousel-options > [aria-current="true"],
+.viz-carousel-options > button:hover {
+  background: var(--viz-carousel-hover) !important;
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding-inline: calc(4px + var(--control-spacing, 12px) / 2);
+  border-color: var(--input);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--popover) 96%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.4285714286;
+}
+.form-control:is(
+  [type="file"],
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"],
+  [type="color"]
+) {
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  line-height: 18px;
+}
+.form-control:is(
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"]
+) {
+  padding-inline: var(--control-spacing, 12px);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type="file"] {
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+  padding: 0;
+}
+
+.form-control[type="file"]::file-selector-button {
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+  min-height: calc(10px + 2 * var(--control-spacing, 12px));
+  padding-inline: var(--control-spacing, 12px);
+  margin-inline-end: var(--control-spacing, 12px);
+}
+
+.form-control[type="file"]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type="color"] {
+  width: 40px;
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  resize: vertical;
+  min-height: 96px;
+  padding: 8px 10px;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: none;
+}
+.form-control:disabled {
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  opacity: 1;
+}
+.form-control[aria-invalid="true"] {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 20%, transparent);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: fit-content;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  margin: 0;
+  /* The secondary icon role is 14px at compact density and 16px at web density. */
+  --icon-size: calc(10px + var(--control-spacing, 12px) / 2);
+  /* Settings dropdowns retain a 12px inset and a 4px text-to-chevron gap. */
+  padding: 0 calc(16px + var(--icon-size)) 0 12px;
+  outline: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    );
+  background-position:
+    calc(100% - 12px - var(--icon-size) / 2) 50%,
+    calc(100% - 12px - var(--icon-size) * 0.18) 50%;
+  background-repeat: no-repeat;
+  background-size: calc(var(--icon-size) * 0.32) calc(var(--icon-size) * 0.32);
+  cursor: var(--cursor-interaction, default);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.form-select :is(option, optgroup) {
+  color: var(--popover-foreground);
+  background-color: var(--popover);
+}
+
+.form-select :is(option, optgroup):disabled {
+  color: var(--muted-foreground);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.form-select:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.form-select:disabled {
+  opacity: 0.4;
+}
+
+.form-check {
+  display: flex;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+  corner-shape: round;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  width: calc(10px + var(--control-spacing, 12px) / 2);
+  height: calc(10px + var(--control-spacing, 12px) / 2);
+  border-color: var(--border-strong, var(--input));
+  border-radius: calc(var(--radius-sm) / 2);
+  background-color: transparent;
+  color: var(--foreground);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:is(:checked, :indeterminate) {
+  border-color: var(--border-strong, var(--input));
+  background-color: color-mix(in srgb, var(--popover) 96%, transparent);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: "";
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+  background-color: var(--foreground);
+}
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:indeterminate::before {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 65%;
+  height: 6.65%;
+  margin: auto;
+  border-radius: var(--radius-full);
+  background: var(--foreground);
+  mask: none;
+  content: "";
+}
+
+.form-check-input[type="radio"] {
+  border-radius: var(--radius-full);
+  width: 16px;
+  height: 16px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--input);
+}
+
+.form-check-input[type="radio"]:checked {
+  border: 0;
+  background: radial-gradient(
+    circle,
+    var(--primary-foreground) 0 3px,
+    var(--foreground) 3px
+  );
+  box-shadow: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.form-check:not(.form-switch) .form-check-input[type="checkbox"]:focus-visible {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+.form-check:not(.form-switch) .form-check-input[type="radio"]:disabled,
+.form-check:not(.form-switch)
+  .form-check-input[type="radio"]:disabled
+  + .form-check-label {
+  opacity: 0.5;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  content: "";
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+  border-color: #fff;
+  background: #fff;
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--blue);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+  outline: none;
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--primary);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  outline: none;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: transparent;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  margin-top: -9px;
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Outline the native track and thumb, preserving the larger input hit area. */
+.form-range:focus-visible::-webkit-slider-runnable-track {
+  outline: 2px auto Highlight;
+  outline-color: -webkit-focus-ring-color;
+}
+
+.form-range::-moz-range-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+.form-range:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed="true"],
+  [aria-selected="true"],
+  .is-selected
+) {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--blue);
+}
+
+.btn.viz-tile:is([aria-pressed="true"], [aria-selected="true"], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.viz-carousel-controls :is(button, summary):focus-visible {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Web recipes are the default, including on renderers without inline style queries. */
+@supports (border-radius: if(style(--corner-shape: round): 1px; else: 2px)) {
+  /* Match the host's proportional text-sm scale at every text preference. */
+  .tooltip,
+  .viz-badge,
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 14 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 13 / 14), 1px)
+    );
+  }
+
+  .btn-sm {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 12 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 12 / 14), 1px)
+    );
+  }
+
+  .btn,
+  .nav-link,
+  .form-select {
+    border-radius: if(
+      style(--corner-shape: round): var(--radius-full); else: var(--radius-lg)
+    );
+  }
+
+  .form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+    border-radius: if(
+      style(--corner-shape: round): calc(var(--radius-sm) / 2);
+        else: calc(var(--radius-lg) * 0.4)
+    );
+  }
+
+  .tooltip {
+    font-weight: if(
+      style(--corner-shape: round): 600; else: var(--font-weight-normal)
+    );
+  }
+}
+
+@media (pointer: coarse) {
+  .viz-carousel:has(> .viz-carousel-controls) {
+    min-height: calc(76px + var(--viz-carousel-picker-height, 0px));
+    padding-bottom: 76px;
+  }
+
+  .btn,
+  .nav-link,
+  .viz-carousel-controls button,
+  .viz-carousel-picker > summary,
+  .form-control,
+  .form-select {
+    --btn-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+  .form-control:is(
+    [type="file"],
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="week"],
+    [type="time"],
+    [type="color"]
+  ) {
+    height: 44px;
+    min-height: 44px;
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+
+  .form-control[type="file"]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type="color"] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="time"],
+    [type="week"]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: "";
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget > svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html>body{padding:0}
+:root{--guide-preview-height:100dvh}</style>
+</head>
+<body>
+<style>
+#report-pipeline-evidence-guide { --dg-bg:light-dark(#fff,#171717); --dg-pane:light-dark(#fafafa,#1a1a1a); --dg-text:light-dark(#18181b,#fafafa); --dg-muted:light-dark(#71717a,#a0a0a0); --dg-border:light-dark(#e4e4e7,#2e2e2e); --dg-rule:light-dark(#eee,#242424); --dg-brand:#4682b4; --dg-link:light-dark(#276594,#73a9d5); --dg-wash:light-dark(#eaf0f6,#1e2a32); color:var(--dg-text); font:14px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color-scheme:light dark; }
+#report-pipeline-evidence-guide * { box-sizing:border-box; }
+#report-pipeline-evidence-guide .dg-app { display:flex; flex-direction:column; height:var(--guide-preview-height,840px); min-height:0; border:1px solid var(--dg-border); background:var(--dg-bg); }
+#report-pipeline-evidence-guide .dg-head { display:flex; align-items:center; gap:16px; height:48px; padding:0 18px; flex-shrink:0; border-bottom:1px solid var(--dg-border); }
+#report-pipeline-evidence-guide .dg-head strong { font-size:16px; font-weight:600; }
+#report-pipeline-evidence-guide .dg-review { margin-left:12px; color:var(--dg-muted); font-size:12px; }
+#report-pipeline-evidence-guide .dg-head-icons { margin-left:auto; display:flex; align-items:center; gap:20px; color:var(--dg-muted); padding-right:80px; }
+#report-pipeline-evidence-guide .dg-main { display:flex; min-height:0; flex:1; }
+#report-pipeline-evidence-guide .dg-sidebar { width:256px; flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid var(--dg-border); }
+#report-pipeline-evidence-guide .dg-search { height:48px; display:flex; align-items:center; gap:8px; padding:0 10px; border-bottom:1px solid var(--dg-border); flex-shrink:0; }
+#report-pipeline-evidence-guide .dg-search input { min-width:0; width:100%; border:1px solid var(--dg-border); border-radius:6px; padding:7px 10px; background:transparent; color:var(--dg-text); font:inherit; }
+#report-pipeline-evidence-guide .dg-docnav { overflow:auto; min-height:0; padding:4px 0 16px; }
+#report-pipeline-evidence-guide .dg-group { margin-top:5px; padding-top:8px; border-top:1px solid var(--dg-border); }
+#report-pipeline-evidence-guide .dg-group:first-child { border:0; margin:0; }
+#report-pipeline-evidence-guide .dg-group-label { display:block; padding:4px 12px; text-transform:uppercase; font-size:10px; color:var(--dg-muted); font-weight:600; letter-spacing:.03em; }
+#report-pipeline-evidence-guide .dg-navitem { display:block; padding:8px 12px; color:var(--dg-text); text-decoration:none; }
+#report-pipeline-evidence-guide .dg-selected { border-left:2px solid var(--dg-brand); background:var(--dg-wash); color:var(--dg-link); padding-left:10px; }
+#report-pipeline-evidence-guide .dg-content { min-width:0; flex:1; display:flex; flex-direction:column; }
+#report-pipeline-evidence-guide .dg-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:12px; height:48px; flex-shrink:0; border-bottom:1px solid var(--dg-border); padding:0 12px; }
+#report-pipeline-evidence-guide .dg-version { font-size:12px; border:1px solid var(--dg-border); border-radius:6px; padding:4px 9px; color:var(--dg-muted); }
+#report-pipeline-evidence-guide .dg-version b { color:var(--dg-text); font-weight:500; }
+#report-pipeline-evidence-guide button { font:inherit; color:inherit; cursor:inherit; }
+#report-pipeline-evidence-guide .dg-iconbtn { border:0; background:none; padding:5px; display:inline-flex; align-items:center; border-radius:4px; color:var(--dg-muted); }
+#report-pipeline-evidence-guide .dg-iconbtn:hover { background:var(--dg-wash); }
+#report-pipeline-evidence-guide .dg-scroll { min-height:0; flex:1; overflow:auto; padding:24px; scroll-behavior:smooth; }
+#report-pipeline-evidence-guide .dg-columns { display:grid; grid-template-columns:minmax(0,1fr) 224px; gap:32px; align-items:start; }
+#report-pipeline-evidence-guide .dg-article { min-width:0; }
+#report-pipeline-evidence-guide h1 { font-size:24px; line-height:1.3; margin:0 0 12px; font-weight:600; }
+#report-pipeline-evidence-guide h2 { font-size:18px; font-weight:600; margin:30px 0 10px; padding-bottom:5px; border-bottom:1px solid var(--dg-rule); scroll-margin-top:12px; }
+#report-pipeline-evidence-guide h3 { font-size:15px; font-weight:500; margin:0 0 8px; }
+#report-pipeline-evidence-guide p { margin:8px 0; }
+#report-pipeline-evidence-guide .dg-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; color:var(--dg-muted); }
+#report-pipeline-evidence-guide .dg-meta span { border:1px solid var(--dg-border); border-radius:5px; padding:1px 7px; font-size:11px; }
+#report-pipeline-evidence-guide .dg-intro { color:var(--dg-muted); }
+#report-pipeline-evidence-guide .dg-example { border-left:2px solid var(--dg-brand); padding-left:12px; margin:18px 0; }
+#report-pipeline-evidence-guide .dg-example p { margin:4px 0; }
+#report-pipeline-evidence-guide .dg-onpage { position:sticky; top:0; color:var(--dg-muted); font-size:12px; }
+#report-pipeline-evidence-guide .dg-onpage > p { text-transform:uppercase; font-size:10px; letter-spacing:.03em; margin:5px 0 12px; }
+#report-pipeline-evidence-guide .dg-onpage a { display:block; color:inherit; text-decoration:none; padding:6px 0 6px 12px; border-left:2px solid transparent; }
+#report-pipeline-evidence-guide .dg-onpage a:hover,#report-pipeline-evidence-guide .dg-onpage a[aria-current] { color:var(--dg-link); border-color:var(--dg-brand); }
+#report-pipeline-evidence-guide .dg-onpage small { display:block; font-size:11px; margin:24px 0 0 12px; }
+#report-pipeline-evidence-guide .dg-loop { margin:14px 0 22px; max-width:500px; }
+#report-pipeline-evidence-guide .dg-loop video { width:100%; display:block; border:1px solid var(--dg-border); border-radius:6px; background:#171717; }
+#report-pipeline-evidence-guide .dg-loop-control { display:flex; justify-content:space-between; align-items:center; gap:12px; color:var(--dg-muted); font-size:11px; margin-top:5px; }
+#report-pipeline-evidence-guide .dg-loop-control button { border:0; padding:3px 0; color:var(--dg-link); background:none; }
+#report-pipeline-evidence-guide .dg-step { padding:17px 0 18px; border-bottom:1px solid var(--dg-rule); }
+#report-pipeline-evidence-guide .dg-step:last-child { border-bottom:0; }
+#report-pipeline-evidence-guide .dg-number { color:var(--dg-muted); display:inline-block; min-width:22px; font-variant-numeric:tabular-nums; }
+#report-pipeline-evidence-guide .dg-step p { margin:4px 0 10px 22px; }
+#report-pipeline-evidence-guide .dg-shot { margin:10px 0 0 22px; max-width:500px; }
+#report-pipeline-evidence-guide .dg-shot button { display:block; width:100%; padding:0; border:1px solid var(--dg-border); border-radius:6px; overflow:hidden; background:#171717; }
+#report-pipeline-evidence-guide .dg-shot img { display:block; width:100%; max-height:300px; object-fit:contain; object-position:left center; }
+#report-pipeline-evidence-guide figcaption { color:var(--dg-muted); font-size:11px; margin-top:6px; }
+#report-pipeline-evidence-guide .dg-result { padding:12px 14px; border-left:2px solid var(--dg-brand); background:var(--dg-pane); margin:18px 0; }
+#report-pipeline-evidence-guide .dg-result p { margin:3px 0; }
+#report-pipeline-evidence-guide code { display:inline-block; max-width:100%; box-sizing:border-box; overflow-wrap:anywhere; font:12px/1.6 ui-monospace,monospace; background:var(--dg-pane); padding:2px 5px; border:1px solid var(--dg-border); border-radius:4px; }
+#report-pipeline-evidence-guide pre { margin:12px 0; padding:12px; background:var(--dg-pane); border:1px solid var(--dg-border); border-radius:6px; white-space:pre-wrap; overflow-wrap:anywhere; }
+#report-pipeline-evidence-guide pre code { background:none; border:0; padding:0; }
+#report-pipeline-evidence-guide .dg-config { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 18px; margin:14px 0; }
+#report-pipeline-evidence-guide .dg-config dt { color:var(--dg-muted); }
+#report-pipeline-evidence-guide .dg-config dd { margin:0; }
+#report-pipeline-evidence-guide .dg-onpage .dg-subtoc { padding-left:24px; }
+#report-pipeline-evidence-guide details { padding:12px 0; border-bottom:1px solid var(--dg-rule); }
+#report-pipeline-evidence-guide summary { font-weight:500; cursor:inherit; }
+#report-pipeline-evidence-guide details p { color:var(--dg-muted); }
+#report-pipeline-evidence-guide .dg-return { color:var(--dg-link); text-decoration:none; display:inline-block; margin-top:22px; }
+#report-pipeline-evidence-guide .dg-lightbox { position:absolute; inset:0; z-index:20; background:rgba(0,0,0,.92); display:flex; align-items:center; justify-content:center; padding:40px 16px 16px; }
+#report-pipeline-evidence-guide .dg-lightbox img { max-width:100%; max-height:100%; object-fit:contain; }
+#report-pipeline-evidence-guide .dg-lightbox button { position:absolute; right:14px; top:8px; background:#242424; color:#fff; border:1px solid #555; border-radius:5px; padding:5px 10px; }
+#report-pipeline-evidence-guide .dg-app { position:relative; }
+#report-pipeline-evidence-guide [hidden] { display:none !important; }
+#report-pipeline-evidence-guide.dg-folded .dg-sidebar { display:none; }
+@media(max-width:1279px) { #report-pipeline-evidence-guide .dg-columns { grid-template-columns:minmax(0,1fr); } #report-pipeline-evidence-guide .dg-onpage { display:none; } }
+@media(max-width:600px) { #report-pipeline-evidence-guide .dg-sidebar { display:none; } #report-pipeline-evidence-guide .dg-scroll { padding:18px; } #report-pipeline-evidence-guide .dg-head { padding:0 12px; } #report-pipeline-evidence-guide .dg-head-icons { padding-right:0; gap:12px; } #report-pipeline-evidence-guide .dg-review { display:none; } #report-pipeline-evidence-guide .dg-shot { margin-left:0; } #report-pipeline-evidence-guide .dg-step p { margin-left:0; } }
+@media(prefers-reduced-motion:reduce) { #report-pipeline-evidence-guide .dg-scroll { scroll-behavior:auto; } }
+</style>
+<div id="report-pipeline-evidence-guide" aria-label="Facilities user guide preview">
+ <div class="dg-app">
+  <header class="dg-head"><strong>Documentation</strong><span class="dg-review">Scheduled reports with workflows guide preview</span><div class="dg-head-icons"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-right" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M15 3v18"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bell" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg><button type="button" class="dg-iconbtn cursor-interaction" data-theme-toggle aria-label="Switch preview theme"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></button></div></header>
+  <div class="dg-main">
+   <aside class="dg-sidebar">
+    <div class="dg-search"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Collapse documentation sidebar" data-collapse><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-close" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m16 15-3-3 3-3"></path></svg></button><input type="search" placeholder="Search…" aria-label="Search documentation" data-search></div>
+    <nav class="dg-docnav" aria-label="Documentation sections"><div class="dg-group"><span class="dg-group-label">Start here</span><a class="dg-navitem" href="start-here-review.html">Start Here</a></div><div class="dg-group"><span class="dg-group-label">Set up your system</span><a class="dg-navitem" href="terminology-review.html">Terminology</a><a class="dg-navitem" href="facilities-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Facilities</a><a class="dg-navitem" href="test-catalog-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Test catalog</a><a class="dg-navitem" href="patients-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Patients</a><span class="dg-navitem">Forms</span><a class="dg-navitem" href="workflows-review.html">Workflows</a></div><div class="dg-group"><span class="dg-group-label">Daily work</span><a class="dg-navitem" href="dashboard-review.html">Dashboards</a><span class="dg-navitem">Reports</span><a class="dg-navitem" href="activity-review.html">Activity</a></div><div class="dg-group"><span class="dg-group-label">Build and manage</span><a class="dg-navitem dg-selected" href="#dg-top" aria-current="page">Scheduled reports with workflows</a><span class="dg-navitem">Custom Queries</span><span class="dg-navitem">Report Designer</span></div><div class="dg-group"><span class="dg-group-label">Administration</span><a class="dg-navitem" href="layouts-review.html">Layouts</a><a class="dg-navitem" href="users-review.html">Users and Roles</a><a class="dg-navitem" href="roles-review.html">Roles</a><a class="dg-navitem" href="audit-review.html">Audit</a><a class="dg-navitem" href="settings-review.html">Settings</a><a class="dg-navitem" href="setup-checks-review.html">Setup checks</a><a class="dg-navitem" href="laboratory-review.html">Laboratory</a><a class="dg-navitem" href="data-exposure-review.html">Data exposure</a><span class="dg-navitem">Distributed Sync</span><a class="dg-navitem" href="connectors-review.html">Connectors</a><a class="dg-navitem" href="connector-diagnose-review.html">Connect to SQL Server and diagnose a connection</a><span class="dg-navitem">Import from OpenLDR v1</span><a class="dg-navitem" href="marketplace-review.html">Marketplace</a><a class="dg-navitem" href="plugin-sites-review.html">Plugin cards and side panels</a><span class="dg-navitem">Authentication providers</span><span class="dg-navitem">Environment Variables</span><span class="dg-navitem">Planned upgrades</span></div><div class="dg-group"><span class="dg-group-label">Personal settings</span><a class="dg-navitem" href="preferences-review.html">Your preferences</a></div><div class="dg-group"><span class="dg-group-label">More</span><span class="dg-navitem">Deployment &amp; Developer Docs</span></div></nav>
+   </aside>
+   <section class="dg-content">
+    <div class="dg-toolbar"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Show documentation sidebar" data-expand hidden><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-open" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m14 9 3 3-3 3"></path></svg></button><span class="dg-version">Version <b>0.1.8</b></span><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg></div>
+    <div class="dg-scroll" data-reading-pane>
+     <div class="dg-columns">
+      <article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Data design</span><span>Build stored summaries and workbook output</span><span>About 35 minutes</span></div>
+<h1>Scheduled reports with workflows</h1>
+<p>Use two workflows when a report needs prepared data and a workbook template. The first reads your source and saves a named dataset. The second loads those saved rows and fills your workbook.</p>
+<p>Start with your own reporting query and workbook. No documentation sample data is required. The small warehouse count below also runs with an empty warehouse. The optional practice workbook is at the end.</p>
+<p>You need <strong>Edit workflows</strong> and <strong>Run workflows</strong>. Configuring database or email connectors also needs <strong>Manage connectors</strong>. Read <a href="workflows-review.html">Workflows</a> for the canvas controls.</p>
+<p>Build and check workbook output before adding a delivery node. The pictures use a separate test installation. Email settings are shown for explanation only. No email was sent during this review.</p>
+<h2 id="dg-extract">Create the summary query</h2>
+<p>Use a read-only query that returns the columns your workbook needs. This introductory count returns one row even when there are no requests.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Create a workflow</h3><p>Open Workflows, open Workflow actions and select <strong>New</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="build-new"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge New opens an empty workflow."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="build-new" alt="New opens an empty workflow."><img class="fc-sharp" data-evidence="build-new" alt="" aria-hidden="true" style="clip-path:inset(12.125% 1.328125% 83.875% 86.953125%)"><span class="fc-ring" aria-hidden="true" style="left:86.953125%;top:12.125%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>New opens an empty workflow.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Name it</h3><p>Set Workflow name to a useful name. This example uses <code>Build request summary</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="build-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Name this workflow for its task."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-24.895833333333332%;top:0.0%"><img class="fc-background" data-evidence="build-name" alt="Name this workflow for its task."><img class="fc-sharp" data-evidence="build-name" alt="" aria-hidden="true" style="clip-path:inset(10.4375% 63.828125% 85.3125% 20.0%)"><span class="fc-ring" aria-hidden="true" style="left:20.0%;top:10.4375%;width:16.171875%;height:4.25%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Name this workflow for its task.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Add Manual Trigger</h3><p>Search the Node library for Manual Trigger and drag it onto the canvas.</p><figure class="dg-shot dg-context-shot" data-shot-id="build-manual"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Drag Manual Trigger from the Node library onto the canvas."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-29.895833333333332%;top:-55.989583333333336%"><img class="fc-background" data-evidence="build-manual" alt="Drag Manual Trigger from the Node library onto the canvas."><img class="fc-sharp" data-evidence="build-manual" alt="" aria-hidden="true" style="clip-path:inset(37.11328125% 59.45312499999999% 57.62109375% 19.375%)"><span class="fc-ring" aria-hidden="true" style="left:19.375%;top:37.11328125%;width:21.171875%;height:5.265625%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Drag Manual Trigger from the Node library onto the canvas.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Add SQL Query</h3><p>Search for SQL Query and drag it beside the trigger. This node reads the reporting schema directly. Use a database node and a connector for another source.</p><figure class="dg-shot dg-context-shot" data-shot-id="build-sql-node"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Drag SQL Query from the Node library onto the canvas."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-29.895833333333332%;top:-55.989583333333336%"><img class="fc-background" data-evidence="build-sql-node" alt="Drag SQL Query from the Node library onto the canvas."><img class="fc-sharp" data-evidence="build-sql-node" alt="" aria-hidden="true" style="clip-path:inset(37.11328125% 59.45312499999999% 57.62109375% 19.375%)"><span class="fc-ring" aria-hidden="true" style="left:19.375%;top:37.11328125%;width:21.171875%;height:5.265625%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Drag SQL Query from the Node library onto the canvas.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Connect the nodes</h3><p>Drag the trigger output dot on the right to the SQL Query input dot on the left.</p><figure class="dg-shot dg-context-shot" data-shot-id="build-connect"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Connect Manual Trigger output to SQL Query input."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-127.78645833333333%;top:-93.5%"><img class="fc-background" data-evidence="build-connect" alt="Connect Manual Trigger output to SQL Query input."><img class="fc-sharp" data-evidence="build-connect" alt="" aria-hidden="true" style="clip-path:inset(52.31249999999999% 32.392578125% 44.6875% 65.732421875%)"><span class="fc-ring" aria-hidden="true" style="left:65.732421875%;top:52.31249999999999%;width:1.875%;height:3.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Connect Manual Trigger output to SQL Query input.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Enter the SELECT</h3><p>Select SQL Query, then its Configure gear. Enter <code>SELECT COUNT(*) AS requests FROM lab_requests</code>. Close the configuration panel to add the next node.</p><figure class="dg-shot dg-context-shot" data-shot-id="build-sql"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Count the current warehouse requests. The count can be zero."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-72.33854166666667%"><img class="fc-background" data-evidence="build-sql" alt="Count the current warehouse requests. The count can be zero."><img class="fc-sharp" data-evidence="build-sql" alt="" aria-hidden="true" style="clip-path:inset(43.27734375% 1.328125% 51.5234375% 78.690185546875%)"><span class="fc-ring" aria-hidden="true" style="left:78.690185546875%;top:43.27734375%;width:19.981689453125%;height:5.19921875%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">6</span></span></span></span></button><figcaption>Count the current warehouse requests. The count can be zero.</figcaption></figure></section>
+<h2 id="dg-store">Save the result as a dataset</h2>
+<p>A dataset keeps the most recently materialized rows under one name. Choose a stable name before another workflow reads it.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Add Materialize Dataset</h3><p>Search for Materialize Dataset and drag it after SQL Query.</p><figure class="dg-shot dg-context-shot" data-shot-id="build-materialize"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Drag Materialize Dataset from the Node library onto the canvas."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-29.895833333333332%;top:-55.989583333333336%"><img class="fc-background" data-evidence="build-materialize" alt="Drag Materialize Dataset from the Node library onto the canvas."><img class="fc-sharp" data-evidence="build-materialize" alt="" aria-hidden="true" style="clip-path:inset(37.11328125% 59.45312499999999% 57.62109375% 19.375%)"><span class="fc-ring" aria-hidden="true" style="left:19.375%;top:37.11328125%;width:21.171875%;height:5.265625%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Drag Materialize Dataset from the Node library onto the canvas.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Connect it to SQL Query</h3><p>Drag SQL Query output to Materialize Dataset input.</p><figure class="dg-shot dg-context-shot" data-shot-id="build-materialize-connect"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Connect SQL Query output to Materialize Dataset input."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-147.91666666666669%;top:-93.5%"><img class="fc-background" data-evidence="build-materialize-connect" alt="Connect SQL Query output to Materialize Dataset input."><img class="fc-sharp" data-evidence="build-materialize-connect" alt="" aria-hidden="true" style="clip-path:inset(52.31249999999999% 24.84375% 44.6875% 73.28125%)"><span class="fc-ring" aria-hidden="true" style="left:73.28125%;top:52.31249999999999%;width:1.875%;height:3.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Connect SQL Query output to Materialize Dataset input.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Name the dataset</h3><p>Open Materialize Dataset configuration. Set <strong>Dataset name</strong> to your chosen name. The example uses <code>request_summary</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="dataset-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose a stable dataset name. A later run replaces the saved rows."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-73.07291666666667%"><img class="fc-background" data-evidence="dataset-name" alt="Choose a stable dataset name. A later run replaces the saved rows."><img class="fc-sharp" data-evidence="dataset-name" alt="" aria-hidden="true" style="clip-path:inset(43.90234375% 1.25% 51.59765625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:43.90234375%;width:22.421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">3</span></span></span></span></button><figcaption>Choose a stable dataset name. A later run replaces the saved rows.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Save the definition</h3><p>Select <strong>Save</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="build-save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Save the definition before running it."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="build-save" alt="Save the definition before running it."><img class="fc-sharp" data-evidence="build-save" alt="" aria-hidden="true" style="clip-path:inset(10.6875% 7.135009765625% 85.5625% 87.1337890625%)"><span class="fc-ring" aria-hidden="true" style="left:87.1337890625%;top:10.6875%;width:5.731201171875%;height:3.75%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Save the definition before running it.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Arm the workflow</h3><p>Select <strong>Run</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="build-run"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Run arms the manual trigger."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="build-run" alt="Run arms the manual trigger."><img class="fc-sharp" data-evidence="build-run" alt="" aria-hidden="true" style="clip-path:inset(10.8125% 1.25% 85.6875% 93.489990234375%)"><span class="fc-ring" aria-hidden="true" style="left:93.489990234375%;top:10.8125%;width:5.260009765625%;height:3.5000000000000004%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">5</span></span></span></span></button><figcaption>Run arms the manual trigger.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Start the manual trigger</h3><p>Select the play badge on Manual Trigger. Wait for Completed.</p><figure class="dg-shot dg-context-shot" data-shot-id="build-fire"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Select the trigger play badge to start the run."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-82.92384465535481%;top:-77.0878194173177%"><img class="fc-background" data-evidence="build-fire" alt="Select the trigger play badge to start the run."><img class="fc-sharp" data-evidence="build-fire" alt="" aria-hidden="true" style="clip-path:inset(46.58008575439453% 49.47990417480469% 51.26422119140624% 49.1727876663208%)"><span class="fc-ring" aria-hidden="true" style="left:49.1727876663208%;top:46.58008575439453%;width:1.3473081588745117%;height:2.1556930541992188%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Select the trigger play badge to start the run.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The three-step run saves the current query rows under the dataset name.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="build-completed"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Completed confirms the workflow reached its end."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-95.44596354166667%;top:-166.66666666666669%"><img class="fc-background" data-evidence="build-completed" alt="Completed confirms the workflow reached its end."><img class="fc-sharp" data-evidence="build-completed" alt="" aria-hidden="true" style="clip-path:inset(94.875% 41.62841796875% 2.375% 50.71289062499999%)"><span class="fc-ring" aria-hidden="true" style="left:50.71289062499999%;top:94.875%;width:7.65869140625%;height:2.75%"></span></span></span></button><figcaption>Completed confirms the workflow reached its end.</figcaption></figure>
+<h2 id="dg-inspect">Inspect and download the saved rows</h2>
+<p>Check the dataset before making workbook output. A count query has one row whose value can be zero.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Datasets</h3><p>Select <strong>Datasets</strong> in the workflow toolbar.</p><figure class="dg-shot dg-context-shot" data-shot-id="datasets-button"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Datasets opens the stored workflow datasets."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-151.93522135416666%;top:0.0%"><img class="fc-background" data-evidence="datasets-button" alt="Datasets opens the stored workflow datasets."><img class="fc-sharp" data-evidence="datasets-button" alt="" aria-hidden="true" style="clip-path:inset(10.6875% 20.62744140625% 85.5625% 72.078857421875%)"><span class="fc-ring" aria-hidden="true" style="left:72.078857421875%;top:10.6875%;width:7.293701171875%;height:3.75%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Datasets opens the stored workflow datasets.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the saved dataset</h3><p>Read its name, row count and update time. Match the name to the Materialize Dataset setting.</p><figure class="dg-shot dg-context-shot" data-shot-id="dataset-row"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Read the stored dataset name, row count and update time."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-118.07291666666666%;top:-11.291666666666666%"><img class="fc-background" data-evidence="dataset-row" alt="Read the stored dataset name, row count and update time."><img class="fc-sharp" data-evidence="dataset-row" alt="" aria-hidden="true" style="clip-path:inset(21.984375% 31.5234375% 76.015625% 57.578125%)"><span class="fc-ring" aria-hidden="true" style="left:57.578125%;top:21.984375%;width:10.8984375%;height:2.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Read the stored dataset name, row count and update time.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Download CSV</h3><p>Select <strong>CSV</strong> on that row to inspect the saved values in another tool.</p><figure class="dg-shot dg-context-shot" data-shot-id="dataset-csv"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge CSV downloads the saved rows."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-11.294270833333334%"><img class="fc-background" data-evidence="dataset-csv" alt="CSV downloads the saved rows."><img class="fc-sharp" data-evidence="dataset-csv" alt="" aria-hidden="true" style="clip-path:inset(21.50390625% 1.25% 75.533203125% 94.482421875%)"><span class="fc-ring" aria-hidden="true" style="left:94.482421875%;top:21.50390625%;width:4.267578125%;height:2.962890625%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">3</span></span></span></span></button><figcaption>CSV downloads the saved rows.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The downloaded CSV contains the rows the second workflow will load.</p></div>
+<h2 id="dg-load">Build the workbook workflow</h2>
+<p>Use a second workflow to read the prepared rows. It can run after the first workflow has refreshed the dataset.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Create and name the workflow</h3><p>Return to Workflows and choose New. Set a name such as <code>Create summary workbook</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="deliver-new"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge New opens an empty workflow."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="deliver-new" alt="New opens an empty workflow."><img class="fc-sharp" data-evidence="deliver-new" alt="" aria-hidden="true" style="clip-path:inset(12.125% 1.328125% 83.875% 86.953125%)"><span class="fc-ring" aria-hidden="true" style="left:86.953125%;top:12.125%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>New opens an empty workflow.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="deliver-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Name this workflow for its task."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-24.895833333333332%;top:0.0%"><img class="fc-background" data-evidence="deliver-name" alt="Name this workflow for its task."><img class="fc-sharp" data-evidence="deliver-name" alt="" aria-hidden="true" style="clip-path:inset(10.4375% 63.828125% 85.3125% 20.0%)"><span class="fc-ring" aria-hidden="true" style="left:20.0%;top:10.4375%;width:16.171875%;height:4.25%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Name this workflow for its task.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Add Manual Trigger</h3><p>Drag Manual Trigger from the library onto the canvas.</p><figure class="dg-shot dg-context-shot" data-shot-id="deliver-manual"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Drag Manual Trigger from the Node library onto the canvas."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-29.895833333333332%;top:-55.989583333333336%"><img class="fc-background" data-evidence="deliver-manual" alt="Drag Manual Trigger from the Node library onto the canvas."><img class="fc-sharp" data-evidence="deliver-manual" alt="" aria-hidden="true" style="clip-path:inset(37.11328125% 59.45312499999999% 57.62109375% 19.375%)"><span class="fc-ring" aria-hidden="true" style="left:19.375%;top:37.11328125%;width:21.171875%;height:5.265625%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Drag Manual Trigger from the Node library onto the canvas.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Add Load Dataset</h3><p>Drag Load Dataset beside it.</p><figure class="dg-shot dg-context-shot" data-shot-id="deliver-load"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Drag Load Dataset from the Node library onto the canvas."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-29.895833333333332%;top:-55.989583333333336%"><img class="fc-background" data-evidence="deliver-load" alt="Drag Load Dataset from the Node library onto the canvas."><img class="fc-sharp" data-evidence="deliver-load" alt="" aria-hidden="true" style="clip-path:inset(37.11328125% 59.45312499999999% 57.62109375% 19.375%)"><span class="fc-ring" aria-hidden="true" style="left:19.375%;top:37.11328125%;width:21.171875%;height:5.265625%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Drag Load Dataset from the Node library onto the canvas.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Connect the trigger</h3><p>Connect Manual Trigger output to Load Dataset input.</p><figure class="dg-shot dg-context-shot" data-shot-id="deliver-load-connect"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Connect Manual Trigger output to Load Dataset input."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-127.78645833333333%;top:-93.5%"><img class="fc-background" data-evidence="deliver-load-connect" alt="Connect Manual Trigger output to Load Dataset input."><img class="fc-sharp" data-evidence="deliver-load-connect" alt="" aria-hidden="true" style="clip-path:inset(52.31249999999999% 32.392578125% 44.6875% 65.732421875%)"><span class="fc-ring" aria-hidden="true" style="left:65.732421875%;top:52.31249999999999%;width:1.875%;height:3.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Connect Manual Trigger output to Load Dataset input.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Choose the saved dataset</h3><p>Open Load Dataset configuration. Set Dataset name to the exact name written by the first workflow, such as <code>request_summary</code>. Close the panel.</p><figure class="dg-shot dg-context-shot" data-shot-id="load-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Load the exact dataset name produced by the first workflow."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-73.07291666666667%"><img class="fc-background" data-evidence="load-name" alt="Load the exact dataset name produced by the first workflow."><img class="fc-sharp" data-evidence="load-name" alt="" aria-hidden="true" style="clip-path:inset(43.90234375% 1.25% 51.59765625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:43.90234375%;width:22.421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">5</span></span></span></span></button><figcaption>Load the exact dataset name produced by the first workflow.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Add Excel Template</h3><p>Drag Excel Template onto the canvas after Load Dataset.</p><figure class="dg-shot dg-context-shot" data-shot-id="deliver-excel"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Drag Excel Template from the Node library onto the canvas."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-29.895833333333332%;top:-55.989583333333336%"><img class="fc-background" data-evidence="deliver-excel" alt="Drag Excel Template from the Node library onto the canvas."><img class="fc-sharp" data-evidence="deliver-excel" alt="" aria-hidden="true" style="clip-path:inset(37.11328125% 59.45312499999999% 57.62109375% 19.375%)"><span class="fc-ring" aria-hidden="true" style="left:19.375%;top:37.11328125%;width:21.171875%;height:5.265625%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Drag Excel Template from the Node library onto the canvas.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Connect Excel Template</h3><p>Connect Load Dataset output to Excel Template input.</p><figure class="dg-shot dg-context-shot" data-shot-id="deliver-excel-connect"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Connect Load Dataset output to Excel Template input."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-155.20833333333331%;top:-93.5%"><img class="fc-background" data-evidence="deliver-excel-connect" alt="Connect Load Dataset output to Excel Template input."><img class="fc-sharp" data-evidence="deliver-excel-connect" alt="" aria-hidden="true" style="clip-path:inset(52.31249999999999% 22.109375% 44.6875% 76.015625%)"><span class="fc-ring" aria-hidden="true" style="left:76.015625%;top:52.31249999999999%;width:1.875%;height:3.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">7</span></span></span></span></button><figcaption>Connect Load Dataset output to Excel Template input.</figcaption></figure></section>
+<h2 id="dg-template">Configure your workbook template</h2>
+<p>Use your own .xlsx workbook. Put column headers above the cells that will receive data. Match the incoming field names to the workbook columns.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Save before uploading</h3><p>Select Save. A template upload needs a saved workflow identifier.</p><figure class="dg-shot dg-context-shot" data-shot-id="template-save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Save first so the template upload has a workflow identifier."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="template-save" alt="Save first so the template upload has a workflow identifier."><img class="fc-sharp" data-evidence="template-save" alt="" aria-hidden="true" style="clip-path:inset(10.6875% 7.135009765625% 85.5625% 87.1337890625%)"><span class="fc-ring" aria-hidden="true" style="left:87.1337890625%;top:10.6875%;width:5.731201171875%;height:3.75%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Save first so the template upload has a workflow identifier.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Upload the template</h3><p>Open Excel Template configuration, select <strong>Upload template</strong>, then choose your .xlsx file. The artifact key fills after upload.</p><figure class="dg-shot dg-context-shot" data-shot-id="template-upload"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Upload your own .xlsx workbook with a header row."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-70.40625%"><img class="fc-background" data-evidence="template-upload" alt="Upload your own .xlsx workbook with a header row."><img class="fc-sharp" data-evidence="template-upload" alt="" aria-hidden="true" style="clip-path:inset(43.15234375% 11.331787109375% 52.84765625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:43.15234375%;width:12.340087890625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Upload your own .xlsx workbook with a header row.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="template-uploaded"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The upload fills the template artifact key."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-70.40625%"><img class="fc-background" data-evidence="template-uploaded" alt="The upload fills the template artifact key."><img class="fc-sharp" data-evidence="template-uploaded" alt="" aria-hidden="true" style="clip-path:inset(43.15234375% 10.784912109375% 52.84765625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:43.15234375%;width:12.886962890625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>The upload fills the template artifact key.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Set the first data cell</h3><p>Set <strong>Start cell</strong> to the top-left data cell. Use A2 when row one contains the headers.</p><figure class="dg-shot dg-context-shot" data-shot-id="start-cell"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge A2 writes data below a header in row one."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-121.23958333333333%"><img class="fc-background" data-evidence="start-cell" alt="A2 writes data below a header in row one."><img class="fc-sharp" data-evidence="start-cell" alt="" aria-hidden="true" style="clip-path:inset(61.96484375% 1.25% 33.53515625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:61.96484375%;width:22.421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">3</span></span></span></span></button><figcaption>A2 writes data below a header in row one.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Map the columns in order</h3><p>In <strong>Columns (ordered)</strong>, enter incoming field names separated by commas. The count example uses <code>requests</code> as its only field.</p><figure class="dg-shot dg-context-shot" data-shot-id="template-columns"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge List incoming field names in workbook-column order."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-153.48958333333334%"><img class="fc-background" data-evidence="template-columns" alt="List incoming field names in workbook-column order."><img class="fc-sharp" data-evidence="template-columns" alt="" aria-hidden="true" style="clip-path:inset(74.05859375% 1.25% 21.44140625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:74.05859375%;width:22.421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">4</span></span></span></span></button><figcaption>List incoming field names in workbook-column order.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Choose an optional filter header</h3><p>Set <strong>Auto-filter header cell</strong> to A1 for a row-one filter, or leave it blank.</p><figure class="dg-shot dg-context-shot" data-shot-id="auto-filter"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge A1 enables a filter on the header row."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="auto-filter" alt="A1 enables a filter on the header row."><img class="fc-sharp" data-evidence="auto-filter" alt="" aria-hidden="true" style="clip-path:inset(86.15234375% 1.25% 9.34765625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:86.15234375%;width:22.421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">5</span></span></span></span></button><figcaption>A1 enables a filter on the header row.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Name the output file</h3><p>Set <strong>File name</strong>, such as <code>request-summary.xlsx</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="file-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Set the generated download file name."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="file-name" alt="Set the generated download file name."><img class="fc-sharp" data-evidence="file-name" alt="" aria-hidden="true" style="clip-path:inset(95.49609375% 1.25% 0.00390625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:95.49609375%;width:22.421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">6</span></span></span></span></button><figcaption>Set the generated download file name.</figcaption></figure></section>
+<h2 id="dg-workbook">Run and check the workbook</h2>
+<p>Confirm the generated file before scheduling or emailing it. Check real values, headers and formatting in your spreadsheet application.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Save the template settings</h3><p>Select Save.</p><figure class="dg-shot dg-context-shot" data-shot-id="deliver-save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Save the definition before running it."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="deliver-save" alt="Save the definition before running it."><img class="fc-sharp" data-evidence="deliver-save" alt="" aria-hidden="true" style="clip-path:inset(10.6875% 7.135009765625% 85.5625% 87.1337890625%)"><span class="fc-ring" aria-hidden="true" style="left:87.1337890625%;top:10.6875%;width:5.731201171875%;height:3.75%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Save the definition before running it.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Arm the run</h3><p>Select Run.</p><figure class="dg-shot dg-context-shot" data-shot-id="deliver-run"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Run arms the manual trigger."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="deliver-run" alt="Run arms the manual trigger."><img class="fc-sharp" data-evidence="deliver-run" alt="" aria-hidden="true" style="clip-path:inset(10.8125% 1.25% 85.6875% 93.489990234375%)"><span class="fc-ring" aria-hidden="true" style="left:93.489990234375%;top:10.8125%;width:5.260009765625%;height:3.5000000000000004%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Run arms the manual trigger.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Start Manual Trigger</h3><p>Select its play badge and wait for Completed.</p><figure class="dg-shot dg-context-shot" data-shot-id="deliver-fire"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Select the trigger play badge to start the run."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-83.15824508666992%;top:-86.65907287597656%"><img class="fc-background" data-evidence="deliver-fire" alt="Select the trigger play badge to start the run."><img class="fc-sharp" data-evidence="deliver-fire" alt="" aria-hidden="true" style="clip-path:inset(50.15292739868165% 49.3817663192749% 47.65862274169922% 49.250450134277344%)"><span class="fc-ring" aria-hidden="true" style="left:49.250450134277344%;top:50.15292739868165%;width:1.367783546447754%;height:2.1884498596191406%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Select the trigger play badge to start the run.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Download the generated file</h3><p>Open Excel Template, select Output, then select the named workbook download.</p><figure class="dg-shot dg-context-shot" data-shot-id="workbook-download"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Download the generated workbook from Excel Template Output."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-36.072916666666664%"><img class="fc-background" data-evidence="workbook-download" alt="Download the generated workbook from Excel Template Output."><img class="fc-sharp" data-evidence="workbook-download" alt="" aria-hidden="true" style="clip-path:inset(30.65234375% 11.60400390625% 66.09765625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:30.65234375%;width:12.06787109375%;height:3.25%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Download the generated workbook from Excel Template Output.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The workbook contains the saved dataset rows. The example has Requests in A1 and numeric zero in A2.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="deliver-completed"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Completed confirms the workflow reached its end."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-95.44596354166667%;top:-166.66666666666669%"><img class="fc-background" data-evidence="deliver-completed" alt="Completed confirms the workflow reached its end."><img class="fc-sharp" data-evidence="deliver-completed" alt="" aria-hidden="true" style="clip-path:inset(94.875% 41.62841796875% 2.375% 50.71289062499999%)"><span class="fc-ring" aria-hidden="true" style="left:50.71289062499999%;top:94.875%;width:7.65869140625%;height:2.75%"></span></span></span></button><figcaption>Completed confirms the workflow reached its end.</figcaption></figure>
+<h2 id="dg-schedule">Set a rebuild schedule</h2>
+<p>Add scheduling after a manual run produces the intended rows. A five-part cron expression sets minute, hour, day of month, month and weekday.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Add Schedule</h3><p>Open the first workflow and drag Schedule from the Node library onto the canvas.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedule-node"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Drag Schedule from the Node library onto the canvas."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-29.895833333333332%;top:-55.989583333333336%"><img class="fc-background" data-evidence="schedule-node" alt="Drag Schedule from the Node library onto the canvas."><img class="fc-sharp" data-evidence="schedule-node" alt="" aria-hidden="true" style="clip-path:inset(37.11328125% 59.45312499999999% 57.62109375% 19.375%)"><span class="fc-ring" aria-hidden="true" style="left:19.375%;top:37.11328125%;width:21.171875%;height:5.265625%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Drag Schedule from the Node library onto the canvas.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Set the cron expression</h3><p>Open Schedule configuration. Set <strong>Cron Expression</strong> to your intended time. <code>0 6 * * *</code> means 06:00 each day in the chosen timezone.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedule-cron"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Set a five-part cron expression for the rebuild time."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-73.07291666666667%"><img class="fc-background" data-evidence="schedule-cron" alt="Set a five-part cron expression for the rebuild time."><img class="fc-sharp" data-evidence="schedule-cron" alt="" aria-hidden="true" style="clip-path:inset(43.90234375% 1.25% 51.59765625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:43.90234375%;width:22.421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Set a five-part cron expression for the rebuild time.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Set the timezone</h3><p>Enter an IANA timezone such as <code>Africa/Dar_es_Salaam</code>. A blank Timezone uses UTC.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedule-timezone"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use the timezone that should interpret the schedule."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-109.90625%"><img class="fc-background" data-evidence="schedule-timezone" alt="Use the timezone that should interpret the schedule."><img class="fc-sharp" data-evidence="schedule-timezone" alt="" aria-hidden="true" style="clip-path:inset(57.71484375% 1.25% 37.78515625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:57.71484375%;width:22.421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">3</span></span></span></span></button><figcaption>Use the timezone that should interpret the schedule.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Connect the schedule</h3><p>Close configuration and connect Schedule output to SQL Query input. The manual trigger can remain for an intentional manual run.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedule-connect"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Connect Schedule output to SQL Query input."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-142.06141153971353%;top:-114.34210713704427%"><img class="fc-background" data-evidence="schedule-connect" alt="Connect Schedule output to SQL Query input."><img class="fc-sharp" data-evidence="schedule-connect" alt="" aria-hidden="true" style="clip-path:inset(60.83881759643555% 27.483549118041996% 37.582237243652344% 71.52960777282715%)"><span class="fc-ring" aria-hidden="true" style="left:71.52960777282715%;top:60.83881759643555%;width:0.9868431091308593%;height:1.5789451599121092%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Connect Schedule output to SQL Query input.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Save the scheduled definition</h3><p>Select Save when you intend to activate the connected schedule. Check History after its first due time.</p><figure class="dg-shot dg-context-shot" data-shot-id="schedule-save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Save activates the connected schedule."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="schedule-save" alt="Save activates the connected schedule."><img class="fc-sharp" data-evidence="schedule-save" alt="" aria-hidden="true" style="clip-path:inset(10.6875% 7.135009765625% 85.5625% 87.1337890625%)"><span class="fc-ring" aria-hidden="true" style="left:87.1337890625%;top:10.6875%;width:5.731201171875%;height:3.75%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Save activates the connected schedule.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The saved schedule determines when the dataset rebuilds. This review saved its settings and then disabled the test workflow. Clock-driven firing was not exercised.</p></div>
+<h2 id="dg-email">Configure optional email delivery</h2>
+<p>Only add delivery after you have an approved email connector and recipients. The review shows an unused loopback connector and an example.invalid address. It did not save or run this email node.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Add and connect Send Email</h3><p>Open the workbook workflow, add Send Email (SMTP), then connect Excel Template output to its input.</p><figure class="dg-shot dg-context-shot" data-shot-id="email-node"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Drag Send Email (SMTP) from the Node library onto the canvas."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-29.895833333333332%;top:-55.989583333333336%"><img class="fc-background" data-evidence="email-node" alt="Drag Send Email (SMTP) from the Node library onto the canvas."><img class="fc-sharp" data-evidence="email-node" alt="" aria-hidden="true" style="clip-path:inset(37.11328125% 59.45312499999999% 57.62109375% 19.375%)"><span class="fc-ring" aria-hidden="true" style="left:19.375%;top:37.11328125%;width:21.171875%;height:5.265625%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Drag Send Email (SMTP) from the Node library onto the canvas.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="email-connect"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Connect Excel Template output to Send Email (SMTP) input."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-72.23472086588542%"><img class="fc-background" data-evidence="email-connect" alt="Connect Excel Template output to Send Email (SMTP) input."><img class="fc-sharp" data-evidence="email-connect" alt="" aria-hidden="true" style="clip-path:inset(44.495086669921875% 9.624462127685547% 52.81904602050781% 88.69688034057617%)"><span class="fc-ring" aria-hidden="true" style="left:88.69688034057617%;top:44.495086669921875%;width:1.6786575317382812%;height:2.6858673095703125%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Connect Excel Template output to Send Email (SMTP) input.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the email connector</h3><p>Open the node configuration. Choose your approved SMTP connector. Gmail and Outlook have their own node types and matching connectors.</p><figure class="dg-shot dg-context-shot" data-shot-id="email-connector"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose your approved SMTP connector."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-86.08333333333333%"><img class="fc-background" data-evidence="email-connector" alt="Choose your approved SMTP connector."><img class="fc-sharp" data-evidence="email-connector" alt="" aria-hidden="true" style="clip-path:inset(49.03125% 8.970947265625% 46.96875% 76.71875%)"><span class="fc-ring" aria-hidden="true" style="left:76.71875%;top:49.03125%;width:14.310302734375%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Choose your approved SMTP connector.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Set the recipients</h3><p>Enter approved recipients in To. Add Cc only when needed. Replace the example address with your real authorised destination.</p><figure class="dg-shot dg-context-shot" data-shot-id="email-to"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Enter the approved recipient. This example address cannot receive mail."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-105.32291666666667%"><img class="fc-background" data-evidence="email-to" alt="Enter the approved recipient. This example address cannot receive mail."><img class="fc-sharp" data-evidence="email-to" alt="" aria-hidden="true" style="clip-path:inset(55.99609375% 1.25% 39.50390625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:55.99609375%;width:22.421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">3</span></span></span></span></button><figcaption>Enter the approved recipient. This example address cannot receive mail.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Set the subject</h3><p>Enter a clear Subject.</p><figure class="dg-shot dg-context-shot" data-shot-id="email-subject"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Give the message a clear subject."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="email-subject" alt="Give the message a clear subject."><img class="fc-sharp" data-evidence="email-subject" alt="" aria-hidden="true" style="clip-path:inset(80.18359375% 1.25% 15.31640625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:80.18359375%;width:22.421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">4</span></span></span></span></button><figcaption>Give the message a clear subject.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Write the body</h3><p>Enter the message Body.</p><figure class="dg-shot dg-context-shot" data-shot-id="email-body"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Write the message body."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-125.15624999999999%"><img class="fc-background" data-evidence="email-body" alt="Write the message body."><img class="fc-sharp" data-evidence="email-body" alt="" aria-hidden="true" style="clip-path:inset(58.30859375000001% 1.25% 26.94140625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:58.30859375000001%;width:22.421875%;height:14.75%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">5</span></span></span></span></button><figcaption>Write the message body.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Match the body format</h3><p>Choose Plain text or HTML to match the text you wrote.</p><figure class="dg-shot dg-context-shot" data-shot-id="email-format"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Plain text or HTML to match the body."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-165.15625%"><img class="fc-background" data-evidence="email-format" alt="Choose Plain text or HTML to match the body."><img class="fc-sharp" data-evidence="email-format" alt="" aria-hidden="true" style="clip-path:inset(78.43359375% 1.25% 17.06640625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:78.43359375%;width:22.421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">6</span></span></span></span></button><figcaption>Choose Plain text or HTML to match the body.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Attach the workbook field</h3><p>Set <strong>Attachment field</strong> to <code>file</code>, the Excel Template output field. A blank value sends no attachment.</p><figure class="dg-shot dg-context-shot" data-shot-id="email-attachment"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use file to attach the Excel Template output."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="email-attachment" alt="Use file to attach the Excel Template output."><img class="fc-sharp" data-evidence="email-attachment" alt="" aria-hidden="true" style="clip-path:inset(88.30859375% 1.25% 7.19140625% 76.328125%)"><span class="fc-ring" aria-hidden="true" style="left:76.328125%;top:88.30859375%;width:22.421875%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">7</span></span></span></span></button><figcaption>Use file to attach the Excel Template output.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The settings identify the transport, recipients, content and attachment. Saving and running a connected email node sends real mail. Check the destination inbox only when your team has authorised that delivery test.</p></div>
+<h2 id="dg-phone">Inspect reporting workflows on a phone</h2>
+<p>Build the canvas on a larger screen. On a phone, use the list and History to inspect an existing definition.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Find the workflows</h3><p>Search their names in Workflows.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-find"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Find the saved reporting workflows on a phone."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:0.0%"><img class="fc-background" data-evidence="phone-find" alt="Find the saved reporting workflows on a phone."><img class="fc-sharp" data-evidence="phone-find" alt="" aria-hidden="true" style="clip-path:inset(6.896551724137931% 20.0% 89.16256157635468% 3.2%)"><span class="fc-ring" aria-hidden="true" style="left:3.2%;top:6.896551724137931%;width:76.8%;height:3.9408866995073892%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Find the saved reporting workflows on a phone.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the workbook workflow</h3><p>Select its name in the list.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-open"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the saved workbook workflow to inspect its history."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:-62.85333333333334%"><img class="fc-background" data-evidence="phone-open" alt="Open the saved workbook workflow to inspect its history."><img class="fc-sharp" data-evidence="phone-open" alt="" aria-hidden="true" style="clip-path:inset(29.125615763546797% 79.75416666666668% 63.97783251231527% 4.266666666666667%)"><span class="fc-ring" aria-hidden="true" style="left:4.266666666666667%;top:29.125615763546797%;width:15.979166666666666%;height:6.896551724137931%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Open the saved workbook workflow to inspect its history.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read History</h3><p>Select History and check the run status and time.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-history"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Read the completed manual run in History."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:-43.45333333333333%"><img class="fc-background" data-evidence="phone-history" alt="Read the completed manual run in History."><img class="fc-sharp" data-evidence="phone-history" alt="" aria-hidden="true" style="clip-path:inset(25.61961206896552% 41.362500000000004% 71.67102832512316% 38.3625%)"><span class="fc-ring" aria-hidden="true" style="left:38.3625%;top:25.61961206896552%;width:20.275000000000002%;height:2.70935960591133%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Read the completed manual run in History.</figcaption></figure></section>
+<h2 id="dg-practice">Optional practice workbook</h2>
+<p><a href="report-pipeline-evidence/example-summary-template.xlsx" download>Download the one-column practice workbook</a>. It contains a Requests header in A1. It is for the read-only count example above and contains no patient data. Your own workbook can use different columns and formatting.</p>
+<p><a href="report-pipeline-evidence/generated-request-summary.xlsx" download>Download the generated review workbook</a> to compare the expected output. This file came from the actual isolated workflow run, with zero requests in its warehouse.</p>
+<h2 id="dg-extend">Adapt the summary to your own report</h2>
+<p>Replace the count query with your approved SELECT and map its output fields to the workbook. For another database, use a matching Postgres, MySQL or Microsoft SQL connector node.</p>
+<p>For reporting windows, set fields such as periodStart and periodEnd before the query, then read them with <code>{{ $json.periodStart }}</code>. Keep the query, parameter types and date boundaries consistent with your source.</p>
+<p>Use Pivot when one incoming value must become several columns. Use Merge with Combine by key when joining two branches. Configure the actual keys and collision rules your data needs. These larger transformations were not exercised in this review.</p>
+<p>Datasets can also be opened under Datasets in <a href="query-review.html">Query</a>. Publishing workflow datasets to warehouse SQL is an optional Settings choice. Keep the dataset name consistent across both workflows.</p>
+<h2 id="dg-delivery">Choose a delivery time</h2>
+<p>Schedule the workbook workflow after the dataset refresh should have finished. Allow time for the source query. A schedule offset alone does not guarantee that an unusually slow first workflow finished. Check the saved dataset update time and History.</p>
+<p>Manual Run also uses the currently stored dataset. It does not rebuild the first workflow automatically. Re-run the first workflow when you need fresh data.</p>
+<h2 id="dg-help">Troubleshooting</h2>
+<p><strong>The dataset is missing.</strong> Run the first workflow and check Materialize Dataset for errors. Match the exact dataset name in Load Dataset.</p>
+<p><strong>The workbook is empty.</strong> Inspect the CSV and the incoming field names. A filtered query may legitimately return no rows.</p>
+<p><strong>Upload asks you to save first.</strong> Save the workflow, then upload again. The upload belongs to that saved workflow.</p>
+<p><strong>Values land in the wrong columns.</strong> Check Start cell and Columns (ordered). The mapping writes fields left to right in the stated order.</p>
+<p><strong>A schedule did not produce the expected file.</strong> Check that the workflow is enabled, the cron expression and timezone, then its History. A stored schedule is not proof that it fired.</p>
+<p><strong>An email lacks the workbook.</strong> Check the upstream Excel Template output and Attachment field. Confirm the real transport and recipient independently.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="workflows-review.html">Workflows</a> explains the canvas and run history. <a href="query-review.html">Query</a> browses stored datasets. <a href="connectors-review.html">Connectors</a> configures source and delivery transports.</p>
+</article>
+
+      <nav class="dg-onpage" aria-label="On this page"><p>On this page</p><a href="#dg-extract">Create the summary query</a><a href="#dg-store">Save the result as a dataset</a><a href="#dg-inspect">Inspect and download the saved rows</a><a href="#dg-load">Build the workbook workflow</a><a href="#dg-template">Configure your workbook template</a><a href="#dg-workbook">Run and check the workbook</a><a href="#dg-schedule">Set a rebuild schedule</a><a href="#dg-email">Configure optional email delivery</a><a href="#dg-phone">Inspect reporting workflows on a phone</a><a href="#dg-practice">Optional practice workbook</a><a href="#dg-extend">Adapt the summary to your own report</a><a href="#dg-delivery">Choose a delivery time</a><a href="#dg-help">Troubleshooting</a><a href="#dg-related">Related guides</a><small>Click any screenshot to enlarge it.</small></nav>
+     </div>
+    </div>
+   </section>
+  </div>
+  <div class="dg-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" hidden><button type="button" class="cursor-interaction" data-close-lightbox>Close</button><div data-lightbox-content></div></div>
+ </div>
+</div>
+<script type="application/json" id="facilities-evidence-assets">{"build-new":"./report-pipeline-evidence/build-new.png","build-name":"./report-pipeline-evidence/build-name.png","build-manual":"./report-pipeline-evidence/build-manual.png","build-sql-node":"./report-pipeline-evidence/build-sql-node.png","build-connect":"./report-pipeline-evidence/build-connect.png","build-sql":"./report-pipeline-evidence/build-sql.png","build-materialize":"./report-pipeline-evidence/build-materialize.png","build-materialize-connect":"./report-pipeline-evidence/build-materialize-connect.png","dataset-name":"./report-pipeline-evidence/dataset-name.png","build-save":"./report-pipeline-evidence/build-save.png","build-run":"./report-pipeline-evidence/build-run.png","build-fire":"./report-pipeline-evidence/build-fire.png","build-completed":"./report-pipeline-evidence/build-completed.png","datasets-button":"./report-pipeline-evidence/datasets-button.png","dataset-row":"./report-pipeline-evidence/dataset-row.png","dataset-csv":"./report-pipeline-evidence/dataset-csv.png","deliver-new":"./report-pipeline-evidence/deliver-new.png","deliver-name":"./report-pipeline-evidence/deliver-name.png","deliver-manual":"./report-pipeline-evidence/deliver-manual.png","deliver-load":"./report-pipeline-evidence/deliver-load.png","deliver-load-connect":"./report-pipeline-evidence/deliver-load-connect.png","load-name":"./report-pipeline-evidence/load-name.png","deliver-excel":"./report-pipeline-evidence/deliver-excel.png","deliver-excel-connect":"./report-pipeline-evidence/deliver-excel-connect.png","template-save":"./report-pipeline-evidence/template-save.png","template-upload":"./report-pipeline-evidence/template-upload.png","template-uploaded":"./report-pipeline-evidence/template-uploaded.png","start-cell":"./report-pipeline-evidence/start-cell.png","template-columns":"./report-pipeline-evidence/template-columns.png","auto-filter":"./report-pipeline-evidence/auto-filter.png","file-name":"./report-pipeline-evidence/file-name.png","deliver-save":"./report-pipeline-evidence/deliver-save.png","deliver-run":"./report-pipeline-evidence/deliver-run.png","deliver-fire":"./report-pipeline-evidence/deliver-fire.png","workbook-download":"./report-pipeline-evidence/workbook-download.png","deliver-completed":"./report-pipeline-evidence/deliver-completed.png","schedule-node":"./report-pipeline-evidence/schedule-node.png","schedule-cron":"./report-pipeline-evidence/schedule-cron.png","schedule-timezone":"./report-pipeline-evidence/schedule-timezone.png","schedule-connect":"./report-pipeline-evidence/schedule-connect.png","schedule-save":"./report-pipeline-evidence/schedule-save.png","email-node":"./report-pipeline-evidence/email-node.png","email-connect":"./report-pipeline-evidence/email-connect.png","email-connector":"./report-pipeline-evidence/email-connector.png","email-to":"./report-pipeline-evidence/email-to.png","email-subject":"./report-pipeline-evidence/email-subject.png","email-body":"./report-pipeline-evidence/email-body.png","email-format":"./report-pipeline-evidence/email-format.png","email-attachment":"./report-pipeline-evidence/email-attachment.png","phone-find":"./report-pipeline-evidence/phone-find.png","phone-open":"./report-pipeline-evidence/phone-open.png","phone-history":"./report-pipeline-evidence/phone-history.png"}</script>
+<script>
+(() => {
+ const root = document.getElementById('report-pipeline-evidence-guide');
+ const assets = JSON.parse(document.getElementById('facilities-evidence-assets').textContent);
+ root.querySelectorAll('img[data-evidence]').forEach(img=>{img.loading='lazy';img.decoding='async';img.src=assets[img.dataset.evidence];});
+ const pane = root.querySelector('[data-reading-pane]');
+ let previewTheme='dark';
+ function applyTheme(){root.style.colorScheme=previewTheme;root.querySelector('[data-theme-toggle]').setAttribute('aria-label','Switch to '+(previewTheme==='dark'?'light':'dark')+' mode');}
+ applyTheme();
+ root.querySelector('[data-theme-toggle]').addEventListener('click',()=>{previewTheme=previewTheme==='dark'?'light':'dark';applyTheme();});
+ const box = root.querySelector('.dg-lightbox');
+ let previousFocus = null;
+ function closeBox() { box.hidden = true; root.querySelector('.dg-main').inert=false; if(previousFocus) previousFocus.focus(); }
+ root.querySelector('[data-close-lightbox]').addEventListener('click', closeBox);
+ root.addEventListener('keydown', event => { if(event.key==='Escape' && !box.hidden) closeBox(); if(event.key==='Tab' && !box.hidden) {event.preventDefault();box.querySelector('button').focus();} });
+ root.querySelectorAll('[data-enlarge]').forEach(button => button.addEventListener('click', () => {
+  previousFocus = button;
+  const content = box.querySelector('[data-lightbox-content]');
+  const frame = button.querySelector('.fc-screenshot');
+  content.replaceChildren();
+  content.className = frame ? 'dg-context-shot' : '';
+  if(frame) {
+   content.dataset.shotId = button.closest('[data-shot-id]').dataset.shotId;
+   content.append(frame.cloneNode(true));
+  } else {
+   delete content.dataset.shotId;
+   content.append(button.querySelector('img').cloneNode(true));
+  }
+  box.hidden = false;
+  root.querySelector('.dg-main').inert=true;
+  box.querySelector('button').focus();
+ }));
+ root.querySelectorAll('a[href^="#dg-"]').forEach(link => link.addEventListener('click', event => {
+  const target = root.querySelector(link.getAttribute('href'));
+  if(!target) return;
+  event.preventDefault();
+  pane.scrollTo({top:target.getBoundingClientRect().top-pane.getBoundingClientRect().top+pane.scrollTop-12,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});
+  root.querySelectorAll('.dg-onpage a').forEach(item => item.removeAttribute('aria-current'));
+  if(link.closest('.dg-onpage')) link.setAttribute('aria-current','location');
+ }));
+ root.querySelectorAll('[data-play-loop]').forEach(button => button.addEventListener('click', () => {
+  const video=button.closest('figure').querySelector('video');
+  if(video.paused) video.play().then(()=>button.textContent='Pause loop').catch(()=>button.textContent='Play loop');
+  else {video.pause();button.textContent='Play loop';}
+ }));
+ root.querySelectorAll('.dg-loop').forEach(figure=>{
+  const video=figure.querySelector('video');
+  const button=figure.querySelector('[data-play-loop]');
+  video.addEventListener('play',()=>{button.textContent='Pause loop';});
+  video.addEventListener('pause',()=>{button.textContent='Play loop';});
+  if(!matchMedia('(prefers-reduced-motion:reduce)').matches) {
+   video.autoplay=true;
+   video.play().catch(()=>{button.textContent='Play loop';});
+  }
+ });
+ const expand = root.querySelector('[data-expand]');
+ root.querySelector('[data-collapse]').addEventListener('click',()=>{root.classList.add('dg-folded');expand.hidden=false;});
+ expand.addEventListener('click',()=>{root.classList.remove('dg-folded');expand.hidden=true;});
+ root.querySelector('[data-search]').addEventListener('input',event=>{
+  const query=event.target.value.trim().toLowerCase();
+  root.querySelectorAll('.dg-navitem').forEach(item=>{item.hidden=!!query&&!item.textContent.toLowerCase().includes(query);});
+ });
+
+})();
+</script>
+<style>
+#report-pipeline-evidence-guide .dg-context-shot { max-width:500px; }
+#report-pipeline-evidence-guide .fc-screenshot { display:block; position:relative; width:100%; aspect-ratio:8/5; container-type:inline-size; overflow:hidden; background:var(--dg-bg); }
+#report-pipeline-evidence-guide .dg-context-shot img { position:absolute; inset:0; display:block; width:100%; height:100%; max-height:none; object-fit:fill; }
+#report-pipeline-evidence-guide .fc-scene { position:absolute; display:block; }
+#report-pipeline-evidence-guide .fc-background { filter:blur(.25cqw); opacity:.9; }
+#report-pipeline-evidence-guide .fc-sharp { pointer-events:none; }
+#report-pipeline-evidence-guide .fc-ring { position:absolute; display:block; border:2px solid var(--dg-link); border-radius:3px; pointer-events:none; }
+#report-pipeline-evidence-guide .fc-marker { position:absolute; right:calc(100% + 3px); top:-4px; display:flex; align-items:center; justify-content:center; width:19px; height:19px; border-radius:50%; background:var(--dg-link); color:var(--dg-bg); font:500 11px/1 Arial,sans-serif; }
+#report-pipeline-evidence-guide [data-shot-id="open-dashboard"] .fc-marker { left:calc(100% + 3px); right:auto; }
+#report-pipeline-evidence-guide .dg-lightbox .dg-context-shot { margin:0; width:min(100%,calc((min(var(--guide-preview-height,840px),100dvh) - 64px)*1.6)); max-width:none; }
+</style>
+<style>#report-pipeline-evidence-guide .fc-marker{left:calc(100% + 3px);right:auto}#report-pipeline-evidence-guide .dg-head-icons{padding-right:0}@media(max-width:900px){#report-pipeline-evidence-guide .fc-marker{left:auto!important;right:4px!important}}</style>
+</body></html>

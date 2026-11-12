@@ -1,0 +1,23 @@
+{
+  "workflowId": "wf_mwdm73ch_j7nrq2",
+  "schedule": [
+    {
+      "id": "trigger-1794492022150",
+      "type": "trigger",
+      "position": {
+        "x": 135,
+        "y": 300
+      },
+      "data": {
+        "tz": "Africa/Dar_es_Salaam",
+        "cron": "0 6 * * *",
+        "label": "Schedule",
+        "config": {},
+        "iconName": "Clock",
+        "templateId": "schedule-trigger",
+        "triggerType": "schedule"
+      }
+    }
+  ],
+  "note": "Saved schedule configuration. Clock-driven firing was not exercised. Review workflow disabled after capture."
+}

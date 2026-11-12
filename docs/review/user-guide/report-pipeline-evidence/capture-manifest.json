@@ -1,0 +1,1099 @@
+{
+  "capturedAt": "2026-11-12T14:02:08.928Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5187/studio/workflows",
+  "steps": [
+    {
+      "id": "build-new",
+      "label": "New opens an empty workflow.",
+      "path": "report-pipeline-evidence/build-new.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1113,
+          "y": 97,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "build-name",
+      "label": "Name this workflow for its task.",
+      "path": "report-pipeline-evidence/build-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 83.5,
+          "width": 207,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "build-manual",
+      "label": "Drag Manual Trigger from the Node library onto the canvas.",
+      "path": "report-pipeline-evidence/build-manual.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 248,
+          "y": 296.90625,
+          "width": 271,
+          "height": 42.125
+        }
+      ]
+    },
+    {
+      "id": "build-sql-node",
+      "label": "Drag SQL Query from the Node library onto the canvas.",
+      "path": "report-pipeline-evidence/build-sql-node.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 248,
+          "y": 296.90625,
+          "width": 271,
+          "height": 42.125
+        }
+      ]
+    },
+    {
+      "id": "build-connect",
+      "label": "Connect Manual Trigger output to SQL Query input.",
+      "path": "report-pipeline-evidence/build-connect.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 841.375,
+          "y": 418.5,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "build-sql",
+      "label": "Count the current warehouse requests. The count can be zero.",
+      "path": "report-pipeline-evidence/build-sql.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1007.234375,
+          "y": 346.21875,
+          "width": 255.765625,
+          "height": 41.59375
+        }
+      ]
+    },
+    {
+      "id": "build-materialize",
+      "label": "Drag Materialize Dataset from the Node library onto the canvas.",
+      "path": "report-pipeline-evidence/build-materialize.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 248,
+          "y": 296.90625,
+          "width": 271,
+          "height": 42.125
+        }
+      ]
+    },
+    {
+      "id": "build-materialize-connect",
+      "label": "Connect SQL Query output to Materialize Dataset input.",
+      "path": "report-pipeline-evidence/build-materialize-connect.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 938,
+          "y": 418.5,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "dataset-name",
+      "label": "Choose a stable dataset name. A later run replaces the saved rows.",
+      "path": "report-pipeline-evidence/dataset-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 351.21875,
+          "width": 287,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "build-save",
+      "label": "Save the definition before running it.",
+      "path": "report-pipeline-evidence/build-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1115.3125,
+          "y": 85.5,
+          "width": 73.359375,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "id": "build-run",
+      "label": "Run arms the manual trigger.",
+      "path": "report-pipeline-evidence/build-run.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1196.671875,
+          "y": 86.5,
+          "width": 67.328125,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "build-fire",
+      "label": "Select the trigger play badge to start the run.",
+      "path": "report-pipeline-evidence/build-fire.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 629.4116821289062,
+          "y": 372.64068603515625,
+          "width": 17.24554443359375,
+          "height": 17.24554443359375
+        }
+      ]
+    },
+    {
+      "id": "build-completed",
+      "label": "Completed confirms the workflow reached its end.",
+      "path": "report-pipeline-evidence/build-completed.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 649.125,
+          "y": 759,
+          "width": 98.03125,
+          "height": 22
+        }
+      ]
+    },
+    {
+      "id": "datasets-button",
+      "label": "Datasets opens the stored workflow datasets.",
+      "path": "report-pipeline-evidence/datasets-button.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 922.609375,
+          "y": 85.5,
+          "width": 93.359375,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "id": "dataset-row",
+      "label": "Read the stored dataset name, row count and update time.",
+      "path": "report-pipeline-evidence/dataset-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 737,
+          "y": 175.875,
+          "width": 139.5,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "dataset-csv",
+      "label": "CSV downloads the saved rows.",
+      "path": "report-pipeline-evidence/dataset-csv.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1209.375,
+          "y": 172.03125,
+          "width": 54.625,
+          "height": 23.703125
+        }
+      ]
+    },
+    {
+      "id": "deliver-new",
+      "label": "New opens an empty workflow.",
+      "path": "report-pipeline-evidence/deliver-new.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1113,
+          "y": 97,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "deliver-name",
+      "label": "Name this workflow for its task.",
+      "path": "report-pipeline-evidence/deliver-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 83.5,
+          "width": 207,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "deliver-manual",
+      "label": "Drag Manual Trigger from the Node library onto the canvas.",
+      "path": "report-pipeline-evidence/deliver-manual.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 248,
+          "y": 296.90625,
+          "width": 271,
+          "height": 42.125
+        }
+      ]
+    },
+    {
+      "id": "deliver-load",
+      "label": "Drag Load Dataset from the Node library onto the canvas.",
+      "path": "report-pipeline-evidence/deliver-load.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 248,
+          "y": 296.90625,
+          "width": 271,
+          "height": 42.125
+        }
+      ]
+    },
+    {
+      "id": "deliver-load-connect",
+      "label": "Connect Manual Trigger output to Load Dataset input.",
+      "path": "report-pipeline-evidence/deliver-load-connect.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 841.375,
+          "y": 418.5,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "load-name",
+      "label": "Load the exact dataset name produced by the first workflow.",
+      "path": "report-pipeline-evidence/load-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 351.21875,
+          "width": 287,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "deliver-excel",
+      "label": "Drag Excel Template from the Node library onto the canvas.",
+      "path": "report-pipeline-evidence/deliver-excel.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 248,
+          "y": 296.90625,
+          "width": 271,
+          "height": 42.125
+        }
+      ]
+    },
+    {
+      "id": "deliver-excel-connect",
+      "label": "Connect Load Dataset output to Excel Template input.",
+      "path": "report-pipeline-evidence/deliver-excel-connect.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 973,
+          "y": 418.5,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "template-save",
+      "label": "Save first so the template upload has a workflow identifier.",
+      "path": "report-pipeline-evidence/template-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1115.3125,
+          "y": 85.5,
+          "width": 73.359375,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "id": "template-upload",
+      "label": "Upload your own .xlsx workbook with a header row.",
+      "path": "report-pipeline-evidence/template-upload.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 345.21875,
+          "width": 157.953125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "template-uploaded",
+      "label": "The upload fills the template artifact key.",
+      "path": "report-pipeline-evidence/template-uploaded.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 345.21875,
+          "width": 164.953125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "start-cell",
+      "label": "A2 writes data below a header in row one.",
+      "path": "report-pipeline-evidence/start-cell.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 495.71875,
+          "width": 287,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "template-columns",
+      "label": "List incoming field names in workbook-column order.",
+      "path": "report-pipeline-evidence/template-columns.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 592.46875,
+          "width": 287,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "auto-filter",
+      "label": "A1 enables a filter on the header row.",
+      "path": "report-pipeline-evidence/auto-filter.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 689.21875,
+          "width": 287,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "file-name",
+      "label": "Set the generated download file name.",
+      "path": "report-pipeline-evidence/file-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 763.96875,
+          "width": 287,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "deliver-save",
+      "label": "Save the definition before running it.",
+      "path": "report-pipeline-evidence/deliver-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1115.3125,
+          "y": 85.5,
+          "width": 73.359375,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "id": "deliver-run",
+      "label": "Run arms the manual trigger.",
+      "path": "report-pipeline-evidence/deliver-run.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1196.671875,
+          "y": 86.5,
+          "width": 67.328125,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "deliver-fire",
+      "label": "Select the trigger play badge to start the run.",
+      "path": "report-pipeline-evidence/deliver-fire.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 630.40576171875,
+          "y": 401.2234191894531,
+          "width": 17.50762939453125,
+          "height": 17.507598876953125
+        }
+      ]
+    },
+    {
+      "id": "deliver-completed",
+      "label": "Completed confirms the workflow reached its end.",
+      "path": "report-pipeline-evidence/deliver-completed.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 649.125,
+          "y": 759,
+          "width": 98.03125,
+          "height": 22
+        }
+      ]
+    },
+    {
+      "id": "workbook-download",
+      "label": "Download the generated workbook from Excel Template Output.",
+      "path": "report-pipeline-evidence/workbook-download.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 245.21875,
+          "width": 154.46875,
+          "height": 26
+        }
+      ]
+    },
+    {
+      "id": "schedule-node",
+      "label": "Drag Schedule from the Node library onto the canvas.",
+      "path": "report-pipeline-evidence/schedule-node.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 248,
+          "y": 296.90625,
+          "width": 271,
+          "height": 42.125
+        }
+      ]
+    },
+    {
+      "id": "schedule-cron",
+      "label": "Set a five-part cron expression for the rebuild time.",
+      "path": "report-pipeline-evidence/schedule-cron.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 351.21875,
+          "width": 287,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "schedule-timezone",
+      "label": "Use the timezone that should interpret the schedule.",
+      "path": "report-pipeline-evidence/schedule-timezone.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 461.71875,
+          "width": 287,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "schedule-connect",
+      "label": "Connect Schedule output to SQL Query input.",
+      "path": "report-pipeline-evidence/schedule-connect.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 915.5789794921875,
+          "y": 486.7105407714844,
+          "width": 12.631591796875,
+          "height": 12.631561279296875
+        }
+      ]
+    },
+    {
+      "id": "schedule-save",
+      "label": "Save activates the connected schedule.",
+      "path": "report-pipeline-evidence/schedule-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1115.3125,
+          "y": 85.5,
+          "width": 73.359375,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "id": "email-node",
+      "label": "Drag Send Email (SMTP) from the Node library onto the canvas.",
+      "path": "report-pipeline-evidence/email-node.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 248,
+          "y": 296.90625,
+          "width": 271,
+          "height": 42.125
+        }
+      ]
+    },
+    {
+      "id": "email-connect",
+      "label": "Connect Excel Template output to Send Email (SMTP) input.",
+      "path": "report-pipeline-evidence/email-connect.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1135.320068359375,
+          "y": 355.960693359375,
+          "width": 21.48681640625,
+          "height": 21.4869384765625
+        }
+      ]
+    },
+    {
+      "id": "email-connector",
+      "label": "Choose your approved SMTP connector.",
+      "path": "report-pipeline-evidence/email-connector.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 982,
+          "y": 392.25,
+          "width": 183.171875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "email-to",
+      "label": "Enter the approved recipient. This example address cannot receive mail.",
+      "path": "report-pipeline-evidence/email-to.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 447.96875,
+          "width": 287,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "email-subject",
+      "label": "Give the message a clear subject.",
+      "path": "report-pipeline-evidence/email-subject.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 641.46875,
+          "width": 287,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "email-body",
+      "label": "Write the message body.",
+      "path": "report-pipeline-evidence/email-body.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 466.46875,
+          "width": 287,
+          "height": 118
+        }
+      ]
+    },
+    {
+      "id": "email-format",
+      "label": "Choose Plain text or HTML to match the body.",
+      "path": "report-pipeline-evidence/email-format.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 627.46875,
+          "width": 287,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "email-attachment",
+      "label": "Use file to attach the Excel Template output.",
+      "path": "report-pipeline-evidence/email-attachment.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 977,
+          "y": 706.46875,
+          "width": 287,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "phone-find",
+      "label": "Find the saved reporting workflows on a phone.",
+      "path": "report-pipeline-evidence/phone-find.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 12,
+          "y": 56,
+          "width": 288,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-open",
+      "label": "Open the saved workbook workflow to inspect its history.",
+      "path": "report-pipeline-evidence/phone-open.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 16,
+          "y": 236.5,
+          "width": 59.921875,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "phone-history",
+      "label": "Read the completed manual run in History.",
+      "path": "report-pipeline-evidence/phone-history.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 143.859375,
+          "y": 208.03125,
+          "width": 76.03125,
+          "height": 22
+        }
+      ]
+    }
+  ]
+}

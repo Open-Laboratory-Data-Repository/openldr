@@ -50,7 +50,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [x] Workflows
 - [ ] Reports
 - [x] Activity
-- [ ] Scheduled reports with workflows
+- [x] Scheduled reports with workflows
 - [ ] Custom Queries
 - [ ] Report Designer
 - [x] Layouts
