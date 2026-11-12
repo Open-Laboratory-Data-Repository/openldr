@@ -95,7 +95,9 @@ describe('local sign-in routes', () => {
       expect(c).toContain('HttpOnly');
       expect(c).toContain('SameSite=Strict');
       expect(c).toContain('Path=/api/auth');
-      expect(c).toMatch(/Max-Age=\d+/);
+      // A browser-session cookie: closing the browser ends it.
+      expect(c).not.toContain('Max-Age');
+      expect(c).not.toContain('Expires');
       expect(c).not.toContain('Secure');
     });
 

@@ -22,17 +22,21 @@ export function readSessionCookie(header: string | undefined): string | null {
   return null;
 }
 
-function write(reply: FastifyReply, value: string, maxAgeSeconds: number, secure: boolean): void {
-  reply.header('set-cookie', `${SESSION_COOKIE}=${value}; ${ATTRIBUTES}; Max-Age=${maxAgeSeconds}${secure ? '; Secure' : ''}`);
+function write(reply: FastifyReply, value: string, extra: string, secure: boolean): void {
+  reply.header('set-cookie', `${SESSION_COOKIE}=${value}; ${ATTRIBUTES}${extra}${secure ? '; Secure' : ''}`);
 }
 
-/** `secure` should be true only when the request arrived over HTTPS. */
-export function setSessionCookie(reply: FastifyReply, value: string, expiresAt: Date, secure: boolean, now: Date = new Date()): void {
+/**
+ * Sets the cookie with no Max-Age and no Expires, so it ends when the browser closes. On a shared
+ * lab PC the next person must not open studio signed in as the last one. The server still ends
+ * the session after 12 hours idle or 7 days in total. `secure` should be true only when the
+ * request arrived over HTTPS.
+ */
+export function setSessionCookie(reply: FastifyReply, value: string, secure: boolean): void {
   if (!SAFE_VALUE.test(value)) throw new Error('session cookie value has unexpected characters');
-  const maxAge = Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / 1000));
-  write(reply, value, maxAge, secure);
+  write(reply, value, '', secure);
 }
 
 export function clearSessionCookie(reply: FastifyReply, secure: boolean): void {
-  write(reply, '', 0, secure);
+  write(reply, '', '; Max-Age=0', secure);
 }

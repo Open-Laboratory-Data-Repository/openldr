@@ -191,7 +191,7 @@ export function registerLocalAuthRoutes(app: FastifyInstance<any, any, any, any>
       // One answer for every reason, so a caller cannot tell a locked or disabled account apart.
       return reply.code(401).send({ error: 'invalid_credentials' });
     }
-    setSessionCookie(reply, result.cookieValue, result.cookieExpiresAt, isHttps(req));
+    setSessionCookie(reply, result.cookieValue, isHttps(req));
     await recordSignedIn(req, 'auth.login', result.userId);
     return reply.send(grantBody(result));
   });
@@ -242,7 +242,7 @@ export function registerLocalAuthRoutes(app: FastifyInstance<any, any, any, any>
       password: p.data.password, ip: req.ip ?? null, userAgent: userAgentOf(req),
     });
     if (!result.ok) return reply.code(SETUP_STATUS[result.reason] ?? 400).send({ error: result.reason });
-    setSessionCookie(reply, result.cookieValue, result.cookieExpiresAt, isHttps(req));
+    setSessionCookie(reply, result.cookieValue, isHttps(req));
     await recordSignedIn(req, 'auth.setup', result.userId);
     return reply.code(201).send(grantBody(result));
   });

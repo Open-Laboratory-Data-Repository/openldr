@@ -28,27 +28,28 @@ describe('session cookie', () => {
     expect(readSessionCookie('xopenldr_session=abc')).toBeNull();
   });
 
-  it('sets HttpOnly, SameSite=Strict, Path=/api/auth and Max-Age in whole seconds', async () => {
-    const now = new Date('2026-11-12T10:00:00Z');
-    const c = await cookieFrom((reply) => setSessionCookie(reply, 'sid.secret', new Date(now.getTime() + 90_500), false, now));
-    expect(c).toBe('openldr_session=sid.secret; Path=/api/auth; HttpOnly; SameSite=Strict; Max-Age=90');
+  it('sets HttpOnly, SameSite=Strict and Path=/api/auth', async () => {
+    const c = await cookieFrom((reply) => setSessionCookie(reply, 'sid.secret', false));
+    expect(c).toBe('openldr_session=sid.secret; Path=/api/auth; HttpOnly; SameSite=Strict');
   });
 
   it('adds Secure only when asked', async () => {
-    const now = new Date('2026-11-12T10:00:00Z');
-    const c = await cookieFrom((reply) => setSessionCookie(reply, 'sid.secret', new Date(now.getTime() + 60_000), true, now));
-    expect(c).toBe('openldr_session=sid.secret; Path=/api/auth; HttpOnly; SameSite=Strict; Max-Age=60; Secure');
+    const c = await cookieFrom((reply) => setSessionCookie(reply, 'sid.secret', true));
+    expect(c).toBe('openldr_session=sid.secret; Path=/api/auth; HttpOnly; SameSite=Strict; Secure');
   });
 
-  it('never sets a negative Max-Age for a past expiry', async () => {
-    const now = new Date('2026-11-12T10:00:00Z');
-    const c = await cookieFrom((reply) => setSessionCookie(reply, 'sid.secret', new Date(now.getTime() - 5_000), false, now));
-    expect(c).toContain('Max-Age=0');
+  it('ends with the browser: no Max-Age and no Expires', async () => {
+    for (const secure of [false, true]) {
+      const c = await cookieFrom((reply) => setSessionCookie(reply, 'sid.secret', secure));
+      expect(c).toContain('openldr_session=sid.secret;');
+      expect(c).not.toContain('Max-Age');
+      expect(c).not.toContain('Expires');
+    }
   });
 
   it('refuses a value that could break out of the cookie', async () => {
     const app = Fastify();
-    app.get('/x', async (_req, reply) => { setSessionCookie(reply, 'a; Path=/', new Date(Date.now() + 1000), false); return reply.send({}); });
+    app.get('/x', async (_req, reply) => { setSessionCookie(reply, 'a; Path=/', false); return reply.send({}); });
     const r = await app.inject({ method: 'GET', url: '/x' });
     await app.close();
     expect(r.statusCode).toBe(500);
