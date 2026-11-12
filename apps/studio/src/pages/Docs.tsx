@@ -314,7 +314,7 @@ export function Docs() {
               <span className="text-muted-foreground">Version</span>
               <span className="ml-auto text-right"><SelectValue /></span>
             </SelectTrigger>
-            <SelectContent align="start">
+            <SelectContent align="start" className="w-[var(--radix-select-trigger-width)]">
               {DOC_VERSIONS.map((docVersion) => (
                 <SelectItem key={docVersion} value={docVersion} className="text-xs">
                   {docVersion}
