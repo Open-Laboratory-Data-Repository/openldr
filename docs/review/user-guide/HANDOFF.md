@@ -601,3 +601,13 @@ no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px view
 All active preview menus match. Sample data remains optional.
 See advanced-docs-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
+
+## Authentication providers preview checkpoint
+
+Previous checkpoint HEAD: d803b5de.
+auth-providers-review.html has 21 numbered steps and 21 native image placements.
+Every step has screenshot evidence. The integrated browser check reported no missing images,
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
+All active preview menus match. Sample data remains optional.
+See auth-providers-review-notes.md for live workflows, source proofs and untested variants.
+This remains a preview. Its published guide is unchanged.

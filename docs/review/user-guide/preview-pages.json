@@ -26,5 +26,6 @@
   "sync": "sync-review.html",
   "environment": "environment-review.html",
   "upgrading": "upgrading-review.html",
-  "advanced-docs": "advanced-docs-review.html"
+  "advanced-docs": "advanced-docs-review.html",
+  "auth-providers": "auth-providers-review.html"
 }

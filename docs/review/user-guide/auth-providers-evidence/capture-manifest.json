@@ -1,0 +1,499 @@
+{
+  "capturedAt": "2026-11-12T14:18:55.083Z",
+  "source": "Real generic OIDC using isolated local Keycloak. Native DPR 4 screenshots. No mock responses.",
+  "appUrl": "http://localhost:5189/studio/",
+  "steps": [
+    {
+      "id": "first-access",
+      "label": "A first login creates a local account but does not grant administrator access.",
+      "path": "auth-providers-evidence/first-access.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 176,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "provider",
+      "label": "Studio redirects to the configured identity provider.",
+      "path": "auth-providers-evidence/provider.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 347.015625,
+          "width": 313.59375,
+          "height": 36.390625
+        }
+      ]
+    },
+    {
+      "id": "username",
+      "label": "Enter your provider username.",
+      "path": "auth-providers-evidence/username.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 417.59375,
+          "width": 448,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "password",
+      "label": "Enter the provider password. It remains masked.",
+      "path": "auth-providers-evidence/password.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 495.78125,
+          "width": 399,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "sign-in",
+      "label": "Sign in authenticates through the real provider.",
+      "path": "auth-providers-evidence/sign-in.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 579.78125,
+          "width": 448,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "admin-access",
+      "label": "After the local role assignment, Studio exposes the permitted administration pages.",
+      "path": "auth-providers-evidence/admin-access.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 456,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "users",
+      "label": "Generic OIDC keeps local access controls while provider account administration is unavailable.",
+      "path": "auth-providers-evidence/users.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 156,
+          "width": 1016,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "user-row",
+      "label": "Verify the intended provider identity before changing local roles.",
+      "path": "auth-providers-evidence/user-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 233,
+          "width": 1040,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "local-actions",
+      "label": "The user row offers local role and access actions.",
+      "path": "auth-providers-evidence/local-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1104,
+          "y": 281.5,
+          "width": 160,
+          "height": 74
+        }
+      ]
+    },
+    {
+      "id": "sync-admin",
+      "label": "Generic OIDC does not provision Keycloak sync clients.",
+      "path": "auth-providers-evidence/sync-admin.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 464,
+          "y": 149,
+          "width": 800,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-docs",
+      "label": "The authenticated app documentation remains readable on a phone.",
+      "path": "auth-providers-evidence/phone-docs.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 72,
+          "y": 188,
+          "width": 279,
+          "height": 76.78125
+        }
+      ]
+    },
+    {
+      "id": "user-menu",
+      "label": "Open your user menu to sign out.",
+      "path": "auth-providers-evidence/user-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 756,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "sign-out",
+      "label": "Sign out clears the app session and uses provider logout when available.",
+      "path": "auth-providers-evidence/sign-out.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 13,
+          "y": 715,
+          "width": 198,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "signed-out",
+      "label": "This provider ended its session and requires a fresh login.",
+      "path": "auth-providers-evidence/signed-out.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 417.59375,
+          "width": 448,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "client-registration",
+      "label": "Illustration. Register a public browser client with PKCE at your provider.",
+      "path": "auth-providers-evidence/client-registration.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 184,
+          "width": 408.078125,
+          "height": 32
+        },
+        {
+          "x": 124,
+          "y": 216,
+          "width": 576.09375,
+          "height": 32
+        },
+        {
+          "x": 124,
+          "y": 248,
+          "width": 468.078125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "auth-mode",
+      "label": "Illustration. Choose generic OIDC without provider administration.",
+      "path": "auth-providers-evidence/auth-mode.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 216,
+          "width": 204.046875,
+          "height": 32
+        },
+        {
+          "x": 124,
+          "y": 248,
+          "width": 324.0625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "issuer-settings",
+      "label": "Illustration. Use issuer, audience and browser client values supplied by your provider.",
+      "path": "auth-providers-evidence/issuer-settings.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 588.109375,
+          "height": 32
+        },
+        {
+          "x": 124,
+          "y": 184,
+          "width": 300.0625,
+          "height": 32
+        },
+        {
+          "x": 124,
+          "y": 216,
+          "width": 360.0625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "scopes",
+      "label": "Illustration. Keep openid and add only the provider scopes or resource required.",
+      "path": "auth-providers-evidence/scopes.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 384.0625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "restart",
+      "label": "Illustration. Recreate the application after editing startup configuration.",
+      "path": "auth-providers-evidence/restart.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 312.0625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "list-subject",
+      "label": "Illustration. Find the local account after its first sign-in.",
+      "path": "auth-providers-evidence/list-subject.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 184,
+          "width": 288.046875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "grant-role",
+      "label": "Illustration. Grant the administrator role to the exact provider subject.",
+      "path": "auth-providers-evidence/grant-role.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 588.109375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "issuer-rebind",
+      "label": "Illustration. Rebind only when the same provider moved and subjects stay unchanged.",
+      "path": "auth-providers-evidence/issuer-rebind.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 124,
+          "y": 152,
+          "width": 396.078125,
+          "height": 32
+        }
+      ]
+    }
+  ]
+}

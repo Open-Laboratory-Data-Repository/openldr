@@ -1,0 +1,10 @@
+$ node packages/cli/dev.mjs auth rebind-issuer
+(node:361038) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+auth rebind-issuer refused: this database is bound to http://127.0.0.1:19879/realms/docs, but OIDC_ISSUER_URL is http://127.0.0.1:19879/realms/moved-example.
+Only rebind when the same identity provider moved address and user IDs are unchanged.
+A different provider needs an explicit identity mapping instead.
+Re-run with --force if that is what you intend.
+[ELIFECYCLE] Command failed with exit code 1.
+
+EXIT 1
