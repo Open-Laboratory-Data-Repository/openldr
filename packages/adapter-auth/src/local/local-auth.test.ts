@@ -261,29 +261,57 @@ describe('password and sessions', () => {
     expect(r.mustChangePassword).toBe(false);
   });
 
-  it('fails a sign-in whose hash was running when an admin reset the password', async () => {
+  /**
+   * An adapter whose hasher stops on Ada's current password once `arm()` is called, until
+   * `release()`. `started` resolves when that hash begins.
+   */
+  async function gatedAuth() {
+    let armed = false;
     let hashStarted!: () => void;
     const started = new Promise<void>((r) => { hashStarted = r; });
-    let releaseHash!: () => void;
-    const released = new Promise<void>((r) => { releaseHash = r; });
+    let release!: () => void;
+    const released = new Promise<void>((r) => { release = r; });
     const gatedScrypt: ScryptFn = async (password, salt, keylen, opts) => {
-      if (password === GOOD) {
+      if (armed && password === GOOD) {
         hashStarted();
         await released;
       }
       return fakeScrypt(password, salt, keylen, opts);
     };
-    const gated = await createLocalAuth({
+    const built = await createLocalAuth({
       store, users, roles, secretKey, ping: async () => {}, now: clock.now,
       hasher: createPasswordHasher({ scrypt: gatedScrypt }),
     });
+    return { ...built, started, release, arm: () => { armed = true; } };
+  }
 
+  it('fails a sign-in whose hash was running when an admin reset the password', async () => {
+    const gated = await gatedAuth();
+    gated.arm();
     const pending = gated.signIn.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null });
-    await started;
+    await gated.started;
     await gated.auth.resetPassword(adaId, NEW, false);
-    releaseHash();
+    gated.release();
 
     expect(await pending).toMatchObject({ ok: false, reason: 'invalid', userId: adaId });
+    expect(await store.deleteSessionsForUser(adaId)).toBe(0);
+  });
+
+  it('refuses a password change whose hash was running when an admin reset the password', async () => {
+    const gated = await gatedAuth();
+    const s = await login(gated.signIn);
+    const sessionId = s.cookieValue.split('.')[0]!;
+    gated.arm();
+    const pending = gated.signIn.changePassword({ userId: adaId, sessionId, currentPassword: GOOD, newPassword: 'user chosen pw 1' });
+    await gated.started;
+    await gated.auth.resetPassword(adaId, NEW, true);
+    gated.release();
+
+    expect(await pending).toBe('wrong_current');
+    const credential = (await store.getCredential(adaId))!;
+    expect(await hasher.verify(NEW, credential.passwordHash)).toBe(true);
+    expect(await hasher.verify('user chosen pw 1', credential.passwordHash)).toBe(false);
+    expect(credential.mustChange).toBe(true);
     expect(await store.deleteSessionsForUser(adaId)).toBe(0);
   });
 

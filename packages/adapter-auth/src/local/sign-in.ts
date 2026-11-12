@@ -108,16 +108,10 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
   }
 
   /**
-   * Reads the lock again after a hash. A burst of requests can all pass the first lock check
-   * and then wait in the hash queue while another request in the burst sets the lock.
-   */
-  async function lockActiveNow(userId: string, now: Date): Promise<boolean> {
-    return isLocked((await store.getCredential(userId))?.lockedUntil, now);
-  }
-
-  /**
-   * Reads the credential again after a hash. `passwordChanged` is true when the hash that was
-   * verified is no longer the stored one, so an admin reset landed during the hash.
+   * Reads the credential again after a hash. `locked` covers a burst of requests that all
+   * passed the first lock check and then waited in the hash queue while another request in the
+   * burst set the lock. `passwordChanged` is true when the hash that was verified is no longer
+   * the stored one, so an admin reset landed during the hash.
    */
   async function recheckAfterHash(
     userId: string, verifiedHash: string, now: Date,
@@ -238,12 +232,14 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
       // The same lock as sign-in, so this route is not a second way to guess the password.
       if (isLocked(credential.lockedUntil, now)) return 'wrong_current';
       const currentOk = await hasher.verify(input.currentPassword, credential.passwordHash);
-      const lockedAfterVerify = await lockActiveNow(input.userId, now);
+      const { locked: lockedAfterVerify, passwordChanged } = await recheckAfterHash(input.userId, credential.passwordHash, now);
       if (!currentOk) {
         await store.recordFailure(input.userId, now, MAX_FAILURES, LOCK_MS);
         return 'wrong_current';
       }
       if (lockedAfterVerify) return 'wrong_current';
+      // An admin reset during the hash wins. Writing now would undo it.
+      if (passwordChanged) return 'wrong_current';
       const rule = checkPasswordRules(input.newPassword, user.username);
       if (rule !== 'ok') return rule;
       await store.setPassword(input.userId, await hasher.hash(input.newPassword), false);
