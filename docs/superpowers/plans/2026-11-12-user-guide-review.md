@@ -57,7 +57,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [x] Users and Roles
 - [x] Roles
 - [x] Audit
-- [ ] Settings
+- [x] Settings
 - [x] Setup checks
 - [x] Laboratory
 - [x] Data exposure

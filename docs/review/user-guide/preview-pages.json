@@ -18,5 +18,6 @@
   "laboratory": "laboratory-review.html",
   "marketplace": "marketplace-review.html",
   "plugin-sites": "plugin-sites-review.html",
-  "data-exposure": "data-exposure-review.html"
+  "data-exposure": "data-exposure-review.html",
+  "settings": "settings-review.html"
 }

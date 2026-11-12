@@ -1,0 +1,847 @@
+{
+  "capturedAt": "2026-11-12T14:06:15.524Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5188/studio/settings/general",
+  "steps": [
+    {
+      "id": "user-menu",
+      "label": "Open your user menu at the bottom left.",
+      "path": "settings-evidence/user-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 755.5,
+          "width": 223,
+          "height": 36.5
+        }
+      ]
+    },
+    {
+      "id": "settings-menu",
+      "label": "Choose Settings.",
+      "path": "settings-evidence/settings-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 13,
+          "y": 682.5,
+          "width": 198,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "general-page",
+      "label": "Select General in Settings.",
+      "path": "settings-evidence/general-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 60,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "about",
+      "label": "About shows the running version and configured services.",
+      "path": "settings-evidence/about.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 481,
+          "y": 229.046875,
+          "width": 766,
+          "height": 92
+        }
+      ]
+    },
+    {
+      "id": "update-state",
+      "label": "Read the Latest value and the time of the last update check.",
+      "path": "settings-evidence/update-state.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 649,
+          "y": 253.046875,
+          "width": 598,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "update-switch",
+      "label": "Auto update check changes whether this server checks for available releases.",
+      "path": "settings-evidence/update-switch.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 481,
+          "y": 354.046875,
+          "width": 766,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "update-off",
+      "label": "Turning it off is reflected in Latest. It does not install an update.",
+      "path": "settings-evidence/update-off.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 649,
+          "y": 253.046875,
+          "width": 598,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "flag",
+      "label": "Turn the optional capability on or off. This example enables Dashboard raw SQL.",
+      "path": "settings-evidence/flag.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 481,
+          "y": 546.046875,
+          "width": 766,
+          "height": 52
+        }
+      ]
+    },
+    {
+      "id": "flag-saved",
+      "label": "Feature flag changes save immediately.",
+      "path": "settings-evidence/flag-saved.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 953.7999877929688,
+          "y": 712.4749755859375,
+          "width": 33.2578125,
+          "height": 17.550048828125
+        }
+      ]
+    },
+    {
+      "id": "number-value",
+      "label": "Enter the intended runtime limit. This example sets a row cap of 5000.",
+      "path": "settings-evidence/number-value.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1087,
+          "y": 764.046875,
+          "width": 160,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "number-saved",
+      "label": "Leaving the number field saves the value.",
+      "path": "settings-evidence/number-saved.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1087,
+          "y": 338.046875,
+          "width": 160,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "number-reopened",
+      "label": "The saved numeric limit remains after reopening General.",
+      "path": "settings-evidence/number-reopened.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1087,
+          "y": 406.046875,
+          "width": 160,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "validation-high",
+      "label": "Choose the required level. The example raises it to High.",
+      "path": "settings-evidence/validation-high.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1124,
+          "y": 617,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "validation-menu",
+      "label": "Open Data validation in Danger Zone.",
+      "path": "settings-evidence/validation-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1119,
+          "y": 575.046875,
+          "width": 128,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "validation-level",
+      "label": "Choose the required level. The example changes it to Medium.",
+      "path": "settings-evidence/validation-level.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1124,
+          "y": 648,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "validation-warning",
+      "label": "Read how the new validation strictness affects incoming data.",
+      "path": "settings-evidence/validation-warning.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 257.8984375,
+          "width": 448,
+          "height": 284.203125
+        }
+      ]
+    },
+    {
+      "id": "validation-phrase",
+      "label": "Type the lowercase phrase shown in the confirmation.",
+      "path": "settings-evidence/validation-phrase.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 441,
+          "y": 429.1015625,
+          "width": 398,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "validation-apply",
+      "label": "Choose Apply to save the new strictness.",
+      "path": "settings-evidence/validation-apply.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 771.96875,
+          "y": 481.1015625,
+          "width": 67.03125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "validation-result",
+      "label": "Data validation now displays the saved Medium level.",
+      "path": "settings-evidence/validation-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1119,
+          "y": 575.046875,
+          "width": 128,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "reset-dashboards-actions",
+      "label": "Open the dots beside Reset dashboards.",
+      "path": "settings-evidence/reset-dashboards-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1215,
+          "y": 627.046875,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "reset-dashboards-menu",
+      "label": "Choose Reset.",
+      "path": "settings-evidence/reset-dashboards-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1092,
+          "y": 668,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "reset-dashboards-warning",
+      "label": "Read what Reset dashboards removes before confirming.",
+      "path": "settings-evidence/reset-dashboards-warning.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 249.0703125,
+          "width": 448,
+          "height": 301.859375
+        }
+      ]
+    },
+    {
+      "id": "reset-dashboards-phrase",
+      "label": "Type the exact confirmation phrase shown by the app.",
+      "path": "settings-evidence/reset-dashboards-phrase.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 441,
+          "y": 437.9296875,
+          "width": 398,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "reset-dashboards-confirm",
+      "label": "Confirm Reset only for the intended operation.",
+      "path": "settings-evidence/reset-dashboards-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 770.421875,
+          "y": 489.9296875,
+          "width": 68.578125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "reset-dashboards-result",
+      "label": "The page reports completion of Reset dashboards.",
+      "path": "settings-evidence/reset-dashboards-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 940,
+          "y": 739.5,
+          "width": 170.109375,
+          "height": 19.5
+        }
+      ]
+    },
+    {
+      "id": "clear-audit-actions",
+      "label": "Open the dots beside Clear audit log.",
+      "path": "settings-evidence/clear-audit-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1215,
+          "y": 679.046875,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "clear-audit-menu",
+      "label": "Choose Clear.",
+      "path": "settings-evidence/clear-audit-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1092,
+          "y": 720,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "clear-audit-warning",
+      "label": "Read what Clear audit log removes before confirming.",
+      "path": "settings-evidence/clear-audit-warning.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 249.0703125,
+          "width": 448,
+          "height": 301.859375
+        }
+      ]
+    },
+    {
+      "id": "clear-audit-phrase",
+      "label": "Type the exact confirmation phrase shown by the app.",
+      "path": "settings-evidence/clear-audit-phrase.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 441,
+          "y": 437.9296875,
+          "width": 398,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "clear-audit-confirm",
+      "label": "Confirm Clear only for the intended operation.",
+      "path": "settings-evidence/clear-audit-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 773.53125,
+          "y": 489.9296875,
+          "width": 65.46875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "clear-audit-result",
+      "label": "The page reports completion of Clear audit log.",
+      "path": "settings-evidence/clear-audit-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 940,
+          "y": 739.5,
+          "width": 128.203125,
+          "height": 19.5
+        }
+      ]
+    },
+    {
+      "id": "factory-reset-actions",
+      "label": "Open the dots beside Factory reset.",
+      "path": "settings-evidence/factory-reset-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1215,
+          "y": 731.046875,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "factory-reset-menu",
+      "label": "Choose Factory reset.",
+      "path": "settings-evidence/factory-reset-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1092,
+          "y": 690,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "factory-reset-warning",
+      "label": "Read what Factory reset removes before confirming.",
+      "path": "settings-evidence/factory-reset-warning.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 229.0703125,
+          "width": 448,
+          "height": 341.859375
+        }
+      ]
+    },
+    {
+      "id": "factory-reset-phrase",
+      "label": "Type the exact confirmation phrase shown by the app.",
+      "path": "settings-evidence/factory-reset-phrase.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 441,
+          "y": 457.9296875,
+          "width": 398,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "factory-reset-confirm",
+      "label": "Confirm Factory reset only for the intended operation.",
+      "path": "settings-evidence/factory-reset-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 725.296875,
+          "y": 509.9296875,
+          "width": 113.703125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "factory-reset-result",
+      "label": "The page reports completion of Factory reset.",
+      "path": "settings-evidence/factory-reset-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 940,
+          "y": 739.5,
+          "width": 140.796875,
+          "height": 19.5
+        }
+      ]
+    },
+    {
+      "id": "phone-about",
+      "label": "Read the General information on a phone.",
+      "path": "settings-evidence/phone-about.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 33,
+          "y": 302.046875,
+          "width": 309,
+          "height": 92
+        }
+      ]
+    },
+    {
+      "id": "phone-limit",
+      "label": "Scroll to the runtime limits. The controls remain within the phone width.",
+      "path": "settings-evidence/phone-limit.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 182,
+          "y": 438.046875,
+          "width": 160,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "phone-danger",
+      "label": "Scroll to Danger Zone and read the action description before opening its dots.",
+      "path": "settings-evidence/phone-danger.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 33,
+          "y": 727.046875,
+          "width": 309,
+          "height": 52
+        }
+      ]
+    }
+  ]
+}
