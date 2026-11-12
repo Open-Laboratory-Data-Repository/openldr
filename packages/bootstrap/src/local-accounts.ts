@@ -1,8 +1,12 @@
 // Account actions for AUTH_ADAPTER=local that the CLI and the HTTP routes share. Each one refuses
 // when local sign-in is off. Audit rows carry the username and never a password.
 import { randomInt } from 'node:crypto';
-import type { DirectoryUser } from '@openldr/ports';
-import type { AppContext } from './index';
+import type { LocalSignIn } from '@openldr/adapter-auth';
+import type { AuditStore } from '@openldr/audit';
+import type { Logger } from '@openldr/core';
+import type { RoleStore } from '@openldr/db';
+import type { AuthPort, DirectoryUser } from '@openldr/ports';
+import type { UserStore } from '@openldr/users';
 import { recordAuditEvent, type AuditActor } from './record-audit';
 
 export class LocalSignInNotEnabledError extends Error {
@@ -37,7 +41,12 @@ export class UnknownRoleError extends Error {
 const TEMPORARY_PASSWORD_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
 const TEMPORARY_PASSWORD_LENGTH = 16;
 
-type AccountContext = Pick<AppContext, 'localSignIn' | 'auth' | 'users' | 'roles' | 'audit' | 'logger'>;
+// The AppContext fields these actions use, typed here so this file does not import index.ts,
+// which imports this file.
+interface SignInContext { localSignIn?: LocalSignIn }
+interface AccountContext extends SignInContext {
+  auth: AuthPort; users: UserStore; roles: RoleStore; audit: AuditStore; logger: Logger;
+}
 
 export function generateTemporaryPassword(): string {
   let out = '';
@@ -47,7 +56,7 @@ export function generateTemporaryPassword(): string {
   return out;
 }
 
-function requireLocalSignIn(ctx: Pick<AppContext, 'localSignIn'>) {
+function requireLocalSignIn(ctx: SignInContext) {
   if (!ctx.localSignIn) throw new LocalSignInNotEnabledError();
   return ctx.localSignIn;
 }
@@ -60,7 +69,7 @@ async function userIdFor(ctx: AccountContext, username: string): Promise<string>
 }
 
 /** A new one-time code for creating the first admin. Replaces any earlier code. */
-export async function createSetupCode(ctx: Pick<AppContext, 'localSignIn'>): Promise<string> {
+export async function createSetupCode(ctx: SignInContext): Promise<string> {
   const signIn = requireLocalSignIn(ctx);
   if (!(await signIn.setupRequired())) throw new SetupAlreadyDoneError();
   return signIn.createSetupCode();
