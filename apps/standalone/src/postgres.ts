@@ -51,6 +51,8 @@ export interface RunningPostgres {
   stop(): Promise<void>;
   /** Tells Postgres to shut down without waiting. Safe in a process exit handler. */
   stopSync(): void;
+  /** Settles when the Postgres process has gone, for any reason. Never rejects. */
+  exited: Promise<void>;
 }
 
 const SUPERUSER = 'postgres';
@@ -174,7 +176,30 @@ async function waitForPidToGo(pid: number, ms: number): Promise<boolean> {
   }
 }
 
-function superClient(settings: PostgresSettings): pg.Client {
+/** The code of the error a superuser login gets when the server did not ask for SCRAM-SHA-256. */
+const UNPROVEN_SERVER = 'OPENLDR_UNPROVEN_SERVER';
+
+function unprovenServer(port: number, asked: string): Error {
+  return Object.assign(
+    new Error(`The program on port ${port} asked for ${asked}, not SCRAM-SHA-256. It is not this install's database.`),
+    { code: UNPROVEN_SERVER },
+  );
+}
+
+/**
+ * A superuser client, and the only way to connect it. The cluster this install made accepts only
+ * SCRAM-SHA-256 (initdb `--auth=scram-sha-256`). Any other program on the port could ask for the
+ * password in plain text, or as MD5, and the `pg` client would send it with no way to refuse. So
+ * the connection is watched from before `connect()`:
+ * - a request for a plain-text or MD5 password destroys the socket before the client's own
+ *   handler runs, so that handler has nothing to write to;
+ * - "authentication ok" before the server has proved it knows the password (the SCRAM final
+ *   message) also counts: a server that lets the superuser in with no proof is not ours.
+ * `connect` then rejects with the code UNPROVEN_SERVER. Every superuser login in this file goes
+ * through here. This listens on `client.connection`, a property of `pg` 8.21.0, which this app
+ * pins to that exact version.
+ */
+function superClient(settings: PostgresSettings): { client: pg.Client; connect: () => Promise<void> } {
   const client = new pg.Client({
     host: HOST,
     port: settings.port,
@@ -186,7 +211,36 @@ function superClient(settings: PostgresSettings): pg.Client {
   });
   // A server that shuts down under an open client emits 'error'. Unhandled, it ends the process.
   client.on('error', () => {});
-  return client;
+
+  const con = (client as unknown as { connection: NodeJS.EventEmitter & { stream: { destroy(err?: Error): void } } })
+    .connection;
+  let refused: Error | undefined;
+  let serverProved = false;
+  const refuse = (asked: string) => () => {
+    refused ??= unprovenServer(settings.port, asked);
+    con.stream.destroy(refused);
+  };
+  // Added before connect(), so each runs before the client's own handler for the same message.
+  con.on('authenticationCleartextPassword', refuse('a plain-text password'));
+  con.on('authenticationMD5Password', refuse('an MD5 password'));
+  con.on('authenticationSASLFinal', () => {
+    serverProved = true;
+  });
+  con.on('authenticationOk', () => {
+    if (!serverProved) refuse('no password at all')();
+  });
+
+  const connect = async (): Promise<void> => {
+    try {
+      await client.connect();
+    } catch (err) {
+      throw refused ?? err;
+    }
+    // A server can send "ready" in the same packet as the refused request, and the client then
+    // reports a connection. It is still refused.
+    if (refused) throw refused;
+  };
+  return { client, connect };
 }
 
 function portIsFree(port: number): Promise<boolean> {
@@ -241,13 +295,14 @@ async function servesCluster(
   stillAlive: () => boolean,
 ): Promise<boolean> {
   for (;;) {
-    const client = superClient(settings);
+    const { client, connect } = superClient(settings);
     try {
-      await client.connect();
+      await connect();
       const res = await client.query<{ data_directory: string }>('show data_directory');
       return samePath(res.rows[0]?.data_directory ?? '', clusterDir);
     } catch (err) {
-      // 57P03: "the database system is starting up". Anything else means it is not ours.
+      // 57P03: "the database system is starting up". Anything else means it is not ours, a
+      // server that asked for anything but SCRAM-SHA-256 included (superClient).
       if (errorCode(err) !== '57P03' || Date.now() >= deadline || !stillAlive()) return false;
     } finally {
       await client.end().catch(() => {});
@@ -530,9 +585,9 @@ const ident = (name: string) => `"${name.replace(/"/g, '""')}"`;
 
 /** Creates the ordinary role and both databases when they are missing. Safe to repeat. */
 async function prepareDatabases(settings: PostgresSettings): Promise<void> {
-  const client = superClient(settings);
-  await client.connect();
+  const { client, connect } = superClient(settings);
   try {
+    await connect();
     // Postgres logs the text of a failed statement by default. The role statement carries the
     // password, so this session logs no statement text at all.
     await client.query('set log_min_error_statement = panic');
@@ -551,6 +606,9 @@ async function prepareDatabases(settings: PostgresSettings): Promise<void> {
       if (found.rowCount === 0) await client.query(`create database ${ident(db)} owner ${ident(APP_ROLE)}`);
       await client.query(`revoke connect on database ${ident(db)} from public`);
     }
+    // The two maintenance databases keep CONNECT for PUBLIC after initdb. The ordinary role has no
+    // business there. The superuser keeps its own access to `postgres`.
+    await client.query('revoke connect on database postgres, template1 from public');
   } finally {
     await client.end().catch(() => {});
   }
@@ -674,10 +732,10 @@ export async function startPostgres(opts: {
       if (Date.now() >= deadline) {
         throw new Error(`Postgres did not accept connections within ${START_TIMEOUT_MS / 1000} seconds. See ${logFile}.`);
       }
-      const client = superClient(settings);
+      const { client, connect } = superClient(settings);
       let failure: unknown;
       try {
-        await client.connect();
+        await connect();
         const res = await client.query<{ data_directory: string }>('show data_directory');
         if (!samePath(res.rows[0]?.data_directory ?? '', clusterDir)) {
           throw new Error(`A different Postgres answered on port ${port}.`);
@@ -699,8 +757,14 @@ export async function startPostgres(opts: {
       if (!retry) {
         // Give a Postgres that failed to bind a moment to exit, so the port message wins.
         await Promise.race([exit, sleep(1000)]);
-        if (!exited) throw failure;
-        continue;
+        if (exited) continue;
+        if (code === UNPROVEN_SERVER) {
+          throw new Error(
+            `Another program answered on port ${port} on ${HOST}. It is not this install's database, and no ` +
+              'password was sent to it. Stop that program, then start again.',
+          );
+        }
+        throw failure;
       }
       await sleep(100);
     }
@@ -710,5 +774,5 @@ export async function startPostgres(opts: {
     throw new Error(scrub(errorMessage(err), settings));
   }
 
-  return { pid, ...postgresUrls(settings), stop, stopSync };
+  return { pid, ...postgresUrls(settings), stop, stopSync, exited: exit };
 }

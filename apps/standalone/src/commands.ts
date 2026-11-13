@@ -6,10 +6,10 @@
 //
 // Only Linux is tested. Windows and macOS behaviour is unproven.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { loadConfig, type Config } from '@openldr/config';
@@ -90,6 +90,13 @@ export const STOPPED_FORCED = 'Stopped, but the server did not finish in 60 seco
 const NOT_RUNNING = 'OpenLDR is not running.';
 const START_FIRST = 'Start OpenLDR first: openldr-standalone start';
 const STUDIO_MISSING = 'The studio is not built. Run: pnpm --filter @openldr/studio build';
+export const WORKFLOW_ROOT_REFUSED =
+  'WORKFLOW_FILE_ACCESS_ROOT must not be the OpenLDR data folder, hold it, or sit inside it.';
+
+/** What `done` rejects with when Postgres stopped while no stop was asked for. */
+export function databaseStoppedMessage(postgresLog: string): string {
+  return `The database stopped by itself. OpenLDR has stopped. See ${postgresLog}.`;
+}
 
 /**
  * Keys for parts a standalone install does not have. They are removed from the environment before
@@ -204,6 +211,45 @@ function checkPortFree(host: string, port: number): Promise<void> {
   });
 }
 
+/**
+ * The real path of `p`. Parts that do not exist yet are kept as they are, after the real path of
+ * the deepest part that does exist.
+ */
+function realPathAllowMissing(p: string): string {
+  let existing = resolve(p);
+  const tail: string[] = [];
+  for (;;) {
+    try {
+      return join(realpathSync.native(existing), ...tail);
+    } catch {
+      const parent = dirname(existing);
+      if (parent === existing) return resolve(p);
+      tail.unshift(basename(existing));
+      existing = parent;
+    }
+  }
+}
+
+/** True when `inner` is `outer` or lies inside it. Windows compares without case; unproven. */
+function sameOrInside(outer: string, inner: string): boolean {
+  const o = process.platform === 'win32' ? outer.toLowerCase() : outer;
+  const i = process.platform === 'win32' ? inner.toLowerCase() : inner;
+  return i === o || i.startsWith(o.endsWith(sep) ? o : `${o}${sep}`);
+}
+
+/**
+ * The workflow file feature reads and writes files under WORKFLOW_FILE_ACCESS_ROOT. That folder
+ * must not reach the data folder, which holds the state file (the superuser password and the
+ * secrets key) and the database's own files. The setting comes from the shell, so it is checked
+ * here, as real paths, whether or not the feature is turned on.
+ */
+function checkWorkflowRoot(dataDir: string, root: string | undefined): void {
+  if (!root) return;
+  const r = realPathAllowMissing(root);
+  const d = realPathAllowMissing(dataDir);
+  if (sameOrInside(r, d) || sameOrInside(d, r)) throw new Error(WORKFLOW_ROOT_REFUSED);
+}
+
 /** True when the lock names a launcher that answers on its control port. */
 async function liveLock(paths: StandalonePaths): Promise<LockInfo | null> {
   const lock = await readLock(paths);
@@ -217,6 +263,7 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
   // 1. The folders. Nothing is started before the studio build is known to be there.
   const paths = dataPaths(opts.dataDir);
   if (!existsSync(join(deps.studioDist, 'index.html'))) throw new Error(STUDIO_MISSING);
+  checkWorkflowRoot(paths.root, process.env.WORKFLOW_FILE_ACCESS_ROOT);
   await ensureFolders(paths);
 
   const address = servedAddress(opts.host, opts.port);
@@ -263,6 +310,8 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
   let forceNow!: () => void;
   const forced = new Promise<'forced'>((r) => (forceNow = () => r('forced')));
   let stopping: Promise<StopResult> | undefined;
+  /** Set when Postgres went while no stop was asked for. `done` then rejects. */
+  let databaseGone = false;
   let resolveDone!: (r: StopResult) => void;
   let rejectDone!: (err: unknown) => void;
   const done = new Promise<StopResult>((resolvePromise, reject) => {
@@ -342,14 +391,16 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       // The control port closes last, after the answer to a `stop` request has been written.
       // Not inside onStop: close() waits for that answer, which waits for onStop. A stop that
       // failed gives the asker no answer: the control port drops it, and `stop` reports that.
+      // When Postgres went by itself, `done` rejects whatever the stop did, so the launcher exits 1.
+      const gone = (): string => databaseStoppedMessage(paths.postgresLog);
       void stopping.then(
         async (result) => {
           await control.close();
-          settle(() => resolveDone(result));
+          settle(() => (databaseGone ? rejectDone(new Error(gone())) : resolveDone(result)));
         },
         async (err: unknown) => {
           await control.close();
-          settle(() => rejectDone(err));
+          settle(() => rejectDone(databaseGone ? new Error(`${gone()}\n${errorMessage(err)}`) : err));
         },
       );
     }
@@ -402,6 +453,17 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
     const exitHook = () => pg?.stopSync();
     process.on('exit', exitHook);
     removers.push(() => process.off('exit', exitHook));
+    // Postgres can go while the launcher runs: the out-of-memory killer, or a person. The server
+    // would then keep reconnecting to a port that any local program could take, and send it the
+    // ordinary role's password. So a Postgres that goes while no stop is in progress stops the
+    // launcher, through the forced path: the server is cut off, the quiet crash handlers go on,
+    // and the lock is released. `done` then rejects, and index.ts exits 1. A stop already in
+    // progress stops Postgres itself, and this does nothing.
+    void pg.exited.then(() => {
+      if (stopping) return;
+      databaseGone = true;
+      void stop(true).catch(() => {});
+    });
 
     // 8. The environment and the config. The config comes from a copy of the environment, so
     //    loadConfig never reads a .env file.

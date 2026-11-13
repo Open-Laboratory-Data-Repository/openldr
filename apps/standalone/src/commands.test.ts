@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { createServer, type AddressInfo, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -132,7 +132,15 @@ afterEach(async () => {
 interface Fakes {
   order: string[];
   printed: string[];
-  pg: { started: boolean; stopped: boolean; stopSyncCalls: number; startOpts?: unknown; leftoverOpts?: unknown };
+  pg: {
+    started: boolean;
+    stopped: boolean;
+    stopSyncCalls: number;
+    startOpts?: unknown;
+    leftoverOpts?: unknown;
+    /** The Postgres process goes: `exited` settles. */
+    die: () => void;
+  };
   server: { started: boolean; closed: boolean; cfg?: Config };
   deps: LauncherDeps;
 }
@@ -166,10 +174,11 @@ function fakes(
   const f: Fakes = {
     order: [],
     printed: [],
-    pg: { started: false, stopped: false, stopSyncCalls: 0 },
+    pg: { started: false, stopped: false, stopSyncCalls: 0, die: () => {} },
     server: { started: false, closed: false },
     deps: undefined as unknown as LauncherDeps,
   };
+  const exited = new Promise<void>((resolve) => (f.pg.die = resolve));
   // Taken before the launcher starts, so these are the test runner's own.
   const outside = outsideCrashListeners();
   const context = {
@@ -199,10 +208,12 @@ function fakes(
           if (o.pgStopEmits) emitConnectionErrors(outside);
           if (o.pgStopFails) throw new Error(`postgres would not stop, password ${opts.settings.appPassword}`);
           f.pg.stopped = true;
+          f.pg.die();
         },
         stopSync: () => {
           f.pg.stopSyncCalls += 1;
         },
+        exited,
       };
     }) as LauncherDeps['startPostgres'],
     startServer: async (cfg, logger) => {
@@ -962,6 +973,123 @@ describe('a forced stop ends cleanly while the server is still hung', () => {
     expect((err as Error).message).toMatch(/^The stop did not finish cleanly\. Postgres did not stop: /);
     await expect(l.done).rejects.toBe(err);
     expect(listenerCounts()).toEqual(listenersBefore);
+  });
+
+  describe('a Postgres that stops by itself', () => {
+    const gone = () => `The database stopped by itself. OpenLDR has stopped. See ${paths.postgresLog}.`;
+
+    it('stops the launcher by the forced path: the hung server is cut off, the lock is released, and done rejects with the message', async () => {
+      const exits = guardExit();
+      const f = fakes({ closeNever: true, pgStopEmits: true });
+      const l = await start(f.deps);
+      launchers.splice(launchers.indexOf(l), 1);
+      f.pg.die();
+      const err = await l.done.then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+      expect(err?.message).toBe(gone());
+      expect(f.order.slice(3)).toEqual(['server.close', 'pg.stop']);
+      expect(f.server.closed).toBe(false);
+      expect(await readLock(paths)).toBeNull();
+      // The errors that come while the server's connections fail are logged, not a crash.
+      await expectNoCrash(exits);
+      expect(listenerCounts()).toEqual(listenersBefore);
+    });
+
+    it('says what else failed when that stop also left something behind', async () => {
+      guardExit();
+      const f = fakes({ pgStopFails: true });
+      const l = await start(f.deps);
+      launchers.splice(launchers.indexOf(l), 1);
+      f.pg.die();
+      const err = await l.done.then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+      expect(err?.message.startsWith(`${gone()}\nThe stop did not finish cleanly. Postgres did not stop: `)).toBe(true);
+      expect(err?.message).not.toContain(state.pgAppPassword);
+      expect(await readLock(paths)).toBeNull();
+    });
+
+    it('changes nothing when Postgres goes during a stop that is already running', async () => {
+      const f = fakes();
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      let closing = false;
+      const startServer = f.deps.startServer;
+      f.deps.startServer = async (cfg, logger) => {
+        const s = await startServer(cfg, logger);
+        return {
+          ...s,
+          close: async () => {
+            closing = true;
+            await gate;
+            await s.close();
+          },
+        };
+      };
+      const l = await start(f.deps);
+      launchers.splice(launchers.indexOf(l), 1);
+      const result = l.stop();
+      await vi.waitFor(() => expect(closing).toBe(true), { timeout: 3000 });
+      // Postgres goes while the server is still closing, before the stop has reached it.
+      f.pg.die();
+      await new Promise((r) => setTimeout(r, 20));
+      release();
+      expect(await result).toBe('clean');
+      expect(await l.done).toBe('clean');
+      expect(f.order.slice(3)).toEqual(['server.close', 'pg.stop']);
+      expect(await readLock(paths)).toBeNull();
+    });
+  });
+});
+
+describe('the workflow file folder', () => {
+  /** A start with WORKFLOW_FILE_ACCESS_ROOT set to `root`. */
+  async function startWith(root: string): Promise<{ f: Fakes; err: Error | null }> {
+    process.env.WORKFLOW_FILE_ACCESS_ROOT = root;
+    const f = fakes();
+    const err = await start(f.deps).then(
+      () => null,
+      (e: unknown) => e as Error,
+    );
+    return { f, err };
+  }
+
+  const refused = 'WORKFLOW_FILE_ACCESS_ROOT must not be the OpenLDR data folder, hold it, or sit inside it.';
+
+  const cases: Array<[string, () => string]> = [
+    ['is the data folder', () => root],
+    ['holds the data folder', () => join(root, '..')],
+    ['sits inside the data folder', () => join(root, 'blobs', 'not-made-yet')],
+  ];
+  for (const [name, folder] of cases) {
+    it(`refuses to start before Postgres when the folder ${name}`, async () => {
+      const { f, err } = await startWith(folder());
+      expect(err?.message).toBe(refused);
+      expect(f.order).toEqual([]);
+      await expectNothingLeft(f);
+    });
+  }
+
+  it('compares real paths, so a link to the data folder is refused too', async () => {
+    const link = join(cwd, 'link-to-data');
+    await symlink(root, link);
+    const { f, err } = await startWith(link);
+    expect(err?.message).toBe(refused);
+    expect(f.order).toEqual([]);
+  });
+
+  it('starts when the folder is a sibling of the data folder', async () => {
+    const sibling = await mkdtemp(join(tmpdir(), 'sa-workflow-'));
+    try {
+      const { f, err } = await startWith(sibling);
+      expect(err).toBeNull();
+      expect(f.order).toEqual(['pg.leftover', 'pg.start', 'server.start']);
+    } finally {
+      await rm(sibling, { recursive: true, force: true });
+    }
   });
 });
 

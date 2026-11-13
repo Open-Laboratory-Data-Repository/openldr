@@ -205,6 +205,12 @@ describe.skipIf(!LIVE)('bundled Postgres, live', { timeout: 120_000 }, () => {
     expect(
       await one(url, "select has_database_privilege('public', 'openldr', 'connect') or has_database_privilege('public', 'openldr_target', 'connect')"),
     ).toBe(false);
+    // The ordinary role cannot connect to the two maintenance databases either. The superuser can.
+    for (const db of ['postgres', 'template1']) {
+      const appTo = `postgres://openldr_app:${encodeURIComponent(c.settings.appPassword)}@127.0.0.1:${c.settings.port}/${db}`;
+      await expect(query(appTo, 'select 1')).rejects.toMatchObject({ code: '42501' });
+    }
+    expect(await one(su, 'select current_database()')).toBe('postgres');
     expect(
       await query(
         url,

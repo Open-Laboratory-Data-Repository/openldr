@@ -1,9 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer, type Server } from 'node:net';
+import { createServer, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   findFreePort,
   isBindFailure,
@@ -77,7 +77,99 @@ async function unusedPort(): Promise<number> {
 
 const settings = (port: number): PostgresSettings => ({ port, superPassword: 'su-x', appPassword: 'app-x' });
 
+const fakeSockets: Socket[] = [];
+
+/** One backend message: a type byte, then a length that counts itself, then the body. */
+function backend(type: string, body: Buffer = Buffer.alloc(0)): Buffer {
+  const head = Buffer.alloc(5);
+  head.write(type, 0, 'latin1');
+  head.writeInt32BE(body.length + 4, 1);
+  return Buffer.concat([head, body]);
+}
+
+const int32 = (n: number) => {
+  const b = Buffer.alloc(4);
+  b.writeInt32BE(n);
+  return b;
+};
+const int16 = (n: number) => {
+  const b = Buffer.alloc(2);
+  b.writeInt16BE(n);
+  return b;
+};
+const cstring = (s: string) => Buffer.from(`${s}\0`, 'utf8');
+
+/**
+ * A server that speaks just enough of the Postgres protocol to ask for a password. It records
+ * every message the client sends after its startup message.
+ * - `cleartext`: asks for a plain-text password.
+ * - `md5`: asks for an MD5 password.
+ * - `trust`: lets the client in at once, as a `trust` line would, and answers
+ *   `show data_directory` with `dataDir`.
+ */
+async function fakePostgres(answer: 'cleartext' | 'md5' | 'trust', dataDir = ''): Promise<{
+  port: number;
+  received: Array<{ type: string; body: Buffer }>;
+  raw: () => Buffer;
+}> {
+  const received: Array<{ type: string; body: Buffer }> = [];
+  const chunks: Buffer[] = [];
+  const s = createServer((sock) => {
+    fakeSockets.push(sock);
+    sock.on('error', () => {});
+    let buf = Buffer.alloc(0);
+    let startup = true;
+    sock.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+      buf = Buffer.concat([buf, chunk]);
+      for (;;) {
+        if (startup) {
+          if (buf.length < 4) return;
+          const len = buf.readInt32BE(0);
+          if (buf.length < len) return;
+          buf = buf.subarray(len);
+          startup = false;
+          if (answer === 'cleartext') sock.write(backend('R', int32(3)));
+          else if (answer === 'md5') sock.write(backend('R', Buffer.concat([int32(5), Buffer.from([1, 2, 3, 4])])));
+          // Ok and ready in one packet, as a real server sends them.
+          else sock.write(Buffer.concat([backend('R', int32(0)), backend('Z', Buffer.from('I'))]));
+          continue;
+        }
+        if (buf.length < 5) return;
+        const len = buf.readInt32BE(1);
+        if (buf.length < len + 1) return;
+        const type = buf.subarray(0, 1).toString('latin1');
+        const body = buf.subarray(5, len + 1);
+        buf = buf.subarray(len + 1);
+        received.push({ type, body });
+        if (type === 'Q') {
+          const field = Buffer.concat([cstring('data_directory'), int32(0), int16(0), int32(25), int16(-1), int32(-1), int16(0)]);
+          const value = Buffer.from(dataDir, 'utf8');
+          sock.write(
+            Buffer.concat([
+              backend('T', Buffer.concat([int16(1), field])),
+              backend('D', Buffer.concat([int16(1), int32(value.length), value])),
+              backend('C', cstring('SHOW')),
+              backend('Z', Buffer.from('I')),
+            ]),
+          );
+        } else if (type === 'p') {
+          sock.write(backend('E', Buffer.concat([Buffer.from('SFATAL\0C28P01\0Mwrong\0'), Buffer.from([0])])));
+          sock.end();
+        } else if (type === 'X') {
+          sock.end();
+        }
+      }
+    });
+  });
+  servers.push(s);
+  await new Promise<void>((resolve) => s.listen({ port: 0, host: '127.0.0.1' }, () => resolve()));
+  return { port: (s.address() as { port: number }).port, received, raw: () => Buffer.concat(chunks) };
+}
+
 afterEach(async () => {
+  vi.restoreAllMocks();
+  for (const s of fakeSockets.splice(0)) s.destroy();
   for (const c of children.splice(0)) if (c.exitCode === null && c.signalCode === null) c.kill('SIGKILL');
   for (const s of servers.splice(0)) if (s.listening) await close(s);
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -218,6 +310,47 @@ describe('stopLeftoverPostgres', () => {
     expect(await stopLeftoverPostgres({ clusterDir: d, settings: settings(await unusedPort()) })).toBe('stale');
     expect(alive(c.pid!)).toBe(true);
     expect(existsSync(pidFile(d))).toBe(false);
+  });
+});
+
+describe('the superuser login accepts only SCRAM-SHA-256', () => {
+  // A made-up password. The point is to see whether it, or anything at all, is sent.
+  const FAKE = { superPassword: 'fake-superuser-pw-not-real', appPassword: 'fake-app-pw-not-real' };
+
+  /** A leftover pid file that names a live process of ours, so the check logs in. */
+  function leftover(): { d: string; child: ChildProcess } {
+    const d = tempDir();
+    const child = idleChild();
+    writePid(d, child.pid!, d);
+    return { d, child };
+  }
+
+  for (const answer of ['cleartext', 'md5'] as const) {
+    it(`sends no password to a server that asks for ${answer === 'md5' ? 'an MD5' : 'a plain-text'} password, and calls it not ours`, async () => {
+      const { d, child } = leftover();
+      const fake = await fakePostgres(answer);
+      const kill = vi.spyOn(process, 'kill');
+      const result = await stopLeftoverPostgres({ clusterDir: d, settings: { port: fake.port, ...FAKE }, waitMs: 2000 });
+      expect(result).toBe('stale');
+      expect(fake.received.map((m) => m.type)).not.toContain('p');
+      expect(fake.raw().includes(FAKE.superPassword)).toBe(false);
+      // Not ours: nothing is signalled, and the pid file of a stranger goes.
+      expect(kill.mock.calls.filter(([, signal]) => signal !== 0)).toEqual([]);
+      expect(alive(child.pid!)).toBe(true);
+      expect(existsSync(pidFile(d))).toBe(false);
+    });
+  }
+
+  it('calls a server that lets the superuser in with no password not ours, sends it no query, and signals nothing', async () => {
+    const { d, child } = leftover();
+    // It would even claim to serve this very cluster, if it were asked.
+    const fake = await fakePostgres('trust', d);
+    const kill = vi.spyOn(process, 'kill');
+    const result = await stopLeftoverPostgres({ clusterDir: d, settings: { port: fake.port, ...FAKE }, waitMs: 2000 });
+    expect(result).toBe('stale');
+    expect(fake.received.map((m) => m.type)).not.toContain('Q');
+    expect(kill.mock.calls.filter(([, signal]) => signal !== 0)).toEqual([]);
+    expect(alive(child.pid!)).toBe(true);
   });
 });
 
