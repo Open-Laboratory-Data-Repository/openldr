@@ -96,14 +96,14 @@ function refuse(status: number, body: Record<string, unknown>): Handler {
 
 interface Result { code: number | undefined; out: string; err: string; log: [string, string][] }
 
-/** Runs the client program over these words, as index.ts does, with OPENLDR_THROUGH_APP=1 unless env
- *  says otherwise. parseAsync must resolve: nothing is caught here. */
+/** Runs the client program over these words, as index.ts does. parseAsync must resolve: nothing is
+ *  caught here. */
 async function cli(
   words: string[], env: NodeJS.ProcessEnv, signals: EventEmitter = new EventEmitter(), log: [string, string][] = [],
   setup?: (program: Command) => void,
 ): Promise<Result> {
   const sink = (name: string) => new Writable({ write(c, _e, cb) { log.push([name, Buffer.from(c).toString('utf8')]); cb(); } });
-  const program = buildClientProgram({ out: sink('out'), err: sink('err'), signals, env: { OPENLDR_THROUGH_APP: '1', ...env } });
+  const program = buildClientProgram({ out: sink('out'), err: sink('err'), signals, env: { ...env } });
   setup?.(program);
   process.exitCode = undefined;
   await program.parseAsync(['node', 'openldr', ...words]);
@@ -152,32 +152,28 @@ afterEach(async () => {
 });
 
 describe('the client program', () => {
-  it('does not run through the app without OPENLDR_THROUGH_APP', async () => {
+  it('sends an app command through the app whatever the environment holds (Task 12)', async () => {
     const srv = await startServer(answers({ t: 'exit', code: 0 }));
-    const r = await cli(['layouts', 'list'], { OPENLDR_THROUGH_APP: undefined, OPENLDR_URL: srv.url });
-    expect(spies.layoutsList).toHaveBeenCalledTimes(1);
-    expect(srv.calls).toHaveLength(0);
+    // Variables a caller might try as a way around: none of them makes the command run here.
+    const r = await cli(['layouts', 'list'], { OPENLDR_URL: srv.url, OPENLDR_LOCAL: '1', OPENLDR_DIRECT: 'true', AUTH_DEV_BYPASS: 'true' });
+    expect(spies.layoutsList).not.toHaveBeenCalled();
+    expect(srv.calls).toHaveLength(1);
     expect(r.code).toBe(0);
-
-    const r2 = await cli(['layouts', 'list'], { OPENLDR_THROUGH_APP: '0', OPENLDR_URL: srv.url });
-    expect(spies.layoutsList).toHaveBeenCalledTimes(2);
-    expect(srv.calls).toHaveLength(0);
-    expect(r2.code).toBe(0);
   });
 
   it('resolves parseAsync normally after sending, and refuses a plain parse() with one line', async () => {
     const srv = await startServer(answers({ t: 'exit', code: 5 }));
-    const program = buildClientProgram({ out: new Writable({ write: (_c, _e, cb) => cb() }), env: { OPENLDR_THROUGH_APP: '1', OPENLDR_URL: srv.url } });
+    const program = buildClientProgram({ out: new Writable({ write: (_c, _e, cb) => cb() }), env: { OPENLDR_URL: srv.url } });
     process.exitCode = undefined;
     await expect(program.parseAsync(['node', 'openldr', 'layouts', 'list'])).resolves.toBe(program);
     expect(process.exitCode).toBe(5);
     process.exitCode = undefined;
     // A closed port: if the override were removed, this could never reach port 3000.
-    const closedEnv = { OPENLDR_THROUGH_APP: '1', OPENLDR_URL: 'http://127.0.0.1:9' };
+    const closedEnv = { OPENLDR_URL: 'http://127.0.0.1:9' };
     expect(() => buildClientProgram({ env: closedEnv }).parse(['node', 'openldr', 'layouts', 'list'])).toThrow('The openldr client program must be run with parseAsync, not parse.');
   });
 
-  it('refuses a command with no table entry when commands go through the app (fails closed)', async () => {
+  it('refuses a command with no table entry (fails closed)', async () => {
     const extra = vi.fn();
     const add = (p: Command) => { p.command('not-in-the-table').action(extra); };
     const srv = await startServer(answers({ t: 'exit', code: 0 }));
@@ -186,12 +182,9 @@ describe('the client program', () => {
     expect(r.code).toBe(1);
     expect(extra).not.toHaveBeenCalled();
     expect(srv.calls).toHaveLength(0);
-    // Without OPENLDR_THROUGH_APP nothing changes yet (Task 12 removes the switch).
-    await cli(['not-in-the-table'], { OPENLDR_THROUGH_APP: undefined, OPENLDR_URL: srv.url }, new EventEmitter(), [], add);
-    expect(extra).toHaveBeenCalledTimes(1);
   });
 
-  it('with OPENLDR_THROUGH_APP=1 sends an app command and does not run it here', async () => {
+  it('sends an app command and does not run it here', async () => {
     const srv = await startServer(answers({ t: 'exit', code: 0 }));
     const r = await cli(['layouts', 'list', '--json'], { OPENLDR_URL: srv.url });
     expect(spies.layoutsList).not.toHaveBeenCalled();

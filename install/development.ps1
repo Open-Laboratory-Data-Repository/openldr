@@ -4,7 +4,7 @@
 # Flags:
 #   -Dir <path>     where to clone (default ./openldr)
 #   -Branch <name>  branch to clone (default main)
-#   -Seed           also load WHONET sample data (needs the wasm build toolchain)
+#   -Seed           also load WHONET sample data (needs the wasm build toolchain; runs the API for it)
 #   -ResetDb        force a db reset even on an existing setup (DESTRUCTIVE)
 #   -NoServices     just clone + install; skip Docker + DB
 param(
@@ -96,9 +96,26 @@ if ($NoServices) {
     pnpm openldr db seed
     if ($LASTEXITCODE -ne 0) { Die "db seed failed" }
     if ($Seed) {
+      # The plugin install and the ingest in e2e:seed go through the running API, signed in by
+      # AUTH_DEV_BYPASS. So the API must answer first: one already running is used, else one is
+      # started for the seed and its whole process tree is stopped after. Unproven: this script
+      # was edited on Linux and has not been run since.
+      $apiUp = { try { Invoke-WebRequest -UseBasicParsing -Uri http://127.0.0.1:3000/health -TimeoutSec 2 *> $null; $true } catch { $false } }
+      $api = $null
+      if (-not (& $apiUp)) {
+        Write-Host "-> Starting the API for the sample data (pnpm -C apps/server dev)"
+        $api = Start-Process -FilePath pnpm -ArgumentList '-C', 'apps/server', 'dev' -PassThru -WindowStyle Hidden
+        for ($i = 0; $i -lt 60 -and -not (& $apiUp); $i++) { Start-Sleep 2 }
+        if (-not (& $apiUp)) {
+          taskkill /T /F /PID $api.Id *> $null
+          Die "The API did not answer on http://127.0.0.1:3000. Start it with: pnpm -C apps/server dev, then run: pnpm e2e:seed"
+        }
+      }
       Write-Host "-> Seeding WHONET sample data (pnpm e2e:seed)"
       pnpm e2e:seed
-      if ($LASTEXITCODE -ne 0) { Die "seed failed" }
+      $seedExit = $LASTEXITCODE
+      if ($api) { taskkill /T /F /PID $api.Id *> $null }
+      if ($seedExit -ne 0) { Die "seed failed" }
     }
   } else {
     Write-Host "-> Skipping db reset (existing setup; pass -ResetDb to wipe & re-init)"

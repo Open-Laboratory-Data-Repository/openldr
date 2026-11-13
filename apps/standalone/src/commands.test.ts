@@ -12,6 +12,7 @@ import {
   STOP_WAIT_MS,
   StopError,
   UsageError,
+  cliEntryFile,
   handleSignals,
   launcherFiles,
   parseCommandLine,
@@ -28,12 +29,15 @@ import { postgresUrls, type PostgresSettings } from './postgres.js';
 import { acquireLock, pathsFor, readLock, type StandalonePaths } from './state.js';
 
 // The CLI program is replaced, so a test can see what a CLI command would load without a database.
+// commandKindOf is the real one: it reads the real command table, so `doctor` is a recovery command
+// here and `layouts list` is not.
 const cli = vi.hoisted(() => ({
   calls: [] as string[][],
   run: undefined as undefined | ((argv: string[]) => Promise<void>),
 }));
-vi.mock('@openldr/cli/program', () => ({
-  buildProgram: () => ({
+vi.mock('@openldr/cli/program', async (importOriginal) => ({
+  commandKindOf: (await importOriginal<typeof import('@openldr/cli/program')>()).commandKindOf,
+  buildClientProgram: () => ({
     parseAsync: async (argv: string[]) => {
       cli.calls.push(argv);
       await cli.run?.(argv);
@@ -50,6 +54,7 @@ let PORT: number;
 /** A port a test holds, to see the launcher refuse it. Also picked for each test. */
 let HELD: number;
 const SETUP_CODE = 'TEST-SETUP-CODE-7Q2X';
+const CLI_ENTRY = join('/', 'opt', 'openldr', 'standalone', 'dist', 'cli.js');
 let ADDRESS: string;
 const STARTED_AT = new Date('2026-11-13T08:00:00.000Z');
 
@@ -251,6 +256,7 @@ function fakes(
     now: () => STARTED_AT,
     studioDist: studio,
     appVersion: '0.1.11',
+    cliEntry: CLI_ENTRY,
   };
   return f;
 }
@@ -813,6 +819,146 @@ describe('runCli', () => {
     });
     expect(await runCli({ dataDir: root, args: ['doctor'] }, () => {})).toBe(1);
     expect(errors.join('')).toContain('command boom');
+  });
+
+  /** The shell's environment again, as a separate CLI process starts with it. */
+  function shellEnvironment(): void {
+    for (const key of Object.keys(process.env)) if (!(key in envBefore)) delete process.env[key];
+    Object.assign(process.env, envBefore);
+    delete process.env.OPENLDR_URL;
+    delete process.env.OPENLDR_ALLOW_PLAIN_HTTP;
+  }
+
+  /** A lock naming this address, with a control port that answers, so the launcher counts as running. */
+  async function lockAt(address: string): Promise<void> {
+    const token = newControlToken();
+    const control = await startControl({ token, onStop: async () => 'clean' });
+    controls.push(control);
+    await acquireLock(paths, { pid: process.pid, address, startedAt: STARTED_AT.toISOString(), controlPort: control.port, token, httpPort: 3999 });
+  }
+
+  /** process.env as the client program sees it when it runs these words. */
+  async function envSeenBy(args: string[]): Promise<NodeJS.ProcessEnv> {
+    let env: NodeJS.ProcessEnv = {};
+    cli.run = async () => {
+      env = { ...process.env };
+    };
+    cli.calls = [];
+    expect(await runCli({ dataDir: root, args }, () => {})).toBe(0);
+    expect(cli.calls).toEqual([['node', 'openldr', ...args]]);
+    return env;
+  }
+
+  it('gives a non-recovery command no database URL and no secrets key (standalone)', async () => {
+    await start(fakes().deps);
+    shellEnvironment();
+    // The caller's own credential passes through. Database settings in the shell do not.
+    const key = 'oldr_TESTKEYtestkeyTESTKEYtestkeyTESTKEYtes';
+    const shellKey = randomBytes(32).toString('base64');
+    Object.assign(process.env, {
+      OPENLDR_KEY: key,
+      OPENLDR_KEY_FILE: join(cwd, 'key'),
+      OPENLDR_SESSION: 'handed-session-placeholder',
+      INTERNAL_DATABASE_URL: 'postgres://shell:shell@127.0.0.1:1/shell',
+      TARGET_DATABASE_URL: 'postgres://shell:shell@127.0.0.1:1/shell_target',
+      SECRETS_ENCRYPTION_KEY: shellKey,
+    });
+    // The state file holds the passwords and the secrets key. A non-recovery command never reads it.
+    await rm(paths.stateFile);
+
+    const env = await envSeenBy(['layouts', 'list', '--json']);
+    expect(env.OPENLDR_URL).toBe(`http://localhost:${PORT}`);
+    expect(env.APP_VERSION).toBe(launcherFiles().appVersion);
+    expect(env.OPENLDR_ALLOW_PLAIN_HTTP).toBeUndefined();
+    expect(env.OPENLDR_KEY).toBe(key);
+    expect(env.OPENLDR_KEY_FILE).toBe(join(cwd, 'key'));
+    expect(env.OPENLDR_SESSION).toBe('handed-session-placeholder');
+    expect(env.HOME).toBe(envBefore.HOME);
+    expect(Object.keys(env).filter((k) => /DATABASE_URL$|^SECRETS_ENCRYPTION_KEY$/.test(k))).toEqual([]);
+    const values = Object.values(env).join('\n');
+    for (const secret of [state.secretsKey, state.pgSuperPassword, state.pgAppPassword, shellKey]) expect(values).not.toContain(secret);
+    // None of the server's other settings either.
+    for (const k of ['AUTH_ADAPTER', 'BLOB_DIR', 'CLI_ENTRY', 'LISTEN_HOST']) expect(env[k], k).toBeUndefined();
+  });
+
+  it('gives a recovery command the database settings (standalone)', async () => {
+    await start(fakes().deps);
+    shellEnvironment();
+    for (const args of [['doctor'], ['--actor', 'ops-bob', 'db', 'migrate'], ['auth', 'setup-code', '--json']]) {
+      shellEnvironment();
+      const env = await envSeenBy(args);
+      expect(env.INTERNAL_DATABASE_URL, args.join(' ')).toBe(postgresUrls(settings).internalUrl);
+      expect(env.TARGET_DATABASE_URL).toBe(postgresUrls(settings).targetUrl);
+      expect(env.SECRETS_ENCRYPTION_KEY).toBe(state.secretsKey);
+    }
+  });
+
+  it('counts --help and an unknown command as not recovery', async () => {
+    await start(fakes().deps);
+    shellEnvironment();
+    for (const args of [['--help'], ['db', '--help'], ['db', 'migrate', '--help'], ['not-a-command']]) {
+      shellEnvironment();
+      const env = await envSeenBy(args);
+      expect(env.INTERNAL_DATABASE_URL, args.join(' ')).toBeUndefined();
+      expect(env.SECRETS_ENCRYPTION_KEY).toBeUndefined();
+      expect(env.OPENLDR_URL).toBe(`http://localhost:${PORT}`);
+    }
+  });
+
+  it('returns the exit code the client program sets, 0 and 3', async () => {
+    await start(fakes().deps);
+    shellEnvironment();
+    for (const code of [3, 0]) {
+      process.exitCode = 9;
+      cli.run = async () => {
+        process.exitCode = code;
+      };
+      expect(await runCli({ dataDir: root, args: ['layouts', 'list'] }, () => {})).toBe(code);
+    }
+  });
+
+  it('allows plain HTTP only for a launcher on a specific host of this machine', async () => {
+    shellEnvironment();
+    await lockAt('http://100.64.0.7:3999/studio/');
+    let env = await envSeenBy(['layouts', 'list']);
+    expect(env.OPENLDR_URL).toBe('http://100.64.0.7:3999');
+    expect(env.OPENLDR_ALLOW_PLAIN_HTTP).toBe('true');
+    await rm(paths.lockFile);
+
+    // Each call is its own process in real use, so each starts from the shell's environment.
+    shellEnvironment();
+    await lockAt('http://[fd7a:115c:a1e0::1]:3999/studio/');
+    env = await envSeenBy(['layouts', 'list']);
+    expect(env.OPENLDR_URL).toBe('http://[fd7a:115c:a1e0::1]:3999');
+    expect(env.OPENLDR_ALLOW_PLAIN_HTTP).toBe('true');
+    await rm(paths.lockFile);
+
+    shellEnvironment();
+    await lockAt('http://localhost:3999/studio/');
+    env = await envSeenBy(['layouts', 'list']);
+    expect(env.OPENLDR_URL).toBe('http://localhost:3999');
+    expect(env.OPENLDR_ALLOW_PLAIN_HTTP).toBeUndefined();
+  });
+
+  it("leaves the caller's own OPENLDR_URL and plain-HTTP setting alone", async () => {
+    shellEnvironment();
+    await lockAt('http://100.64.0.7:3999/studio/');
+    process.env.OPENLDR_URL = 'https://lab.example.org';
+    const env = await envSeenBy(['layouts', 'list']);
+    expect(env.OPENLDR_URL).toBe('https://lab.example.org');
+    expect(env.OPENLDR_ALLOW_PLAIN_HTTP).toBeUndefined();
+  });
+});
+
+describe('the CLI entry', () => {
+  it('is dist/cli.js in the app folder', () => {
+    expect(cliEntryFile(join('/', 'opt', 'openldr', 'standalone'))).toBe(join('/', 'opt', 'openldr', 'standalone', 'dist', 'cli.js'));
+  });
+
+  it("is given to the server as CLI_ENTRY", async () => {
+    const f = fakes();
+    await start(f.deps);
+    expect(f.server.cfg?.CLI_ENTRY).toBe(CLI_ENTRY);
   });
 });
 

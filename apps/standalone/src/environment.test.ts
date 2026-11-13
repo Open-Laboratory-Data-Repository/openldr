@@ -9,6 +9,7 @@ import { pathsFor, type StandaloneState } from './state.js';
 // Nothing here touches the disk. The data folder only has to be an absolute path.
 const ROOT = join('/', 'srv', 'openldr-environment-test');
 const STUDIO_DIST = join('/', 'opt', 'openldr', 'studio', 'dist');
+const CLI_ENTRY = join('/', 'opt', 'openldr', 'standalone', 'dist', 'cli.js');
 
 const state: StandaloneState = {
   version: 1,
@@ -29,6 +30,7 @@ function makeInput(over: Partial<EnvironmentInput> = {}): EnvironmentInput {
     host: '127.0.0.1',
     studioDist: STUDIO_DIST,
     appVersion: '0.1.11',
+    cliEntry: CLI_ENTRY,
     ...over,
   };
 }
@@ -40,7 +42,7 @@ const EXPECTED_KEYS = [
   'AUTH_ADAPTER', 'AUTH_DEV_BYPASS', 'BLOB_ADAPTER', 'BLOB_DIR', 'EVENTING_ADAPTER',
   'TARGET_STORE_ADAPTER', 'INTERNAL_DATABASE_URL', 'TARGET_DATABASE_URL', 'MIGRATE_ON_START',
   'SEED_ON_START', 'SECRETS_ENCRYPTION_KEY', 'PLUGIN_CRASH_LOG_DIR', 'TERMINOLOGY_WORK_DIR',
-  'WEB_DIST_DIR', 'APP_VERSION', 'OPENLDR_SKIP_ENV_FILE',
+  'WEB_DIST_DIR', 'APP_VERSION', 'OPENLDR_SKIP_ENV_FILE', 'CLI_ENTRY',
 ];
 
 /** A setting whose name says it holds a path. */
@@ -116,13 +118,13 @@ describe('buildEnvironment', () => {
     expect(buildEnvironment(input).OPENLDR_SKIP_ENV_FILE).toBe('true');
   });
 
-  it('puts every path inside the data folder, apart from the studio build', () => {
+  it('puts every path inside the data folder, apart from the studio build and the CLI entry', () => {
     const env = buildEnvironment(input);
     const cfg = loadConfig(env) as Record<string, unknown>;
     const checked = new Set<string>();
     // The keys it sets, and every setting the schema fills in, defaults included.
     for (const [key, value] of [...Object.entries(env), ...Object.entries(cfg)]) {
-      if (key === 'WEB_DIST_DIR' || !isPathEntry(key, value)) continue;
+      if (key === 'WEB_DIST_DIR' || key === 'CLI_ENTRY' || !isPathEntry(key, value)) continue;
       checked.add(key);
       expect(isInside(ROOT, value), `${key} is outside the data folder`).toBe(true);
     }
@@ -152,6 +154,12 @@ describe('buildEnvironment', () => {
       expect(schemaKeys).toContain(key);
       expect(env).not.toHaveProperty(key);
     }
+  });
+
+  it("sets CLI_ENTRY to the bundle's cli entry", () => {
+    const env = buildEnvironment(input);
+    expect(env.CLI_ENTRY).toBe(CLI_ENTRY);
+    expect(loadConfig(env).CLI_ENTRY).toBe(CLI_ENTRY);
   });
 
   it('is accepted under NODE_ENV=production', () => {
@@ -195,6 +203,7 @@ describe('buildEnvironment', () => {
       ['an empty version', { appVersion: '' }, 'appVersion'],
       ['an empty studio build path', { studioDist: '' }, 'studioDist'],
       ['a relative studio build path', { studioDist: 'studio/dist' }, 'studioDist'],
+      ['a relative CLI entry', { cliEntry: 'dist/cli.js' }, 'cliEntry'],
       ['a relative data folder', { paths: pathsFor('openldr-data') }, 'paths.root'],
     ];
     it.each(cases)('%s', (_name, over, field) => {

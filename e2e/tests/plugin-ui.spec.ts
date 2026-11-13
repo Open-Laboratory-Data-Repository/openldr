@@ -12,7 +12,7 @@ import { test, expect } from '@playwright/test';
  *
  * Prerequisites (manual, deferred to CI/acceptance):
  *   - Full stack up (postgres + minio, AUTH_DEV_BYPASS=true)
- *   - Reference plugin installed:
+ *   - Reference plugin installed, with the server running (the install goes through it):
  *       pnpm openldr plugin install reference-plugins/ui-reference/plugin.wasm
  *   - Server built: pnpm turbo build --filter=@openldr/server --filter=@openldr/studio
  */

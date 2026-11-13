@@ -6,6 +6,7 @@ import {
   STOPPED_FORCED,
   USAGE,
   UsageError,
+  cliEntryFile,
   handleSignals,
   launcherFiles,
   parseCommandLine,
@@ -59,6 +60,7 @@ async function start(opts: { dataDir?: string; port: number; host: string }): Pr
       printNow,
       now: () => new Date(),
       ...launcherFiles(),
+      cliEntry: cliEntryFile(),
     });
   } catch (err) {
     printError(messageOf(err));

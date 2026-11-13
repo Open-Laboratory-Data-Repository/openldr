@@ -6,12 +6,14 @@ const SEED_HELP = [
   '',
   'The stack appears unseeded or unreachable. Bring it up and seed it, then re-run:',
   '  docker compose up -d',
+  '  pnpm -C apps/server dev    (in another terminal: the seed installs and ingests through it)',
   '  pnpm e2e:seed',
 ].join('\n');
 const DOCS_SEED_HELP = [
   '',
   'The docs capture stack appears unseeded or unreachable. Bring it up and seed it, then re-run:',
   '  docker compose up -d',
+  '  pnpm -C apps/server dev    (in another terminal: the seed installs and ingests through it)',
   '  pnpm docs:seed',
 ].join('\n');
 

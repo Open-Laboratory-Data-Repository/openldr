@@ -61,7 +61,7 @@ import { runQueryExport, runQueryImport } from './query';
 import { setActorOverride } from './cli-actor';
 import { guardServed } from './served';
 import { commandPath, runCommandsList } from './command-list';
-import { COMMAND_META } from './command-meta';
+import { COMMAND_META, type CommandKind } from './command-meta';
 import { assertSafeUrl, CredentialError, findCredential, PlainHttpError, serverUrl } from './client/credentials';
 import { NOT_PREPARED, runThroughApp, wordsAfterPath } from './client/run-through-app';
 import { runLogin, runLogout, runWhoami, type LoginIo } from './client/session';
@@ -1554,11 +1554,59 @@ async function parseWithoutRunning(path: string, argv: string[]): Promise<{ args
   return got;
 }
 
+/** What a recovery command prints when this machine has no database settings (spec section 6.7). */
+export const NEEDS_DATABASE = 'This command works on the database itself. Run it on the machine that runs OpenLDR.';
+
+/**
+ * True when INTERNAL_DATABASE_URL is set once the config file has been looked for, the way a
+ * command's own loadConfig() looks for it. A mistake in any other setting is left for the command
+ * to report, with today's message.
+ */
+function hasDatabaseSettings(env: NodeJS.ProcessEnv): boolean {
+  try {
+    loadConfig(env);
+  } catch {
+    // The command reads the config again and says what is wrong.
+  }
+  return Boolean(env.INTERNAL_DATABASE_URL?.trim());
+}
+
+/**
+ * The table kind of the command these words name (the caller's words after the program name).
+ * Parsed with a fresh program that runs no action and prints nothing. Null when the words ask for
+ * help, name no command in the table, or do not parse. The standalone launcher uses it to decide,
+ * before it builds any environment, whether this call gets the database settings.
+ *
+ * The program's own preAction hooks still run: guardServed does nothing outside served mode, and
+ * setActorOverride records the same --actor the real run records next.
+ */
+export async function commandKindOf(words: readonly string[]): Promise<CommandKind | null> {
+  const fresh = buildProgram();
+  // The client program's root option, so a line that uses it parses here too.
+  fresh.option('--server-url <address>', 'the OpenLDR server to send commands to');
+  const found: { path?: string } = {};
+  const quiet = (c: Command): void => {
+    c.exitOverride();
+    c.configureOutput({ writeOut: () => {}, writeErr: () => {}, outputError: () => {} });
+    if (c.parent && c.commands.length === 0) c.action(() => { found.path = commandPath(c); });
+    c.commands.forEach(quiet);
+  };
+  quiet(fresh);
+  try {
+    await fresh.parseAsync([...words], { from: 'user' });
+  } catch {
+    return null;
+  }
+  const path = found.path;
+  return path !== undefined && Object.hasOwn(COMMAND_META, path) ? COMMAND_META[path]!.kind : null;
+}
+
 /**
  * The program the `openldr` entry runs outside served mode. It is buildProgram() plus the root
- * option --server-url, and, when OPENLDR_THROUGH_APP is '1', a preAction hook that sends each `app`
- * command through the running app instead of running it here. `local` and `recovery` commands,
- * and an `app` command whose table entry says this call is local, run here as before.
+ * option --server-url and a preAction hook that sends each `app` command through the running app
+ * instead of running it here, always. Only a `local` command, a `recovery` command, and an `app`
+ * command whose table entry says this call is local run here. A recovery command with no database
+ * settings stops with NEEDS_DATABASE. No flag, setting or variable changes this (spec section 3).
  *
  * Call parseAsync with the 'node' argv form (index.ts) or { from: 'user' }. The words sent are taken
  * from the argv that was parsed, not read again from process.argv.
@@ -1620,12 +1668,17 @@ export function buildClientProgram(io: Partial<ClientIo> = {}): Command {
   };
 
   program.hook('preAction', async (_root, cmd) => {
-    if (env.OPENLDR_THROUGH_APP !== '1') return;
     const path = commandPath(cmd);
     const meta = Object.hasOwn(COMMAND_META, path) ? COMMAND_META[path] : undefined;
     if (!meta) {
       // Fail closed: a command the table does not know is never run here unchecked.
       err.write(`${path} has no entry in the command table, so it cannot run.\n`);
+      process.exitCode = 1;
+      throw new SentThroughApp();
+    }
+    if (meta.kind === 'recovery') {
+      if (hasDatabaseSettings(env)) return;
+      err.write(`${NEEDS_DATABASE}\n`);
       process.exitCode = 1;
       throw new SentThroughApp();
     }

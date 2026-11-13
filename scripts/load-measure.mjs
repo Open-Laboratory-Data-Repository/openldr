@@ -9,8 +9,11 @@
 // Usage: node scripts/load-measure.mjs [--rows N]   (default N=100)
 // Preconditions (the caller sets these up — the script does NOT reset the DB):
 //   - DB migrated and in the desired starting state (reset before a clean run for fresh inserts).
+//   - The API running with AUTH_DEV_BYPASS=true, at OPENLDR_URL (default http://127.0.0.1:3000).
+//     The ingest goes through it, so the time includes the request and the server's own CLI process.
 //   - Plugin built + installed (pnpm build:plugins && pnpm openldr plugin install ...).
-//   - Env selects the engine: TARGET_STORE_ADAPTER=pg (default) or =mssql + MSSQL_* set.
+//   - The server's settings select the engine: TARGET_STORE_ADAPTER=pg (default) or =mssql + MSSQL_*.
+//     Set TARGET_STORE_ADAPTER the same in this shell, so the printed engine label matches.
 import { execSync } from 'node:child_process';
 
 const rowsArg = process.argv.indexOf('--rows');

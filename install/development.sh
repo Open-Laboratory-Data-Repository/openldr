@@ -5,7 +5,7 @@
 # Flags:
 #   --dir <path>     where to clone (default ./openldr)
 #   --branch <name>  branch to clone (default main)
-#   --seed           also load WHONET sample data (needs the wasm build toolchain)
+#   --seed           also load WHONET sample data (needs the wasm build toolchain; runs the API for it)
 #   --reset-db       force a db reset even on an existing setup (DESTRUCTIVE)
 #   --no-services    just clone + install; skip Docker + DB
 set -eu
@@ -99,8 +99,34 @@ else
     echo "→ Seeding starter set (pnpm openldr db seed)"
     pnpm openldr db seed || err "db seed failed"
     if [ "$SEED" -eq 1 ]; then
+      # The plugin install and the ingest in e2e:seed go through the running API, signed in by
+      # AUTH_DEV_BYPASS. So the API must answer first: one already running is used, else one is
+      # started for the seed in its own process group, and the group is stopped after.
+      # Unproven: this part has not been run. macOS is unproven too.
+      api_up() { node -e "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" >/dev/null 2>&1; }
+      API_PID=""
+      API_LOG="${TMPDIR:-/tmp}/openldr-dev-api.log"
+      if ! api_up; then
+        echo "→ Starting the API for the sample data (pnpm -C apps/server dev, log in $API_LOG)"
+        set -m
+        pnpm -C apps/server dev >"$API_LOG" 2>&1 &
+        API_PID=$!
+        set +m
+        i=0
+        until api_up; do
+          i=$((i + 1))
+          if [ "$i" -ge 60 ]; then
+            kill -TERM -- "-$API_PID" 2>/dev/null || true
+            err "The API did not answer on http://127.0.0.1:3000 (see $API_LOG). Start it with: pnpm -C apps/server dev, then run: pnpm e2e:seed"
+          fi
+          sleep 2
+        done
+      fi
       echo "→ Seeding WHONET sample data (pnpm e2e:seed)"
-      pnpm e2e:seed || err "seed failed"
+      SEED_EXIT=0
+      pnpm e2e:seed || SEED_EXIT=$?
+      if [ -n "$API_PID" ]; then kill -TERM -- "-$API_PID" 2>/dev/null || true; fi
+      [ "$SEED_EXIT" -eq 0 ] || err "seed failed"
     fi
   else
     echo "→ Skipping db reset (existing setup; pass --reset-db to wipe & re-init)"

@@ -28,9 +28,14 @@ Uint8Array hex/base64 polyfill — a separate concern that stays.)
 ## Bring up + seed the stack
 
     docker compose up -d        # Postgres / storage (Garage) / Keycloak (git-ignored override ports)
+    pnpm -C apps/server dev     # in another terminal: the seed's install and ingest go through it
     pnpm e2e:seed               # make sample -> build plugin -> db reset -> install plugin -> ingest WHONET
 
-`pnpm e2e:seed` needs Docker up and the Rust/wasi toolchain (for `build:plugins`).
+`pnpm e2e:seed` needs Docker up and the Rust/wasi toolchain (for `build:plugins`). It also needs
+the API running with `AUTH_DEV_BYPASS=true`: `db reset` works on the database itself, but
+`plugin install` and `ingest` are sent through the running app. Without one they stop with
+`Cannot reach OpenLDR at http://127.0.0.1:3000. Is it running?`. For an API on another port, set
+`OPENLDR_URL` to its address. `pnpm docs:seed` needs the same.
 
 ## Run
 
