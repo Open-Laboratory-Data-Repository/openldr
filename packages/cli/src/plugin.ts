@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { createIngestContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
+import { uiEntryOf } from './command-meta';
 
 interface JsonOpt {
   json: boolean;
@@ -14,7 +15,7 @@ export function readAdjacentUi(
   manifest: { ui?: { entry?: string }; payload?: { ui?: { entry?: string } } },
   manifestDir: string,
 ): Uint8Array | undefined {
-  const entry = manifest.payload?.ui?.entry ?? manifest.ui?.entry;
+  const entry = uiEntryOf(manifest);
   if (!entry) return undefined;
   if (entry !== basename(entry) || entry === '') {
     throw new Error(`invalid ui entry '${entry}': must be a plain filename inside the plugin dir`);
