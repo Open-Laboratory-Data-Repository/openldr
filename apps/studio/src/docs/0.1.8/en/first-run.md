@@ -2,7 +2,7 @@
 
 First run is three short steps that Studio shows straight after you create the first administrator. You name the laboratory, load sample data if you want it, and see which setup checks still need you. It is for the person who sets up a new install.
 
-First run appears once, only on an install that uses OpenLDR's own sign-in. Only the person who created the first administrator sees it, in the window where they did so. You can skip the first two steps. Settings, Setup checks keeps the same list afterwards, and can load sample data later.
+First run appears once, only on an install that uses OpenLDR's own sign-in. Only the person who created the first administrator sees it, in the window or browser tab where they did so. You can skip the first two steps. Settings, Setup checks keeps the same list afterwards, and can load sample data later.
 
 ## Name the laboratory
 
@@ -50,14 +50,14 @@ When nothing needs you, the page says **Nothing needs you now. Settings, Setup c
 
 - First run appears only with OpenLDR's own sign-in. An install that signs in through Keycloak or another provider never shows it. Use [Setup checks](/docs/setup-checks) there.
 - It appears once. After **Open OpenLDR**, a link, or signing out, it does not come back.
-- A reload of the page in the middle starts first run again from step 1. A name you saved stays saved.
+- A reload of the page in the middle starts first run again from step 1. A name you saved stays saved. Closing that tab in the middle ends first run for good.
 - Sample data is offered only while the install holds no lab data.
 
 ## Troubleshooting
 
 - **The sample data step did not appear.** The install already holds lab data, or Studio could not ask the server. Open Settings, Setup checks, and look for **Load sample data** in its dots menu.
 - **The laboratory could not be saved:** followed by a reason. Select **Save** again. Or select **Skip** and set the name later in Settings, Laboratory.
-- **Sample data could not be loaded:** followed by a reason. The load did not finish. Some sample data may already be in place, and then the install counts as holding lab data, so Studio does not offer the load again. The server log has the reason.
+- **Sample data could not be loaded:** followed by a reason. The load did not finish. Some sample data may already be in place. A second try is then refused, so select **Skip**. The server log names the error.
 - **The setup checks could not run:** followed by a reason. Select **Open OpenLDR**. Then open Settings, Setup checks and select **Run again** from its dots menu.
 
 ## Related guides

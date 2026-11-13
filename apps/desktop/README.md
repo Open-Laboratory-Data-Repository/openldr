@@ -5,8 +5,8 @@ The OpenLDR desktop app. It is an Electron app that wraps the standalone launche
 stops OpenLDR through the launcher's `stop` command when you quit.
 
 The app starts its launcher with `--host 127.0.0.1`, and the window loads Studio at
-`http://127.0.0.1:<port>/studio/`. The app's own log is `desktop.log` in its own folder (see
-`OPENLDR_DESKTOP_USER_DIR` below). The web docs page `apps/web/src/docs/0.1.8/en/desktop-app.md`
+`http://127.0.0.1:<port>/studio/`. The app's own log is `desktop.log` in its own folder. `OPENLDR_DESKTOP_USER_DIR`
+below names that folder. The web docs page `apps/web/src/docs/0.1.8/en/desktop-app.md`
 is the guide for people who install the app.
 
 This package is private. It is never published.

@@ -66,9 +66,17 @@ On macOS the installer signs the app on your Mac with `codesign`, using a signat
 
 Studio's own guide, **First run**, covers the three steps. Sample data is offered only while the install holds no lab data. If you skip it, Settings, Setup checks can load it later, from its dots menu.
 
-The app loads Studio at `http://127.0.0.1:3000/studio/`. It takes port 3000 when that port is free. If not, it picks another free port and remembers it, so the address stays the same from then on.
+The app loads Studio at `http://127.0.0.1:3000/studio/`. It takes port 3000 when that port is free. If not, it picks another free port and remembers it. The address then stays the same while that port stays free.
 
-The app fills in the setup code only for an OpenLDR it started itself. OpenLDR may already run when the app starts, because you started it from a terminal, or because an app that was killed left it running. The app then shows that OpenLDR, and the setup code field stays empty. Quit the app and start it again. Or run `openldr-standalone cli -- auth setup-code` and type the code it prints.
+The app fills in the setup code only for an OpenLDR it started itself. OpenLDR may already run when the app starts. You may have started it from a terminal. Or an app that was killed left it running. The app then shows that OpenLDR, and the setup code field stays empty.
+
+The simple way out is to select **Quit** in the tray menu and start the app again. The app then starts OpenLDR itself and fills in the code. Or run the app's `openldr-standalone` command, and type the code it prints:
+
+| System | Command |
+| --- | --- |
+| Linux | `~/.local/share/openldr-desktop/openldr-standalone cli -- auth setup-code` |
+| macOS | `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone cli -- auth setup-code` |
+| Windows, in PowerShell | `& "$env:LOCALAPPDATA\Programs\OpenLDR\openldr-standalone.cmd" cli -- auth setup-code` |
 
 ## The window and the tray
 
@@ -107,11 +115,13 @@ On Windows it says:
 X OpenLDR is running. Quit it from its tray icon, or run: & "C:\Users\you\AppData\Local\Programs\OpenLDR\openldr-standalone.cmd" stop. Then run this again.
 ```
 
-The path in the message is the `openldr-standalone` command of your install. Run that line, then run the install line again.
+The path in the message is the `openldr-standalone` command of your install. Quit OpenLDR from its tray icon, or run that `stop` line. Then run the install line again.
+
+If the installer still refuses, a database from an OpenLDR that was killed may still be running. `stop` then says `OpenLDR is not running.`, because only the database is left. Start the app once and wait for Studio. When the app starts OpenLDR, OpenLDR first stops a database left running on the same data folder. Then select **Quit** in the tray menu, and run the install line again.
 
 ## Remove
 
-Quit OpenLDR first. On Linux and macOS:
+Quit OpenLDR first. If the installer refuses with `OpenLDR is running.`, follow the steps under **Update**. On Linux and macOS:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/desktop.sh | bash -s -- --uninstall
@@ -125,7 +135,7 @@ On Windows:
 
 This removes the app and the app's own `OpenLDR Desktop` folder. It also removes:
 
-- on Linux, the menu entry, the start-at-sign-in entry, the `openldr-standalone` link in `~/.local/bin`, and the AppArmor profile, which asks for the administrator password again;
+- on Linux, the menu entry, the start-at-sign-in entry, the `openldr-standalone` link in `~/.local/bin`, and the AppArmor profile, if one was installed, which asks for the administrator password again;
 - on macOS, the `openldr-standalone` link in `~/.local/bin`;
 - on Windows, the Start menu shortcut and the start-at-sign-in entry.
 
@@ -141,7 +151,7 @@ The data folder stays. The last line says where it is, such as `Your data was le
 | macOS | `~/Library/Application Support/OpenLDR` | `~/Library/Application Support/OpenLDR Desktop` |
 | Windows | `%LOCALAPPDATA%\OpenLDR` | `%APPDATA%\OpenLDR Desktop` |
 
-The data folder holds the database, stored files, the logs and the secrets key. [Run without Docker](/docs/standalone) lists what is in it. The app's own folder holds its settings (the port, start at sign-in and the window size), its log `desktop.log`, and the window's browser data. Its settings hold no secret.
+The data folder holds the database, stored files, the logs and the secrets key. [Run without Docker](/docs/standalone) lists what is in it. The app's own folder holds its settings, its log `desktop.log`, and the window's browser data. The settings are the port, start at sign-in and the window size. They hold no secret.
 
 The data folder is the same one `openldr-standalone` uses. The app brings that command with it:
 
@@ -151,13 +161,13 @@ The data folder is the same one `openldr-standalone` uses. The app brings that c
 | macOS | `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone` |
 | Windows | `%LOCALAPPDATA%\Programs\OpenLDR\openldr-standalone.cmd` |
 
-On Linux and macOS the installer links it as `~/.local/bin/openldr-standalone` when that folder is on your PATH. Then `openldr-standalone` works in a new terminal. On Windows nothing is added to your PATH, so run it by its full path.
+On Linux and macOS the installer links it as `~/.local/bin/openldr-standalone` when that folder exists and is on your PATH. Then `openldr-standalone` works in a new terminal. On Windows nothing is added to your PATH, so run it by its full path.
 
 It takes the commands on [Run without Docker](/docs/standalone), without `pnpm` in front: `openldr-standalone status`, `openldr-standalone stop` and `openldr-standalone cli -- doctor`. One launcher runs per data folder. If you start OpenLDR from a terminal first, the app shows that one.
 
 ## When it will not start
 
-The app then shows **OpenLDR is not running**, the last message from OpenLDR, **The logs are in:** with the log files, and **Try again**. The log files are:
+The app then shows **OpenLDR is not running**, the last message from OpenLDR, and **Try again**. Most errors also show **The logs are in:** with the log files. The log files are:
 
 | File | Where |
 | --- | --- |
@@ -186,10 +196,10 @@ On Windows, the bundled Postgres may need the Microsoft Visual C++ runtime, and 
 
 - This computer only. The app starts OpenLDR on `127.0.0.1`, so a phone or another computer cannot reach it. [Run without Docker](/docs/standalone) shows how to open OpenLDR to other devices.
 - The app does not update itself. Run the install line again.
-- The app is not signed on macOS or Windows.
+- The app carries no publisher's signature on macOS or Windows.
 - The Windows and macOS packages are built on Linux, and nobody has run them yet.
 - On macOS, the window may open when the app starts at sign-in. That is not proven.
-- `desktop.log` grows without limit, like `server.log` and `postgres.log`. Delete it while the app is closed.
+- `desktop.log` grows without limit, like `server.log` and `postgres.log`. Delete it after you select **Quit**.
 - The limits of [Run without Docker](/docs/standalone) apply too, such as no TLS and backup by copying the stopped data folder.
 
 ## Related guides

@@ -160,7 +160,7 @@ The report describes the checks at the time they ran. All checks passed does not
 
 **Load sample data is not in the menu.** The install already holds lab data, or your role does not have the Danger zone permission. A patient, a lab request, a specimen, a result, a saved form response, an organization or a location counts as lab data.
 
-**Sample data could not be loaded:** followed by a reason. The load did not finish. Some sample data may already be in place, and then the menu no longer offers it. The server log has the reason.
+**Sample data could not be loaded:** followed by a reason. The load did not finish. Some sample data may already be in place. A second try is then refused, and the menu item is gone the next time you open the page. The server log names the error.
 
 ## Related guides
 

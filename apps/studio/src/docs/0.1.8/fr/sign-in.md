@@ -93,9 +93,9 @@ Une nouvelle installation n'a aucun compte. Tant que personne n'a créé le prem
 
 **Résultat attendu :** vous êtes connecté au nom du nouvel administrateur, avec le rôle **Administrator**, et le [Premier démarrage](/docs/first-run) s'ouvre. La page ne revient plus sur cette installation.
 
-Dans l'application OpenLDR, vous sautez l'étape 1. L'application remplit **Code de configuration**, et l'indication sous le champ dit **Rempli par l'application OpenLDR.**
-
 Relancer la commande remplace le code précédent. Tant que le premier administrateur n'existe pas, `openldr doctor` affiche un avertissement sur sa ligne Sign-in. Voir [Vérifications d'installation](/docs/setup-checks).
+
+Dans l'application OpenLDR, vous sautez les étapes 1 et 3. L'application remplit **Code de configuration**, et l'indication sous le champ dit **Rempli par l'application OpenLDR.**
 
 ## Ajouter une personne avec un mot de passe temporaire
 
@@ -176,7 +176,7 @@ openldr user end-sessions <username>
 - **Studio m'a renvoyé à la page de connexion.** La session s'est terminée. Cela arrive après 12 heures sans utilisation, après 7 jours, quand un administrateur la ferme, ou quand vous changez votre mot de passe sur un autre appareil. Reconnectez-vous.
 - **Impossible de joindre le serveur. Réessayez.** Studio ne joint pas le serveur. Vérifiez votre connexion, puis réessayez.
 - **La page de configuration dit que le code est incorrect ou a expiré.** Un code dure 30 minutes, et chaque nouveau code remplace le précédent. Relancez `openldr auth setup-code` et tapez le code le plus récent.
-- **Dans l'application OpenLDR, le champ du code de configuration est vide.** L'application ne le remplit que pour un OpenLDR qu'elle a démarré elle-même. Si OpenLDR tournait déjà quand l'application a démarré, quittez l'application et relancez-la. Ou lancez `openldr-standalone cli -- auth setup-code` et tapez le code.
+- **Dans l'application OpenLDR, le champ du code de configuration est vide.** L'application ne le remplit que pour un OpenLDR qu'elle a démarré elle-même. Sélectionnez **Quitter** dans le menu de l'icône de notification de l'application, puis relancez l'application. Elle remplit alors le code. Vous pouvez aussi lancer la commande `openldr-standalone` de l'application avec `cli -- auth setup-code`, et taper le code. Sous Linux, la commande est `~/.local/share/openldr-desktop/openldr-standalone`. Sous macOS, c'est `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone`. Sous Windows, dans PowerShell, lancez `& "$env:LOCALAPPDATA\Programs\OpenLDR\openldr-standalone.cmd" cli -- auth setup-code`. Une installation de bureau n'a pas de commande `openldr`, donc l'indication sous le champ ne s'y applique pas.
 - **La page de configuration dit que le nom d'utilisateur est déjà utilisé.** Choisissez un autre nom d'utilisateur.
 - **La page de configuration dit qu'un administrateur existe déjà.** Quelqu'un a terminé la configuration avant vous. Sélectionnez **Se connecter**.
 - **Le dernier administrateur a oublié son mot de passe.** Une personne qui a accès au serveur lance `openldr user reset-password <username> --force`. La commande affiche un mot de passe temporaire.

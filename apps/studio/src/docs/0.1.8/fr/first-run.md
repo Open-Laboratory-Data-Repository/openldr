@@ -2,7 +2,7 @@
 
 Le premier démarrage, ce sont trois courtes étapes que Studio affiche juste après la création du premier administrateur. Vous nommez le laboratoire, chargez des données d'exemple si vous le souhaitez, et voyez quelles vérifications demandent encore votre attention. Il s'adresse à la personne qui met en place une nouvelle installation.
 
-Le premier démarrage n'apparaît qu'une fois, et seulement sur une installation qui utilise la connexion propre à OpenLDR. Seule la personne qui a créé le premier administrateur le voit, dans la fenêtre où elle l'a créé. Vous pouvez passer les deux premières étapes. Ensuite, Paramètres, Vérifications d’installation garde la même liste et peut charger les données d'exemple plus tard.
+Le premier démarrage n'apparaît qu'une fois, et seulement sur une installation qui utilise la connexion propre à OpenLDR. Seule la personne qui a créé le premier administrateur le voit, dans la fenêtre ou l'onglet du navigateur où elle l'a créé. Vous pouvez passer les deux premières étapes. Ensuite, Paramètres, Vérifications d’installation garde la même liste et peut charger les données d'exemple plus tard.
 
 ## Nommer le laboratoire
 
@@ -50,14 +50,14 @@ Quand rien ne demande votre attention, la page affiche **Rien ne demande votre a
 
 - Le premier démarrage n'apparaît qu'avec la connexion propre à OpenLDR. Une installation qui se connecte par Keycloak ou par un autre fournisseur ne l'affiche jamais. Utilisez alors [Vérifications de configuration](/docs/setup-checks).
 - Il n'apparaît qu'une fois. Après **Ouvrir OpenLDR**, un lien ou une déconnexion, il ne revient pas.
-- Recharger la page en cours de route relance le premier démarrage à l'étape 1. Un nom déjà enregistré reste enregistré.
+- Recharger la page en cours de route relance le premier démarrage à l'étape 1. Un nom déjà enregistré reste enregistré. Fermer cet onglet en cours de route met fin au premier démarrage pour de bon.
 - Les données d'exemple ne sont proposées que tant que l'installation ne contient aucune donnée de laboratoire.
 
 ## Résolution de problèmes
 
 - **L'étape des données d'exemple n'est pas apparue.** L'installation contient déjà des données de laboratoire, ou Studio n'a pas pu interroger le serveur. Ouvrez Paramètres, Vérifications d’installation, et cherchez **Charger les données d'exemple** dans son menu à points.
 - **Le laboratoire n'a pas pu être enregistré :** suivi d'une raison. Sélectionnez de nouveau **Enregistrer**. Ou sélectionnez **Passer** et définissez le nom plus tard dans Paramètres, Laboratoire.
-- **Les données d'exemple n'ont pas pu être chargées :** suivi d'une raison. Le chargement ne s'est pas terminé. Une partie des données d'exemple peut déjà être en place. L'installation compte alors comme contenant des données de laboratoire, et Studio ne propose plus le chargement. Le journal du serveur indique la raison.
+- **Les données d'exemple n'ont pas pu être chargées :** suivi d'une raison. Le chargement ne s'est pas terminé. Une partie des données d'exemple peut déjà être en place. Un second essai est alors refusé, donc sélectionnez **Passer**. Le journal du serveur nomme l'erreur.
 - **Les vérifications n’ont pas pu s’exécuter :** suivi d'une raison. Sélectionnez **Ouvrir OpenLDR**. Ouvrez ensuite Paramètres, Vérifications d’installation et sélectionnez **Relancer** dans son menu à points.
 
 ## Guides associés

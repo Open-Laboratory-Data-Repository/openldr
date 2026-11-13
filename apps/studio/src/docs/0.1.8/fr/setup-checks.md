@@ -160,7 +160,7 @@ Le rapport décrit les vérifications au moment de leur exécution. All checks p
 
 **Charger les données d'exemple n'est pas dans le menu.** L'installation contient déjà des données de laboratoire, ou votre rôle n'a pas la permission Zone de danger. Un patient, une demande d'analyse, un échantillon, un résultat, une réponse de formulaire enregistrée, une organisation ou un site comptent comme données de laboratoire.
 
-**Les données d'exemple n'ont pas pu être chargées :** suivi d'une raison. Le chargement ne s'est pas terminé. Une partie des données d'exemple peut déjà être en place, et le menu ne propose alors plus le chargement. Le journal du serveur indique la raison.
+**Les données d'exemple n'ont pas pu être chargées :** suivi d'une raison. Le chargement ne s'est pas terminé. Une partie des données d'exemple peut déjà être en place. Un second essai est alors refusé, et l'élément disparaît du menu la prochaine fois que vous ouvrez la page. Le journal du serveur nomme l'erreur.
 
 ## Guides associés
 

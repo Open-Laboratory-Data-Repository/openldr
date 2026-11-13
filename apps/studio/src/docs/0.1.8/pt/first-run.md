@@ -2,7 +2,7 @@
 
 O primeiro arranque são três passos curtos que o Studio mostra logo depois de criar o primeiro administrador. Dá nome ao laboratório, carrega dados de exemplo se quiser, e vê que verificações ainda precisam de si. É para a pessoa que prepara uma instalação nova.
 
-O primeiro arranque aparece uma só vez, e só numa instalação que usa o início de sessão do próprio OpenLDR. Só a pessoa que criou o primeiro administrador o vê, na janela onde o criou. Pode saltar os dois primeiros passos. Depois, Definições, Verificações de instalação guarda a mesma lista e pode carregar os dados de exemplo mais tarde.
+O primeiro arranque aparece uma só vez, e só numa instalação que usa o início de sessão do próprio OpenLDR. Só a pessoa que criou o primeiro administrador o vê, na janela ou no separador do navegador onde o criou. Pode saltar os dois primeiros passos. Depois, Definições, Verificações de instalação guarda a mesma lista e pode carregar os dados de exemplo mais tarde.
 
 ## Dar nome ao laboratório
 
@@ -50,14 +50,14 @@ Quando nada precisa de si, a página diz **Nada precisa de si por agora. A lista
 
 - O primeiro arranque só aparece com o início de sessão do próprio OpenLDR. Uma instalação que inicia sessão através do Keycloak ou de outro fornecedor nunca o mostra. Use aí [Verificações da configuração](/docs/setup-checks).
 - Aparece uma só vez. Depois de **Abrir o OpenLDR**, de uma ligação ou de terminar sessão, não volta.
-- Recarregar a página a meio recomeça o primeiro arranque no passo 1. Um nome já guardado continua guardado.
+- Recarregar a página a meio recomeça o primeiro arranque no passo 1. Um nome já guardado continua guardado. Fechar esse separador a meio termina o primeiro arranque de vez.
 - Os dados de exemplo só são oferecidos enquanto a instalação não tiver dados de laboratório.
 
 ## Resolução de problemas
 
 - **O passo dos dados de exemplo não apareceu.** A instalação já tem dados de laboratório, ou o Studio não conseguiu perguntar ao servidor. Abra Definições, Verificações de instalação, e procure **Carregar dados de exemplo** no menu de pontos.
 - **Não foi possível guardar o laboratório:** seguido de um motivo. Selecione **Guardar** de novo. Ou selecione **Saltar** e defina o nome mais tarde em Definições, Laboratório.
-- **Não foi possível carregar os dados de exemplo:** seguido de um motivo. O carregamento não terminou. Parte dos dados de exemplo pode já estar lá. A instalação conta então como tendo dados de laboratório, e o Studio deixa de oferecer o carregamento. O registo do servidor tem o motivo.
+- **Não foi possível carregar os dados de exemplo:** seguido de um motivo. O carregamento não terminou. Parte dos dados de exemplo pode já estar lá. Uma segunda tentativa é então recusada, por isso selecione **Saltar**. O registo do servidor indica o erro.
 - **Não foi possível executar as verificações:** seguido de um motivo. Selecione **Abrir o OpenLDR**. Depois abra Definições, Verificações de instalação e selecione **Executar de novo** no menu de pontos.
 
 ## Guias relacionados

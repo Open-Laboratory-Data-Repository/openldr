@@ -16,7 +16,7 @@ There are three ways to invoke it:
 # Source checkout, from the repository root
 pnpm openldr --help
 
-# Standalone install (no Docker), through its launcher. See "The standalone launcher" below.
+# Standalone install with no Docker, through its launcher. See "The standalone launcher" below.
 openldr-standalone cli -- doctor
 ```
 
@@ -253,7 +253,7 @@ duplicates.
 
 ## The standalone launcher
 
-`openldr-standalone` runs OpenLDR on one computer with no Docker: a bundled Postgres 16 and the server, with all data in one folder. Source: `apps/standalone/src/commands.ts`. In a built checkout it is `pnpm openldr-standalone`. The desktop app installs it as a command of its own: `~/.local/share/openldr-desktop/openldr-standalone` on Linux, `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone` on macOS, `%LOCALAPPDATA%\Programs\OpenLDR\openldr-standalone.cmd` on Windows. The web docs pages "Run without Docker" (`apps/web/src/docs/0.1.8/en/standalone.md`) and "Desktop app" (`desktop-app.md`) are the full account. Only Linux has been tested.
+`openldr-standalone` runs OpenLDR on one computer with no Docker: a bundled Postgres 16 and the server, with all data in one folder. Source: `apps/standalone/src/commands.ts`. In a built checkout it is `pnpm openldr-standalone`. The desktop app installs it as a command of its own: `~/.local/share/openldr-desktop/openldr-standalone` on Linux, `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone` on macOS, `%LOCALAPPDATA%\Programs\OpenLDR\openldr-standalone.cmd` on Windows. The full account is in two web docs pages, `apps/web/src/docs/0.1.8/en/standalone.md` and `apps/web/src/docs/0.1.8/en/desktop-app.md`. Only Linux has been tested.
 
 Its help text, from `USAGE`:
 
@@ -272,11 +272,11 @@ Commands:
            --data-dir <folder> goes before the --.
 ```
 
-`--data-dir` wins over `OPENLDR_HOME`, which wins over the default folder: `~/.local/share/openldr` on Linux (`$XDG_DATA_HOME/openldr` when that holds a full path), `~/Library/Application Support/OpenLDR` on macOS, `%LOCALAPPDATA%\OpenLDR` on Windows. One launcher runs per data folder.
+`--data-dir` wins over `OPENLDR_HOME`, which wins over the default folder. The default is `~/.local/share/openldr` on Linux, `~/Library/Application Support/OpenLDR` on macOS and `%LOCALAPPDATA%\OpenLDR` on Windows. On Linux, `$XDG_DATA_HOME/openldr` replaces it when `XDG_DATA_HOME` holds a full path. One launcher runs per data folder.
 
 ### `start --events-fd <n>`
 
-A program that runs the launcher, such as the desktop app, passes a descriptor it opened. The launcher writes one JSON object and a newline to it per event. There are six shapes:
+A program that runs the launcher, such as the desktop app, passes a descriptor it opened. The launcher writes one JSON object and a newline to it per event. There are six events. `starting` comes twice, once per step:
 
 ```text
 {"event":"starting","step":"postgres"}
@@ -325,7 +325,7 @@ With `--events-fd`, `start` makes no setup code and prints none. The program ask
 This data folder was last used by OpenLDR <newer>. This is OpenLDR <older>, which is older and cannot open it. Install OpenLDR <newer> or newer.
 ```
 
-Removing `last-version.json` lets the older launcher start. That is safe only when the newer version never changed the database. Otherwise the older launcher fails later with a database error. Source: `apps/standalone/src/data-version.ts`.
+Removing `last-version.json` lets the older launcher start. That is safe only when the newer version never changed the database. Otherwise the older launcher fails with a database error, or runs on data it does not expect. Install the newer version instead. Source: `apps/standalone/src/data-version.ts`.
 
 ## Captured Terminal Output
 

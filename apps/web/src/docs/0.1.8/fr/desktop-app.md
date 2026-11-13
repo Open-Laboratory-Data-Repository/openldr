@@ -1,6 +1,6 @@
 # Application de bureau
 
-L'application de bureau OpenLDR fait tourner OpenLDR sur un seul ordinateur, dans sa propre fenêtre. Il ne faut ni Docker ni terminal. L'application démarre la base Postgres fournie et le serveur OpenLDR, affiche Studio, et arrête les deux quand vous quittez. Elle utilise le même lanceur que [Exécuter sans Docker](/docs/standalone), avec le même dossier de données.
+L'application de bureau OpenLDR fait tourner OpenLDR sur un seul ordinateur, dans sa propre fenêtre. Il ne faut ni Docker ni terminal. L'application démarre la base Postgres fournie et le serveur OpenLDR, affiche Studio, et arrête les deux quand vous quittez. Elle utilise le même lanceur que la page [Exécuter sans Docker](/docs/standalone), avec le même dossier de données.
 
 Il existe des paquets pour Linux x64, macOS sur Apple silicon et Windows x64. Seul Linux a été essayé. Les paquets Windows et macOS sont nouveaux. Ils sont construits sous Linux, et personne ne les a encore lancés sous Windows ou macOS.
 
@@ -66,9 +66,17 @@ Sous macOS, l'installateur signe l'application sur votre Mac avec `codesign`, av
 
 Le guide de Studio, **Premier démarrage**, décrit ces trois étapes. Les données d'exemple ne sont proposées que tant que l'installation ne contient aucune donnée de laboratoire. Si vous les passez, Paramètres, Vérifications d’installation peut les charger plus tard, depuis son menu à points.
 
-L'application ouvre Studio à `http://127.0.0.1:3000/studio/`. Elle prend le port 3000 s'il est libre. Sinon, elle choisit un autre port libre et le retient, pour que l'adresse reste la même ensuite.
+L'application ouvre Studio à `http://127.0.0.1:3000/studio/`. Elle prend le port 3000 s'il est libre. Sinon, elle choisit un autre port libre et le retient. L'adresse reste alors la même tant que ce port reste libre.
 
-L'application ne remplit le code de configuration que pour un OpenLDR qu'elle a démarré elle-même. OpenLDR peut déjà tourner quand l'application démarre, parce que vous l'avez lancé depuis un terminal, ou parce qu'une application arrêtée de force l'a laissé tourner. L'application affiche alors cet OpenLDR, et le champ du code reste vide. Quittez l'application et relancez-la. Ou lancez `openldr-standalone cli -- auth setup-code` et tapez le code affiché.
+L'application ne remplit le code de configuration que pour un OpenLDR qu'elle a démarré elle-même. OpenLDR peut déjà tourner quand l'application démarre. Vous l'avez peut-être lancé depuis un terminal. Ou une application arrêtée de force l'a laissé tourner. L'application affiche alors cet OpenLDR, et le champ du code reste vide.
+
+Le plus simple est de sélectionner **Quitter** dans le menu de la zone de notification, puis de relancer l'application. Elle démarre alors OpenLDR elle-même et remplit le code. Vous pouvez aussi lancer la commande `openldr-standalone` de l'application, puis taper le code affiché :
+
+| Système | Commande |
+| --- | --- |
+| Linux | `~/.local/share/openldr-desktop/openldr-standalone cli -- auth setup-code` |
+| macOS | `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone cli -- auth setup-code` |
+| Windows, dans PowerShell | `& "$env:LOCALAPPDATA\Programs\OpenLDR\openldr-standalone.cmd" cli -- auth setup-code` |
 
 ## La fenêtre et la zone de notification
 
@@ -107,11 +115,13 @@ Sous Windows, il affiche :
 X OpenLDR is running. Quit it from its tray icon, or run: & "C:\Users\you\AppData\Local\Programs\OpenLDR\openldr-standalone.cmd" stop. Then run this again.
 ```
 
-Le chemin du message est la commande `openldr-standalone` de votre installation. Lancez cette ligne, puis relancez la ligne d'installation.
+Le chemin du message est la commande `openldr-standalone` de votre installation. Quittez OpenLDR depuis son icône de notification, ou lancez cette ligne `stop`. Relancez ensuite la ligne d'installation.
+
+Si l'installateur refuse encore, une base de données laissée par un OpenLDR arrêté de force tourne peut-être toujours. `stop` dit alors `OpenLDR is not running.`, car seule la base de données reste. Démarrez l'application une fois et attendez Studio. Quand l'application démarre OpenLDR, OpenLDR arrête d'abord une base de données restée en marche sur le même dossier de données. Sélectionnez ensuite **Quitter** dans le menu de la zone de notification, puis relancez la ligne d'installation.
 
 ## Désinstaller
 
-Quittez d'abord OpenLDR. Sous Linux et macOS :
+Quittez d'abord OpenLDR. Si l'installateur refuse avec `OpenLDR is running.`, suivez les étapes de **Mettre à jour**. Sous Linux et macOS :
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/desktop.sh | bash -s -- --uninstall
@@ -125,7 +135,7 @@ Sous Windows :
 
 Cela supprime l'application et son propre dossier `OpenLDR Desktop`. Cela supprime aussi :
 
-- sous Linux, l'entrée de menu, l'entrée de démarrage à la connexion, le lien `openldr-standalone` dans `~/.local/bin` et le profil AppArmor, qui redemande le mot de passe administrateur ;
+- sous Linux, l'entrée de menu, l'entrée de démarrage à la connexion, le lien `openldr-standalone` dans `~/.local/bin` et le profil AppArmor s'il a été installé, ce qui redemande le mot de passe administrateur ;
 - sous macOS, le lien `openldr-standalone` dans `~/.local/bin` ;
 - sous Windows, le raccourci du menu Démarrer et l'entrée de démarrage à la connexion.
 
@@ -141,7 +151,7 @@ Le dossier de données reste. La dernière ligne dit où il se trouve, par exemp
 | macOS | `~/Library/Application Support/OpenLDR` | `~/Library/Application Support/OpenLDR Desktop` |
 | Windows | `%LOCALAPPDATA%\OpenLDR` | `%APPDATA%\OpenLDR Desktop` |
 
-Le dossier de données contient la base de données, les fichiers stockés, les journaux et la clé des secrets. [Exécuter sans Docker](/docs/standalone) détaille son contenu. Le dossier propre à l'application contient ses réglages (le port, le démarrage à la connexion et la taille de la fenêtre), son journal `desktop.log` et les données de navigateur de la fenêtre. Ses réglages ne contiennent aucun secret.
+Le dossier de données contient la base de données, les fichiers stockés, les journaux et la clé des secrets. [Exécuter sans Docker](/docs/standalone) détaille son contenu. Le dossier propre à l'application contient ses réglages, son journal `desktop.log` et les données de navigateur de la fenêtre. Les réglages sont le port, le démarrage à la connexion et la taille de la fenêtre. Ils ne contiennent aucun secret.
 
 Le dossier de données est le même que celui de `openldr-standalone`. L'application fournit cette commande :
 
@@ -151,13 +161,13 @@ Le dossier de données est le même que celui de `openldr-standalone`. L'applica
 | macOS | `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone` |
 | Windows | `%LOCALAPPDATA%\Programs\OpenLDR\openldr-standalone.cmd` |
 
-Sous Linux et macOS, l'installateur la relie en `~/.local/bin/openldr-standalone` quand ce dossier est dans votre PATH. `openldr-standalone` fonctionne alors dans un nouveau terminal. Sous Windows, rien n'est ajouté à votre PATH, donc lancez-la par son chemin complet.
+Sous Linux et macOS, l'installateur la relie en `~/.local/bin/openldr-standalone` quand ce dossier existe et se trouve dans votre PATH. `openldr-standalone` fonctionne alors dans un nouveau terminal. Sous Windows, rien n'est ajouté à votre PATH, donc lancez-la par son chemin complet.
 
-Elle accepte les commandes de [Exécuter sans Docker](/docs/standalone), sans `pnpm` devant : `openldr-standalone status`, `openldr-standalone stop` et `openldr-standalone cli -- doctor`. Un seul lanceur tourne par dossier de données. Si vous démarrez d'abord OpenLDR depuis un terminal, l'application affiche celui-là.
+Elle accepte les commandes de la page [Exécuter sans Docker](/docs/standalone), sans `pnpm` devant : `openldr-standalone status`, `openldr-standalone stop` et `openldr-standalone cli -- doctor`. Un seul lanceur tourne par dossier de données. Si vous démarrez d'abord OpenLDR depuis un terminal, l'application affiche celui-là.
 
 ## Quand elle ne démarre pas
 
-L'application affiche alors **OpenLDR n'est pas en cours d'exécution**, le dernier message d'OpenLDR, **Les journaux se trouvent dans :** avec les fichiers journaux, et **Réessayer**. Les fichiers journaux sont :
+L'application affiche alors **OpenLDR n'est pas en cours d'exécution**, le dernier message d'OpenLDR et **Réessayer**. La plupart des erreurs affichent aussi **Les journaux se trouvent dans :** avec les fichiers journaux. Les fichiers journaux sont :
 
 | Fichier | Emplacement |
 | --- | --- |
@@ -178,7 +188,7 @@ Lisez d'abord le message, puis les journaux. `desktop.log` est le journal de l'a
 
 Le dossier de données contient `last-version.json`, qui indique la version d'OpenLDR qui l'a démarré en dernier. Une version plus récente peut modifier la base de données d'une façon qu'une plus ancienne ne sait pas lire. Une application plus ancienne refuse donc le dossier avec le premier message ci-dessus, et ne démarre rien.
 
-Chaque démarrage écrit `last-version.json` juste avant que le serveur démarre, car le serveur peut modifier la base même s'il échoue ensuite. Supprimer ce fichier laisse démarrer l'application plus ancienne. Ce n'est sûr que si la version plus récente n'a jamais modifié la base. Dans le doute, supposez qu'elle l'a fait. L'application plus ancienne échoue alors plus tard avec une erreur de base de données. Installer la version plus récente est le retour sûr.
+Chaque démarrage écrit `last-version.json` juste avant que le serveur démarre, car le serveur peut modifier la base même s'il échoue ensuite. Supprimer ce fichier laisse démarrer l'application plus ancienne. Ce n'est sûr que si la version plus récente n'a jamais modifié la base. Dans le doute, supposez qu'elle l'a fait. L'application plus ancienne échoue alors plus tard avec une erreur de base de données. La seule voie sûre est d'installer la version plus récente.
 
 Sous Windows, le Postgres fourni peut avoir besoin du runtime Microsoft Visual C++, que le paquet ne contient pas. Ce n'est pas encore confirmé.
 
@@ -186,11 +196,11 @@ Sous Windows, le Postgres fourni peut avoir besoin du runtime Microsoft Visual C
 
 - Cet ordinateur seulement. L'application démarre OpenLDR sur `127.0.0.1`, donc un téléphone ou un autre ordinateur ne peut pas l'atteindre. [Exécuter sans Docker](/docs/standalone) montre comment ouvrir OpenLDR à d'autres appareils.
 - L'application ne se met pas à jour elle-même. Relancez la ligne d'installation.
-- L'application n'est pas signée sous macOS ni sous Windows.
+- L'application ne porte la signature d'aucun éditeur sous macOS ni sous Windows.
 - Les paquets Windows et macOS sont construits sous Linux, et personne ne les a encore lancés.
 - Sous macOS, la fenêtre peut s'ouvrir quand l'application démarre à la connexion. Ce n'est pas prouvé.
-- `desktop.log` grossit sans limite, comme `server.log` et `postgres.log`. Supprimez-le quand l'application est fermée.
-- Les limites de [Exécuter sans Docker](/docs/standalone) s'appliquent aussi, comme l'absence de TLS et la sauvegarde par copie du dossier de données arrêté.
+- `desktop.log` grossit sans limite, comme `server.log` et `postgres.log`. Supprimez-le après avoir sélectionné **Quitter**.
+- Les limites de la page [Exécuter sans Docker](/docs/standalone) s'appliquent aussi, comme l'absence de TLS et la sauvegarde par copie du dossier de données arrêté.
 
 ## Guides associés
 

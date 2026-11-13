@@ -160,7 +160,7 @@ O relatório descreve as verificações no momento da execução. All checks pas
 
 **Carregar dados de exemplo não está no menu.** A instalação já tem dados de laboratório, ou a sua função não tem a permissão Zona de perigo. Um paciente, um pedido de análise, uma amostra, um resultado, uma resposta de formulário guardada, uma organização ou um local contam como dados de laboratório.
 
-**Não foi possível carregar os dados de exemplo:** seguido de um motivo. O carregamento não terminou. Parte dos dados de exemplo pode já estar lá, e o menu deixa então de oferecer o carregamento. O registo do servidor tem o motivo.
+**Não foi possível carregar os dados de exemplo:** seguido de um motivo. O carregamento não terminou. Parte dos dados de exemplo pode já estar lá. Uma segunda tentativa é então recusada, e o item desaparece do menu da próxima vez que abrir a página. O registo do servidor indica o erro.
 
 ## Guias relacionados
 

@@ -66,9 +66,17 @@ No macOS, o instalador assina a aplicação no seu Mac com `codesign`, com uma a
 
 O guia do Studio, **Primeiro arranque**, descreve os três passos. Os dados de exemplo só são oferecidos enquanto a instalação não tiver dados de laboratório. Se os saltar, Definições, Verificações de instalação pode carregá-los mais tarde, a partir do menu de pontos.
 
-A aplicação abre o Studio em `http://127.0.0.1:3000/studio/`. Usa a porta 3000 quando está livre. Caso contrário, escolhe outra porta livre e guarda-a, para que o endereço fique o mesmo a partir daí.
+A aplicação abre o Studio em `http://127.0.0.1:3000/studio/`. Usa a porta 3000 quando está livre. Caso contrário, escolhe outra porta livre e guarda-a. O endereço fica então o mesmo enquanto essa porta estiver livre.
 
-A aplicação só preenche o código de configuração para um OpenLDR que ela própria iniciou. O OpenLDR pode já estar a funcionar quando a aplicação arranca, porque o iniciou num terminal, ou porque uma aplicação terminada à força o deixou a funcionar. A aplicação mostra então esse OpenLDR, e o campo do código fica vazio. Saia da aplicação e abra-a de novo. Ou execute `openldr-standalone cli -- auth setup-code` e escreva o código mostrado.
+A aplicação só preenche o código de configuração para um OpenLDR que ela própria iniciou. O OpenLDR pode já estar a funcionar quando a aplicação arranca. Pode tê-lo iniciado num terminal. Ou uma aplicação terminada à força deixou-o a funcionar. A aplicação mostra então esse OpenLDR, e o campo do código fica vazio.
+
+O mais simples é selecionar **Sair** no menu da área de notificação e abrir a aplicação de novo. A aplicação inicia então o OpenLDR ela própria e preenche o código. Também pode executar o comando `openldr-standalone` da aplicação, e escrever o código mostrado:
+
+| Sistema | Comando |
+| --- | --- |
+| Linux | `~/.local/share/openldr-desktop/openldr-standalone cli -- auth setup-code` |
+| macOS | `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone cli -- auth setup-code` |
+| Windows, no PowerShell | `& "$env:LOCALAPPDATA\Programs\OpenLDR\openldr-standalone.cmd" cli -- auth setup-code` |
 
 ## A janela e a área de notificação
 
@@ -107,11 +115,13 @@ No Windows, mostra:
 X OpenLDR is running. Quit it from its tray icon, or run: & "C:\Users\you\AppData\Local\Programs\OpenLDR\openldr-standalone.cmd" stop. Then run this again.
 ```
 
-O caminho na mensagem é o comando `openldr-standalone` da sua instalação. Execute essa linha, e depois a linha de instalação de novo.
+O caminho na mensagem é o comando `openldr-standalone` da sua instalação. Saia do OpenLDR pelo ícone de notificação, ou execute essa linha `stop`. Depois execute de novo a linha de instalação.
+
+Se o instalador continuar a recusar, uma base de dados deixada por um OpenLDR terminado à força pode ainda estar a funcionar. `stop` diz então `OpenLDR is not running.`, porque só resta a base de dados. Abra a aplicação uma vez e espere pelo Studio. Quando a aplicação inicia o OpenLDR, o OpenLDR para primeiro uma base de dados que tenha ficado a funcionar na mesma pasta de dados. Selecione depois **Sair** no menu da área de notificação, e execute de novo a linha de instalação.
 
 ## Remover
 
-Saia primeiro do OpenLDR. No Linux e no macOS:
+Saia primeiro do OpenLDR. Se o instalador recusar com `OpenLDR is running.`, siga os passos de **Atualizar**. No Linux e no macOS:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/desktop.sh | bash -s -- --uninstall
@@ -125,7 +135,7 @@ No Windows:
 
 Isto remove a aplicação e a pasta `OpenLDR Desktop` da própria aplicação. Remove também:
 
-- no Linux, a entrada no menu, a entrada de arranque ao entrar na sessão, a ligação `openldr-standalone` em `~/.local/bin` e o perfil AppArmor, que volta a pedir a palavra-passe de administrador;
+- no Linux, a entrada no menu, a entrada de arranque ao entrar na sessão, a ligação `openldr-standalone` em `~/.local/bin` e o perfil AppArmor, se tiver sido instalado, o que volta a pedir a palavra-passe de administrador;
 - no macOS, a ligação `openldr-standalone` em `~/.local/bin`;
 - no Windows, o atalho no menu Iniciar e a entrada de arranque ao entrar na sessão.
 
@@ -141,7 +151,7 @@ A pasta de dados fica. A última linha diz onde está, por exemplo `Your data wa
 | macOS | `~/Library/Application Support/OpenLDR` | `~/Library/Application Support/OpenLDR Desktop` |
 | Windows | `%LOCALAPPDATA%\OpenLDR` | `%APPDATA%\OpenLDR Desktop` |
 
-A pasta de dados guarda a base de dados, os ficheiros armazenados, os registos e a chave dos segredos. [Executar sem Docker](/docs/standalone) descreve o que contém. A pasta da própria aplicação guarda as definições dela (a porta, o arranque ao entrar na sessão e o tamanho da janela), o registo `desktop.log` e os dados de navegador da janela. As definições não guardam nenhum segredo.
+A pasta de dados guarda a base de dados, os ficheiros armazenados, os registos e a chave dos segredos. [Executar sem Docker](/docs/standalone) descreve o que contém. A pasta da própria aplicação guarda as definições dela, o registo `desktop.log` e os dados de navegador da janela. As definições são a porta, o arranque ao entrar na sessão e o tamanho da janela. Não guardam nenhum segredo.
 
 A pasta de dados é a mesma que o `openldr-standalone` usa. A aplicação traz esse comando:
 
@@ -151,13 +161,13 @@ A pasta de dados é a mesma que o `openldr-standalone` usa. A aplicação traz e
 | macOS | `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone` |
 | Windows | `%LOCALAPPDATA%\Programs\OpenLDR\openldr-standalone.cmd` |
 
-No Linux e no macOS, o instalador liga-o como `~/.local/bin/openldr-standalone` quando essa pasta está no seu PATH. Então `openldr-standalone` funciona num terminal novo. No Windows, nada é acrescentado ao seu PATH, por isso execute-o pelo caminho completo.
+No Linux e no macOS, o instalador liga-o como `~/.local/bin/openldr-standalone` quando essa pasta existe e está no seu PATH. Então `openldr-standalone` funciona num terminal novo. No Windows, nada é acrescentado ao seu PATH, por isso execute-o pelo caminho completo.
 
 Aceita os comandos de [Executar sem Docker](/docs/standalone), sem `pnpm` à frente: `openldr-standalone status`, `openldr-standalone stop` e `openldr-standalone cli -- doctor`. Só funciona um lançador por pasta de dados. Se iniciar primeiro o OpenLDR num terminal, a aplicação mostra esse.
 
 ## Quando não arranca
 
-A aplicação mostra então **O OpenLDR não está em execução**, a última mensagem do OpenLDR, **Os registos estão em:** com os ficheiros de registo, e **Tentar novamente**. Os ficheiros de registo são:
+A aplicação mostra então **O OpenLDR não está em execução**, a última mensagem do OpenLDR e **Tentar novamente**. A maioria dos erros mostra também **Os registos estão em:** com os ficheiros de registo. Os ficheiros de registo são:
 
 | Ficheiro | Onde |
 | --- | --- |
@@ -186,10 +196,10 @@ No Windows, o Postgres incluído pode precisar do runtime Microsoft Visual C++, 
 
 - Só este computador. A aplicação inicia o OpenLDR em `127.0.0.1`, por isso um telemóvel ou outro computador não lhe chega. [Executar sem Docker](/docs/standalone) mostra como abrir o OpenLDR a outros dispositivos.
 - A aplicação não se atualiza sozinha. Execute de novo a linha de instalação.
-- A aplicação não está assinada em macOS nem em Windows.
+- A aplicação não tem a assinatura de nenhum editor em macOS nem em Windows.
 - Os pacotes para Windows e macOS são construídos em Linux, e ainda ninguém os executou.
 - No macOS, a janela pode abrir quando a aplicação arranca ao entrar na sessão. Não está provado.
-- `desktop.log` cresce sem limite, tal como `server.log` e `postgres.log`. Apague-o com a aplicação fechada.
+- `desktop.log` cresce sem limite, tal como `server.log` e `postgres.log`. Apague-o depois de selecionar **Sair**.
 - Os limites de [Executar sem Docker](/docs/standalone) também se aplicam, como a falta de TLS e a cópia de segurança feita a copiar a pasta de dados com o OpenLDR parado.
 
 ## Guias relacionados
