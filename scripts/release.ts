@@ -1,4 +1,5 @@
-// Publishes a release: five images, a verified GitHub release, and a latest.json asset.
+// Publishes a release: five images, a verified GitHub release, a latest.json asset, and the
+// desktop packages with their SHA256SUMS.
 //
 // The value of this script is what it refuses to do. Every precondition is checked before
 // anything is pushed, and the git tag is created LAST — so a failure during verification leaves
@@ -35,6 +36,12 @@ import {
 } from '../packages/release/src/registry';
 import { parseFailedTasks, formatFailedTask, tasksNeverFinished, GATE_TURBO_ARGS } from '../packages/release/src/gate';
 import { parseThirdPartyList } from '../packages/release/src/third-party';
+import {
+  desktopAssetNames,
+  desktopPackRefusal,
+  missingDesktopAssets,
+  uploadFailureMessage,
+} from '../packages/release/src/desktop-release';
 
 const OWNER = 'Open-Laboratory-Data-Repository';
 const REPO = 'openldr';
@@ -200,8 +207,11 @@ async function gateGreen(): Promise<boolean> {
  *  gating on the alias would fail a release that is already released.
  *
  *  Closes a real gap: nothing else checks that this file is readable, and a broken asset silently
- *  disables the update check on every install in the field while the release reports success. */
-async function verifyPublishedManifest(version: string): Promise<void> {
+ *  disables the update check on every install in the field while the release reports success.
+ *
+ *  Returns null when the manifest is right, or the text to print when it is not. It does not exit:
+ *  the desktop upload can fail too, and the caller cleans up once and prints both. */
+async function verifyPublishedManifest(version: string): Promise<string | null> {
   const url = `https://github.com/${OWNER}/${REPO}/releases/download/v${version}/latest.json`;
   let problem = '';
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -217,22 +227,23 @@ async function verifyPublishedManifest(version: string): Promise<void> {
       if (!manifest) throw new Error('the asset is not a valid release manifest');
       if (manifest.version !== version) throw new Error(`the asset names ${manifest.version}`);
       console.log(`published manifest verified: ${url}`);
-      return;
+      return null;
     } catch (err) {
       problem = err instanceof Error ? err.message : String(err);
       if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 5000));
     }
   }
-  console.error(`\n⛔ the release published, but its latest.json is not readable: ${problem}`);
-  console.error(`  ${url}`);
-  console.error('Every install polls this file, so update checks stay broken until it is fixed.');
   // ⛔ No rollback here, unlike step 10. The images are public and :latest has already moved, so
   // deleting the tag would remove the record and leave the artifacts. A loud failure naming the
   // fix is more honest than a rollback that undoes the wrong half. Do not "fix" this later.
-  console.error('The tag is NOT rolled back: the images are already public, so deleting it would');
-  console.error('remove the record and leave the artifacts. Re-upload the asset instead:');
-  console.error(`  gh release upload v${version} latest.json --clobber`);
-  process.exit(1);
+  return [
+    `⛔ the release published, but its latest.json is not readable: ${problem}`,
+    `  ${url}`,
+    'Every install polls this file, so update checks stay broken until it is fixed.',
+    'The tag is NOT rolled back: the images are already public, so deleting it would',
+    'remove the record and leave the artifacts. Re-upload the asset instead:',
+    `  gh release upload v${version} latest.json --clobber`,
+  ].join('\n');
 }
 
 /** Carry out a cleanup plan for the step-9 scratch directory. `cleanupPlan` decides; this acts.
@@ -323,6 +334,23 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   console.log('preconditions clear\n');
+
+  // The desktop packages are built and checked here, before step 7 pushes anything. A failure
+  // stops the release while the same version can still be run again. The pack checks each
+  // archive's entries itself and exits non-zero on a problem. A dry run prints both commands.
+  const packRefusal = desktopPackRefusal(process.platform);
+  if (packRefusal !== null) {
+    console.error(`\nrefusing to release: ${packRefusal}`);
+    process.exit(1);
+  }
+  try {
+    run('pnpm', ['turbo', 'run', 'build', '--filter=@openldr/studio', '--filter=@openldr/standalone', '--filter=@openldr/desktop']);
+    run('pnpm', ['pack:desktop', 'all']);
+  } catch (err) {
+    console.error(`\nthe desktop packages could not be built: ${err instanceof Error ? err.message : String(err)}`);
+    console.error('nothing was pushed, so the same version can be run again once the cause is fixed.');
+    process.exit(1);
+  }
 
   // 7. Build and push all five images. This also tags :<version> alongside :latest.
   run(BASH, ['scripts/build-and-push.sh', '--tag', 'latest']);
@@ -463,12 +491,47 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // 11. Upload the desktop packages the pack wrote before step 7, then read the release back.
+  //
+  // ⛔ Outside the step-10 `try` on purpose. The release is public now, so a failed upload must
+  // not unwind the tag. It is reported with the command to finish by hand, like the manifest.
+  // The read-back is what counts, not the upload's exit code: only an asset in the "uploaded"
+  // state is on the release. `sh()` runs even in a dry run, so the read-back is guarded.
+  const failures: string[] = [];
+  const desktopOut = 'dist/desktop';
+  try {
+    run('gh', ['release', 'upload', `v${version}`, ...desktopAssetNames(version).map((name) => `${desktopOut}/v${version}/${name}`)]);
+  } catch (err) {
+    console.error(`gh release upload failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (!DRY_RUN) {
+    let published: string[] = [];
+    try {
+      published = sh('gh', ['release', 'view', `v${version}`, '--json', 'assets', '--jq', '.assets[] | select(.state == "uploaded") | .name']).split('\n');
+    } catch (err) {
+      // Cannot read the release back. Count every file as missing: a file we cannot see may not be there.
+      console.error(`could not read the assets of v${version}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    const missing = missingDesktopAssets(version, published);
+    if (missing.length > 0) failures.push(uploadFailureMessage(version, missing, desktopOut));
+  }
+
   // Skipped under --dry-run: nothing was published, so there is no asset to read.
-  if (!DRY_RUN) await verifyPublishedManifest(version);
+  if (!DRY_RUN) {
+    const manifestProblem = await verifyPublishedManifest(version);
+    if (manifestProblem !== null) failures.push(manifestProblem);
+  }
 
   // Last, after the upload: `latest.json` lives in `probe` and `gh release create` reads it from
-  // there. A dry run started no stack, so this only removes the empty directory it left.
+  // there. A dry run started no stack, so this only removes the empty directory it left. It runs
+  // after a failed upload or manifest check too: the release is public either way, and a stack
+  // left on ports 80 and 443 would block the next release's verification install.
   cleanUp(probe, cleanupPlan({ dryRun: DRY_RUN, outcome: 'released' }));
+
+  if (failures.length > 0) {
+    for (const failure of failures) console.error(`\n${failure}`);
+    process.exit(1);
+  }
 
   console.log(`\nreleased ${version}`);
 }

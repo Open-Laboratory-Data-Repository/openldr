@@ -39,9 +39,14 @@ pushed, and reports every problem at once:
    tasks it re-runs. Before this, the 0.1.10 dry run reported green with three packages cut off
    mid-run.
 
-Then it pushes the five images, checks that every package is public (it cannot make them
-public — see below), verifies by installing the published tag into a clean directory, and only
-then creates the git tag, pushes it, and cuts the GitHub release with `latest.json` attached.
+Then it builds Studio, the launcher and the desktop app, and packs the three desktop archives
+with their `SHA256SUMS` into `dist/desktop/vX.Y.Z/` (`pnpm pack:desktop all`). The pack checks
+what is inside each archive. A failure here stops the release before anything is pushed, so the
+same version can be run again. Then it pushes the five images, checks that every package is
+public (it cannot make them public, see below), verifies by installing the published tag into a
+clean directory, and only then creates the git tag, pushes it, and cuts the GitHub release with
+`latest.json` attached. Last, it uploads the three archives and `SHA256SUMS` to the release, and
+reads the release back to check all four are on it.
 
 **The tag is last on purpose.** A `vX.Y.Z` tag exists only if that release is complete and
 verified — so a failure part-way through leaves no tag, and no lab ever sees a half-release.
@@ -61,6 +66,23 @@ which nothing checks for. In both cases: check
 `https://github.com/Open-Laboratory-Data-Repository/openldr/releases` and `git ls-remote --tags
 origin` before re-running. **This rollback path has never executed** — see "What is NOT proven
 by tests".
+
+**A failed desktop upload is not rolled back.** The upload runs after the release is public. If
+it fails, or the read-back finds a file missing, the release and its tag stay. The script names
+each missing file and prints the `gh release upload vX.Y.Z ... --clobber` command to finish by
+hand, from the repo root. The `latest.json` check works the same way. The script removes the
+verification stack, prints every failure together, and exits non-zero.
+
+### The release runs on Linux
+
+From this change, `pnpm release` runs on Linux only. The pack copies symbolic links and file
+modes into the macOS and Linux archives and calls GNU tar. Windows gives it none of these. On any
+other system the release refuses after the preconditions, before anything is pushed, and says to
+run it on the Linux release machine. The release has run on Windows before. That no longer works.
+
+The pack takes several minutes. It downloads Electron and the Postgres package for macOS and
+Windows, so it needs the network. The three archives are about 515 MB, 603 MB and 566 MB, so the
+upload is about 1.7 GB. They are written to `dist/desktop/vX.Y.Z/`, which git ignores.
 
 ### Upgrade guide checklist
 
@@ -185,6 +207,14 @@ each outcome, is unit-tested in `packages/release/src/cleanup.test.ts`. The code
 guarantee of never failing the release. A dry run cannot exercise it either: once `v<version>`
 is tagged, preconditions 2 and 3 both refuse, and they run before step 9 ever creates the
 directory. The first release after this change is its first real run.
+
+The desktop packages are split the same way. `desktopPackRefusal`, `desktopAssetNames`,
+`missingDesktopAssets` and `uploadFailureMessage` are unit-tested in
+`packages/release/src/desktop-release.test.ts`. Where the pack step sits in the sequence, the
+upload, the read-back of the release's assets, and the single exit after cleanup are proven only
+by a real release. A dry run prints the build, pack and upload commands and runs none of them.
+The macOS and Windows archives are never run on the release machine. The pack checks what is
+inside them, and nothing starts them. Whether they work is not proven, and waits for the operator.
 
 What *is* unit-tested, with injected inputs: semver comparison, each precondition's refusal,
 the manifest shape, the registry probes (`tagExistsInRegistry`, `imagesWithTag`,
