@@ -49,6 +49,12 @@ export const STALL_MS = 5 * 60_000;
 export const PIPE_WAIT_MS = 3_000;
 /** How often the budget above is counted. */
 const BUDGET_TICK_MS = 100;
+/** After the process has gone, the most of its output that is read. A grandchild writing to a
+ *  caller that keeps reading would otherwise hold the slot past the budget, because time spent
+ *  waiting on the caller does not count. */
+export const AFTER_EXIT_MAX_BYTES = 4 * 1024 * 1024;
+/** At start, a request folder older than this is left over from a hard stop and is removed. */
+export const OLD_RUN_FOLDER_MS = 24 * 60 * 60 * 1000;
 /** Between `start` and `go`, the longest the body may send nothing. Uploads take no slot, so a
  *  trickle would otherwise hold a connection, an open file and a request folder for ever. */
 export const UPLOAD_IDLE_MS = 60_000;
@@ -327,6 +333,62 @@ export function createPathMasker(pairs: ReadonlyArray<readonly [real: string, pl
   };
 }
 
+/** The part of an answer stream the final wait needs. */
+export interface AnswerEnd {
+  readonly writableFinished: boolean;
+  readonly destroyed: boolean;
+  once(event: 'finish' | 'close', fn: () => void): unknown;
+  off(event: 'finish' | 'close', fn: () => void): unknown;
+}
+
+/** Waits until the answer is written out or the connection has closed. A caller that reads
+ *  nothing for `stallMs` is treated as gone: `onStall` runs and the wait ends, so a caller that
+ *  stops reading near the end cannot hold its slot for ever. */
+export function waitForAnswerEnd(res: AnswerEnd, stallMs: number, onStall: () => void): Promise<void> {
+  if (res.writableFinished || res.destroyed) return Promise.resolve();
+  return new Promise<void>((resolveWait) => {
+    const done = () => {
+      clearTimeout(timer);
+      res.off('finish', done);
+      res.off('close', done);
+      resolveWait();
+    };
+    const timer = setTimeout(() => { onStall(); done(); }, stallMs);
+    res.once('finish', done);
+    res.once('close', done);
+  });
+}
+
+/**
+ * Removes request folders left in `cli-runs` by a hard stop or a power cut. They can hold uploads,
+ * and an `ingest` upload can hold patient data. By age only: a folder last changed more than
+ * `maxAgeMs` ago goes. Only real folders that are direct children, checked with lstat, so a link
+ * is never followed out of `cli-runs`. `cli-kept` is not touched. A failure is logged with its code
+ * and the folder's own name, and stops nothing.
+ */
+export async function sweepOldRunFolders(runsRoot: string, maxAgeMs: number, logger: Pick<Logger, 'warn'>, now = Date.now()): Promise<void> {
+  const codeOf = (err: unknown) => (err as NodeJS.ErrnoException | null)?.code;
+  try {
+    const root = await lstat(runsRoot).catch((err: unknown) => {
+      if (codeOf(err) === 'ENOENT') return null;
+      throw err;
+    });
+    if (!root?.isDirectory()) return;
+    for (const name of await readdir(runsRoot)) {
+      const dir = join(runsRoot, name);
+      try {
+        const st = await lstat(dir);
+        if (!st.isDirectory() || now - st.mtimeMs <= maxAgeMs) continue;
+        await rm(dir, { recursive: true, force: true });
+      } catch (err) {
+        logger.warn({ code: codeOf(err), folder: name }, 'old cli request folder could not be removed');
+      }
+    }
+  } catch (err) {
+    logger.warn({ code: codeOf(err) }, 'old cli request folders could not be listed');
+  }
+}
+
 export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx: CliRouteContext, opts: CliRouteOptions = {}): CliRunner {
   const cfg = ctx.cfg;
   const runner = opts.runner ?? createCliRunner({ maxRunning: cfg.CLI_MAX_RUNNING ?? 2, settings: cfg as Readonly<Record<string, unknown>> });
@@ -352,6 +414,8 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
   // Stop running commands before the server stops taking requests, so each caller gets its exit
   // frame and each audit row is written before the context closes (start.ts closes the app first).
   app.addHook('preClose', async () => { await runner.close(); });
+  // Before the first request: no command of this process can be using a folder yet.
+  app.addHook('onReady', async () => { await sweepOldRunFolders(runsRoot, OLD_RUN_FOLDER_MS, ctx.logger); });
 
   const run = async (req: FastifyRequest, reply: FastifyReply) => {
     const user = req.user;
@@ -610,6 +674,9 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
           throw new Refusal(400, 'A frame came out of order.');
         }
       }
+      // The idle limit can answer 408 while a disk write is stalled, and `go` can already be read.
+      // After `go` no timer is armed, so this check cannot be overtaken. The catch only cleans up.
+      if (reply.sent) throw new Refusal(408, 'The upload timed out.');
 
       const real = new Map([...placed.values()].map((p) => [p.ref, p.path] as const));
       const handoff: ServedHandoff = {
@@ -780,10 +847,26 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
     const onStop = () => { if (processGone) givePipesUp(); };
     stop.signal.addEventListener('abort', onStop, { once: true });
 
+    // Both streams together read at most AFTER_EXIT_MAX_BYTES after the process has gone.
+    let afterExitBytes = 0;
     const pump = async (stream: NodeJS.ReadableStream, t: 'out' | 'err'): Promise<void> => {
       const masker = createPathMasker(pairs);
       try {
-        for await (const chunk of stream) await sendBytes(t, masker.push(chunk as Buffer));
+        for await (const chunk of stream) {
+          let buf = chunk as Buffer;
+          if (processGone) {
+            const room = AFTER_EXIT_MAX_BYTES - afterExitBytes;
+            if (buf.length >= room) {
+              buf = buf.subarray(0, room);
+              afterExitBytes = AFTER_EXIT_MAX_BYTES;
+              givePipesUp();
+            } else {
+              afterExitBytes += buf.length;
+            }
+          }
+          await sendBytes(t, masker.push(buf));
+          if (afterExitBytes >= AFTER_EXIT_MAX_BYTES) break;
+        }
       } catch { /* the pipe broke, or was given up on; the exit code says the rest */ }
       await sendBytes(t, masker.flush());
     };
@@ -883,12 +966,11 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
         metadata: { exitCode, interrupted: handle.interrupted },
       });
       if (!out.destroyed) out.end();
-      // The slot is held until the answer is written, so shutdown waits for it. The abandon timer
-      // still runs, so a caller that stopped reading cannot hold it for ever.
+      // The slot is held until the answer is written, so shutdown waits for it. A caller that stops
+      // reading near the end is treated as gone after STALL_MS, as anywhere else in the answer, and
+      // on shutdown the abandon timer still runs.
       const res = s.reply.raw;
-      if (!res.writableFinished && !res.destroyed) {
-        await new Promise<void>((done) => { res.once('finish', done); res.once('close', done); });
-      }
+      await waitForAnswerEnd(res, STALL_MS, stalled);
       clearTimeout(abandonTimer);
       runner.closingSignal.removeEventListener('abort', onClosing);
       // A connection kept open after the answer would hold the server's close until the caller

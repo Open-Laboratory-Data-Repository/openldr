@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -235,6 +235,17 @@ describe('checking the shape of the hand-off', () => {
     ];
     for (const b of bad) expect(() => parseHandoff(text(b)), JSON.stringify(b)).toThrow(HandoffError);
     expect(() => parseHandoff('not json')).toThrow(HandoffError);
+  });
+
+  // The server's cli-routes.test.ts checks the server builds exactly these. A field renamed on
+  // either side fails one of the two tests.
+  it('accepts every hand-off the server builds and keeps every field (shared fixture)', () => {
+    const fixture = JSON.parse(readFileSync(join(HERE, '__fixtures__', 'served-handoffs.json'), 'utf8')) as { handoffs: Record<string, object> };
+    expect(Object.keys(fixture.handoffs).sort()).toEqual(['devBypass', 'key', 'session']);
+    for (const [name, h] of Object.entries(fixture.handoffs)) {
+      const sent = { ...h, runDir };
+      expect(parseHandoff(text(sent)), name).toEqual(sent);
+    }
   });
 });
 

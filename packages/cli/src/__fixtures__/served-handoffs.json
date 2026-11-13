@@ -1,0 +1,26 @@
+{
+  "about": "The hand-off the server builds for `audit list self`, one per kind of caller. apps/server/src/cli-routes.test.ts checks the server builds exactly these, and packages/cli/src/served.test.ts checks parseHandoff keeps every field. runDir is a placeholder that each test fills.",
+  "handoffs": {
+    "key": {
+      "path": "audit list",
+      "argv": ["self"],
+      "caller": { "id": "u-bot", "username": "bot", "displayName": null, "keyName": "backup job" },
+      "runDir": "<runDir>",
+      "keptDirs": []
+    },
+    "session": {
+      "path": "audit list",
+      "argv": ["self"],
+      "caller": { "id": "u-admin", "username": "admin", "displayName": "Admin", "keyName": null },
+      "runDir": "<runDir>",
+      "keptDirs": []
+    },
+    "devBypass": {
+      "path": "audit list",
+      "argv": ["self"],
+      "caller": { "id": "dev:dev-admin", "username": "dev-admin", "displayName": "Dev Admin", "keyName": null },
+      "runDir": "<runDir>",
+      "keptDirs": []
+    }
+  }
+}

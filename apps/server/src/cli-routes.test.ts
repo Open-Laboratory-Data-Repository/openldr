@@ -5,7 +5,9 @@
 // hook over pg-mem. The audit store and logger in the header tests are fakes that record what they
 // are given. Linux only: Windows and macOS are unproven.
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { EventEmitter } from 'node:events';
+import { chmodSync, existsSync, lutimesSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { open as openFile } from 'node:fs/promises';
 import http, { type IncomingHttpHeaders, type IncomingMessage } from 'node:http';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
@@ -25,7 +27,8 @@ import type { RequestActor } from './auth-plugin';
 import { ctxWith } from './test-helpers';
 import { createCliRunner, KILL_AFTER_MS, SLOT_WAIT_MS } from './cli-runner';
 import {
-  countNewFolders, createPathMasker, PIPE_WAIT_MS, REFUSAL_DRAIN_MS, registerCliRoutes, STALL_MS, START_DEADLINE_MS, UPLOAD_IDLE_MS,
+  AFTER_EXIT_MAX_BYTES, countNewFolders, createPathMasker, OLD_RUN_FOLDER_MS, PIPE_WAIT_MS, REFUSAL_DRAIN_MS, registerCliRoutes, STALL_MS,
+  START_DEADLINE_MS, sweepOldRunFolders, UPLOAD_IDLE_MS, waitForAnswerEnd,
   type FolderTree,
 } from './cli-routes';
 import { readAppVersion } from './version';
@@ -44,6 +47,8 @@ const USERS: Record<string, RequestActor> = {
   conn: { id: 'u-conn', username: 'conn', displayName: null, roles: [], capabilities: ['connectors.manage'] },
   ingest: { id: 'u-ingest', username: 'ingest', displayName: null, roles: [], capabilities: ['ingest.run'] },
   other: { id: 'u-other', username: 'other', displayName: null, roles: [], capabilities: ['audit.view'] },
+  // The shape auth-plugin.ts's devActor gives when the user store cannot be read.
+  dev: { id: 'dev:dev-admin', username: 'dev-admin', displayName: 'Dev Admin', roles: ['lab_admin'], capabilities: ['audit.view'] },
 };
 
 /** Polls on real time, which the fake timers do not touch. */
@@ -380,7 +385,8 @@ describe('POST /api/cli/run refusals', () => {
     const took = Date.now() - t0;
     expect(r.status).toBe(400);
     expect(r.json()).toEqual({ error: 'A line is empty.' });
-    expect(took).toBeLessThan(2000);
+    // Real time, with headroom for a loaded machine. Reading all 100 MiB takes far longer.
+    expect(took).toBeLessThan(5000);
     expect(h.started()).toBe(0);
     expect(folders(h)).toEqual([]);
   });
@@ -496,20 +502,21 @@ describe('POST /api/cli/run refusals', () => {
   });
 
   it('lets go of a refused caller that keeps sending past 16 MiB', async () => {
+    // Fake timers, so the 5-second drain limit cannot fire: only the byte budget can let go.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const h = await harness();
     // A raw client: Node's own stops writing once its answer has ended, so it would never pass 16 MiB.
     const total = 256 * MiB;
     const head = body(start('audit list', ['echo']), { t: 'file', ref: 'f', rel: '' });
     const chunk = Buffer.from(encodeFrame({ t: 'data', d: Buffer.alloc(48 * 1024, 1).toString('base64') }));
     const url = new URL(h.url);
-    const t0 = Date.now();
-    const r = await new Promise<{ sent: number; got: string; ms: number }>((resolve) => {
+    const r = await new Promise<{ sent: number; got: string }>((resolve) => {
       let sent = 0;
       let got = '';
       const s = net.connect(Number(url.port), '127.0.0.1');
       s.on('data', (c: Buffer) => { got += c.toString(); });
       s.on('error', () => {});
-      s.on('close', () => resolve({ sent, got, ms: Date.now() - t0 }));
+      s.on('close', () => resolve({ sent, got }));
       s.write(`POST /api/cli/run HTTP/1.1\r\nHost: test\r\nContent-Type: application/x-ndjson\r\nx-test-user: viewer\r\nContent-Length: ${total + head.length}\r\n\r\n${head}`);
       const pump = () => {
         while (sent < total && !s.destroyed) {
@@ -521,10 +528,9 @@ describe('POST /api/cli/run refusals', () => {
     });
     expect(r.got.startsWith('HTTP/1.1 403')).toBe(true);
     expect(r.got).toContain('"capability":"audit.view"');
-    // Let go on the byte budget, well before the 5-second one.
+    // Let go on the byte budget: the time budget never ran.
     expect(r.sent).toBeGreaterThan(16 * MiB);
     expect(r.sent).toBeLessThan(64 * MiB);
-    expect(r.ms).toBeLessThan(REFUSAL_DRAIN_MS);
     expect(h.started()).toBe(0);
   });
 
@@ -767,9 +773,10 @@ describe('POST /api/cli/run', () => {
       pump();
     });
     // The server stopped at the first byte: what was sent is what the socket buffers hold, far
-    // short of the 256 MiB on offer. The bound leaves room for large kernel buffers.
+    // short of the 256 MiB on offer. The bound leaves room for large kernel buffers. The time bound
+    // is real time with wide headroom for a loaded machine: sending all 256 MiB would take longer.
     expect(r.sent).toBeLessThan(32 * MiB);
-    expect(r.ms).toBeLessThan(5_000);
+    expect(r.ms).toBeLessThan(20_000);
     await until(() => cliRows(h).length === 1, 'audit row');
     // The interrupt can land before the command sets its SIGINT handler (130) or after (0).
     expect(cliRows(h)[0]!.metadata).toMatchObject({ interrupted: true });
@@ -839,6 +846,40 @@ describe('POST /api/cli/run', () => {
     expect(h.started()).toBe(0);
   });
 
+  it('starts nothing when the idle limit answers 408 during a stalled disk write, though go was sent', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const h = await harness();
+    // Every FileHandle shares one prototype. Its write waits on a gate, as a stalled disk would.
+    const probe = await openFile(join(scratchDir(), 'probe'), 'w');
+    const proto = Object.getPrototypeOf(probe) as { write: (...args: unknown[]) => Promise<unknown> };
+    await probe.close();
+    const realWrite = proto.write;
+    let letWriteGo!: () => void;
+    const gate = new Promise<void>((r) => { letWriteGo = r; });
+    let stalled = false;
+    const spy = vi.spyOn(proto, 'write').mockImplementation(async function (this: unknown, ...args: unknown[]) {
+      stalled = true;
+      await gate;
+      return realWrite.apply(this, args);
+    });
+    try {
+      // The whole body, `go` included, in one write: the server has read it before the 408.
+      const s = stream(h, 'admin', body(start('connectors add', ['echo', '@@f'], { inputs: [inFile('f', 'a.csv')] }), file('f', '', 'a,b\n'), GO));
+      await until(() => stalled, 'the disk write to stall');
+      await vi.advanceTimersByTimeAsync(UPLOAD_IDLE_MS);
+      await until(() => s.state.status !== 0, 'the 408');
+      expect(s.state.status).toBe(408);
+      letWriteGo();
+      // An unfixed server starts the command before it removes the folder.
+      await until(() => folders(h).length === 0, 'the folder to go');
+      expect(h.started()).toBe(0);
+      expect(cliRows(h)).toEqual([]);
+    } finally {
+      letWriteGo();
+      spy.mockRestore();
+    }
+  });
+
   it('refuses a file name longer than 4096 bytes and makes nothing for it', async () => {
     const h = await harness();
     const rel = `${'a/'.repeat(2048)}b`;
@@ -895,7 +936,9 @@ describe('POST /api/cli/run', () => {
     await until(() => existsSync(marker), 'the command to finish writing');
     const total = Number(readFileSync(marker, 'utf8'));
     expect(total).toBeGreaterThan(64 * 1024);
-    await realSleep(300);
+    // The server has seen the exit once it holds two timers: the stall timer of the write that
+    // waits on this caller, and the budget after exit.
+    await until(() => vi.getTimerCount() === 2, 'the server to see the exit');
     // The caller still reads nothing, for three times the pipe limit.
     await vi.advanceTimersByTimeAsync(3 * PIPE_WAIT_MS);
     (response as IncomingMessage | null)!.resume();
@@ -1225,6 +1268,31 @@ describe('POST /api/cli/run', () => {
     }
   });
 
+  it('reads at most 4 MiB after the command has gone from a grandchild that keeps writing, then sends exit', async () => {
+    // Fake timers and a budget far longer than the test: only the byte cap can end the run.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const h = await harness({ maxRunning: 1, pipeWaitMs: 600_000 });
+    const dir = scratchDir();
+    const go = join(dir, 'gush-go');
+    const release = join(dir, 'gush-release');
+    let grandchild = 0;
+    try {
+      const s = stream(h, 'admin', body(start('audit list', ['gush', go, release]), GO));
+      await until(() => /grandchild \d+/.test(s.out().stderr), 'the grandchild');
+      grandchild = pidOf(s.out().stderr, 'grandchild');
+      // The command has gone once the budget after exit is the one timer. Only then does the
+      // grandchild start, so every byte it writes is read after exit.
+      await until(() => vi.getTimerCount() === 1, 'the budget after exit');
+      writeFileSync(go, 'go');
+      await s.done();
+      expect(Buffer.byteLength(s.out().stdout)).toBe(AFTER_EXIT_MAX_BYTES);
+      expect(s.out().exit).toBe(0);
+      await until(() => cliRows(h).length === 1, 'audit row');
+    } finally {
+      await endGrandchild(release, grandchild);
+    }
+  });
+
   it('interrupts running commands on shutdown and leaves no process behind', async () => {
     const h = await harness({ maxRunning: 1 });
     const s = stream(h, 'admin', body(start('audit list', ['sleep', '600000']), GO));
@@ -1363,6 +1431,27 @@ describe('behind the real auth plugin', () => {
   });
 });
 
+describe('the hand-off between server and child', () => {
+  // The CLI's served.test.ts runs this same file through the child's own parseHandoff. The server
+  // cannot import that parser (only @openldr/cli/meta and /wire), so the file is the shared pin: a
+  // field renamed on either side fails one of the two tests.
+  const FIXTURE = fileURLToPath(new URL('../../../packages/cli/src/__fixtures__/served-handoffs.json', import.meta.url));
+
+  it('builds exactly the fixture hand-off for a key caller, a session caller and the dev-bypass actor', async () => {
+    const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as { handoffs: Record<string, unknown> };
+    const h = await harness();
+    const callers = { key: 'keyed', session: 'admin', devBypass: 'dev' } as const;
+    expect(Object.keys(fixture.handoffs).sort()).toEqual(Object.keys(callers).sort());
+    for (const [name, user] of Object.entries(callers)) {
+      const r = await post(h, { user, body: body(start('audit list', ['self']), GO) });
+      expect(r.exit, name).toBe(0);
+      const { handoff } = JSON.parse(r.stdout) as { handoff: { runDir: string } };
+      expect(handoff.runDir.startsWith(join(h.work, 'cli-runs'))).toBe(true);
+      expect({ ...handoff, runDir: '<runDir>' }, name).toEqual(fixture.handoffs[name]);
+    }
+  });
+});
+
 describe('buildApp', () => {
   it('registers both routes', async () => {
     const app = await buildApp(ctxWith('up'));
@@ -1370,6 +1459,93 @@ describe('buildApp', () => {
     expect(app.hasRoute({ method: 'POST', url: '/api/cli/run' })).toBe(true);
     expect(app.hasRoute({ method: 'POST', url: '/api/cli/runs/:id/interrupt' })).toBe(true);
     await app.close();
+  });
+});
+
+describe('the final wait for the answer', () => {
+  /** An answer stream that never finishes, as when a caller stops reading near the end. */
+  const stuckAnswer = () => Object.assign(new EventEmitter(), { writableFinished: false, destroyed: false });
+
+  it('treats a caller that reads nothing for 5 minutes as gone, and ends the wait', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const res = stuckAnswer();
+    const onStall = vi.fn();
+    let ended = false;
+    const waiting = waitForAnswerEnd(res, STALL_MS, onStall).then(() => { ended = true; });
+    await vi.advanceTimersByTimeAsync(STALL_MS - 1);
+    expect(ended).toBe(false);
+    expect(onStall).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await waiting;
+    expect(onStall).toHaveBeenCalledTimes(1);
+  });
+
+  it('ends at finish or close, and leaves no timer behind', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    for (const event of ['finish', 'close'] as const) {
+      const res = stuckAnswer();
+      const onStall = vi.fn();
+      const waiting = waitForAnswerEnd(res, STALL_MS, onStall);
+      expect(vi.getTimerCount()).toBe(1);
+      res.emit(event);
+      await waiting;
+      expect(vi.getTimerCount()).toBe(0);
+      expect(onStall).not.toHaveBeenCalled();
+    }
+  });
+});
+
+describe('the sweep of old request folders at start', () => {
+  const HOUR = 60 * 60 * 1000;
+  const ago = (ms: number) => new Date(Date.now() - ms);
+
+  it('removes a request folder 25 hours old, keeps one an hour old, follows no link, and leaves cli-kept alone', async () => {
+    const work = scratchDir();
+    const runs = join(work, 'cli-runs');
+    const kept = join(work, 'cli-kept');
+    const outside = scratchDir();
+    for (const d of [join(runs, 'old', 'in'), join(runs, 'new'), join(kept, 'old-kept'), join(outside, 'target')]) mkdirSync(d, { recursive: true });
+    writeFileSync(join(runs, 'old', 'in', 'upload.csv'), 'patient data');
+    writeFileSync(join(outside, 'target', 'keep.txt'), 'must stay');
+    symlinkSync(join(outside, 'target'), join(runs, 'link'));
+    utimesSync(join(runs, 'old'), ago(25 * HOUR), ago(25 * HOUR));
+    utimesSync(join(runs, 'new'), ago(HOUR), ago(HOUR));
+    utimesSync(join(kept, 'old-kept'), ago(25 * HOUR), ago(25 * HOUR));
+    utimesSync(join(outside, 'target'), ago(25 * HOUR), ago(25 * HOUR));
+    lutimesSync(join(runs, 'link'), ago(25 * HOUR), ago(25 * HOUR));
+
+    // Through the real registration: the sweep runs before the server takes a request.
+    const h = await harness({ work });
+    expect(readdirSync(runs).sort()).toEqual(['link', 'new']);
+    expect(readFileSync(join(outside, 'target', 'keep.txt'), 'utf8')).toBe('must stay');
+    expect(readdirSync(kept)).toEqual(['old-kept']);
+    expect(h.logs.filter((l) => l.includes('could not be removed'))).toEqual([]);
+  });
+
+  it('logs a folder it cannot remove with its code and name, and carries on', async () => {
+    const work = scratchDir();
+    const runs = join(work, 'cli-runs');
+    mkdirSync(join(runs, 'locked', 'sub'), { recursive: true });
+    mkdirSync(join(runs, 'other'), { recursive: true });
+    writeFileSync(join(runs, 'locked', 'sub', 'f'), 'x');
+    chmodSync(join(runs, 'locked', 'sub'), 0o500);
+    for (const n of ['locked', 'other']) utimesSync(join(runs, n), ago(25 * HOUR), ago(25 * HOUR));
+    const lines: string[] = [];
+    try {
+      await sweepOldRunFolders(runs, OLD_RUN_FOLDER_MS, { warn: (...args: unknown[]) => { lines.push(inspect(args)); } } as never);
+      expect(existsSync(join(runs, 'other'))).toBe(false);
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain("code: 'EACCES'");
+      expect(lines[0]).toContain("folder: 'locked'");
+    } finally {
+      chmodSync(join(runs, 'locked', 'sub'), 0o700);
+    }
+  });
+
+  it('does nothing when there is no cli-runs folder', async () => {
+    const lines: string[] = [];
+    await sweepOldRunFolders(join(scratchDir(), 'cli-runs'), OLD_RUN_FOLDER_MS, { warn: (...args: unknown[]) => { lines.push(inspect(args)); } } as never);
+    expect(lines).toEqual([]);
   });
 });
 

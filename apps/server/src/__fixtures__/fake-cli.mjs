@@ -2,7 +2,7 @@
 // the real CLI: the hand-off arrives as JSON on descriptor 3, and OPENLDR_SERVED_FD is '3'. It
 // touches no database. The first word of the hand-off's argv picks what it does.
 import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, closeSync, fstatSync, lstatSync, mkdirSync, readdirSync, readFileSync, readSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, existsSync, fstatSync, lstatSync, mkdirSync, readdirSync, readFileSync, readSync, symlinkSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import { dirname, join } from 'node:path';
 
@@ -141,8 +141,32 @@ switch (mode) {
   case 'chatty': {
     // Leaves a process behind that writes a line to this one's standard output every 100 ms, so
     // the pipe is never quiet, until the given file exists (the test makes it), or two minutes.
-    const code = "const fs = require('fs'); setInterval(() => { if (fs.existsSync(process.argv[1])) process.exit(0); process.stdout.write('tick\\n'); }, 100); setTimeout(() => process.exit(0), 120000);";
-    const child = spawn(process.execPath, ['-e', code, rest[0]], {
+    // This process exits only after the first tick, which the grandchild marks with a file beside
+    // the given one, so a slow start under load cannot leave the pipe quiet after the exit.
+    const ticked = `${rest[0]}.ticked`;
+    const code = "const fs = require('fs'); setInterval(() => { if (fs.existsSync(process.argv[1])) process.exit(0); process.stdout.write('tick\\n'); fs.writeFileSync(process.argv[2], 'ticked'); }, 100); setTimeout(() => process.exit(0), 120000);";
+    const child = spawn(process.execPath, ['-e', code, rest[0], ticked], {
+      stdio: ['ignore', 'inherit', 'inherit'],
+      detached: true,
+    });
+    process.stderr.write(`grandchild ${child.pid}\n`);
+    child.unref();
+    const waitTick = setInterval(() => { if (existsSync(ticked)) { clearInterval(waitTick); process.exit(0); } }, 10);
+    break;
+  }
+  case 'gush': {
+    // Leaves a process behind that holds this one's standard output and, once the first file exists
+    // (the test makes it after this process has gone), writes to it as fast as the pipe takes it,
+    // until the second file exists, the pipe breaks, or two minutes.
+    const code = [
+      "const fs = require('fs'); const [go, release] = process.argv.slice(1);",
+      'const piece = Buffer.alloc(64 * 1024, 103);',
+      "process.stdout.on('error', () => process.exit(0));",
+      "const write = () => { if (fs.existsSync(release)) process.exit(0); if (process.stdout.write(piece)) setImmediate(write); else process.stdout.once('drain', write); };",
+      'const wait = setInterval(() => { if (fs.existsSync(release)) process.exit(0); if (fs.existsSync(go)) { clearInterval(wait); write(); } }, 20);',
+      'setTimeout(() => process.exit(0), 120000);',
+    ].join(' ');
+    const child = spawn(process.execPath, ['-e', code, rest[0], rest[1]], {
       stdio: ['ignore', 'inherit', 'inherit'],
       detached: true,
     });
