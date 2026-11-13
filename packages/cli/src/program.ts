@@ -59,6 +59,7 @@ import {
 } from './patients';
 import { runQueryExport, runQueryImport } from './query';
 import { setActorOverride } from './cli-actor';
+import { guardServed } from './served';
 import { runCommandsList } from './command-list';
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
@@ -1453,6 +1454,9 @@ export function buildProgram(): Command {
     .option('--json', 'emit JSON', false)
     .action((opts: { json: boolean }) => { process.exitCode = runCommandsList(program, opts); });
 
+  // Served mode only: refuse, before any action, a command the server did not check. Does nothing
+  // when the server did not start this process.
+  program.hook('preAction', (_root, actionCommand) => guardServed(program, actionCommand));
   program.hook('preAction', () => setActorOverride(program.opts().actor as string | undefined));
 
   return program;

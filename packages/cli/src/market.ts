@@ -4,6 +4,7 @@ import { createInternalDb, createMarketplaceInstallStore } from '@openldr/db';
 import { readBundle, verifyBundle, type Bundle } from '@openldr/marketplace';
 import { isNewerVersion } from '@openldr/core';
 import { redactError } from './redact-error';
+import { callerName } from './cli-actor';
 
 interface JsonOpt {
   json: boolean;
@@ -13,7 +14,8 @@ function emit(json: boolean, payload: unknown, human: string): void {
   process.stdout.write(json ? JSON.stringify(payload, null, 2) + '\n' : human + '\n');
 }
 
-const cliActor = { name: 'cli' } as const;
+/** Who did it, for the plugin and marketplace stores: the signed-in account in served mode, 'cli' otherwise. */
+const actor = (): { name: string } => ({ name: callerName() });
 
 // ---------------------------------------------------------------------------
 // verify
@@ -72,7 +74,7 @@ async function installOrUpdate(dir: string, opts: InstallOpts, mode: Mode): Prom
   const approval =
     opts.approve
       ? {
-          approvedBy: opts.approvedBy ?? 'cli',
+          approvedBy: opts.approvedBy ?? callerName(),
           acknowledgedCapabilities: bundle.manifest.capabilities,
         }
       : undefined;
@@ -89,7 +91,7 @@ async function installOrUpdate(dir: string, opts: InstallOpts, mode: Mode): Prom
     }
     const installed = await ctx.plugins.install(bundle.wasm, bundle.raw, {
       publicKeyDer: bundle.publicKeyDer,
-      actor: cliActor,
+      actor: actor(),
       ui: bundle.ui,
       approval,
     });
@@ -121,7 +123,7 @@ async function installForm(
       return 0;
     }
     const installed = await ctx.marketplaceForms.install(bundle, {
-      actor: cliActor,
+      actor: actor(),
       approval,
     });
     emit(opts.json, { id: installed.id, version: installed.version }, `installed ${installed.id}@${installed.version}`);
@@ -180,7 +182,7 @@ async function installPack(
         return 1;
       }
     }
-    const result = await ctx.marketplacePacks.install(bundle, { actor: { id: null, name: 'cli' } });
+    const result = await ctx.marketplacePacks.install(bundle, { actor: { id: null, name: callerName() } });
     if (result.status === 'failed') {
       if (opts.json) emit(true, result, '');
       else process.stderr.write(`failed at step ${result.failedStep}: ${redactError(result.error)}\n`);
@@ -266,7 +268,7 @@ export async function runMarketRollback(
 ): Promise<number> {
   const ctx = await createIngestContext(loadConfig());
   try {
-    await ctx.plugins.rollback(id, version, { actor: cliActor });
+    await ctx.plugins.rollback(id, version, { actor: actor() });
     emit(opts.json, { id, version, rolledBack: true }, `rolled back ${id} to ${version}`);
     return 0;
   } catch (err) {
@@ -284,7 +286,7 @@ export async function runMarketRollback(
 export async function runMarketEnable(id: string, opts: JsonOpt): Promise<number> {
   const ctx = await createIngestContext(loadConfig());
   try {
-    await ctx.plugins.setEnabled(id, true, { actor: cliActor });
+    await ctx.plugins.setEnabled(id, true, { actor: actor() });
     emit(opts.json, { id, enabled: true }, `enabled ${id}`);
     return 0;
   } catch (err) {
@@ -298,7 +300,7 @@ export async function runMarketEnable(id: string, opts: JsonOpt): Promise<number
 export async function runMarketDisable(id: string, opts: JsonOpt): Promise<number> {
   const ctx = await createIngestContext(loadConfig());
   try {
-    await ctx.plugins.setEnabled(id, false, { actor: cliActor });
+    await ctx.plugins.setEnabled(id, false, { actor: actor() });
     emit(opts.json, { id, enabled: false }, `disabled ${id}`);
     return 0;
   } catch (err) {
@@ -320,7 +322,7 @@ export async function runMarketRemove(
 ): Promise<number> {
   const ctx = await createIngestContext(loadConfig());
   try {
-    await ctx.plugins.remove(id, version, { actor: cliActor });
+    await ctx.plugins.remove(id, version, { actor: actor() });
     emit(
       opts.json,
       { removed: id, version: version ?? 'all' },

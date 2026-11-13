@@ -17,6 +17,7 @@ import { createWasmConverter, createExtismRunner, type PluginRunner } from '@ope
 import { createIngestContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { redactError } from './redact-error';
+import { callerName } from './cli-actor';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -212,13 +213,13 @@ export async function runArtifactPublish(
       try {
         const approval = opts.approve
           ? {
-              approvedBy: opts.approvedBy ?? 'cli',
+              approvedBy: opts.approvedBy ?? callerName(),
               acknowledgedCapabilities: bundle.manifest.capabilities,
             }
           : undefined;
         const installed = await ctx.plugins.install(bundle.wasm, bundle.raw, {
           publicKeyDer: bundle.publicKeyDer,
-          actor: { name: 'cli' },
+          actor: { name: callerName() },
           ui: bundle.ui,
           approval,
         });

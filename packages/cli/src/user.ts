@@ -6,7 +6,7 @@ import {
   UnknownAccessKeyError,
 } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
-import { cliActor } from './cli-actor';
+import { cliActor, cliNamedActor } from './cli-actor';
 
 interface JsonOpt {
   json: boolean;
@@ -286,7 +286,7 @@ export async function runUserSetStatus(id: string, status: 'active' | 'disabled'
   const ctx = await createAppContext(loadConfig());
   try {
     try {
-      await setAccountStatus(ctx, { localId: id }, status === 'active', { ...cliActor(), actorName: 'cli' });
+      await setAccountStatus(ctx, { localId: id }, status === 'active', cliNamedActor());
     } catch (error) {
       if (!(error instanceof AccountNotFoundError)) throw error;
       emit(opts.json, { error: 'user not found' }, `user ${id} not found`);
