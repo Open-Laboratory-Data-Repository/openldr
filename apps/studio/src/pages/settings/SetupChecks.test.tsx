@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import i18n from '@/i18n';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, runSetupChecks: vi.fn() };
+  return { ...actual, runSetupChecks: vi.fn(), fetchSampleDataAllowed: vi.fn(), loadSampleData: vi.fn() };
 });
 import * as api from '@/api';
 import { SetupChecks } from './SetupChecks';
@@ -23,7 +23,26 @@ const page = () => render(<MemoryRouter><SetupChecks /></MemoryRouter>);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(api.fetchSampleDataAllowed).mockResolvedValue(false);
+  vi.mocked(api.loadSampleData).mockResolvedValue(undefined);
 });
+
+/** Opens the page's dots menu once the checks and the sample data answer are in. */
+async function openMenu() {
+  await screen.findByTestId('setup-check-adapters');
+  await waitFor(() => expect(api.fetchSampleDataAllowed).toHaveBeenCalledTimes(1));
+  await act(async () => {});
+  const trigger = screen.getByTestId('setup-menu');
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
+  await screen.findByTestId('setup-run-again');
+}
+
+async function openSampleConfirm() {
+  await openMenu();
+  await act(async () => { fireEvent.click(screen.getByTestId('setup-load-sample')); });
+  return within(await screen.findByRole('alertdialog'));
+}
 
 describe('SetupChecks', () => {
   it('runs the checks when it opens and shows each one with its status', async () => {
@@ -86,6 +105,65 @@ describe('SetupChecks', () => {
     (api.runSetupChecks as any).mockRejectedValue(new Error('run setup checks failed: 500'));
     page();
     expect((await screen.findByTestId('setup-error')).textContent).toContain('500');
+  });
+
+  describe('Load sample data', () => {
+    beforeEach(() => {
+      (api.runSetupChecks as any).mockResolvedValue(report);
+    });
+
+    it('is not in the menu when the server does not allow a load', async () => {
+      page();
+      await openMenu();
+      expect(screen.queryByTestId('setup-load-sample')).toBeNull();
+    });
+
+    it('is not in the menu when the question fails', async () => {
+      vi.mocked(api.fetchSampleDataAllowed).mockRejectedValue(new Error('check sample data failed: 403'));
+      page();
+      await openMenu();
+      expect(screen.queryByTestId('setup-load-sample')).toBeNull();
+    });
+
+    it('is in the menu when the server allows a load', async () => {
+      vi.mocked(api.fetchSampleDataAllowed).mockResolvedValue(true);
+      page();
+      await openMenu();
+      expect(screen.getByTestId('setup-load-sample').textContent).toBe('Load sample data');
+    });
+
+    it('asks first with the first run sentence; confirming loads once, hides the item and runs the checks again', async () => {
+      vi.mocked(api.fetchSampleDataAllowed).mockResolvedValue(true);
+      page();
+      const dialog = await openSampleConfirm();
+      expect(dialog.getByText(/made-up patient and laboratory/)).toBeTruthy();
+      await act(async () => { fireEvent.click(dialog.getByRole('button', { name: 'Load sample data' })); });
+      await waitFor(() => expect(api.runSetupChecks).toHaveBeenCalledTimes(2));
+      expect(api.loadSampleData).toHaveBeenCalledTimes(1);
+      await openMenu();
+      expect(screen.queryByTestId('setup-load-sample')).toBeNull();
+    });
+
+    it('cancelling loads nothing', async () => {
+      vi.mocked(api.fetchSampleDataAllowed).mockResolvedValue(true);
+      page();
+      const dialog = await openSampleConfirm();
+      await act(async () => { fireEvent.click(dialog.getByRole('button', { name: 'Cancel' })); });
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+      expect(api.loadSampleData).not.toHaveBeenCalled();
+      expect(api.runSetupChecks).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows the server\'s sentence when the load fails, and keeps the item', async () => {
+      vi.mocked(api.fetchSampleDataAllowed).mockResolvedValue(true);
+      vi.mocked(api.loadSampleData).mockRejectedValue(new Error('load sample data failed: This install already holds lab data · has_lab_data'));
+      page();
+      const dialog = await openSampleConfirm();
+      await act(async () => { fireEvent.click(dialog.getByRole('button', { name: 'Load sample data' })); });
+      expect((await screen.findByTestId('setup-sample-error')).textContent).toContain('already holds lab data');
+      expect(api.loadSampleData).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('setup-check-adapters')).toBeTruthy();
+    });
   });
 
   it('has a title for every check and text for every hint, in every language', () => {

@@ -2,19 +2,26 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { LoadingState } from '@/components/ui/spinner';
 import { SetupCheckRow } from '@/components/setup/SetupCheckRow';
-import { runSetupChecks, type SetupReport } from '@/api';
+import { fetchSampleDataAllowed, loadSampleData, runSetupChecks, type SetupReport } from '@/api';
 import { SettingsHeader } from './SettingsHeader';
 
 /** Settings > Setup checks: what this install still needs before it is ready. Runs when it opens;
- *  the page menu runs it again. The same list as `openldr doctor`. */
+ *  the page menu runs it again. The same list as `openldr doctor`. The menu also loads sample
+ *  data while the server allows it, so a person who left the first run early can still do it. */
 export function SetupChecks(): JSX.Element {
   const { t } = useTranslation();
   const [report, setReport] = useState<SetupReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  // Shown only when the server says a load is allowed. A failure or a 403 hides it.
+  const [sampleAllowed, setSampleAllowed] = useState(false);
+  const [confirmSample, setConfirmSample] = useState(false);
+  const [sampleLoading, setSampleLoading] = useState(false);
+  const [sampleError, setSampleError] = useState<string | null>(null);
 
   const run = useCallback(async () => {
     setRunning(true);
@@ -30,6 +37,32 @@ export function SetupChecks(): JSX.Element {
   }, []);
 
   useEffect(() => { void run(); }, [run]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchSampleDataAllowed().then(
+      (a) => { if (!cancelled) setSampleAllowed(a); },
+      () => { if (!cancelled) setSampleAllowed(false); },
+    );
+    return () => { cancelled = true; };
+  }, []);
+
+  async function loadSample() {
+    setConfirmSample(false);
+    if (sampleLoading) return;
+    setSampleLoading(true);
+    setSampleError(null);
+    try {
+      await loadSampleData();
+    } catch (e) {
+      setSampleError(t('firstRun.sample.failed', { error: e instanceof Error ? e.message : String(e) }));
+      setSampleLoading(false);
+      return;
+    }
+    setSampleLoading(false);
+    setSampleAllowed(false);
+    void run();
+  }
 
   const failed = report?.checks.filter((c) => c.status === 'fail').length ?? 0;
   const warned = report?.checks.filter((c) => c.status === 'warn').length ?? 0;
@@ -49,13 +82,25 @@ export function SetupChecks(): JSX.Element {
               <DropdownMenuItem data-testid="setup-run-again" disabled={running} onSelect={() => { void run(); }}>
                 {t('settings.setup.runAgain')}
               </DropdownMenuItem>
+              {sampleAllowed && (
+                <DropdownMenuItem data-testid="setup-load-sample" disabled={sampleLoading} onSelect={() => setConfirmSample(true)}>
+                  {t('firstRun.sample.load')}
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         }
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto text-sm">
-        {running ? (
+        {sampleError && (
+          <div role="alert" className="break-words px-4 py-4 text-destructive" data-testid="setup-sample-error">
+            {sampleError}
+          </div>
+        )}
+        {sampleLoading ? (
+          <LoadingState className="min-h-[16rem] flex-1" label={t('firstRun.sample.loading')} />
+        ) : running ? (
           <LoadingState className="min-h-[16rem] flex-1" label={t('settings.setup.running')} />
         ) : error ? (
           <div className="px-4 py-4 text-destructive" data-testid="setup-error">
@@ -78,6 +123,16 @@ export function SetupChecks(): JSX.Element {
           </>
         ) : null}
       </div>
+
+      <ConfirmDialog
+        open={confirmSample}
+        onOpenChange={setConfirmSample}
+        title={t('firstRun.sample.title')}
+        description={t('firstRun.sample.intro')}
+        confirmLabel={t('firstRun.sample.load')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => { void loadSample(); }}
+      />
     </div>
   );
 }

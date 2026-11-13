@@ -22,12 +22,12 @@ function browserTimeZone(): string {
 
 /**
  * The time zones to pick from: the browser's own zone first, then a stored zone the list does not
- * hold, then every zone the browser knows. Where `Intl.supportedValuesOf` is missing, the list is
- * the browser's zone and UTC.
+ * hold, then UTC, then every zone the browser knows. `Intl.supportedValuesOf` does not list UTC, so
+ * it is added here. Each zone appears once.
  */
 export function timeZoneOptions(stored: string): ComboboxOption[] {
-  const known = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : ['UTC'];
-  const zones = [browserTimeZone(), ...(stored ? [stored] : []), ...known];
+  const known = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
+  const zones = [browserTimeZone(), ...(stored ? [stored] : []), 'UTC', ...known];
   return [...new Set(zones)].map((z) => ({ value: z, label: z }));
 }
 
@@ -35,6 +35,8 @@ export function timeZoneOptions(stored: string): ComboboxOption[] {
 export function LabStep({ onNext }: { onNext: () => void }): JSX.Element {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
+  // Set when the stored values could not be read. Save then sends a name only if one was typed.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [name, setName] = useState('');
   const [stored, setStored] = useState('');
   const [zone, setZone] = useState(browserTimeZone);
@@ -49,7 +51,7 @@ export function LabStep({ onNext }: { onNext: () => void }): JSX.Element {
       setName(r.values[NAME_KEY] ?? '');
       const z = (r.values[TIMEZONE_KEY] ?? '').trim();
       if (z) { setStored(z); setZone(z); }
-    }, () => {}).finally(() => { if (!cancelled) setLoading(false); });
+    }, () => { if (!cancelled) setLoadFailed(true); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
@@ -60,8 +62,12 @@ export function LabStep({ onNext }: { onNext: () => void }): JSX.Element {
     if (saving) return;
     setSaving(true);
     setMessage(null);
+    // An empty name after a failed load would overwrite a stored one the person never saw.
+    const trimmed = name.trim();
+    const values: Record<string, string> = { [TIMEZONE_KEY]: zone };
+    if (!loadFailed || trimmed) values[NAME_KEY] = trimmed;
     try {
-      await saveLabIdentity({ [NAME_KEY]: name.trim(), [TIMEZONE_KEY]: zone });
+      await saveLabIdentity(values);
     } catch (err) {
       setMessage(t('firstRun.lab.saveFailed', { error: err instanceof Error ? err.message : String(err) }));
       setSaving(false);

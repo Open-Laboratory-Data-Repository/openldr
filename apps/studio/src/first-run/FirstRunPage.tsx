@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/spinner';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { fetchSampleDataAllowed } from '@/api';
@@ -43,7 +44,13 @@ export function FirstRunPage({ onDone }: { onDone: () => void }): JSX.Element {
       <div className="flex max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-sm flex-col gap-4 rounded-lg border border-border bg-card p-4 text-sm text-foreground shadow-sm sm:p-6">
         <p className="text-xs text-muted-foreground">{t('firstRun.stepOf', { step: number, total: TOTAL })}</p>
         {shown === 'lab' && <LabStep onNext={() => setStep('after-lab')} />}
-        {shown === 'after-lab' && <LoadingState className="min-h-[6rem]" />}
+        {shown === 'after-lab' && (
+          <>
+            <LoadingState className="min-h-[6rem]" />
+            {/* The answer may never come. The person can still go on. */}
+            <Button type="button" variant="ghost" onClick={() => setStep('ready')}>{t('firstRun.skip')}</Button>
+          </>
+        )}
         {shown === 'sample' && <SampleDataStep onNext={() => setStep('ready')} />}
         {shown === 'ready' && <ReadyStep onDone={onDone} />}
       </div>

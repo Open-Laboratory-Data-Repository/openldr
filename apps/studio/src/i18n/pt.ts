@@ -52,7 +52,7 @@ export const pt: EnShape = {
     },
     sample: {
       title: 'Dados de exemplo',
-      intro: 'Os dados de exemplo acrescentam um doente e um laboratório fictícios, com formulários, fluxos de trabalho e painéis, para experimentar o OpenLDR antes de chegarem dados reais.',
+      intro: 'Os dados de exemplo acrescentam um paciente e um laboratório fictícios, com formulários, fluxos de trabalho e painéis, para experimentar o OpenLDR antes de chegarem dados reais.',
       load: 'Carregar dados de exemplo',
       loading: 'A carregar os dados de exemplo…',
       failed: 'Não foi possível carregar os dados de exemplo: {{error}}',

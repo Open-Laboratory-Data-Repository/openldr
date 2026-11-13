@@ -113,6 +113,43 @@ describe('FirstRunPage, step 1', () => {
     }
   });
 
+  it('offers UTC once, after the browser zone, though Intl.supportedValuesOf does not list it', () => {
+    browserZone('Pacific/Fiji');
+    const values = timeZoneOptions('').map((o) => o.value);
+    expect(values[0]).toBe('Pacific/Fiji');
+    expect(values.filter((v) => v === 'UTC')).toHaveLength(1);
+    expect(values.indexOf('UTC')).toBe(1);
+  });
+
+  it('offers UTC only once when it is the browser zone', () => {
+    browserZone('UTC');
+    const values = timeZoneOptions('UTC').map((o) => o.value);
+    expect(values[0]).toBe('UTC');
+    expect(values.filter((v) => v === 'UTC')).toHaveLength(1);
+  });
+
+  it('a failed load leaves the stored name alone: Save without typing sends no name', async () => {
+    vi.mocked(api.fetchLabIdentity).mockRejectedValue(new Error('load lab identity failed: 500'));
+    page();
+    await screen.findByLabelText('Name');
+    fireEvent.click(button('Save'));
+    await screen.findByRole('heading', { name: 'Sample data' });
+    expect(api.saveLabIdentity).toHaveBeenCalledTimes(1);
+    const sent = vi.mocked(api.saveLabIdentity).mock.calls[0]![0] as Record<string, string>;
+    expect(Object.keys(sent)).toEqual(['lab.timezone']);
+  });
+
+  it('a failed load still sends a name the person typed', async () => {
+    vi.mocked(api.fetchLabIdentity).mockRejectedValue(new Error('load lab identity failed: 500'));
+    page();
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: '  Mbeya Lab ' } });
+    fireEvent.click(button('Save'));
+    await screen.findByRole('heading', { name: 'Sample data' });
+    const sent = vi.mocked(api.saveLabIdentity).mock.calls[0]![0] as Record<string, string>;
+    expect(sent['lab.name']).toBe('Mbeya Lab');
+    expect(Object.keys(sent).sort()).toEqual(['lab.name', 'lab.timezone']);
+  });
+
   it('keeps a stored zone the list does not hold', () => {
     browserZone('Pacific/Fiji');
     const values = timeZoneOptions('Old/Zone').map((o) => o.value);
@@ -149,6 +186,18 @@ describe('FirstRunPage, skipping', () => {
     expect(await screen.findByRole('heading', { name: 'You are ready' })).toBeInTheDocument();
     expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Sample data' })).toBeNull();
+  });
+
+  it('shows Skip under the spinner while the question has no answer, and Skip goes to step 3', async () => {
+    vi.mocked(api.fetchSampleDataAllowed).mockReturnValue(new Promise<boolean>(() => {}));
+    page();
+    await skipLab();
+    expect(screen.getByText('Step 2 of 3')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    fireEvent.click(button('Skip'));
+    expect(await screen.findByRole('heading', { name: 'You are ready' })).toBeInTheDocument();
+    expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
+    expect(api.loadSampleData).not.toHaveBeenCalled();
   });
 
   it('goes from step 1 straight to step 3 when the question fails', async () => {
