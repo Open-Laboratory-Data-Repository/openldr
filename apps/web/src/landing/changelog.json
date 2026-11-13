@@ -6,6 +6,270 @@
       "version": null,
       "entries": [
         {
+          "hash": "20c40351",
+          "type": "fix",
+          "scope": "cli-run",
+          "title": "Say when OpenLDR stopped a command, read the answer to its end, whoami on a disabled account, refuse --approved-by first"
+        },
+        {
+          "hash": "255f58c0",
+          "type": "fix",
+          "scope": "install",
+          "title": "The PowerShell wrapper runs in its own folder, and the CLI_ENTRY example works"
+        },
+        {
+          "hash": "b60bf507",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Date picker survives an impossible date, key field copy and spell check, two wordings"
+        },
+        {
+          "hash": "c5f80b8b",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Say a refused key was refused, time out small requests, guard the session file and key inputs"
+        },
+        {
+          "hash": "3a5276a7",
+          "type": "fix",
+          "scope": "cli-run",
+          "title": "Time the final wait, cap output after exit, sweep old request folders, pin the hand-off"
+        },
+        {
+          "hash": "dad5239c",
+          "type": "fix",
+          "scope": "security",
+          "title": "Gate the terminology worker, sign-in by matched route, one account may not hold every command slot"
+        },
+        {
+          "hash": "720d64f9",
+          "type": "fix",
+          "scope": "install",
+          "title": "Check the port before the second reset in the dev script"
+        },
+        {
+          "hash": "f2c55967",
+          "type": "fix",
+          "scope": "install",
+          "title": "Load sample data only when the script's own API is the one listening"
+        },
+        {
+          "hash": "3032eaa4",
+          "type": "fix",
+          "scope": "install",
+          "title": "Check the port before anything, and load only into the script's own API"
+        },
+        {
+          "hash": "18cf84b3",
+          "type": "fix",
+          "scope": "install",
+          "title": "Resolve the wrapper's folder on disk, and keep the old link until the new file is in place"
+        },
+        {
+          "hash": "f28dced6",
+          "type": "fix",
+          "scope": "install",
+          "title": "Stop the dev script when an API already answers"
+        },
+        {
+          "hash": "5b2262f0",
+          "type": "fix",
+          "scope": "install",
+          "title": "Follow a link to the wrapper, and never move the wrapper into a folder"
+        },
+        {
+          "hash": "64d0f44b",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Seed in two steps, and keep plain HTTP off for a caller's own address"
+        },
+        {
+          "hash": "23d233bb",
+          "type": "fix",
+          "scope": "install",
+          "title": "Replace the wrapper through a temporary file"
+        },
+        {
+          "hash": "8c2cbc78",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Send database commands through the app by default"
+        },
+        {
+          "hash": "82803460",
+          "type": "fix",
+          "scope": "install",
+          "title": "Give each install its own session file and a way to refresh the wrapper"
+        },
+        {
+          "hash": "76d580e4",
+          "type": "feat",
+          "scope": "install",
+          "title": "Pass a key or a session to the CLI in the container"
+        },
+        {
+          "hash": "099b6fcd",
+          "type": "fix",
+          "scope": "server",
+          "title": "Bound a grandchild that keeps a command's output open"
+        },
+        {
+          "hash": "f4e20179",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Check where an uploaded file really is, not only which file it is"
+        },
+        {
+          "hash": "25e49522",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Check each uploaded file again when it is opened"
+        },
+        {
+          "hash": "46d11570",
+          "type": "fix",
+          "scope": "server",
+          "title": "Count upload folders cheaply and keep a slow caller's output"
+        },
+        {
+          "hash": "4cdab9d3",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Sign in, sign out and whoami"
+        },
+        {
+          "hash": "48ec0ead",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Keep a folder upload inside the folder the caller named"
+        },
+        {
+          "hash": "4559af46",
+          "type": "fix",
+          "scope": "server",
+          "title": "Bound what a caller can send to the run endpoint"
+        },
+        {
+          "hash": "00b4e75b",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Send a command through the app"
+        },
+        {
+          "hash": "22b96351",
+          "type": "feat",
+          "scope": "server",
+          "title": "Run a CLI command as a signed-in caller"
+        },
+        {
+          "hash": "72a72530",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Close two path holes in served mode and record the account for plugin commands"
+        },
+        {
+          "hash": "939eb526",
+          "type": "fix",
+          "scope": "rbac",
+          "title": "Import start and resume also need ingest.run"
+        },
+        {
+          "hash": "af1f836a",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Run a command handed over by the server"
+        },
+        {
+          "hash": "c94c0fe0",
+          "type": "fix",
+          "scope": "rbac",
+          "title": "Let a command need a second key, and mark sync import destructive"
+        },
+        {
+          "hash": "9e27ca3d",
+          "type": "feat",
+          "scope": "rbac",
+          "title": "A capability for every CLI command"
+        },
+        {
+          "hash": "c6c799a2",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Close a path escape in artifact publish and finish the command table"
+        },
+        {
+          "hash": "b6a19c74",
+          "type": "fix",
+          "scope": "server",
+          "title": "Audit a key link's disable only when the directory said so"
+        },
+        {
+          "hash": "96cf3439",
+          "type": "fix",
+          "scope": "server",
+          "title": "Never enable an account while linking it for a key"
+        },
+        {
+          "hash": "5138dff3",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Record how each command runs, and list the commands"
+        },
+        {
+          "hash": "595daf7b",
+          "type": "fix",
+          "scope": "server",
+          "title": "Making a key never changes an account's status"
+        },
+        {
+          "hash": "0ab45a42",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Show the right expiry day and keep a copy button on plain HTTP"
+        },
+        {
+          "hash": "f958e2e5",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Key commands and accounts with no password"
+        },
+        {
+          "hash": "8b8d2b8e",
+          "type": "fix",
+          "scope": "server",
+          "title": "Find the key routes' user by provider id too"
+        },
+        {
+          "hash": "47431244",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Manage a user's access keys"
+        },
+        {
+          "hash": "84c86f80",
+          "type": "feat",
+          "scope": "server",
+          "title": "Sign in with an access key, and routes to manage keys"
+        },
+        {
+          "hash": "92793865",
+          "type": "fix",
+          "scope": "server",
+          "title": "Give the test context an access key store"
+        },
+        {
+          "hash": "225e73fe",
+          "type": "feat",
+          "scope": "auth",
+          "title": "Access key logic and accounts with no password"
+        },
+        {
+          "hash": "77511c27",
+          "type": "feat",
+          "scope": "db",
+          "title": "Access keys table and store"
+        },
+        {
           "hash": "36446947",
           "type": "fix",
           "scope": "standalone",
