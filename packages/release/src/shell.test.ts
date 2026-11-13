@@ -1,7 +1,9 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { resolveGitBash } from './git-bash';
-import { execFileSync, spawnSync } from 'node:child_process';
-import { writeFileSync, readFileSync, mkdtempSync, mkdirSync, rmSync, chmodSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import {
+  writeFileSync, readFileSync, mkdtempSync, mkdirSync, rmSync, chmodSync, existsSync, readdirSync, statSync, realpathSync, symlinkSync,
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir, platform } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -603,19 +605,52 @@ const SETTINGS = ['OPENLDR_KEY', 'OPENLDR_KEY_FILE', 'OPENLDR_SESSION', 'OPENLDR
 /** What the fake docker saw on one call. */
 interface DockerCall { args: string[]; env: Record<string, string>; stdin: string }
 
+interface RunOpts {
+  env?: Record<string, string>; input?: string; stdout?: string; exit?: number;
+  /** Options for `sh` itself, such as -x. */
+  shArgs?: string[];
+  /** Another install folder's wrapper, from install(); the first one by default. */
+  wrapper?: string;
+}
+interface RunResult { code: number; stdout: string; stderr: string; calls: DockerCall[] }
+
 interface WrapperHost {
   root: string; home: string; work: string; tmp: string;
+  /** The first install's wrapper and the session file it keeps. */
+  wrapper: string;
   sessionFile: string;
-  run(args: string[], opts?: { env?: Record<string, string>; input?: string; stdout?: string; exit?: number }): { code: number; stdout: string; stderr: string; calls: DockerCall[] };
+  /** The session folder every install shares: ~/.config/openldr/docker. */
+  sessionDir: string;
+  /** Another install folder under the same home. */
+  install(name: string): { wrapper: string; sessionFile: string };
+  run(args: string[], opts?: RunOpts): RunResult;
+  /** The wrapper's environment for one run, for a test that starts it itself. */
+  envFor(opts?: RunOpts): Record<string, string>;
+  calls(): DockerCall[];
+  resetCalls(): void;
+}
+
+/** The session file a wrapper in `folder` keeps: a cksum of the folder's real path, as the wrapper
+ *  works it out, so this checks the wrapper's naming rather than copying it. */
+function sessionFileOf(home: string, folder: string): string {
+  const sum = spawnSync('cksum', [], { input: realpathSync(folder), encoding: 'utf8' }).stdout.trim().split(/\s+/);
+  return join(home, '.config', 'openldr', 'docker', `${sum[0]}-${sum[1]}.json`);
 }
 
 function wrapperHost(): WrapperHost {
   const root = tempDir('openldr-wrapper-');
-  const dirs = { bin: join(root, 'bin'), rec: join(root, 'rec'), home: join(root, 'home'), work: join(root, 'work'), tmp: join(root, 'tmp'), w: join(root, 'w') };
+  const dirs = { bin: join(root, 'bin'), rec: join(root, 'rec'), home: join(root, 'home'), work: join(root, 'work'), tmp: join(root, 'tmp') };
   for (const d of Object.values(dirs)) mkdirSync(d);
-  const wrapper = join(dirs.w, 'openldr');
-  writeFileSync(wrapper, heredoc('WRAPPER'));
-  chmodSync(wrapper, 0o755);
+  const install = (name: string) => {
+    const folder = join(root, name);
+    mkdirSync(folder);
+    const wrapper = join(folder, 'openldr');
+    writeFileSync(wrapper, heredoc('WRAPPER'));
+    chmodSync(wrapper, 0o755);
+    return { wrapper, sessionFile: sessionFileOf(dirs.home, folder) };
+  };
+  const first = install('w');
+  // One file per argument, so an argument that holds a newline is recorded whole.
   writeFileSync(
     join(dirs.bin, 'docker'),
     [
@@ -623,8 +658,8 @@ function wrapperHost(): WrapperHost {
       'n=$(ls "$FAKE_REC" | wc -l | tr -d " ")',
       'd="$FAKE_REC/call$n"',
       'mkdir "$d"',
-      ': > "$d/args"',
-      'for a in "$@"; do printf "%s\\n" "$a" >> "$d/args"; done',
+      'i=0',
+      'for a in "$@"; do printf %s "$a" > "$d/arg.$i"; i=$((i + 1)); done',
       `for v in ${SETTINGS.join(' ')}; do`,
       '  eval "if [ -n \\"\\${$v+x}\\" ]; then printf %s \\"\\$$v\\" > \\"\\$d/env.$v\\"; fi"',
       'done',
@@ -639,35 +674,53 @@ function wrapperHost(): WrapperHost {
     readdirSync(dirs.rec).sort((a, b) => Number(a.slice(4)) - Number(b.slice(4))).map((c) => {
       const d = join(dirs.rec, c);
       const env: Record<string, string> = {};
-      for (const f of readdirSync(d)) if (f.startsWith('env.')) env[f.slice(4)] = readFileSync(join(d, f), 'utf8');
-      const args = readFileSync(join(d, 'args'), 'utf8');
-      return { args: args === '' ? [] : args.slice(0, -1).split('\n'), env, stdin: readFileSync(join(d, 'stdin'), 'utf8') };
+      const args: string[] = [];
+      for (const f of readdirSync(d)) {
+        if (f.startsWith('env.')) env[f.slice(4)] = readFileSync(join(d, f), 'utf8');
+        if (f.startsWith('arg.')) args[Number(f.slice(4))] = readFileSync(join(d, f), 'utf8');
+      }
+      return { args, env, stdin: readFileSync(join(d, 'stdin'), 'utf8') };
     });
+  const resetCalls = () => {
+    rmSync(dirs.rec, { recursive: true, force: true });
+    mkdirSync(dirs.rec);
+  };
+  // A clean environment: no real OPENLDR_* or XDG_CONFIG_HOME from the machine running the tests.
+  const envFor = (opts: RunOpts = {}): Record<string, string> => ({
+    PATH: `${dirs.bin}:${process.env.PATH ?? ''}`,
+    HOME: dirs.home,
+    TMPDIR: dirs.tmp,
+    DOCKER_HOST: 'tcp://127.0.0.1:1',
+    FAKE_REC: dirs.rec,
+    ...(opts.stdout !== undefined ? { FAKE_STDOUT: opts.stdout } : {}),
+    ...(opts.exit !== undefined ? { FAKE_EXIT: String(opts.exit) } : {}),
+    ...opts.env,
+  });
   return {
     root, home: dirs.home, work: dirs.work, tmp: dirs.tmp,
-    sessionFile: join(dirs.home, '.config', 'openldr', 'session.json'),
+    wrapper: first.wrapper,
+    sessionFile: first.sessionFile,
+    sessionDir: join(dirs.home, '.config', 'openldr', 'docker'),
+    install,
+    envFor,
+    calls,
+    resetCalls,
     run(args, opts = {}) {
-      rmSync(dirs.rec, { recursive: true, force: true });
-      mkdirSync(dirs.rec);
-      // A clean environment: no real OPENLDR_* or XDG_CONFIG_HOME from the machine running the tests.
-      const r = spawnSync('sh', [wrapper, ...args], {
-        cwd: dirs.work,
-        encoding: 'utf8',
-        input: opts.input ?? '',
-        env: {
-          PATH: `${dirs.bin}:${process.env.PATH ?? ''}`,
-          HOME: dirs.home,
-          TMPDIR: dirs.tmp,
-          DOCKER_HOST: 'tcp://127.0.0.1:1',
-          FAKE_REC: dirs.rec,
-          ...(opts.stdout !== undefined ? { FAKE_STDOUT: opts.stdout } : {}),
-          ...(opts.exit !== undefined ? { FAKE_EXIT: String(opts.exit) } : {}),
-          ...opts.env,
-        },
+      resetCalls();
+      const r = spawnSync('sh', [...(opts.shArgs ?? []), opts.wrapper ?? first.wrapper, ...args], {
+        cwd: dirs.work, encoding: 'utf8', input: opts.input ?? '', env: envFor(opts),
       });
       return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr, calls: calls() };
     },
   };
+}
+
+/** Writes a stored session for this host's first install, as login would. */
+function storeSession(h: WrapperHost, text = `${W_SESSION}\n`): void {
+  mkdirSync(h.sessionDir, { recursive: true, mode: 0o700 });
+  chmodSync(join(h.home, '.config', 'openldr'), 0o700);
+  chmodSync(h.sessionDir, 0o700);
+  writeFileSync(h.sessionFile, text, { mode: 0o600 });
 }
 
 const UID_GID = platform() === 'win32' ? '' : `${process.getuid?.()}:${process.getgid?.()}`;
@@ -733,8 +786,7 @@ describe.skipIf(platform() === 'win32')('the ./openldr wrapper', () => {
 
   it('stops on a key file that is missing, empty or not named, and never falls through to a session', () => {
     const h = wrapperHost();
-    mkdirSync(join(h.home, '.config', 'openldr'), { recursive: true, mode: 0o700 });
-    writeFileSync(h.sessionFile, `${W_SESSION}\n`, { mode: 0o600 });
+    storeSession(h);
     const missing = join(h.root, 'no-such-key');
     const r = h.run(['report', 'list'], { env: { OPENLDR_KEY_FILE: missing } });
     expect(r.code).toBe(1);
@@ -767,10 +819,13 @@ describe.skipIf(platform() === 'win32')('the ./openldr wrapper', () => {
     expect(readFileSync(h.sessionFile, 'utf8')).toBe(`${W_SESSION}\n`);
     expect(statSync(h.sessionFile).mode & 0o777).toBe(0o600);
     expect(statSync(join(h.home, '.config', 'openldr')).mode & 0o777).toBe(0o700);
+    expect(statSync(h.sessionDir).mode & 0o777).toBe(0o700);
     // The session line is kept, not shown.
     expect(r.stdout + r.stderr).not.toContain(W_COOKIE);
-    // No temporary file is left beside it.
-    expect(filesUnder(h.home)).toEqual(['.config/', '.config/openldr/', '.config/openldr/session.json']);
+    // No temporary file is left beside it, and no session.json is made.
+    expect(filesUnder(h.home)).toEqual([
+      '.config/', '.config/openldr/', '.config/openldr/docker/', `.config/openldr/docker/${h.sessionFile.split('/').at(-1)}`,
+    ]);
   });
 
   it('login keeps the session under XDG_CONFIG_HOME when it is set', () => {
@@ -779,7 +834,7 @@ describe.skipIf(platform() === 'win32')('the ./openldr wrapper', () => {
     const r = h.run(['login', '--username=alice'], { input: `${W_PASSWORD}\n`, stdout: W_SESSION, env: { XDG_CONFIG_HOME: cfg } });
     expect(r.code).toBe(0);
     expect(r.calls[0]!.args).toEqual([...prefix(), 'login', '--username=alice', '--password-stdin', '--session-out']);
-    expect(readFileSync(join(cfg, 'openldr', 'session.json'), 'utf8')).toBe(`${W_SESSION}\n`);
+    expect(readFileSync(join(cfg, 'openldr', 'docker', h.sessionFile.split('/').at(-1)!), 'utf8')).toBe(`${W_SESSION}\n`);
   });
 
   it('login handles --server-url before the command and hands the address on', () => {
@@ -864,7 +919,307 @@ describe.skipIf(platform() === 'win32')('the ./openldr wrapper', () => {
     h.run(['logout']);
     expect(filesUnder(h.work)).toEqual([]);
     expect(filesUnder(h.tmp)).toEqual([]);
-    expect(filesUnder(h.home)).toEqual(['.config/', '.config/openldr/']);
+    expect(filesUnder(h.home)).toEqual(['.config/', '.config/openldr/', '.config/openldr/docker/']);
+  });
+
+  it('passes an argument that holds a newline through whole', () => {
+    const h = wrapperHost();
+    const r = h.run(['report', 'run', '--param', 'note=line one\nline two']);
+    expect(r.calls[0]!.args).toEqual([...prefix(), 'report', 'run', '--param', 'note=line one\nline two']);
+  });
+
+  it('keeps a separate session for each install folder under one home', () => {
+    const h = wrapperHost();
+    const b = h.install('second-install');
+    expect(b.sessionFile).not.toBe(h.sessionFile);
+    const sessionB = W_SESSION.replace('WRAPPER1', 'WRAPPERB');
+    expect(h.run(['login', '--username', 'alice'], { input: `${W_PASSWORD}\n`, stdout: W_SESSION }).code).toBe(0);
+    expect(h.run(['login', '--username', 'bob'], { input: `${W_PASSWORD}\n`, stdout: sessionB, wrapper: b.wrapper }).code).toBe(0);
+    // Signing in to B did not replace A's session.
+    expect(h.run(['report', 'list']).calls[0]!.env.OPENLDR_SESSION).toBe(W_SESSION);
+    expect(h.run(['report', 'list'], { wrapper: b.wrapper }).calls[0]!.env.OPENLDR_SESSION).toBe(sessionB);
+    // Signing out of B leaves A signed in.
+    expect(h.run(['logout'], { wrapper: b.wrapper }).code).toBe(0);
+    expect(existsSync(b.sessionFile)).toBe(false);
+    expect(h.run(['report', 'list']).calls[0]!.env.OPENLDR_SESSION).toBe(W_SESSION);
+  });
+
+  it("never reads or writes a native client's session.json", () => {
+    const h = wrapperHost();
+    const native = join(h.home, '.config', 'openldr', 'session.json');
+    mkdirSync(join(h.home, '.config', 'openldr'), { recursive: true, mode: 0o700 });
+    const marker = '{"version":1,"sessions":{"https://lab.example":{"cookie":{"name":"n","value":"nativeMARKER"},"username":"x","savedAt":"x"}}}\n';
+    writeFileSync(native, marker, { mode: 0o600 });
+    expect(h.run(['login', '--username', 'alice'], { input: `${W_PASSWORD}\n`, stdout: W_SESSION }).code).toBe(0);
+    const later = h.run(['report', 'list']);
+    expect(later.calls[0]!.env.OPENLDR_SESSION).toBe(W_SESSION);
+    expect(h.run(['logout']).code).toBe(0);
+    // With no session of its own left, nothing of the native file is handed in.
+    expect(h.run(['report', 'list']).calls[0]!.env.OPENLDR_SESSION).toBeUndefined();
+    expect(readFileSync(native, 'utf8')).toBe(marker);
+    expect(statSync(native).mode & 0o777).toBe(0o600);
+  });
+
+  describe('refuses a stored session the CLI would refuse, and calls docker zero times', () => {
+    const refused = (h: WrapperHost, message: string) => {
+      for (const args of [['report', 'list'], ['whoami']]) {
+        const r = h.run(args);
+        expect(r.code).toBe(1);
+        expect(r.stderr).toBe(`${message}\n`);
+        expect(r.calls).toEqual([]);
+      }
+    };
+
+    it('a file group or others can read', () => {
+      const h = wrapperHost();
+      storeSession(h);
+      chmodSync(h.sessionFile, 0o644);
+      refused(h, `Other users can read or change the session file ${h.sessionFile}, so it is not used. Remove it and sign in again.`);
+    });
+
+    it('a link, even to a readable file', () => {
+      const h = wrapperHost();
+      storeSession(h);
+      const elsewhere = join(h.root, 'other.json');
+      writeFileSync(elsewhere, 'some other file\n', { mode: 0o600 });
+      rmSync(h.sessionFile);
+      symlinkSync(elsewhere, h.sessionFile);
+      refused(h, `The session file ${h.sessionFile} is a link, so it is not used. Remove it and sign in again.`);
+    });
+
+    it('something that is not a plain file', () => {
+      const h = wrapperHost();
+      storeSession(h);
+      rmSync(h.sessionFile);
+      mkdirSync(h.sessionFile, { mode: 0o700 });
+      refused(h, `The session file ${h.sessionFile} is not a plain file, so it is not used. Remove it and sign in again.`);
+    });
+
+    it('a folder group or others can read', () => {
+      const h = wrapperHost();
+      storeSession(h);
+      chmodSync(h.sessionDir, 0o755);
+      refused(h, `Other users can read or change the session folder ${h.sessionDir}, so it is not used. Remove it and sign in again.`);
+    });
+
+    it('a folder that is a link', () => {
+      const h = wrapperHost();
+      const real = join(h.root, 'real-folder');
+      mkdirSync(real, { mode: 0o700 });
+      writeFileSync(join(real, h.sessionFile.split('/').at(-1)!), `${W_SESSION}\n`, { mode: 0o600 });
+      mkdirSync(join(h.home, '.config', 'openldr'), { recursive: true, mode: 0o700 });
+      symlinkSync(real, h.sessionDir);
+      refused(h, `The session folder ${h.sessionDir} is a link, so it is not used. Remove it and sign in again.`);
+    });
+
+    it.skipIf(process.getuid?.() === 0)('a file that cannot be read', () => {
+      const h = wrapperHost();
+      storeSession(h);
+      chmodSync(h.sessionFile, 0o200);
+      refused(h, `The session file ${h.sessionFile} cannot be read. Remove it and sign in again.`);
+    });
+  });
+
+  it('a login it cannot store ends that session on the server', () => {
+    const h = wrapperHost();
+    // The folder the session goes in cannot be made.
+    mkdirSync(join(h.home, '.config'));
+    mkdirSync(join(h.home, '.config', 'openldr'), { mode: 0o500 });
+    try {
+      const r = h.run(['login', '--username', 'alice'], { input: `${W_PASSWORD}\n`, stdout: W_SESSION });
+      expect(r.code).toBe(1);
+      expect(r.stderr).toContain(`Cannot write the session file ${h.sessionFile}, so the session was ended.`);
+      expect(r.calls).toHaveLength(2);
+      expect(r.calls[1]!.args).toEqual([...prefix('OPENLDR_SESSION'), 'logout']);
+      expect(r.calls[1]!.env.OPENLDR_SESSION).toBe(W_SESSION);
+      expect(r.calls[1]!.args.join(' ')).not.toContain(W_COOKIE);
+    } finally {
+      chmodSync(join(h.home, '.config', 'openldr'), 0o700);
+    }
+  });
+
+  it('a login whose answer is not a session stores nothing', () => {
+    const h = wrapperHost();
+    const r = h.run(['login', '--username', 'alice'], { input: `${W_PASSWORD}\n`, stdout: 'Signed in, but this is not a session' });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toBe('The sign-in gave an answer this script did not expect, so nothing was stored.\n');
+    expect(existsSync(join(h.home, '.config'))).toBe(false);
+  });
+
+  it('a temporary file left by an earlier run with the same process id does not end a good login', async () => {
+    const h = wrapperHost();
+    h.resetCalls();
+    storeSession(h, 'old\n');
+    // The fake docker waits for standard input to end, so the stale file is in place before the
+    // wrapper reaches the store. $$ in the wrapper is this child's process id.
+    const child = spawn('sh', [h.wrapper, 'login', '--username', 'alice'], { cwd: h.work, env: h.envFor({ stdout: W_SESSION }) });
+    const stale = join(h.sessionDir, `.${h.sessionFile.split('/').at(-1)}.${child.pid}.tmp`);
+    writeFileSync(stale, 'left over\n', { mode: 0o600 });
+    let stderr = '';
+    child.stderr.on('data', (c: Buffer) => { stderr += c.toString('utf8'); });
+    const code = await new Promise<number | null>((done) => { child.on('close', done); child.stdin.end(`${W_PASSWORD}\n`); });
+    expect(stderr).toBe('');
+    expect(code).toBe(0);
+    expect(h.calls()).toHaveLength(1);
+    expect(readFileSync(h.sessionFile, 'utf8')).toBe(`${W_SESSION}\n`);
+    expect(existsSync(stale)).toBe(false);
+  });
+
+  it('logout --help is passed through and keeps the session', () => {
+    const h = wrapperHost();
+    storeSession(h);
+    const r = h.run(['logout', '--help'], { stdout: 'Usage: openldr logout' });
+    expect(r.code).toBe(0);
+    // Help runs like any other command: the session is handed in, and nothing is removed.
+    expect(r.calls[0]!.args).toEqual([...prefix('OPENLDR_SESSION'), 'logout', '--help']);
+    expect(readFileSync(h.sessionFile, 'utf8')).toBe(`${W_SESSION}\n`);
+  });
+
+  it('turns tracing off, so sh -x prints no password, session or key', () => {
+    const h = wrapperHost();
+    const keyFile = join(h.root, 'key.txt');
+    writeFileSync(keyFile, `${W_KEY}\n`);
+    const runs = [
+      h.run(['login', '--username', 'alice'], { shArgs: ['-x'], input: `${W_PASSWORD}\n`, stdout: W_SESSION }),
+      h.run(['report', 'list'], { shArgs: ['-x'] }),
+      h.run(['report', 'list'], { shArgs: ['-x'], env: { OPENLDR_KEY_FILE: keyFile } }),
+      h.run(['logout'], { shArgs: ['-x'] }),
+    ];
+    // The session was stored and handed in, and the key reached docker: tracing off changed nothing else.
+    expect(runs.map((r) => r.code)).toEqual([0, 0, 0, 0]);
+    expect(runs[1]!.calls[0]!.env.OPENLDR_SESSION).toBe(W_SESSION);
+    expect(runs[2]!.calls[0]!.env.OPENLDR_KEY).toBe(W_KEY);
+    for (const r of runs) {
+      expect(r.stderr).toContain('Tracing is off: this script handles a password and keys.');
+      for (const secret of [W_PASSWORD.trim(), W_COOKIE, W_KEY]) expect(r.stdout + r.stderr, secret).not.toContain(secret);
+    }
+  });
+
+  describe('key file checks, as the CLI makes them', () => {
+    it('drops a trailing carriage return and newline, and blanks around the key', () => {
+      const h = wrapperHost();
+      for (const text of [`${W_KEY}\r\n`, `\n  ${W_KEY} \n\n`]) {
+        const keyFile = join(h.root, 'key.txt');
+        writeFileSync(keyFile, text);
+        const r = h.run(['report', 'list'], { env: { OPENLDR_KEY_FILE: keyFile } });
+        expect(r.code).toBe(0);
+        expect(r.calls[0]!.env.OPENLDR_KEY).toBe(W_KEY);
+      }
+    });
+
+    it('refuses a file over 4096 bytes, naming it', () => {
+      const h = wrapperHost();
+      const keyFile = join(h.root, 'big-key.txt');
+      writeFileSync(keyFile, 'k'.repeat(4097));
+      const r = h.run(['report', 'list'], { env: { OPENLDR_KEY_FILE: keyFile } });
+      expect(r.code).toBe(1);
+      expect(r.stderr).toBe(`The key file named by OPENLDR_KEY_FILE is too large to hold a key: ${keyFile}\n`);
+      expect(r.calls).toEqual([]);
+    });
+
+    it('checks the size of a key read from a named pipe too, which has no size before it is read', () => {
+      const h = wrapperHost();
+      const fifo = join(h.root, 'key.fifo');
+      expect(spawnSync('mkfifo', [fifo]).status).toBe(0);
+      // A background printf writes the pipe while the wrapper reads it.
+      const viaPipe = (text: string) => {
+        h.resetCalls();
+        const r = spawnSync('sh', ['-c', 'printf %s "$FAKE_KEY_TEXT" > "$1" & exec sh "$2" report list', 'sh', fifo, h.wrapper], {
+          cwd: h.work, encoding: 'utf8', input: '',
+          env: h.envFor({ env: { OPENLDR_KEY_FILE: fifo, FAKE_KEY_TEXT: text } }),
+        });
+        return { code: r.status, stderr: r.stderr, calls: h.calls() };
+      };
+      const big = viaPipe('k'.repeat(4097));
+      expect(big.stderr).toBe(`The key file named by OPENLDR_KEY_FILE is too large to hold a key: ${fifo}\n`);
+      expect(big.code).toBe(1);
+      expect(big.calls).toEqual([]);
+      const ok = viaPipe(`${W_KEY}\n`);
+      expect(ok.code).toBe(0);
+      expect(ok.calls[0]!.env.OPENLDR_KEY).toBe(W_KEY);
+    });
+
+    it('refuses a file with more than one line, naming it', () => {
+      const h = wrapperHost();
+      const keyFile = join(h.root, 'two-keys.txt');
+      writeFileSync(keyFile, `${W_KEY}\r\n${W_KEY}\n`);
+      const r = h.run(['report', 'list'], { env: { OPENLDR_KEY_FILE: keyFile } });
+      expect(r.code).toBe(1);
+      expect(r.stderr).toBe(`The key file named by OPENLDR_KEY_FILE holds more than one line: ${keyFile}\n`);
+      expect(r.calls).toEqual([]);
+    });
+  });
+});
+
+/**
+ * install.sh --wrapper-only, run for real with bash against a temporary install folder. A fake
+ * `curl` and `wget` record any call, so the test can show nothing was downloaded; a fake `docker`
+ * records any call too.
+ */
+function wrapperOnly(args: string[], folder: (dir: string) => void): { code: number; out: string; dir: string; cwd: string; called: string[] } {
+  const root = tempDir('openldr-wrapper-only-');
+  const bin = join(root, 'bin');
+  const dir = join(root, 'install');
+  const cwd = join(root, 'cwd');
+  const rec = join(root, 'rec');
+  for (const d of [bin, dir, cwd, rec]) mkdirSync(d);
+  folder(dir);
+  for (const tool of ['curl', 'wget', 'docker']) {
+    writeFileSync(join(bin, tool), `#!/bin/sh\necho "${tool} $*" >> "${rec}/called"\nexit 1\n`);
+    chmodSync(join(bin, tool), 0o755);
+  }
+  const r = spawnSync(BASH, [join(REPO, 'install/install.sh').replace(/\\/g, '/'), ...args.map((a) => a.replace('{dir}', dir))], {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${toPosix(bin)}:${process.env.PATH ?? ''}`, DOCKER_HOST: 'tcp://127.0.0.1:1', OPENLDR_REPO_RAW: 'file:///nowhere' },
+  });
+  const called = existsSync(join(rec, 'called')) ? readFileSync(join(rec, 'called'), 'utf8').trim().split('\n') : [];
+  return { code: r.status ?? 1, out: `${r.stdout}${r.stderr}`, dir, cwd, called };
+}
+
+describe.skipIf(platform() === 'win32')('install.sh --wrapper-only', () => {
+  const ENV_MARKER = 'OPENLDR_VERSION=0.1.8\nAUTH_ADAPTER=local\n# kept as is\n';
+  const COMPOSE_MARKER = 'services:\n  api:\n    image: kept-as-is\n';
+  const GARAGE_MARKER = '# a local edit that must survive\n';
+  const install = (dir: string) => {
+    writeFileSync(join(dir, '.env'), ENV_MARKER);
+    writeFileSync(join(dir, 'docker-compose.yml'), COMPOSE_MARKER);
+    mkdirSync(join(dir, 'config'));
+    writeFileSync(join(dir, 'config', 'garage.toml'), GARAGE_MARKER);
+    writeFileSync(join(dir, 'openldr'), '#!/bin/sh\nexec docker compose exec -T api node /app/cli/dist/index.js "$@"\n', { mode: 0o644 });
+  };
+
+  it('replaces the wrapper, makes it executable, and changes nothing else', () => {
+    const r = wrapperOnly(['--wrapper-only', '--dir', '{dir}'], install);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain(`Rewrote the openldr wrapper in ${r.dir}. Nothing else was changed.`);
+    expect(readFileSync(join(r.dir, 'openldr'), 'utf8')).toBe(heredoc('WRAPPER'));
+    expect(statSync(join(r.dir, 'openldr')).mode & 0o111).not.toBe(0);
+    expect(readFileSync(join(r.dir, '.env'), 'utf8')).toBe(ENV_MARKER);
+    expect(readFileSync(join(r.dir, 'docker-compose.yml'), 'utf8')).toBe(COMPOSE_MARKER);
+    expect(readFileSync(join(r.dir, 'config', 'garage.toml'), 'utf8')).toBe(GARAGE_MARKER);
+    expect(filesUnder(r.dir)).toEqual(['.env', 'config/', 'config/garage.toml', 'docker-compose.yml', 'openldr']);
+    // Nothing downloaded, and Docker never asked.
+    expect(r.called).toEqual([]);
+  });
+
+  it('refuses without --dir, and makes no install folder', () => {
+    const r = wrapperOnly(['--wrapper-only'], install);
+    expect(r.code).toBe(2);
+    expect(r.out).toContain('--wrapper-only needs --dir <the install folder>');
+    expect(filesUnder(r.cwd)).toEqual([]);
+    expect(r.called).toEqual([]);
+  });
+
+  it('refuses a folder that is not an OpenLDR install', () => {
+    const noCompose = wrapperOnly(['--wrapper-only', '--dir', '{dir}'], (dir) => writeFileSync(join(dir, '.env'), ENV_MARKER));
+    expect(noCompose.code).toBe(2);
+    expect(noCompose.out).toContain(`${noCompose.dir} is not an OpenLDR install folder: it has no .env or no docker-compose.yml.`);
+    expect(filesUnder(noCompose.dir)).toEqual(['.env']);
+    const empty = wrapperOnly(['--wrapper-only', '--dir', '{dir}'], () => {});
+    expect(empty.code).toBe(2);
+    expect(filesUnder(empty.dir)).toEqual([]);
+    expect([...noCompose.called, ...empty.called]).toEqual([]);
   });
 });
 
@@ -890,6 +1245,23 @@ describe('the openldr.ps1 wrapper (unproven: nothing here runs PowerShell)', () 
   it('answers login with one line about access keys and exit 1', () => {
     expect(fromSh).toContain('On Windows the CLI signs in with an access key. Set it in OPENLDR_KEY.');
     expect(fromSh).toMatch(/'login'[\s\S]*?exit 1/);
+  });
+
+  it('stops when OPENLDR_KEY_FILE is set and OPENLDR_KEY is not, before docker runs', () => {
+    const check = fromSh.indexOf('(Test-Path Env:OPENLDR_KEY_FILE) -and -not (Test-Path Env:OPENLDR_KEY)');
+    expect(check).toBeGreaterThan(-1);
+    const rest = fromSh.slice(check);
+    expect(rest).toMatch(/^[^\n]*\n {2}\[Console\]::Error\.WriteLine\('OPENLDR_KEY_FILE is not read on Windows\. Set OPENLDR_KEY\.'\)\n {2}exit 1\n/m);
+    expect(check).toBeLessThan(fromSh.indexOf('docker compose exec'));
+  });
+
+  it('install.ps1 has -WrapperOnly, which needs -Dir and an install folder, and writes before any download', () => {
+    expect(ps1).toContain('[switch]$WrapperOnly');
+    const block = ps1.slice(ps1.indexOf('if ($WrapperOnly) {'));
+    expect(block).toContain("$PSBoundParameters.ContainsKey('Dir')");
+    expect(block).toContain('is not an OpenLDR install folder: it has no .env or no docker-compose.yml.');
+    expect(ps1.indexOf('if ($WrapperOnly) {')).toBeLessThan(ps1.indexOf('Fetch "deploy/install/docker-compose.yml"'));
+    expect(ps1.indexOf('if ($WrapperOnly) {')).toBeLessThan(ps1.indexOf('if ($Version -eq "auto")'));
   });
 });
 

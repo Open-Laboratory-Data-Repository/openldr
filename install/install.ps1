@@ -24,6 +24,8 @@
 #   -Auth local|keycloak (sign-in for a new install. local keeps OpenLDR's own accounts and runs
 #     no Keycloak. Without it the installer asks when it has a console, and otherwise uses local.
 #     A re-run keeps the mode the install was made with.)
+#   -WrapperOnly (with -Dir, required: rewrite openldr.ps1 in an existing install folder and
+#     nothing else. For an install upgraded by the documented steps. Unproven: never run.)
 param(
   [string]$Dir = "./openldr",
   # Default is the moving `latest` tag because no release has published latest.json yet - the
@@ -62,12 +64,63 @@ param(
   # Empty until -Auth, the existing .env, or the question below decides it. Checked by hand below,
   # not with ValidateSet: PowerShell applies ValidateSet to every later assignment too, and an
   # existing install's .env may say `oidc`.
-  [string]$Auth = ''
+  [string]$Auth = '',
+  # With -Dir (required): rewrite openldr.ps1 in an existing install folder and change nothing else.
+  [switch]$WrapperOnly
 )
 
 if ($Auth -and (@('local', 'keycloak') -notcontains $Auth)) {
   Write-Error "X -Auth must be 'local' or 'keycloak' (got '$Auth')"
   exit 2
+}
+
+# The `openldr` operator CLI wrapper — see the matching block in install/install.sh.
+# Single-quoted here-string so $args and $LASTEXITCODE are written literally, not expanded at
+# install time. The closing '@ must be at column 0.
+# No -u here on purpose: the sh wrapper adds `-u "$(id -u):$(id -g)"` because a Linux bind mount
+# carries host ownership through and the image's default uid (10001) can't write to ./data.
+# Windows does not enforce that ownership check on bind mounts, and there is no `id` command to
+# resolve the flag's value — adding -u here would just break the wrapper. Leave it out.
+# It signs in with an access key only: no password is asked for in PowerShell. The body must stay
+# the same as the PSWRAPPER block in install/install.sh; packages/release/src/shell.test.ts checks.
+# Unproven: written on Linux, where nothing can run PowerShell.
+$wrapper = @'
+# OpenLDR operator CLI. Runs inside the api container.
+# Files must live under .\data (mounted at /data) - e.g. .\openldr.ps1 ingest data/bundle.json
+# Signing in: on Windows the CLI signs in with an access key, set in OPENLDR_KEY. `-e NAME` with no
+# value copies NAME from this window's environment, so the key is never on a command line.
+# Unproven: this was written on Linux, where nothing can run PowerShell.
+if ($args.Count -gt 0 -and $args[0] -eq 'login') {
+  [Console]::Error.WriteLine('On Windows the CLI signs in with an access key. Set it in OPENLDR_KEY.')
+  exit 1
+}
+if ((Test-Path Env:OPENLDR_KEY_FILE) -and -not (Test-Path Env:OPENLDR_KEY)) {
+  [Console]::Error.WriteLine('OPENLDR_KEY_FILE is not read on Windows. Set OPENLDR_KEY.')
+  exit 1
+}
+$pass = @()
+foreach ($name in 'OPENLDR_KEY', 'OPENLDR_URL', 'OPENLDR_ALLOW_PLAIN_HTTP') {
+  if (Test-Path "Env:$name") { $pass += '-e', $name }
+}
+docker compose exec -T @pass -w / api node /app/cli/dist/index.js $args
+exit $LASTEXITCODE
+'@
+
+# -WrapperOnly: an upgrade by the documented steps leaves the old wrapper on disk, which hands in
+# no key. This writes openldr.ps1 and does nothing else: no download, no .env change, no compose
+# file, no Docker check, no start. Unproven: nothing on the Linux build machine runs PowerShell.
+if ($WrapperOnly) {
+  if (-not $PSBoundParameters.ContainsKey('Dir')) {
+    Write-Error "X -WrapperOnly needs -Dir <the install folder>, so a fresh install is never made by accident."
+    exit 2
+  }
+  if (-not (Test-Path -LiteralPath "$Dir/.env" -PathType Leaf) -or -not (Test-Path -LiteralPath "$Dir/docker-compose.yml" -PathType Leaf)) {
+    Write-Error "X $Dir is not an OpenLDR install folder: it has no .env or no docker-compose.yml."
+    exit 2
+  }
+  Set-Content -Path "$Dir/openldr.ps1" -Value $wrapper -Encoding utf8
+  Write-Host "OK Rewrote openldr.ps1 in $Dir. Nothing else was changed."
+  exit 0
 }
 
 # Resolve `auto` to a concrete published version, so .env records exactly what this lab runs.
@@ -320,33 +373,7 @@ Fetch "scripts/init-target-db.sql" "$Dir/config/init-target-db.sql"
 Fetch "scripts/init-keycloak-db.sql" "$Dir/config/init-keycloak-db.sql"
 Fetch "deploy/install/garage.toml" "$Dir/config/garage.toml"
 
-# The `openldr` operator CLI wrapper — see the matching block in install/install.sh.
-# Single-quoted here-string so $args and $LASTEXITCODE are written literally, not expanded at
-# install time. The closing '@ must be at column 0.
-# No -u here on purpose: the sh wrapper adds `-u "$(id -u):$(id -g)"` because a Linux bind mount
-# carries host ownership through and the image's default uid (10001) can't write to ./data.
-# Windows does not enforce that ownership check on bind mounts, and there is no `id` command to
-# resolve the flag's value — adding -u here would just break the wrapper. Leave it out.
-# It signs in with an access key only: no password is asked for in PowerShell. The body must stay
-# the same as the PSWRAPPER block in install/install.sh; packages/release/src/shell.test.ts checks.
-# Unproven: written on Linux, where nothing can run PowerShell.
-$wrapper = @'
-# OpenLDR operator CLI. Runs inside the api container.
-# Files must live under .\data (mounted at /data) - e.g. .\openldr.ps1 ingest data/bundle.json
-# Signing in: on Windows the CLI signs in with an access key, set in OPENLDR_KEY. `-e NAME` with no
-# value copies NAME from this window's environment, so the key is never on a command line.
-# Unproven: this was written on Linux, where nothing can run PowerShell.
-if ($args.Count -gt 0 -and $args[0] -eq 'login') {
-  [Console]::Error.WriteLine('On Windows the CLI signs in with an access key. Set it in OPENLDR_KEY.')
-  exit 1
-}
-$pass = @()
-foreach ($name in 'OPENLDR_KEY', 'OPENLDR_URL', 'OPENLDR_ALLOW_PLAIN_HTTP') {
-  if (Test-Path "Env:$name") { $pass += '-e', $name }
-}
-docker compose exec -T @pass -w / api node /app/cli/dist/index.js $args
-exit $LASTEXITCODE
-'@
+# The `openldr` operator CLI wrapper. $wrapper is defined near the top, so -WrapperOnly can write it.
 Set-Content -Path "$Dir/openldr.ps1" -Value $wrapper -Encoding utf8
 
 if ($MssqlDemo) {
