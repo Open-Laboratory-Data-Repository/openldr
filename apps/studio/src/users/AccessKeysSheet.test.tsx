@@ -213,6 +213,32 @@ describe('AccessKeysSheet', () => {
     expect(field.selectionEnd).toBe(KEY.length);
   });
 
+  it('asks to copy by hand when the field ignores select(), though the older command answers true', async () => {
+    // iOS Safari can ignore select() on a read-only field while execCommand('copy') returns true.
+    setClipboard(undefined);
+    const execCommand = vi.fn(() => true);
+    setExecCommand(execCommand);
+    const select = vi.spyOn(HTMLTextAreaElement.prototype, 'select').mockImplementation(() => {});
+    try {
+      render(<Harness />);
+      await createKey('new-bot');
+      const field = await screen.findByDisplayValue(KEY) as HTMLTextAreaElement;
+      field.setSelectionRange(0, 0);
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copy key' })); });
+      expect(await screen.findByText('Copy did not work here. Select the key and copy it by hand.')).toBeTruthy();
+      expect(screen.queryByText('Copied.')).toBeNull();
+    } finally {
+      select.mockRestore();
+    }
+  });
+
+  it('turns spell check off on the key field', async () => {
+    render(<Harness />);
+    await createKey('new-bot');
+    const field = await screen.findByDisplayValue(KEY) as HTMLTextAreaElement;
+    expect(field.getAttribute('spellcheck')).toBe('false');
+  });
+
   it('does not show the key again after the sheet is closed and reopened', async () => {
     render(<Harness />);
     await createKey('new-bot');

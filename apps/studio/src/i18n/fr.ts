@@ -441,7 +441,7 @@ export const fr: EnShape = {
       settings: {
         view: { label: 'Voir les paramètres', description: 'Ouvrir l’espace Paramètres.' },
         edit_general: { label: 'Modifier les paramètres généraux', description: 'Modifier les paramètres généraux, numériques et de validation.' },
-        feature_flags: { label: 'Gérer les indicateurs de fonctionnalité', description: 'Activer ou désactiver des indicateurs de fonctionnalité.' },
+        feature_flags: { label: 'Gérer les indicateurs de fonctionnalités', description: 'Activer ou désactiver des indicateurs de fonctionnalités.' },
         danger_zone: { label: 'Zone de danger', description: 'Lancer des actions de maintenance destructrices.' },
       },
       data_exposure: {

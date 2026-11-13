@@ -28,7 +28,10 @@ export function pickerValueToDate(value: string): Date {
 
 export function DatePicker({ value, onChange, minDate, maxDate, placeholder = 'Pick a date', disabled, className, id }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
-  const dateValue = value ? pickerValueToDate(value) : undefined;
+  // A stored value that looks like a date but is not one (2026-02-31) parses to an invalid date,
+  // which format() throws on. Such a value shows as no date chosen.
+  const parsed = value ? pickerValueToDate(value) : undefined;
+  const dateValue = parsed && !Number.isNaN(parsed.getTime()) ? parsed : undefined;
 
   const handleDateSelect = (day: Date | undefined) => {
     if (!day) return;
@@ -43,7 +46,7 @@ export function DatePicker({ value, onChange, minDate, maxDate, placeholder = 'P
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button id={id} variant="outline" disabled={disabled} className={cn('h-9 w-full justify-start text-left font-normal', !value && 'text-muted-foreground', className)}>
+        <Button id={id} variant="outline" disabled={disabled} className={cn('h-9 w-full justify-start text-left font-normal', !dateValue && 'text-muted-foreground', className)}>
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 shrink-0">
             <path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" />
           </svg>

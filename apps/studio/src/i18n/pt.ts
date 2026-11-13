@@ -429,7 +429,7 @@ export const pt: EnShape = {
       },
       marketplace: {
         view: { label: 'Ver o marketplace', description: 'Consultar os plugins disponíveis e instalados.' },
-        manage: { label: 'Gerir o marketplace', description: 'Instalar, publicar, ativar, desativar e remover plugins e repositórios.' },
+        manage: { label: 'Gerir o marketplace', description: 'Instalar, publicar, ativar, desativar e remover plugins e registos.' },
       },
       connectors: {
         manage: { label: 'Gerir conectores', description: 'Configurar conectores para bases de dados e serviços externos.' },

@@ -26,6 +26,25 @@ describe('i18n key parity', () => {
   });
 });
 
+// A capability's label names a thing the way the thing's own screen names it.
+describe('capability wording matches the screen', () => {
+  const text = (res: unknown, path: string): string => {
+    const v = path.split('.').reduce<unknown>((o, k) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[k] : undefined), res);
+    if (typeof v !== 'string') throw new Error(`no string at ${path}`);
+    return v.toLowerCase();
+  };
+
+  it('French feature flags use the feature-flags screen term', () => {
+    const term = text(fr, 'settings.general.flags.title');
+    expect(text(fr, 'roles.capability.settings.feature_flags.label')).toContain(term);
+    expect(text(fr, 'roles.capability.settings.feature_flags.description')).toContain(term);
+  });
+
+  it('Portuguese marketplace.manage uses the marketplace screen term for registries', () => {
+    expect(text(pt, 'roles.capability.marketplace.manage.description')).toContain(text(pt, 'settings.marketplace.registriesTab'));
+  });
+});
+
 // A capability key such as 'users.manage' is read as the path roles.capability.users.manage.
 describe('capability labels', () => {
   const at = (res: Record<string, unknown>, path: string): unknown =>

@@ -138,9 +138,12 @@ function AccessKeysBody({ user }: { user: { id: string; username: string } }) {
     const field = keyField.current;
     field?.focus();
     field?.select();
+    // iOS Safari can ignore select() on a read-only field while execCommand('copy') still answers
+    // true. So "Copied." is said only when the selection really holds the whole key.
+    const holdsKey = field !== null && field.value === revealed && field.selectionStart === 0 && field.selectionEnd === revealed.length;
     let copied = false;
     try {
-      copied = typeof document.execCommand === 'function' && document.execCommand('copy');
+      copied = holdsKey && typeof document.execCommand === 'function' && document.execCommand('copy');
     } catch {
       copied = false;
     }
@@ -198,6 +201,7 @@ function AccessKeysBody({ user }: { user: { id: string; username: string } }) {
                 id="access-key-value"
                 ref={keyField}
                 readOnly
+                spellCheck={false}
                 rows={3}
                 value={revealed}
                 onFocus={(e) => e.currentTarget.select()}

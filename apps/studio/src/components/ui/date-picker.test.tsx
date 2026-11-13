@@ -34,6 +34,18 @@ describe('DatePicker west of UTC', () => {
     expect(selected.map((el) => el.dataset.day)).toEqual(['2026-11-20']);
   });
 
+  it('shows no date chosen for a stored value that is not a real date, and does not throw', () => {
+    for (const value of ['2026-02-31', '2026-13-01', 'not a date']) {
+      const { unmount } = render(<DatePicker value={value} onChange={() => {}} placeholder="Pick a date" />);
+      const trigger = screen.getByRole('button');
+      expect(trigger.textContent, value).toContain('Pick a date');
+      // Opening it shows the calendar with nothing selected.
+      fireEvent.click(trigger);
+      expect(document.querySelectorAll('[data-day][aria-selected="true"], [data-day][data-selected="true"]')).toHaveLength(0);
+      unmount();
+    }
+  });
+
   it('reads a bare date as local midnight and keeps the old reading for anything else', () => {
     const d = pickerValueToDate('2026-11-20');
     expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]).toEqual([2026, 10, 20, 0]);
