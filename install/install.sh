@@ -147,13 +147,26 @@ done
 # read-only `openldr` is replaced (the folder decides, not the file), a terminal still running the old
 # wrapper keeps reading the old text, and a failed write leaves the old wrapper as it was.
 wrapper_failed() {
-  rm -f "$1"
+  rm -f "$1" 2>/dev/null || true
   echo "✗ Could not write $2. The wrapper that was there is unchanged." >&2
   exit 1
 }
+# Moves the written wrapper ($1) to its name ($2). `mv` onto a folder, or onto a link to one, would
+# put the file inside it, so a link is removed first and a real folder is refused. (`mv -T` would
+# say this in one flag, but it is not portable.)
+place_wrapper() {
+  if [ -h "$2" ]; then
+    rm -f "$2" || wrapper_failed "$1" "$2"
+  elif [ -d "$2" ]; then
+    rm -f "$1" 2>/dev/null || true
+    echo "✗ $2 is a folder, not the wrapper. Remove or rename it, then run the installer again." >&2
+    exit 1
+  fi
+  mv -f "$1" "$2" || wrapper_failed "$1" "$2"
+}
 write_wrappers() {
 wrapper_tmp="$DIR/.openldr.$$.tmp"
-rm -f "$wrapper_tmp"
+rm -f "$wrapper_tmp" 2>/dev/null || wrapper_failed "$wrapper_tmp" "$DIR/openldr"
 if ! cat > "$wrapper_tmp" <<'WRAPPER'
 #!/bin/sh
 # OpenLDR operator CLI. Runs inside the api container.
@@ -201,8 +214,22 @@ cli() {
   docker compose exec -T $pass -u "$(id -u):$(id -g)" -w / api node /app/cli/dist/index.js "$@"
 }
 
+# This script's install folder. $0 is followed while it is a link, so a link on PATH (such as
+# /usr/local/bin/openldr) runs the install it points at. readlink is not POSIX: where it is missing,
+# the loop stops and the link's own folder is used. A loop of links stops after 40 steps.
+self=$0
+i=0
+while [ -h "$self" ] && [ "$i" -lt 40 ]; do
+  target=$(readlink -- "$self") || break
+  case $target in
+    /*) self=$target ;;
+    *) self=$(dirname -- "$self")/$target ;;
+  esac
+  i=$((i + 1))
+done
+here=$(CDPATH='' cd -- "$(dirname -- "$self")" 2>/dev/null && pwd -P) || here=''
+
 # Where this install's session is kept. A relative XDG_CONFIG_HOME is ignored, as the CLI ignores it.
-here=$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd -P) || here=''
 case ${XDG_CONFIG_HOME-} in
   /*) session_root=$XDG_CONFIG_HOME/openldr ;;
   *) session_root=${HOME:+$HOME/.config/openldr} ;;
@@ -221,6 +248,11 @@ fi
 go_home() {
   if [ -z "$here" ] || ! cd -- "$here"; then
     say 'Cannot find the folder this script is in, so the install it belongs to is not known.'
+    exit 1
+  fi
+  # A copy of this script elsewhere cannot be traced back to its install.
+  if [ ! -f docker-compose.yml ]; then
+    say "This script must stay in its install folder, or be a link to it. $here has no docker-compose.yml."
     exit 1
   fi
 }
@@ -362,7 +394,7 @@ logout() {
     if has_session; then
       say "$problem, so it was not used, and it could not be removed. Remove it yourself."
     else
-      say "$problem, so it was removed without being used. The session on the server was not ended. It ends by itself after 12 idle hours."
+      say "$problem, so it was removed without being used. The session on the server was not ended. It ends by itself after 12 idle hours. Changing the account's password ends its other sessions."
     fi
     exit 1
   fi
@@ -456,7 +488,7 @@ then
 fi
 # chmod can fail on a Windows file system, where the bit means nothing; the rename still counts.
 chmod +x "$wrapper_tmp" 2>/dev/null || true
-mv -f "$wrapper_tmp" "$DIR/openldr" || wrapper_failed "$wrapper_tmp" "$DIR/openldr"
+place_wrapper "$wrapper_tmp" "$DIR/openldr"
 
 # ⛔ On Windows the wrapper above is unusable from PowerShell. It has no file extension and
 # PowerShell does not read shebangs, so `./openldr` never runs: Windows falls back to file
@@ -470,7 +502,7 @@ mv -f "$wrapper_tmp" "$DIR/openldr" || wrapper_failed "$wrapper_tmp" "$DIR/openl
 case "$(uname -s 2>/dev/null)" in
   MINGW*|MSYS*|CYGWIN*)
     wrapper_tmp="$DIR/.openldr.ps1.$$.tmp"
-    rm -f "$wrapper_tmp"
+    rm -f "$wrapper_tmp" 2>/dev/null || wrapper_failed "$wrapper_tmp" "$DIR/openldr.ps1"
     if ! cat > "$wrapper_tmp" <<'PSWRAPPER'
 # OpenLDR operator CLI. Runs inside the api container.
 # Files must live under .\data (mounted at /data) - e.g. .\openldr.ps1 ingest data/bundle.json
@@ -495,7 +527,7 @@ PSWRAPPER
     then
       wrapper_failed "$wrapper_tmp" "$DIR/openldr.ps1"
     fi
-    mv -f "$wrapper_tmp" "$DIR/openldr.ps1" || wrapper_failed "$wrapper_tmp" "$DIR/openldr.ps1"
+    place_wrapper "$wrapper_tmp" "$DIR/openldr.ps1"
     echo "→ Also wrote openldr.ps1 (PowerShell cannot run the extensionless sh wrapper)"
     ;;
 esac

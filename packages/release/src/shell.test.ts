@@ -612,6 +612,10 @@ interface RunOpts {
   shArgs?: string[];
   /** The folder the wrapper is run from; the temporary work folder by default. */
   cwd?: string;
+  /** Run this instead of `sh <wrapper>`, for example ['./openldr'] or ['sh', 'openldr']. */
+  command?: string[];
+  /** A folder put first on PATH, before the fake docker's. */
+  pathFirst?: string;
   /** Another install folder's wrapper, from install(); the first one by default. */
   wrapper?: string;
 }
@@ -650,6 +654,8 @@ function wrapperHost(): WrapperHost {
     const wrapper = join(folder, 'openldr');
     writeFileSync(wrapper, heredoc('WRAPPER'));
     chmodSync(wrapper, 0o755);
+    // What makes a folder an install, to the wrapper.
+    writeFileSync(join(folder, 'docker-compose.yml'), 'services: {}\n');
     return { wrapper, sessionFile: sessionFileOf(dirs.home, folder) };
   };
   const first = install('w');
@@ -691,7 +697,7 @@ function wrapperHost(): WrapperHost {
   };
   // A clean environment: no real OPENLDR_* or XDG_CONFIG_HOME from the machine running the tests.
   const envFor = (opts: RunOpts = {}): Record<string, string> => ({
-    PATH: `${dirs.bin}:${process.env.PATH ?? ''}`,
+    PATH: `${opts.pathFirst ? `${opts.pathFirst}:` : ''}${dirs.bin}:${process.env.PATH ?? ''}`,
     HOME: dirs.home,
     TMPDIR: dirs.tmp,
     DOCKER_HOST: 'tcp://127.0.0.1:1',
@@ -711,7 +717,8 @@ function wrapperHost(): WrapperHost {
     resetCalls,
     run(args, opts = {}) {
       resetCalls();
-      const r = spawnSync('sh', [...(opts.shArgs ?? []), opts.wrapper ?? first.wrapper, ...args], {
+      const argv = opts.command ?? ['sh', ...(opts.shArgs ?? []), opts.wrapper ?? first.wrapper];
+      const r = spawnSync(argv[0]!, [...argv.slice(1), ...args], {
         cwd: opts.cwd ?? dirs.work, encoding: 'utf8', input: opts.input ?? '', env: envFor(opts), timeout: 20_000,
       });
       return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr, calls: calls() };
@@ -1039,7 +1046,7 @@ describe.skipIf(platform() === 'win32')('the ./openldr wrapper', () => {
       expect(r.code).toBe(1);
       expect(r.stderr).toBe(
         `Other users can read or change the session file ${h.sessionFile}, so it was removed without being used. ` +
-        'The session on the server was not ended. It ends by itself after 12 idle hours.\n',
+        "The session on the server was not ended. It ends by itself after 12 idle hours. Changing the account's password ends its other sessions.\n",
       );
       expect(r.calls).toEqual([]);
       expect(existsSync(h.sessionFile)).toBe(false);
@@ -1066,35 +1073,127 @@ describe.skipIf(platform() === 'win32')('the ./openldr wrapper', () => {
     const h = wrapperHost();
     const b = h.install('install-b');
     const aFolder = realpathSync(join(h.root, 'w'));
-    // A's wrapper, called from inside B's folder, uses A's stack.
+    // B has a session of its own, which A's wrapper must never hand in.
+    const B_MARKER = W_SESSION.replace('WRAPPER1', 'BMARKER1');
+    mkdirSync(h.sessionDir, { recursive: true, mode: 0o700 });
+    writeFileSync(b.sessionFile, `${B_MARKER}\n`, { mode: 0o600 });
+    // A's wrapper, called from inside B's folder, uses A's stack. A has no session, so none goes in.
     const r = h.run(['report', 'list'], { cwd: join(h.root, 'install-b') });
     expect(r.calls[0]!.cwd).toBe(aFolder);
+    expect(r.calls[0]!.env.OPENLDR_SESSION).toBeUndefined();
     // A key file named relative to where the caller stood is still found.
     writeFileSync(join(h.work, 'key.txt'), `${W_KEY}\n`);
     const k = h.run(['report', 'list'], { env: { OPENLDR_KEY_FILE: 'key.txt' } });
     expect(k.code).toBe(0);
     expect(k.calls[0]!.env.OPENLDR_KEY).toBe(W_KEY);
     expect(k.calls[0]!.cwd).toBe(aFolder);
-    // login and logout too.
-    expect(h.run(['login', '--username', 'alice'], { input: `${W_PASSWORD}\n`, stdout: W_SESSION, cwd: join(h.root, 'install-b') }).calls[0]!.cwd).toBe(aFolder);
-    expect(h.run(['logout'], { cwd: join(h.root, 'install-b') }).calls[0]!.cwd).toBe(aFolder);
-    expect(existsSync(b.sessionFile)).toBe(false);
+    // login and logout too: A's session is stored, handed in and removed, and B's is never touched.
+    const inB = { cwd: join(h.root, 'install-b') };
+    expect(h.run(['login', '--username', 'alice'], { input: `${W_PASSWORD}\n`, stdout: W_SESSION, ...inB }).calls[0]!.cwd).toBe(aFolder);
+    expect(readFileSync(h.sessionFile, 'utf8')).toBe(`${W_SESSION}\n`);
+    const out = h.run(['logout'], inB);
+    expect(out.calls[0]!.cwd).toBe(aFolder);
+    expect(out.calls[0]!.env.OPENLDR_SESSION).toBe(W_SESSION);
+    expect(existsSync(h.sessionFile)).toBe(false);
+    expect(readFileSync(b.sessionFile, 'utf8')).toBe(`${B_MARKER}\n`);
   });
 
-  it('a wrapper run through a link keeps its session by the link\'s folder, which two links share', () => {
-    const h = wrapperHost();
-    const links = join(h.root, 'links');
-    mkdirSync(links);
-    symlinkSync(h.wrapper, join(links, 'openldr'));
-    symlinkSync(h.wrapper, join(links, 'openldr-two'));
-    const viaLink = sessionFileOf(h.home, links);
-    expect(viaLink).not.toBe(h.sessionFile);
-    const r = h.run(['login', '--username', 'alice'], { input: `${W_PASSWORD}\n`, stdout: W_SESSION, wrapper: join(links, 'openldr') });
-    expect(r.code).toBe(0);
-    expect(r.calls[0]!.cwd).toBe(realpathSync(links));
-    expect(existsSync(viaLink)).toBe(true);
-    expect(existsSync(h.sessionFile)).toBe(false);
-    expect(h.run(['report', 'list'], { wrapper: join(links, 'openldr-two') }).calls[0]!.env.OPENLDR_SESSION).toBe(W_SESSION);
+  // Ruling 77. This replaces a test that pinned the session to the link's own folder, which broke
+  // every link to the wrapper from a folder on PATH.
+  describe('finds its install folder however it is run', () => {
+    /** A host whose first install (folder `w`) has a stored session, and a folder of links. */
+    const setup = () => {
+      const h = wrapperHost();
+      storeSession(h);
+      const links = join(h.root, 'links');
+      mkdirSync(links);
+      return { h, links, install: realpathSync(join(h.root, 'w')) };
+    };
+    const usedInstall = (r: RunResult, install: string) => {
+      expect(r.code).toBe(0);
+      expect(r.calls).toHaveLength(1);
+      expect(r.calls[0]!.cwd).toBe(install);
+      expect(r.calls[0]!.env.OPENLDR_SESSION).toBe(W_SESSION);
+    };
+
+    it('./openldr, from the install folder', () => {
+      const { h, install } = setup();
+      usedInstall(h.run(['report', 'list'], { command: ['./openldr'], cwd: install }), install);
+    });
+
+    it('an absolute path, from elsewhere', () => {
+      const { h, install } = setup();
+      usedInstall(h.run(['report', 'list'], { command: [join(install, 'openldr')] }), install);
+    });
+
+    it('sh openldr, from the install folder', () => {
+      const { h, install } = setup();
+      usedInstall(h.run(['report', 'list'], { command: ['sh', 'openldr'], cwd: install }), install);
+    });
+
+    it('a link in another folder, run from the install folder and from elsewhere', () => {
+      const { h, links, install } = setup();
+      symlinkSync(h.wrapper, join(links, 'openldr'));
+      usedInstall(h.run(['report', 'list'], { command: [join(links, 'openldr')], cwd: install }), install);
+      usedInstall(h.run(['report', 'list'], { command: [join(links, 'openldr')] }), install);
+    });
+
+    it('a link found on PATH', () => {
+      const { h, links, install } = setup();
+      symlinkSync(h.wrapper, join(links, 'openldr'));
+      usedInstall(h.run(['report', 'list'], { command: ['openldr'], pathFirst: links }), install);
+    });
+
+    it('a relative link', () => {
+      const { h, links, install } = setup();
+      symlinkSync('../w/openldr', join(links, 'openldr'));
+      usedInstall(h.run(['report', 'list'], { command: [join(links, 'openldr')] }), install);
+    });
+
+    it('a link to a link', () => {
+      const { h, links, install } = setup();
+      symlinkSync(h.wrapper, join(links, 'first'));
+      const outer = join(h.root, 'outer');
+      mkdirSync(outer);
+      symlinkSync('../links/first', join(outer, 'openldr'));
+      usedInstall(h.run(['report', 'list'], { command: [join(outer, 'openldr')] }), install);
+    });
+
+    it('two links in one folder to two installs use two sessions', () => {
+      const { h, links, install } = setup();
+      const b = h.install('install-b');
+      const B_MARKER = W_SESSION.replace('WRAPPER1', 'BMARKER1');
+      writeFileSync(b.sessionFile, `${B_MARKER}\n`, { mode: 0o600 });
+      symlinkSync(h.wrapper, join(links, 'openldr-a'));
+      symlinkSync(b.wrapper, join(links, 'openldr-b'));
+      usedInstall(h.run(['report', 'list'], { command: [join(links, 'openldr-a')] }), install);
+      const rb = h.run(['report', 'list'], { command: [join(links, 'openldr-b')] });
+      expect(rb.calls[0]!.cwd).toBe(realpathSync(join(h.root, 'install-b')));
+      expect(rb.calls[0]!.env.OPENLDR_SESSION).toBe(B_MARKER);
+    });
+
+    it('a loop of links ends, and stops with the install-folder message', () => {
+      const { h, links } = setup();
+      symlinkSync(join(links, 'loop-b'), join(links, 'loop-a'));
+      symlinkSync(join(links, 'loop-a'), join(links, 'loop-b'));
+      // `sh -c <text> <name>` sets $0 to <name>, so $0 can be a loop that no shell could open.
+      const started = Date.now();
+      const r = h.run(['report', 'list'], { command: ['sh', '-c', heredoc('WRAPPER'), join(links, 'loop-a')] });
+      expect(Date.now() - started).toBeLessThan(15_000);
+      expect(r.code).toBe(1);
+      expect(r.stderr).toBe(`This script must stay in its install folder, or be a link to it. ${realpathSync(links)} has no docker-compose.yml.\n`);
+      expect(r.calls).toEqual([]);
+    });
+
+    it('a copy in a folder with no compose file stops, naming the folder, and hands nothing in', () => {
+      const { h, links } = setup();
+      const copy = join(links, 'openldr');
+      writeFileSync(copy, heredoc('WRAPPER'), { mode: 0o755 });
+      const r = h.run(['report', 'list'], { command: [copy] });
+      expect(r.code).toBe(1);
+      expect(r.stderr).toBe(`This script must stay in its install folder, or be a link to it. ${realpathSync(links)} has no docker-compose.yml.\n`);
+      expect(r.calls).toEqual([]);
+    });
   });
 
   it('after a failed login, says what a --session-out refusal means', () => {
@@ -1262,7 +1361,7 @@ describe.skipIf(platform() === 'win32')('the ./openldr wrapper', () => {
  */
 function wrapperOnly(
   args: string[], folder: (dir: string) => void,
-  how: { piped?: 'sh' | 'bash'; uname?: string } = {},
+  how: { piped?: 'sh' | 'bash'; uname?: string; staleTempFolder?: boolean } = {},
 ): { code: number; out: string; dir: string; cwd: string; called: string[] } {
   const root = tempDir('openldr-wrapper-only-');
   const bin = join(root, 'bin');
@@ -1285,7 +1384,9 @@ function wrapperOnly(
   // Piped, as the docs show it: `curl ... | bash -s -- --wrapper-only --dir .`, from a local copy.
   const [cmd, argv, input] = how.piped
     ? [how.piped === 'sh' ? 'sh' : BASH, ['-s', '--', ...words], readFileSync(installer, 'utf8')]
-    : [BASH, [installer, ...words], ''];
+    : how.staleTempFolder
+      ? ['sh', ['-c', 'd=$1; shift; mkdir -- "$d/.openldr.$$.tmp" && exec "$@"', 'sh', dir, BASH, installer, ...words], '']
+      : [BASH, [installer, ...words], ''];
   const r = spawnSync(cmd, argv, {
     cwd,
     encoding: 'utf8',
@@ -1402,6 +1503,58 @@ describe.skipIf(platform() === 'win32')('install.sh --wrapper-only', () => {
     } finally {
       chmodSync(dirOf, 0o755);
     }
+  });
+
+  it('replaces a link to a folder with a real file, and writes nothing into that folder', () => {
+    let target = '';
+    const r = wrapperOnly(['--wrapper-only', '--dir', '{dir}'], (dir) => {
+      install(dir);
+      target = join(dir, '..', 'a-folder');
+      mkdirSync(target);
+      rmSync(join(dir, 'openldr'));
+      symlinkSync(target, join(dir, 'openldr'));
+    });
+    expect(r.code).toBe(0);
+    expect(lstatSync(join(r.dir, 'openldr')).isFile()).toBe(true);
+    expect(readFileSync(join(r.dir, 'openldr'), 'utf8')).toBe(heredoc('WRAPPER'));
+    expect(readdirSync(target)).toEqual([]);
+  });
+
+  it('refuses a real folder named openldr, writes nothing into it, and leaves no temporary file', () => {
+    const r = wrapperOnly(['--wrapper-only', '--dir', '{dir}'], (dir) => {
+      install(dir);
+      rmSync(join(dir, 'openldr'));
+      mkdirSync(join(dir, 'openldr'));
+    });
+    expect(r.code).not.toBe(0);
+    expect(r.out).toContain(`${r.dir}/openldr is a folder, not the wrapper. Remove or rename it, then run the installer again.`);
+    expect(r.out).not.toContain('Rewrote the openldr wrapper');
+    expect(readdirSync(join(r.dir, 'openldr'))).toEqual([]);
+    expect(filesUnder(r.dir)).toEqual(['.env', 'config/', 'config/garage.toml', 'docker-compose.yml', 'openldr/']);
+  });
+
+  it('a stale folder with the temporary file\'s name stops with the could-not-write message', () => {
+    // The temporary name holds the installer's process id. A shell makes the folder under its own $$
+    // and then execs the installer, which keeps that process id.
+    const r = wrapperOnly(['--wrapper-only', '--dir', '{dir}'], install, { staleTempFolder: true });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain(`Could not write ${r.dir}/openldr. The wrapper that was there is unchanged.`);
+    expect(r.out).not.toContain('Is a directory');
+    expect(readFileSync(join(r.dir, 'openldr'), 'utf8')).not.toBe(heredoc('WRAPPER'));
+  });
+
+  it('replaces a link to a folder named openldr.ps1 the same way where it writes one', () => {
+    let target = '';
+    const r = wrapperOnly(['--wrapper-only', '--dir', '{dir}'], (dir) => {
+      install(dir);
+      target = join(dir, '..', 'a-ps1-folder');
+      mkdirSync(target);
+      symlinkSync(target, join(dir, 'openldr.ps1'));
+    }, { uname: 'MINGW64_NT-10.0-19045' });
+    expect(r.code).toBe(0);
+    expect(lstatSync(join(r.dir, 'openldr.ps1')).isFile()).toBe(true);
+    expect(readFileSync(join(r.dir, 'openldr.ps1'), 'utf8')).toBe(heredoc('PSWRAPPER'));
+    expect(readdirSync(target)).toEqual([]);
   });
 
   it('replaces a linked openldr.ps1 the same way where it writes one', () => {
