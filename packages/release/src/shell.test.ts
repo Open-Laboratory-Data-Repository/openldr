@@ -1224,6 +1224,17 @@ describe.skipIf(platform() === 'win32')('the ./openldr wrapper', () => {
       expect(r.calls).toEqual([]);
     });
 
+    it('a copy in a folder with a .env and no compose file stops, and hands nothing in', () => {
+      const { h, links } = setup();
+      writeFileSync(join(links, '.env'), 'SOMETHING=else\n');
+      const copy = join(links, 'openldr');
+      writeFileSync(copy, heredoc('WRAPPER'), { mode: 0o755 });
+      const r = h.run(['report', 'list'], { command: [copy], env: { OPENLDR_KEY: W_KEY } });
+      expect(r.code).toBe(1);
+      expect(r.stderr).toBe(notInstall(links));
+      expect(r.calls).toEqual([]);
+    });
+
     // `ln -sr` makes a relative link like this one. Its `..` must be taken on disk, from the folder the
     // link really is in, not by text from the linked folder it was reached through.
     describe.each(SHELLS)('a relative link reached through a linked folder, under %s', (_name, shell) => {
@@ -1776,6 +1787,29 @@ describe('the openldr.ps1 wrapper (unproven: nothing here runs PowerShell)', () 
     const rest = fromSh.slice(check);
     expect(rest).toMatch(/^[^\n]*\n {2}\[Console\]::Error\.WriteLine\('OPENLDR_KEY_FILE is not read on Windows\. Set OPENLDR_KEY\.'\)\n {2}exit 1\n/m);
     expect(check).toBeLessThan(fromSh.indexOf('docker compose exec'));
+  });
+
+  // A copy in another project's folder would otherwise run `docker compose exec api` there and hand
+  // an exported OPENLDR_KEY to that project's api. Read, not run: nothing here runs PowerShell.
+  it('stops with the sh wrapper\'s message when it is not beside a .env and a docker-compose.yml, before docker runs', () => {
+    const shMessage = /say "(This script must stay in its install folder, or be a link to it\. \$here has no \.env or no docker-compose\.yml\.)"/.exec(heredoc('WRAPPER'));
+    expect(shMessage).not.toBeNull();
+    const check = fromSh.indexOf("(Test-Path -LiteralPath (Join-Path $here '.env') -PathType Leaf)");
+    expect(check).toBeGreaterThan(-1);
+    expect(fromSh.slice(check)).toContain("-not (Test-Path -LiteralPath (Join-Path $here 'docker-compose.yml') -PathType Leaf)");
+    expect(fromSh.slice(check)).toMatch(new RegExp(`^[^\\n]*\\n {2}\\[Console\\]::Error\\.WriteLine\\("${shMessage![1]!.replace(/[.$()]/g, '\\$&')}"\\)\\n {2}exit 1\\n`, 'm'));
+    expect(fromSh.indexOf('$here = $PSScriptRoot')).toBeLessThan(check);
+    expect(check).toBeLessThan(fromSh.indexOf('docker compose exec'));
+  });
+
+  it('runs docker from its own folder and puts the caller\'s folder back after', () => {
+    const go = fromSh.indexOf('Set-Location -LiteralPath $here');
+    const docker = fromSh.indexOf('docker compose exec');
+    expect(fromSh.indexOf('$caller = Get-Location')).toBeLessThan(go);
+    expect(go).toBeGreaterThan(-1);
+    expect(go).toBeLessThan(docker);
+    // The way back is in a finally, so it runs however docker ends.
+    expect(fromSh.slice(go)).toMatch(/try \{\n[\s\S]*docker compose exec[\s\S]*\n\} finally \{\n {2}Set-Location -LiteralPath \$caller\.Path\n\}\nexit \$code\n$/);
   });
 
   it('install.ps1 has -WrapperOnly, which needs -Dir and an install folder, and writes before any download', () => {

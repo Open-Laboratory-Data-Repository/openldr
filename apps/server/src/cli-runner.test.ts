@@ -1,6 +1,6 @@
 // Layer under test: cli-runner.ts starting a real child process (the fake CLI in __fixtures__, never
 // the real one) and handing it a command on descriptor 3. Linux only: Windows and macOS are unproven.
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
@@ -322,6 +322,14 @@ describe('resolveCliEntry', () => {
 
   it('finds the checkout entry from this source folder', () => {
     expect(resolveCliEntry(undefined)).toBe(fileURLToPath(new URL('../../../packages/cli/dev.mjs', import.meta.url)));
+  });
+
+  it('finds the CLI from the example in .env.example, read from apps/server where `pnpm -C apps/server dev` runs', () => {
+    const example = readFileSync(fileURLToPath(new URL('../../../.env.example', import.meta.url)), 'utf8');
+    const value = /^# CLI_ENTRY=(.+)$/m.exec(example)?.[1];
+    expect(value).toBeDefined();
+    const serverFolder = fileURLToPath(new URL('..', import.meta.url));
+    expect(resolveCliEntry(value, { cwd: serverFolder })).toBe(fileURLToPath(new URL('../../../packages/cli/dev.mjs', import.meta.url)));
   });
 });
 

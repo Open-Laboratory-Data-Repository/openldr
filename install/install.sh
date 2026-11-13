@@ -529,12 +529,32 @@ if ((Test-Path Env:OPENLDR_KEY_FILE) -and -not (Test-Path Env:OPENLDR_KEY)) {
   [Console]::Error.WriteLine('OPENLDR_KEY_FILE is not read on Windows. Set OPENLDR_KEY.')
   exit 1
 }
+# docker compose finds the stack from the working folder, so it runs from this script's own folder,
+# the install it belongs to, and the caller's folder is put back after. A copy of this script
+# elsewhere cannot be traced back to its install: no .env or no docker-compose.yml beside it stops
+# here, so an exported OPENLDR_KEY never reaches another project's api.
+$here = $PSScriptRoot
+if (-not $here) {
+  [Console]::Error.WriteLine('Cannot find the folder this script is in, so the install it belongs to is not known.')
+  exit 1
+}
+if (-not (Test-Path -LiteralPath (Join-Path $here '.env') -PathType Leaf) -or -not (Test-Path -LiteralPath (Join-Path $here 'docker-compose.yml') -PathType Leaf)) {
+  [Console]::Error.WriteLine("This script must stay in its install folder, or be a link to it. $here has no .env or no docker-compose.yml.")
+  exit 1
+}
 $pass = @()
 foreach ($name in 'OPENLDR_KEY', 'OPENLDR_URL', 'OPENLDR_ALLOW_PLAIN_HTTP') {
   if (Test-Path "Env:$name") { $pass += '-e', $name }
 }
-docker compose exec -T @pass -w / api node /app/cli/dist/index.js $args
-exit $LASTEXITCODE
+$caller = Get-Location
+Set-Location -LiteralPath $here
+try {
+  docker compose exec -T @pass -w / api node /app/cli/dist/index.js $args
+  $code = $LASTEXITCODE
+} finally {
+  Set-Location -LiteralPath $caller.Path
+}
+exit $code
 PSWRAPPER
     then
       wrapper_failed "$wrapper_tmp" "$DIR/openldr.ps1"
