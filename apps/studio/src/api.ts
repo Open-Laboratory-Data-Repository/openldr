@@ -823,6 +823,24 @@ export const sendUserResetEmail = (id: string): Promise<void> =>
 export const forceUserLogout = (id: string): Promise<void> =>
   authFetch(`/api/users/${id}/force-logout`, { method: 'POST' }).then((r) => { if (!r.ok) throw new Error(`force logout failed: ${r.status}`); });
 
+// ── Access keys (apps/server/src/access-key-routes.ts) ─────────────────────────
+/** Mirrors AccessKeyRecord (packages/db/src/access-key-store.ts). It never holds the key. */
+export interface AccessKey {
+  id: string; userId: string; name: string; prefix: string;
+  createdBy: string | null; createdAt: string;
+  expiresAt: string | null; revokedAt: string | null; lastUsedAt: string | null;
+}
+/** Revoked and expired keys are in the list too. */
+export const listAccessKeys = (userId: string): Promise<AccessKey[]> =>
+  apiGet<{ keys: AccessKey[] }>(`/api/users/${encodeURIComponent(userId)}/keys`, 'list access keys').then((r) => r.keys);
+/** The only answer that ever holds a key. The caller shows it once and keeps it nowhere else.
+ *  `expiresAt` is a full ISO date-time, or null for no expiry. */
+export const createAccessKey = (userId: string, input: { name: string; expiresAt: string | null }): Promise<{ key: string; record: AccessKey }> =>
+  authFetch(`/api/users/${encodeURIComponent(userId)}/keys`, jbody(input, 'POST'))
+    .then((r) => okJson<{ key: string; record: AccessKey }>(r, 'create access key'));
+export const revokeAccessKey = (userId: string, keyId: string): Promise<void> =>
+  apiDelete(`/api/users/${encodeURIComponent(userId)}/keys/${encodeURIComponent(keyId)}`, 'revoke access key');
+
 // ── Facility registry (hand entry via the Users pattern) ──────────────────────
 // Mirrors the server's FacilityRecord (packages/db/src/facility-registry-store.ts) as returned
 // verbatim by GET/POST/PUT /api/facilities.

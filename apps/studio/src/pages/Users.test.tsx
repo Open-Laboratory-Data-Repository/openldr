@@ -19,14 +19,17 @@ vi.mock('@/api', async (orig) => {
     listRoles: vi.fn(),
     getUserRoles: vi.fn(),
     setUserRoles: vi.fn(),
+    listAccessKeys: vi.fn(),
   };
 });
 const providerState = vi.hoisted(() => ({ identityAdmin: true, syncClientAdmin: true, passwordResetEmail: undefined as boolean | undefined }));
+// Capabilities the signed-in user lacks. Empty means every capability is held.
+const missingCaps = vi.hoisted(() => new Set<string>());
 vi.mock('@/auth/AuthProvider', () => ({
-  useAuth: () => ({ authCapabilities: providerState, user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasCapability: () => true }),
+  useAuth: () => ({ authCapabilities: providerState, user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasCapability: (c: string) => !missingCaps.has(c) }),
 }));
 
-import { listUserDirectory, setUserStatus, createUser, updateUser, sendUserResetEmail, listPublishedForms, getForm, listRoles, getUserRoles, setUserRoles, type UserSummary } from '@/api';
+import { listUserDirectory, setUserStatus, createUser, updateUser, sendUserResetEmail, listPublishedForms, getForm, listRoles, getUserRoles, setUserRoles, listAccessKeys, type UserSummary } from '@/api';
 import { Users } from './Users';
 
 // Minimal published form + schema for UserDialog tests
@@ -59,7 +62,8 @@ const rows: UserSummary[] = [
 ];
 
 beforeEach(() => {
-  vi.clearAllMocks(); providerState.identityAdmin = true; providerState.passwordResetEmail = undefined;
+  vi.clearAllMocks(); providerState.identityAdmin = true; providerState.passwordResetEmail = undefined; missingCaps.clear();
+  vi.mocked(listAccessKeys).mockResolvedValue([]);
   (listUserDirectory as ReturnType<typeof vi.fn>).mockImplementation(async ({ enabled }) => ({ rows: rows.filter((u) => enabled === undefined || u.enabled === enabled), total: null, hasMore: false }));
   (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([
     { id: 'form-1', name: 'Users Form', versionLabel: null, status: 'published', active: true, fhirResourceType: null, fieldCount: 2, updatedAt: '2026-01-01T00:00:00Z' },
@@ -272,6 +276,28 @@ describe('Send reset email', () => {
     providerState.passwordResetEmail = true;
     await openBobActions();
     expect(screen.getByRole('menuitem', { name: 'Send reset email' })).toBeTruthy();
+  });
+});
+
+describe('Access keys row action', () => {
+  it('opens the access keys sheet for that user', async () => {
+    render(<MemoryRouter><Users /></MemoryRouter>);
+    await screen.findByText('bob');
+    openDropdown(screen.getByLabelText('Actions for bob'));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Access keys' }));
+    expect(await screen.findByText('Access keys for bob')).toBeTruthy();
+    await waitFor(() => expect(listAccessKeys).toHaveBeenCalledWith('u2'));
+    // The sheet's own clicks do not reach the row's click-to-edit handler.
+    expect(screen.queryByText('Edit user')).toBeNull();
+  });
+
+  it('hides the row action without users.manage', async () => {
+    missingCaps.add('users.manage');
+    render(<MemoryRouter><Users /></MemoryRouter>);
+    await screen.findByText('bob');
+    openDropdown(screen.getByLabelText('Actions for bob'));
+    await screen.findByRole('menuitem', { name: 'Edit' });
+    expect(screen.queryByRole('menuitem', { name: 'Access keys' })).toBeNull();
   });
 });
 

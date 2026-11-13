@@ -19,6 +19,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { listUserDirectory, setUserStatus, sendUserResetEmail, forceUserLogout, type UserSummary } from '@/api';
 import { UserDialog } from '@/users/UserDialog';
 import { ResetPasswordDialog } from '@/users/ResetPasswordDialog';
+import { AccessKeysSheet } from '@/users/AccessKeysSheet';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '-';
@@ -28,8 +29,10 @@ function formatDate(iso: string | null): string {
 
 export function Users() {
   const { t } = useTranslation();
-  const { user: me, authCapabilities } = useAuth();
+  const { user: me, authCapabilities, hasCapability } = useAuth();
   const identityAdmin = authCapabilities?.identityAdmin ?? true;
+  // The key routes need users.manage, so the row action is shown only with it.
+  const manageKeys = hasCapability('users.manage');
   // Only an explicit false hides it. An older server sends no flag and keeps today's menu.
   const resetEmail = authCapabilities?.passwordResetEmail !== false;
   const [rows, setRows] = useState<UserSummary[]>([]);
@@ -40,6 +43,7 @@ export function Users() {
   const [pendingToggle, setPendingToggle] = useState<UserSummary | null>(null);
   const [resetting, setResetting] = useState<UserSummary | null>(null);
   const [pendingLogout, setPendingLogout] = useState<UserSummary | null>(null);
+  const [keysFor, setKeysFor] = useState<UserSummary | null>(null);
   const [search, setSearch] = useState('');
 
   const [status, setStatus] = useState('true');
@@ -117,6 +121,7 @@ export function Users() {
                 <DropdownMenuItem disabled={isSelf} onClick={() => { if (!isSelf) setPendingToggle(u); }} className={u.enabled ? 'text-destructive focus:text-destructive' : ''}>
                   {u.enabled ? t('users.disable') : t('users.enable')}{isSelf ? ` (${t('users.selfSuffix')})` : ''}
                 </DropdownMenuItem>
+                {manageKeys && <DropdownMenuItem onClick={() => setKeysFor(u)}>{t('users.accessKeys.menuItem')}</DropdownMenuItem>}
                 {identityAdmin && <><DropdownMenuItem onClick={() => { setResetting(u); }}>
                   {t('users.resetPassword')}
                 </DropdownMenuItem>
@@ -131,7 +136,7 @@ export function Users() {
           </div>
         );
       }, type: 'text', defaultVisible: true, sortable: false, filterable: false, headClassName: 'w-16' },
-  ], [me?.id, t, doSendResetEmail, identityAdmin, resetEmail]);
+  ], [me?.id, t, doSendResetEmail, identityAdmin, resetEmail, manageKeys]);
 
   const table = useTableState({ columns });
 
@@ -224,6 +229,7 @@ export function Users() {
           destructive
           onConfirm={() => { void doForceLogout(); }}
         />
+        <AccessKeysSheet user={keysFor} onClose={() => setKeysFor(null)} />
       </div>
     </AppShell>
   );
