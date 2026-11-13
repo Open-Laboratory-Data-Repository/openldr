@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "b8e94b4b",
+          "type": "feat",
+          "scope": "standalone",
+          "title": "A recovery command starts the database itself when no launcher runs"
+        },
+        {
+          "hash": "14bef4d7",
+          "type": "fix",
+          "scope": "db",
+          "title": "A lost database connection no longer ends the server"
+        },
+        {
           "hash": "1adae9f3",
           "type": "fix",
           "scope": "bootstrap",
