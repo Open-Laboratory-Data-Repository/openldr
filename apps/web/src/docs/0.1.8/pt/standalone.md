@@ -16,7 +16,7 @@ Executa-o a partir de uma cópia do código-fonte, compilada no seu próprio com
 
 Execute todos os comandos desta página a partir da raiz do repositório, onde está o `package.json`.
 
-Quando um comando do lançador termina com um código de saída diferente de 0, ou quando carrega em Ctrl+C, o pnpm acrescenta uma linha própria que começa por `[ELIFECYCLE]`, por exemplo `[ELIFECYCLE] Command failed.` Essa linha vem do pnpm. Não é um erro do OpenLDR.
+Quando um comando do lançador termina com um código de saída diferente de 0, o pnpm acrescenta uma linha própria. Faz o mesmo quando carrega em Ctrl+C. Essa linha começa por `[ELIFECYCLE]`, por exemplo `[ELIFECYCLE] Command failed.` Vem do pnpm. Não é um erro do OpenLDR.
 
 ### 1. Obter o código-fonte
 
@@ -141,7 +141,7 @@ pnpm openldr-standalone stop
 Stopped.
 ```
 
-Se o servidor ainda estiver ocupado ao fim de 60 segundos, o Postgres para na mesma. `stop` mostra então esta linha, ao fim de cerca de um minuto:
+Se o servidor ainda estiver ocupado ao fim de 60 segundos, o Postgres para na mesma. `stop` mostra então esta linha em vez disso, ao fim de cerca de um minuto:
 
 ```text
 Stopped, but the server did not finish in 60 seconds. Work in flight will be retried.
@@ -151,7 +151,7 @@ Nos dois casos, o código de saída é 0. `stop` pede ao lançador em execução
 
 Também pode carregar em Ctrl+C no terminal onde `start` está a correr. Fechar essa janela de terminal também é uma paragem normal. Em qualquer dos casos, o servidor para primeiro e o Postgres depois. O terminal de `start` mostra a mesma linha `Stopped.`, ou a linha dos 60 segundos acima.
 
-Para não esperar os 60 segundos, carregue de novo em Ctrl+C passado um momento. Toques com menos de um segundo e meio de intervalo contam como um só, porque um terminal pode entregar a mesma tecla mais do que uma vez. Um terceiro Ctrl+C, também passado um momento, termina o lançador de imediato com o código de saída 1. O Postgres recebe na mesma a ordem de parar quando o lançador sai. Fechar o terminal nunca encurta a espera.
+Para não esperar os 60 segundos, aguarde um momento e carregue de novo em Ctrl+C. Depois de um Ctrl+C, o lançador ignora os toques seguintes durante um segundo e meio. Faz isto porque o pnpm e a shell podem entregar o mesmo sinal uma segunda vez. Um terceiro Ctrl+C, também passado um momento, termina o lançador de imediato com o código de saída 1. O Postgres recebe na mesma a ordem de parar quando o lançador sai. Fechar o terminal nunca encurta a espera.
 
 ### 3. Reiniciar depois de um corte de energia ou de uma falha
 
@@ -259,7 +259,7 @@ Listening on 100.64.0.10. Sign-in travels over plain HTTP on this network.
 
 Substitua `100.64.0.10` pelo endereço privado ou Tailscale do seu computador. Abra no telemóvel o endereço mostrado. `--host 0.0.0.0` escuta em todos os endereços deste computador. O lançador mostra então `http://localhost:3000/studio/`, que só funciona neste computador. No telemóvel, use antes o endereço do computador.
 
-Em HTTP sem cifra, o navegador desativa uma funcionalidade que o Studio usa. Alguns ecrãs podem então falhar, entre eles as páginas de plugins e a edição de painéis. Isto acontece no telemóvel, e também neste computador quando abre o endereço dado a `--host`. Estes ecrãs funcionam quando o Studio é aberto em `http://localhost:3000/studio/` no computador que executa o OpenLDR. Esse endereço só responde com o endereço de escuta predefinido ou com `--host 0.0.0.0`.
+Em HTTP sem cifra, o navegador desativa uma funcionalidade que o Studio usa. Alguns ecrãs podem então falhar, entre eles as páginas de plugins e a edição de painéis. Isto acontece no telemóvel, e também neste computador quando abre o endereço dado a `--host`. Estes ecrãs funcionam quando abre o Studio em `http://localhost:3000/studio/` no computador que executa o OpenLDR. Esse endereço responde quando arranca sem `--host`, ou com `--host localhost`, `0.0.0.0`, `::1` ou `::`.
 
 A última linha é um aviso. Uma instalação autónoma não tem TLS. Os nomes de utilizador, as palavras-passe e os dados dos doentes atravessam a rede sem cifra. Qualquer pessoa que consiga observar essa rede pode lê-los. Faça-o só numa rede de confiança. O Tailscale cifra o tráfego entre os seus próprios dispositivos. Nunca abra esta porta à Internet. Pode ter de autorizar a porta na firewall.
 
@@ -272,7 +272,9 @@ pnpm openldr-standalone stop
 cp -a ~/.local/share/openldr /media/backup/openldr-2026-11-13
 ```
 
-Guarde `standalone.json` com o resto. Sem ele, o lançador recusa arrancar nessa base de dados. Sem a chave que ele contém, os segredos guardados na base de dados não podem ser lidos. A cópia contém dados de doentes e palavras-passe. Mantenha-a privada.
+Guarde `standalone.json` com o resto. Sem ele, o lançador recusa arrancar nessa base de dados. Sem a chave que ele contém, os segredos guardados na base de dados não podem ser lidos.
+
+A cópia contém dados de doentes. Contém também o ficheiro de estado, `standalone.json`, com a palavra-passe de administrador da base de dados e a chave dos segredos guardados. Guarde a cópia numa pasta que só o seu utilizador possa abrir. Um disco FAT ou exFAT não guarda as permissões da pasta. Qualquer pessoa que consiga ler esse disco consegue ler a cópia.
 
 Para repor, pare o OpenLDR, volte a colocar a pasta copiada no sítio original e arranque de novo. Também pode arrancar com `--data-dir` a apontar para a cópia.
 
@@ -284,9 +286,10 @@ Para repor, pare o OpenLDR, volte a colocar a pasta copiada no sítio original e
 - Um só lançador por pasta de dados.
 - Só o Linux foi testado. O Windows e o macOS não foram testados.
 - A sincronização com um servidor central que use um certificado autoassinado não é suportada.
-- Aberto num endereço que não seja `localhost`, em HTTP sem cifra, alguns ecrãs do Studio podem falhar, como as páginas de plugins e a edição de painéis. Funcionam em `http://localhost:3000/studio/` no computador que executa o OpenLDR. Esse endereço só responde com o endereço de escuta predefinido ou com `--host 0.0.0.0`.
+- Em HTTP sem cifra, alguns ecrãs do Studio precisam de um endereço que o navegador considere local: `localhost` ou `127.0.0.1`. As páginas de plugins e a edição de painéis estão entre eles. Noutro endereço, podem falhar. `http://localhost:3000/studio/` responde quando arranca sem `--host`, ou com `--host localhost`, `0.0.0.0`, `::1` ou `::`.
 - O Postgres incluído não pode passar para uma nova versão principal. A pasta de dados só funciona com o Postgres 16.
 - Fazer uma cópia de segurança é parar e depois copiar a pasta. Não existe ferramenta de cópia de segurança.
+- Os registos do servidor e do Postgres não têm rotação. Crescem até os apagar com o OpenLDR parado.
 - Não pode mover dados entre uma instalação autónoma e uma instalação Docker.
 - Não arranca com o computador. Só funciona enquanto `start` estiver a correr num terminal.
 
@@ -299,6 +302,8 @@ Para repor, pare o OpenLDR, volte a colocar a pasta copiada no sítio original e
 | `A Postgres for <folder> is running as process <n> but does not accept this install's login. Stop that process, then start again.` | Um Postgres que esta instalação não iniciou está a usar a pasta da base de dados. Pare-o e arranque de novo. |
 | `The state file <file> is missing, but a database already exists in <folder>.` | Reponha `standalone.json` a partir da sua cópia de segurança. Não apague a base de dados para contornar esta mensagem. |
 | `Could not confirm that OpenLDR stopped: ...` | Execute `status`. Se ainda estiver a funcionar, carregue em Ctrl+C no terminal dele. |
+| `The database is recovering after an unclean stop. This can take a few minutes.` | Aguarde. O arranque continua sozinho quando o Postgres terminar a reparação. |
+| `WORKFLOW_FILE_ACCESS_ROOT must not be the OpenLDR data folder, hold it, or sit inside it.` | Indique em `WORKFLOW_FILE_ACCESS_ROOT` uma pasta fora da pasta de dados e arranque de novo. |
 
 ## Guias relacionados
 
