@@ -6,6 +6,144 @@
       "version": null,
       "entries": [
         {
+          "hash": "83a508a7",
+          "type": "fix",
+          "scope": "install",
+          "title": "The Windows installer refuses before the download and keeps the system's reason"
+        },
+        {
+          "hash": "afe797f6",
+          "type": "fix",
+          "scope": "install",
+          "title": "Refuse before the download, follow a linked ~/.local, and fetch https only"
+        },
+        {
+          "hash": "c20f579e",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Load sample data from Setup checks, and four first run fixes"
+        },
+        {
+          "hash": "a6374e06",
+          "type": "fix",
+          "scope": "release",
+          "title": "Refuse a Postgres link target outside its package before removing anything"
+        },
+        {
+          "hash": "d9b3f517",
+          "type": "fix",
+          "scope": "desktop",
+          "title": "Load the launcher on 127.0.0.1, no bridge when attached, and five smaller fixes"
+        },
+        {
+          "hash": "eeb4bf2b",
+          "type": "fix",
+          "scope": "install",
+          "title": "The running check no longer matches itself, and four smaller fixes"
+        },
+        {
+          "hash": "2ee32cc2",
+          "type": "fix",
+          "scope": "release",
+          "title": "Keep latest.json when a check after the release fails, and refuse a non-Linux host at once"
+        },
+        {
+          "hash": "cb9e6a65",
+          "type": "fix",
+          "scope": "release",
+          "title": "The macOS package carries Electron's licence files"
+        },
+        {
+          "hash": "8b33aa53",
+          "type": "feat",
+          "scope": "install",
+          "title": "A one-line installer for the desktop app on Windows"
+        },
+        {
+          "hash": "05d59636",
+          "type": "feat",
+          "scope": "release",
+          "title": "Build, check and upload the desktop packages"
+        },
+        {
+          "hash": "0558b93f",
+          "type": "feat",
+          "scope": "install",
+          "title": "A one-line installer for the desktop app on Linux and macOS"
+        },
+        {
+          "hash": "220af4b4",
+          "type": "feat",
+          "scope": "release",
+          "title": "Pack the desktop app for Linux, macOS and Windows"
+        },
+        {
+          "hash": "83b596cf",
+          "type": "feat",
+          "scope": "web",
+          "title": "The desktop app's one-line install on the landing page"
+        },
+        {
+          "hash": "4ddf6cf6",
+          "type": "fix",
+          "scope": "server",
+          "title": "Audit a sample data load that failed"
+        },
+        {
+          "hash": "6eeeb332",
+          "type": "feat",
+          "scope": "studio",
+          "title": "A first-run flow after the first administrator is made"
+        },
+        {
+          "hash": "77d372b5",
+          "type": "feat",
+          "scope": "server",
+          "title": "Load sample data through a route, for an administrator, on an empty install"
+        },
+        {
+          "hash": "1a74506d",
+          "type": "fix",
+          "scope": "desktop",
+          "title": "Guard frame navigation, keep the launcher alive past the app, and four smaller fixes"
+        },
+        {
+          "hash": "6f9269c1",
+          "type": "feat",
+          "scope": "desktop",
+          "title": "The app hands the setup code to Studio"
+        },
+        {
+          "hash": "f9550475",
+          "type": "feat",
+          "scope": "desktop",
+          "title": "The window, the tray, quit through stop, and attaching to a running launcher"
+        },
+        {
+          "hash": "54408602",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "Record the data folder's version before the server starts"
+        },
+        {
+          "hash": "79aca47d",
+          "type": "feat",
+          "scope": "desktop",
+          "title": "The app's package, settings, port choice and launcher commands"
+        },
+        {
+          "hash": "0e0b629d",
+          "type": "feat",
+          "scope": "standalone",
+          "title": "An older launcher refuses a data folder a newer one used"
+        },
+        {
+          "hash": "ee0ef583",
+          "type": "feat",
+          "scope": "standalone",
+          "title": "Launcher events on --events-fd, and status --json"
+        },
+        {
           "hash": "b8e94b4b",
           "type": "feat",
           "scope": "standalone",
