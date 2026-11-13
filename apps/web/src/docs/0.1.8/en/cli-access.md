@@ -149,8 +149,6 @@ oldr_<the new key>
 made key 6afa1ead-1382-4cd1-a07e-d233c907fa2b (claude-test) for ai-reader. It cannot be shown again, so store it now.
 ```
 
-Standard error also holds a JSON log line from the server, as it does for every command sent through the app. "What is different through the app", below, says more.
-
 So a script can keep the key in a file and never show it on screen. The `umask` makes the file readable only by you from the moment it is made:
 
 ```sh
@@ -296,7 +294,7 @@ These used to work and now give an error. A script may meet them.
 - A program that runs the CLI and reads nothing of its output for 5 minutes loses the command. The server stops it. Not run.
 - Ctrl+C stops the command on the server too. A command that does not stop is killed after 10 seconds. Not run.
 - If the server stops while a command runs, the CLI prints `OpenLDR stopped while this command was running.` on standard error. For most commands the exit code is 130, or 137 when the command had to be killed. `import start` returns its own code. A hard stop prints `The connection to OpenLDR was lost.` instead. Not run.
-- Every command sent through the app prints a JSON log line from the server on standard error. On an install with no sync it is one line, with `"msg":"sync disabled (not configured)"`. Standard output stays clean, so `--json` output still parses. A script that treats any standard error output as a failure will fail.
+- `sync status`, `sync now` and `sync quarantine retry` print JSON log lines from the server on standard error, such as `"msg":"sync disabled (not configured)"`. They start sync to give their answer. On a site with sync set up, those lines name the central address and the site id. Other commands do not start sync and print no such line. Standard output stays clean, so `--json` output still parses. A script that treats any standard error output from these three as a failure will fail.
 
 ## Who can run what
 

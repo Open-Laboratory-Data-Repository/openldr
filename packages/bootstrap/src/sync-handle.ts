@@ -76,7 +76,17 @@ export function createSyncHandle(opts: {
   divergences?: SyncDivergenceStore;
   /** Track A: per-direction liveness summary source (in-memory). Absent = liveness fields are null. */
   activity?: Pick<SyncActivityTracker, 'summary'>;
+  /** Starts sync in a process that did not start it when its context was built (every process but
+   *  the server). `status()`, `triggerNow()` and `retryQuarantine()` read what only a started sync
+   *  holds, so each waits for this first. The calls that only read stored rows never call it, so an
+   *  `openldr` command that has nothing to do with sync starts no worker. Absent = sync was already
+   *  started, and nothing is waited for. The caller makes repeat calls cheap (one start, remembered). */
+  ensureStarted?: () => Promise<void>;
 }): SyncHandle {
+  const fireWorkers = (): void => {
+    opts.runtime.pushWorker()?.trigger();
+    opts.runtime.pullWorker()?.trigger();
+  };
   const cursorRow = (consumer: string) =>
     opts.db
       .selectFrom('fhir.change_cursors')
@@ -100,6 +110,7 @@ export function createSyncHandle(opts: {
 
   return {
     async status(): Promise<SyncStatus> {
+      await opts.ensureStarted?.();
       const push = opts.runtime.pushWorker();
       const pull = opts.runtime.pullWorker();
       const [pushRow, pullRow] = await Promise.all([cursorRow('sync-push'), cursorRow('sync-pull')]);
@@ -127,13 +138,16 @@ export function createSyncHandle(opts: {
       };
     },
     triggerNow(): void {
-      opts.runtime.pushWorker()?.trigger();
-      opts.runtime.pullWorker()?.trigger();
+      if (!opts.ensureStarted) { fireWorkers(); return; }
+      // The start may still be running, so trigger once it has finished. A start that failed built
+      // no worker to trigger; status() and retryQuarantine() are what report that failure.
+      void opts.ensureStarted().then(fireWorkers, () => undefined);
     },
     async listQuarantine(): Promise<SyncQuarantineRow[]> {
       return opts.quarantine ? opts.quarantine.list() : [];
     },
     async retryQuarantine(entityType: string, entityId: string): Promise<{ ok: boolean; error?: string }> {
+      await opts.ensureStarted?.();
       const fn = opts.runtime.retryQuarantine();
       if (!fn) return { ok: false, error: 'sync pull is not enabled on this node' };
       return fn(entityType, entityId);
