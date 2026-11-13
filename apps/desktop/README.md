@@ -4,6 +4,11 @@ The OpenLDR desktop app. It is an Electron app that wraps the standalone launche
 (`apps/standalone`). It starts the launcher as a child process, shows Studio in a window, and
 stops OpenLDR through the launcher's `stop` command when you quit.
 
+The app starts its launcher with `--host 127.0.0.1`, and the window loads Studio at
+`http://127.0.0.1:<port>/studio/`. The app's own log is `desktop.log` in its own folder (see
+`OPENLDR_DESKTOP_USER_DIR` below). The web docs page `apps/web/src/docs/0.1.8/en/desktop-app.md`
+is the guide for people who install the app.
+
 This package is private. It is never published.
 
 ## Build and start from a checkout
@@ -56,7 +61,7 @@ These are for development and tests only.
 | `OPENLDR_DESKTOP_DATA_DIR` | The data folder, passed to the launcher as `--data-dir`. Without it the launcher uses its own default. |
 | `OPENLDR_DESKTOP_PORT` | Use exactly this port. The app remembers nothing. |
 | `OPENLDR_DESKTOP_USER_DIR` | The app's own folder (settings, log, browser profile). Without it, `OpenLDR Desktop` under the system's app data folder. |
-| `OPENLDR_DESKTOP_SELFCHECK` | A file path. The app writes one JSON object there about what it shows, then quits. |
+| `OPENLDR_DESKTOP_SELFCHECK` | A file path. The app writes one JSON object there about what it shows. It then does what `OPENLDR_DESKTOP_SELFCHECK_THEN` says, and quits when that is not set. |
 | `OPENLDR_DESKTOP_SELFCHECK_THEN` | What the app does after it writes the self-check file: `close` closes the window and keeps running, `stay` does nothing. Without it, the app quits. |
 
 From a worktree, also set `OPENLDR_SKIP_ENV_FILE=true`. Otherwise the server finds the main

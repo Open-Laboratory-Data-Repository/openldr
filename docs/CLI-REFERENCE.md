@@ -7,7 +7,7 @@ Source of truth: `packages/cli/src/index.ts`. Captured help output for every com
 > `pnpm openldr` instead. The arguments are identical. File arguments on an installed stack
 > must live under `./data`; see the CLI doc's "Running it" section.
 
-There are two ways to invoke it:
+There are three ways to invoke it:
 
 ```bash
 # Installed stack, from the install directory (`.\openldr.ps1` on Windows)
@@ -15,6 +15,9 @@ There are two ways to invoke it:
 
 # Source checkout, from the repository root
 pnpm openldr --help
+
+# Standalone install (no Docker), through its launcher. See "The standalone launcher" below.
+openldr-standalone cli -- doctor
 ```
 
 ## How a command runs
@@ -247,6 +250,82 @@ ids, mark them as different people or undo that, and are audited. `export` write
 groups as CSV with names and identifiers, to stdout or to `--out`. It always writes an audit
 event that records the group count only. CE does not merge patients. The source system fixes
 duplicates.
+
+## The standalone launcher
+
+`openldr-standalone` runs OpenLDR on one computer with no Docker: a bundled Postgres 16 and the server, with all data in one folder. Source: `apps/standalone/src/commands.ts`. In a built checkout it is `pnpm openldr-standalone`. The desktop app installs it as a command of its own: `~/.local/share/openldr-desktop/openldr-standalone` on Linux, `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone` on macOS, `%LOCALAPPDATA%\Programs\OpenLDR\openldr-standalone.cmd` on Windows. The web docs pages "Run without Docker" (`apps/web/src/docs/0.1.8/en/standalone.md`) and "Desktop app" (`desktop-app.md`) are the full account. Only Linux has been tested.
+
+Its help text, from `USAGE`:
+
+```text
+Usage: openldr-standalone <command> [options]
+
+Commands:
+  start    Start Postgres and the server. Ctrl+C stops both.
+           --data-dir <folder>  --port <port> (default 3000)  --host <address> (default 127.0.0.1)
+           --events-fd <n>  Write one JSON line per event to descriptor n (3 or higher).
+                            No setup code is made or printed.
+  stop     Stop the launcher running on the data folder.  --data-dir <folder>
+  status   Say whether it is running, and where.  --data-dir <folder>
+           --json  Print one JSON line instead.
+  cli      Run the openldr CLI against this install, for example: cli -- doctor
+           --data-dir <folder> goes before the --.
+```
+
+`--data-dir` wins over `OPENLDR_HOME`, which wins over the default folder: `~/.local/share/openldr` on Linux (`$XDG_DATA_HOME/openldr` when that holds a full path), `~/Library/Application Support/OpenLDR` on macOS, `%LOCALAPPDATA%\OpenLDR` on Windows. One launcher runs per data folder.
+
+### `start --events-fd <n>`
+
+A program that runs the launcher, such as the desktop app, passes a descriptor it opened. The launcher writes one JSON object and a newline to it per event. There are six shapes:
+
+```text
+{"event":"starting","step":"postgres"}
+{"event":"recovering"}
+{"event":"starting","step":"server"}
+{"event":"ready","address":"http://localhost:3000/studio/"}
+{"event":"stopping"}
+{"event":"stopped","result":"clean"}
+{"event":"error","message":"..."}
+```
+
+`starting` has `step` `postgres` or `server`. `recovering` comes only when Postgres repairs itself after an unclean stop. `stopped` has `result` `clean`, or `forced` when the stop cut the server off, for example after 60 seconds. `error` comes when a start fails, and when a stop leaves something behind. The launcher then exits with code 1. No event holds a password, a key, a token or a setup code. A failed write is ignored, so a reader that has gone does not stop the launcher.
+
+With `--events-fd`, `start` makes no setup code and prints none. The program asks for one itself with `cli -- auth setup-code --json`. The launcher's printed lines stay as they are. The value must be a whole number, 3 or higher; otherwise the launcher prints `--events-fd must be a whole number, 3 or higher.` and exits with code 2.
+
+### `status --json`
+
+`status --json` prints one JSON line and nothing else. It has three shapes:
+
+```text
+{"dataDir":"/home/you/.local/share/openldr","running":true,"address":"http://localhost:3000/studio/","host":"127.0.0.1"}
+{"dataDir":"/home/you/.local/share/openldr","running":false}
+{"dataDir":"/home/you/.local/share/openldr","running":false,"busy":"OpenLDR is not running. A recovery command is using the database (process 12345). Try again when it has finished."}
+```
+
+`host` is the `--host` the running launcher was started with. A lock written by an older launcher may have none, and the line then has no `host`. The third shape means a recovery command, such as `cli -- doctor`, holds the data folder.
+
+### Exit codes
+
+| Command | Code | When |
+|---|---|---|
+| `status` | `0` | A launcher runs on the data folder. |
+| `status` | `3` | None runs, or a recovery command holds the folder. The same with `--json`. |
+| `stop` | `0` | Stopped, or nothing was running. |
+| `stop` | `1` | `Could not confirm that OpenLDR stopped: ...` |
+| `start` | `1` | The start failed, or a stop left something behind. |
+| any | `2` | The options are wrong. The launcher prints the reason, then the help text. |
+
+`cli` exits with the CLI command's own code, or `1` when it cannot run the command, such as `Start OpenLDR first: openldr-standalone start` for an `app` command while nothing runs.
+
+### A data folder from a newer version
+
+`last-version.json` in the data folder records the version that last started it, as `{"version":"0.1.11"}`. A start writes it just before the server starts, because the server may change the database even when it then fails. A launcher older than the recorded version refuses the folder before it starts anything, and `start` exits with code 1:
+
+```text
+This data folder was last used by OpenLDR <newer>. This is OpenLDR <older>, which is older and cannot open it. Install OpenLDR <newer> or newer.
+```
+
+Removing `last-version.json` lets the older launcher start. That is safe only when the newer version never changed the database. Otherwise the older launcher fails later with a database error. Source: `apps/standalone/src/data-version.ts`.
 
 ## Captured Terminal Output
 

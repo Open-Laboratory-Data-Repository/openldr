@@ -4,7 +4,7 @@ Execute o OpenLDR num único computador, sem Docker. Um só comando inicia uma b
 
 Só o Linux foi testado. O macOS e o Windows podem funcionar, mas ainda ninguém os verificou.
 
-Executa-o a partir de uma cópia do código-fonte, compilada no seu próprio computador. Ainda não existe instalador. O lançador é o comando `openldr-standalone`, e as mensagens dele usam esse nome. Numa cópia do repositório, esse comando não está no seu PATH. Escreva `pnpm` antes dele e execute-o a partir da raiz do repositório, por exemplo `pnpm openldr-standalone start`.
+Esta página executa-o a partir de uma cópia do código-fonte, compilada no seu próprio computador. Continua a ser o caminho para quem desenvolve. Para o instalar com uma linha, use antes a [aplicação de computador](/docs/desktop-app). Ela traz o mesmo lançador e usa a mesma pasta de dados. O lançador é o comando `openldr-standalone`, e as mensagens dele usam esse nome. Numa cópia do repositório, esse comando não está no seu PATH. Escreva `pnpm` antes dele e execute-o a partir da raiz do repositório, por exemplo `pnpm openldr-standalone start`.
 
 ## O que precisa
 
@@ -87,6 +87,8 @@ O código de configuração só aparece no terminal. O lançador nunca o escreve
 | `--data-dir <folder>` | Veja a secção seguinte | A pasta que guarda todos os dados desta instalação. |
 | `--port <port>` | `3000` | A porta web. Se outro programa a estiver a usar, `start` para com `Port 3000 is already in use. Choose another with --port.` Nunca escolhe outra porta por si. |
 | `--host <address>` | `127.0.0.1` | O endereço em que o OpenLDR escuta. A predefinição só deixa entrar este computador. Veja **Abrir o acesso a um telemóvel ou a outro computador** mais abaixo. |
+| `--events-fd <n>` | Nenhum | Escreve uma linha JSON por evento no descritor n (3 ou mais). Nenhum código de configuração é criado nem mostrado. É para um programa que executa o lançador, como a aplicação de computador. |
+| `--json`, com `status` | Desligado | `status` mostra uma só linha JSON em vez disso. Veja **Verificar se está a funcionar** mais abaixo. |
 
 Dê a `--data-dir` um caminho completo. O pnpm executa o lançador a partir da raiz do repositório. Um caminho curto como `mydata` aponta então para dentro do repositório, e não para a pasta em que o seu terminal está.
 
@@ -111,6 +113,9 @@ A pasta contém:
 | `work/` | Ficheiros temporários, como um descarregamento de terminologia enquanto é importado. |
 | `standalone.json` | A chave dos segredos, as duas palavras-passe da base de dados e a porta da base de dados. |
 | `standalone.lock` | Existe enquanto um lançador funciona. Indica o processo e o endereço desse lançador. Pode ficar para trás depois de uma falha ou de uma paragem à força. O `start` seguinte substitui-o. |
+| `last-version.json` | A versão do OpenLDR que iniciou esta pasta pela última vez. |
+
+Uma versão mais recente pode alterar a base de dados de uma forma que uma mais antiga não sabe ler. Por isso, um lançador mais antigo recusa uma pasta que um mais recente iniciou, e não inicia nada. Mostra `This data folder was last used by OpenLDR <newer>. This is OpenLDR <older>, which is older and cannot open it. Install OpenLDR <newer> or newer.` [Aplicação de computador](/docs/desktop-app) diz quando é seguro apagar `last-version.json`.
 
 No Linux, só o seu utilizador pode abrir a pasta. O lançador dá o modo 700 à pasta e o modo 600 aos dois ficheiros. A base de dados só escuta em `127.0.0.1`. A porta é escolhida no primeiro arranque, 54320 se estiver livre, e fica guardada em `standalone.json`.
 
@@ -128,6 +133,14 @@ OpenLDR is running at http://localhost:3000/studio/
 ```
 
 `status` termina com o código 0 quando o OpenLDR está a funcionar e 3 quando não está. Quando não está, vê `OpenLDR is not running.` e depois a linha do pnpm `[ELIFECYCLE] Command failed with exit code 3.`
+
+Com `--json`, `status` mostra uma só linha e mais nada, com os mesmos códigos de saída:
+
+```text
+{"dataDir":"/home/you/.local/share/openldr","running":true,"address":"http://localhost:3000/studio/","host":"127.0.0.1"}
+```
+
+Quando o OpenLDR não está a funcionar, a linha é `{"dataDir":"...","running":false}`. Enquanto um comando de recuperação usa a pasta, a linha tem também `busy`, a mensagem que o diz.
 
 ### 2. Pará-lo
 
@@ -288,7 +301,7 @@ Para repor, pare o OpenLDR, volte a colocar a pasta copiada no sítio original e
 ## Limites
 
 - Sem TLS. O OpenLDR serve HTTP sem cifra.
-- Ainda sem instalador. Executa-o a partir de uma cópia compilada do repositório.
+- Esta página executa-o a partir de uma cópia compilada do repositório. A [aplicação de computador](/docs/desktop-app) instala-o com uma linha.
 - Só Postgres. O Postgres incluído guarda as duas bases de dados. O SQL Server e o MySQL não podem ser a base de dados de análise.
 - Um só lançador por pasta de dados.
 - Só o Linux foi testado. O Windows e o macOS não foram testados.

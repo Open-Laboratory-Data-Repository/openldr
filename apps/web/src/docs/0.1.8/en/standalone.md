@@ -4,7 +4,7 @@ Run OpenLDR on one computer that has no Docker. One command starts a Postgres 16
 
 Only Linux has been tested. macOS and Windows may work, but nobody has checked them yet.
 
-You run it from a copy of the source code that you build on your own computer. There is no installer yet. The launcher is the `openldr-standalone` command, and its messages use that name. In a source checkout that command is not on your PATH. Put `pnpm` in front of it and run it from the checkout's root folder, for example `pnpm openldr-standalone start`.
+This page runs it from a copy of the source code that you build on your own computer. That remains the way for a developer. To install it with one line instead, use the [desktop app](/docs/desktop-app). It brings the same launcher, and works on the same data folder. The launcher is the `openldr-standalone` command, and its messages use that name. In a source checkout that command is not on your PATH. Put `pnpm` in front of it and run it from the checkout's root folder, for example `pnpm openldr-standalone start`.
 
 ## What you need
 
@@ -87,6 +87,8 @@ The setup code goes to the terminal only. The launcher never writes it to a log 
 | `--data-dir <folder>` | See the next section | The folder that holds all of this install's data. |
 | `--port <port>` | `3000` | The web port. If another program uses it, `start` stops with `Port 3000 is already in use. Choose another with --port.` It never picks another port by itself. |
 | `--host <address>` | `127.0.0.1` | The address OpenLDR listens on. The default lets only this computer in. See **Open it to a phone or another computer** below. |
+| `--events-fd <n>` | None | Write one JSON line per event to descriptor n (3 or higher). No setup code is made or printed. It is for a program that runs the launcher, such as the desktop app. |
+| `--json`, with `status` | Off | `status` prints one JSON line instead. See **Check whether it runs** below. |
 
 Give `--data-dir` a full path. pnpm runs the launcher from the checkout's root folder. A short path such as `mydata` then points into the checkout, not into the folder your terminal is in.
 
@@ -111,6 +113,9 @@ The folder holds:
 | `work/` | Scratch files, such as a terminology download while it is imported. |
 | `standalone.json` | The secrets key, the two database passwords and the database port. |
 | `standalone.lock` | Exists while a launcher runs. It names that launcher's process and address. It can stay behind after a crash or a hard kill. The next `start` replaces it. |
+| `last-version.json` | The version of OpenLDR that last started this folder. |
+
+A newer version may change the database in a way an older one cannot read. So an older launcher refuses a folder that a newer one started, and starts nothing. It says `This data folder was last used by OpenLDR <newer>. This is OpenLDR <older>, which is older and cannot open it. Install OpenLDR <newer> or newer.` [Desktop app](/docs/desktop-app) says when removing `last-version.json` is safe.
 
 On Linux only your user can open the folder. The launcher sets the folder to mode 700 and the two files to mode 600. The database listens on `127.0.0.1` only. Its port is chosen at the first start, 54320 if that one is free, and is kept in `standalone.json`.
 
@@ -128,6 +133,14 @@ OpenLDR is running at http://localhost:3000/studio/
 ```
 
 `status` exits with code 0 when OpenLDR runs and 3 when it does not. When it does not run, you see `OpenLDR is not running.`, then pnpm's line `[ELIFECYCLE] Command failed with exit code 3.`
+
+With `--json`, `status` prints one line and nothing else, with the same exit codes:
+
+```text
+{"dataDir":"/home/you/.local/share/openldr","running":true,"address":"http://localhost:3000/studio/","host":"127.0.0.1"}
+```
+
+When OpenLDR is not running, the line is `{"dataDir":"...","running":false}`. While a recovery command holds the folder, it also has `busy`, the message that says so.
 
 ### 2. Stop it
 
@@ -288,7 +301,7 @@ To restore, stop OpenLDR, put the copied folder back where it was, and start aga
 ## Limits
 
 - No TLS. OpenLDR serves plain HTTP.
-- No installer yet. You run it from a built source checkout.
+- This page runs it from a built source checkout. The [desktop app](/docs/desktop-app) installs it with one line.
 - Postgres only. The bundled Postgres holds both databases. SQL Server and MySQL cannot be the analytics database.
 - One launcher per data folder.
 - Only Linux has been tested. Windows and macOS are untested.

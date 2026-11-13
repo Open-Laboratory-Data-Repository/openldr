@@ -303,7 +303,7 @@ All three routes need `users.manage`. `:id` is the id Studio's Users page uses: 
 
 ## Settings
 
-Admin-gated (`lab_admin`) general settings, plus the sync admin routes (next section).
+General settings, plus the sync admin routes (next section). Each route needs a capability: `settings.feature_flags` for flags, `settings.edit_general` for numbers, and `settings.danger_zone` for the danger-zone action and the two sample data routes.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -313,7 +313,7 @@ Admin-gated (`lab_admin`) general settings, plus the sync admin routes (next sec
 | `PUT` | `/api/settings/numbers/:key` | Set a numeric setting. |
 | `POST` | `/api/settings/danger/:action` | Run a danger-zone action (reset-dashboards, clear-audit, factory-reset). |
 | `GET` | `/api/settings/sample-data` | Say whether sample data may load: `{ allowed }`, false once the install holds lab data. Needs `settings.danger_zone`. |
-| `POST` | `/api/settings/sample-data` | Load the sample data `openldr db seed` loads. Answers 409 `has_lab_data` when the install holds lab data, and 409 `sample_data_busy` while a load runs. Needs `settings.danger_zone`. Writes a `settings.sample_data.load` audit row, with `ok: false` when the load fails partway. |
+| `POST` | `/api/settings/sample-data` | Load the sample data `openldr db seed` loads. Answers 409 `has_lab_data` when the install holds lab data, and 409 `sample_data_busy` while a load runs. Needs `settings.danger_zone`. Writes a `settings.sample_data.load` audit row. When the load fails, it answers 500 `Sample data could not be loaded.`, and the audit row has `ok: false`. That row is written on any failure, because a failed load can still leave sample data behind. |
 
 ## Distributed Sync
 
