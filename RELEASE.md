@@ -45,8 +45,8 @@ what is inside each archive. A failure here stops the release before anything is
 same version can be run again. Then it pushes the five images, checks that every package is
 public (it cannot make them public, see below), verifies by installing the published tag into a
 clean directory, and only then creates the git tag, pushes it, and cuts the GitHub release with
-`latest.json` attached. Last, it uploads the three archives and `SHA256SUMS` to the release, and
-reads the release back to check all four are on it.
+`latest.json` attached. Last, it uploads `SHA256SUMS` and then the three archives to the release,
+and reads the release back to check all four are on it.
 
 **The tag is last on purpose.** A `vX.Y.Z` tag exists only if that release is complete and
 verified — so a failure part-way through leaves no tag, and no lab ever sees a half-release.
@@ -67,18 +67,28 @@ which nothing checks for. In both cases: check
 origin` before re-running. **This rollback path has never executed** — see "What is NOT proven
 by tests".
 
-**A failed desktop upload is not rolled back.** The upload runs after the release is public. If
-it fails, or the read-back finds a file missing, the release and its tag stay. The script names
-each missing file and prints the `gh release upload vX.Y.Z ... --clobber` command to finish by
-hand, from the repo root. The `latest.json` check works the same way. The script removes the
-verification stack, prints every failure together, and exits non-zero.
+**A failed desktop upload is not rolled back.** The upload runs after the release is public. It
+sends `SHA256SUMS` first, in its own call, and the three archives only once that is up. The
+install script picks the newest release that lists an archive for its system and then needs
+`SHA256SUMS`, so a listed archive must never be there without it. If the upload fails, or the
+read-back finds a file missing, the release and its tag stay. The script names each missing file
+and prints the `gh release upload vX.Y.Z ... --clobber` commands to finish by hand, from the repo
+root. If it cannot read the release back at all, it says the files could not be confirmed and
+prints the commands for all four. The `latest.json` check works the same way, and its command
+names the full path of the kept `latest.json`. The script removes the verification stack, keeps
+its folder, prints every failure together, and exits non-zero.
+
+To finish, run the printed commands. A re-run of `pnpm release` refuses, because the tag
+exists. Upload the files already in `dist/desktop/vX.Y.Z/`. Do not pack again first: a new pack
+makes new bytes, which would not match a `SHA256SUMS` already on the release.
 
 ### The release runs on Linux
 
 From this change, `pnpm release` runs on Linux only. The pack copies symbolic links and file
-modes into the macOS and Linux archives and calls GNU tar. Windows gives it none of these. On any
-other system the release refuses after the preconditions, before anything is pushed, and says to
-run it on the Linux release machine. The release has run on Windows before. That no longer works.
+modes into the macOS and Linux archives and calls GNU tar. Windows gives it none of these. The
+Linux check is the first thing the script does, before the fetch and the test gate. On any other
+system it refuses at once, dry run or not, and says to run it on the Linux release machine. The
+release has run on Windows before. That no longer works.
 
 The pack takes several minutes. It downloads Electron and the Postgres package for macOS and
 Windows, so it needs the network. The three archives are about 515 MB, 603 MB and 566 MB, so the
@@ -100,6 +110,7 @@ it, on **ports 80 and 443**. What happens to it depends on how the run ends:
 |---|---|---|
 | Released | removed with `docker compose down -v` | deleted |
 | Dry run | never started | deleted (it was empty) |
+| Released, but the desktop upload or the `latest.json` check failed | removed with `docker compose down -v` | **kept**, it holds `latest.json` |
 | Failed | **kept running** | kept |
 
 A failed run keeps everything on purpose: the stack's logs are the evidence when a release fails
@@ -159,8 +170,9 @@ Two separate credentials are needed here, and they are not interchangeable:
   credential from the `gh` CLI's own token. Log in with a token that has `write:packages` before
   running `pnpm release`.
 
-  The plain `docker login ghcr.io -u <github-username>` prompt has failed before. This works, on
-  Windows and Linux alike, once the `gh` token has `write:packages` (the refresh above):
+  The plain `docker login ghcr.io -u <github-username>` prompt has failed before. This works on
+  Linux, where the release now runs, once the `gh` token has `write:packages` (the refresh
+  above):
 
   ```
   gh auth token | docker login ghcr.io -u <github-username> --password-stdin
@@ -209,10 +221,12 @@ is tagged, preconditions 2 and 3 both refuse, and they run before step 9 ever cr
 directory. The first release after this change is its first real run.
 
 The desktop packages are split the same way. `desktopPackRefusal`, `desktopAssetNames`,
-`missingDesktopAssets` and `uploadFailureMessage` are unit-tested in
-`packages/release/src/desktop-release.test.ts`. Where the pack step sits in the sequence, the
-upload, the read-back of the release's assets, and the single exit after cleanup are proven only
-by a real release. A dry run prints the build, pack and upload commands and runs none of them.
+`desktopArchiveNames`, `missingDesktopFiles`, `missingDesktopAssets`, `uploadFailureMessage` and
+`uploadUnconfirmedMessage` are unit-tested in `packages/release/src/desktop-release.test.ts`, and
+the outcome that keeps the folder after a failed check is tested in `cleanup.test.ts`. The Linux
+check at the start, where the pack step sits in the sequence, the check of the four files on disk,
+the upload in two calls, the read-back of the release's assets, and the single exit after cleanup
+are proven only by a real release. A dry run prints the build, pack and upload commands and runs none of them.
 The macOS and Windows archives are never run on the release machine. The pack checks what is
 inside them, and nothing starts them. Whether they work is not proven, and waits for the operator.
 

@@ -28,6 +28,25 @@ describe('cleanupPlan', () => {
     });
   });
 
+  // The release is public, but the desktop upload or the latest.json check after it failed. The
+  // stack holds 80 and 443 and nobody needs it, so it goes. The folder holds latest.json, the only
+  // copy, and the printed recovery command uploads it from there, so the folder stays.
+  it('tears the stack down and keeps the directory when a check after the release failed', () => {
+    expect(cleanupPlan({ dryRun: false, outcome: 'released-check-failed' })).toEqual({
+      teardownStack: true,
+      removeDir: false,
+    });
+  });
+
+  // A dry run runs no check after the release, so it cannot reach this outcome. If it ever does,
+  // there is no stack to remove, and the folder is still kept rather than guessed about.
+  it('keeps the directory of a dry run whose check failed, with no stack to remove', () => {
+    expect(cleanupPlan({ dryRun: true, outcome: 'released-check-failed' })).toEqual({
+      teardownStack: false,
+      removeDir: false,
+    });
+  });
+
   it('keeps the directory of a failed dry run too, since it may say why', () => {
     expect(cleanupPlan({ dryRun: true, outcome: 'failed' })).toEqual({
       teardownStack: false,

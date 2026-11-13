@@ -17,7 +17,7 @@
 // tests" — keep that list honest when editing here.
 
 import { execFileSync, spawn } from 'node:child_process';
-import { writeFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -37,15 +37,21 @@ import {
 import { parseFailedTasks, formatFailedTask, tasksNeverFinished, GATE_TURBO_ARGS } from '../packages/release/src/gate';
 import { parseThirdPartyList } from '../packages/release/src/third-party';
 import {
-  desktopAssetNames,
+  SHA256SUMS_NAME,
+  desktopArchiveNames,
   desktopPackRefusal,
   missingDesktopAssets,
+  missingDesktopFiles,
   uploadFailureMessage,
+  uploadUnconfirmedMessage,
 } from '../packages/release/src/desktop-release';
 
 const OWNER = 'Open-Laboratory-Data-Repository';
 const REPO = 'openldr';
 const DRY_RUN = process.argv.includes('--dry-run');
+/** Where the pack writes `v<version>/` and the upload reads it, relative to the repo root. The pack
+ *  gets it as `--out`, and resolves it against the repo root, where pnpm runs root scripts. */
+const DESKTOP_OUT = 'dist/desktop';
 
 // ⛔ Not the literal 'bash'. On Windows with WSL installed that is the WSL launcher,
 // which cannot run these scripts — it stopped a release dead at step 7 with every
@@ -210,8 +216,10 @@ async function gateGreen(): Promise<boolean> {
  *  disables the update check on every install in the field while the release reports success.
  *
  *  Returns null when the manifest is right, or the text to print when it is not. It does not exit:
- *  the desktop upload can fail too, and the caller cleans up once and prints both. */
-async function verifyPublishedManifest(version: string): Promise<string | null> {
+ *  the desktop upload can fail too, and the caller cleans up once and prints both. On a failure
+ *  the caller keeps the folder that holds `manifestPath`, the only copy, so the printed command
+ *  names it in full. */
+async function verifyPublishedManifest(version: string, manifestPath: string): Promise<string | null> {
   const url = `https://github.com/${OWNER}/${REPO}/releases/download/v${version}/latest.json`;
   let problem = '';
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -242,7 +250,7 @@ async function verifyPublishedManifest(version: string): Promise<string | null> 
     'Every install polls this file, so update checks stay broken until it is fixed.',
     'The tag is NOT rolled back: the images are already public, so deleting it would',
     'remove the record and leave the artifacts. Re-upload the asset instead:',
-    `  gh release upload v${version} latest.json --clobber`,
+    `  gh release upload v${version} "${manifestPath}" --clobber`,
   ].join('\n');
 }
 
@@ -301,6 +309,15 @@ async function main(): Promise<void> {
   // This runs under --dry-run too, and uses sh() rather than run() to make sure of it. Fetching
   // is read-only — it moves no local branch and touches no working tree — and a dry run whose
   // whole job is checking preconditions must not check this one against a stale ref.
+  // The first thing a release does: refuse a host that cannot build the desktop packages, before
+  // the fetch and before the minutes-long gate. A dry run refuses too. This is the only check;
+  // the platform cannot change while the script runs.
+  const packRefusal = desktopPackRefusal(process.platform);
+  if (packRefusal !== null) {
+    console.error(`refusing to release: ${packRefusal}`);
+    process.exit(1);
+  }
+
   console.log('+ git fetch origin');
   sh('git', ['fetch', 'origin', '--tags']);
 
@@ -338,18 +355,33 @@ async function main(): Promise<void> {
   // The desktop packages are built and checked here, before step 7 pushes anything. A failure
   // stops the release while the same version can still be run again. The pack checks each
   // archive's entries itself and exits non-zero on a problem. A dry run prints both commands.
-  const packRefusal = desktopPackRefusal(process.platform);
-  if (packRefusal !== null) {
-    console.error(`\nrefusing to release: ${packRefusal}`);
-    process.exit(1);
-  }
+  // `--out` names the folder the upload reads from, so the two cannot drift apart.
+  const packDir = join(repoRoot, DESKTOP_OUT, `v${version}`);
   try {
     run('pnpm', ['turbo', 'run', 'build', '--filter=@openldr/studio', '--filter=@openldr/standalone', '--filter=@openldr/desktop']);
-    run('pnpm', ['pack:desktop', 'all']);
+    run('pnpm', ['pack:desktop', 'all', '--out', DESKTOP_OUT]);
   } catch (err) {
     console.error(`\nthe desktop packages could not be built: ${err instanceof Error ? err.message : String(err)}`);
     console.error('nothing was pushed, so the same version can be run again once the cause is fixed.');
     process.exit(1);
+  }
+  // The upload after the release reads these four files. One missing now would be found only
+  // once the release is public. Skipped under --dry-run: nothing was packed.
+  if (DRY_RUN) {
+    console.log(`+ (dry run) skipping the check of ${packDir}, nothing was packed`);
+  } else {
+    let onDisk: string[] = [];
+    try {
+      onDisk = readdirSync(packDir);
+    } catch {
+      // No folder: every file counts as missing, and the message below names them.
+    }
+    const notPacked = missingDesktopFiles(version, onDisk);
+    if (notPacked.length > 0) {
+      console.error(`\nthe pack finished, but ${packDir} lacks: ${notPacked.join(', ')}`);
+      console.error('nothing was pushed, so the same version can be run again once the cause is fixed.');
+      process.exit(1);
+    }
   }
 
   // 7. Build and push all five images. This also tags :<version> alongside :latest.
@@ -497,39 +529,54 @@ async function main(): Promise<void> {
   // not unwind the tag. It is reported with the command to finish by hand, like the manifest.
   // The read-back is what counts, not the upload's exit code: only an asset in the "uploaded"
   // state is on the release. `sh()` runs even in a dry run, so the read-back is guarded.
+  //
+  // SHA256SUMS goes first, in its own call, and the archives only once it is up. The install
+  // script picks the newest release that lists an archive for its system and then needs
+  // SHA256SUMS. gh may send the files of one call in any order, so with one call a listed archive
+  // could have no SHA256SUMS beside it, and a person's install would fail on that release.
   const failures: string[] = [];
-  const desktopOut = 'dist/desktop';
+  const tag = `v${version}`;
+  const uploadPath = (name: string): string => `${DESKTOP_OUT}/${tag}/${name}`;
   try {
-    run('gh', ['release', 'upload', `v${version}`, ...desktopAssetNames(version).map((name) => `${desktopOut}/v${version}/${name}`)]);
+    run('gh', ['release', 'upload', tag, uploadPath(SHA256SUMS_NAME)]);
+    try {
+      run('gh', ['release', 'upload', tag, ...desktopArchiveNames(version).map(uploadPath)]);
+    } catch (err) {
+      console.error(`gh release upload of the archives failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   } catch (err) {
-    console.error(`gh release upload failed: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`gh release upload of ${SHA256SUMS_NAME} failed, so the archives were not sent: ${err instanceof Error ? err.message : String(err)}`);
   }
   if (!DRY_RUN) {
-    let published: string[] = [];
     try {
-      published = sh('gh', ['release', 'view', `v${version}`, '--json', 'assets', '--jq', '.assets[] | select(.state == "uploaded") | .name']).split('\n');
+      const published = sh('gh', ['release', 'view', tag, '--json', 'assets', '--jq', '.assets[] | select(.state == "uploaded") | .name']).split('\n');
+      const missing = missingDesktopAssets(version, published);
+      if (missing.length > 0) failures.push(uploadFailureMessage(version, missing, DESKTOP_OUT));
     } catch (err) {
-      // Cannot read the release back. Count every file as missing: a file we cannot see may not be there.
-      console.error(`could not read the assets of v${version}: ${err instanceof Error ? err.message : String(err)}`);
+      // Cannot read the release back, so nobody knows which files arrived. The message says so and
+      // gives the commands for all four.
+      console.error(`could not read the assets of ${tag}: ${err instanceof Error ? err.message : String(err)}`);
+      failures.push(uploadUnconfirmedMessage(version, DESKTOP_OUT));
     }
-    const missing = missingDesktopAssets(version, published);
-    if (missing.length > 0) failures.push(uploadFailureMessage(version, missing, desktopOut));
   }
 
   // Skipped under --dry-run: nothing was published, so there is no asset to read.
   if (!DRY_RUN) {
-    const manifestProblem = await verifyPublishedManifest(version);
+    const manifestProblem = await verifyPublishedManifest(version, manifestPath);
     if (manifestProblem !== null) failures.push(manifestProblem);
   }
 
   // Last, after the upload: `latest.json` lives in `probe` and `gh release create` reads it from
   // there. A dry run started no stack, so this only removes the empty directory it left. It runs
   // after a failed upload or manifest check too: the release is public either way, and a stack
-  // left on ports 80 and 443 would block the next release's verification install.
-  cleanUp(probe, cleanupPlan({ dryRun: DRY_RUN, outcome: 'released' }));
+  // left on ports 80 and 443 would block the next release's verification install. Then
+  // `cleanupPlan` keeps `probe`, because it holds latest.json and the printed command needs it.
+  const outcome = failures.length > 0 ? 'released-check-failed' : 'released';
+  cleanUp(probe, cleanupPlan({ dryRun: DRY_RUN, outcome }));
 
   if (failures.length > 0) {
     for (const failure of failures) console.error(`\n${failure}`);
+    console.error(`\nkept ${probe}: it holds latest.json, the only copy. Remove it once the release is finished.`);
     process.exit(1);
   }
 
