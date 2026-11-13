@@ -226,7 +226,7 @@ Exécutez la commande depuis `~/Downloads/openldr_ce`. Gardez le préfixe `data/
 
 La CLI installée s'exécute dans le conteneur API. Le dossier `data` est partagé avec ce conteneur. Sur un serveur distant, placez le fichier dans le dossier de ce serveur. Un fichier enregistré sur votre portable n'y est pas automatiquement copié.
 
-La plupart des commandes, dont `ingest`, passent par le serveur OpenLDR en marche. Connectez-vous d'abord avec `./openldr login`, ou définissez une clé d'accès dans `OPENLDR_KEY`. Lisez [Utilisateurs](/docs/users) pour créer une clé d'accès.
+La plupart des commandes, dont `ingest`, passent par le serveur OpenLDR en marche. <!-- cli:linux -->Connectez-vous d'abord avec `./openldr login`, ou définissez une clé d'accès dans `OPENLDR_KEY`.<!-- /cli --><!-- cli:mac -->Connectez-vous d'abord avec `./openldr login`, ou définissez une clé d'accès dans `OPENLDR_KEY`.<!-- /cli --><!-- cli:windows -->Définissez d'abord une clé d'accès dans `OPENLDR_KEY`. Sous Windows, le CLI se connecte uniquement avec une clé d'accès. Cela n'a pas été lancé sous Windows.<!-- /cli --> Lisez [Utilisateurs](/docs/users) pour créer une clé d'accès.
 
 Utilisez également `data/` pour les fichiers de sortie. Mettez les chemins contenant des espaces entre guillemets, comme `"data/my file.json"`. Chaque guide explique le format attendu. Exécuter un import écrit des dossiers.
 

@@ -4,7 +4,7 @@ A maioria dos comandos `openldr` passa agora pelo servidor OpenLDR em execução
 
 Esta página mostra como iniciar sessão, como criar e revogar chaves de acesso, e como dar a um agente de IA ou a um script um acesso próprio e restrito. A [referência do CLI](/docs/cli) lista os comandos em si.
 
-Os exemplos desta página foram corridos em Linux numa instalação autónoma. O Windows e o macOS não foram testados.
+Os exemplos desta página foram corridos em Linux numa instalação autónoma. O Windows e o macOS não foram testados. Uma linha marcada "Não corrido" vem da leitura do código. Ninguém a correu à mão.
 
 ## Três tipos de comando
 
@@ -116,6 +116,8 @@ Não existe a opção `--password`, porque os outros utilizadores da máquina co
 
 `openldr logout` termina a sessão no servidor e retira-a da sua máquina.
 
+`login`, `whoami` e `logout` desistem quando o servidor aceita a ligação e não responde durante 30 segundos. Mostram então `Cannot reach OpenLDR at <address>: ETIMEDOUT.`
+
 A sessão fica guardada num ficheiro que só você pode ler:
 
 | Computador | Ficheiro de sessão |
@@ -147,11 +149,12 @@ oldr_<the new key>
 made key 6afa1ead-1382-4cd1-a07e-d233c907fa2b (claude-test) for ai-reader. It cannot be shown again, so store it now.
 ```
 
-Assim, um script pode guardar a chave num ficheiro sem nunca a mostrar no ecrã:
+A saída de erro tem também uma linha de registo JSON do servidor, como em todos os comandos que passam pela aplicação. A secção "O que muda ao passar pela aplicação", mais abaixo, diz mais.
+
+Assim, um script pode guardar a chave num ficheiro sem nunca a mostrar no ecrã. O `umask` torna o ficheiro legível só por si desde o momento em que é criado:
 
 ```sh
-openldr user key create ai-reader --name claude-test > ai-reader.key
-chmod 600 ai-reader.key
+(umask 077; openldr user key create ai-reader --name claude-test --expires 2026-12-31 > ai-reader.key)
 ```
 
 `--expires` aceita uma data, ou uma data e hora ISO que termina em `Z` ou num desvio horário. Uma data simples, como `2026-12-31`, significa o fim desse dia em UTC. No Studio, uma data escolhida significa o fim desse dia no fuso horário do seu navegador. Sem expiração, a chave funciona até a revogar.
@@ -180,7 +183,19 @@ openldr user key revoke ai-reader 6afa1ead-1382-4cd1-a07e-d233c907fa2b --force
 revoked key 6afa1ead-1382-4cd1-a07e-d233c907fa2b for ai-reader
 ```
 
-Um programa que use a chave é recusado a partir da chamada seguinte. Uma revogação não pode ser anulada. Crie antes uma chave nova.
+Um programa que use a chave é recusado a partir da chamada seguinte. Um comando que já esteja a correr continua até ao fim. O mesmo acontece quando desativa a conta. Não corrido. Uma revogação não pode ser anulada. Crie antes uma chave nova.
+
+`user key revoke` recebe o identificador da chave, nunca a chave. Um valor que não seja um identificador de chave é recusado, e não volta a ser mostrado:
+
+```text
+user key revoke refused: that is not a key ID. Find the ID with "openldr user key list".
+```
+
+Uma chave colada no lugar do identificador recebe `user key revoke refused: that is a key, not a key ID. Find the ID with "openldr user key list".`
+
+Um nome de utilizador que contenha `oldr_` é recusado da mesma forma por `user key list`, `create` e `revoke`, por exemplo `user key list refused: that looks like a key, not a username. Give the account's username.`
+
+O nome de uma chave não pode ter uma tabulação, uma quebra de linha nem outro carácter de controlo: `user key create refused: name holds a control character, such as a tab or a line break`.
 
 ## Dar acesso a um agente de IA
 
@@ -223,11 +238,11 @@ O que o agente pode fazer com a chave:
 - Correr os comandos que as permissões da sua função permitem, e mais nenhum. Qualquer outro comando responde `This account lacks the capability <name>.`
 - Listar cada comando, o seu tipo e a permissão de que precisa, com `openldr commands --json`.
 
-O que não pode fazer:
+O que não pode fazer só com a chave:
 
-- Correr um comando de recuperação. Esses precisam das definições de base de dados, não de uma chave.
+- Correr um comando de recuperação. Esses precisam das definições de base de dados, não de uma chave. Isto só é verdade enquanto o agente não tiver uma shell na máquina do OpenLDR com Docker ou as definições de base de dados. Ver "O que isto não protege", mais abaixo.
 - Registar o trabalho em nome de outra pessoa. `--actor` e `--approved-by` são recusados.
-- Esconder o que correu. Cada comando que corre fica no registo de auditoria, com a conta, o nome da chave e o comando. Os argumentos não são registados.
+- Esconder o que correu pela aplicação. Cada comando que corre pela aplicação fica no registo de auditoria, com a conta, o nome da chave e o comando. Os argumentos não são registados. Um comando `local`, como `artifact build`, não é auditado.
 
 ## Que servidor e que credencial
 
@@ -244,7 +259,7 @@ Inicia sessão com o primeiro destes que estiver definido:
 3. A sessão de `openldr login`.
 4. Nada. Um comando `app` responde então `Sign in first: openldr login, or set OPENLDR_KEY.`
 
-Não existe a opção `--key`, porque os outros utilizadores conseguem ler as linhas de comando. Uma variável de chave definida mas vazia para o comando. O CLI não passa para a sua sessão:
+Não existe a opção `--key`, porque os outros utilizadores conseguem ler as linhas de comando. Uma variável de chave definida mas vazia interrompe o comando. O CLI não recorre à sua sessão:
 
 ```text
 OPENLDR_KEY is set but empty. Set it, or unset it.
@@ -269,15 +284,17 @@ Use `https`. Defina `OPENLDR_ALLOW_PLAIN_HTTP=true` só numa rede de confiança,
 
 Estes usos funcionavam antes e agora dão erro. Um script pode encontrá-los.
 
-- `--actor` e `--approved-by` são recusados: `--actor cannot be used through the app. The signed-in account is recorded.` O registo de auditoria guarda a conta que iniciou sessão.
+- `--actor` e `--approved-by` são recusados antes de qualquer envio: `--actor cannot be used through the app. The signed-in account is recorded.` e `--approved-by cannot be used through the app. The signed-in account is recorded.` O registo de auditoria guarda a conta que iniciou sessão.
 - `audit list --actor <id>` não pode ser usado. O CLI lê esse `--actor` como o que é recusado. É uma falha conhecida. Filtre antes a saída de `audit list --json` com a sua própria ferramenta.
 - `sync export` precisa de `--out <file>`. `report run --format pdf` também.
 - O cliente e o servidor têm de ser da mesma versão: `This client is version 0.0.1 and OpenLDR is version 0.1.11. Use the same release on both.`
 - Um ficheiro que indica é enviado para o servidor, e um ficheiro que o comando escreve volta para si. Os caminhos são, portanto, caminhos da sua máquina. Numa instalação Docker continuam a ser dentro do contentor. Mantenha-os em `data/`, como antes.
-- Uma pasta que indica é enviada com tudo o que tem. Uma ligação para uma pasta lá dentro para o comando: `<path> is a link to a folder. A link to a folder is not sent.` Uma ligação para um ficheiro só é seguida quando o ficheiro está dentro da pasta. Uma pasta vazia lá dentro não é enviada.
-- Um ficheiro que muda enquanto está a ser enviado para o comando. Envie-o outra vez.
-- Um programa que corre o CLI e não lê nada da saída durante 5 minutos perde o comando. O servidor para-o.
-- Ctrl+C também para o comando no servidor. Um comando que não pare é terminado à força após 10 segundos. Isto não foi testado à mão.
+- Uma pasta que indica é enviada com tudo o que tem. Uma ligação para uma pasta lá dentro interrompe o comando: `<path> is a link to a folder. A link to a folder is not sent.` Uma ligação para um ficheiro dentro da pasta é seguida. Uma ligação que aponta para fora da pasta interrompe o comando: `<path> is a link that points outside <folder>.` Uma pasta vazia lá dentro não é enviada. Não corrido para a pasta vazia.
+- Um ficheiro que muda durante o envio interrompe o comando. Envie-o outra vez. Não corrido.
+- Um programa que corre o CLI e não lê nada da saída durante 5 minutos perde o comando. O servidor interrompe-o. Não corrido.
+- Ctrl+C também interrompe o comando no servidor. Um comando que não pare é terminado à força após 10 segundos. Não corrido.
+- Se o servidor parar durante um comando, o CLI mostra `OpenLDR stopped while this command was running.` na saída de erro. O código de saída é 130, ou 137 quando o comando teve de ser terminado à força. Não corrido.
+- Cada comando que passa pela aplicação mostra uma linha de registo JSON do servidor na saída de erro. Numa instalação sem sincronização, é uma linha com `"msg":"sync disabled (not configured)"`. A saída padrão fica limpa, por isso a saída `--json` continua legível. Um script que trate qualquer saída de erro como falha vai falhar.
 
 ## Quem pode correr o quê
 
@@ -286,6 +303,8 @@ Um comando precisa da permissão de que a ação correspondente no Studio precis
 - `patients list`, `patients show` e `patients duplicates list` precisam de `patients.view_identifiers`. Um analista ou auditor que vê doentes mascarados no Studio não consegue listar doentes a partir do CLI, mesmo sem `--identifiers`.
 - `import start` e `import resume` precisam de `connectors.manage` e de `ingest.run`. O Studio só deixa correr importações à função de administrador do laboratório, pelo nome. O CLI verifica antes estas duas permissões. Não verifica as funções exigidas pelo próprio plugin.
 - `import status` e `import failures` podem mostrar uma chave de linha do sistema de origem. Essa chave pode ser um número de laboratório.
+
+Para mudar o que uma chave ou uma pessoa com sessão iniciada pode fazer, mude as funções da conta com `openldr user assign-role <subject> <role>` e `openldr user unassign-role <subject> <role>`. No início de sessão próprio do OpenLDR, o sujeito é o identificador da conta. A mudança conta a partir do pedido seguinte da conta. `openldr user set-role` não muda o que uma chave ou uma pessoa com sessão iniciada pode fazer, por isso use os dois comandos acima.
 
 ## O registo de auditoria
 
@@ -322,9 +341,13 @@ Um comando que altera algo, como `user create`, também escreve a sua própria l
 | `CLI_MAX_UPLOAD_BYTES` | `2147483648` (2 GiB) | O máximo de bytes de ficheiros que um comando pode enviar. |
 | `CLI_ENTRY` | encontrado junto ao servidor | O ficheiro do CLI que o servidor inicia. Defina-o só quando o CLI estiver noutro sítio. |
 
-O servidor escreve os envios em `TERMINOLOGY_WORK_DIR`, ou na pasta temporária do sistema quando esta definição está vazia. A maioria dos envios é apagada quando o comando termina. `terminology ontology build` guarda a sua pasta, para que `terminology ontology rebuild` a possa ler outra vez. Cada construção bem-sucedida deixa mais uma cópia.
+Quando `CLI_MAX_RUNNING` é maior do que 1, uma conta pode correr no máximo menos um comando do que esse valor ao mesmo tempo. Assim, uma conta não ocupa todos os lugares. Com o valor predefinido de 2, uma conta corre um comando de cada vez, e o segundo comando espera. Não corrido.
+
+O servidor escreve os envios em `TERMINOLOGY_WORK_DIR`, ou na pasta temporária do sistema quando `TERMINOLOGY_WORK_DIR` não está definida. Os envios de um comando são apagados quando ele termina. Se o servidor for morto durante um comando, o que fica é apagado no arranque seguinte, quando tiver mais de 24 horas. Não corrido. `terminology ontology build` guarda a sua pasta em `cli-kept`, para que `terminology ontology rebuild` a possa ler outra vez. A limpeza no arranque não toca em `cli-kept`. Cada construção bem-sucedida deixa lá mais uma cópia.
 
 Numa instalação Docker, se usar `terminology ontology build` pela aplicação, aponte `TERMINOLOGY_WORK_DIR` para uma pasta que sobreviva à recriação do contentor. Caso contrário, `terminology ontology rebuild` falha depois de uma atualização. A pasta tem de estar num volume Docker ou numa montagem, e o utilizador do contentor `api` tem de conseguir escrever nela. Isto não foi testado.
+
+Uma instalação Docker põe o gateway, um proxy nginx, à frente do servidor. Um CLI noutra máquina que envia os comandos para o endereço do gateway encontra mais dois limites. O gateway recusa um pedido com mais de 50 MiB (`client_max_body_size 50m`), por isso um envio maior falha aí. Também corta um comando que não envia nenhuma saída durante 120 segundos (`proxy_read_timeout 120s`). O script `./openldr` não passa pelo gateway, por isso nenhum destes limites se aplica a ele. Não corrido.
 
 [Variáveis de ambiente](/docs/environment) lista todas as definições.
 
@@ -332,15 +355,17 @@ Numa instalação Docker, se usar `terminology ontology build` pela aplicação,
 
 O script `./openldr` da pasta de instalação corre o CLI dentro do contentor `api`. Aí, o CLI fala com o servidor do mesmo contentor, por isso não define nenhum endereço.
 
+Nada nesta secção foi corrido. Vem da leitura do script que `install/install.sh` escreve.
+
 - `OPENLDR_KEY`, quando está definido, é passado em cada chamada.
-- `OPENLDR_KEY_FILE` é lido no anfitrião, não no contentor. Aponte-o para um ficheiro do anfitrião.
+- `OPENLDR_KEY_FILE` é lido no anfitrião, não no contentor. Aponte-o para um ficheiro do anfitrião. O script passa a chave como `OPENLDR_KEY`, por isso uma chave recusada vinda de um ficheiro aparece como `OpenLDR refused the access key from OPENLDR_KEY. It is revoked, expired or wrong.`
 - `./openldr login` pede a palavra-passe no anfitrião. Guarda a sessão num ficheiro próprio dessa pasta de instalação, em `~/.config/openldr/docker/`. Nada é guardado no contentor.
 - Mudar o nome ou o lugar da pasta de instalação termina a sua sessão no script. Inicie sessão outra vez.
-- Uma ligação para `./openldr` a partir de outra pasta, como uma pasta do seu `PATH`, funciona. Corre a instalação para onde aponta, com a sessão dessa instalação. Uma simples cópia do script noutra pasta para com `This script must stay in its install folder, or be a link to it. <folder> has no docker-compose.yml.`
-- Um `OPENLDR_KEY_FILE` errado, ou uma sessão guardada que o script não consegue usar, para todos os comandos, incluindo os de recuperação. A mensagem nomeia a definição ou o ficheiro. Retire a definição, ou apague o ficheiro e inicie sessão outra vez.
-- No Windows, `.\openldr.ps1` inicia sessão apenas com uma chave. Defina `OPENLDR_KEY`. `login` e `OPENLDR_KEY_FILE` são aí recusados. Não está provado: nada foi corrido no Windows.
+- Uma ligação para `./openldr` a partir de outra pasta, como uma pasta do seu `PATH`, funciona. Corre a instalação para onde aponta, com a sessão dessa instalação. Uma simples cópia do script noutra pasta termina com `This script must stay in its install folder, or be a link to it. <folder> has no .env or no docker-compose.yml.`
+- Um `OPENLDR_KEY_FILE` errado, ou uma sessão guardada que o script não consegue usar, interrompe todos os comandos, incluindo os de recuperação. A mensagem nomeia a definição ou o ficheiro. Retire a definição, ou apague o ficheiro e inicie sessão outra vez.
+- No Windows, `.\openldr.ps1` inicia sessão apenas com uma chave. Defina `OPENLDR_KEY`. `login` e `OPENLDR_KEY_FILE` são aí recusados. Uma cópia de `openldr.ps1` fora da sua pasta de instalação termina com a mesma mensagem que a cópia do script acima. Quando não encontra a sua própria pasta, termina com `Cannot find the folder this script is in, so the install it belongs to is not known.` Não está provado: nada foi corrido no Windows.
 
-Uma instalação feita antes desta mudança tem o script antigo. Com ele, cada comando que passa pela aplicação responde `Sign in first`. Substitua o script depois de as imagens estarem na nova versão. [Atualizações planeadas](/docs/upgrading) tem o comando.
+Uma instalação feita antes desta mudança tem o script antigo. Com ele, cada comando que passa pela aplicação responde `Sign in first: openldr login, or set OPENLDR_KEY.` Substitua o script depois de as imagens estarem na nova versão. [Atualizações planeadas](/docs/upgrading) tem o comando.
 
 ## Executar sem Docker
 
@@ -351,6 +376,8 @@ pnpm openldr-standalone cli -- login
 pnpm openldr-standalone cli -- whoami
 ```
 
+O pedido da palavra-passe pelo lançador não foi corrido. `login --username <name> --password-stdin` foi.
+
 Um lançador iniciado com `--host` noutro endereço continua a ser este computador, por isso o HTTP simples para ele é permitido nestas chamadas. [Executar sem Docker](/docs/standalone) tem o resto.
 
 ## Instalações Keycloak e OIDC
@@ -359,7 +386,7 @@ Um lançador iniciado com `--host` noutro endereço continua a ser este computad
 
 - Crie a conta da IA no Studio, ou no fornecedor de identidade. Dê-lhe as funções no Studio. As funções definidas só no Keycloak chegam ao OpenLDR quando a pessoa inicia sessão com um token, e uma conta que só usa uma chave nunca o faz.
 - O Studio consegue criar uma chave para uma conta que nunca iniciou sessão. O CLI não consegue. `openldr user key create` só encontra contas que o OpenLDR já conhece.
-- Desativar uma conta só na consola do fornecedor de identidade não para as suas chaves. Desative-a no Studio ou com `openldr user deactivate`, ou revogue a chave.
+- Desativar uma conta só na consola do fornecedor de identidade não bloqueia as suas chaves. Desative-a no Studio ou com `openldr user deactivate`, ou revogue a chave.
 
 ## O que isto não protege
 
@@ -373,16 +400,26 @@ O início de sessão e as permissões limitam uma pessoa ou um programa que só 
 
 | Mensagem | O que significa |
 | --- | --- |
-| `Sign in first: openldr login, or set OPENLDR_KEY.` | Não foi encontrada nenhuma credencial, ou a chave está errada, revogada ou expirada, ou a sessão terminou. As mesmas palavras aparecem quando uma chave está definida mas já não funciona. |
+| `Sign in first: openldr login, or set OPENLDR_KEY.` | Não foi encontrada nenhuma chave nem sessão. Inicie sessão, ou defina uma chave. |
+| `OpenLDR refused the access key from OPENLDR_KEY. It is revoked, expired or wrong.` | A chave em `OPENLDR_KEY` já não funciona. Crie uma chave nova. |
+| `OpenLDR refused the access key from OPENLDR_KEY_FILE. It is revoked, expired or wrong.` | A chave nesse ficheiro já não funciona. Crie uma chave nova. |
+| `Your session has ended. Sign in again: openldr login.` | A sessão passou o seu limite, ou o servidor terminou-a. |
 | `This account lacks the capability <name>.` | As funções da conta não incluem essa permissão. |
-| `account disabled` | A conta por trás da chave ou da sessão está desativada. |
+| `account disabled` | A conta por trás da chave ou da sessão está desativada. `whoami` mostra o mesmo. |
+| `Cannot reach OpenLDR at <address>: ETIMEDOUT.` | `login`, `whoami` ou `logout` não recebeu resposta em 30 segundos. |
+| `OpenLDR stopped while this command was running.` | O servidor parou durante o comando. Corra-o outra vez quando o servidor voltar. |
 | `This client is version <a> and OpenLDR is version <b>. Use the same release on both.` | Atualize o CLI ou o servidor para que sejam da mesma versão. |
 | `OpenLDR is running other commands. Try again shortly.` | Já estão a correr `CLI_MAX_RUNNING` comandos. |
 | `This command works on the database itself. Run it on the machine that runs OpenLDR.` | Um comando de recuperação foi corrido onde não há definições de base de dados. |
 | `Refusing to send a credential over plain HTTP to <host>. ...` | Use https, ou defina `OPENLDR_ALLOW_PLAIN_HTTP=true` numa rede de confiança. |
 | `The key file named by OPENLDR_KEY_FILE cannot be read: <file>` | Verifique o caminho e o dono do ficheiro. |
 | `--actor cannot be used through the app. The signed-in account is recorded.` | Retire `--actor`. |
+| `--approved-by cannot be used through the app. The signed-in account is recorded.` | Retire `--approved-by`. |
 | `Through the app, sync export needs --out <file>.` | Acrescente `--out`. |
+| `user key revoke refused: that is not a key ID. Find the ID with "openldr user key list".` | Indique o identificador da chave dado por `user key list`, não a chave. |
+| `<command> refused: that looks like a key, not a username. Give the account's username.` | Foi escrita uma chave no lugar do nome de utilizador. |
+| `no user has that name. Usernames here match exactly, including case.` | Nenhuma conta tem esse nome de utilizador. O valor não é mostrado porque contém `oldr_`. |
+| `user key create refused: name holds a control character, such as a tab or a line break` | Dê à chave um nome sem tabulações nem quebras de linha. |
 
 ## Guias relacionados
 

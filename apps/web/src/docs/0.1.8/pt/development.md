@@ -196,7 +196,7 @@ Este exemplo verifica o site público. Escolha o pacote afetado para outras alte
 
 ### 3. Repor apenas uma base descartável
 
-Opcional e destrutivo. Verifique os dois URL das bases. Estes comandos apagam e recriam o esquema e carregam as definições. Não os use para reparar uma migração em falta. `pnpm e2e:seed` e `pnpm docs:seed` também repõem dados e compilam extensões; são conjuntos de teste opcionais. Cada um tem uma metade de reposição que não precisa da API, e uma metade de carga que passa pela API em execução. Corra-os pela ordem que o `e2e/README.md` indica.
+Opcional e destrutivo. Verifique os dois URL das bases. Estes comandos apagam e recriam o esquema e carregam as definições. Não os use para reparar uma migração em falta. `pnpm e2e:seed` e `pnpm docs:seed` também repõem dados e compilam extensões; são conjuntos de teste opcionais. Cada um tem uma metade de reposição que não precisa da API, e uma metade de carga que passa pela API em execução. A metade de carga precisa de `AUTH_DEV_BYPASS=true`, porque a reposição não deixa nenhuma conta nem chave para iniciar sessão. Corra-os pela ordem que o `e2e/README.md` indica. Essa ordem não foi corrida.
 
 ```sh
 {{operator:dev-reset}}
@@ -274,7 +274,7 @@ O comando de testes JavaScript não executa estes testes Rust. Teste o pacote Ru
 
 ### 4. Instalar apenas no sistema de teste
 
-Estes comandos escrevem no registo e armazenamento de desenvolvimento. Verifique `.env`. Antes de os executar, adicione `MARKETPLACE_DEV_ALLOW_UNSIGNED=true` ao `.env` do teste isolado e reinicie a API. Mantenha o manifesto junto do ficheiro WASM. Esta compilação não está assinada; reserve a opção de desenvolvimento sem assinatura a um sistema isolado. Use pacotes assinados e aprovados numa instalação normal.
+Estes comandos escrevem no registo e armazenamento de desenvolvimento. Passam pela API em execução, por isso mantenha-a a correr, com sessão dada por `AUTH_DEV_BYPASS=true` ou por `pnpm openldr login`. Verifique `.env`. Antes de os executar, adicione `MARKETPLACE_DEV_ALLOW_UNSIGNED=true` ao `.env` do teste isolado e reinicie a API. Mantenha o manifesto junto do ficheiro WASM. Esta compilação não está assinada; reserve a opção de desenvolvimento sem assinatura a um sistema isolado. Use pacotes assinados e aprovados numa instalação normal.
 
 ```sh
 {{operator:dev-plugin-install}}
@@ -290,7 +290,7 @@ Estes comandos escrevem no registo e armazenamento de desenvolvimento. Verifique
 | `--branch NAME` | `-Branch NAME` | Escolher o ramo de um clone novo. |
 | `--no-services` | `-NoServices` | Ignorar Docker e a inicialização das bases. |
 | `--reset-db` | `-ResetDb` | Repor uma base de desenvolvimento existente. Destrutivo. |
-| `--seed` | `-Seed` | Na inicialização, executar a preparação destrutiva WHONET. Exige ferramentas de compilação. Se uma API já responder em `http://127.0.0.1:3000`, o script para antes de qualquer reposição. Caso contrário, inicia a sua própria API para a carga e deixa-a a correr. Não testado. |
+| `--seed` | `-Seed` | Na inicialização, executar a preparação destrutiva WHONET. Exige ferramentas de compilação. Se alguma coisa estiver à escuta na porta 3000, o script termina antes de instalar ou mudar o que quer que seja. Numa instalação nova ou com `--reset-db`, compila depois a amostra e as extensões. Repõe e carrega a base, e depois repõe-na outra vez. Inicia então a sua própria API na porta 3000 e carrega a amostra por ela. Verifica a porta 3000 outra vez antes de cada reposição e antes de a API iniciar, e termina se alguma coisa estiver à escuta. Uma paragem depois de uma reposição di-lo e indica como correr outra vez. A carga precisa de `AUTH_DEV_BYPASS=true` em `.env`, e de nenhum `OPENLDR_KEY` nem `OPENLDR_KEY_FILE` na sua shell. A API fica a correr. Não testado. |
 
 `pnpm build:ui-reference` compila a extensão com página, cartão e painel. `pnpm build:v1-import` compila o importador v1. `pnpm build:plugins` compila WHONET e as outras extensões de referência. WHONET também exige clang e um sysroot WASI.
 

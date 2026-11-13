@@ -226,7 +226,7 @@ Execute o comando em `~/Downloads/openldr_ce`. Mantenha o prefixo `data/`, pois 
 
 A CLI instalada executa dentro do contentor API. A pasta `data` é partilhada com esse contentor. Num servidor remoto, coloque o ficheiro na pasta desse servidor. Guardar um ficheiro no portátil não o copia para o servidor.
 
-A maioria dos comandos, incluindo `ingest`, passa pelo servidor OpenLDR em execução. Inicie sessão primeiro com `./openldr login`, ou defina uma chave de acesso em `OPENLDR_KEY`. Leia [Utilizadores](/docs/users) para criar uma chave de acesso.
+A maioria dos comandos, incluindo `ingest`, passa pelo servidor OpenLDR em execução. <!-- cli:linux -->Inicie sessão primeiro com `./openldr login`, ou defina uma chave de acesso em `OPENLDR_KEY`.<!-- /cli --><!-- cli:mac -->Inicie sessão primeiro com `./openldr login`, ou defina uma chave de acesso em `OPENLDR_KEY`.<!-- /cli --><!-- cli:windows -->Defina primeiro uma chave de acesso em `OPENLDR_KEY`. No Windows, o CLI inicia sessão apenas com uma chave de acesso. Isto não foi corrido no Windows.<!-- /cli --> Leia [Utilizadores](/docs/users) para criar uma chave de acesso.
 
 Use também `data/` para ficheiros de saída. Coloque caminhos com espaços entre aspas, como `"data/my file.json"`. Cada guia explica o formato esperado. Executar uma importação escreve registos.
 

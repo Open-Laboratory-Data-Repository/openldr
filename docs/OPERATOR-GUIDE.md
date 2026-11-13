@@ -49,7 +49,7 @@ Start the web app in a second shell:
 pnpm -C apps/studio dev
 ```
 
-For screenshot/e2e data, seed WHONET sample data. The reset half works on the database itself; the load half goes through the running API at `OPENLDR_URL` (default `http://127.0.0.1:3000`), which must be the API on the database you just reset:
+For screenshot/e2e data, seed WHONET sample data. The reset half works on the database itself. The load half goes through the running API at `OPENLDR_URL` (default `http://127.0.0.1:3000`), which must be the API on the database you just reset. The load needs a signed-in caller. Right after the reset no account or key exists, so run the API with `AUTH_DEV_BYPASS=true` in `.env`, and leave `OPENLDR_KEY` and `OPENLDR_KEY_FILE` unset:
 
 ```bash
 pnpm e2e:seed:reset          # with the API stopped
@@ -172,7 +172,7 @@ Troubleshooting:
 - `--converter fhir-bundle` (default). The file is a FHIR **transaction/collection Bundle** (a JSON object with `resourceType: "Bundle"` and an `entry` array). A bare JSON array is **not** a Bundle and will not persist clinical rows.
 - `--plugin <id>`. Parse with an installed WASM converter plugin, e.g. `whonet-sqlite` (WHONET AMR databases), `hl7v2` (HL7 v2 messages), or `tabular` (CSV/TSV with a `--config` column mapping). Install the plugin first with `openldr plugin install`.
 
-The plugin and the sample file below are repository files, so this example is a source checkout:
+The plugin and the sample file below are repository files, so this example is a source checkout. `ingest`, `plugin install` and `pipeline` go through the running API, so start it (`pnpm -C apps/server dev`) and sign in first. On a dev machine, `AUTH_DEV_BYPASS=true` in `.env` signs these commands in. Elsewhere use `pnpm openldr login` or an access key.
 
 ```bash
 # A FHIR transaction Bundle

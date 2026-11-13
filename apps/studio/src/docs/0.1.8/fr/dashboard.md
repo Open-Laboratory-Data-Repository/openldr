@@ -167,7 +167,7 @@ cd C:\openldr_ce
 
 #### Depuis une copie du code source
 
-Le fichier d'exemple est déjà inclus. Depuis votre copie de test dans `~/Downloads/openldr_ce` ou `C:\openldr_ce`, exécutez la commande ci-dessous. Elle utilise les bases configurées dans `.env`.
+Le fichier d'exemple est déjà inclus. Depuis votre copie de test dans `~/Downloads/openldr_ce` ou `C:\openldr_ce`, exécutez la commande ci-dessous. Elle passe par l'API en marche, donc démarrez-la et connectez-vous d'abord.
 
 ```sh
 pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-lab-data.json

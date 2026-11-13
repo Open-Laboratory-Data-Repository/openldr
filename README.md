@@ -160,7 +160,16 @@ Windows hosts use [`install/install.ps1`](install/install.ps1) with the same fla
 curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/development.sh | bash
 ```
 
-Accepts `--dir`, `--branch`, `--seed` (loads the WHONET sample dataset), `--reset-db`, and `--no-services`. With `--seed`, the script stops before any reset when an API already answers at `http://127.0.0.1:3000`. Stop that API and run the script again, or seed by hand in the order [`e2e/README.md`](e2e/README.md) gives. Otherwise it starts its own API for the sample load and leaves it running. This was not run. Windows: [`install/development.ps1`](install/development.ps1).
+Accepts `--dir`, `--branch`, `--seed` (loads the WHONET sample dataset), `--reset-db`, and `--no-services`. Windows: [`install/development.ps1`](install/development.ps1).
+
+With `--seed`, the script first checks that nothing listens on port 3000, on any address. It does this before it installs or changes anything. On a fresh setup or with `--reset-db`, it then works in this order:
+
+1. It builds the WHONET sample and the plugins.
+2. It checks port 3000, then runs `db reset` and `db seed`.
+3. It checks port 3000, then runs a second `db reset`.
+4. It checks port 3000, then starts its own API there and loads the sample through it.
+
+Any program listening on port 3000 stops the script at each check. A stop after a reset says the database was reset and how to run the script again. The load signs in through `AUTH_DEV_BYPASS=true`, which the script writes into a new `.env`. If your `.env` lacks it, the load is refused after the database was reset. A key in `OPENLDR_KEY` or `OPENLDR_KEY_FILE`, or an `openldr login` session for `http://127.0.0.1:3000`, is refused too, because the reset removed it. The API stays running after the load. None of this was run.
 
 ### 3. Manual setup
 
@@ -185,7 +194,7 @@ pnpm -C apps/studio dev      # terminal 2 — Studio dev server (HMR)
 pnpm -C apps/web dev         # terminal 3 (optional) — public landing site + docs
 ```
 
-Optional sample data. It builds the WASM plugins, resets the DB, and ingests a WHONET export. Requires the Rust/WASM toolchain (see [`wasm/rust-toolchain.toml`](wasm/rust-toolchain.toml)). The reset runs on the database itself; the plugin install and the ingest go through the running API at `OPENLDR_URL` (default `http://127.0.0.1:3000`), which must be the API on the database you just reset. So stop the API first:
+Optional sample data. It builds the WASM plugins, resets the DB, and ingests a WHONET export. Requires the Rust/WASM toolchain (see [`wasm/rust-toolchain.toml`](wasm/rust-toolchain.toml)). The reset runs on the database itself. The plugin install and the ingest go through the running API at `OPENLDR_URL`, by default `http://127.0.0.1:3000`. That must be the API on the database you just reset. They need a signed-in caller. Right after the reset no account or key exists, so the API must run with `AUTH_DEV_BYPASS=true` in `.env`. Your shell must not set `OPENLDR_KEY` or `OPENLDR_KEY_FILE`. So stop the API first:
 
 ```bash
 pnpm e2e:seed:reset          # with the API stopped

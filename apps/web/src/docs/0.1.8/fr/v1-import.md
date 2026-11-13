@@ -230,7 +230,7 @@ L'usage habituel exige une base v1 existante. Sur un SQL Server de test seulemen
 
 Le fichier crée une base. Lisez-le avant de l'exécuter et utilisez un serveur de test sans base nommée guide_v1. Demandez à l'opérateur un compte en lecture seule. Le fichier ne fournit aucun identifiant de connexion.
 
-Depuis les sources, `pnpm build:v1-import` prépare l'importeur de référence. Rust et la cible wasm32-wasip1 sont nécessaires. Installez le fichier avec `pnpm openldr plugin install reference-plugins/openldr-v1-import/plugin.wasm`. Cette compilation non signée sert aux tests. En usage habituel, utilisez le paquet signé approuvé par votre organisation.
+Depuis les sources, `pnpm build:v1-import` prépare l'importeur de référence. Rust et la cible wasm32-wasip1 sont nécessaires. Installez le fichier avec `pnpm openldr plugin install reference-plugins/openldr-v1-import/plugin.wasm`. Cette commande passe par l'API en marche, donc démarrez-la et connectez-vous d'abord. Cette compilation non signée sert aux tests. En usage habituel, utilisez le paquet signé approuvé par votre organisation.
 
 ## Résolution de problèmes
 

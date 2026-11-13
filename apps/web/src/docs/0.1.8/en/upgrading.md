@@ -234,7 +234,7 @@ HTTP 202 means accepted, not completed. Inspect webhook receipts and linked runs
 
 ### 3. Replace the openldr wrapper
 
-Run this once the images are on the new release. It rewrites only the `openldr` wrapper in this folder, and `openldr.ps1` where the installer writes one. It changes nothing else. Without it, the old wrapper sends no sign-in, and every command that goes through the app answers `Sign in first: openldr login, or set OPENLDR_KEY.` Then sign in with `./openldr login`, or set `OPENLDR_KEY`. See [CLI sign-in and access keys](/docs/cli-access). The PowerShell form was not run on Windows.
+Run this once the images are on the new release. It rewrites only the `openldr` wrapper in this folder, and `openldr.ps1` where the installer writes one. It changes nothing else. Without it, the old wrapper sends no sign-in, and every command that goes through the app answers `Sign in first: openldr login, or set OPENLDR_KEY.` Then sign in with `./openldr login`, or set `OPENLDR_KEY`. On Windows, `.\openldr.ps1` signs in with a key only, so set `OPENLDR_KEY`. See [CLI sign-in and access keys](/docs/cli-access). Neither form was run against a real install. The PowerShell form was not run on Windows.
 
 ```sh
 {{operator:upgrade-wrapper}}

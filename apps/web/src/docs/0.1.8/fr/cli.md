@@ -30,7 +30,7 @@ L’aide liste les commandes sans modifier les données. Le lanceur exécute dan
 
 ### 3. Lire les options de la commande choisie
 
-Utilisez --help à chaque niveau. Les lectures proposent souvent --json. Les exemples de modification ci-dessous sont des alternatives, pas un script successif. La plupart des commandes passent par le serveur en marche, donc connectez-vous d'abord avec ./openldr login ou une clé d'accès. Voir [Connexion du CLI et clés d'accès](/docs/cli-access).
+Utilisez --help à chaque niveau. Les lectures proposent souvent --json. Les exemples de modification ci-dessous sont des alternatives, pas un script successif. La plupart des commandes passent par le serveur en marche, donc connectez-vous d'abord avec ./openldr login ou une clé d'accès. Sous Windows, .\openldr.ps1 se connecte uniquement avec une clé d'accès, donc définissez OPENLDR_KEY. Cela n'a pas été lancé sous Windows. Voir [Connexion du CLI et clés d'accès](/docs/cli-access).
 
 ```sh
 {{operator:cli-group-help}}

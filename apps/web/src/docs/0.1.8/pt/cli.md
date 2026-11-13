@@ -30,7 +30,7 @@ A ajuda lista comandos sem alterar dados. O lançador executa no contentor api; 
 
 ### 3. Ler opções do comando escolhido
 
-Use --help em cada nível. Leituras costumam aceitar --json. Exemplos de alteração abaixo são alternativas, não um script em sequência. A maioria dos comandos passa pelo servidor em execução, por isso inicie sessão primeiro com ./openldr login ou uma chave de acesso. Ver [Início de sessão do CLI e chaves de acesso](/docs/cli-access).
+Use --help em cada nível. Leituras costumam aceitar --json. Exemplos de alteração abaixo são alternativas, não um script em sequência. A maioria dos comandos passa pelo servidor em execução, por isso inicie sessão primeiro com ./openldr login ou uma chave de acesso. No Windows, .\openldr.ps1 inicia sessão apenas com uma chave de acesso, por isso defina OPENLDR_KEY. Isto não foi corrido no Windows. Ver [Início de sessão do CLI e chaves de acesso](/docs/cli-access).
 
 ```sh
 {{operator:cli-group-help}}
@@ -407,7 +407,7 @@ Sem `--apply`, nada é escrito. O comando mostra o número de linhas novas, alte
 
 ![Guardar o mapeamento no ficheiro JSON.](guide:operator-cli-pt-13)
 
-Uma resposta de categoria é `"kind": "existing"` com um `code`, ou `"kind": "new"` com um `code` e um `display`. Só uma instalação que seja dona do catálogo pode importar. Uma aplicação fica no registo de auditoria com a conta com sessão iniciada. Exporte os testes ativos em CSV, para a saída padrão ou para um ficheiro:
+Uma resposta de categoria é `"kind": "existing"` com um `code`, ou `"kind": "new"` com um `code` e um `display`. Só uma instalação que seja dona do catálogo pode importar. Uma importação aplicada fica no registo de auditoria com a conta com sessão iniciada. Exporte os testes ativos em CSV, para a saída padrão ou para um ficheiro:
 
 ### 14. Usar o catálogo com os seus códigos
 

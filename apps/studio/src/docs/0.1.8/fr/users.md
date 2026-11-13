@@ -232,29 +232,33 @@ Vérifiez le nom d'utilisateur et sélectionnez **Force sign-out**.
 
 ## Créer une clé d'accès pour une IA
 
-Effectuez cette tâche lorsqu'un agent IA ou un script doit lancer des commandes `openldr` sous son propre compte. Il agit avec la clé, sans qu'une personne se connecte. Cela exige Manage users.
+Effectuez cette tâche lorsqu'un agent IA ou un script doit lancer des commandes `openldr` sous son propre compte. Il agit avec la clé, sans qu'une personne se connecte. Cela exige Manage users. Créez d'abord le compte de l'IA avec **Créer un compte opérateur** plus haut. Laissez **Password** vide, et choisissez le rôle le plus restreint qui suffit au travail.
 
-1. Créez un compte pour l'IA avec **Créer un compte opérateur** plus haut. Laissez **Password** vide, et choisissez le rôle le plus restreint qui suffit au travail.
-2. Trouvez le nouveau compte. Ouvrez les points de sa ligne et sélectionnez **Clés d'accès**.
-3. Ouvrez les points en haut à droite du panneau et sélectionnez **Nouvelle clé**.
-4. Saisissez un nom dans **Nom**, par exemple `claude-test`.
-5. Sélectionnez **Expire le** et choisissez le dernier jour où la clé peut fonctionner.
-6. Ouvrez les points de **Nouvelle clé** et sélectionnez **Créer la clé**.
-7. Sélectionnez le bouton de copie à côté de **Clé**, puis collez la clé là où l'IA la lit.
+1. Sélectionnez **Users** dans le menu principal.
+2. Recherchez le compte de l'IA par son nom d'utilisateur.
+3. Ouvrez les points de sa ligne et sélectionnez **Clés d'accès**.
+4. Ouvrez les points en haut à droite du panneau et sélectionnez **Nouvelle clé**.
+5. Saisissez un nom dans **Nom**, par exemple `claude-test`.
+6. Sélectionnez **Expire le** et choisissez le dernier jour où la clé peut fonctionner.
+7. Ouvrez les points de **Nouvelle clé** et sélectionnez **Créer la clé**.
+8. Sélectionnez le bouton de copie à côté de **Clé**, puis collez la clé là où l'IA la lit.
 
 **Résultat attendu :** la clé s'affiche une seule fois, avec « Cette clé ne pourra plus être affichée. Copiez-la maintenant. » Le tableau liste la clé comme Active, avec son nom et les premiers caractères de la clé.
 
-Donnez à l'IA la clé et l'adresse du serveur. Elle ne peut lancer que les commandes que son rôle autorise. Elle ne peut pas lancer les commandes qui travaillent sur la base de données elle-même, ni inscrire son travail sous un autre nom. Chaque commande qu'elle lance figure dans le journal Audit sous son compte, avec le nom de la clé. La page du site web **Connexion du CLI et clés d'accès** montre comment un programme utilise la clé.
+Donnez à l'IA la clé et l'adresse du serveur. Elle ne peut lancer que les commandes que son rôle autorise. Elle ne peut pas lancer les commandes qui travaillent sur la base de données elle-même, ni inscrire son travail sous un autre nom. Chaque commande qu'elle lance figure dans le journal Audit sous son compte, avec le nom de la clé. La page du site web **Connexion du CLI et clés d'accès** montre comment un programme utilise la clé. Ces étapes n'ont pas été vérifiées à l'écran. Les libellés viennent des textes de Studio.
 
 ## Révoquer une clé d'accès
 
 Effectuez cette tâche lorsque le travail de l'IA est terminé, ou lorsqu'une clé a pu fuiter.
 
-1. Trouvez le compte. Ouvrez les points de sa ligne et sélectionnez **Clés d'accès**.
-2. Ouvrez les points au bout de la ligne de la clé et sélectionnez **Révoquer**.
-3. Vérifiez le nom de la clé dans la confirmation, puis sélectionnez **Révoquer**.
+1. Sélectionnez **Users** dans le menu principal.
+2. Recherchez le compte par son nom d'utilisateur.
+3. Ouvrez les points de sa ligne et sélectionnez **Clés d'accès**.
+4. Trouvez la clé par son nom et ses premiers caractères.
+5. Ouvrez les points au bout de la ligne de la clé et sélectionnez **Révoquer**.
+6. Vérifiez le nom de la clé dans la confirmation, puis sélectionnez **Révoquer**.
 
-**Résultat attendu :** le statut de la clé passe à Révoquée. Un programme qui l'utilise est refusé dès son appel suivant. Une révocation est définitive. Créez une nouvelle clé si l'IA a de nouveau besoin d'accès.
+**Résultat attendu :** le statut de la clé passe à Révoquée. Un programme qui l'utilise est refusé dès son appel suivant. Une commande qu'il a déjà lancée continue jusqu'à sa fin. Une révocation est définitive. Créez une nouvelle clé si l'IA a de nouveau besoin d'accès.
 
 ## Utiliser Users sur un téléphone
 
@@ -299,6 +303,8 @@ Une clé n'est affichée qu'une fois, à sa création. Studio n'en garde aucune 
 **Le bouton de copie ne copie pas.** En HTTP simple sur une autre adresse, le navigateur peut bloquer la copie. Sélectionnez la clé dans **Clé** et copiez-la à la main.
 
 **L'IA reçoit « This account lacks the capability ».** Son rôle n'autorise pas cette commande. Donnez-lui un rôle qui l'autorise, ou laissez le refus.
+
+**La clé n'est pas créée.** Studio affiche « Impossible de créer la clé : name holds a control character, such as a tab or a line break ». Le nom contient une tabulation ou un saut de ligne, souvent venu d'un collage. Saisissez de nouveau le nom.
 
 ## Guides associés
 

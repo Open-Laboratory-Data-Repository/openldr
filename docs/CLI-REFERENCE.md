@@ -31,7 +31,9 @@ Sign in with `openldr login` (local sign-in only), or set `OPENLDR_KEY` or `OPEN
 
 The server address is `--server-url <address>` (a root option, accepted anywhere on the line), then `OPENLDR_URL`, then `http://127.0.0.1:3000`. Plain HTTP to a host other than `localhost`, `127.0.0.1` or `[::1]` is refused unless `OPENLDR_ALLOW_PLAIN_HTTP` is `true` or `1`.
 
-Through the app, `--actor` and `--approved-by` are refused, and the signed-in account is recorded. `audit list --actor <id>` cannot be used, because the root `--actor` takes the value (known fault). `sync export` and `report run --format pdf` need `--out`. The client and server must be the same release.
+Through the app, `--actor` and `--approved-by` are refused before anything is sent, and the signed-in account is recorded. `audit list --actor <id>` cannot be used, because the root `--actor` takes the value (known fault). `sync export` and `report run --format pdf` need `--out`. The client and server must be the same release.
+
+A key that was sent and refused prints `OpenLDR refused the access key from OPENLDR_KEY. It is revoked, expired or wrong.` (or `from OPENLDR_KEY_FILE`). An ended session prints `Your session has ended. Sign in again: openldr login.` Only a caller with no credential gets `Sign in first: openldr login, or set OPENLDR_KEY.` `login`, `whoami` and `logout` give up after 30 seconds with no answer, with `Cannot reach OpenLDR at <address>: ETIMEDOUT.` If the server stops during a command, the client prints `OpenLDR stopped while this command was running.` Every command through the app also prints a JSON log line from the server on standard error, such as `sync disabled (not configured)`. Standard output stays clean.
 
 The web docs page "CLI sign-in and access keys" (`apps/web/src/docs/0.1.8/en/cli-access.md`) has the full account, with real output.
 
@@ -47,7 +49,7 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 | `openldr login [--username <name>] [--password-stdin]` | Sign in to the server and keep the session (local sign-in only). The password is asked for with no echo. `--password-stdin` needs `--username`. |
 | `openldr logout` | End the session on the server and remove it from this machine. |
 | `openldr whoami [--json]` | Show the account, its roles, and whether a session or a key signs in. |
-| `openldr user key list/create/revoke` | List, make and revoke a user's access keys. `create <username> --name <name> [--expires <date>]` prints the key once, alone on standard output. A bare `YYYY-MM-DD` means the end of that day in UTC. `revoke <username> <keyId>` refuses without `--force`. |
+| `openldr user key list/create/revoke` | List, make and revoke a user's access keys. `create <username> --name <name> [--expires <date>]` prints the key once, alone on standard output. A bare `YYYY-MM-DD` means the end of that day in UTC. `revoke <username> <keyId>` refuses without `--force`, and refuses a value that is not a key ID. All three refuse a username that holds `oldr_`. A key name with a tab, a line break or another control character is refused. |
 | `openldr health` | Probe configured adapters and service health. |
 | `openldr errors list` | List the error-code catalog. |
 | `openldr fhir validate <file>` | Validate a FHIR JSON resource or bundle. |
@@ -67,6 +69,8 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 | `openldr audit list` | Query append-only audit events. |
 | `openldr auth rebind-issuer --force` | Bind the database to a new `OIDC_ISSUER_URL` after the same provider moved address. Refuses without `--force`. Not for switching providers. |
 | `openldr users list` / `openldr user ...` | Manage local users and roles. |
+| `openldr user create --username <u> [--name <n>] [--email <e>] [--role <r>...] [--no-password]` | Make an account. `--no-password` makes it with no password, so it cannot sign in to Studio. Use it for an account that signs in with access keys. Local sign-in only. |
+| `openldr user assign-role <subject> <slug>` / `unassign-role <subject> <slug>` | Add or remove a capability role. These roles decide what a key or a signed-in person may do. The change counts from the account's next request. On local sign-in the subject is the account's ID. `user set-role` does not change what they may do. |
 | `openldr roles ...` | Manage capability roles. `roles doctor` reports capability drift against the built-in role definitions. |
 | `openldr settings flags/numbers/sync/danger ...` | Read/write feature flags, numeric limits, sync config, and danger-zone actions. |
 | `openldr sync ...` | Distributed (lab⇄central) sync status/control, enrollment, amendment, divergence, and offline bundle export/import. |
@@ -112,7 +116,7 @@ pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 | `--source <s>` | `cli` | Source-system identifier recorded on the batch/provenance. |
 | `--json` | off | Emit the batch result as JSON. |
 
-The plugin and the sample file below are repository files, so this example is a source checkout:
+The plugin and the sample file below are repository files, so this example is a source checkout. `ingest`, `plugin install` and `pipeline` go through the running API, so start it and sign in first. On a dev machine, `AUTH_DEV_BYPASS=true` in `.env` signs them in.
 
 ```bash
 # FHIR Bundle (default converter)
@@ -252,4 +256,4 @@ duplicates.
 - every command family help page;
 - every leaf subcommand help page.
 
-Live examples that require services, databases, Keycloak, or DHIS2 should be run only after `.env` is configured and `docker compose up -d` plus the seed have completed, in the order `e2e/README.md` gives (`pnpm e2e:seed:reset` with the API stopped, start the API, then `pnpm e2e:seed:load`).
+Live examples that require services, databases, Keycloak, or DHIS2 should be run only after `.env` is configured and `docker compose up -d` plus the seed have completed, in the order `e2e/README.md` gives (`pnpm e2e:seed:reset` with the API stopped, start the API, then `pnpm e2e:seed:load`). The load and every `app` command need the API running and a signed-in caller. Right after the reset no account or key exists, so the API must run with `AUTH_DEV_BYPASS=true`.

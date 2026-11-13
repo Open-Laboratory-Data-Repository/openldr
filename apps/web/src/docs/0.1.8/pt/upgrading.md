@@ -234,7 +234,7 @@ HTTP 202 significa aceite, não concluído. Examine recibos webhook e execuçõe
 
 ### 3. Substituir o script openldr
 
-Corra isto depois de as imagens estarem na nova versão. Reescreve apenas o script `openldr` desta pasta, e `openldr.ps1` onde o instalador escreve um. Não muda mais nada. Sem isto, o script antigo não envia início de sessão, e cada comando que passa pela aplicação responde `Sign in first: openldr login, or set OPENLDR_KEY.` Depois inicie sessão com `./openldr login`, ou defina `OPENLDR_KEY`. Ver [Início de sessão do CLI e chaves de acesso](/docs/cli-access). A forma PowerShell não foi corrida no Windows.
+Corra isto depois de as imagens estarem na nova versão. Reescreve apenas o script `openldr` desta pasta, e `openldr.ps1` onde o instalador escreve um. Não muda mais nada. Sem isto, o script antigo não envia início de sessão, e cada comando que passa pela aplicação responde `Sign in first: openldr login, or set OPENLDR_KEY.` Depois inicie sessão com `./openldr login`, ou defina `OPENLDR_KEY`. No Windows, `.\openldr.ps1` inicia sessão apenas com uma chave, por isso defina `OPENLDR_KEY`. Ver [Início de sessão do CLI e chaves de acesso](/docs/cli-access). Nenhuma das formas foi corrida numa instalação real. A forma PowerShell não foi corrida no Windows.
 
 ```sh
 {{operator:upgrade-wrapper}}

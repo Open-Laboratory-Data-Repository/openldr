@@ -196,7 +196,7 @@ Cet exemple vérifie le site public. Choisissez le paquet concerné pour les aut
 
 ### 3. Réinitialiser seulement une base jetable
 
-Facultatif et destructif. Vérifiez les deux URL des bases. Ces commandes suppriment et recréent le schéma, puis chargent les définitions. Ne les utilisez pas pour une migration manquante. `pnpm e2e:seed` et `pnpm docs:seed` réinitialisent aussi les données et construisent des extensions ; ces jeux de test ne sont pas nécessaires. Chacun a une moitié de réinitialisation qui n'a pas besoin de l'API, et une moitié de chargement qui passe par l'API en marche. Lancez-les dans l'ordre donné par `e2e/README.md`.
+Facultatif et destructif. Vérifiez les deux URL des bases. Ces commandes suppriment et recréent le schéma, puis chargent les définitions. Ne les utilisez pas pour une migration manquante. `pnpm e2e:seed` et `pnpm docs:seed` réinitialisent aussi les données et construisent des extensions ; ces jeux de test ne sont pas nécessaires. Chacun a une moitié de réinitialisation qui n'a pas besoin de l'API, et une moitié de chargement qui passe par l'API en marche. La moitié de chargement demande `AUTH_DEV_BYPASS=true`, car la réinitialisation ne laisse aucun compte ni clé pour se connecter. Lancez-les dans l'ordre donné par `e2e/README.md`. Cet ordre n'a pas été lancé.
 
 ```sh
 {{operator:dev-reset}}
@@ -274,7 +274,7 @@ La commande de tests JavaScript ne lance pas ces tests Rust. Vérifiez le paquet
 
 ### 4. Installer uniquement dans le système de test
 
-Ces commandes écrivent dans le registre et le stockage de développement. Vérifiez `.env`. Avant de les lancer, ajoutez `MARKETPLACE_DEV_ALLOW_UNSIGNED=true` au `.env` du test isolé et redémarrez l'API. Gardez le manifeste à côté du fichier WASM. Cette compilation n'est pas signée ; réservez le réglage de développement non signé à un système isolé. Utilisez des paquets signés et approuvés dans une installation normale.
+Ces commandes écrivent dans le registre et le stockage de développement. Elles passent par l'API en marche, donc gardez-la en marche, connectée par `AUTH_DEV_BYPASS=true` ou par `pnpm openldr login`. Vérifiez `.env`. Avant de les lancer, ajoutez `MARKETPLACE_DEV_ALLOW_UNSIGNED=true` au `.env` du test isolé et redémarrez l'API. Gardez le manifeste à côté du fichier WASM. Cette compilation n'est pas signée ; réservez le réglage de développement non signé à un système isolé. Utilisez des paquets signés et approuvés dans une installation normale.
 
 ```sh
 {{operator:dev-plugin-install}}
@@ -290,7 +290,7 @@ Ces commandes écrivent dans le registre et le stockage de développement. Véri
 | `--branch NAME` | `-Branch NAME` | Choisir la branche d'un nouveau clone. |
 | `--no-services` | `-NoServices` | Ignorer Docker et l'initialisation des bases. |
 | `--reset-db` | `-ResetDb` | Réinitialiser une base de développement existante. Destructif. |
-| `--seed` | `-Seed` | À l'initialisation, lancer la préparation destructive WHONET. Outils de compilation requis. Si une API répond déjà à `http://127.0.0.1:3000`, le script s'arrête avant toute réinitialisation. Sinon il démarre sa propre API pour le chargement et la laisse en marche. Non testé. |
+| `--seed` | `-Seed` | À l'initialisation, lancer la préparation destructive WHONET. Outils de compilation requis. Si quelque chose écoute sur le port 3000, le script s'arrête avant d'installer ou de modifier quoi que ce soit. Sur une nouvelle installation ou avec `--reset-db`, il construit ensuite l'échantillon et les extensions. Il réinitialise et alimente la base, puis la réinitialise de nouveau. Il démarre alors sa propre API sur le port 3000 et charge l'échantillon par elle. Il vérifie de nouveau le port 3000 avant chaque réinitialisation et avant le démarrage de l'API, et s'arrête si quelque chose y écoute. Un arrêt après une réinitialisation le dit et indique comment relancer. Le chargement demande `AUTH_DEV_BYPASS=true` dans `.env`, et aucun `OPENLDR_KEY` ni `OPENLDR_KEY_FILE` dans votre shell. L'API reste en marche. Non testé. |
 
 `pnpm build:ui-reference` construit l'extension avec page, carte et panneau. `pnpm build:v1-import` construit l'importateur v1. `pnpm build:plugins` construit WHONET et les autres extensions de référence. WHONET exige aussi clang et un sysroot WASI.
 

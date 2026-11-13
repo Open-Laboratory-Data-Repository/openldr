@@ -232,29 +232,33 @@ Check the username and select **Force sign-out**.
 
 ## Make an access key for an AI
 
-Use this when an AI agent or a script must run `openldr` commands as its own account. It acts with the key and no person signs in. This requires Manage users.
+Use this when an AI agent or a script must run `openldr` commands as its own account. It acts with the key and no person signs in. This requires Manage users. First create the AI's account with **Create an operator account** above. Leave **Password** blank, and choose the narrowest role that does the job.
 
-1. Create an account for the AI with **Create an operator account** above. Leave **Password** blank, and choose the narrowest role that does the job.
-2. Find the new account. Open its row dots and select **Access keys**.
-3. Open the dots at the top right of the sheet and select **New key**.
-4. Type a name in **Name**, such as `claude-test`.
-5. Select **Expires** and choose the last day the key may work.
-6. Open the dots of **New key** and select **Create key**.
-7. Select the copy button beside **Key**, and paste the key where the AI reads it.
+1. Select **Users** in the main menu.
+2. Search for the AI's account by its username.
+3. Open its row dots and select **Access keys**.
+4. Open the dots at the top right of the sheet and select **New key**.
+5. Type a name in **Name**, such as `claude-test`.
+6. Select **Expires** and choose the last day the key may work.
+7. Open the dots of **New key** and select **Create key**.
+8. Select the copy button beside **Key**, and paste the key where the AI reads it.
 
 **Expected result:** the key shows once, with "This key cannot be shown again. Copy it now." The table lists the key as Active, with its name and the first characters of the key.
 
-Give the AI the key and the server address. It can run only the commands its role allows. It cannot run the commands that work on the database itself, and it cannot record its work under another name. Each command it runs is in the Audit log under its account, with the key's name. The website's page **CLI sign-in and access keys** shows how a program uses the key.
+Give the AI the key and the server address. It can run only the commands its role allows. It cannot run the commands that work on the database itself, and it cannot record its work under another name. Each command it runs is in the Audit log under its account, with the key's name. The website's page **CLI sign-in and access keys** shows how a program uses the key. These steps were not checked on screen. The labels come from the Studio's own text.
 
 ## Revoke an access key
 
 Use this when the AI's work is done, or when a key may have leaked.
 
-1. Find the account. Open its row dots and select **Access keys**.
-2. Open the dots at the end of the key's row and select **Revoke**.
-3. Check the key's name in the confirmation, then select **Revoke**.
+1. Select **Users** in the main menu.
+2. Search for the account by its username.
+3. Open its row dots and select **Access keys**.
+4. Find the key by its name and its first characters.
+5. Open the dots at the end of the key's row and select **Revoke**.
+6. Check the key's name in the confirmation, then select **Revoke**.
 
-**Expected result:** the key's status changes to Revoked. A program that uses it is refused from its next call. Revoking cannot be undone. Make a new key if the AI needs access again.
+**Expected result:** the key's status changes to Revoked. A program that uses it is refused from its next call. A command it already started keeps running to its end. Revoking cannot be undone. Make a new key if the AI needs access again.
 
 ## Use Users on a phone
 
@@ -299,6 +303,8 @@ A key is shown only once, when you create it. Studio keeps no copy. An expiry da
 **The copy button does not copy.** Over plain HTTP on another address, the browser can block copying. Select the key in **Key** and copy it by hand.
 
 **The AI gets "This account lacks the capability".** Its role does not allow that command. Give it a role that does, or leave it refused.
+
+**The key is not made.** Studio shows "Could not create the key: name holds a control character, such as a tab or a line break". The name holds a tab or a line break, often from a paste. Type the name again.
 
 ## Related guides
 

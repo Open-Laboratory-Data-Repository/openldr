@@ -252,7 +252,7 @@ Run the command from `~/Downloads/openldr_ce`. Keep the `data/` prefix in the fi
 
 The installed CLI runs inside OpenLDR's API container. The `data` folder is shared with that container. This lets the command read files you place there.
 
-Most commands, `ingest` among them, go through the running OpenLDR server. Sign in first with `./openldr login`, or set an access key in `OPENLDR_KEY`. Read [Users](/docs/users) to make an access key.
+Most commands, `ingest` among them, go through the running OpenLDR server. <!-- cli:linux -->Sign in first with `./openldr login`, or set an access key in `OPENLDR_KEY`.<!-- /cli --><!-- cli:mac -->Sign in first with `./openldr login`, or set an access key in `OPENLDR_KEY`.<!-- /cli --><!-- cli:windows -->Set an access key in `OPENLDR_KEY` first. On Windows the CLI signs in with an access key only. This was not run on Windows.<!-- /cli --> Read [Users](/docs/users) to make an access key.
 
 If OpenLDR is on a remote server, place the file in that server's installation folder. Saving it on your laptop does not put it on the server.
 

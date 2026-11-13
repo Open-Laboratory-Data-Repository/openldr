@@ -30,7 +30,7 @@ Help lists commands without changing records. The launcher executes inside the a
 
 ### 3. Read the selected command’s options
 
-Use --help at each command level. Most read commands support --json. Mutating examples below are alternatives, not a script to run in sequence. Most commands go through the running server, so sign in first with ./openldr login or an access key. See [CLI sign-in and access keys](/docs/cli-access).
+Use --help at each command level. Most read commands support --json. Mutating examples below are alternatives, not a script to run in sequence. Most commands go through the running server, so sign in first with ./openldr login or an access key. On Windows, .\openldr.ps1 signs in with an access key only, so set OPENLDR_KEY. That was not run on Windows. See [CLI sign-in and access keys](/docs/cli-access).
 
 ```sh
 {{operator:cli-group-help}}

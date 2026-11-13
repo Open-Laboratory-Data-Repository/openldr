@@ -160,7 +160,7 @@ pnpm openldr market sites <plugin-id> panel on
 
 Use o seu plugin instalado para o trabalho normal. Numa instalação de teste a partir do código, o plugin de referência demonstra um cartão, um painel e uma página separada. A compilação exige Rust e o destino `wasm32-wasip1`.
 
-A partir de `openldr_ce`, execute `pnpm build:ui-reference` e depois `pnpm openldr plugin install reference-plugins/ui-reference/plugin.wasm`. Recarregue Studio. Dashboard mostra Reference card e Side panels oferece Reference panel. O plugin não declara assinatura do editor. Use-o apenas numa instalação de teste.
+A partir de `openldr_ce`, execute `pnpm build:ui-reference` e depois `pnpm openldr plugin install reference-plugins/ui-reference/plugin.wasm`. A instalação passa pela API em execução, por isso inicie-a e inicie sessão primeiro. Recarregue Studio. Dashboard mostra Reference card e Side panels oferece Reference panel. O plugin não declara assinatura do editor. Use-o apenas numa instalação de teste.
 
 A captura indica Drawn in: widget ou Drawn in: panel conforme o local. A nota de teste é fictícia. Remova-o depois com `pnpm openldr plugin remove ui-reference`.
 
