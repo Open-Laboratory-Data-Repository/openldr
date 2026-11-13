@@ -28,7 +28,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
-import { createServer, type AddressInfo } from 'node:net';
+import { createServer, Socket, type AddressInfo } from 'node:net';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import pg from 'pg';
@@ -192,20 +192,87 @@ function unprovenServer(port: number, asked: string): Error {
   );
 }
 
+/** What an authentication request asks for, for the refusal message. */
+function asked(code: number, proved: boolean): string {
+  if (code === 0 && !proved) return 'no password at all';
+  if (code === 3) return 'a plain-text password';
+  if (code === 5) return 'an MD5 password';
+  return `authentication method ${code}`;
+}
+
+/**
+ * The socket a superuser client talks through. Until the server has proved it knows the password,
+ * it reads each message from the server before `pg` sees it. It lets through only error and
+ * notice messages and the SCRAM-SHA-256 requests (codes 10, 11 and 12), then "authentication ok"
+ * (code 0) once the SCRAM final message (12) has come. Anything else is refused: a plain-text or
+ * MD5 request, a method `pg` does not know (its parser would throw that as an uncaught
+ * exception), "ok" with no proof, or "ready" with no login at all. A refused message never
+ * reaches `pg`, so `pg` writes nothing in answer, and the socket is destroyed with an error of
+ * code UNPROVEN_SERVER. After the proof, everything goes through as usual.
+ */
+class ScramOnlySocket extends Socket {
+  refused: Error | undefined;
+  private received = Buffer.alloc(0);
+  private proved = false;
+  private passThrough = false;
+
+  constructor(private readonly dbPort: number) {
+    super();
+  }
+
+  override emit(event: string | symbol, ...args: unknown[]): boolean {
+    if (event === 'data' && !this.passThrough) {
+      if (this.refused) return false;
+      const why = this.check(args[0] as Buffer);
+      if (why !== undefined) {
+        this.refused = unprovenServer(this.dbPort, why);
+        this.destroy(this.refused);
+        return false;
+      }
+    }
+    return super.emit(event, ...args);
+  }
+
+  /** Checks every whole message received so far. Returns why the server is refused, if it is. */
+  private check(chunk: Buffer): string | undefined {
+    this.received = Buffer.concat([this.received, chunk]);
+    while (this.received.length >= 5) {
+      const type = String.fromCharCode(this.received[0]!);
+      const length = this.received.readInt32BE(1);
+      if (length < 4) return 'something that is not the Postgres protocol';
+      // A message that has not fully arrived yet. `pg` cannot act on it either.
+      if (this.received.length < length + 1) return undefined;
+      const message = this.received.subarray(0, length + 1);
+      this.received = this.received.subarray(length + 1);
+      if (type === 'E' || type === 'N') continue;
+      if (type !== 'R' || length < 8) return 'no password at all';
+      const code = message.readInt32BE(5);
+      if (code === 10 || code === 11) continue;
+      if (code === 12) {
+        this.proved = true;
+        continue;
+      }
+      if (code === 0 && this.proved) {
+        this.passThrough = true;
+        this.received = Buffer.alloc(0);
+        return undefined;
+      }
+      return asked(code, this.proved);
+    }
+    return undefined;
+  }
+}
+
 /**
  * A superuser client, and the only way to connect it. The cluster this install made accepts only
  * SCRAM-SHA-256 (initdb `--auth=scram-sha-256`). Any other program on the port could ask for the
  * password in plain text, or as MD5, and the `pg` client would send it with no way to refuse. So
- * the connection is watched from before `connect()`:
- * - a request for a plain-text or MD5 password destroys the socket before the client's own
- *   handler runs, so that handler has nothing to write to;
- * - "authentication ok" before the server has proved it knows the password (the SCRAM final
- *   message) also counts: a server that lets the superuser in with no proof is not ours.
- * `connect` then rejects with the code UNPROVEN_SERVER. Every superuser login in this file goes
- * through here. This listens on `client.connection`, a property of `pg` 8.21.0, which this app
- * pins to that exact version.
+ * the client talks through a ScramOnlySocket, passed in with `pg`'s own `stream` option, and
+ * `connect` rejects with the code UNPROVEN_SERVER when that socket refused the server. Every
+ * superuser login in this file goes through here. `pg` is pinned to exactly 8.21.0.
  */
 function superClient(settings: PostgresSettings): { client: pg.Client; connect: () => Promise<void> } {
+  const socket = new ScramOnlySocket(settings.port);
   const client = new pg.Client({
     host: HOST,
     port: settings.port,
@@ -214,37 +281,19 @@ function superClient(settings: PostgresSettings): { client: pg.Client; connect: 
     database: 'postgres',
     ssl: false,
     connectionTimeoutMillis: 5000,
+    // `pg` calls this once, from its constructor.
+    stream: () => socket,
   });
   // A server that shuts down under an open client emits 'error'. Unhandled, it ends the process.
   client.on('error', () => {});
-
-  const con = (client as unknown as { connection: NodeJS.EventEmitter & { stream: { destroy(err?: Error): void } } })
-    .connection;
-  let refused: Error | undefined;
-  let serverProved = false;
-  const refuse = (asked: string) => () => {
-    refused ??= unprovenServer(settings.port, asked);
-    con.stream.destroy(refused);
-  };
-  // Added before connect(), so each runs before the client's own handler for the same message.
-  con.on('authenticationCleartextPassword', refuse('a plain-text password'));
-  con.on('authenticationMD5Password', refuse('an MD5 password'));
-  con.on('authenticationSASLFinal', () => {
-    serverProved = true;
-  });
-  con.on('authenticationOk', () => {
-    if (!serverProved) refuse('no password at all')();
-  });
 
   const connect = async (): Promise<void> => {
     try {
       await client.connect();
     } catch (err) {
-      throw refused ?? err;
+      throw socket.refused ?? err;
     }
-    // A server can send "ready" in the same packet as the refused request, and the client then
-    // reports a connection. It is still refused.
-    if (refused) throw refused;
+    if (socket.refused) throw socket.refused;
   };
   return { client, connect };
 }
@@ -291,25 +340,27 @@ export function readPostmasterPid(clusterDir: string): { pid: number; dataDir: s
 }
 
 /**
- * True only when a Postgres answers on 127.0.0.1:<port>, accepts this install's superuser
+ * `ours` only when a Postgres answers on 127.0.0.1:<port>, accepts this install's superuser
  * password, and reports `clusterDir` as its data folder. Retries while it is starting up.
+ * `recovering` when it still answered "starting up" at the deadline. Otherwise `no`.
  */
 async function servesCluster(
   clusterDir: string,
   settings: PostgresSettings,
   deadline: number,
   stillAlive: () => boolean,
-): Promise<boolean> {
+): Promise<'ours' | 'recovering' | 'no'> {
   for (;;) {
     const { client, connect } = superClient(settings);
     try {
       await connect();
       const res = await client.query<{ data_directory: string }>('show data_directory');
-      return samePath(res.rows[0]?.data_directory ?? '', clusterDir);
+      return samePath(res.rows[0]?.data_directory ?? '', clusterDir) ? 'ours' : 'no';
     } catch (err) {
       // 57P03: "the database system is starting up". Anything else means it is not ours, a
       // server that asked for anything but SCRAM-SHA-256 included (superClient).
-      if (errorCode(err) !== '57P03' || Date.now() >= deadline || !stillAlive()) return false;
+      if (errorCode(err) !== '57P03' || !stillAlive()) return 'no';
+      if (Date.now() >= deadline) return 'recovering';
     } finally {
       await client.end().catch(() => {});
     }
@@ -367,8 +418,16 @@ function looksLikePostgresFor(pid: number, clusterDir: string): boolean {
  * macOS and Windows have no /proc, so there is no such guard there. Postgres's own shared-memory
  * check on start is the remaining net. Unproven: only Linux is tested.
  */
-function removeUnprovenPidFile(clusterDir: string, pid: number): void {
+function removeUnprovenPidFile(clusterDir: string, pid: number, recovering = false): void {
   if (process.platform === 'linux' && looksLikePostgresFor(pid, clusterDir)) {
+    // It still answered "starting up" when the wait ran out: a leftover Postgres in crash
+    // recovery, not one that refuses our login.
+    if (recovering) {
+      throw new Error(
+        `The database in ${clusterDir} (process ${pid}) is still recovering after an unclean stop. ` +
+          'Run start again in a minute.',
+      );
+    }
     throw new Error(
       `A Postgres for ${clusterDir} is running as process ${pid} but does not accept this install's login. ` +
         'Stop that process, then start again.',
@@ -444,16 +503,17 @@ export async function stopLeftoverPostgres(opts: {
     // A process ID alone proves nothing: after a reboot it can belong to any program. Prove over
     // SQL that this install's Postgres is the one running before sending any signal. `foreign`
     // (EPERM, another user's process) is never ours.
-    const ours =
-      state === 'alive' &&
-      (await servesCluster(clusterDir, settings, Date.now() + waitMs, () => liveness(info.pid) === 'alive'));
-    if (!ours) {
+    const proof =
+      state === 'alive'
+        ? await servesCluster(clusterDir, settings, Date.now() + waitMs, () => liveness(info.pid) === 'alive')
+        : 'no';
+    if (proof !== 'ours') {
       // Not proven ours, and nothing is signalled. Postgres refuses to start while the pid file
       // names any live process, whatever that process is, and after a power cut it is usually a
       // stranger that reused the number. So the file goes, after one guard (see
       // removeUnprovenPidFile). Postgres still checks its shared memory block on start, so a
       // second server on a cluster that is truly in use is refused by Postgres itself.
-      removeUnprovenPidFile(clusterDir, info.pid);
+      removeUnprovenPidFile(clusterDir, info.pid, proof === 'recovering');
       return 'stale';
     }
 

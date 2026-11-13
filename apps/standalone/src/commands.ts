@@ -46,6 +46,8 @@ export interface LauncherDeps {
   stopLeftoverPostgres: typeof stopLeftoverPostgres;
   startServer: (cfg: Config, logger: Logger) => Promise<RunningServer>;
   print: (line: string) => void;
+  /** Writes one line to the terminal synchronously. Used on the way out of a crash. */
+  printNow: (line: string) => void;
   now: () => Date;
   /** The built studio. `start` refuses to run without its index.html. */
   studioDist: string;
@@ -93,6 +95,11 @@ const STUDIO_MISSING = 'The studio is not built. Run: pnpm --filter @openldr/stu
 export const RECOVERING = 'The database is recovering after an unclean stop. This can take a few minutes.';
 export const WORKFLOW_ROOT_REFUSED =
   'WORKFLOW_FILE_ACCESS_ROOT must not be the OpenLDR data folder, hold it, or sit inside it.';
+
+/** The line a crash handler writes to the terminal before the process exits. */
+export function crashedMessage(serverLog: string): string {
+  return `OpenLDR stopped after an error. See ${serverLog}.`;
+}
 
 /** What `done` rejects with when Postgres stopped while no stop was asked for. */
 export function databaseStoppedMessage(postgresLog: string): string {
@@ -297,9 +304,12 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
    * errors from those connections are expected from then on. They must not end the process
    * through a crash handler, write a crash marker, or cut the stop short. So the real crash
    * handlers come off, and handlers that only log at warn go on in their place. The clean path
-   * keeps the real ones until the server has closed.
+   * keeps the real ones until the server has closed. Runs once, however often it is called.
    */
+  let quiet = false;
   const quietCrashHandlers = (): void => {
+    if (quiet) return;
+    quiet = true;
     for (const remove of crashRemovers.splice(0)) remove();
     for (const kind of CRASH_KINDS) {
       const handler = (err: unknown): void => {
@@ -321,6 +331,17 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
   let stopping: Promise<StopResult> | undefined;
   /** Set when Postgres went while no stop was asked for. `done` then rejects. */
   let databaseGone = false;
+  /**
+   * OpenLDR can stop by itself two ways: a crash handler, or Postgres going (the `exited`
+   * watcher). Each prints one line. Whichever starts first takes this, and the other prints
+   * nothing.
+   */
+  let stoppedByItself = false;
+  const claimStoppedByItself = (): boolean => {
+    if (stoppedByItself) return false;
+    stoppedByItself = true;
+    return true;
+  };
   let resolveDone!: (r: StopResult) => void;
   let rejectDone!: (err: unknown) => void;
   const done = new Promise<StopResult>((resolvePromise, reject) => {
@@ -473,9 +494,14 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
     // launcher, through the forced path: the server is cut off, the quiet crash handlers go on,
     // and the lock is released. `done` then rejects, and index.ts exits 1. A stop already in
     // progress stops Postgres itself, and this does nothing.
+    // In practice the server's dead connections usually throw first, and a crash handler ends
+    // the process with its own line (step 9). This is the net for a death that throws nothing.
+    // The quiet handlers go on at once, so an error that comes after this cannot print a second
+    // line through a real crash handler.
     void pg.exited.then(() => {
-      if (stopping) return;
+      if (stopping || !claimStoppedByItself()) return;
       databaseGone = true;
+      quietCrashHandlers();
       void stop(true).catch(() => {});
     });
 
@@ -499,12 +525,26 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
     logger = log;
 
     // 9. The crash handlers, pointed at the crash folder. No crash-loop guard: nothing restarts
-    //    a launcher. A forced stop swaps them for quiet ones (quietCrashHandlers).
-    for (const kind of CRASH_KINDS) {
+    //    a launcher. A forced stop swaps them for quiet ones (quietCrashHandlers). If Postgres has
+    //    already gone, the quiet ones are on and these are not added.
+    //    After the marker is written and before the exit, one line goes to the terminal. It is
+    //    written synchronously, and a failed write cannot stop the exit.
+    const crashedLine = crashedMessage(paths.serverLog);
+    for (const kind of quiet ? [] : CRASH_KINDS) {
       const handler = makeCrashHandler({
         dir: paths.crash,
         kind,
         log: (m) => log.fatal({ marker: m }, `${kind}, wrote crash marker, exiting`),
+        exit: (code) => {
+          if (claimStoppedByItself()) {
+            try {
+              deps.printNow(crashedLine);
+            } catch {
+              // The terminal is gone. The exit still happens.
+            }
+          }
+          process.exit(code);
+        },
       });
       process.on(kind, handler);
       crashRemovers.push(() => process.off(kind, handler));

@@ -109,8 +109,15 @@ const cstring = (s: string) => Buffer.from(`${s}\0`, 'utf8');
  * - `md5`: asks for an MD5 password.
  * - `trust`: lets the client in at once, as a `trust` line would, and answers
  *   `show data_directory` with `dataDir`.
+ * - `gss`: asks for GSS (code 7), a method `pg` does not know.
+ * - `ready`: sends "ready" with no login at all, then answers like `trust`.
+ * - `recovering`: answers "the database system is starting up" (57P03), as Postgres does in crash
+ *   recovery, and hangs up.
  */
-async function fakePostgres(answer: 'cleartext' | 'md5' | 'trust', dataDir = ''): Promise<{
+async function fakePostgres(
+  answer: 'cleartext' | 'md5' | 'trust' | 'gss' | 'ready' | 'recovering',
+  dataDir = '',
+): Promise<{
   port: number;
   received: Array<{ type: string; body: Buffer }>;
   raw: () => Buffer;
@@ -134,6 +141,11 @@ async function fakePostgres(answer: 'cleartext' | 'md5' | 'trust', dataDir = '')
           startup = false;
           if (answer === 'cleartext') sock.write(backend('R', int32(3)));
           else if (answer === 'md5') sock.write(backend('R', Buffer.concat([int32(5), Buffer.from([1, 2, 3, 4])])));
+          else if (answer === 'gss') sock.write(backend('R', int32(7)));
+          else if (answer === 'ready') sock.write(backend('Z', Buffer.from('I')));
+          else if (answer === 'recovering') {
+            sock.end(backend('E', Buffer.from('SFATAL\0C57P03\0Mthe database system is starting up\0\0')));
+          }
           // Ok and ready in one packet, as a real server sends them.
           else sock.write(Buffer.concat([backend('R', int32(0)), backend('Z', Buffer.from('I'))]));
           continue;
@@ -328,8 +340,9 @@ describe('the superuser login accepts only SCRAM-SHA-256', () => {
     return { d, child };
   }
 
-  for (const answer of ['cleartext', 'md5'] as const) {
-    it(`sends no password to a server that asks for ${answer === 'md5' ? 'an MD5' : 'a plain-text'} password, and calls it not ours`, async () => {
+  const asks = { cleartext: 'a plain-text password', md5: 'an MD5 password', gss: 'GSS, which pg does not know' } as const;
+  for (const answer of ['cleartext', 'md5', 'gss'] as const) {
+    it(`sends no password to a server that asks for ${asks[answer]}, and calls it not ours`, async () => {
       const { d, child } = leftover();
       const fake = await fakePostgres(answer);
       const kill = vi.spyOn(process, 'kill');
@@ -344,17 +357,44 @@ describe('the superuser login accepts only SCRAM-SHA-256', () => {
     });
   }
 
-  it('calls a server that lets the superuser in with no password not ours, sends it no query, and signals nothing', async () => {
-    const { d, child } = leftover();
-    // It would even claim to serve this very cluster, if it were asked.
-    const fake = await fakePostgres('trust', d);
-    const kill = vi.spyOn(process, 'kill');
-    const result = await stopLeftoverPostgres({ clusterDir: d, settings: { port: fake.port, ...FAKE }, waitMs: 2000 });
-    expect(result).toBe('stale');
-    expect(fake.received.map((m) => m.type)).not.toContain('Q');
-    expect(kill.mock.calls.filter(([, signal]) => signal !== 0)).toEqual([]);
-    expect(alive(child.pid!)).toBe(true);
-  });
+  for (const answer of ['trust', 'ready'] as const) {
+    const how = answer === 'trust' ? '"authentication ok" with no password' : '"ready" with no login at all';
+    it(`calls a server that lets the superuser in with ${how} not ours, sends it no query, and signals nothing`, async () => {
+      const { d, child } = leftover();
+      // It would even claim to serve this very cluster, if it were asked.
+      const fake = await fakePostgres(answer, d);
+      const kill = vi.spyOn(process, 'kill');
+      const result = await stopLeftoverPostgres({ clusterDir: d, settings: { port: fake.port, ...FAKE }, waitMs: 2000 });
+      expect(result).toBe('stale');
+      expect(fake.received.map((m) => m.type)).not.toContain('Q');
+      expect(kill.mock.calls.filter(([, signal]) => signal !== 0)).toEqual([]);
+      expect(alive(child.pid!)).toBe(true);
+    });
+  }
+
+  it.runIf(process.platform === 'linux')(
+    'says a leftover Postgres that keeps answering "starting up" is still recovering, and keeps its pid file',
+    async () => {
+      const d = tempDir();
+      // The command line a real postmaster for this folder shows in /proc.
+      const child = idleChild(['-D', d], '/opt/pg/bin/postgres');
+      writePid(d, child.pid!, d);
+      const fake = await fakePostgres('recovering');
+      const kill = vi.spyOn(process, 'kill');
+      const err = await stopLeftoverPostgres({ clusterDir: d, settings: { port: fake.port, ...FAKE }, waitMs: 1000 }).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+      expect(err?.message).toBe(
+        `The database in ${d} (process ${child.pid}) is still recovering after an unclean stop. Run start again in a minute.`,
+      );
+      // What is signalled and what is removed are as before: nothing, and nothing.
+      expect(kill.mock.calls.filter(([, signal]) => signal !== 0)).toEqual([]);
+      expect(existsSync(pidFile(d))).toBe(true);
+      expect(alive(child.pid!)).toBe(true);
+      expect(fake.received.map((m) => m.type)).not.toContain('p');
+    },
+  );
 });
 
 describe('cluster folder checks', () => {

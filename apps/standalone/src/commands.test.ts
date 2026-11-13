@@ -139,6 +139,10 @@ afterEach(async () => {
 interface Fakes {
   order: string[];
   printed: string[];
+  /** Lines written with printNow, the crash path's terminal line. */
+  printedNow: string[];
+  /** The test runner's own crash listeners, taken before the launcher starts. */
+  outside: Map<'uncaughtException' | 'unhandledRejection', Listener[]>;
   pg: {
     started: boolean;
     stopped: boolean;
@@ -181,6 +185,8 @@ function fakes(
   const f: Fakes = {
     order: [],
     printed: [],
+    printedNow: [],
+    outside: undefined as unknown as Fakes['outside'],
     pg: { started: false, stopped: false, stopSyncCalls: 0, die: () => {} },
     server: { started: false, closed: false },
     deps: undefined as unknown as LauncherDeps,
@@ -188,6 +194,7 @@ function fakes(
   const exited = new Promise<void>((resolve) => (f.pg.die = resolve));
   // Taken before the launcher starts, so these are the test runner's own.
   const outside = outsideCrashListeners();
+  f.outside = outside;
   const context = {
     localSignIn: {
       setupRequired: async () => Boolean(o.setupRequired),
@@ -240,6 +247,7 @@ function fakes(
       } as unknown as RunningServer;
     },
     print: (line) => f.printed.push(line),
+    printNow: (line) => f.printedNow.push(line),
     now: () => STARTED_AT,
     studioDist: studio,
     appVersion: '0.1.11',
@@ -1091,6 +1099,82 @@ describe('a forced stop ends cleanly while the server is still hung', () => {
       expect(await l.done).toBe('clean');
       expect(f.order.slice(3)).toEqual(['server.close', 'pg.stop']);
       expect(await readLock(paths)).toBeNull();
+    });
+  });
+
+  describe('the line on the terminal when OpenLDR stops by itself', () => {
+    const crashed = () => `OpenLDR stopped after an error. See ${paths.serverLog}.`;
+    const tick = () => new Promise((r) => setImmediate(r));
+
+    it('a crash writes the marker, prints the line once, and still exits 1', async () => {
+      const exits = guardExit();
+      const f = fakes();
+      await start(f.deps);
+      // Both kinds at once, as a dead database connection gives.
+      emitConnectionErrors(f.outside);
+      expect(f.printedNow).toEqual([crashed()]);
+      expect(exits).toEqual([1, 1]);
+      expect((await readFile(join(paths.crash, 'crash.log'), 'utf8')).trim().split('\n')).toHaveLength(2);
+      // The ordinary terminal output got nothing from the crash.
+      expect(f.printed.join('\n')).not.toContain('stopped after an error');
+    });
+
+    it('when the database watcher started first, a later crash prints no second line', async () => {
+      const exits = guardExit();
+      const f = fakes({ closeNever: true });
+      const l = await start(f.deps);
+      launchers.splice(launchers.indexOf(l), 1);
+      f.pg.die();
+      await tick();
+      emitConnectionErrors(f.outside);
+      const err = await l.done.then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+      expect(err?.message).toBe(`The database stopped by itself. OpenLDR has stopped. See ${paths.postgresLog}.`);
+      expect(f.printedNow).toEqual([]);
+      // The errors were logged at warn, not a crash.
+      await expectNoCrash(exits);
+    });
+
+    it('when Postgres goes during the start, an error before the start ends prints no crash line', async () => {
+      // The stop waits for the start to finish, so only the watcher's own swap to the quiet
+      // handlers stands between these errors and a real crash handler.
+      const exits = guardExit();
+      const f = fakes();
+      const startServer = f.deps.startServer;
+      f.deps.startServer = async (cfg, logger) => {
+        f.pg.die();
+        await tick();
+        emitConnectionErrors(f.outside);
+        return startServer(cfg, logger);
+      };
+      const l = await runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps);
+      const err = await l.done.then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+      expect(err?.message).toBe(`The database stopped by itself. OpenLDR has stopped. See ${paths.postgresLog}.`);
+      expect(f.printedNow).toEqual([]);
+      expect(exits).toEqual([]);
+      expect(await readdir(paths.crash)).toEqual([]);
+      expect(await readLock(paths)).toBeNull();
+    });
+
+    it('when a crash started first, the database watcher does nothing', async () => {
+      const exits = guardExit();
+      const f = fakes();
+      const l = await start(f.deps);
+      emitConnectionErrors(f.outside);
+      f.pg.die();
+      await tick();
+      await tick();
+      expect(f.printedNow).toEqual([crashed()]);
+      expect(exits).toEqual([1, 1]);
+      // No stop began: the server was not closed and Postgres was not stopped by the watcher.
+      expect(f.order).toEqual(['pg.leftover', 'pg.start', 'server.start']);
+      const settled = await Promise.race([l.done.then(() => 'settled', () => 'settled'), tick().then(() => 'pending')]);
+      expect(settled).toBe('pending');
     });
   });
 });

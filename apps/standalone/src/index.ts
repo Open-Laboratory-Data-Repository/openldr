@@ -1,5 +1,6 @@
 // The openldr-standalone command. Runs from the built bundle, never under the tsx command.
 
+import { writeSync } from 'node:fs';
 import {
   STOPPED,
   STOPPED_FORCED,
@@ -31,6 +32,14 @@ const write = (stream: NodeJS.WriteStream, line: string): void => {
 };
 const print = (line: string): void => write(process.stdout, line);
 const printError = (line: string): void => write(process.stderr, line);
+/** Straight to standard error, before the call returns. A crash handler exits right after it. */
+const printNow = (line: string): void => {
+  try {
+    writeSync(2, `${line}\n`);
+  } catch {
+    // The terminal is gone. Nothing to tell.
+  }
+};
 
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -47,6 +56,7 @@ async function start(opts: { dataDir?: string; port: number; host: string }): Pr
       // Loaded only now, after runStart has set the environment the server reads when it loads.
       startServer: async (cfg, logger) => (await import('@openldr/server/start')).startServer(cfg, logger),
       print,
+      printNow,
       now: () => new Date(),
       ...launcherFiles(),
     });
