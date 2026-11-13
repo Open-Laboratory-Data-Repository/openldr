@@ -1663,7 +1663,7 @@ export function buildClientProgram(io: Partial<ClientIo> = {}): Command {
     return runThroughApp({
       path, tokens, meta, command: cmd, parsedArgs: args, parsedOpts: opts,
       reparse: (argv) => parseWithoutRunning(path, argv),
-      url, credential, out, err, signals,
+      url, credential, env, out, err, signals,
     });
   };
 

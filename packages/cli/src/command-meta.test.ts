@@ -684,6 +684,15 @@ describe('plugin install companions', () => {
     }
   });
 
+  it('never returns a UI entry with a control character or DEL, which the server refuses', () => {
+    for (const bad of ['ui\t.html', 'ui\n.html', 'ui\u0000.html', 'ui\u001f.html', 'ui\u007f.html']) {
+      expect(wasm.companions!(ctx({}, 'wasm', { 'manifest.json': withUi(bad) })), JSON.stringify(bad)).toEqual(['manifest.json']);
+      expect(manifest.companions!(ctx({ manifest: 'm.json' }, withUi(bad), {})), JSON.stringify(bad)).toEqual([]);
+    }
+    // A space and letters past ASCII stay allowed, as on the server.
+    expect(manifest.companions!(ctx({ manifest: 'm.json' }, withUi('mon écran.html'), {}))).toEqual(['mon écran.html']);
+  });
+
   it('--manifest: the UI page it names, read from itself', () => {
     expect(manifest.companions!(ctx({ manifest: 'm.json' }, withUi('ui.html'), {}))).toEqual(['ui.html']);
     expect(manifest.companions!(ctx({ manifest: 'm.json' }, '{}', {}))).toEqual([]);

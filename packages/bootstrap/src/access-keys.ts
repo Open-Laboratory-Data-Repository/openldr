@@ -12,6 +12,8 @@ export const ACCESS_KEY_PREFIX = 'oldr_';
 const KEY_BODY_BYTES = 32;
 const STORED_PREFIX_LENGTH = 12;
 const NAME_MAX_LENGTH = 80;
+/** C0 and C1 control characters, and DEL. */
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f]/;
 
 // The AppContext fields these actions use, typed here so this file does not import index.ts,
 // which imports this file.
@@ -30,7 +32,7 @@ export class UnknownAccessKeyError extends Error {
 
 /** createAccessKey refused its input. The message says why and never holds a key. */
 export class AccessKeyInputError extends Error {
-  constructor(readonly reason: 'unknown_user' | 'empty_name' | 'name_too_long' | 'bad_expiry' | 'past_expiry', message: string) {
+  constructor(readonly reason: 'unknown_user' | 'empty_name' | 'name_too_long' | 'control_in_name' | 'bad_expiry' | 'past_expiry', message: string) {
     super(message);
     this.name = 'AccessKeyInputError';
   }
@@ -83,6 +85,8 @@ export function checkAccessKeyInput(
   const name = input.name.trim();
   if (name === '') throw new AccessKeyInputError('empty_name', 'name is empty');
   if (name.length > NAME_MAX_LENGTH) throw new AccessKeyInputError('name_too_long', `name is over ${NAME_MAX_LENGTH} characters`);
+  // A tab or a line break would split a row of `openldr user key list`, which is tab-separated.
+  if (CONTROL_CHARACTER.test(name)) throw new AccessKeyInputError('control_in_name', 'name holds a control character, such as a tab or a line break');
   return { name, expiresAt: checkedExpiry(input.expiresAt, now) };
 }
 

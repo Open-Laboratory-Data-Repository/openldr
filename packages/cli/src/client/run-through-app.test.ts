@@ -382,6 +382,23 @@ describe('sending a command', () => {
 });
 
 describe('refusals', () => {
+  it('says a refused key was refused, names its variable, and never prints the key', async () => {
+    const srv = await startServer(refuse(401, { error: 'invalid access key' }));
+    const r = await cli(['layouts', 'list'], { OPENLDR_URL: srv.url, OPENLDR_KEY: KEY });
+    expect(r.err).toBe('OpenLDR refused the access key from OPENLDR_KEY. It is revoked, expired or wrong.\n');
+    expect(r.code).toBe(1);
+    const dir = await mkdtemp(join(tmpdir(), 'openldr-keyfile-'));
+    try {
+      const keyFile = join(dir, 'key');
+      await writeFile(keyFile, `${KEY}\n`);
+      const f = await cli(['layouts', 'list'], { OPENLDR_URL: srv.url, OPENLDR_KEY_FILE: keyFile });
+      expect(f.err).toBe('OpenLDR refused the access key from OPENLDR_KEY_FILE. It is revoked, expired or wrong.\n');
+      expect(r.err + r.out + f.err + f.out).not.toContain(KEY);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('prints the right message for 401, 403, busy and a refused connection', async () => {
     const cases: [Handler, string][] = [
       [refuse(401, { error: 'authentication required' }), 'Sign in first: openldr login, or set OPENLDR_KEY.\n'],

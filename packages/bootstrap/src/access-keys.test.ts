@@ -26,6 +26,14 @@ describe('checkAccessKeyInput', () => {
     expect(reasonOf({ name: 'x', expiresAt: 'soon' })).toBe('bad_expiry');
     expect(reasonOf({ name: 'x', expiresAt: '2026-11-12T00:00:00Z' })).toBe('past_expiry');
   });
+  it('refuses a control character inside the name, which would split a tab-separated list row', () => {
+    for (const name of ['backup\tjob', 'backup\njob', 'a\rb', 'a\u0000b', 'a\u007fb', 'a\u0085b']) {
+      expect(reasonOf({ name }), JSON.stringify(name)).toBe('control_in_name');
+    }
+    // Blanks around the name are trimmed first, as before; a plain space inside is fine.
+    expect(reasonOf({ name: '\tbackup job\n' })).toBeNull();
+    expect(() => checkAccessKeyInput({ name: 'a\tb' }, now)).toThrow('name holds a control character, such as a tab or a line break');
+  });
   it('answers the trimmed name and the stored expiry', () => {
     expect(checkAccessKeyInput({ name: ' job ', expiresAt: '2026-12-01T00:00:00+01:00' }, now)).toEqual({ name: 'job', expiresAt: '2026-11-30T23:00:00.000Z' });
     expect(checkAccessKeyInput({ name: 'job' }, now)).toEqual({ name: 'job', expiresAt: null });

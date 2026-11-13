@@ -93,9 +93,11 @@ export function uiEntryOf(manifest: unknown): string | undefined {
   return m.payload?.ui?.entry ?? m.ui?.entry;
 }
 
-/** One plain file name: not empty, not `.` or `..`, and no `/`, `\` or NUL. */
+/** One plain file name: not empty, not `.` or `..`, and no `/`, `\`, control character or DEL. The
+ *  same rule as the server's name check (apps/server/src/cli-routes.ts), so the client never sends
+ *  a companion the server refuses. */
 function isPlainFileName(name: unknown): name is string {
-  return typeof name === 'string' && name !== '' && name !== '.' && name !== '..' && !/[/\\\0]/.test(name);
+  return typeof name === 'string' && name !== '' && name !== '.' && name !== '..' && !/[/\\\x00-\x1f\x7f]/.test(name);
 }
 
 /** The UI entry of a manifest's text, when it is a plain file name. A missing or broken manifest gives none. */

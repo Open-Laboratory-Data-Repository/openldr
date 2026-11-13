@@ -168,8 +168,9 @@ function entryOf(v: unknown): SessionEntry | null {
 async function readAll(file: string): Promise<Map<string, SessionEntry>> {
   let fh: FileHandle;
   try {
-    // O_NOFOLLOW is not defined on Windows.
-    fh = await open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    // O_NOFOLLOW and O_NONBLOCK are not defined on Windows. O_NONBLOCK keeps a FIFO put in the
+    // file's place from blocking the open; the check below then refuses it as not a plain file.
+    fh = await open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
   } catch (e) {
     const code = errorCode(e);
     if (code === 'ENOENT') return new Map();

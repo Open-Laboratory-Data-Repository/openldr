@@ -204,6 +204,24 @@ describe('reading the hand-off from descriptor 3', () => {
   });
 });
 
+describe('the client entry, outside served mode', () => {
+  it('prints the first line of the message and no stack, and exits 1, when the parse rejects', async () => {
+    // Every command found so far catches its own failure, so the probe makes commander's parse
+    // reject, then loads the real entry. commander's ES module wraps the same class.
+    const commander = pathToFileURL(createRequire(join(HERE, 'index.ts')).resolve('commander')).href;
+    const probe = join(base, 'reject-probe.mjs');
+    writeFileSync(probe, [
+      `const { Command } = await import(${JSON.stringify(commander)});`,
+      "Command.prototype.parseAsync = async function () { throw new Error('the parse failed\\nsecond line'); };",
+      `await import(${JSON.stringify(pathToFileURL(join(HERE, 'index.ts')).href)});`,
+    ].join('\n'));
+    const r = await runChild(probe, ['commands'], {});
+    expect(r.code).toBe(1);
+    expect(r.stdout).toBe('');
+    expect(r.stderr).toBe('the parse failed\n');
+  });
+});
+
 describe('checking the shape of the hand-off', () => {
   const text = (v: unknown) => JSON.stringify(v);
 

@@ -116,6 +116,16 @@ describe('/api/users/:id/keys', () => {
     expect(await f.accessKeys.listForUser('bot-id')).toEqual([]);
   });
 
+  it('answers 400 for a name with a tab or a line break, and makes no key', async () => {
+    const f = await setup();
+    for (const name of ['backup\tjob', 'backup\njob']) {
+      const res = await f.app.inject({ method: 'POST', url: '/api/users/bot-id/keys', headers: bearer(TOKENS.admin), payload: { name } });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({ error: 'name holds a control character, such as a tab or a line break' });
+    }
+    expect(await f.accessKeys.listForUser('bot-id')).toEqual([]);
+  });
+
   it('answers a fixed 500 and logs no database detail when the store refuses the key', async () => {
     const f = await setup();
     const error = vi.fn();

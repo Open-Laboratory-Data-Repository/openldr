@@ -25,7 +25,10 @@ function main(): void {
     return;
   }
   if (!handoff) {
-    buildClientProgram().parseAsync(process.argv);
+    // A failure the command did not catch itself: one redacted line, no stack.
+    buildClientProgram().parseAsync(process.argv).catch((err: unknown) => {
+      stop(redactError(err));
+    });
     return;
   }
   setServedHandoff(handoff);

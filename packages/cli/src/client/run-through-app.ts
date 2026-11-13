@@ -22,7 +22,7 @@ import type { CommandMeta, PathKind, PathMark } from '../command-meta';
 import { runningVersion } from '../update';
 import { decodeFrames, encodeFrame, MAX_DATA_BYTES, PATH_PLACEHOLDER, type ClientFrame, type ServerFrame } from '../wire';
 import type { Credential } from './credentials';
-import { clean, connectionMessage, endpoint, REDIRECT_MESSAGE, sendRequest, SIGN_IN_FIRST } from './request';
+import { clean, connectionMessage, endpoint, REDIRECT_MESSAGE, sendRequest, signInRefused } from './request';
 
 /** Printed when the line cannot be rewritten safely. Nothing has been sent. */
 export const NOT_PREPARED = 'This command line could not be prepared for the app. Nothing was sent.';
@@ -673,9 +673,9 @@ async function readRefusal(res: IncomingMessage): Promise<Record<string, unknown
   }
 }
 
-function refusalMessage(status: number, body: Record<string, unknown> | null): string {
+function refusalMessage(status: number, body: Record<string, unknown> | null, sent: Credential['kind'], env: NodeJS.ProcessEnv): string {
   if (status >= 300 && status < 400) return REDIRECT_MESSAGE;
-  if (status === 401) return SIGN_IN_FIRST;
+  if (status === 401) return signInRefused(sent, env);
   if (status === 403 && typeof body?.capability === 'string') return `This account lacks the capability ${clean(body.capability)}.`;
   if (status === 503 && body?.error === 'busy') return 'OpenLDR is running other commands. Try again shortly.';
   if (typeof body?.error === 'string' && body.error.trim() !== '') return clean(body.error);
@@ -702,6 +702,8 @@ export interface ThroughAppInput {
   reparse: (argv: string[]) => Promise<{ args: string[]; opts: Record<string, unknown> } | null>;
   url: string;
   credential: Credential;
+  /** The environment the credential was found in, to name where a refused key came from. */
+  env?: NodeJS.ProcessEnv;
   out: NodeJS.WritableStream;
   err: NodeJS.WritableStream;
   signals: NodeJS.EventEmitter;
@@ -920,7 +922,7 @@ async function exchange(
       const status = res.statusCode ?? 0;
       const body = status >= 300 && status < 400 ? null : await readRefusal(res);
       if (forced !== null) return await stopped();
-      return await fail(refusalMessage(status, body));
+      return await fail(refusalMessage(status, body, credential.kind, input.env ?? process.env));
     }
     return await readAnswer(res);
   } finally {

@@ -1,8 +1,10 @@
-import { chmod, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { closeSync, constants as fsConstants, openSync } from 'node:fs';
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingHttpHeaders, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +18,7 @@ vi.mock('@openldr/config', async (orig) => ({
 import { buildClientProgram } from '../program';
 import { listCommands } from '../command-list';
 import { CredentialError, findCredential } from './credentials';
+import { REQUEST_TIMEOUT_MS } from './request';
 import { runLogin, runLogout, runWhoami, sessionFilePath, type LoginIo } from './session';
 
 // Made-up values. The spaces show that nothing is trimmed from a password.
@@ -263,6 +266,21 @@ describe('login', () => {
     expect(t.out() + t.err()).not.toContain(PASSWORD.trim());
   });
 
+  it('drops arrow keys and other escape sequences typed at the password prompt', async () => {
+    const app = await startApp();
+    const t = makeIo({ tty: true });
+    const done = runLogin({ url: app.url, username: 'alice', passwordStdin: false }, t.io);
+    await vi.waitFor(() => expect(t.err()).toContain('Password: '));
+    // Up and Left (CSI), Down (SS3), Delete (CSI with a number), Alt+x, and a sequence split across
+    // two chunks. Enter right after a lone ESC is still Enter.
+    const half = PASSWORD.length >> 1;
+    t.stdin.write(`${PASSWORD.slice(0, half)}\u001b[A\u001b[D\u001bOB\u001b[3~\u001bx\u001b[`);
+    await new Promise((r) => setImmediate(r));
+    t.stdin.write(`1;5C${PASSWORD.slice(half)}\u001b\r`);
+    expect(await done).toBe(0);
+    expect(JSON.parse(app.calls[1]!.body).password).toBe(PASSWORD);
+  });
+
   it('asks for the username on a terminal when --username is absent', async () => {
     const app = await startApp();
     const t = makeIo({ tty: true });
@@ -467,6 +485,28 @@ describe('logout', () => {
   });
 });
 
+describe('a FIFO in the place of the session file', () => {
+  it('is refused as not a plain file, and the open does not block', async () => {
+    const app = await startApp();
+    await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+    expect(spawnSync('mkfifo', ['-m', '600', file]).status).toBe(0);
+    try {
+      // Real time as a guard only: a blocked open never settles, and the guard is far longer
+      // than the open takes.
+      const result = await Promise.race([
+        findCredential(env(), app.url, place()).then(() => 'read', (e: unknown) => e),
+        new Promise((r) => setTimeout(() => r('blocked'), 5_000)),
+      ]);
+      expect(result).toBeInstanceOf(CredentialError);
+      expect((result as Error).message).toBe(`The session file ${file} is not a plain file, so it is not used. Remove it and sign in again.`);
+      expect(app.calls).toEqual([]);
+    } finally {
+      // Opening the write end lets a blocked reader go, so a failed run cannot hold a thread.
+      try { closeSync(openSync(file, fsConstants.O_WRONLY | fsConstants.O_NONBLOCK)); } catch { /* no reader */ }
+    }
+  });
+});
+
 describe('whoami', () => {
   it('names a key and its name', async () => {
     const app = await startApp();
@@ -485,6 +525,56 @@ describe('whoami', () => {
     expect(await runWhoami({ url: app.url, json: false }, t.io)).toBe(1);
     expect(t.err()).toBe('Sign in first: openldr login, or set OPENLDR_KEY.\n');
     expect(app.calls[0]!.headers.authorization).toBeUndefined();
+  });
+
+  it('says a refused key was refused, names the variable it came from, and never the key', async () => {
+    const app = await startApp();
+    const wrong = 'oldr_WRONGkeyWRONGkeyWRONGkeyWRONGkeyWRONGk';
+    const t = makeIo({ env: { ...env(), OPENLDR_KEY: wrong } });
+    expect(await runWhoami({ url: app.url, json: false }, t.io)).toBe(1);
+    expect(t.err()).toBe('OpenLDR refused the access key from OPENLDR_KEY. It is revoked, expired or wrong.\n');
+    const keyFile = join(home, 'wrong.key');
+    await writeFile(keyFile, `${wrong}\n`);
+    const f = makeIo({ env: { ...env(), OPENLDR_KEY_FILE: keyFile } });
+    expect(await runWhoami({ url: app.url, json: false }, f.io)).toBe(1);
+    expect(f.err()).toBe('OpenLDR refused the access key from OPENLDR_KEY_FILE. It is revoked, expired or wrong.\n');
+    expect(t.err() + f.err()).not.toContain(wrong);
+  });
+
+  it('gives up on a server that takes the connection and never answers, after 30 seconds, naming the address', async () => {
+    const sockets = new Set<import('node:net').Socket>();
+    const silent = createServer(() => { /* never answers */ });
+    silent.on('connection', (s) => { sockets.add(s); });
+    await new Promise<void>((done) => silent.listen(0, '127.0.0.1', done));
+    const url = `http://127.0.0.1:${(silent.address() as AddressInfo).port}`;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const t = makeIo({ env: { ...env(), OPENLDR_KEY: KEY } });
+      let code: number | null = null;
+      const running = runWhoami({ url, json: false }, t.io).then((c) => { code = c; });
+      // The request is on the wire once the server holds its connection.
+      for (let i = 0; i < 500 && sockets.size === 0; i += 1) await new Promise((r) => setImmediate(r));
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1);
+      expect(code).toBeNull();
+      await vi.advanceTimersByTimeAsync(1);
+      await running;
+      expect(code).toBe(1);
+      expect(t.err()).toBe(`Cannot reach OpenLDR at ${url}: ETIMEDOUT.\n`);
+    } finally {
+      vi.useRealTimers();
+      for (const s of sockets) s.destroy();
+      await new Promise<void>((done) => silent.close(() => done()));
+    }
+  });
+
+  it('says the session ended when a session was sent and refused', async () => {
+    const app = await startApp();
+    // The refresh still answers, but the token it gives is no longer taken.
+    app.live.add(COOKIE_B);
+    const session = JSON.stringify({ version: 1, sessions: { [app.url]: { cookie: { name: NAME, value: COOKIE_B }, username: 'alice', savedAt: '2026-11-13T00:00:00.000Z' } } });
+    const t = makeIo({ env: { ...env(), OPENLDR_SESSION: session } });
+    expect(await runWhoami({ url: app.url, json: false }, t.io)).toBe(1);
+    expect(t.err()).toBe('Your session has ended. Sign in again: openldr login.\n');
   });
 });
 

@@ -172,6 +172,14 @@ describe('user commands under local sign-in', () => {
     expect(ctx.auth.forceLogout).not.toHaveBeenCalled();
   });
 
+  it('does not print back an unknown username that holds a key', async () => {
+    const pasted = 'oldr_PASTEDkeyPASTEDkeyPASTEDkeyPASTEDkeyPA';
+    expect(await runUserEndSessions(pasted, { json: false })).toBe(1);
+    expect(await runUserResetPassword(pasted, { json: false, force: true })).toBe(1);
+    expect(err).toBe('no user has that name. Usernames here match exactly, including case.\n'.repeat(2));
+    expect(err + out).not.toContain(pasted);
+  });
+
   it('end-sessions exits 1 when local sign-in is off', async () => {
     const { localSignIn: _off, ...keycloakCtx } = ctx;
     mocks.createAppContext.mockResolvedValue(keycloakCtx);
@@ -370,7 +378,7 @@ describe('user key commands (pg-mem)', () => {
   it('gives the same unknown-user message as the other user commands', async () => {
     expect(await runUserKeyList('Bob', { json: false })).toBe(1);
     expect(await runUserKeyCreate('Bob', { name: 'ci', json: false })).toBe(1);
-    expect(await runUserKeyRevoke('Bob', 'k1', { force: true })).toBe(1);
+    expect(await runUserKeyRevoke('Bob', '00000000-0000-4000-8000-000000000001', { force: true })).toBe(1);
     expect(err).toBe('no user named Bob. Usernames here match exactly, including case.\n'.repeat(3));
     expect(out).toBe('');
     expect(await db.selectFrom('access_keys').selectAll().execute()).toEqual([]);
@@ -467,6 +475,48 @@ describe('user key commands (pg-mem)', () => {
     expect(mocks.createAppContext).not.toHaveBeenCalled();
   });
 
+  it('refuses a key name with a tab or a line break, so the list stays one row per key', async () => {
+    for (const name of ['backup\tjob', 'backup\njob']) {
+      err = '';
+      expect(await runUserKeyCreate('bob', { name, json: false })).toBe(1);
+      expect(err).toBe('user key create refused: name holds a control character, such as a tab or a line break\n');
+    }
+    expect(out).toBe('');
+    expect(await db.selectFrom('access_keys').selectAll().execute()).toEqual([]);
+  });
+
+  it('refuses a key ID that is not UUID-shaped without echoing it, before the database', async () => {
+    const made = await makeKey('u1', 'ci');
+    mocks.createAppContext.mockClear();
+    // The key with its start cut off, and the key with a blank before it.
+    for (const keyId of [made.key.slice(5), ` ${made.key}`]) {
+      for (const force of [false, true]) {
+        err = '';
+        expect(await runUserKeyRevoke('bob', keyId, { force })).toBe(1);
+        expect(err).toBe('user key revoke refused: that is not a key ID. Find the ID with "openldr user key list".\n');
+      }
+    }
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+  });
+
+  it('refuses a username that holds a key, in each key command, without echoing it', async () => {
+    const made = await makeKey('u1', 'ci');
+    mocks.createAppContext.mockClear();
+    const asName = ` ${made.key}`;
+    const runs: Array<[string, () => Promise<number>]> = [
+      ['user key list', () => runUserKeyList(asName, { json: false })],
+      ['user key create', () => runUserKeyCreate(asName, { name: 'ci', json: false })],
+      ['user key revoke', () => runUserKeyRevoke(asName, made.record.id, { force: true })],
+    ];
+    for (const [command, run] of runs) {
+      err = '';
+      expect(await run()).toBe(1);
+      expect(err).toBe(`${command} refused: that looks like a key, not a username. Give the account's username.\n`);
+    }
+    expect(out).toBe('');
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+  });
+
   it('revokes a key and audits it', async () => {
     const made = await makeKey('u1', 'ci');
     mocks.recordAuditEvent.mockClear();
@@ -494,7 +544,7 @@ describe('user key commands (pg-mem)', () => {
     out = '';
 
     const messages: string[] = [];
-    for (const keyId of ['no-such-id', anns.record.id, bobs.record.id]) {
+    for (const keyId of ['00000000-0000-4000-8000-000000000002', anns.record.id, bobs.record.id]) {
       err = '';
       expect(await runUserKeyRevoke('bob', keyId, { force: true }), keyId).toBe(1);
       messages.push(err.replace(keyId, '<id>'));

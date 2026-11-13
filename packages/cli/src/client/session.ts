@@ -9,7 +9,7 @@
 // field, so the name shown and kept is the account's own, from GET /api/me.
 
 import { assertSafeUrl, CredentialError, findCredential, PlainHttpError } from './credentials';
-import { clean, connectionMessage, errorCode, jsonOf, REDIRECT_MESSAGE, requestOnce, shown, SIGN_IN_FIRST, type Answer } from './request';
+import { clean, connectionMessage, errorCode, jsonOf, REDIRECT_MESSAGE, requestOnce, shown, signInRefused, type Answer } from './request';
 import {
   cookieHeader, handedEntry, isHeaderSafe, MUST_CHANGE_PASSWORD, readEntry, removeEntry, saveEntry, sessionCookieFrom, SessionError,
   sessionFileFor, sessionLine, UNREADABLE_ANSWER, type SessionCookie, type SessionPlace,
@@ -106,6 +106,10 @@ async function askHidden(input: PromptInput, setRawMode: (mode: boolean) => unkn
     return await new Promise<string | null>((resolve) => {
       const decoder = new TextDecoder();
       let text = '';
+      // An arrow key or another key that sends an escape sequence is dropped whole, not typed in:
+      // ESC [ ... final byte (CSI), ESC O and one more (SS3), or ESC and one more (Alt+key). A
+      // control character inside one ends it and is read as itself. Kept across chunks.
+      let esc: 'none' | 'start' | 'csi' | 'ss3' = 'none';
       const finish = (v: string | null) => {
         input.off('data', onData);
         input.off('end', onEnd);
@@ -116,6 +120,13 @@ async function askHidden(input: PromptInput, setRawMode: (mode: boolean) => unkn
       const onData = (chunk: Buffer | string) => {
         const s = typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true });
         for (const ch of s) {
+          if (esc !== 'none' && ch >= ' ') {
+            if (esc === 'start') esc = ch === '[' ? 'csi' : ch === 'O' ? 'ss3' : 'none';
+            else if (esc === 'ss3' || (ch >= '@' && ch <= '~')) esc = 'none';
+            continue;
+          }
+          esc = 'none';
+          if (ch === '\u001b') { esc = 'start'; continue; }
           if (ch === '\r' || ch === '\n') { finish(text); return; }
           if (ch === '\u0003') { finish(null); return; }
           if (ch === '\u0004') {
@@ -358,7 +369,7 @@ export async function runWhoami(opts: { url: string; json: boolean }, io: LoginI
   } catch (e) {
     return fail(connectionMessage(url, errorCode(e)));
   }
-  if (answer.status === 401) return fail(SIGN_IN_FIRST);
+  if (answer.status === 401) return fail(signInRefused(credential.kind, io.env));
   if (answer.status !== 200) return fail(answerProblem(answer.status));
   const me = jsonOf(answer);
   if (!me || typeof me.username !== 'string') return fail(UNREADABLE);

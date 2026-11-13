@@ -58,7 +58,19 @@ function localAccountRefusal(err: unknown, username: string): string | null {
 }
 
 function unknownUsername(username: string): string {
+  // A key pasted in the username's place must not be printed back.
+  if (username.includes(ACCESS_KEY_MARK)) return 'no user has that name. Usernames here match exactly, including case.';
   return `no user named ${username}. Usernames here match exactly, including case.`;
+}
+
+/** Every access key starts with this. A username or key ID that holds it is a key in the wrong place. */
+const ACCESS_KEY_MARK = 'oldr_';
+/** A key ID: the UUID the key store gives each key. */
+const KEY_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Refuses a username that holds a key, without printing either. Null when it is fine. */
+function keyAsUsernameRefusal(command: string, username: string): string | null {
+  return username.includes(ACCESS_KEY_MARK) ? `${command} refused: that looks like a key, not a username. Give the account's username.` : null;
 }
 
 /** `opts.password` is false for `--no-password`. Commander sets it to true otherwise. */
@@ -170,6 +182,8 @@ async function userIdOrRefuse(ctx: Awaited<ReturnType<typeof createAppContext>>,
 
 /** Text and JSON hold the stored record only. No key or hash exists to print. */
 export async function runUserKeyList(username: string, opts: JsonOpt): Promise<number> {
+  const asKey = keyAsUsernameRefusal('user key list', username);
+  if (asKey) { process.stderr.write(`${asKey}\n`); return 1; }
   const ctx = await createAppContext(loadConfig());
   try {
     const userId = await userIdOrRefuse(ctx, username);
@@ -205,6 +219,8 @@ function keyInputRefusal(err: AccessKeyInputError): string {
 /** The key goes to standard output alone, so `KEY=$(openldr user key create ...)` captures it.
  *  The notice goes to standard error. The key is never logged or audited. */
 export async function runUserKeyCreate(username: string, opts: JsonOpt & { name: string; expires?: string }): Promise<number> {
+  const asKey = keyAsUsernameRefusal('user key create', username);
+  if (asKey) { process.stderr.write(`${asKey}\n`); return 1; }
   const ctx = await createAppContext(loadConfig());
   try {
     const userId = await userIdOrRefuse(ctx, username);
@@ -236,6 +252,13 @@ export async function runUserKeyRevoke(username: string, keyId: string, opts: { 
     process.stderr.write('user key revoke refused: that is a key, not a key ID. Find the ID with "openldr user key list".\n');
     return 1;
   }
+  // Anything else that is not a key ID could be a key with its start cut off: not echoed either.
+  if (!KEY_ID.test(keyId)) {
+    process.stderr.write('user key revoke refused: that is not a key ID. Find the ID with "openldr user key list".\n');
+    return 1;
+  }
+  const asKey = keyAsUsernameRefusal('user key revoke', username);
+  if (asKey) { process.stderr.write(`${asKey}\n`); return 1; }
   if (!opts.force) {
     process.stderr.write(
       `user key revoke refused: this revokes key ${keyId} of ${username}, and any program using it loses access at once.\n`
