@@ -10,7 +10,7 @@ import { createBlobFromConfig } from './s3-config';
 import { requireOidcIssuer, type Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
-import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -469,6 +469,8 @@ export interface AppContext {
   auth: AuthPort;
   /** Sign-in, sessions and first-admin setup. Set only when AUTH_ADAPTER=local. */
   localSignIn?: LocalSignIn;
+  /** Access keys, on every sign-in adapter. Use the functions in `access-keys.ts`, not the store. */
+  accessKeys: AccessKeyStore;
   blob: BlobStoragePort;
   eventing: EventingPort;
   store: TargetStorePort;
@@ -647,6 +649,7 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   const users = createUserStore(internal.db, { withSubjectLock: internal.withAccountStatusLock });
   const roles = createRoleStore(internal.db);
+  const accessKeys = createAccessKeyStore(internal.db);
   let auth: AuthPort;
   let localSignIn: LocalSignIn | undefined;
   try {
@@ -1830,6 +1833,7 @@ const reporting: ReportingApi = {
     logger,
     auth,
     localSignIn,
+    accessKeys,
     blob,
     eventing,
     store,
@@ -2138,6 +2142,11 @@ export {
   createSetupCode, createLocalAccount, resetLocalPassword, endLocalSessions, generateTemporaryPassword,
   LocalSignInNotEnabledError, SetupAlreadyDoneError, UnknownUserError, UnknownRoleError,
 } from './local-accounts';
+export {
+  ACCESS_KEY_PREFIX, generateAccessKey, hashAccessKey, looksLikeAccessKey,
+  createAccessKey, listAccessKeys, revokeAccessKey, resolveAccessKey,
+  UnknownAccessKeyError, AccessKeyInputError, type KeyContext,
+} from './access-keys';
 
 
 export { listUserDirectory, directoryPageInput } from './user-directory';
