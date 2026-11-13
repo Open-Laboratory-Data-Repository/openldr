@@ -684,6 +684,8 @@ function refusalMessage(status: number, body: Record<string, unknown> | null, se
 
 /** How long the interrupt request may take before it is given up. */
 const INTERRUPT_TIMEOUT_MS = 5000;
+/** After the exit frame, how long the client waits for the server to end the answer. */
+export const AFTER_EXIT_WAIT_MS = 10_000;
 
 /** An output file being written under its temporary name. */
 interface Opened { handle: FileHandle; temp: string; target: string; shown: string }
@@ -943,6 +945,9 @@ async function exchange(
     const written = new Set<string>();
     let opened: Opened | null = null;
     let exit: number | null = null;
+    /** OpenLDR stopped and interrupted the command, as opposed to the caller's own interrupt. */
+    let serverStopped = false;
+    let afterExit: NodeJS.Timeout | undefined;
     let sawError = false;
     let problem: string | null = null;
 
@@ -999,6 +1004,8 @@ async function exchange(
     try {
       let first = true;
       for await (const f of decodeFrames<ServerFrame>(answer)) {
+        // Nothing comes after exit. A frame that does is not read, and the answer is closed.
+        if (exit !== null) break;
         if (first) {
           if (f.t !== 'run' || typeof f.id !== 'string' || !RUN_ID.test(f.id)) throw new ProtocolError();
           runId = f.id;
@@ -1039,7 +1046,11 @@ async function exchange(
           // An exit with a file still open: the file never ended, so the answer is not whole.
           if (opened) throw new ProtocolError();
           exit = Number.isInteger(f.code) && f.code >= 0 && f.code <= 255 ? f.code : 1;
-          break;
+          serverStopped = f.stopped === true;
+          // Read on to the end of the answer rather than closing here. The server ends it once
+          // its clean-up and audit row are done; closing first made every run end in the server
+          // log as "stream closed prematurely". At most AFTER_EXIT_WAIT_MS, then it is closed.
+          afterExit = setTimeout(() => answer.destroy(), AFTER_EXIT_WAIT_MS);
         } else {
           throw new ProtocolError();
         }
@@ -1051,6 +1062,7 @@ async function exchange(
       else if (e instanceof ProtocolError || (e as Error | null)?.name === 'FrameError') problem = 'OpenLDR sent an answer this client cannot read.';
       // Anything else is the connection going; the checks below say so.
     } finally {
+      clearTimeout(afterExit);
       await discard();
     }
 
@@ -1062,6 +1074,7 @@ async function exchange(
       if (sawError) return 1;
       return fail('The connection to OpenLDR was lost.');
     }
+    if (serverStopped) await writeTo(err, 'OpenLDR stopped while this command was running.\n');
     // An output that failed on the server leaves the caller without a file it asked for.
     return sawError ? 1 : exit;
   }

@@ -370,6 +370,9 @@ export async function runWhoami(opts: { url: string; json: boolean }, io: LoginI
     return fail(connectionMessage(url, errorCode(e)));
   }
   if (answer.status === 401) return fail(signInRefused(credential.kind, io.env));
+  // A 403 says why, such as "account disabled": the same text the other commands print for it.
+  const refusal = answer.status === 403 ? jsonOf(answer)?.error : undefined;
+  if (typeof refusal === 'string' && refusal.trim() !== '') return fail(clean(refusal));
   if (answer.status !== 200) return fail(answerProblem(answer.status));
   const me = jsonOf(answer);
   if (!me || typeof me.username !== 'string') return fail(UNREADABLE);

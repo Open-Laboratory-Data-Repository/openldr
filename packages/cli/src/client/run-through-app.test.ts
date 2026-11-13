@@ -26,7 +26,7 @@ import { commandPath } from '../command-list';
 import type { CommandMeta } from '../command-meta';
 import { runningVersion } from '../update';
 import { decodeFrames, encodeFrame, type ClientFrame, type ServerFrame } from '../wire';
-import { runThroughApp, uploadSeam } from './run-through-app';
+import { AFTER_EXIT_WAIT_MS, runThroughApp, uploadSeam } from './run-through-app';
 
 // A key-shaped value for the tests. Not a real key.
 const KEY = 'oldr_TESTKEYtestkeyTESTKEYtestkeyTESTKEYtes';
@@ -230,6 +230,22 @@ describe('the client program', () => {
     expect(spies.layoutsList).not.toHaveBeenCalled();
   });
 
+  it('refuses --approved-by before any request, so no folder is uploaded and nothing starts', async () => {
+    const srv = await startServer(answers({ t: 'exit', code: 0 }));
+    const dir = await mkdtemp(join(tmpdir(), 'openldr-bundle-'));
+    try {
+      await writeFile(join(dir, 'manifest.json'), '{}');
+      for (const verb of ['install', 'update']) {
+        const r = await cli(['market', verb, dir, '--approve', '--approved-by', 'someone'], { OPENLDR_URL: srv.url, OPENLDR_KEY: KEY });
+        expect(r.err, verb).toBe('--approved-by cannot be used through the app. The signed-in account is recorded.\n');
+        expect(r.code).toBe(1);
+      }
+      expect(srv.calls).toHaveLength(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('refuses plain HTTP to another machine with no credential too', async () => {
     const r = await cli(['layouts', 'list'], { OPENLDR_URL: 'http://lab.example:3000' });
     expect(r.err).toBe('Refusing to send a credential over plain HTTP to lab.example. Use https, or set OPENLDR_ALLOW_PLAIN_HTTP=true.\n');
@@ -366,6 +382,77 @@ describe('sending a command', () => {
     expect(r.out).toBe('partial\n');
     expect(r.err).toBe('The connection to OpenLDR was lost.\n');
     expect(r.code).toBe(1);
+  });
+
+  it('says once that OpenLDR stopped when the exit frame says the server stopped the command, and keeps its code', async () => {
+    const srv = await startServer(answers({ t: 'out', d: b64('partial\n') }, { t: 'exit', code: 130, stopped: true }));
+    const r = await cli(['layouts', 'list'], { OPENLDR_URL: srv.url });
+    expect(r.out).toBe('partial\n');
+    expect(r.err).toBe('OpenLDR stopped while this command was running.\n');
+    expect(r.code).toBe(130);
+  });
+
+  it('reads to the end of the answer after the exit frame, so the server ends it before the connection closes', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const events: string[] = [];
+    const srv = await startServer(async (call, req, res) => {
+      await readUntilGo(call, req);
+      stream200(res);
+      res.on('finish', () => events.push('finish'));
+      res.on('close', () => events.push('close'));
+      // The real server ends the answer only after its clean-up and audit row.
+      send(res, { t: 'run', id: 'run-1' }, { t: 'exit', code: 0 });
+      await Promise.race([gate, new Promise((r) => res.once('close', r))]);
+      if (!res.destroyed) res.end();
+    });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const running = cli(['layouts', 'list'], { OPENLDR_URL: srv.url });
+      // The client waits for the end once it holds its one timer, the bound on that wait. A client
+      // that closed at the exit frame sets none, and the server sees the close.
+      for (let i = 0; i < 5000 && vi.getTimerCount() === 0 && events.length === 0; i += 1) await new Promise((r) => setImmediate(r));
+      expect(events).toEqual([]);
+      expect(vi.getTimerCount()).toBe(1);
+      release();
+      const r = await running;
+      expect(r.code).toBe(0);
+      expect(events).toEqual(['finish', 'close']);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+      release();
+    }
+  });
+
+  it('closes the answer after the bound when the server never ends it, and keeps the exit code', async () => {
+    const srv = await startServer(async (call, req, res) => {
+      await readUntilGo(call, req);
+      stream200(res);
+      send(res, { t: 'run', id: 'run-1' }, { t: 'exit', code: 4 });
+      // Never ends.
+    });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      let settled: Result | null = null;
+      const running = cli(['layouts', 'list'], { OPENLDR_URL: srv.url }).then((r) => { settled = r; return r; });
+      for (let i = 0; i < 5000 && vi.getTimerCount() === 0; i += 1) await new Promise((r) => setImmediate(r));
+      await vi.advanceTimersByTimeAsync(AFTER_EXIT_WAIT_MS - 1);
+      expect(settled).toBeNull();
+      await vi.advanceTimersByTimeAsync(1);
+      const r = await running;
+      expect(r.code).toBe(4);
+      expect(r.err).toBe('');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('prints nothing more for an exit the server did not stop', async () => {
+    const srv = await startServer(answers({ t: 'exit', code: 130 }));
+    const r = await cli(['layouts', 'list'], { OPENLDR_URL: srv.url });
+    expect(r.err).toBe('');
+    expect(r.code).toBe(130);
   });
 
   it('does not follow a redirect', async () => {

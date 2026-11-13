@@ -778,7 +778,12 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
     });
     // On shutdown the command is interrupted by the runner. A caller that stops reading must not
     // hold the shutdown: after twice the kill wait, stop writing to it.
+    // The runner calls this before it interrupts the command, so a command no one has interrupted
+    // yet is one the server's own stop interrupts. The exit frame says so (`stopped`), so the
+    // caller can tell a server stop from its own Ctrl+C.
+    let interruptedByStop = false;
     const onClosing = () => {
+      if (!handle.interrupted) interruptedByStop = true;
       abandonTimer = setTimeout(() => { stop.abort(); out.destroy(); s.reply.raw.destroy(); }, 2 * KILL_AFTER_MS);
     };
     if (runner.closingSignal.aborted) onClosing();
@@ -933,7 +938,8 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
         ctx.logger.warn({ code: (err as NodeJS.ErrnoException | null)?.code }, 'cli output could not be sent');
         await send({ t: 'error', message: 'An output could not be sent.' });
       }
-      await send({ t: 'exit', code: exitCode });
+      // A command that had already ended is not interrupted by the stop: interrupt() does nothing then.
+      await send(interruptedByStop && handle.interrupted ? { t: 'exit', code: exitCode, stopped: true } : { t: 'exit', code: exitCode });
     } catch (err) {
       // The command may still be running: stop it before waiting for it below.
       handle.interrupt();

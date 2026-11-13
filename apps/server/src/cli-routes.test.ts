@@ -1293,6 +1293,24 @@ describe('POST /api/cli/run', () => {
     }
   });
 
+  it('marks the exit frame stopped when the server stops the command, and not for the caller\'s own interrupt', async () => {
+    const h = await harness();
+    const own = stream(h, 'admin', body(start('audit list', ['sleep', '600000']), GO));
+    await own.printed('sleeping');
+    expect((await interrupt(h, 'admin', await own.runId())).status).toBe(204);
+    await own.done();
+    expect(own.out().frames.at(-1)).toEqual({ t: 'exit', code: 0 });
+
+    const stopped = stream(h, 'admin', body(start('audit list', ['sleep', '600000']), GO));
+    await stopped.printed('sleeping');
+    await h.app.close();
+    open.splice(open.indexOf(h), 1);
+    await stopped.done();
+    expect(stopped.out().frames.at(-1)).toEqual({ t: 'exit', code: 0, stopped: true });
+    expect(stopped.out().frames.filter((f) => f.t === 'exit')).toHaveLength(1);
+    rmSync(h.work, { recursive: true, force: true });
+  });
+
   it('interrupts running commands on shutdown and leaves no process behind', async () => {
     const h = await harness({ maxRunning: 1 });
     const s = stream(h, 'admin', body(start('audit list', ['sleep', '600000']), GO));

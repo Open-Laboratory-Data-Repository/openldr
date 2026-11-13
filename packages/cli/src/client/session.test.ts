@@ -567,6 +567,23 @@ describe('whoami', () => {
     }
   });
 
+  it('says "account disabled" for a key on a disabled account, as the other commands do', async () => {
+    const disabled = createServer((req, res) => {
+      res.writeHead(403, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'account disabled' }));
+    });
+    await new Promise<void>((done) => disabled.listen(0, '127.0.0.1', done));
+    try {
+      const url = `http://127.0.0.1:${(disabled.address() as AddressInfo).port}`;
+      const t = makeIo({ env: { ...env(), OPENLDR_KEY: KEY } });
+      expect(await runWhoami({ url, json: false }, t.io)).toBe(1);
+      expect(t.err()).toBe('account disabled\n');
+    } finally {
+      disabled.closeAllConnections();
+      await new Promise<void>((done) => disabled.close(() => done()));
+    }
+  });
+
   it('says the session ended when a session was sent and refused', async () => {
     const app = await startApp();
     // The refresh still answers, but the token it gives is no longer taken.

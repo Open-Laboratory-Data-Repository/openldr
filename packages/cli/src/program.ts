@@ -59,7 +59,7 @@ import {
 } from './patients';
 import { runQueryExport, runQueryImport } from './query';
 import { setActorOverride } from './cli-actor';
-import { guardServed } from './served';
+import { guardServed, NAME_OPTIONS, nameRefusalText } from './served';
 import { commandPath, runCommandsList } from './command-list';
 import { COMMAND_META, type CommandKind } from './command-meta';
 import { assertSafeUrl, CredentialError, findCredential, PlainHttpError, serverUrl } from './client/credentials';
@@ -1647,6 +1647,12 @@ export function buildClientProgram(io: Partial<ClientIo> = {}): Command {
     if (why) return fail(why);
     if (program.getOptionValueSource('actor') === 'cli') {
       return fail('--actor cannot be used through the app. The signed-in account is recorded.');
+    }
+    // Refused here, before anything is uploaded or started. The child refuses it too, for a
+    // hand-made request.
+    for (const flag of NAME_OPTIONS) {
+      const option = cmd.options.find((o) => o.long === flag);
+      if (option && cmd.getOptionValue(option.attributeName()) !== undefined) return fail(nameRefusalText(flag));
     }
     const tokens = userArgs ? wordsAfterPath(program, path, userArgs) : null;
     if (!tokens) return fail(NOT_PREPARED);

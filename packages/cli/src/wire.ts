@@ -44,7 +44,9 @@ export type ServerFrame =
   | { t: 'file'; ref: string; rel: string }
   | { t: 'data'; d: string }
   | { t: 'end' }
-  | { t: 'exit'; code: number }
+  /** `stopped` is true when OpenLDR itself stopped and interrupted the command. Absent otherwise,
+   *  and an older server never sends it. */
+  | { t: 'exit'; code: number; stopped?: true }
   /** A failure after `run` was sent. */
   | { t: 'error'; message: string };
 

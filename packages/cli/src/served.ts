@@ -183,10 +183,17 @@ export function refuseHelp(program: Command, argv: readonly string[]): void {
   walk(program);
 }
 
-const NAME_OPTIONS = ['--approved-by'] as const;
+/** Options that name a person. Through the app the signed-in account is recorded instead, so the
+ *  client refuses them before sending (program.ts), and this file refuses them for a hand-made request. */
+export const NAME_OPTIONS = ['--approved-by'] as const;
+
+/** The refusal for an option that names a person, said the same way by the client and the child. */
+export function nameRefusalText(flag: string): string {
+  return `${flag} cannot be used through the app. The signed-in account is recorded.`;
+}
 
 function nameRefusal(flag: string): ServedRefusal {
-  return new ServedRefusal(`${flag} cannot be used through the app. The signed-in account is recorded.`);
+  return new ServedRefusal(nameRefusalText(flag));
 }
 
 /**
