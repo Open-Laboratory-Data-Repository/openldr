@@ -11,8 +11,8 @@
 import { assertSafeUrl, CredentialError, findCredential, PlainHttpError } from './credentials';
 import { clean, connectionMessage, errorCode, jsonOf, REDIRECT_MESSAGE, requestOnce, shown, SIGN_IN_FIRST, type Answer } from './request';
 import {
-  cookieHeader, isHeaderSafe, MUST_CHANGE_PASSWORD, readEntry, removeEntry, saveEntry, sessionCookieFrom, SessionError, sessionFileFor,
-  UNREADABLE_ANSWER, type SessionCookie, type SessionPlace,
+  cookieHeader, handedEntry, isHeaderSafe, MUST_CHANGE_PASSWORD, readEntry, removeEntry, saveEntry, sessionCookieFrom, SessionError,
+  sessionFileFor, sessionLine, UNREADABLE_ANSWER, type SessionCookie, type SessionPlace,
 } from './session-file';
 
 export { sessionFilePath } from './session-file';
@@ -178,15 +178,28 @@ async function accountName(url: string, token: string): Promise<string | null> {
  * Signs a person in and keeps the session for this server. Ignores OPENLDR_KEY: it signs a person
  * in. Nothing is asked for until the address is checked and the server says it signs people in
  * itself.
+ *
+ * With `sessionOut` (the Docker wrapper's hidden `--session-out`, see session-file.ts) no session
+ * file is read or written: the session is printed as one line on standard output, and everything
+ * else goes to standard error.
  */
-export async function runLogin(opts: { url: string; username?: string; passwordStdin: boolean }, io: LoginIo): Promise<number> {
+export async function runLogin(
+  opts: { url: string; username?: string; passwordStdin: boolean; sessionOut?: boolean }, io: LoginIo,
+): Promise<number> {
   const fail = failWith(io);
   const { url } = opts;
+  const sessionOut = opts.sessionOut === true;
   try {
     assertSafeUrl(url, io.env);
   } catch (e) {
     if (e instanceof PlainHttpError) return fail(e.message);
     throw e;
+  }
+  if (sessionOut && (io.out as { isTTY?: boolean }).isTTY === true) {
+    return fail('--session-out writes the session to a pipe, not a terminal.');
+  }
+  if (!sessionOut && io.env.OPENLDR_SESSION !== undefined) {
+    return fail('A session was handed in by the openldr wrapper, so this login keeps no session file. Sign in through the wrapper.');
   }
   const setRawMode = io.stdin.isTTY === true && typeof io.stdin.setRawMode === 'function' ? io.stdin.setRawMode.bind(io.stdin) : null;
   if (opts.passwordStdin) {
@@ -197,14 +210,16 @@ export async function runLogin(opts: { url: string; username?: string; passwordS
   } else if (setRawMode === null) {
     return fail('Standard input is not a terminal, so the password cannot be asked for. Use --password-stdin with --username.');
   }
-  const file = sessionFileFor(io.env, placeOf(io));
-  if (file === null) return fail('Cannot find your home folder, so there is nowhere to keep the session. Set HOME.');
-  try {
-    // A session file that cannot be used stops here, before anything is asked for.
-    await readEntry(file, url);
-  } catch (e) {
-    if (e instanceof SessionError) return fail(e.message);
-    throw e;
+  const file = sessionOut ? null : sessionFileFor(io.env, placeOf(io));
+  if (!sessionOut) {
+    if (file === null) return fail('Cannot find your home folder, so there is nowhere to keep the session. Set HOME.');
+    try {
+      // A session file that cannot be used stops here, before anything is asked for.
+      await readEntry(file, url);
+    } catch (e) {
+      if (e instanceof SessionError) return fail(e.message);
+      throw e;
+    }
   }
 
   let config: Answer;
@@ -264,14 +279,22 @@ export async function runLogin(opts: { url: string; username?: string; passwordS
     return fail(UNREADABLE_ANSWER);
   }
   const name = await accountName(url, token);
+  const entry = { cookie, username: name, savedAt: new Date().toISOString() };
+  const signedIn = name === null ? `Signed in to ${shown(url)}.\n` : `Signed in to ${shown(url)} as ${name}.\n`;
+  if (file === null) {
+    // --session-out: the wrapper reads standard output, so the line is all that goes there.
+    io.out.write(`${sessionLine(url, entry)}\n`);
+    io.err.write(signedIn);
+    return 0;
+  }
   try {
-    await saveEntry(file, url, { cookie, username: name, savedAt: new Date().toISOString() });
+    await saveEntry(file, url, entry);
   } catch (e) {
     await endSession(url, cookie);
     if (e instanceof SessionError) return fail(e.message);
     throw e;
   }
-  io.out.write(name === null ? `Signed in to ${shown(url)}.\n` : `Signed in to ${shown(url)} as ${name}.\n`);
+  io.out.write(signedIn);
   return 0;
 }
 
@@ -285,22 +308,25 @@ export async function runLogout(opts: { url: string }, io: LoginIo): Promise<num
     if (e instanceof PlainHttpError) return fail(e.message);
     throw e;
   }
-  const file = sessionFileFor(io.env, placeOf(io));
+  // A session the Docker wrapper handed in (session-file.ts) is ended here and its file is the
+  // wrapper's to remove: no session file is read or written.
+  const handed = io.env.OPENLDR_SESSION;
+  const file = handed === undefined ? sessionFileFor(io.env, placeOf(io)) : null;
   let entry;
   try {
-    entry = file === null ? null : await readEntry(file, url);
+    entry = handed !== undefined ? handedEntry(handed, url) : file === null ? null : await readEntry(file, url);
   } catch (e) {
     if (e instanceof SessionError) return fail(e.message);
     throw e;
   }
-  if (file === null || entry === null) {
+  if (entry === null) {
     io.out.write(`Not signed in to ${shown(url)}.\n`);
     return 0;
   }
   const problem = await endSession(url, entry.cookie);
   try {
     // Only the session just ended: an entry a newer login wrote meanwhile is kept.
-    await removeEntry(file, url, entry.cookie.value);
+    if (file !== null) await removeEntry(file, url, entry.cookie.value);
   } catch (e) {
     if (e instanceof SessionError) return fail(e.message);
     throw e;

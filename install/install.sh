@@ -397,7 +397,9 @@ fetch "deploy/install/renew-cert.sh" "$DIR/renew-cert.sh"
 chmod +x "$DIR/renew-cert.sh" 2>/dev/null || true
 
 # The `openldr` operator CLI. It ships inside the api image (apps/server/Dockerfile), so the
-# wrapper is a one-line shim rather than a downloaded binary. `-T` disables TTY allocation so
+# wrapper is a small shell script rather than a downloaded binary. It hands a key or a stored
+# session into the container for each call, and runs `login` and `logout` on the host (spec
+# section 6.8; the wrapper's own comments say how). `-T` disables TTY allocation so
 # `./openldr report list --json | jq` works in a pipeline. `-w /` sets the container's working
 # directory to root, so a `data/`-prefixed argument, like `./openldr ingest data/x.json`,
 # resolves to the /data bind mount — the same path the operator sees on the host. `-u
@@ -420,7 +422,182 @@ cat > "$DIR/openldr" <<'WRAPPER'
 # a container path or a relative one like `data/bundle.json`, and relative paths are not converted
 # anyway, so turning conversion off for this command loses nothing. Non-MSYS shells ignore it.
 export MSYS_NO_PATHCONV=1
-exec docker compose exec -T -u "$(id -u):$(id -g)" -w / api node /app/cli/dist/index.js "$@"
+
+# Signing in. The container has no terminal and keeps nothing, so the credential is handed in from
+# the host for each call:
+#   - OPENLDR_KEY, or the key in the file OPENLDR_KEY_FILE names, read here on the host.
+#   - Else the session `./openldr login` keeps on the host, in
+#     ${XDG_CONFIG_HOME:-$HOME/.config}/openldr/session.json (folder 0700, file 0600).
+# `-e NAME` with no value makes docker compose copy NAME from this process's environment, so a key
+# or a session is never on a command line, where other users can read it.
+# `login` asks for the password here and pipes it to the CLI, which prints the session as one line
+# (its hidden --session-out) and keeps no file. This script keeps the line and hands it back in the
+# hidden variable OPENLDR_SESSION. `logout` ends the session and removes the file.
+# Known limit: the server gives no new session value on a refresh today. If it ever starts to, this
+# script will not see it: only output comes back out of the container.
+
+say() { printf '%s\n' "$*" >&2; }
+
+# Only fixed `-e NAME` words go in $pass, so it is left unquoted on purpose below.
+pass=''
+if [ -n "${OPENLDR_URL+x}" ]; then pass="$pass -e OPENLDR_URL"; fi
+if [ -n "${OPENLDR_ALLOW_PLAIN_HTTP+x}" ]; then pass="$pass -e OPENLDR_ALLOW_PLAIN_HTTP"; fi
+
+cli() {
+  docker compose exec -T $pass -u "$(id -u):$(id -g)" -w / api node /app/cli/dist/index.js "$@"
+}
+
+# Where the session is kept. A relative XDG_CONFIG_HOME is ignored, as the CLI ignores it.
+case ${XDG_CONFIG_HOME-} in
+  /*) session_dir=$XDG_CONFIG_HOME/openldr ;;
+  *) session_dir=${HOME:+$HOME/.config/openldr} ;;
+esac
+session_file=${session_dir:+$session_dir/session.json}
+
+# Hands the stored session in, when there is one.
+hand_session() {
+  [ -n "$session_file" ] && [ -e "$session_file" ] || return 0
+  if ! OPENLDR_SESSION=$(cat -- "$session_file" 2>/dev/null); then
+    say "The session file $session_file cannot be read. Remove it and sign in again."
+    return 1
+  fi
+  export OPENLDR_SESSION
+  pass="$pass -e OPENLDR_SESSION"
+}
+
+# Writes the session line whole: a temporary file made owner-only, then renamed over the old one.
+store() {
+  (umask 077 && mkdir -p "$session_dir") && chmod 700 "$session_dir" || return 1
+  tmp=$session_dir/.session.json.$$.tmp
+  if (umask 077 && set -C && printf '%s\n' "$1" > "$tmp") && chmod 600 "$tmp" && mv -f "$tmp" "$session_file"; then
+    return 0
+  fi
+  rm -f "$tmp"
+  return 1
+}
+
+login() {
+  if [ -z "$session_file" ]; then
+    say 'Cannot find your home folder, so there is nowhere to keep the session. Set HOME.'
+    exit 1
+  fi
+  has_user=0
+  for a in "$@"; do
+    case $a in --username|--username=*) has_user=1 ;; esac
+  done
+  if [ -t 0 ]; then
+    if [ "$has_user" = 0 ]; then
+      printf 'Username: ' >&2
+      IFS= read -r username || { say 'Sign-in cancelled.'; exit 1; }
+      set -- "$@" --username "$username"
+    fi
+    printf 'Password: ' >&2
+    tty_state=$(stty -g)
+    # Echo comes back however this ends: Enter, Ctrl+C, or the window closing.
+    trap 'stty "$tty_state"' EXIT
+    trap 'exit 130' INT TERM HUP
+    stty -echo
+    IFS= read -r password
+    got=$?
+    stty "$tty_state"
+    trap - EXIT INT TERM HUP
+    printf '\n' >&2
+    if [ "$got" -ne 0 ]; then say 'Sign-in cancelled.'; exit 1; fi
+    # printf is built into the shell, so the password is on no command line.
+    line=$(printf '%s\n' "$password" | cli "$@" --password-stdin --session-out)
+    code=$?
+    password=''
+  else
+    if [ "$has_user" = 0 ]; then
+      say 'Standard input is not a terminal, so the username cannot be asked for. Use --username, and put the password on standard input.'
+      exit 1
+    fi
+    line=$(cli "$@" --password-stdin --session-out)
+    code=$?
+  fi
+  [ "$code" -eq 0 ] || exit "$code"
+  nl='
+'
+  case $line in
+    '' | *"$nl"*) say 'The sign-in gave no session this script can read, so nothing was stored.'; exit 1 ;;
+  esac
+  if ! store "$line"; then
+    # Leave no live session behind that nobody holds.
+    say "Cannot write the session file $session_file, so the session was ended."
+    OPENLDR_SESSION=$line
+    export OPENLDR_SESSION
+    pass="$pass -e OPENLDR_SESSION"
+    if [ -n "$server_url" ]; then cli --server-url "$server_url" logout; else cli logout; fi >/dev/null 2>&1
+    exit 1
+  fi
+  exit 0
+}
+
+# Ends the session and removes the file, whatever the CLI answered.
+logout() {
+  if ! hand_session; then
+    rm -f "$session_file"
+    exit 1
+  fi
+  cli "$@"
+  code=$?
+  if [ -n "$session_file" ] && ! rm -f "$session_file"; then
+    say "Cannot remove the session file $session_file."
+    [ "$code" -ne 0 ] || code=1
+  fi
+  exit "$code"
+}
+
+# The command word, after any root option before it. --server-url is noted wherever it is.
+cmd=''
+server_url=''
+skip=''
+for a in "$@"; do
+  case $skip in
+    url) server_url=$a; skip=''; continue ;;
+    other) skip=''; continue ;;
+  esac
+  case $a in
+    --server-url) skip=url ;;
+    --server-url=*) server_url=${a#--server-url=} ;;
+    --actor) [ -n "$cmd" ] || skip=other ;;
+    -*) ;;
+    *) [ -n "$cmd" ] || cmd=$a ;;
+  esac
+done
+# Help for login or logout is only help: it runs in the container like any other command.
+for a in "$@"; do
+  case $a in -h | --help) cmd='' ;; esac
+done
+
+case $cmd in
+  login) login "$@" ;;
+  logout) logout "$@" ;;
+esac
+
+if [ -n "${OPENLDR_KEY+x}" ]; then
+  pass="$pass -e OPENLDR_KEY"
+elif [ -n "${OPENLDR_KEY_FILE+x}" ]; then
+  # Read here: the file is on the host, where the container cannot see it. A key file that cannot
+  # be used stops here. It never falls through to a session, which could be someone else's.
+  if [ -z "$OPENLDR_KEY_FILE" ]; then
+    say 'OPENLDR_KEY_FILE is set but empty. Set it, or unset it.'
+    exit 1
+  fi
+  if ! OPENLDR_KEY=$(cat -- "$OPENLDR_KEY_FILE" 2>/dev/null); then
+    say "The key file named by OPENLDR_KEY_FILE cannot be read: $OPENLDR_KEY_FILE"
+    exit 1
+  fi
+  case $OPENLDR_KEY in
+    *[![:space:]]*) ;;
+    *) say "The key file named by OPENLDR_KEY_FILE is empty: $OPENLDR_KEY_FILE"; exit 1 ;;
+  esac
+  export OPENLDR_KEY
+  pass="$pass -e OPENLDR_KEY"
+else
+  hand_session || exit 1
+fi
+exec docker compose exec -T $pass -u "$(id -u):$(id -g)" -w / api node /app/cli/dist/index.js "$@"
 WRAPPER
 chmod +x "$DIR/openldr" 2>/dev/null || true
 
@@ -431,13 +608,25 @@ chmod +x "$DIR/openldr" 2>/dev/null || true
 # platform, so a Windows verification install had no CLI its own operator could run.
 # Body kept identical to install/install.ps1. No -u on purpose: Windows bind mounts do not
 # enforce the ownership check the sh wrapper's `id` call exists for, and there is no `id`
-# command to resolve the flag anyway.
+# command to resolve the flag anyway. It signs in with an access key only: no password is asked
+# for in PowerShell (unproven: nothing on the Linux build machine runs PowerShell).
 case "$(uname -s 2>/dev/null)" in
   MINGW*|MSYS*|CYGWIN*)
     cat > "$DIR/openldr.ps1" <<'PSWRAPPER'
 # OpenLDR operator CLI. Runs inside the api container.
 # Files must live under .\data (mounted at /data) - e.g. .\openldr.ps1 ingest data/bundle.json
-docker compose exec -T -w / api node /app/cli/dist/index.js $args
+# Signing in: on Windows the CLI signs in with an access key, set in OPENLDR_KEY. `-e NAME` with no
+# value copies NAME from this window's environment, so the key is never on a command line.
+# Unproven: this was written on Linux, where nothing can run PowerShell.
+if ($args.Count -gt 0 -and $args[0] -eq 'login') {
+  [Console]::Error.WriteLine('On Windows the CLI signs in with an access key. Set it in OPENLDR_KEY.')
+  exit 1
+}
+$pass = @()
+foreach ($name in 'OPENLDR_KEY', 'OPENLDR_URL', 'OPENLDR_ALLOW_PLAIN_HTTP') {
+  if (Test-Path "Env:$name") { $pass += '-e', $name }
+}
+docker compose exec -T @pass -w / api node /app/cli/dist/index.js $args
 exit $LASTEXITCODE
 PSWRAPPER
     echo "→ Also wrote openldr.ps1 (PowerShell cannot run the extensionless sh wrapper)"

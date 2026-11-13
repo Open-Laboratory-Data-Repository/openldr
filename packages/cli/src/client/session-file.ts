@@ -107,6 +107,48 @@ export function sessionCookieFrom(h: string | string[] | undefined): SessionCook
 
 const unreadable = (file: string) => new SessionError(`The session file ${file} cannot be read. Remove it and sign in again.`);
 
+/** Every entry in a session file's text. Throws what `bad` makes when the text is not one. */
+function parseSessions(text: string, bad: () => SessionError): Map<string, SessionEntry> {
+  if (text.length > MAX_FILE_BYTES) throw bad();
+  let sessions: unknown;
+  try {
+    sessions = (JSON.parse(text) as { sessions?: unknown } | null)?.sessions;
+  } catch {
+    throw bad();
+  }
+  if (typeof sessions !== 'object' || sessions === null || Array.isArray(sessions)) throw bad();
+  const out = new Map<string, SessionEntry>();
+  for (const [key, v] of Object.entries(sessions)) {
+    const entry = entryOf(v);
+    if (!entry) throw bad();
+    out.set(key, entry);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The Docker wrapper's plumbing (install/install.sh)
+//
+// On a Docker install the CLI runs in the API container, which has no terminal and must keep
+// nothing. So the wrapper signs in on the host with the hidden `login --session-out`, which prints
+// the session as one line, in the session file's own form, and keeps no file. The wrapper keeps
+// that line on the host and hands it back for each call in the hidden variable OPENLDR_SESSION.
+// When OPENLDR_SESSION is set, no session file is read or written at all. Both are the wrapper's
+// own plumbing: they appear in no help text and no user doc.
+// ---------------------------------------------------------------------------------------------
+
+/** The session for this server as the one line `login --session-out` prints. */
+export function sessionLine(url: string, entry: SessionEntry): string {
+  return JSON.stringify({ version: 1, sessions: { [sessionKey(url)]: entry } });
+}
+
+/** This server's entry in the text of OPENLDR_SESSION, or null. Empty text is no session. */
+export function handedEntry(text: string, url: string): SessionEntry | null {
+  if (text.trim() === '') return null;
+  const bad = () => new SessionError('The session handed in by the openldr wrapper cannot be read. Sign in again.');
+  return parseSessions(text, bad).get(sessionKey(url)) ?? null;
+}
+
 function entryOf(v: unknown): SessionEntry | null {
   if (typeof v !== 'object' || v === null) return null;
   const e = v as Record<string, unknown>;
@@ -141,17 +183,7 @@ async function readAll(file: string): Promise<Map<string, SessionEntry>> {
       throw new SessionError(`Other users can read or change the session file ${file}, so it is not used. Remove it and sign in again.`);
     }
     if (st.size > MAX_FILE_BYTES) throw unreadable(file);
-    const text = await fh.readFile('utf8');
-    if (text.length > MAX_FILE_BYTES) throw unreadable(file);
-    const sessions = (JSON.parse(text) as { sessions?: unknown } | null)?.sessions;
-    if (typeof sessions !== 'object' || sessions === null || Array.isArray(sessions)) throw unreadable(file);
-    const out = new Map<string, SessionEntry>();
-    for (const [key, v] of Object.entries(sessions)) {
-      const entry = entryOf(v);
-      if (!entry) throw unreadable(file);
-      out.set(key, entry);
-    }
-    return out;
+    return parseSessions(await fh.readFile('utf8'), () => unreadable(file));
   } catch (e) {
     if (e instanceof SessionError) throw e;
     throw unreadable(file);
@@ -246,16 +278,39 @@ export async function removeEntry(file: string, url: string, onlyIf?: string): P
 export async function refreshSession(url: string, file: string): Promise<string | null> {
   const entry = await readEntry(file, url);
   if (!entry) return null;
+  const r = await refreshWith(url, entry);
+  if (r === null) {
+    await removeEntry(file, url, entry.cookie.value);
+    return null;
+  }
+  if (r.renewed !== null) {
+    await saveEntry(file, url, { ...entry, cookie: { name: entry.cookie.name, value: r.renewed }, savedAt: new Date().toISOString() });
+  }
+  return r.token;
+}
+
+/**
+ * refreshSession for the session in OPENLDR_SESSION. Reads and writes no file. A refused refresh
+ * gives null. A new cookie value from the server cannot be handed back to the wrapper, so it is
+ * not kept; the server sets none today (apps/server/src/local-auth-routes.ts).
+ */
+export async function refreshHanded(url: string, text: string): Promise<string | null> {
+  const entry = handedEntry(text, url);
+  if (!entry) return null;
+  const r = await refreshWith(url, entry);
+  return r === null ? null : r.token;
+}
+
+/** One refresh with this entry's cookie: null when the server refused it (401), else the token and
+ *  any new cookie value. Anything else that goes wrong throws SessionError. */
+async function refreshWith(url: string, entry: SessionEntry): Promise<{ token: string; renewed: string | null } | null> {
   let answer: Answer;
   try {
     answer = await requestOnce(url, 'api/auth/refresh', { method: 'POST', headers: { cookie: cookieHeader(entry.cookie) } });
   } catch (e) {
     throw new SessionError(connectionMessage(url, errorCode(e)));
   }
-  if (answer.status === 401) {
-    await removeEntry(file, url, entry.cookie.value);
-    return null;
-  }
+  if (answer.status === 401) return null;
   if (answer.status >= 300 && answer.status < 400) throw new SessionError(REDIRECT_MESSAGE);
   if (answer.status !== 200) throw new SessionError(`OpenLDR answered with status ${answer.status}.`);
   const body = jsonOf(answer);
@@ -263,8 +318,6 @@ export async function refreshSession(url: string, file: string): Promise<string 
   if (typeof token !== 'string' || !isHeaderSafe(token)) throw new SessionError(UNREADABLE_ANSWER);
   if (body?.mustChangePassword === true) throw new SessionError(MUST_CHANGE_PASSWORD);
   const renewed = setCookies(answer.headers['set-cookie']).filter((c) => c.name === entry.cookie.name && sets(c));
-  if (renewed.length === 1 && renewed[0]!.value !== entry.cookie.value) {
-    await saveEntry(file, url, { ...entry, cookie: { name: entry.cookie.name, value: renewed[0]!.value }, savedAt: new Date().toISOString() });
-  }
-  return token;
+  const changed = renewed.length === 1 && renewed[0]!.value !== entry.cookie.value;
+  return { token, renewed: changed ? renewed[0]!.value : null };
 }

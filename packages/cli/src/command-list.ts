@@ -45,7 +45,8 @@ export function listCommands(program: Command): CommandEntry[] {
         path,
         description: cmd.description(),
         arguments: cmd.registeredArguments.map((a) => ({ name: a.name(), required: a.required, variadic: a.variadic })),
-        options: cmd.options.map((o) => ({ flags: o.flags, description: o.description })),
+        // A hidden option is plumbing (login --session-out, for the Docker wrapper), not for callers.
+        options: cmd.options.filter((o) => !o.hidden).map((o) => ({ flags: o.flags, description: o.description })),
         kind: meta.kind,
         capability: meta.capability ?? null,
         alsoRequires: [...(meta.alsoRequires ?? [])],

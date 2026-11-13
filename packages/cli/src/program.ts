@@ -1,4 +1,4 @@
-import { Command, type ParseOptions } from 'commander';
+import { Command, Option, type ParseOptions } from 'commander';
 import { loadConfig } from '@openldr/config';
 import { createAppContext } from '@openldr/bootstrap';
 import { exitCodeFor, formatHealthTable } from './format';
@@ -1479,8 +1479,13 @@ export function buildProgram(): Command {
     .description('Sign in to the OpenLDR server and keep the session for later commands')
     .option('--username <name>', 'the account to sign in as (asked for when absent)')
     .option('--password-stdin', 'read the password from standard input, one line', false)
-    .action(async (o: { username?: string; passwordStdin: boolean }) => {
-      process.exitCode = await runLogin({ url: sessionServerUrl(program), username: o.username, passwordStdin: o.passwordStdin }, loginIo());
+    // The Docker wrapper's plumbing (client/session-file.ts): print the session, keep no file. It is
+    // hidden from help, and no user doc names it.
+    .addOption(new Option('--session-out').hideHelp().default(false))
+    .action(async (o: { username?: string; passwordStdin: boolean; sessionOut: boolean }) => {
+      process.exitCode = await runLogin({
+        url: sessionServerUrl(program), username: o.username, passwordStdin: o.passwordStdin, sessionOut: o.sessionOut,
+      }, loginIo());
     });
   program.command('logout')
     .description('End the session on the server and remove it from this machine')

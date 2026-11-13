@@ -327,10 +327,24 @@ Fetch "deploy/install/garage.toml" "$Dir/config/garage.toml"
 # carries host ownership through and the image's default uid (10001) can't write to ./data.
 # Windows does not enforce that ownership check on bind mounts, and there is no `id` command to
 # resolve the flag's value — adding -u here would just break the wrapper. Leave it out.
+# It signs in with an access key only: no password is asked for in PowerShell. The body must stay
+# the same as the PSWRAPPER block in install/install.sh; packages/release/src/shell.test.ts checks.
+# Unproven: written on Linux, where nothing can run PowerShell.
 $wrapper = @'
 # OpenLDR operator CLI. Runs inside the api container.
 # Files must live under .\data (mounted at /data) - e.g. .\openldr.ps1 ingest data/bundle.json
-docker compose exec -T -w / api node /app/cli/dist/index.js $args
+# Signing in: on Windows the CLI signs in with an access key, set in OPENLDR_KEY. `-e NAME` with no
+# value copies NAME from this window's environment, so the key is never on a command line.
+# Unproven: this was written on Linux, where nothing can run PowerShell.
+if ($args.Count -gt 0 -and $args[0] -eq 'login') {
+  [Console]::Error.WriteLine('On Windows the CLI signs in with an access key. Set it in OPENLDR_KEY.')
+  exit 1
+}
+$pass = @()
+foreach ($name in 'OPENLDR_KEY', 'OPENLDR_URL', 'OPENLDR_ALLOW_PLAIN_HTTP') {
+  if (Test-Path "Env:$name") { $pass += '-e', $name }
+}
+docker compose exec -T @pass -w / api node /app/cli/dist/index.js $args
 exit $LASTEXITCODE
 '@
 Set-Content -Path "$Dir/openldr.ps1" -Value $wrapper -Encoding utf8

@@ -14,6 +14,7 @@ vi.mock('@openldr/config', async (orig) => ({
 }));
 
 import { buildClientProgram } from '../program';
+import { listCommands } from '../command-list';
 import { CredentialError, findCredential } from './credentials';
 import { runLogin, runLogout, runWhoami, sessionFilePath, type LoginIo } from './session';
 
@@ -241,7 +242,7 @@ describe('login', () => {
     // The command has no --password option, and commander refuses one.
     const program = buildClientProgram({ env: {} });
     const cmd = program.commands.find((c) => c.name() === 'login')!;
-    expect(cmd.options.map((o) => o.long).sort()).toEqual(['--password-stdin', '--username']);
+    expect(cmd.options.filter((o) => !o.hidden).map((o) => o.long).sort()).toEqual(['--password-stdin', '--username']);
     cmd.exitOverride();
     cmd.configureOutput({ writeOut: () => {}, writeErr: () => {}, outputError: () => {} });
     program.exitOverride();
@@ -484,6 +485,181 @@ describe('whoami', () => {
     expect(await runWhoami({ url: app.url, json: false }, t.io)).toBe(1);
     expect(t.err()).toBe('Sign in first: openldr login, or set OPENLDR_KEY.\n');
     expect(app.calls[0]!.headers.authorization).toBeUndefined();
+  });
+});
+
+// The Docker wrapper's plumbing (install/install.sh). The wrapper signs in on the host with
+// `login --session-out`, keeps the line on the host, and hands it back in OPENLDR_SESSION.
+describe('the Docker wrapper: login --session-out and OPENLDR_SESSION', () => {
+  const sessionOutLogin = async (url: string, over: { input?: string; env?: NodeJS.ProcessEnv } = {}) => {
+    const t = makeIo({ input: over.input ?? `${PASSWORD}\n`, env: over.env });
+    const code = await runLogin({ url, username: 'alice', passwordStdin: true, sessionOut: true }, t.io);
+    return { code, out: t.out(), err: t.err() };
+  };
+  /** A handed-in session for `url` holding `cookie`, in the form --session-out prints. */
+  const handed = (url: string, cookie: string) =>
+    JSON.stringify({ version: 1, sessions: { [url]: { cookie: { name: NAME, value: cookie }, username: 'alice', savedAt: '2026-11-13T00:00:00.000Z' } } });
+
+  it('login --session-out prints the session as one line on standard output and writes no file', async () => {
+    const app = await startApp();
+    const r = await sessionOutLogin(app.url);
+    expect(r.code).toBe(0);
+    expect(r.out.endsWith('\n')).toBe(true);
+    const lines = r.out.slice(0, -1).split('\n');
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]!)).toMatchObject({
+      version: 1, sessions: { [app.url]: { cookie: { name: NAME, value: COOKIE_A }, username: 'alice' } },
+    });
+    // Everything else goes to standard error.
+    expect(r.err).toBe(`Signed in to ${app.url} as alice.\n`);
+    // Not the file, and not even its folder.
+    await expect(stat(cfg)).rejects.toThrow();
+    // The line holds no access token and no password.
+    expect(r.out).not.toContain(TOKEN_A);
+    expect(r.out).not.toContain(PASSWORD.trim());
+
+    // Handed back in, it signs a later command, and still no file appears.
+    expect(await findCredential({ ...env(), OPENLDR_SESSION: lines[0] }, app.url, place())).toEqual({ kind: 'session', authorization: `Bearer ${TOKEN_A}` });
+    expect(app.calls.at(-1)!.headers.cookie).toBe(`${NAME}=${COOKIE_A}`);
+    await expect(stat(cfg)).rejects.toThrow();
+  });
+
+  it('login --session-out prints nothing on standard output when the sign-in fails', async () => {
+    const app = await startApp();
+    const r = await sessionOutLogin(app.url, { input: 'wrong\n' });
+    expect(r).toEqual({ code: 1, out: '', err: `${WRONG}\n` });
+    await expect(stat(cfg)).rejects.toThrow();
+  });
+
+  it('login --session-out refuses a terminal on standard output, before anything is sent', async () => {
+    const app = await startApp();
+    const t = makeIo({ input: `${PASSWORD}\n` });
+    Object.assign(t.io.out, { isTTY: true });
+    expect(await runLogin({ url: app.url, username: 'alice', passwordStdin: true, sessionOut: true }, t.io)).toBe(1);
+    expect(t.err()).toContain('--session-out');
+    expect(t.out()).toBe('');
+    expect(app.calls).toEqual([]);
+  });
+
+  it('with OPENLDR_SESSION set, reads and writes no session file', async () => {
+    const app = await startApp();
+    // A session file for this server, holding another session.
+    expect((await login(app.url)).code).toBe(0);
+    const before = await readFile(file, 'utf8');
+    app.live.add(COOKIE_B);
+    // A file other users can read is refused when it is read. Here it is not read at all.
+    await chmod(file, 0o644);
+    const withHanded = { ...env(), OPENLDR_SESSION: handed(app.url, COOKIE_B) };
+
+    expect(await findCredential(withHanded, app.url, place())).toEqual({ kind: 'session', authorization: `Bearer ${TOKEN_A}` });
+    expect(app.calls.at(-1)!.headers.cookie).toBe(`${NAME}=${COOKIE_B}`);
+    // A new value from refresh cannot be kept, and the file is not where it goes.
+    app.b.rotateTo = COOKIE_NEW;
+    expect((await findCredential(withHanded, app.url, place())).kind).toBe('session');
+    app.b.rotateTo = undefined;
+    // A refused refresh means no session. Nothing is removed.
+    app.live.clear();
+    expect(await findCredential(withHanded, app.url, place())).toEqual({ kind: 'none', authorization: null });
+    expect(await readFile(file, 'utf8')).toBe(before);
+
+    const w = makeIo({ env: withHanded });
+    expect(await runWhoami({ url: app.url, json: false }, w.io)).toBe(1);
+    expect(w.err()).toBe('Sign in first: openldr login, or set OPENLDR_KEY.\n');
+    expect(await readFile(file, 'utf8')).toBe(before);
+  });
+
+  it('an empty OPENLDR_SESSION is no session, and the file is still not read', async () => {
+    const app = await startApp();
+    expect((await login(app.url)).code).toBe(0);
+    await chmod(file, 0o644);
+    const before = app.calls.length;
+    expect(await findCredential({ ...env(), OPENLDR_SESSION: '' }, app.url, place())).toEqual({ kind: 'none', authorization: null });
+    expect(app.calls.length).toBe(before);
+  });
+
+  it('sends a handed-in session only to the server it was made for', async () => {
+    const app = await startApp();
+    const other = await startApp();
+    app.live.add(COOKIE_B);
+    expect(await findCredential({ ...env(), OPENLDR_SESSION: handed(app.url, COOKIE_B) }, other.url, place())).toEqual({ kind: 'none', authorization: null });
+    expect(other.calls).toEqual([]);
+    expect(app.calls).toEqual([]);
+  });
+
+  it('refuses a handed-in session it cannot read, without quoting it', async () => {
+    const app = await startApp();
+    for (const text of [`{"sessions":{"${app.url}":{"cookie":"${COOKIE_B}"}}}`, `not json ${COOKIE_B}`]) {
+      const e = await findCredential({ ...env(), OPENLDR_SESSION: text }, app.url, place()).catch((x: unknown) => x);
+      expect(e).toBeInstanceOf(CredentialError);
+      expect((e as Error).message).not.toContain(COOKIE_B);
+    }
+    expect(app.calls).toEqual([]);
+  });
+
+  it('puts a key before a handed-in session', async () => {
+    const app = await startApp();
+    app.live.add(COOKIE_B);
+    const both = { ...env(), OPENLDR_KEY: KEY, OPENLDR_SESSION: handed(app.url, COOKIE_B) };
+    expect(await findCredential(both, app.url, place())).toEqual({ kind: 'key', authorization: `Bearer ${KEY}` });
+    expect(app.calls).toEqual([]);
+  });
+
+  it('logout with OPENLDR_SESSION ends that session on the server and touches no file', async () => {
+    const app = await startApp();
+    expect((await login(app.url)).code).toBe(0);
+    const before = await readFile(file, 'utf8');
+    await chmod(file, 0o644);
+    app.live.add(COOKIE_B);
+    const t = makeIo({ env: { ...env(), OPENLDR_SESSION: handed(app.url, COOKIE_B) } });
+    expect(await runLogout({ url: app.url }, t.io)).toBe(0);
+    expect(t.out()).toBe(`Signed out of ${app.url}.\n`);
+    expect(app.calls.at(-1)!.headers.cookie).toBe(`${NAME}=${COOKIE_B}`);
+    expect(app.live.has(COOKIE_B)).toBe(false);
+    // The file's own session is still live and the file is unchanged.
+    expect(app.live.has(COOKIE_A)).toBe(true);
+    expect(await readFile(file, 'utf8')).toBe(before);
+
+    const none = makeIo({ env: { ...env(), OPENLDR_SESSION: '' } });
+    expect(await runLogout({ url: app.url }, none.io)).toBe(0);
+    expect(none.out()).toBe(`Not signed in to ${app.url}.\n`);
+    expect(app.live.has(COOKIE_A)).toBe(true);
+  });
+
+  it('login without --session-out refuses while OPENLDR_SESSION is set, and writes no file', async () => {
+    const app = await startApp();
+    const t = makeIo({ input: `${PASSWORD}\n`, env: { ...env(), OPENLDR_SESSION: '' } });
+    expect(await runLogin({ url: app.url, username: 'alice', passwordStdin: true }, t.io)).toBe(1);
+    expect(t.err().split('\n').filter(Boolean)).toHaveLength(1);
+    expect(app.calls).toEqual([]);
+    await expect(stat(cfg)).rejects.toThrow();
+  });
+
+  it('shows neither in any help text or in the command list', async () => {
+    const program = buildClientProgram({ env: {} });
+    const cmd = program.commands.find((c) => c.name() === 'login')!;
+    expect(cmd.options.find((o) => o.long === '--session-out')?.hidden).toBe(true);
+    const help = [program.helpInformation(), ...program.commands.map((c) => c.helpInformation())].join('\n');
+    expect(help).not.toContain('session-out');
+    expect(help).not.toContain('OPENLDR_SESSION');
+    const rows = listCommands(program);
+    expect(JSON.stringify(rows)).not.toContain('session-out');
+    expect(rows.find((r) => r.path === 'login')!.options.map((o) => o.flags).sort()).toEqual(['--password-stdin', '--username <name>']);
+  });
+
+  it('never prints the handed-in session value', async () => {
+    const app = await startApp();
+    expect((await sessionOutLogin(app.url)).code).toBe(0);
+    printed = '';
+    const withHanded = { ...env(), OPENLDR_SESSION: handed(app.url, COOKIE_A) };
+    await runWhoami({ url: app.url, json: false }, makeIo({ env: withHanded }).io);
+    app.b.refreshStatus = 500;
+    expect(await runWhoami({ url: app.url, json: false }, makeIo({ env: withHanded }).io)).toBe(1);
+    app.b.refreshStatus = undefined;
+    expect(await runLogout({ url: app.url }, makeIo({ env: withHanded }).io)).toBe(0);
+    await app.close();
+    expect(await runLogout({ url: app.url }, makeIo({ env: withHanded }).io)).toBe(1);
+    expect(printed).not.toBe('');
+    for (const secret of [COOKIE_A, TOKEN_A, 'cookieSecret']) expect(printed, secret).not.toContain(secret);
   });
 });
 

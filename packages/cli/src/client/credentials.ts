@@ -4,7 +4,7 @@
 // line or an error message. Messages name the setting or the file, never the value.
 
 import { open } from 'node:fs/promises';
-import { homeOf, refreshSession, SessionError, sessionFileFor, type SessionPlace } from './session-file';
+import { homeOf, refreshHanded, refreshSession, SessionError, sessionFileFor, type SessionPlace } from './session-file';
 
 /** The server address when neither --server-url nor OPENLDR_URL is set. */
 export const DEFAULT_SERVER_URL = 'http://127.0.0.1:3000';
@@ -109,12 +109,15 @@ async function readKeyFile(file: string): Promise<string> {
  * message.
  */
 async function readSession(env: NodeJS.ProcessEnv, url: string, place: SessionPlace): Promise<Credential | null> {
-  const file = sessionFileFor(env, place);
-  if (file === null) return null;
+  // The Docker wrapper's hidden plumbing (session-file.ts): a session handed in for this one call.
+  // When it is set, no session file is read or written.
+  const handed = env.OPENLDR_SESSION;
+  const file = handed === undefined ? sessionFileFor(env, place) : null;
+  if (handed === undefined ? file === null : handed.trim() === '') return null;
   assertSafeUrl(url, env);
   let token: string | null;
   try {
-    token = await refreshSession(url, file);
+    token = handed !== undefined ? await refreshHanded(url, handed) : await refreshSession(url, file!);
   } catch (err) {
     if (err instanceof SessionError) throw new CredentialError(err.message);
     throw err;
@@ -123,7 +126,8 @@ async function readSession(env: NodeJS.ProcessEnv, url: string, place: SessionPl
 }
 
 /**
- * OPENLDR_KEY, then the file named by OPENLDR_KEY_FILE, then the session file, then none. Only a
+ * OPENLDR_KEY, then the file named by OPENLDR_KEY_FILE, then the session (the one the Docker wrapper
+ * hands in as OPENLDR_SESSION when that is set, else the session file), then none. Only a
  * variable that is not set at all is passed over. Set but empty (`OPENLDR_KEY_FILE=$TYPO` expands to
  * nothing), or naming a file that is missing, unreadable or empty, stops here with CredentialError
  * (Ruling 65): falling through to a session would run the command as someone else.
