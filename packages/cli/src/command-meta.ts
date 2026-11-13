@@ -227,12 +227,14 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // Import from a database connector. allow, revoke and allowed are connectors-routes.ts:228 and
   // :235 (connectors.manage). The rest have no route: Studio runs them through the plugin broker,
   // which lets only lab_admin call any import op, "like the connector routes" (plugin-broker.ts:170).
+  // start and resume also save FHIR records (packages/bootstrap/src/import-run.ts header), so they
+  // need ingest.run too: connectors.manage alone must not write clinical records.
   'import allow': { kind: 'app', capability: 'connectors.manage' },
   'import allowed': { kind: 'app', capability: 'connectors.manage' },
   'import failures': { kind: 'app', capability: 'connectors.manage' },
-  'import resume': { kind: 'app', capability: 'connectors.manage' },
+  'import resume': { kind: 'app', capability: 'connectors.manage', alsoRequires: ['ingest.run'] },
   'import revoke': { kind: 'app', capability: 'connectors.manage', destructive: true },
-  'import start': { kind: 'app', capability: 'connectors.manage' },
+  'import start': { kind: 'app', capability: 'connectors.manage', alsoRequires: ['ingest.run'] },
   'import status': { kind: 'app', capability: 'connectors.manage' },
   'import stop': { kind: 'app', capability: 'connectors.manage' },
 

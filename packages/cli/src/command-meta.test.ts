@@ -145,6 +145,8 @@ describe('COMMAND_META', () => {
     expect(withSecond.sort()).toEqual([
       'facilities add-type: terminology.manage + facilities.manage',
       'facilities jobs: facilities.manage + facilities.view',
+      'import resume: connectors.manage + ingest.run',
+      'import start: connectors.manage + ingest.run',
       'patients duplicates list: patients.view_identifiers + patients.view',
       'patients list: patients.view_identifiers + patients.view',
       'patients show: patients.view_identifiers + patients.view',
@@ -493,7 +495,7 @@ const WRITE_PREFIXES = [
   'create', 'set', 'delete', 'remove', 'import', 'install', 'enable', 'disable', 'grant', 'revoke', 'reset', 'rotate',
   'purge', 'retry', 'cancel', 'publish', 'restore', 'link', 'unlink', 'merge', 'amend',
 ];
-// Commands whose name starts like a write but that only read, with a view key.
+// Commands whose name starts like a write but that only read, with a read key (isReadKey).
 const WRITE_NAME_VIEW_KEY: Record<string, string> = {
   'facilities import-run': 'shows one import run; GET /api/facilities/import/runs/:id needs facilities.view (facilities-routes.ts:3068)',
   'facilities import-runs': 'lists import runs; GET /api/facilities/import/runs needs facilities.view (facilities-routes.ts:2790)',
@@ -554,9 +556,9 @@ describe('capabilities', () => {
     expect(wrong).toEqual([]);
   });
 
-  it('a command named for writing does not use a view key', () => {
+  it('a command named for writing does not use a read key', () => {
     const wrong = appPaths()
-      .filter((p) => WRITE_PREFIXES.some((w) => lastWord(p).startsWith(w)) && capabilityOf(p).endsWith('.view') && !WRITE_NAME_VIEW_KEY[p])
+      .filter((p) => WRITE_PREFIXES.some((w) => lastWord(p).startsWith(w)) && isReadKey(capabilityOf(p)) && !WRITE_NAME_VIEW_KEY[p])
       .map((p) => `${p}: ${capabilityOf(p)}`);
     expect(wrong).toEqual([]);
   });
@@ -569,7 +571,7 @@ describe('capabilities', () => {
     }
     for (const p of Object.keys(WRITE_NAME_VIEW_KEY)) {
       if (COMMAND_META[p]?.kind !== 'app') bad.push(`${p}: not an app command`);
-      else if (!capabilityOf(p).endsWith('.view')) bad.push(`${p}: not needed`);
+      else if (!WRITE_PREFIXES.some((w) => lastWord(p).startsWith(w)) || !isReadKey(capabilityOf(p))) bad.push(`${p}: not needed`);
     }
     expect(bad).toEqual([]);
   });
