@@ -138,7 +138,7 @@ Abra `http://localhost:5174/`. O Studio usa 5173 e este site usa 5174. Num confl
 
 ### 4. Executar a CLI a partir do código
 
-O lançador do código é `pnpm openldr`, a partir da raiz do repositório. Lê `.env` e liga aos serviços Docker. Não exige uma página Studio aberta. Consulte o [guia da CLI](/docs/cli) para comandos e caminhos.
+O lançador do código é `pnpm openldr`, a partir da raiz do repositório. Para um comando de recuperação como `health`, lê `.env` e liga aos serviços Docker. Todos os outros comandos vão para a API em `OPENLDR_URL`, por predefinição `http://127.0.0.1:3000`, por isso mantenha a API do passo 1 em execução. Com `AUTH_DEV_BYPASS=true`, a API inicia sessão nestes comandos. Ver [Início de sessão do CLI e chaves de acesso](/docs/cli-access). Consulte o [guia da CLI](/docs/cli) para comandos e caminhos.
 
 ```sh
 {{operator:dev-cli}}
@@ -196,7 +196,7 @@ Este exemplo verifica o site público. Escolha o pacote afetado para outras alte
 
 ### 3. Repor apenas uma base descartável
 
-Opcional e destrutivo. Verifique os dois URL das bases. Estes comandos apagam e recriam o esquema e carregam as definições. Não os use para reparar uma migração em falta. `pnpm e2e:seed` e `pnpm docs:seed` também repõem dados e compilam extensões; são conjuntos de teste opcionais.
+Opcional e destrutivo. Verifique os dois URL das bases. Estes comandos apagam e recriam o esquema e carregam as definições. Não os use para reparar uma migração em falta. `pnpm e2e:seed` e `pnpm docs:seed` também repõem dados e compilam extensões; são conjuntos de teste opcionais. Cada um tem uma metade de reposição que não precisa da API, e uma metade de carga que passa pela API em execução. Corra-os pela ordem que o `e2e/README.md` indica.
 
 ```sh
 {{operator:dev-reset}}
@@ -290,7 +290,7 @@ Estes comandos escrevem no registo e armazenamento de desenvolvimento. Verifique
 | `--branch NAME` | `-Branch NAME` | Escolher o ramo de um clone novo. |
 | `--no-services` | `-NoServices` | Ignorar Docker e a inicialização das bases. |
 | `--reset-db` | `-ResetDb` | Repor uma base de desenvolvimento existente. Destrutivo. |
-| `--seed` | `-Seed` | Na inicialização, executar a preparação destrutiva WHONET. Exige ferramentas de compilação. |
+| `--seed` | `-Seed` | Na inicialização, executar a preparação destrutiva WHONET. Exige ferramentas de compilação. Se uma API já responder em `http://127.0.0.1:3000`, o script para antes de qualquer reposição. Caso contrário, inicia a sua própria API para a carga e deixa-a a correr. Não testado. |
 
 `pnpm build:ui-reference` compila a extensão com página, cartão e painel. `pnpm build:v1-import` compila o importador v1. `pnpm build:plugins` compila WHONET e as outras extensões de referência. WHONET também exige clang e um sysroot WASI.
 

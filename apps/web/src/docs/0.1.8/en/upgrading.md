@@ -232,9 +232,19 @@ HTTP 202 means accepted, not completed. Inspect webhook receipts and linked runs
 
 ![Check health and outstanding work.](guide:operator-upgrade-health)
 
-### 3. Rebuild older warehouse projections only when required
+### 3. Replace the openldr wrapper
 
-For releases predating result status, the Patient Index or duplicate detection, this fills the added warehouse/index fields. It rewrites the read model and requires --force. Skip when not required. Keep the verified backup and previous images under your retention policy.
+Run this once the images are on the new release. It rewrites only the `openldr` wrapper in this folder, and `openldr.ps1` where the installer writes one. It changes nothing else. Without it, the old wrapper sends no sign-in, and every command that goes through the app answers `Sign in first: openldr login, or set OPENLDR_KEY.` Then sign in with `./openldr login`, or set `OPENLDR_KEY`. See [CLI sign-in and access keys](/docs/cli-access). The PowerShell form was not run on Windows.
+
+```sh
+{{operator:upgrade-wrapper}}
+```
+
+![Replace the openldr wrapper.](guide:operator-upgrade-wrapper)
+
+### 4. Rebuild older warehouse projections only when required
+
+For releases predating result status, the Patient Index or duplicate detection, this fills the added warehouse/index fields. It rewrites the read model and requires --force. It goes through the running app, so sign in first as an account with the `settings.danger_zone` permission. Skip when not required. Keep the verified backup and previous images under your retention policy.
 
 ```sh
 {{operator:upgrade-reproject}}

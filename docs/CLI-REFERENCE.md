@@ -17,6 +17,24 @@ There are two ways to invoke it:
 pnpm openldr --help
 ```
 
+## How a command runs
+
+Each command has a kind, kept in `packages/cli/src/command-meta.ts`. `openldr commands` lists them, and `openldr commands --json` gives each command's `kind`, `capability`, `alsoRequires`, `destructive`, arguments and options.
+
+| Kind | Where it runs | Sign-in |
+|---|---|---|
+| `app` | In the running server, through `POST /api/cli/run`. Almost every command. | Needed. The account must hold the command's `capability` and every key in `alsoRequires`. |
+| `recovery` | On the machine that runs OpenLDR, straight on the database. Exactly ten: `auth rebind-issuer`, `auth setup-code`, `db migrate`, `db reset`, `db seed`, `doctor`, `health`, `storage copy`, `target-store test`, `user reset-password`. | None. Without database settings it stops with `This command works on the database itself. Run it on the machine that runs OpenLDR.` |
+| `local` | On the caller's machine. No database, no server. | None. `login`, `logout` and `whoami` talk only to the server's sign-in routes. |
+
+Sign in with `openldr login` (local sign-in only), or set `OPENLDR_KEY` or `OPENLDR_KEY_FILE` to an access key. The client looks for a credential in that order: `OPENLDR_KEY`, `OPENLDR_KEY_FILE`, the session from `login`, then none. A key variable that is set but empty is an error. There is no `--key` option.
+
+The server address is `--server-url <address>` (a root option, accepted anywhere on the line), then `OPENLDR_URL`, then `http://127.0.0.1:3000`. Plain HTTP to a host other than `localhost`, `127.0.0.1` or `[::1]` is refused unless `OPENLDR_ALLOW_PLAIN_HTTP` is `true` or `1`.
+
+Through the app, `--actor` and `--approved-by` are refused, and the signed-in account is recorded. `audit list --actor <id>` cannot be used, because the root `--actor` takes the value (known fault). `sync export` and `report run --format pdf` need `--out`. The client and server must be the same release.
+
+The web docs page "CLI sign-in and access keys" (`apps/web/src/docs/0.1.8/en/cli-access.md`) has the full account, with real output.
+
 ## Exit Codes
 
 Most commands return `0` on success and `1` on validation/runtime failure. Commander help invocations return `0`. Commands that talk to external services or databases also return `1` when required config is missing or the service is unavailable.
@@ -25,6 +43,11 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 
 | Command | Purpose |
 |---|---|
+| `openldr commands [--json]` | List every command with its kind, the capability it needs, and whether it is destructive. |
+| `openldr login [--username <name>] [--password-stdin]` | Sign in to the server and keep the session (local sign-in only). The password is asked for with no echo. `--password-stdin` needs `--username`. |
+| `openldr logout` | End the session on the server and remove it from this machine. |
+| `openldr whoami [--json]` | Show the account, its roles, and whether a session or a key signs in. |
+| `openldr user key list/create/revoke` | List, make and revoke a user's access keys. `create <username> --name <name> [--expires <date>]` prints the key once, alone on standard output. A bare `YYYY-MM-DD` means the end of that day in UTC. `revoke <username> <keyId>` refuses without `--force`. |
 | `openldr health` | Probe configured adapters and service health. |
 | `openldr errors list` | List the error-code catalog. |
 | `openldr fhir validate <file>` | Validate a FHIR JSON resource or bundle. |
@@ -204,8 +227,9 @@ except `identifier-systems set`, which changes only a label.
 
 Output is masked unless you pass `--identifiers`, which is audited. A masked name keeps its
 first letter and a masked identifier keeps its last four characters. `list` and `show` with
-`--identifiers` write an audit event. It records actor type `cli` and the OS user name, or the
-`--actor` override. `identifier-systems list` shows each
+`--identifiers` write an audit event. It records the signed-in account. All patient commands
+go through the app. `list`, `show` and `duplicates list` need `patients.view_identifiers` even
+without `--identifiers`. `identifier-systems list` shows each
 identifier system CE has seen, its label, whether it shows in the list and whether search
 matches it. `identifier-systems set` changes one system and is audited too.
 

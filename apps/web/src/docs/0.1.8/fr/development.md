@@ -138,7 +138,7 @@ Ouvrez `http://localhost:5174/`. Studio utilise 5173, ce site utilise 5174. En c
 
 ### 4. Lancer la CLI depuis les sources
 
-Le lanceur source est `pnpm openldr`, depuis la racine du dépôt. Il lit `.env` et contacte les services Docker. Il n'exige pas une page Studio ouverte. Consultez le [guide CLI](/docs/cli) pour les commandes et chemins.
+Le lanceur source est `pnpm openldr`, depuis la racine du dépôt. Pour une commande de récupération comme `health`, il lit `.env` et contacte les services Docker. Toutes les autres commandes vont à l'API à l'adresse `OPENLDR_URL`, par défaut `http://127.0.0.1:3000`, donc gardez l'API de l'étape 1 en marche. Avec `AUTH_DEV_BYPASS=true`, l'API connecte ces commandes. Voir [Connexion du CLI et clés d'accès](/docs/cli-access). Consultez le [guide CLI](/docs/cli) pour les commandes et chemins.
 
 ```sh
 {{operator:dev-cli}}
@@ -196,7 +196,7 @@ Cet exemple vérifie le site public. Choisissez le paquet concerné pour les aut
 
 ### 3. Réinitialiser seulement une base jetable
 
-Facultatif et destructif. Vérifiez les deux URL des bases. Ces commandes suppriment et recréent le schéma, puis chargent les définitions. Ne les utilisez pas pour une migration manquante. `pnpm e2e:seed` et `pnpm docs:seed` réinitialisent aussi les données et construisent des extensions ; ces jeux de test ne sont pas nécessaires.
+Facultatif et destructif. Vérifiez les deux URL des bases. Ces commandes suppriment et recréent le schéma, puis chargent les définitions. Ne les utilisez pas pour une migration manquante. `pnpm e2e:seed` et `pnpm docs:seed` réinitialisent aussi les données et construisent des extensions ; ces jeux de test ne sont pas nécessaires. Chacun a une moitié de réinitialisation qui n'a pas besoin de l'API, et une moitié de chargement qui passe par l'API en marche. Lancez-les dans l'ordre donné par `e2e/README.md`.
 
 ```sh
 {{operator:dev-reset}}
@@ -290,7 +290,7 @@ Ces commandes écrivent dans le registre et le stockage de développement. Véri
 | `--branch NAME` | `-Branch NAME` | Choisir la branche d'un nouveau clone. |
 | `--no-services` | `-NoServices` | Ignorer Docker et l'initialisation des bases. |
 | `--reset-db` | `-ResetDb` | Réinitialiser une base de développement existante. Destructif. |
-| `--seed` | `-Seed` | À l'initialisation, lancer la préparation destructive WHONET. Outils de compilation requis. |
+| `--seed` | `-Seed` | À l'initialisation, lancer la préparation destructive WHONET. Outils de compilation requis. Si une API répond déjà à `http://127.0.0.1:3000`, le script s'arrête avant toute réinitialisation. Sinon il démarre sa propre API pour le chargement et la laisse en marche. Non testé. |
 
 `pnpm build:ui-reference` construit l'extension avec page, carte et panneau. `pnpm build:v1-import` construit l'importateur v1. `pnpm build:plugins` construit WHONET et les autres extensions de référence. WHONET exige aussi clang et un sysroot WASI.
 

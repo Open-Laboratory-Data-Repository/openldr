@@ -171,7 +171,13 @@ Para ter duas instalações a funcionar ao mesmo tempo, dê a cada uma o seu `--
 
 ## Executar comandos da CLI
 
-A CLI `openldr` funciona através do lançador. O OpenLDR tem de estar a funcionar, porque a CLI liga-se à base de dados dele.
+A CLI `openldr` funciona através do lançador, e o OpenLDR tem de estar a funcionar. `cli` aponta a CLI para o endereço do próprio lançador, a não ser que defina `OPENLDR_URL` ou passe `--server-url`. Só dá as definições de base de dados a um comando de recuperação, como `doctor` abaixo. Qualquer outro comando passa pelo servidor em execução, por isso inicie sessão primeiro:
+
+```sh
+pnpm openldr-standalone cli -- login
+```
+
+[Início de sessão do CLI e chaves de acesso](/docs/cli-access) explica o início de sessão, as chaves de acesso e os comandos de recuperação. Um comando de recuperação não pede início de sessão:
 
 ```sh
 pnpm openldr-standalone cli -- doctor
@@ -198,9 +204,9 @@ Acima destas linhas aparecem também a linha do pnpm, o aviso WASI do Node e uma
 - O `--` é opcional. `cli doctor` executa o mesmo comando.
 - `--data-dir` fica antes do `--`, por exemplo `pnpm openldr-standalone cli --data-dir /srv/openldr -- doctor`.
 - Quando uma mensagem da CLI lhe pede para executar um comando `openldr`, execute-o através do lançador. `openldr auth setup-code` passa a `pnpm openldr-standalone cli -- auth setup-code`.
-- Um comando que escreve um ficheiro, como `sync export`, escreve-o na raiz do repositório se não indicar `--out`. Dê a `--out` um caminho completo.
+- `sync export` precisa de `--out`. Um caminho relativo parte da raiz do repositório, por isso dê a `--out` um caminho completo.
 
-`pnpm openldr` numa cópia do repositório não chega a uma instalação autónoma. Lê o ficheiro `.env` do repositório e liga-se às bases de dados indicadas nele. Use antes `pnpm openldr-standalone cli`. A [referência da CLI](/docs/cli) lista todos os comandos.
+`pnpm openldr` numa cópia do repositório não é o mesmo. Para um comando de recuperação, lê o ficheiro `.env` do repositório e liga-se às bases de dados indicadas nele. Envia qualquer outro comando para `OPENLDR_URL`, por predefinição `http://127.0.0.1:3000`. Use antes `pnpm openldr-standalone cli`, para que cada comando chegue a esta instalação. A [referência da CLI](/docs/cli) lista todos os comandos.
 
 ## Alterar uma definição
 
@@ -230,6 +236,7 @@ O lançador não lê nenhum ficheiro `.env`. Define ele próprio estas definiç�
 | `TERMINOLOGY_WORK_DIR` | `work/` na pasta de dados |
 | `WEB_DIST_DIR` | A compilação do Studio no repositório |
 | `APP_VERSION` | A versão do lançador |
+| `CLI_ENTRY` | `dist/cli.js` na pasta do lançador |
 
 Por isso, `LOG_LEVEL` fica em `info` e não o pode alterar.
 

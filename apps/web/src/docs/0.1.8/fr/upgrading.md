@@ -232,9 +232,19 @@ HTTP 202 signifie accepté, pas terminé. Examinez reçus webhook et exécutions
 
 ![Vérifier santé et travaux en attente.](guide:operator-upgrade-health)
 
-### 3. Reconstruire les anciennes projections seulement si nécessaire
+### 3. Remplacer le script openldr
 
-Pour versions antérieures au statut de résultat, index patient ou doublons, cela remplit les nouveaux champs. Cette reconstruction exige --force. Ignorez si inutile. Gardez sauvegarde vérifiée et anciennes images selon votre politique.
+Lancez ceci une fois les images passées à la nouvelle version. Cela réécrit seulement le script `openldr` de ce dossier, et `openldr.ps1` là où l'installateur en écrit un. Rien d'autre ne change. Sans cela, l'ancien script n'envoie aucune connexion, et chaque commande qui passe par l'application répond `Sign in first: openldr login, or set OPENLDR_KEY.` Connectez-vous ensuite avec `./openldr login`, ou définissez `OPENLDR_KEY`. Voir [Connexion du CLI et clés d'accès](/docs/cli-access). La forme PowerShell n'a pas été lancée sous Windows.
+
+```sh
+{{operator:upgrade-wrapper}}
+```
+
+![Remplacer le script openldr.](guide:operator-upgrade-wrapper)
+
+### 4. Reconstruire les anciennes projections seulement si nécessaire
+
+Pour versions antérieures au statut de résultat, index patient ou doublons, cela remplit les nouveaux champs. Cette reconstruction exige --force. Elle passe par l'application en marche, donc connectez-vous d'abord avec un compte qui a la permission `settings.danger_zone`. Ignorez si inutile. Gardez sauvegarde vérifiée et anciennes images selon votre politique.
 
 ```sh
 {{operator:upgrade-reproject}}

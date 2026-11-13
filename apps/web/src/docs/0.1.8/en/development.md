@@ -138,7 +138,7 @@ Open `http://localhost:5174/`. Studio owns port 5173 and this site owns 5174. Bo
 
 ### 4. Run the source CLI
 
-The source launcher is `pnpm openldr`, from the repository root. It reads the local `.env` and connects to the backing services. It does not need a running Studio page. See the [CLI guide](/docs/cli) for commands and file paths.
+The source launcher is `pnpm openldr`, from the repository root. For a recovery command such as `health`, it reads the local `.env` and connects to the backing services. Every other command goes to the API at `OPENLDR_URL`, by default `http://127.0.0.1:3000`, so keep the API from step 1 running. With `AUTH_DEV_BYPASS=true` the API signs these commands in. See [CLI sign-in and access keys](/docs/cli-access). See the [CLI guide](/docs/cli) for commands and file paths.
 
 ```sh
 {{operator:dev-cli}}
@@ -196,7 +196,7 @@ This example checks the public site. Choose the affected package for other chang
 
 ### 3. Reset only a disposable database
 
-Optional and destructive. Check both database URLs first. This drops and recreates the development schema, then seeds definitions. Do not use it to repair a missing migration. `pnpm e2e:seed` and `pnpm docs:seed` also reset data and build plugins; they are optional test fixtures, not normal setup.
+Optional and destructive. Check both database URLs first. This drops and recreates the development schema, then seeds definitions. Do not use it to repair a missing migration. `pnpm e2e:seed` and `pnpm docs:seed` also reset data and build plugins; they are optional test fixtures, not normal setup. Each has a reset half that needs no API and a load half that goes through the running API. Run them in the order `e2e/README.md` gives.
 
 ```sh
 {{operator:dev-reset}}
@@ -290,7 +290,7 @@ These commands write to the development plugin registry and storage. Check `.env
 | `--branch NAME` | `-Branch NAME` | Choose the branch for a new clone. |
 | `--no-services` | `-NoServices` | Skip Docker and database initialization. |
 | `--reset-db` | `-ResetDb` | Reset an existing development database. Destructive. |
-| `--seed` | `-Seed` | During initialization, run the destructive WHONET sample setup. Requires its build tools. |
+| `--seed` | `-Seed` | During initialization, run the destructive WHONET sample setup. Requires its build tools. If an API already answers at `http://127.0.0.1:3000`, the script stops before any reset. Otherwise it starts its own API for the load and leaves it running. Not tested. |
 
 `pnpm build:ui-reference` builds the reference plugin with a page, card and side panel. `pnpm build:v1-import` builds the v1 importer. `pnpm build:plugins` builds WHONET and the other reference plugins. WHONET also needs clang and a WASI sysroot.
 

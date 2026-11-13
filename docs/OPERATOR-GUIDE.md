@@ -57,7 +57,7 @@ pnpm -C apps/server dev      # boots on the fresh schema
 pnpm e2e:seed:load           # through that API
 ```
 
-`pnpm e2e:seed` runs both in one line and resets the schema under a running API, which was not checked. See `e2e/README.md`.
+`pnpm e2e:seed` runs both in one line, and resets the schema under an API that is already running. Whether a running API copes with that was not checked. See `e2e/README.md`.
 
 ## Dashboards
 
@@ -216,9 +216,14 @@ DHIS2 is **no longer a core feature**. It ships as a removable `dhis2-sink` plug
 
 Use Users for local profile and role management; Keycloak admin actions are available only when admin client config is present. Use Audit to inspect append-only operational events.
 
+Most `openldr` commands go through the running server and need sign-in: `./openldr login` on a local sign-in install, or an access key in `OPENLDR_KEY` or `OPENLDR_KEY_FILE`. Each command run that way leaves a `cli.run` audit row under the signed-in account. To give an AI agent or a script access, make an account with no password (`user create --no-password`) and a narrow role, make a key in Studio (Users, row menu, **Access keys**) or with `user key create`, and revoke it when done. See [CLI Reference, How a command runs](CLI-REFERENCE.md#how-a-command-runs) and the web docs page "CLI sign-in and access keys".
+
+After an upgrade, replace the `./openldr` wrapper, or every command that goes through the app answers `Sign in first`. The web docs page "Planned upgrades" has the command.
+
 Worked example:
 
 ```bash
+./openldr login
 ./openldr user list --json
 ./openldr audit list --json
 ```

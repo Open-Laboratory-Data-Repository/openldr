@@ -160,7 +160,7 @@ Windows hosts use [`install/install.ps1`](install/install.ps1) with the same fla
 curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/development.sh | bash
 ```
 
-Accepts `--dir`, `--branch`, `--seed` (loads the WHONET sample dataset), `--reset-db`, and `--no-services`. Windows: [`install/development.ps1`](install/development.ps1).
+Accepts `--dir`, `--branch`, `--seed` (loads the WHONET sample dataset), `--reset-db`, and `--no-services`. With `--seed`, the script stops before any reset when an API already answers at `http://127.0.0.1:3000`. Stop that API and run the script again, or seed by hand in the order [`e2e/README.md`](e2e/README.md) gives. Otherwise it starts its own API for the sample load and leaves it running. This was not run. Windows: [`install/development.ps1`](install/development.ps1).
 
 ### 3. Manual setup
 
@@ -185,7 +185,7 @@ pnpm -C apps/studio dev      # terminal 2 — Studio dev server (HMR)
 pnpm -C apps/web dev         # terminal 3 (optional) — public landing site + docs
 ```
 
-Optional sample data — builds the WASM plugins, resets the DB, and ingests a WHONET export. Requires the Rust/WASM toolchain (see [`wasm/rust-toolchain.toml`](wasm/rust-toolchain.toml)). The reset runs on the database itself; the plugin install and the ingest go through the running API at `OPENLDR_URL` (default `http://127.0.0.1:3000`), which must be the API on the database you just reset. So stop the API first:
+Optional sample data. It builds the WASM plugins, resets the DB, and ingests a WHONET export. Requires the Rust/WASM toolchain (see [`wasm/rust-toolchain.toml`](wasm/rust-toolchain.toml)). The reset runs on the database itself; the plugin install and the ingest go through the running API at `OPENLDR_URL` (default `http://127.0.0.1:3000`), which must be the API on the database you just reset. So stop the API first:
 
 ```bash
 pnpm e2e:seed:reset          # with the API stopped
@@ -193,7 +193,7 @@ pnpm -C apps/server dev      # terminal 1: boots on the fresh schema
 pnpm e2e:seed:load           # through that API
 ```
 
-`pnpm e2e:seed` runs both halves in one line and resets the schema under a running API, which was not checked. See [`e2e/README.md`](e2e/README.md).
+`pnpm e2e:seed` runs both halves in one line, and resets the schema under an API that is already running. Whether a running API copes with that was not checked. See [`e2e/README.md`](e2e/README.md).
 
 Opt-in backing services:
 

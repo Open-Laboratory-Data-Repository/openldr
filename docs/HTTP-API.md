@@ -278,6 +278,22 @@ central owns the labels.
 | `GET` | `/api/audit` | List audit events with filters. |
 | `GET` | `/api/audit/:id` | Get one audit event. |
 
+## Access keys
+
+An access key lets a program act as one account. Send it as `Authorization: Bearer oldr_<key>`, in place of a token. The server checks the account behind the key on every request, so a disable, a block or a role change applies to the next one. An unknown, revoked or expired key answers `401 { error: 'invalid access key' }`. A key whose account is disabled answers `403 { error: 'account disabled' }`. "Last used" is written at most once every 60 seconds per key, including for a call that is then refused because the account is disabled.
+
+All three routes need `users.manage`. `:id` is the id Studio's Users page uses: the provider's id when identity administration is on (local sign-in counts), else the local id.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/users/:id/keys` | List the account's keys: `{ keys }`. Each has `id`, `userId`, `name`, `prefix`, `createdBy`, `createdAt`, `expiresAt`, `revokedAt` and `lastUsedAt`. The key itself is never returned again. An account the directory knows but that never signed in has `{ keys: [] }`. 404 unknown account. |
+| `POST` | `/api/users/:id/keys` | Make a key: `{ name, expiresAt? }`. `name` is 1 to 80 characters. `expiresAt` is null or a future ISO date-time with `Z` or an offset. Answers `201 { key, record }` with `Cache-Control: no-store`. This is the only answer that ever holds a key. For a directory account that never signed in, it first writes the local row. 400 bad name or expiry, 404 unknown account, 409 another change to the account is in progress. Audited as `access_key.create`, without the key. |
+| `DELETE` | `/api/users/:id/keys/:keyId` | Revoke a key. 204 on success. 404 for an unknown key, another account's key, or a key already revoked. Audited as `access_key.revoke`. |
+
+## CLI runs (the CLI's own routes)
+
+`POST /api/cli/run` and `POST /api/cli/runs/:id/interrupt` are how the `openldr` CLI sends a command through the app. They are the CLI's own wire format, not a public API, and they may change with any release. The client and server must be the same release, or the run answers 409. Use the CLI instead of calling them. Each run leaves one `cli.run` audit row with the account, the command path, the exit code, and the key's name when a key was used. Arguments are never recorded. See `apps/server/src/cli-routes.ts` and the web docs page "CLI sign-in and access keys".
+
 ## Activity
 
 | Method | Path | Purpose |
