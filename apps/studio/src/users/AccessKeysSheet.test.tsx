@@ -1,7 +1,20 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 import { useState } from 'react';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import '@/i18n';
+
+// Pin a zone west of UTC with no daylight saving, before any import reads a date. Node applies a
+// change to process.env.TZ at once. Vitest's default pool is child processes, and afterAll puts
+// the old zone back.
+const zone = vi.hoisted(() => {
+  const before = process.env.TZ;
+  process.env.TZ = 'America/Bogota';
+  return { before };
+});
+afterAll(() => {
+  if (zone.before === undefined) delete process.env.TZ;
+  else process.env.TZ = zone.before;
+});
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -40,6 +53,10 @@ function Harness() {
 function setClipboard(value: unknown) {
   Object.defineProperty(navigator, 'clipboard', { value, configurable: true, writable: true });
 }
+// jsdom has no document.execCommand. Each test that needs it sets one.
+function setExecCommand(value: unknown) {
+  Object.defineProperty(document, 'execCommand', { value, configurable: true, writable: true });
+}
 
 async function createKey(name: string) {
   openDropdown(await screen.findByRole('button', { name: 'Access key actions' }));
@@ -57,8 +74,9 @@ beforeEach(() => {
   vi.mocked(createAccessKey).mockResolvedValue({ key: KEY, record: key({ id: 'k9', name: 'new-bot' }) });
   vi.mocked(revokeAccessKey).mockResolvedValue(undefined);
   setClipboard(undefined);
+  setExecCommand(undefined);
 });
-afterEach(() => setClipboard(undefined));
+afterEach(() => { setClipboard(undefined); setExecCommand(undefined); });
 
 describe('AccessKeysSheet', () => {
   it('names the user in the title', async () => {
@@ -84,7 +102,7 @@ describe('AccessKeysSheet', () => {
     expect(screen.queryByText('key-01')).toBeNull();
   });
 
-  it('works out each status and offers Revoke only on an active key', async () => {
+  it('works out each status, and offers Revoke on every key that is not revoked', async () => {
     vi.mocked(listAccessKeys).mockResolvedValue([active, revoked, expired]);
     render(<Harness />);
     const activeRow = (await screen.findByText('ci-bot')).closest('tr')!;
@@ -95,7 +113,30 @@ describe('AccessKeysSheet', () => {
     expect(within(expiredRow).getByText('Expired')).toBeTruthy();
     expect(within(activeRow).getByRole('button', { name: 'Actions for ci-bot' })).toBeTruthy();
     expect(within(revokedRow).queryByRole('button')).toBeNull();
-    expect(within(expiredRow).queryByRole('button')).toBeNull();
+    // "Expired" is this browser's clock. The server may still accept the key, so Revoke stays.
+    openDropdown(within(expiredRow).getByRole('button', { name: 'Actions for temp-bot' }));
+    expect(await screen.findByRole('menuitem', { name: 'Revoke' })).toBeTruthy();
+  });
+
+  it('lets a long unbroken name wrap anywhere, so it cannot widen the table', async () => {
+    // jsdom does no layout, so this checks the class that does the work, nothing more.
+    vi.mocked(listAccessKeys).mockResolvedValue([key({ id: 'k5', name: 'nightly_export_reporting_service_key' })]);
+    render(<Harness />);
+    const nameEl = await screen.findByText('nightly_export_reporting_service_key');
+    expect(nameEl.className).toContain('[overflow-wrap:anywhere]');
+    const stackedPrefix = within(nameEl.closest('td')!).getByText('oldr_k5xxxxx');
+    expect(stackedPrefix.className).toContain('[overflow-wrap:anywhere]');
+  });
+
+  it('shows a failed load as an error, not as an empty list, and clears it once a load works', async () => {
+    vi.mocked(listAccessKeys).mockRejectedValueOnce(new Error('list access keys failed: 500'));
+    render(<Harness />);
+    expect(await screen.findByText('Could not load the keys: list access keys failed: 500')).toBeTruthy();
+    expect(screen.queryByText('No access keys yet.')).toBeNull();
+    // A create reads the list again, and this time it works.
+    await createKey('new-bot');
+    expect(await screen.findByText('ci-bot')).toBeTruthy();
+    expect(screen.queryByText(/Could not load the keys/)).toBeNull();
   });
 
   it('shows a dash for no expiry and for never used', async () => {
@@ -123,8 +164,10 @@ describe('AccessKeysSheet', () => {
     render(<Harness />);
     await createKey('  new-bot  ');
     await waitFor(() => expect(createAccessKey).toHaveBeenCalledWith('u2', { name: 'new-bot', expiresAt: null }));
-    const field = await screen.findByDisplayValue(KEY) as HTMLInputElement;
+    const field = await screen.findByDisplayValue(KEY) as HTMLTextAreaElement;
     expect(field.readOnly).toBe(true);
+    // A textarea wraps, so the whole key shows and can be selected by hand.
+    expect(field.tagName).toBe('TEXTAREA');
     expect(screen.getByText('This key cannot be shown again. Copy it now.')).toBeTruthy();
     // The list is read again, so the new key's row appears.
     await waitFor(() => expect(listAccessKeys).toHaveBeenCalledTimes(2));
@@ -133,26 +176,41 @@ describe('AccessKeysSheet', () => {
     expect(await screen.findByText('Copied.')).toBeTruthy();
   });
 
-  it('asks to copy by hand when the clipboard write fails', async () => {
-    setClipboard({ writeText: vi.fn().mockRejectedValue(new Error('denied')) });
-    render(<Harness />);
-    await createKey('new-bot');
-    const field = await screen.findByDisplayValue(KEY) as HTMLInputElement;
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copy key' })); });
-    expect(await screen.findByText('Copy did not work here. Select the key and copy it by hand.')).toBeTruthy();
-    expect(document.activeElement).toBe(field);
-    expect(field.selectionStart).toBe(0);
-    expect(field.selectionEnd).toBe(KEY.length);
-  });
-
-  it('asks to copy by hand with no copy button when the page has no clipboard', async () => {
+  it('copies with the older command when the page has no clipboard', async () => {
     // A plain HTTP page that is not localhost, as over Tailscale, has no navigator.clipboard.
     setClipboard(undefined);
+    let selectedWhenCopied = '';
+    const execCommand = vi.fn(() => {
+      const el = document.activeElement as HTMLTextAreaElement;
+      selectedWhenCopied = el.value.slice(el.selectionStart, el.selectionEnd);
+      return true;
+    });
+    setExecCommand(execCommand);
     render(<Harness />);
     await createKey('new-bot');
     expect(await screen.findByDisplayValue(KEY)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Copy key' })).toBeNull();
-    expect(screen.getByText('Copy did not work here. Select the key and copy it by hand.')).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copy key' })); });
+    expect(execCommand).toHaveBeenCalledWith('copy');
+    expect(selectedWhenCopied).toBe(KEY);
+    expect(await screen.findByText('Copied.')).toBeTruthy();
+    expect(screen.queryByText('Copy did not work here. Select the key and copy it by hand.')).toBeNull();
+  });
+
+  it('asks to copy by hand when the clipboard and the older command both fail', async () => {
+    setClipboard({ writeText: vi.fn().mockRejectedValue(new Error('denied')) });
+    const execCommand = vi.fn(() => false);
+    setExecCommand(execCommand);
+    render(<Harness />);
+    await createKey('new-bot');
+    const field = await screen.findByDisplayValue(KEY) as HTMLTextAreaElement;
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copy key' })); });
+    expect(execCommand).toHaveBeenCalledWith('copy');
+    expect(await screen.findByText('Copy did not work here. Select the key and copy it by hand.')).toBeTruthy();
+    expect(screen.queryByText('Copied.')).toBeNull();
+    // The key is left selected.
+    expect(document.activeElement).toBe(field);
+    expect(field.selectionStart).toBe(0);
+    expect(field.selectionEnd).toBe(KEY.length);
   });
 
   it('does not show the key again after the sheet is closed and reopened', async () => {
@@ -200,13 +258,17 @@ describe('AccessKeysSheet', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'New key' }));
     expect(screen.getByText('The key works until the end of this day, in your time zone.')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'dated-bot' } });
-    fireEvent.click(screen.getByRole('button', { name: /no expiry/i }));
+    // The Expires label names the picker's trigger.
+    fireEvent.click(screen.getByLabelText('Expires'));
     const days = [...document.querySelectorAll<HTMLElement>('[data-day]')].filter((d) => {
       const b = d.querySelector('button');
       return b && !b.disabled;
     });
     const picked = days[days.length - 1];
     fireEvent.click(picked.querySelector('button')!);
+    // The trigger shows the day that was picked, not the day before.
+    const [y, m, d] = picked.dataset.day!.split('-');
+    expect(screen.getByLabelText('Expires').textContent).toContain(`${d}/${m}/${y}`);
     openDropdown(screen.getByRole('button', { name: 'New key actions' }));
     const create = await screen.findByRole('menuitem', { name: 'Create key' });
     await act(async () => { fireEvent.click(create); });
@@ -238,9 +300,13 @@ describe('AccessKeysSheet', () => {
 });
 
 describe('endOfDayIso', () => {
+  it('runs in the pinned zone, five hours behind UTC', () => {
+    expect(new Date(Date.UTC(2026, 10, 20, 12)).getTimezoneOffset()).toBe(300);
+  });
+
   it('is the last millisecond of that day in local time, as a full ISO date-time', () => {
-    const iso = endOfDayIso('2026-11-20');
-    expect(iso).toBe(new Date(2026, 10, 20, 23, 59, 59, 999).toISOString());
-    expect(iso.endsWith('Z')).toBe(true);
+    // 23:59:59.999 on the 20th in Bogota (UTC-5) is 04:59:59.999 on the 21st in UTC. A version
+    // written with Date.UTC would give 2026-11-20T23:59:59.999Z and fail.
+    expect(endOfDayIso('2026-11-20')).toBe('2026-11-21T04:59:59.999Z');
   });
 });
