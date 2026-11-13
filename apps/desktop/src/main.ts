@@ -11,7 +11,7 @@ import { bridgeHandlers } from './bridge';
 import { RETRY_CHANNEL, SCREEN_CHANNEL } from './channels';
 import { DesktopController, pageState, type Screen } from './controller';
 import * as launcher from './launcher';
-import { linkTarget, mayGrantPermission, sameOrigin } from './locality';
+import { frameTarget, linkTarget, mayGrantPermission, renderAfterLoad, sameOrigin, urlForLog } from './locality';
 import { choosePort } from './ports';
 import { Selfcheck, selfcheckConfig } from './selfcheck';
 import { loadSettings, saveSettings, type Settings } from './settings';
@@ -150,6 +150,12 @@ function main(): void {
     };
     contents.on('will-navigate', (event) => guard(event, event.url));
     contents.on('will-redirect', (event) => guard(event, event.url));
+    // will-navigate covers the main frame only. A frame inside a page may stay on the launcher's
+    // origin or load about:blank or about:srcdoc (Studio's plugin frames); anything else is stopped.
+    contents.on('will-frame-navigate', (event) => {
+      if (event.isMainFrame) return;
+      if (frameTarget(event.url, controller?.address()) === 'refuse') event.preventDefault();
+    });
     contents.on('will-attach-webview', (event) => event.preventDefault());
     contents.setWindowOpenHandler(({ url }) => {
       if (linkTarget(url, controller?.address(), [pageUrl]) === 'browser') void shell.openExternal(url);
@@ -183,6 +189,8 @@ function main(): void {
   });
 
   void app.whenReady().then(() => {
+    // A quit that came before this point has already exited. Start nothing.
+    if (exiting) return;
     const s = strings();
     const settings = loadSettings(settingsFile);
 
@@ -247,12 +255,17 @@ function main(): void {
         if (current.screen !== 'studio') w.webContents.send(SCREEN_CHANNEL, pageState(current, strings()));
         return;
       }
+      // An error or stopping screen that came while another page was loading is shown now.
+      if (renderAfterLoad(current.screen === 'studio', url, pageUrl)) return render();
       const address = controller?.address();
       if (address !== undefined && sameOrigin(url, address)) selfcheck?.onStudioLoaded();
     });
     w.webContents.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
-      if (isMainFrame) pageLoading = false;
-      if (isMainFrame && code !== -3) log(`A page did not load (${code} ${description}): ${url}`);
+      // -3 is a load another load replaced. That other load reports its own end.
+      if (!isMainFrame || code === -3) return;
+      pageLoading = false;
+      log(`A page did not load (${code} ${description}): ${urlForLog(url)}`);
+      if (renderAfterLoad(current.screen === 'studio', url, pageUrl)) render();
     });
     w.webContents.on('render-process-gone', (_e, details) => log(`The window's page process ended: ${details.reason}.`));
 

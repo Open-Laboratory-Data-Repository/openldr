@@ -275,11 +275,18 @@ describe('startLauncher, with a fake child', () => {
     const spawn = vi.fn(() => child);
     startLauncher(withData, 3990, { event: () => {}, stderrLine: () => {} }, spawn as unknown as Spawn);
     expect(spawn).toHaveBeenCalledTimes(1);
-    const [file, args, options] = spawn.mock.calls[0] as unknown as [string, string[], { env: NodeJS.ProcessEnv; stdio: unknown }];
+    const [file, args, options] = spawn.mock.calls[0] as unknown as [
+      string,
+      string[],
+      { env: NodeJS.ProcessEnv; stdio: unknown; detached?: boolean; windowsHide?: boolean },
+    ];
     expect(file).toBe(withData.execPath);
     expect(args).toEqual(startArgs(withData, 3990));
     expect(options.env).toEqual(launcherEnv(process.env));
     expect(options.stdio).toEqual(['ignore', 'ignore', 'pipe', 'pipe']);
+    // Detached, so the launcher outlives the app on every system (on Windows, out of the app's job).
+    expect(options.detached).toBe(true);
+    expect(options.windowsHide).toBe(true);
   });
 
   it('feeds events from descriptor 3 and lines from standard error, then the exit code; never kills', async () => {

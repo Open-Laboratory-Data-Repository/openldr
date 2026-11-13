@@ -65,3 +65,36 @@ export function mayGrantPermission(permission: string, requestingUrl: string, la
   if (permission !== 'clipboard-sanitized-write' || launcherAddress === undefined) return false;
   return sameOrigin(requestingUrl, launcherAddress);
 }
+
+/** The two about: pages a frame may load. Studio's plugin frames load `about:srcdoc`. */
+const FRAME_ABOUT_PAGES = new Set(['blank', 'srcdoc']);
+
+/**
+ * Whether a navigation inside a frame (not the main frame) may go ahead. A frame may stay on the
+ * launcher's origin (a `blob:` URL of that origin counts), or load about:blank or about:srcdoc.
+ * Anything else is refused, and is not opened in the browser either.
+ */
+export function frameTarget(url: string, launcherAddress: string | undefined): 'allow' | 'refuse' {
+  const u = parse(url);
+  if (u === undefined) return 'refuse';
+  if (u.protocol === 'about:') return FRAME_ABOUT_PAGES.has(u.pathname) ? 'allow' : 'refuse';
+  if (launcherAddress !== undefined && sameOrigin(url, launcherAddress)) return 'allow';
+  return 'refuse';
+}
+
+/**
+ * Whether the window must show the current screen again once a load has finished or failed: the
+ * screen is not Studio, and the load was not the app's own page. A failed load of the app's own
+ * page gives false, so it is not loaded again and again.
+ */
+export function renderAfterLoad(currentIsStudio: boolean, loadedUrl: string, ownPage: string): boolean {
+  return !currentIsStudio && linkTarget(loadedUrl, undefined, [ownPage]) !== 'inside';
+}
+
+/** A URL for the log: its origin and path, never its query or fragment, which may hold a token. */
+export function urlForLog(url: string): string {
+  const u = parse(url);
+  if (u === undefined) return '(unreadable address)';
+  if (u.origin !== 'null') return `${u.origin}${u.pathname}`;
+  return u.pathname.startsWith('/') ? `${u.protocol}//${u.host}${u.pathname}` : `${u.protocol}${u.pathname}`;
+}

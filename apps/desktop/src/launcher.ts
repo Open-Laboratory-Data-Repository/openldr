@@ -211,6 +211,9 @@ export function startLauncher(
     env: launcherEnv(process.env),
     stdio: ['ignore', 'ignore', 'pipe', 'pipe'],
     windowsHide: true,
+    // Detached, so the launcher outlives the app on every system: on Windows a child that is not
+    // detached is ended with the app's job. Not unref'd: the app still waits for its exit on quit.
+    detached: true,
   });
   const events = child.stdio[3] as Readable | null | undefined;
   events?.setEncoding('utf8');

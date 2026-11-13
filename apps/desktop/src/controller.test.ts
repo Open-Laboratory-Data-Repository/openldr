@@ -400,6 +400,23 @@ describe('DesktopController', () => {
     expect(h.controller.address()).toBeUndefined();
   });
 
+  it('ruling 1. never shows Studio for a ready that comes after a quit began and before stopping', async () => {
+    const h = harness();
+    const l = await started(h);
+    l.on.event({ event: 'starting', step: 'server' });
+    void h.controller.quit();
+    await settle();
+    expect(h.stops()).toBe(1);
+    l.on.event({ event: 'ready', address: OWN });
+    await settle();
+    expect(h.shown.some((s) => s.screen === 'studio')).toBe(false);
+    expect(h.last()).toEqual({ screen: 'stopping' });
+    l.on.event({ event: 'stopping' });
+    l.exit(0);
+    await settle();
+    expect(h.exits).toEqual([0]);
+  });
+
   describe('6. the launcher ends by itself', () => {
     const logs = { serverLog: join(DATA, 'logs', 'server.log'), postgresLog: join(DATA, 'logs', 'postgres.log') };
 
@@ -664,7 +681,7 @@ describe('DesktopController', () => {
     const all = h.logs.join('\n');
     expect(all).toContain('"event":"ready"');
     expect(all).toContain('a warning');
-    expect(all).toContain('3');
+    expect(h.logs).toContain('The launcher exited with code 3.');
   });
 
   it('a status that has not answered after 30 s shows the error screen, and a retry does not stack a second one', async () => {
@@ -688,7 +705,7 @@ describe('DesktopController', () => {
     expect(reads).toBe(1);
   });
 
-  it('a status that has not answered while attached shows the error screen, with no second status on top', async () => {
+  it('a status that has not answered while attached shows the error screen', async () => {
     let reads = 0;
     const h = harness({
       readStatus: () => (++reads === 1 ? Promise.resolve(runningStatus('127.0.0.1')) : new Promise<Status>(() => {})),

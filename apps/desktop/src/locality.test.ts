@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isLocalAddress, linkTarget, mayAnswerStudio, mayGrantPermission, sameOrigin } from './locality';
+import { frameTarget, isLocalAddress, linkTarget, mayAnswerStudio, mayGrantPermission, renderAfterLoad, sameOrigin, urlForLog } from './locality';
 
 describe('isLocalAddress', () => {
   it.each(['http://localhost:3000/studio/', 'http://127.0.0.1:3000/x', 'http://[::1]:3000'])('%s is local', (url) => {
@@ -110,5 +110,69 @@ describe('mayGrantPermission', () => {
 
   it.each(['clipboard-read', 'media', 'geolocation', 'notifications', 'openExternal', 'fullscreen'])('refuses %s, even from the launcher', (permission) => {
     expect(mayGrantPermission(permission, 'http://localhost:3990/studio/', launcher)).toBe(false);
+  });
+});
+
+describe('frameTarget', () => {
+  const launcher = 'http://localhost:3990/studio/';
+
+  it('allows a frame on the launcher\'s origin', () => {
+    expect(frameTarget('http://localhost:3990/studio/plugins/x', launcher)).toBe('allow');
+  });
+
+  it('allows about:blank and about:srcdoc, which Studio\'s plugin frames load', () => {
+    expect(frameTarget('about:blank', launcher)).toBe('allow');
+    expect(frameTarget('about:srcdoc', launcher)).toBe('allow');
+    expect(frameTarget('about:srcdoc', undefined)).toBe('allow');
+  });
+
+  it('allows a blob: URL of the launcher\'s origin', () => {
+    expect(frameTarget('blob:http://localhost:3990/0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f', launcher)).toBe('allow');
+  });
+
+  it('refuses any other site, scheme or origin', () => {
+    expect(frameTarget('https://example.com/', launcher)).toBe('refuse');
+    expect(frameTarget('http://localhost:3991/studio/', launcher)).toBe('refuse');
+    expect(frameTarget('blob:https://example.com/0f1c2d3e', launcher)).toBe('refuse');
+    expect(frameTarget('data:text/html,hi', launcher)).toBe('refuse');
+    expect(frameTarget('file:///etc/passwd', launcher)).toBe('refuse');
+    expect(frameTarget('javascript:alert(1)', launcher)).toBe('refuse');
+    expect(frameTarget('about:config', launcher)).toBe('refuse');
+    expect(frameTarget('http://localhost:3990/studio/', undefined)).toBe('refuse');
+    expect(frameTarget('not a url', launcher)).toBe('refuse');
+  });
+});
+
+describe('renderAfterLoad', () => {
+  const own = 'file:///opt/openldr-desktop/pages/page.html';
+
+  it('is true when a load ends on another page while the screen is not Studio', () => {
+    expect(renderAfterLoad(false, 'http://localhost:3990/studio/', own)).toBe(true);
+    expect(renderAfterLoad(false, 'chrome-error://chromewebdata/', own)).toBe(true);
+  });
+
+  it('is false while the screen is Studio', () => {
+    expect(renderAfterLoad(true, 'http://localhost:3990/studio/', own)).toBe(false);
+  });
+
+  it('is false when the load was the app\'s own page, so a page that fails is not loaded again and again', () => {
+    expect(renderAfterLoad(false, own, own)).toBe(false);
+    expect(renderAfterLoad(false, `${own}?x=1`, own)).toBe(false);
+  });
+});
+
+describe('urlForLog', () => {
+  it('keeps the origin and the path, and drops the query and the fragment', () => {
+    expect(urlForLog('http://localhost:3990/studio/reset?token=PLANTED-SECRET#step=PLANTED-TOO')).toBe('http://localhost:3990/studio/reset');
+  });
+
+  it('keeps the scheme and path of a URL with no origin', () => {
+    expect(urlForLog('file:///opt/openldr-desktop/pages/page.html?a=b')).toBe('file:///opt/openldr-desktop/pages/page.html');
+    expect(urlForLog('about:blank')).toBe('about:blank');
+  });
+
+  it('gives a fixed word for a URL it cannot read', () => {
+    expect(urlForLog('not a url token=PLANTED')).toBe('(unreadable address)');
+    expect(urlForLog('')).toBe('(unreadable address)');
   });
 });
