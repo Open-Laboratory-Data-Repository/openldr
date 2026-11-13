@@ -56,3 +56,12 @@ export function linkTarget(
   if (u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'mailto:') return 'browser';
   return 'refuse';
 }
+
+/**
+ * Whether the window may grant a permission. Every request is refused, with one exception: a
+ * sanitized clipboard write from a page on the launcher's origin, for Studio's copy buttons.
+ */
+export function mayGrantPermission(permission: string, requestingUrl: string, launcherAddress: string | undefined): boolean {
+  if (permission !== 'clipboard-sanitized-write' || launcherAddress === undefined) return false;
+  return sameOrigin(requestingUrl, launcherAddress);
+}

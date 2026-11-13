@@ -35,6 +35,8 @@ export interface AppStrings {
   /** Error lines. */
   launcherEnded: string;
   launcherGone: string;
+  /** `status` gave no answer in time. */
+  statusNoAnswer: string;
   notBuilt: string;
   /** Shown and logged in place of a launcher line that held a secret. */
   lineHidden: string;
@@ -59,6 +61,7 @@ const en: AppStrings = {
   trayQuit: 'Quit',
   launcherEnded: 'OpenLDR stopped unexpectedly.',
   launcherGone: 'OpenLDR is no longer running.',
+  statusNoAnswer: 'OpenLDR did not answer when the app asked whether it is running.',
   notBuilt: 'OpenLDR is not built. Build it, then start the app again.',
   lineHidden: 'A line from OpenLDR was hidden because it held a secret.',
 };
@@ -66,13 +69,13 @@ const en: AppStrings = {
 const fr: AppStrings = {
   windowTitle: 'OpenLDR',
   startingTitle: "Démarrage d'OpenLDR",
-  checkingNote: "Recherche d'un OpenLDR déjà en marche.",
+  checkingNote: "Vérification : OpenLDR est-il déjà en cours d'exécution ?",
   postgresNote: 'Démarrage de la base de données.',
-  recoveringNote: 'La base de données se rétablit après un arrêt inattendu. Cela peut prendre quelques minutes.',
+  recoveringNote: 'La base de données est en cours de récupération après un arrêt brutal. Cela peut prendre quelques minutes.',
   serverNote: 'Démarrage du serveur.',
   stoppingTitle: "Arrêt d'OpenLDR",
   stoppingNote: "OpenLDR s'arrête. Veuillez patienter.",
-  errorTitle: "OpenLDR n'est pas en marche",
+  errorTitle: "OpenLDR n'est pas en cours d'exécution",
   logsLabel: 'Les journaux se trouvent dans :',
   retryLabel: 'Réessayer',
   trayTooltip: 'OpenLDR',
@@ -81,7 +84,8 @@ const fr: AppStrings = {
   trayOpenLogs: 'Ouvrir le dossier des journaux',
   trayQuit: 'Quitter',
   launcherEnded: "OpenLDR s'est arrêté de façon inattendue.",
-  launcherGone: "OpenLDR n'est plus en marche.",
+  launcherGone: "OpenLDR n'est plus en cours d'exécution.",
+  statusNoAnswer: "OpenLDR n'a pas répondu quand l'application a vérifié s'il est en cours d'exécution.",
   notBuilt: "OpenLDR n'est pas compilé. Compilez-le, puis relancez l'application.",
   lineHidden: "Une ligne d'OpenLDR a été masquée, car elle contenait un secret.",
 };
@@ -105,6 +109,7 @@ const pt: AppStrings = {
   trayQuit: 'Sair',
   launcherEnded: 'O OpenLDR parou inesperadamente.',
   launcherGone: 'O OpenLDR já não está em execução.',
+  statusNoAnswer: 'O OpenLDR não respondeu quando a aplicação verificou se está em execução.',
   notBuilt: 'O OpenLDR não está compilado. Compile-o e volte a abrir a aplicação.',
   lineHidden: 'Uma linha do OpenLDR foi ocultada porque continha um segredo.',
 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isLocalAddress, linkTarget, mayAnswerStudio, sameOrigin } from './locality';
+import { isLocalAddress, linkTarget, mayAnswerStudio, mayGrantPermission, sameOrigin } from './locality';
 
 describe('isLocalAddress', () => {
   it.each(['http://localhost:3000/studio/', 'http://127.0.0.1:3000/x', 'http://[::1]:3000'])('%s is local', (url) => {
@@ -89,5 +89,26 @@ describe('linkTarget', () => {
     expect(linkTarget('ftp://example.com/x', launcher, ownPages)).toBe('refuse');
     expect(linkTarget('not a url', launcher, ownPages)).toBe('refuse');
     expect(linkTarget('', launcher, ownPages)).toBe('refuse');
+  });
+});
+
+describe('mayGrantPermission', () => {
+  const launcher = 'http://localhost:3990/studio/';
+
+  it('allows a sanitized clipboard write from the launcher\'s origin', () => {
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://localhost:3990/studio/users', launcher)).toBe(true);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://localhost:3990', launcher)).toBe(true);
+  });
+
+  it('refuses the clipboard write from any other origin or with no launcher', () => {
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://localhost:3991/studio/', launcher)).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'https://example.com/', launcher)).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'file:///opt/openldr-desktop/pages/page.html', launcher)).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://localhost:3990/studio/', undefined)).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', '', launcher)).toBe(false);
+  });
+
+  it.each(['clipboard-read', 'media', 'geolocation', 'notifications', 'openExternal', 'fullscreen'])('refuses %s, even from the launcher', (permission) => {
+    expect(mayGrantPermission(permission, 'http://localhost:3990/studio/', launcher)).toBe(false);
   });
 });
