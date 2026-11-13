@@ -48,7 +48,7 @@ Words used in this document:
 | A run started from the CLI is driven by the CLI process | CONFIRMED | `follow` waits on a run in its own process (`packages/cli/src/import.ts:128`). Under design C that process is a child of the server and is interrupted when the caller leaves (`2026-11-13-cli-through-the-app-design.md:279`) |
 | One query may run for 30 seconds at most | CONFIRMED | `createConnectorDb` refuses a longer limit (`packages/bootstrap/src/connector-db.ts:71`) |
 | Binary columns reach the plugin intact | CONFIRMED | Bytes are sent as base64 (`packages/bootstrap/src/import-sql.ts:79`) |
-| CE cannot read SQL Server 2014 | REFUTED by reading, not by a run | The version list covers the analytics target only (`packages/adapter-mssql-store/src/supported-versions.ts:21`). The v1 importer pages with `TOP` (`wasm/openldr-v1-import/src/queries.rs:260`). The toolchain reads the same servers with the same driver |
+| CE cannot read SQL Server 2014 | REFUTED by reading, not by a run | The version list covers the analytics target only (`packages/adapter-mssql-store/src/supported-versions.ts:21`). The v1 importer pages with `TOP` (`wasm/openldr-v1-import/src/queries.rs:160`). The toolchain reads the same servers with the same driver |
 | The 4 seconds per request comes from data size | REFUTED by the toolchain's own notes, not measured in Zambia | One lab costs about 110 round trips, one after another (`cdr-toolchain/scripts/DIAGNOSTICS.md`, step 1). 110 trips at 35 ms is about 4 seconds |
 | A file must be carried between servers | REFUTED | Access is remote only. CE can read each source over the network and keep the rows locally |
 | The toolchain holds FHIR mapping to reuse | PARTLY | It maps DISA to its own payload, then to FHIR (`cdr-toolchain/packages/ce-fhir/src/fhir-transform.ts`). This is TypeScript and has to be ported |
@@ -257,20 +257,20 @@ generated from the TypeScript code (`wasm/openldr-v1-import/tests/generate-fixtu
 
 ### 9.1 What a plugin declares
 
-`importSource` in the manifest gains two optional fields. A plugin without them behaves as
-today.
+`importSource` in the manifest gains one optional field, `entrypoints.copy`, the name of the
+entrypoint that returns what to copy. A plugin without it behaves as today.
 
-- `sources`. A list of named sources, each with the connector types it reads. Absent means
-  one source. The DISA plugin will name two, its own database and v1.
-- `entrypoints.copy`. The name of the entrypoint that returns what to copy.
+`entrypoints.queries` and `entrypoints.map` become optional when `copy` is present. A plugin
+with `copy` alone can be copied from and cannot run a one-pass import. That is the
+query-only DISA plugin of part 1.
 
 The copy entrypoint takes `{ options }` and returns a list of sets:
 
 ```json
 { "sets": [
-  { "name": "requests", "source": "main",
+  { "name": "requests",
     "keyQuery": { "sql": "SELECT DISTINCT TOP ({{limit}}) [RequestID] FROM ... WHERE [RequestID] > {{after}} ORDER BY [RequestID]" },
-    "detailQueries": [ { "name": "results", "sql": "SELECT ... WHERE [RequestID] IN ({{keys}})" } ] }
+    "detailQueries": [ { "name": "results", "sql": "SELECT [RequestID], ... WHERE [RequestID] IN ({{keys}})" } ] }
 ] }
 ```
 
@@ -278,28 +278,43 @@ A set pages by its own key, with the same `{{after}}`, `{{limit}}` and `{{keys}}
 import uses today. A set with no detail queries copies the key query's own rows, which is
 how a dictionary table is copied whole.
 
+The first column of every detail row is its paging key. CE files each row under that key.
+The v1 plugin's detail queries already start with `[RequestID]`. A detail row whose first
+column is not one of the page's keys is a plugin fault and ends the run as `failed`.
+
+A copy reads one source. The v1 plugin copies v1. The DISA plugin copies DISA and holds no
+v1 SQL. So v1 crosses the link once, and both mode 1 and mode 2 use that one copy. Part 4
+pairs a DISA copy with a v1 copy for the check.
+
 For the v1 plugin there is one set, `requests`, with the key query and the four detail
 queries it already has (`queries.rs:160` to `:187`).
 
 ### 9.2 The copy store
 
-One table in the internal database, in a schema of its own so that a database backup can
-leave it out.
+One table of its own in the internal database, `import_copy_rows`. It holds nothing else,
+so a database backup can leave its rows out by naming the table.
 
 | Column | Meaning |
 |---|---|
-| `copy_id` | The plugin and the connectors, one value per copy |
+| `copy_id` | The plugin and the connector, one value per copy |
 | `set_name`, `detail_name` | Which set and which query the row came from |
 | `key` | The paging key the row belongs to |
 | `seq` | The row's position within its key, in the order the query returned it |
 | `row` | The row as JSON, in the same form a plugin receives today |
-| `marker` | A change marker, when the plugin supplies one |
 | `read_at` | When CE read it |
+
+The top-up work in 9.4 adds a change marker column when its method is settled.
 
 Rules:
 
-- One copy per plugin and set of connectors. Its options are fixed at the first start. A
-  different date range or database means a new copy.
+- One copy per plugin and connector. To copy two databases, make two connectors.
+- CE remembers the SQL of each set. When a later start brings different SQL for a set,
+  because an option changed or the plugin was upgraded, CE refuses and names the set. The
+  person must say "read it again". CE then empties that set and reads it from the start.
+  A typed-wrong date must not wipe weeks of copying without a question.
+- An option that does not change the SQL, such as the time zone, changes nothing in the copy.
+- The query-only DISA plugin of part 1 must read every column parts 2 and 3 will need.
+  A column added later means reading that set again over the link.
 - A page is written by replacing every row for its keys. Reading a page twice leaves one
   copy of it.
 - The rows are written before the paging position is saved. A crash between the two means
@@ -307,8 +322,9 @@ Rules:
 - The copy reports rows and bytes per set. That is how a country learns its real link
   speed and how much disk it needs.
 
-My call: one database partition per copy, so deleting a copy is a drop and not a
-row-by-row delete. The builder may choose otherwise if delete stays fast on a full copy.
+My call: a plain table, and a delete that the server works through in batches. A partition
+per copy would make a delete instant. But every package's tests build the schema on pg-mem,
+no migration here uses a partition, and I have not checked that pg-mem can run one.
 
 ### 9.3 The copy run
 
@@ -322,19 +338,29 @@ the same audit entries, plus the points below.
 - **It carries on after a restart.** When the server starts, it picks up every copy run
   that was running. No person presses Resume. The audit log records this with the actor
   `system`.
+- **It does not touch runs from before this change.** A one-pass run recorded by an older
+  version still says `running` when nobody drives it. The server never picks those up.
+  Only a run that records the server as its starter is picked up.
 - **Taking over is decided by a heartbeat, never by a process id.** The driver writes the
-  run at least every 30 seconds, even while waiting. A run whose last write is older than
-  2 minutes has no driver and may be taken.
+  run every 30 seconds on a timer of its own, even in the middle of a page or a wait. A run
+  whose last write is older than 2 minutes has no driver and may be taken. Today a run is
+  written only after each page (`import-run.ts:323`), and one page can take longer than
+  that, so the timer is required.
 - **It retries without a person.** When the source cannot be reached, the run shows
   `waiting` with the last error and tries again. The wait starts at 5 seconds and doubles
   to a ceiling of 5 minutes. It retries until a person stops it.
 - **It tells a cut link from a broken query.** A lost connection or a timeout is retried.
   An error the SQL Server itself returned, such as a missing table or a refused login, ends
   the run as `failed`, because retrying cannot fix it.
-- **It shrinks a page that is too slow.** A page that hits the 30-second limit is halved
-  and read again. Pages grow back after pages succeed. A single key that cannot be read
-  within the limit at a page of one is recorded as not copied, with the code
-  `COPY_TIMEOUT`, and the run moves on.
+- **It shrinks a page that is too slow, and only then.** A cut link often shows up as a
+  timeout. So after a timeout CE first sends the source a trivial query with a 5-second
+  limit. No answer means the link is down, and the run waits as above without changing the
+  page size. An answer means the page was too big, and it is halved and read again. Pages
+  grow back after pages succeed.
+- **A key it cannot read is kept on a list and tried again.** A single key that still times
+  out at a page of one is recorded as skipped, with the code `SOURCE_TIMEOUT`, and the run
+  moves on. Skipped keys are read again at the end of the pass and at every later start.
+  A copy with a skipped key left is shown as complete with a warning, never as clean.
 - **It copies set by set.** Each set keeps its own position, so a restart continues in the
   middle of a set.
 
@@ -374,8 +400,11 @@ waits for the two facts.
   exactly that.
 - **Activity.** A copy run is listed with its state and counts.
 - **CLI.** `openldr import copy start`, `status`, `stop` and `delete`, beside the commands
-  that exist. `delete` refuses without `--force`. The route and the CLI call the same code
-  in `@openldr/bootstrap`.
+  that exist. `delete` refuses without `--force`. `start` records the request and returns,
+  because the server does the driving. `openldr import start` keeps working as it does
+  today. The plugin page's broker operations and the CLI call the same code in
+  `@openldr/bootstrap`. There is no Fastify route for imports
+  (`packages/bootstrap/src/plugin-broker.ts:363`).
 - **Docs.** The v1 import guide gains the copy steps, in en, fr and pt, in the in-app docs
   and the web docs.
 - **Phone.** The page is checked at 375 by 812.
@@ -387,7 +416,7 @@ current, and nothing reads it yet. Mode 1 keeps saving through the one-pass impo
 
 ## 10. What is left to the builder
 
-- The table layout beyond the columns in 9.2, the indexes, and the partitioning.
+- The table layout beyond the columns in 9.2, and the indexes.
 - How the server finds runs that need driving, and how often it looks.
 - Which driver errors count as a lost connection. `classifyConnectError`
   (`packages/bootstrap/src/connector-diagnose.ts:71`) already sorts some.
@@ -409,6 +438,14 @@ For the operator:
 3. **Mozambique's mode.** Mozambique has GXAlert and SISLab records in v1 that never came
    from DISA. Mode 2 would flag every one of them. Does Mozambique run mode 2, mode 1, or
    mode 2 with a later mode 1 pass over the flagged records?
+4. **Where the copy screens live.** This design puts them on each importer plugin's own
+   page, as import controls are today. The cost: the DISA plugin, in its own repository,
+   has to build the same copy screen and the same confirm step again. The other way is one
+   Studio screen that lists every copy, built once with the Studio components, with the
+   plugin declaring its options in the manifest. That is more work in CE core now, and the
+   DISA plugin then ships no screen at all. Part 4's held-back view will be a Studio screen
+   either way. Tasks 1 to 7 of the part 1 plan are the same for both. Tasks 8, 10 and 11
+   change.
 
 Unknown, and settled only by running part 1 at a site:
 
