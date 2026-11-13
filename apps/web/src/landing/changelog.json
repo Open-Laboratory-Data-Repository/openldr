@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "1adae9f3",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Only the server starts sync at boot, and a CLI process starts it on first use"
+        },
+        {
           "hash": "20c40351",
           "type": "fix",
           "scope": "cli-run",
