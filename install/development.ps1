@@ -65,12 +65,13 @@ function Get-PortState([int]$port) {
   return 'free'
 }
 
-# Stops the script unless the port is free. $next says what has happened so far and what to do next.
-function Assert-PortFree([string]$next) {
+# Stops the script unless the port is free. $done says what has happened so far. $rerun says how to
+# run the script again, and starts with a lower-case "run".
+function Assert-PortFree([string]$done, [string]$rerun) {
   $state = Get-PortState $apiPort
   if ($state -eq 'free') { return }
-  if ($state -eq 'listening') { Die "Something is already listening on port $apiPort. Stop that program. $next" }
-  Die "The script could not check whether port $apiPort is free. $next"
+  if ($state -eq 'listening') { Die "Something is already listening on port $apiPort. Stop that program. $done Once the port is free, $rerun" }
+  Die "The script could not check whether port $apiPort is free. $done The check binds the port for a moment with .NET. Fix what stops that, then $rerun"
 }
 
 # True when this run's API has logged that it listens on $apiUrl. A read that fails counts as no.
@@ -95,7 +96,7 @@ if ($nodeMajor -lt 20) { Die "Node.js >=20 required (found $nodeVer)." }
 # re-run after stopping it behaves as a first run. It checks before it knows whether it will seed,
 # so it can refuse a run that would have loaded nothing; the message says so.
 if ($Seed) {
-  Assert-PortFree "With -Seed, the script would start its own API on port $apiPort and load the sample data through it. It does that only on a fresh setup or with -ResetDb, and not with -NoServices, but it checks the port first in every case. Nothing has been installed, written, reset or started. Once the port is free, run this script again, or seed by hand in the order given in e2e/README.md."
+  Assert-PortFree "With -Seed, the script would start its own API on port $apiPort and load the sample data through it. It does that only on a fresh setup or with -ResetDb, and not with -NoServices, but it checks the port first in every case. Nothing has been installed, written, reset or started." "run this script again, or seed by hand in the order given in e2e/README.md."
 }
 if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
   if (Get-Command corepack -ErrorAction SilentlyContinue) { Write-Host "-> Enabling pnpm via corepack"; corepack enable *> $null }
@@ -153,21 +154,36 @@ if ($NoServices) {
 
   # 6. DB init - only on a fresh setup so a re-run never wipes data; -ResetDb forces it.
   if ($freshEnv -or $ResetDb) {
+    if ($Seed) {
+      # How to run again after a stop in this step. This run may have written .env just now; a
+      # plain re-run would then skip the reset.
+      if ($freshEnv) {
+        $rerunNote = " This run wrote .env, so a plain re-run would skip the reset."
+        $rerun = "run this script again with -ResetDb -Seed, and the same -Dir and -Branch if you gave them."
+      } else {
+        $rerunNote = ""
+        $rerun = "run this script again with the same options."
+      }
+      # The two builds of e2e:seed:reset (see the second reset below). They need no database and
+      # take minutes, so they run here, before any port check, and not between a check and a reset.
+      Write-Host "-> Building the WHONET sample (pnpm make:whonet-sample)"
+      pnpm make:whonet-sample
+      if ($LASTEXITCODE -ne 0) { Die "pnpm make:whonet-sample failed. Nothing has been reset or loaded.$rerunNote Fix the build, then $rerun" }
+      Write-Host "-> Building the plugins (pnpm build:plugins)"
+      pnpm build:plugins
+      if ($LASTEXITCODE -ne 0) { Die "pnpm build:plugins failed. Nothing has been reset or loaded.$rerunNote Fix the build, then $rerun" }
+    }
     Write-Host "-> Waiting for Postgres to be ready..."
     for ($i = 0; $i -lt 30; $i++) {
       docker compose exec -T postgres pg_isready -U openldr *> $null
       if ($LASTEXITCODE -eq 0) { break }
       Start-Sleep 2
     }
-    # With -Seed, the port is checked again right before the first reset. pnpm install, docker and
-    # the wait above take minutes, and a reset under an API this run did not start is the harm.
-    # This run may have written .env just now; a plain re-run would then skip the reset.
+    # With -Seed, the port is checked again right before the first reset. pnpm install, docker, the
+    # builds and the wait above take minutes, and a reset under an API this run did not start is the
+    # harm.
     if ($Seed) {
-      if ($freshEnv) {
-        Assert-PortFree "Nothing has been reset or loaded. This run wrote .env, so a plain re-run would skip the reset. Once the port is free, run this script again with -ResetDb -Seed, and the same -Dir and -Branch if you gave them."
-      } else {
-        Assert-PortFree "Nothing has been reset or loaded. Once the port is free, run this script again with the same options."
-      }
+      Assert-PortFree "Nothing has been reset or loaded.$rerunNote" $rerun
     }
     Write-Host "-> Resetting the database (pnpm openldr db reset)"
     pnpm openldr db reset
@@ -178,14 +194,19 @@ if ($NoServices) {
     if ($Seed) {
       $keepApi = $false
       try {
-        # 1. The reset half needs no server.
-        Write-Host "-> Preparing WHONET sample data (pnpm e2e:seed:reset)"
-        pnpm e2e:seed:reset
-        if ($LASTEXITCODE -ne 0) { Die "seed reset failed" }
-        # 2. Then an API on the fresh schema, on the script's own port. The steps above take
-        #    minutes, so the port is checked again first. One node process with no watcher, so its
-        #    own handle stops all of it. PORT is set for the child only, then put back.
-        Assert-PortFree "The database has been reset and no sample data was loaded. Once the port is free, run this script again with -ResetDb -Seed, and the same -Dir and -Branch if you gave them."
+        # 1. The second reset, which wipes the starter seed, as e2e:seed:reset always has. The two
+        #    builds above and this reset are the parts of e2e:seed:reset in package.json, run one
+        #    by one so a port check sits right before each reset. A change to e2e:seed:reset must
+        #    be repeated here.
+        Assert-PortFree "The database has been reset once and seeded with the starter set, and no sample data was loaded.$rerunNote" $rerun
+        Write-Host "-> Resetting the database for the sample data (pnpm openldr db reset)"
+        pnpm openldr db reset
+        if ($LASTEXITCODE -ne 0) { Die "db reset failed" }
+        # 2. Then an API on the fresh schema, on the script's own port. The port is checked again
+        #    right before the start. One node process with no watcher, so its own handle stops all
+        #    of it. PORT is set for the child only, then put back.
+        Assert-PortFree "The database has been reset and no sample data was loaded." "run this script again with -ResetDb -Seed, and the same -Dir and -Branch if you gave them."
+        $notLoaded = "The database has been reset and no sample data was loaded. Once the cause is fixed, run this script again with -ResetDb -Seed, and the same -Dir and -Branch if you gave them."
         $apiLog = Join-Path ([System.IO.Path]::GetTempPath()) 'openldr-dev-api.log'
         Write-Host "-> Starting the API for the sample load (node dev.mjs in apps/server on port $apiPort, log in $apiLog)"
         $oldPort = $env:PORT
@@ -204,21 +225,21 @@ if ($NoServices) {
         # line narrows the window and may not close it. Whether Select-String can read the log
         # while Start-Process holds it open is unproven too; a failed read counts as no line.
         for ($i = 0; ; $i++) {
-          if (-not (Test-OwnApiAlive)) { Die "The API stopped while starting (see $apiLog)." }
+          if (-not (Test-OwnApiAlive)) { Die "The API stopped while starting (see $apiLog and $apiLog.err). $notLoaded" }
           if (& $apiUp) {
             # The probe can answer a moment before the line is written, so look a few times.
             for ($n = 1; -not (Test-OwnApiListening); $n++) {
-              if (-not (Test-OwnApiAlive)) { Die "The API stopped while starting (see $apiLog)." }
+              if (-not (Test-OwnApiAlive)) { Die "The API stopped while starting (see $apiLog and $apiLog.err). $notLoaded" }
               if ($n -ge 5) {
                 if (-not $api.HasExited) { $api.Kill() }
                 Die "The script could not confirm that its own API is the one answering on port $apiPort, so it loaded nothing and stopped that API. The check looks in $apiLog for the line Server listening at $apiUrl. It needs the API's log at info level on standard output: LOG_LEVEL set to info, debug or trace, LOG_FILE unset, and LISTEN_HOST unset, 127.0.0.1 or 0.0.0.0, in .env and in your session. The database has been reset and no sample data was loaded. Run this script again with -ResetDb -Seed once that holds."
               }
               Start-Sleep 1
             }
-            if (-not (Test-OwnApiAlive)) { Die "The API stopped while starting (see $apiLog)." }
+            if (-not (Test-OwnApiAlive)) { Die "The API stopped while starting (see $apiLog and $apiLog.err). $notLoaded" }
             break
           }
-          if ($i -ge 60) { Die "The API did not answer at $apiUrl (see $apiLog)." }
+          if ($i -ge 60) { Die "The API did not answer at $apiUrl (see $apiLog and $apiLog.err). $notLoaded" }
           Start-Sleep 2
         }
         # 3. The load half, through that API and no other.
