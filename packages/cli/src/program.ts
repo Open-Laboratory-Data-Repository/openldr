@@ -17,7 +17,7 @@ import { runAuditList } from './audit';
 import { runWorkflowReceiptsList, runWorkflowReceiptShow } from './workflows';
 import {
   runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus, runUserPreferencesShow, runUserPreferencesSet,
-  runUserResetPassword, runUserEndSessions,
+  runUserResetPassword, runUserEndSessions, runUserKeyList, runUserKeyCreate, runUserKeyRevoke,
 } from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
@@ -1266,9 +1266,28 @@ export function buildProgram(): Command {
     .option('--name <n>', 'display name')
     .option('--email <e>', 'email')
     .option('--role <r...>', 'role (repeatable)')
+    .option('--no-password', 'make the account with no password, so it cannot sign in to Studio (for an account that uses access keys; local sign-in only)')
     .option('--json', 'emit JSON', false)
-    .action(async (opts: { username: string; name?: string; email?: string; role?: string[]; json: boolean }) => {
+    .action(async (opts: { username: string; name?: string; email?: string; role?: string[]; password: boolean; json: boolean }) => {
       try { process.exitCode = await runUserCreate(opts); } catch (err) { process.stderr.write(`user create failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  const userKey = user.command('key').description("A user's access keys, which let a program act as that user");
+  userKey.command('list <username>').description('List the user\'s access keys. A key itself is never shown again.')
+    .option('--json', 'emit JSON', false)
+    .action(async (username: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runUserKeyList(username, opts); } catch (err) { process.stderr.write(`user key list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  userKey.command('create <username>').description('Make an access key and print it once, alone on standard output')
+    .requiredOption('--name <name>', 'a name for the key, such as the program that uses it')
+    .option('--expires <date>', 'expiry: an ISO date-time ending in Z or an offset, or a bare YYYY-MM-DD, which means the end of that day in UTC')
+    .option('--json', 'emit { key, record } as JSON', false)
+    .action(async (username: string, opts: { name: string; expires?: string; json: boolean }) => {
+      try { process.exitCode = await runUserKeyCreate(username, opts); } catch (err) { process.stderr.write(`user key create failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  userKey.command('revoke <username> <keyId>').description('Revoke an access key (refuses without --force)')
+    .option('--force', 'confirm any program using the key loses access', false)
+    .action(async (username: string, keyId: string, opts: { force: boolean }) => {
+      try { process.exitCode = await runUserKeyRevoke(username, keyId, opts); } catch (err) { process.stderr.write(`user key revoke failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
   user.command('reset-password <username>')
     .description('Set a temporary password and end the user\'s sessions (local sign-in only; refuses without --force)')

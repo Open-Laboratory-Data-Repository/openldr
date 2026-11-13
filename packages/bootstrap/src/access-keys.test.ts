@@ -134,6 +134,44 @@ describe('access key actions (pg-mem)', () => {
     expect(logged).not.toContain(key);
     expect(logged).not.toContain(hashAccessKey(key));
     expect(logged).not.toContain(record.prefix);
+    // JSON.stringify writes an Error as {}, so look inside the logged error too.
+    const loggedErr = (warn.mock.calls[0]?.[0] as { err?: unknown })?.err;
+    expect(loggedErr).toBeInstanceOf(Error);
+    const errText = `${(loggedErr as Error).message}\n${(loggedErr as Error).stack ?? ''}`;
+    expect(errText).not.toContain(key);
+    expect(errText).not.toContain(hashAccessKey(key));
+    expect(errText).not.toContain(record.prefix);
+  });
+
+  it('takes an expiry only as a full ISO date-time with Z or an offset', async () => {
+    const year = new Date().getUTCFullYear() + 5;
+    for (const expiresAt of [
+      '99999',
+      `${year}-01-01`,
+      `${year}-01-01T00:00`,
+      `${year}-01-01T00:00:00`,
+      `${year}-02-31T00:00:00Z`,
+      `${year}-01-01T24:00:00Z`,
+      `${year}-01-01 00:00:00Z`,
+    ]) {
+      const err = await createAccessKey(ctx, actor, { userId, name: 'assistant', expiresAt }).catch((e: unknown) => e);
+      expect(err, expiresAt).toBeInstanceOf(AccessKeyInputError);
+      expect((err as AccessKeyInputError).reason, expiresAt).toBe('bad_expiry');
+    }
+    expect(await allRowsOf('access_keys')).toEqual([]);
+    const { record } = await createAccessKey(ctx, actor, { userId, name: 'offset', expiresAt: `${year}-01-01T00:00:00+02:00` });
+    expect(record.expiresAt).toBe(`${year - 1}-12-31T22:00:00.000Z`);
+    const { record: utc } = await createAccessKey(ctx, actor, { userId, name: 'utc', expiresAt: `${year}-06-30T23:59:59.999Z` });
+    expect(utc.expiresAt).toBe(`${year}-06-30T23:59:59.999Z`);
+  });
+
+  it('trusts the conditional revoke, not the earlier read', async () => {
+    const { record } = await createAccessKey(ctx, actor, { userId, name: 'assistant' });
+    events.length = 0;
+    vi.spyOn(ctx.accessKeys, 'revoke').mockResolvedValue(false);
+    expect((await listAccessKeys(ctx, userId))[0]?.revokedAt).toBeNull();
+    await expect(revokeAccessKey(ctx, actor, { userId, keyId: record.id })).rejects.toBeInstanceOf(UnknownAccessKeyError);
+    expect(events).toEqual([]);
   });
 
   it('refuses an unknown user, an empty name and a past expiry', async () => {

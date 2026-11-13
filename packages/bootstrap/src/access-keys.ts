@@ -50,10 +50,24 @@ export function looksLikeAccessKey(value: string): boolean {
   return value.startsWith(ACCESS_KEY_PREFIX);
 }
 
-/** The ISO expiry to store, or null for none. Refuses a value that does not parse or is not after now. */
+// A full ISO 8601 date-time with seconds and a zone: Z or an explicit offset. Date.parse alone
+// takes "99999" as a year and reads a value with no zone in the server's own time zone.
+const EXPIRY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** True when the written date and time exist, so "02-31" or "24:00" is not rolled over. */
+function isRealDateTime(match: RegExpExecArray): boolean {
+  const [y, mo, d, h, mi, s] = match.slice(1, 7).map(Number);
+  const t = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d
+    && t.getUTCHours() === h && t.getUTCMinutes() === mi && t.getUTCSeconds() === s;
+}
+
+/** The ISO expiry to store, or null for none. Refuses a value that is not a full ISO date-time
+ *  with a zone, or is not after now. */
 function checkedExpiry(expiresAt: string | null | undefined, now: Date): string | null {
   if (expiresAt === undefined || expiresAt === null) return null;
-  const at = Date.parse(expiresAt);
+  const match = EXPIRY_PATTERN.exec(expiresAt);
+  const at = match && isRealDateTime(match) ? Date.parse(expiresAt) : Number.NaN;
   if (Number.isNaN(at)) throw new AccessKeyInputError('bad_expiry', 'expiry is not a date');
   if (at <= now.getTime()) throw new AccessKeyInputError('past_expiry', 'expiry must be in the future');
   return new Date(at).toISOString();
