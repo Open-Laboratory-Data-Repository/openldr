@@ -220,6 +220,12 @@ async function layElectron(system: DesktopSystem, staging: string): Promise<void
     // Unpacked where it stays, so the links the macOS zip is full of are never copied.
     run('unzip', ['-q', zip, '-d', staging]);
     renameSync(join(staging, 'Electron.app'), join(staging, layout.root));
+    // Electron's licence files sit beside Electron.app in the zip. Only the app goes into the
+    // archive, so they move inside it.
+    for (const file of ['LICENSE', 'LICENSES.chromium.html']) {
+      if (!existsSync(join(staging, file))) fail(`The macOS Electron zip has no ${file}.`);
+      renameSync(join(staging, file), join(staging, layout.root, 'Contents', 'Resources', file));
+    }
     const plistPath = join(staging, layout.root, 'Contents', 'Info.plist');
     const raw = readFileSync(plistPath);
     if (raw.subarray(0, 8).toString('latin1') === 'bplist00') {

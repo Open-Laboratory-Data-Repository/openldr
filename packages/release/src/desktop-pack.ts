@@ -107,6 +107,9 @@ export function checkArchiveEntries(system: DesktopSystem, entries: readonly str
     `${pgBin}/initdb${exe}`,
   ];
   if (system === 'linux-x64') required.push(`${l.root}/chrome-sandbox`);
+  // Electron's licence files. The macOS zip has them beside Electron.app; the pack moves them into the app.
+  const licences = system === 'darwin-arm64' ? `${l.root}/Contents/Resources` : l.root;
+  required.push(`${licences}/LICENSE`, `${licences}/LICENSES.chromium.html`);
   for (const r of required) {
     if (!present.has(r)) problems.push(`Missing: ${r}`);
   }
@@ -189,6 +192,9 @@ function compareVersions(x: string, y: string): number {
   return 0;
 }
 
+/** The deepest nesting placePackages allows. Far past what a real closure needs. */
+const MAX_NESTING = 20;
+
 /** Places each package of a closure at the top level or nested under a dependent, so Node resolves every dependency to the version it needs. */
 export function placePackages(closure: readonly ClosurePackage[], roots: readonly PackageId[]): PlacedPackage[] {
   const key = (name: string, version: string) => `${name}@${version}`;
@@ -245,6 +251,10 @@ export function placePackages(closure: readonly ClosurePackage[], roots: readonl
         found = placed.get([...segments.slice(0, i), d].join('/node_modules/'));
       }
       if (found !== undefined && found.version === v) continue;
+      // A cycle across versions nests one level deeper on each pass and would never end.
+      if (segments.length >= MAX_NESTING) {
+        throw new Error(`${d}@${v} would be nested more than ${MAX_NESTING} deep, under ${p.name}@${p.version} at ${p.path}. The closure has a cycle across versions.`);
+      }
       const nested = { name: d, version: v, path: `${p.path}/node_modules/${d}` };
       placed.set(nested.path, nested);
       queue.push(nested);

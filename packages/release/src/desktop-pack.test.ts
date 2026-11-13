@@ -113,6 +113,8 @@ function requiredEntries(system: DesktopSystem): string[] {
     `${pg}/initdb${exe}`,
   ];
   if (system === 'linux-x64') list.push('openldr-desktop/chrome-sandbox');
+  const licences = system === 'darwin-arm64' ? 'OpenLDR.app/Contents/Resources' : l.root;
+  list.push(`${licences}/LICENSE`, `${licences}/LICENSES.chromium.html`);
   return list;
 }
 
@@ -189,6 +191,23 @@ describe('checkArchiveEntries', () => {
     const problems = checkArchiveEntries('darwin-arm64', [...fullList('darwin-arm64'), entry]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain(entry);
+  });
+
+  // Electron's licence needs its notice in every copy, and these archives are uploaded for anyone.
+  // The macOS zip keeps both files beside Electron.app, so the pack moves them into the app.
+  it('reports each missing licence file, on every system', () => {
+    const where = { 'linux-x64': 'openldr-desktop', 'win32-x64': 'OpenLDR', 'darwin-arm64': 'OpenLDR.app/Contents/Resources' } as const;
+    for (const s of DESKTOP_SYSTEMS) {
+      for (const file of ['LICENSE', 'LICENSES.chromium.html']) {
+        const entry = `${where[s]}/${file}`;
+        const problems = checkArchiveEntries(
+          s,
+          fullList(s).filter((e) => e !== entry),
+        );
+        expect(problems, `${s}: ${entry}`).toHaveLength(1);
+        expect(problems[0]).toContain(entry);
+      }
+    }
   });
 
   // Electron on Linux needs chrome-sandbox beside the binary when user namespaces are refused.
@@ -328,6 +347,29 @@ describe('placePackages', () => {
     );
     expect(placed).toContainEqual({ name: 'pako', version: '1.0.11', path: 'pako' });
     expect(placed).toContainEqual({ name: 'pako', version: '0.2.9', path: 'a/node_modules/pako' });
+  });
+
+  // Versions compare as numbers, not as text: as text, "1.0.11" sorts before "1.0.9".
+  it('with equal dependents, compares versions as numbers', () => {
+    const placed = placePackages(
+      [pkg('a', '1.0.0', { pako: '1.0.9' }), pkg('c', '1.0.0', { pako: '1.0.11' }), pkg('pako', '1.0.9'), pkg('pako', '1.0.11')],
+      [
+        { name: 'a', version: '1.0.0' },
+        { name: 'c', version: '1.0.0' },
+      ],
+    );
+    expect(placed).toContainEqual({ name: 'pako', version: '1.0.11', path: 'pako' });
+    expect(placed).toContainEqual({ name: 'pako', version: '1.0.9', path: 'a/node_modules/pako' });
+  });
+
+  // Each pass of this cycle nests one level deeper, so without a limit the pack never ends.
+  it('refuses a cycle across versions that would nest without end', () => {
+    expect(() =>
+      placePackages(
+        [pkg('a', '1.0.0', { b: '2.0.0' }), pkg('b', '2.0.0', { a: '2.0.0' }), pkg('a', '2.0.0', { b: '1.0.0' }), pkg('b', '1.0.0', { a: '1.0.0' })],
+        [{ name: 'a', version: '1.0.0' }],
+      ),
+    ).toThrow(/nested more than 20 deep.*[ab]@[12]\.0\.0/);
   });
 
   // A closure that names a dependency it does not hold was gathered wrongly. Copying it anyway
