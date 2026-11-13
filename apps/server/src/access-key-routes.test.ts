@@ -278,6 +278,68 @@ describe('/api/users/:id/keys with identity admin', () => {
     expect(res.json()).toEqual({ error: 'another change to this account is in progress; try again' });
   });
 
+  // Runs `before` as the route's write begins: after every lookup the route makes, before the
+  // statement that links the row. pg-mem runs one statement at a time, so this proves what the
+  // statement does when the row changed in that gap. It does not run two connections at once.
+  function onLinkWrite(f: Fixture, before: () => Promise<void>) {
+    vi.spyOn(f.users, 'withSubjectLock').mockImplementation(async (_subject, work) => work({
+      ...f.users,
+      setSubjectStatus: async (...args: Parameters<typeof f.users.setSubjectStatus>) => { await before(); return f.users.setSubjectStatus(...args); },
+    }));
+  }
+
+  it('does not undo a disable that lands between the lookups and the link write', async () => {
+    const f = await setup({ identityAdmin: true });
+    await f.db.insertInto('users').values({ id: 'ai-local', subject: null, username: 'ai', status: 'active', roles: JSON.stringify([]) as never }).execute();
+    // As `openldr user disable ai-local` would, with no lock, because the row has no subject.
+    onLinkWrite(f, () => f.users.setStatus('ai-local', 'disabled'));
+    const made = await f.app.inject({ method: 'POST', url: keysUrl('ai-sub'), headers: bearer(TOKENS.admin), payload: { name: 'x' } });
+    expect(made.statusCode).toBe(201);
+    expect(await f.users.getBySubject('ai-sub')).toMatchObject({ id: 'ai-local', status: 'disabled' });
+    vi.restoreAllMocks();
+    expect((await f.app.inject({ method: 'GET', url: '/api/me', headers: bearer(made.json().key) })).statusCode).toBe(403);
+  });
+
+  // The store throws this when a first sign-in links the row between its read by username and its
+  // update (packages/users/src/store.ts). pg-mem cannot reach inside that gap, so the store's
+  // answer is stood in for here, with the store's own name and text.
+  it('answers its own 409 when a sign-in links the row during the create', async () => {
+    const f = await setup({ identityAdmin: true });
+    vi.spyOn(f.users, 'withSubjectLock').mockImplementation(async (_subject, work) => work({
+      ...f.users,
+      setSubjectStatus: async () => { throw Object.assign(new Error('username subject changed during status update'), { name: 'SubjectLinkConflictError' }); },
+    }));
+    const res = await f.app.inject({ method: 'POST', url: keysUrl('ai-sub'), headers: bearer(TOKENS.admin), payload: { name: 'x' } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: 'another change to this account is in progress; try again' });
+  });
+
+  it('refuses a bad name or a past expiry before it makes a local row', async () => {
+    const f = await setup({ identityAdmin: true });
+    for (const payload of [{ name: '  ' }, { name: 'x', expiresAt: new Date(Date.now() - 1000).toISOString() }]) {
+      const res = await f.app.inject({ method: 'POST', url: keysUrl('ai-sub'), headers: bearer(TOKENS.admin), payload });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(await f.users.getBySubject('ai-sub')).toBeUndefined();
+  });
+
+  it('audits linking an active local row as disabled because the directory account is disabled, and refuses its key', async () => {
+    const f = await setup({ identityAdmin: true });
+    await f.db.insertInto('users').values({ id: 'off-local', subject: null, username: 'off', status: 'active', roles: JSON.stringify([]) as never }).execute();
+    const made = await f.app.inject({ method: 'POST', url: keysUrl('off-sub'), headers: bearer(TOKENS.admin), payload: { name: 'x' } });
+    expect(made.statusCode).toBe(201);
+    expect(await f.users.getBySubject('off-sub')).toMatchObject({ id: 'off-local', status: 'disabled' });
+    const rows = await f.audit.list({ action: 'user.status' });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actorName: 'admin', entityType: 'user', entityId: 'off-sub',
+      before: { id: 'off-local', subject: null, status: 'active' },
+      after: { status: 'disabled', enabled: false },
+      metadata: { enabled: false, backend: 'provider', localId: 'off-local', reason: 'key-link-found-directory-account-disabled' },
+    });
+    expect((await f.app.inject({ method: 'GET', url: '/api/me', headers: bearer(made.json().key) })).statusCode).toBe(403);
+  });
+
   // Local sign-in is identity admin too (packages/config/src/auth.ts). Its directory id is the
   // local id, and a local row's subject is its id (packages/db/src/local-auth-store.ts).
   it('finds a local sign-in account by its id, which is also its subject', async () => {

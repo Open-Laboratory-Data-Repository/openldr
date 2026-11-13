@@ -73,16 +73,26 @@ function checkedExpiry(expiresAt: string | null | undefined, now: Date): string 
   return new Date(at).toISOString();
 }
 
+/** The name and expiry a key would be stored with. Throws AccessKeyInputError for a name that is
+ *  empty or too long, and for an expiry that is not a date or is not after `now`. createAccessKey
+ *  calls it; a caller that writes something else first can call it before that write. */
+export function checkAccessKeyInput(
+  input: { name: string; expiresAt?: string | null },
+  now: Date,
+): { name: string; expiresAt: string | null } {
+  const name = input.name.trim();
+  if (name === '') throw new AccessKeyInputError('empty_name', 'name is empty');
+  if (name.length > NAME_MAX_LENGTH) throw new AccessKeyInputError('name_too_long', `name is over ${NAME_MAX_LENGTH} characters`);
+  return { name, expiresAt: checkedExpiry(input.expiresAt, now) };
+}
+
 /** The returned key is the only copy. It is never stored or logged. */
 export async function createAccessKey(
   ctx: KeyContext,
   actor: AuditActor,
   input: { userId: string; name: string; expiresAt?: string | null },
 ): Promise<{ record: AccessKeyRecord; key: string }> {
-  const name = input.name.trim();
-  if (name === '') throw new AccessKeyInputError('empty_name', 'name is empty');
-  if (name.length > NAME_MAX_LENGTH) throw new AccessKeyInputError('name_too_long', `name is over ${NAME_MAX_LENGTH} characters`);
-  const expiresAt = checkedExpiry(input.expiresAt, new Date());
+  const { name, expiresAt } = checkAccessKeyInput(input, new Date());
   if (!(await ctx.users.get(input.userId))) throw new AccessKeyInputError('unknown_user', 'no user has that id');
 
   const key = generateAccessKey();

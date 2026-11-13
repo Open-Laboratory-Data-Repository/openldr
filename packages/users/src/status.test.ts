@@ -33,6 +33,35 @@ describe('subject status persistence', () => {
     } finally { await db.destroy(); }
   });
 
+  // The key routes pass `neverEnable`: the write itself keeps a disabled row disabled, so a disable
+  // that lands after the caller last read the row is not undone. The status route does not pass it.
+  it('with neverEnable, links a disabled row without enabling it, and the default still enables', async () => {
+    const { db, users } = await setup();
+    try {
+      const row = await users.create({ username: 'ada' });
+      await users.setStatus(row.id, 'disabled');
+      const linked = await users.setSubjectStatus({ subject: 'provider-1', username: 'ada' }, 'active', { neverEnable: true });
+      expect(linked).toMatchObject({ id: row.id, subject: 'provider-1', status: 'disabled' });
+
+      const other = await users.create({ username: 'bob' });
+      expect(await users.setSubjectStatus({ subject: 'provider-2', username: 'bob' }, 'active', { neverEnable: true })).toMatchObject({ id: other.id, status: 'active' });
+      await users.setStatus(other.id, 'active');
+      const third = await users.create({ username: 'cy' });
+      await users.setStatus(third.id, 'disabled');
+      expect(await users.setSubjectStatus({ subject: 'provider-3', username: 'cy' }, 'active')).toMatchObject({ id: third.id, status: 'active' });
+    } finally { await db.destroy(); }
+  });
+
+  it('with neverEnable, the upsert on an existing subject keeps a disabled row disabled', async () => {
+    const { db, users } = await setup();
+    try {
+      await users.setSubjectStatus({ subject: 'provider-1', username: 'ada' }, 'disabled');
+      expect(await users.setSubjectStatus({ subject: 'provider-1', username: 'ada' }, 'active', { neverEnable: true })).toMatchObject({ status: 'disabled' });
+      expect(await users.setSubjectStatus({ subject: 'provider-1', username: 'ada' }, 'active')).toMatchObject({ status: 'active' });
+      expect(await users.setSubjectStatus({ subject: 'provider-1', username: 'ada' }, 'disabled', { neverEnable: true })).toMatchObject({ status: 'disabled' });
+    } finally { await db.destroy(); }
+  });
+
   it('status changes for a provider username collision leave the existing account untouched', async () => {
     const { db, users } = await setup();
     try {

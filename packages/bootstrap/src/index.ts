@@ -2144,7 +2144,7 @@ export {
 } from './local-accounts';
 export {
   ACCESS_KEY_PREFIX, generateAccessKey, hashAccessKey, looksLikeAccessKey,
-  createAccessKey, listAccessKeys, revokeAccessKey, resolveAccessKey,
+  createAccessKey, listAccessKeys, revokeAccessKey, resolveAccessKey, checkAccessKeyInput,
   UnknownAccessKeyError, AccessKeyInputError, type KeyContext,
 } from './access-keys';
 

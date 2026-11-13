@@ -1,15 +1,16 @@
 // Routes that list, make and revoke a user's access keys. All three need users.manage. The logic
 // is in @openldr/bootstrap, which the CLI calls too. The create answer is the only response that
 // ever holds a key.
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
-  createAccessKey, listAccessKeys, revokeAccessKey, AccessKeyInputError, UnknownAccessKeyError, type AppContext,
+  createAccessKey, listAccessKeys, revokeAccessKey, checkAccessKeyInput, AccessKeyInputError, UnknownAccessKeyError,
+  type AppContext,
 } from '@openldr/bootstrap';
 import { resolveAuthCapabilities } from '@openldr/config';
 import { redact } from '@openldr/core';
 import { requireCapability } from './rbac';
-import { actorFromRequest } from './audit-helper';
+import { actorFromRequest, recordAudit, type AuditDetails } from './audit-helper';
 import { isNotConfigured } from './users-routes';
 
 const MANAGE = { preHandler: requireCapability('users.manage') };
@@ -56,21 +57,40 @@ export function registerAccessKeyRoutes(app: FastifyInstance<any, any, any, any>
 
   // A directory account that never signed in has no local row, and a key needs one. This writes it
   // with setSubjectStatus, the store's writer for an account that has never signed in, under the
-  // same subject lock setAccountStatus holds around it. The status copies the directory's, except
-  // that making a key never turns a disabled row back on: setSubjectStatus links a row with the
-  // same username and no subject, and writes the status it is given onto that row. Read inside the
-  // lock, after the re-check, so no other caller can change the row between the read and the write.
-  async function localRowFor(owner: Exclude<KeyOwner, null>): Promise<string> {
+  // same subject lock setAccountStatus holds around it. The status copies the directory's.
+  //
+  // setSubjectStatus may instead link a row with the same username and no subject, and write the
+  // status onto it. Making a key never turns such a row on. A lookup here could not promise that:
+  // the subject lock does not cover a row with no subject, so `openldr user disable` can land
+  // between any read and the write. So `neverEnable` makes the write itself keep a disabled row
+  // disabled, in one statement.
+  //
+  // The read of the linkable row is for the audit row only. When the directory says disabled and
+  // the link turns an active row off, that is a status change, and it is audited as one. The row is
+  // written after the lock is let go, as setAccountStatus does, so the audit store does not take a
+  // second connection while the pinned one is held.
+  async function localRowFor(owner: Exclude<KeyOwner, null>, req: FastifyRequest): Promise<string> {
     if (owner.local) return owner.userId;
-    return ctx.users.withSubjectLock(owner.subject, async (users) => {
+    let audit: AuditDetails | undefined;
+    const userId = await ctx.users.withSubjectLock(owner.subject, async (users) => {
       const current = await users.getBySubject(owner.subject);
       if (current) return current.id;
       const linkable = await users.getByUsername(owner.username);
-      const keepDisabled = linkable !== undefined && linkable.subject === null && linkable.status === 'disabled';
-      const status = keepDisabled || !owner.enabled ? 'disabled' : 'active';
-      const made = await users.setSubjectStatus({ subject: owner.subject, username: owner.username }, status);
+      const status = owner.enabled ? 'active' : 'disabled';
+      const made = await users.setSubjectStatus({ subject: owner.subject, username: owner.username }, status, { neverEnable: true });
+      const linked = linkable !== undefined && linkable.subject === null && linkable.id === made.id;
+      if (linked && linkable.status === 'active' && made.status === 'disabled') {
+        audit = {
+          action: 'user.status', entityType: 'user', entityId: owner.subject,
+          before: { id: linkable.id, subject: null, status: 'active' },
+          after: { status: 'disabled', enabled: false },
+          metadata: { enabled: false, backend: 'provider', localId: made.id, reason: 'key-link-found-directory-account-disabled' },
+        };
+      }
       return made.id;
     });
+    if (audit) await recordAudit(ctx, req, audit);
+    return userId;
   }
 
   app.get('/api/users/:id/keys', MANAGE, async (req, reply) => {
@@ -89,12 +109,19 @@ export function registerAccessKeyRoutes(app: FastifyInstance<any, any, any, any>
     const owner = await findOwner(id);
     if (owner && 'status' in owner) return reply.code(owner.status).send({ error: owner.error });
     if (!owner) return reply.code(404).send(NOT_FOUND);
+    // Refuse a bad name or expiry before a local row is written. createAccessKey checks again.
+    try {
+      checkAccessKeyInput(parsed.data, new Date());
+    } catch (e) {
+      if (e instanceof AccessKeyInputError) return reply.code(400).send({ error: e.message });
+      throw e;
+    }
     let userId: string;
     try {
-      userId = await localRowFor(owner);
+      userId = await localRowFor(owner, req);
     } catch (e) {
-      // Another change holds the subject lock. Retryable.
-      if (e instanceof Error && e.name === 'AccountStatusConflictError') {
+      // Another change holds the subject lock, or a first sign-in linked the row first. Retryable.
+      if (e instanceof Error && (e.name === 'AccountStatusConflictError' || e.name === 'SubjectLinkConflictError')) {
         return reply.code(409).send({ error: 'another change to this account is in progress; try again' });
       }
       throw e;

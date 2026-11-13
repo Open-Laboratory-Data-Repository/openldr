@@ -8,10 +8,29 @@ import type { Logger } from '@openldr/core';
 import { createUserStore } from '@openldr/users';
 import {
   ACCESS_KEY_PREFIX, generateAccessKey, hashAccessKey, looksLikeAccessKey,
-  createAccessKey, listAccessKeys, revokeAccessKey, resolveAccessKey,
+  createAccessKey, listAccessKeys, revokeAccessKey, resolveAccessKey, checkAccessKeyInput,
   UnknownAccessKeyError, AccessKeyInputError, type KeyContext,
 } from './access-keys';
 import type { AppContext } from './index';
+
+// The name and expiry checks on their own, so a caller can refuse bad input before it writes
+// anything else (the key routes make a local user row first). createAccessKey calls the same function.
+describe('checkAccessKeyInput', () => {
+  const now = new Date('2026-11-13T00:00:00Z');
+  const reasonOf = (input: { name: string; expiresAt?: string | null }) => {
+    try { checkAccessKeyInput(input, now); return null; } catch (e) { return (e as AccessKeyInputError).reason; }
+  };
+  it('refuses what createAccessKey refuses, with the same reasons', () => {
+    expect(reasonOf({ name: '  ' })).toBe('empty_name');
+    expect(reasonOf({ name: 'x'.repeat(81) })).toBe('name_too_long');
+    expect(reasonOf({ name: 'x', expiresAt: 'soon' })).toBe('bad_expiry');
+    expect(reasonOf({ name: 'x', expiresAt: '2026-11-12T00:00:00Z' })).toBe('past_expiry');
+  });
+  it('answers the trimmed name and the stored expiry', () => {
+    expect(checkAccessKeyInput({ name: ' job ', expiresAt: '2026-12-01T00:00:00+01:00' }, now)).toEqual({ name: 'job', expiresAt: '2026-11-30T23:00:00.000Z' });
+    expect(checkAccessKeyInput({ name: 'job' }, now)).toEqual({ name: 'job', expiresAt: null });
+  });
+});
 
 const actor = { actorType: 'user' as const, actorId: 'admin-1', actorName: 'admin' };
 const userId = 'u1';
