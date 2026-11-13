@@ -106,8 +106,16 @@ async function main(): Promise<void> {
       process.exitCode = await runStatus(cmd, print);
       return;
     case 'cli':
-      // The CLI exits by itself once its command has finished, as it does in Docker.
-      process.exitCode = await runCli(cmd, print);
+      // The CLI exits by itself once its command has finished, as it does in Docker. With no
+      // launcher running, a recovery command starts Postgres for itself and stops it again.
+      process.exitCode = await runCli(cmd, print, {
+        startPostgres,
+        stopLeftoverPostgres,
+        now: () => new Date(),
+        notice: printError,
+        signals: process,
+        exit: (code) => process.exit(code),
+      });
       return;
   }
 }

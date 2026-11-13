@@ -43,6 +43,10 @@ export interface LockInfo {
   token: string;
   /** The HTTP port the server listens on. Missing from locks written before it was added. */
   httpPort?: number;
+  /** Who holds the data folder. Missing means a launcher, with the server running. `recovery` is a
+   *  `cli` recovery command that started Postgres for itself because no launcher was running: the
+   *  database is up, the server is not, and `address` names no place to open. */
+  holder?: 'recovery';
 }
 
 export class StateFileError extends Error {
@@ -332,6 +336,7 @@ function parseLock(text: string): LockInfo | null {
   if (d.httpPort !== undefined && !isPort(d.httpPort)) return null;
   const info: LockInfo = { pid: d.pid as number, address: d.address, startedAt: d.startedAt, controlPort: d.controlPort, token: d.token };
   if (d.httpPort !== undefined) info.httpPort = d.httpPort;
+  if (d.holder === 'recovery') info.holder = 'recovery';
   return info;
 }
 

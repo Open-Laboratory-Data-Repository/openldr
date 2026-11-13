@@ -199,7 +199,7 @@ SKIP  Facilities in the data
 3 warnings.
 ```
 
-Above these lines you also see pnpm's line, Node's WASI warning and one log line. When OpenLDR is not running, you see `Start OpenLDR first: openldr-standalone start`.
+Above these lines you also see pnpm's line, Node's WASI warning and one log line. When OpenLDR is not running, a recovery command such as `doctor` starts the database for itself. It prints `OpenLDR is not running. Starting its database for this command.`, runs, and stops the database again. So you can repair an install that will not start. Any other command prints `Start OpenLDR first: openldr-standalone start`.
 
 - The `--` is optional. `cli doctor` runs the same command.
 - `--data-dir` goes before the `--`, for example `pnpm openldr-standalone cli --data-dir /srv/openldr -- doctor`.

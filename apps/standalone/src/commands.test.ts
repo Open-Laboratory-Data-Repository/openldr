@@ -9,6 +9,8 @@ import type { Config } from '@openldr/config';
 import type { RunningServer } from '@openldr/server/start';
 import {
   FORCED_STOP_ERROR,
+  RECOVERY_DONE,
+  RECOVERY_NOTICE,
   STOP_WAIT_MS,
   StopError,
   UsageError,
@@ -21,12 +23,13 @@ import {
   runStatus,
   runStop,
   servedAddress,
+  type CliDeps,
   type Launcher,
   type LauncherDeps,
 } from './commands.js';
 import { newControlToken, requestStop, startControl, type ControlServer } from './control.js';
 import { postgresUrls, type PostgresSettings } from './postgres.js';
-import { acquireLock, pathsFor, readLock, type StandalonePaths } from './state.js';
+import { acquireLock, isLockLive, pathsFor, readLock, type StandalonePaths } from './state.js';
 
 // The CLI program is replaced, so a test can see what a CLI command would load without a database.
 // commandKindOf is the real one: it reads the real command table, so `doctor` is a recovery command
@@ -975,6 +978,175 @@ describe('runCli', () => {
     const env = await envSeenBy(['layouts', 'list']);
     expect(env.OPENLDR_URL).toBe('https://lab.example.org');
     expect(env.OPENLDR_ALLOW_PLAIN_HTTP).toBeUndefined();
+  });
+});
+
+describe('runCli with no launcher running', () => {
+  // An install that has run before: the state file (made in beforeEach) and a database folder.
+  async function installed(): Promise<void> {
+    await mkdir(paths.cluster, { recursive: true });
+    await writeFile(join(paths.cluster, 'PG_VERSION'), '16\n');
+  }
+
+  function cliDeps(f: Fakes, o: { startFails?: boolean; signalWhileStarting?: boolean } = {}) {
+    const notices: string[] = [];
+    const exits: number[] = [];
+    const signals = new EventEmitter();
+    const deps: CliDeps = {
+      stopLeftoverPostgres: f.deps.stopLeftoverPostgres,
+      startPostgres: o.startFails
+        ? ((async (opts: { settings: PostgresSettings }) => {
+            f.order.push('pg.start');
+            throw new Error(`postgres would not start, password ${opts.settings.superPassword}`);
+          }) as CliDeps['startPostgres'])
+        : o.signalWhileStarting
+          ? ((async (opts: Parameters<CliDeps['startPostgres']>[0]) => {
+              // Postgres is spawned but not yet answering: the caller holds no handle to it yet.
+              signals.emit('SIGINT');
+              return f.deps.startPostgres(opts);
+            }) as CliDeps['startPostgres'])
+          : f.deps.startPostgres,
+      now: () => STARTED_AT,
+      notice: (line) => notices.push(line),
+      signals: signals as unknown as CliDeps['signals'],
+      exit: (code) => exits.push(code),
+    };
+    return { deps, notices, exits, signals };
+  }
+
+  it('an app command is still refused, and nothing is started', async () => {
+    await installed();
+    const f = fakes();
+    const { deps } = cliDeps(f);
+    const printed: string[] = [];
+    expect(await runCli({ dataDir: root, args: ['layouts', 'list'] }, (l) => printed.push(l), deps)).toBe(1);
+    expect(printed).toEqual(['Start OpenLDR first: openldr-standalone start']);
+    expect(f.order).toEqual([]);
+    expect(cli.calls).toEqual([]);
+    expect(await readLock(paths)).toBeNull();
+  });
+
+  it('a recovery command starts the database, runs with the install settings, and stops the database again', async () => {
+    await installed();
+    const f = fakes();
+    const { deps, notices } = cliDeps(f);
+    let env: NodeJS.ProcessEnv = {};
+    let lockDuring: Awaited<ReturnType<typeof readLock>> = null;
+    let liveDuring = false;
+    cli.run = async () => {
+      env = { ...process.env };
+      lockDuring = await readLock(paths);
+      liveDuring = lockDuring ? await isLockLive(lockDuring) : false;
+      f.order.push('command');
+      process.exitCode = 7;
+    };
+
+    expect(await runCli({ dataDir: root, args: ['doctor'] }, () => {}, deps)).toBe(7);
+
+    expect(f.order).toEqual(['pg.leftover', 'pg.start', 'command', 'pg.stop']);
+    expect(cli.calls).toEqual([['node', 'openldr', 'doctor']]);
+    expect(env.INTERNAL_DATABASE_URL).toBe(postgresUrls(settings).internalUrl);
+    expect(env.TARGET_DATABASE_URL).toBe(postgresUrls(settings).targetUrl);
+    expect(env.LOG_FILE).toBeUndefined();
+    // While the command runs the data folder is held, so a `start` cannot bring up a second Postgres.
+    expect(lockDuring).toMatchObject({ pid: process.pid, holder: 'recovery' });
+    expect(liveDuring).toBe(true);
+    // Afterwards nothing is left: no lock, Postgres stopped.
+    expect(f.pg.stopped).toBe(true);
+    expect(await readLock(paths)).toBeNull();
+    expect(notices).toEqual([RECOVERY_NOTICE, RECOVERY_DONE]);
+  });
+
+  it('a command that throws still stops the database and frees the data folder', async () => {
+    await installed();
+    const f = fakes();
+    const { deps } = cliDeps(f);
+    cli.run = async () => {
+      throw new Error('command boom');
+    };
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    expect(await runCli({ dataDir: root, args: ['doctor'] }, () => {}, deps)).toBe(1);
+    expect(f.pg.stopped).toBe(true);
+    expect(await readLock(paths)).toBeNull();
+  });
+
+  it('a database that will not start is reported without a secret, and nothing is left', async () => {
+    await installed();
+    const f = fakes();
+    const { deps } = cliDeps(f, { startFails: true });
+    const printed: string[] = [];
+    expect(await runCli({ dataDir: root, args: ['doctor'] }, (l) => printed.push(l), deps)).toBe(1);
+    expect(printed.join('\n')).toContain('postgres would not start');
+    expect(printed.join('\n')).not.toContain(state.pgSuperPassword);
+    expect(cli.calls).toEqual([]);
+    expect(await readLock(paths)).toBeNull();
+  });
+
+  it('a folder that never ran is refused, and nothing is started', async () => {
+    const f = fakes();
+    const { deps } = cliDeps(f);
+    const printed: string[] = [];
+    expect(await runCli({ dataDir: root, args: ['doctor'] }, (l) => printed.push(l), deps)).toBe(1);
+    expect(printed).toEqual(['This data folder holds no OpenLDR database yet. Start OpenLDR once first: openldr-standalone start']);
+    expect(f.order).toEqual([]);
+    expect(await readLock(paths)).toBeNull();
+  });
+
+  it('while a recovery command holds the data folder, other commands, status and start say so', async () => {
+    await installed();
+    const f = fakes();
+    const { deps } = cliDeps(f);
+    const seen: Record<string, string[]> = { second: [], app: [], status: [] };
+    let statusCode = -1;
+    let startError = '';
+    cli.run = async () => {
+      // Only the first command gets here. The others are refused before any command runs.
+      expect(await runCli({ dataDir: root, args: ['doctor'] }, (l) => seen.second!.push(l), cliDeps(fakes()).deps)).toBe(1);
+      expect(await runCli({ dataDir: root, args: ['layouts', 'list'] }, (l) => seen.app!.push(l))).toBe(1);
+      statusCode = await runStatus({ dataDir: root }, (l) => seen.status!.push(l));
+      startError = await runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, fakes().deps).then(
+        () => 'started',
+        (err: Error) => err.message,
+      );
+    };
+    expect(await runCli({ dataDir: root, args: ['doctor'] }, () => {}, deps)).toBe(0);
+
+    const busy = `A recovery command is using the database (process ${process.pid}). Try again when it has finished.`;
+    expect(seen.second).toEqual([busy]);
+    expect(seen.app).toEqual([busy]);
+    expect(statusCode).toBe(3);
+    expect(seen.status).toEqual([`Data folder: ${root}`, `OpenLDR is not running. ${busy}`]);
+    expect(startError).toBe(busy);
+    expect(cli.calls).toHaveLength(1);
+    // One Postgres only: the first command's.
+    expect(f.order).toEqual(['pg.leftover', 'pg.start', 'pg.stop']);
+  });
+
+  it('Ctrl+C during the command stops the database before the process goes', async () => {
+    await installed();
+    const f = fakes();
+    const { deps, exits, signals } = cliDeps(f);
+    cli.run = async () => {
+      signals.emit('SIGINT');
+    };
+    await runCli({ dataDir: root, args: ['doctor'] }, () => {}, deps);
+    expect(f.pg.stopSyncCalls).toBe(1);
+    expect(exits).toEqual([130]);
+    // Its handlers are gone once the command has ended.
+    expect(signals.listenerCount('SIGINT') + signals.listenerCount('SIGTERM') + signals.listenerCount('SIGHUP')).toBe(0);
+  });
+
+  it('Ctrl+C while the database is still starting stops it once it is up, and the command never runs', async () => {
+    await installed();
+    const f = fakes();
+    const { deps, exits, signals } = cliDeps(f, { signalWhileStarting: true });
+    expect(await runCli({ dataDir: root, args: ['doctor'] }, () => {}, deps)).toBe(130);
+    expect(f.order).toEqual(['pg.leftover', 'pg.start', 'pg.stop']);
+    expect(f.pg.stopped).toBe(true);
+    expect(cli.calls).toEqual([]);
+    expect(exits).toEqual([130]);
+    expect(await readLock(paths)).toBeNull();
+    expect(signals.listenerCount('SIGINT') + signals.listenerCount('SIGTERM') + signals.listenerCount('SIGHUP')).toBe(0);
   });
 });
 
