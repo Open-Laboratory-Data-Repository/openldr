@@ -13,7 +13,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { constants as fsConstants, readFileSync, statSync } from 'node:fs';
-import { lstat, mkdir, open, readdir, realpath, rename, stat, unlink, type FileHandle } from 'node:fs/promises';
+import { lstat, mkdir, open, readdir, readlink, realpath, rename, stat, unlink, type FileHandle } from 'node:fs/promises';
 import type { ClientRequest, IncomingMessage } from 'node:http';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -335,27 +335,99 @@ async function linkInside(abs: string, shownAs: string, realRoot: string, folder
 
 const changedWhileRead = (shownAs: string) => new Refusal(`${shownAs} changed while it was being read.`);
 
+/** For tests only: runs before each step of pinning a file, so a test can replay a swap at an exact
+ *  step instead of racing a second process. `beforeOpen` runs just before each upload file is
+ *  opened for sending. Never set outside tests. */
+export const uploadSeam: {
+  beforeFs?: (step: 'lstat' | 'realpath' | 'open', path: string) => Promise<void>;
+  beforeOpen?: (typed: string) => Promise<void>;
+} = {};
+
+// Each is undefined on Windows (unproven there): the open then follows a last link, and the device
+// and inode check still refuses a file that is not the one walked.
+const OPEN_FLAGS = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0) | (fsConstants.O_NOCTTY ?? 0);
+
 /**
- * Pins a regular file at a real path: its device and inode from lstat, and the real path checked
- * again, so the name was not swapped for a link while it was looked at. Null for anything that is
- * not a regular file.
+ * True where the kernel can say where an open file is (Linux). On macOS and Windows Node gives no
+ * path from a handle, so there the device and inode check stands alone (unproven there).
  */
-async function pinReal(real: string, shownAs: string, realRoot: string | null): Promise<Pinned | null> {
-  const st = await lstat(real, { bigint: true }).catch(() => null);
-  if (!st?.isFile()) return null;
-  const again = await realpath(real).catch(() => null);
-  if (again !== real || (realRoot !== null && !within(again, realRoot))) throw changedWhileRead(shownAs);
-  return { open: real, dev: st.dev, ino: st.ino };
+const HAS_PROC_FD = (() => {
+  try {
+    return statSync('/proc/self/fd').isDirectory();
+  } catch {
+    return false;
+  }
+})();
+
+/** Where the kernel says the file behind this handle is, whatever path was used to reach it
+ *  (Ruling 70). Null when it cannot be read. */
+async function locationOf(fh: FileHandle): Promise<string | null> {
+  try {
+    return await readlink(`/proc/self/fd/${fh.fd}`);
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Pins a file found inside a folder the caller named (Ruling 68). A link is followed only to a
- * regular file whose real target is inside `realRoot`. A link to a folder is refused, wherever it
- * leads. Null for anything that is not a regular file, or that has gone.
+ * Opens the pinned path and records the file from the handle, not from a path (Ruling 70). The
+ * handle must be a regular file with the device and inode the path gave, and, where the kernel can
+ * say, it must really be at that real path and inside `realRoot`. A parent folder swapped for a link
+ * between the path lookups and this open is caught here: the kernel reports where the file is.
  */
-async function pinInside(abs: string, shownAs: string, realRoot: string, folder: string): Promise<Pinned | null> {
+async function confirmByHandle(p: Pinned, shownAs: string, realRoot: string | null): Promise<Pinned> {
+  await uploadSeam.beforeFs?.('open', p.open);
+  let fh: FileHandle;
+  try {
+    fh = await open(p.open, OPEN_FLAGS);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ELOOP' || code === 'ENOENT' || code === 'ENOTDIR' || code === 'EMLINK') throw changedWhileRead(shownAs);
+    throw new Refusal(`Cannot read ${shownAs}.`);
+  }
+  try {
+    const st = await fh.stat({ bigint: true });
+    if (!st.isFile() || st.dev !== p.dev || st.ino !== p.ino) throw changedWhileRead(shownAs);
+    if (!HAS_PROC_FD) return p;
+    const at = await locationOf(fh);
+    if (at === null || at !== p.open || (realRoot !== null && !within(at, realRoot))) throw changedWhileRead(shownAs);
+    return { open: at, dev: st.dev, ino: st.ino };
+  } catch (err) {
+    if (err instanceof Refusal) throw err;
+    throw new Refusal(`Cannot read ${shownAs}.`);
+  } finally {
+    await fh.close().catch(() => {});
+  }
+}
+
+/**
+ * Pins a regular file at a real path: its device and inode from lstat, the real path checked again,
+ * then the file opened and checked from its handle. Null for anything that is not a regular file.
+ */
+async function pinReal(real: string, shownAs: string, realRoot: string | null): Promise<Pinned | null> {
+  await uploadSeam.beforeFs?.('lstat', real);
+  const st = await lstat(real, { bigint: true }).catch(() => null);
+  if (!st?.isFile()) return null;
+  await uploadSeam.beforeFs?.('realpath', real);
+  const again = await realpath(real).catch(() => null);
+  if (again !== real || (realRoot !== null && !within(again, realRoot))) throw changedWhileRead(shownAs);
+  return confirmByHandle({ open: real, dev: st.dev, ino: st.ino }, shownAs, realRoot);
+}
+
+/**
+ * Pins a file found inside a folder the caller named (Rulings 68 and 70). A link is followed only to
+ * a regular file whose real target is inside `realRoot`. A link to a folder is refused, wherever it
+ * leads. `strict` (a folder walk, where readdir already listed it): an entry that has gone or is no
+ * longer a file or a link changed while it was being read. Not strict (a companion): null for
+ * anything that is missing or not a regular file.
+ */
+async function pinInside(abs: string, shownAs: string, realRoot: string, folder: string, strict: boolean): Promise<Pinned | null> {
+  await uploadSeam.beforeFs?.('lstat', abs);
   const entry = await lstat(abs, { bigint: true }).catch(() => null);
-  if (!entry) return null;
+  if (!entry || (!entry.isSymbolicLink() && !entry.isFile())) {
+    if (strict) throw changedWhileRead(shownAs);
+    return null;
+  }
   if (entry.isSymbolicLink()) {
     const real = await linkInside(abs, shownAs, realRoot, folder);
     if ((await stat(real).catch(() => null))?.isDirectory()) {
@@ -363,7 +435,7 @@ async function pinInside(abs: string, shownAs: string, realRoot: string, folder:
     }
     return pinReal(real, shownAs, realRoot);
   }
-  if (!entry.isFile()) return null;
+  await uploadSeam.beforeFs?.('realpath', abs);
   const real = await realpath(abs).catch(() => null);
   if (real === null || !within(real, realRoot)) throw changedWhileRead(shownAs);
   const pinned = await pinReal(real, shownAs, realRoot);
@@ -390,6 +462,11 @@ async function walkFolder(root: string, typed: string, ref: string): Promise<Sen
   const visit = async (abs: string, rel: string): Promise<void> => {
     const shownAs = rel === '' ? typed : join(typed, rel);
     let entries;
+    if (rel !== '') {
+      // readdir listed a folder here. Anything else now changed while it was being read.
+      const entry = await lstat(abs).catch(() => null);
+      if (!entry?.isDirectory()) throw changedWhileRead(shownAs);
+    }
     try {
       const real = await realpath(abs);
       if (!within(real, realRoot)) throw changedWhileRead(shownAs);
@@ -411,7 +488,7 @@ async function walkFolder(root: string, typed: string, ref: string): Promise<Sen
         await visit(childAbs, childRel);
         continue;
       }
-      const pinned = await pinInside(childAbs, childShown, realRoot, typed);
+      const pinned = await pinInside(childAbs, childShown, realRoot, typed, true);
       if (pinned) files.push({ ref, rel: childRel, typed: childShown, ...pinned });
     }
   };
@@ -453,7 +530,7 @@ async function prepareUploads(plan: Plan, opts: Record<string, unknown>): Promis
         // in a folder, inside the main file's folder (Rulings 64 and 68).
         realBeside ??= await realpath(beside).catch(() => null);
         if (realBeside === null) throw new Refusal(`Cannot read ${beside}.`);
-        const pinned = await pinInside(abs, abs, realBeside, beside);
+        const pinned = await pinInside(abs, abs, realBeside, beside, false);
         // A companion that is missing is not sent, and the command then fails as it does today.
         if (!pinned) continue;
         sends.push({ ref: input.ref, rel: c, typed: abs, ...pinned });
@@ -666,18 +743,11 @@ export async function runThroughApp(input: ThroughAppInput): Promise<number> {
 /** The upload stops: the message is printed and the exit code is 1. */
 class ReadFailure extends Error {}
 
-/** For tests only: runs just before each upload file is opened, so a test can change the file
- *  between the walk and the read without a sleep. Never set outside tests. */
-export const uploadSeam: { beforeOpen?: (typed: string) => Promise<void> } = {};
-
-// Undefined on Windows (unproven there): the open then follows a last link, and the inode check
-// still refuses a file that is not the one walked.
-const OPEN_FLAGS = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0);
-
 /**
- * Opens a pinned file again and checks it is the file the walk saw (Ruling 68). O_NOFOLLOW refuses a
- * last part swapped for a link, the inode check refuses anything else swapped in (a link in a folder
- * above it, another file), and O_NONBLOCK keeps a FIFO swapped in from blocking the open.
+ * Opens a pinned file again and checks it is the file the walk saw, where the walk saw it (Rulings
+ * 68 and 70). O_NOFOLLOW refuses a last part swapped for a link, the inode check refuses another
+ * file swapped in, the kernel's location refuses the same file reached through a folder swapped for
+ * a link, and O_NONBLOCK keeps a FIFO swapped in from blocking the open.
  */
 async function openPinned(s: Send): Promise<FileHandle> {
   const changed = () => new ReadFailure(`${s.typed} changed while it was being sent. Nothing more was sent.`);
@@ -692,6 +762,8 @@ async function openPinned(s: Send): Promise<FileHandle> {
   try {
     const st = await fh.stat({ bigint: true });
     if (!st.isFile() || st.dev !== s.dev || st.ino !== s.ino) throw changed();
+    // Where the kernel can say, the file must be where the walk found it (unproven without /proc).
+    if (HAS_PROC_FD && (await locationOf(fh)) !== s.open) throw changed();
     return fh;
   } catch (err) {
     await fh.close().catch(() => {});
@@ -707,9 +779,14 @@ async function* bodyOf(start: ClientFrame, sends: Send[], reading: { now: boolea
   yield encodeFrame(start);
   for (const s of sends) {
     reading.now = true;
-    await uploadSeam.beforeOpen?.(s.typed);
-    const fh = await openPinned(s);
-    reading.now = false;
+    let fh: FileHandle;
+    try {
+      await uploadSeam.beforeOpen?.(s.typed);
+      fh = await openPinned(s);
+    } finally {
+      // Cleared when the open fails too, so a later forced stop does not say a read is pending.
+      reading.now = false;
+    }
     try {
       yield encodeFrame({ t: 'file', ref: s.ref, rel: s.rel });
       const buf = Buffer.alloc(MAX_DATA_BYTES);

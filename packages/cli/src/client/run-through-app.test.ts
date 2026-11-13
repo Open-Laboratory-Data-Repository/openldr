@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { createServer, type IncomingHttpHeaders, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -642,7 +643,7 @@ describe('paths', () => {
       await writeFile(join(outside, 'data.txt'), SECRET);
       await writeFile(join(outside, 'x.txt'), SECRET);
     });
-    afterEach(() => { delete uploadSeam.beforeOpen; });
+    afterEach(() => { delete uploadSeam.beforeOpen; delete uploadSeam.beforeFs; });
 
     /** Sends the bundle, running `swap` once just before `target` is opened. */
     async function sendWithSwap(target: string, swap: () => Promise<void>) {
@@ -694,6 +695,104 @@ describe('paths', () => {
       expect(r.code).toBe(0);
       const s = start(call);
       expect([...uploads(call).get(s.inputs[0]!.ref)!.keys()].sort()).toEqual(['a.txt', 'data.txt', 'sub/x.txt']);
+    });
+
+    it('refuses a file a readdir listed that is no longer a file when it is looked at', async () => {
+      const target = join(bundle, 'a.txt');
+      let done = false;
+      uploadSeam.beforeFs = async (step, path) => {
+        if (done || step !== 'lstat' || path !== target) return;
+        done = true;
+        await rm(target);
+        await mkdir(target);
+      };
+      const srv = await startServer(collect);
+      const r = await cli(['market', 'install', bundle], { OPENLDR_URL: srv.url });
+      expect(r.err).toBe(`${target} changed while it was being read.\n`);
+      expect(r.code).toBe(1);
+      expect(srv.calls).toHaveLength(0);
+    });
+
+    // Ruling 70. These replay, one step at a time through the seam, swaps that only the kernel's
+    // report of where an open file is can catch. The race itself (a second process swapping in a
+    // loop) is the reviewer's run, not a test here.
+    const NO_PROC = !existsSync('/proc/self/fd');
+    const NO_PROC_REASON = 'no /proc/self/fd on this platform: only the device and inode check runs there';
+    /** The title, with the reason it is skipped where there is no /proc. */
+    const procTitle = (title: string) => (NO_PROC ? `${title} (skipped: ${NO_PROC_REASON})` : title);
+
+    it.skipIf(NO_PROC)(procTitle('refuses the swap sequence: parent swapped at the record, back at the path lookup, swapped again at the open'), async () => {
+      const target = join(bundle, 'sub', 'x.txt');
+      const parked = join(bundle, '.sub-real');
+      let state: 'real' | 'link' = 'real';
+      const setSub = async (want: 'real' | 'link') => {
+        if (state === want) return;
+        if (want === 'link') {
+          await rename(join(bundle, 'sub'), parked);
+          await symlink(outside, join(bundle, 'sub'));
+        } else {
+          await rm(join(bundle, 'sub'));
+          await rename(parked, join(bundle, 'sub'));
+        }
+        state = want;
+      };
+      uploadSeam.beforeFs = async (step, path) => {
+        if (!path.endsWith('x.txt')) return;
+        // At the record (lstat): a link. At the path lookup (realpath): back. At the open: a link.
+        await setSub(step === 'realpath' ? 'real' : 'link');
+      };
+      uploadSeam.beforeOpen = async (typed) => { if (typed === target) await setSub('link'); };
+      const srv = await startServer(collect);
+      const r = await cli(['market', 'install', bundle], { OPENLDR_URL: srv.url });
+      const sent = srv.calls.flatMap((c) => c.frames).filter((f): f is Extract<ClientFrame, { t: 'data' }> => f.t === 'data')
+        .map((f) => Buffer.from(f.d, 'base64').toString()).join('');
+      expect(sent).not.toContain(SECRET);
+      expect(r.err).toBe(`${target} changed while it was being read.\n`);
+      expect(r.code).toBe(1);
+    });
+
+    it.skipIf(NO_PROC)(procTitle('refuses a companion reached through a swapped folder at read time, even as the same file'), async () => {
+      const pdir = join(dir, 'plugin');
+      await mkdir(pdir);
+      await writeFile(join(pdir, 'p.wasm'), Buffer.from([0, 97, 115, 109]));
+      await writeFile(join(pdir, 'manifest.json'), '{}');
+      const companion = join(pdir, 'manifest.json');
+      // At read time the folder becomes a link to another folder holding a hard link to the very
+      // same file: same device and inode, another place.
+      uploadSeam.beforeOpen = async (typed) => {
+        if (typed !== companion) return;
+        const other = join(dir, 'plugin-other');
+        await rename(pdir, join(dir, 'plugin-old'));
+        await mkdir(other);
+        await link(join(dir, 'plugin-old', 'manifest.json'), join(other, 'manifest.json'));
+        await symlink(other, pdir);
+      };
+      const srv = await startServer(collect);
+      const r = await cli(['plugin', 'install', join(pdir, 'p.wasm')], { OPENLDR_URL: srv.url });
+      expect(r.err).toBe(`${companion} changed while it was being sent. Nothing more was sent.\n`);
+      expect(r.code).toBe(1);
+      expect(srv.calls[0]!.frames.some((f) => f.t === 'file' && f.rel === 'manifest.json')).toBe(false);
+    });
+
+    it.skipIf(NO_PROC)(procTitle('refuses the named file\'s target reached through a swapped folder at read time, even as the same file'), async () => {
+      const realDir = join(dir, 'elsewhere');
+      await mkdir(realDir);
+      await writeFile(join(realDir, 'payload.json'), '{"named":true}');
+      const named = join(dir, 'named.json');
+      await symlink(join(realDir, 'payload.json'), named);
+      uploadSeam.beforeOpen = async (typed) => {
+        if (typed !== named) return;
+        const other = join(dir, 'other');
+        await rename(realDir, join(dir, 'elsewhere-old'));
+        await mkdir(other);
+        await link(join(dir, 'elsewhere-old', 'payload.json'), join(other, 'payload.json'));
+        await symlink(other, realDir);
+      };
+      const srv = await startServer(collect);
+      const r = await cli(['ingest', named], { OPENLDR_URL: srv.url });
+      expect(r.err).toBe(`${named} changed while it was being sent. Nothing more was sent.\n`);
+      expect(r.code).toBe(1);
+      expect(srv.calls[0]!.frames.some((f) => f.t === 'file')).toBe(false);
     });
   });
 
