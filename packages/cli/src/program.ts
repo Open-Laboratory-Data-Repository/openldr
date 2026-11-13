@@ -59,6 +59,7 @@ import {
 } from './patients';
 import { runQueryExport, runQueryImport } from './query';
 import { setActorOverride } from './cli-actor';
+import { runCommandsList } from './command-list';
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
 //  - index.ts's module-level side effect is just `buildProgram().parseAsync(process.argv)`,
@@ -1445,6 +1446,12 @@ export function buildProgram(): Command {
   artifact.command('test <dir>').requiredOption('--sample <file>').option('--json', 'emit JSON', false).action(async (dir: string, o: { sample: string; json: boolean }) => { process.exitCode = await runArtifactTest(dir, o); });
   artifact.command('publish <bundleDir>').requiredOption('--to <registryDir>').option('--install', 'also install into the running CE', false).option('--approve', 'approve requested capabilities on install', false).option('--approved-by <actor>').option('--json', 'emit JSON', false)
     .action(async (bundleDir: string, o: { to: string; install: boolean; approve: boolean; approvedBy?: string; json: boolean }) => { process.exitCode = await runArtifactPublish(bundleDir, o); });
+
+  // Reads only this tree and the command table. Needs no server and no database settings.
+  program.command('commands')
+    .description('List every command and how it runs: through the app, recovery, or on this machine')
+    .option('--json', 'emit JSON', false)
+    .action((opts: { json: boolean }) => { process.exitCode = runCommandsList(program, opts); });
 
   program.hook('preAction', () => setActorOverride(program.opts().actor as string | undefined));
 

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "bin": { "openldr": "./dist/index.js" },
-  "exports": { ".": "./src/index.ts", "./program": "./src/program.ts" },
+  "exports": { ".": "./src/index.ts", "./program": "./src/program.ts", "./meta": "./src/command-meta.ts" },
   "scripts": {
     "build": "tsup",
     "build:check": "tsup && node dist/index.js --help",
