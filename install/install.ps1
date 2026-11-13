@@ -109,7 +109,28 @@ exit $LASTEXITCODE
 # -WrapperOnly: an upgrade by the documented steps leaves the old wrapper on disk, which hands in
 # no key. This writes openldr.ps1 and does nothing else: no download, no .env change, no compose
 # file, no Docker check, no start. Unproven: nothing on the Linux build machine runs PowerShell.
+# Writes openldr.ps1 to a temporary file in the same folder, then moves it over the old one, as the
+# sh installer does: a link is replaced by a real file, and a failed write leaves the old wrapper.
+# Stops with a message and exit 1 when it cannot, whatever $ErrorActionPreference is.
+function Write-Wrapper {
+  $target = Join-Path $Dir 'openldr.ps1'
+  $temp = Join-Path $Dir ".openldr.ps1.$PID.tmp"
+  try {
+    Set-Content -LiteralPath $temp -Value $wrapper -Encoding utf8 -ErrorAction Stop
+    Move-Item -LiteralPath $temp -Destination $target -Force -ErrorAction Stop
+  } catch {
+    Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+    Write-Host "X Could not write $target. The wrapper that was there is unchanged." -ForegroundColor Red
+    exit 1
+  }
+}
+
 if ($WrapperOnly) {
+  $other = @($PSBoundParameters.Keys | Where-Object { $_ -ne 'Dir' -and $_ -ne 'WrapperOnly' })
+  if ($other.Count -gt 0) {
+    Write-Host "X -WrapperOnly takes no other option than -Dir (got -$($other[0]))." -ForegroundColor Red
+    exit 2
+  }
   if (-not $PSBoundParameters.ContainsKey('Dir')) {
     Write-Error "X -WrapperOnly needs -Dir <the install folder>, so a fresh install is never made by accident."
     exit 2
@@ -118,7 +139,7 @@ if ($WrapperOnly) {
     Write-Error "X $Dir is not an OpenLDR install folder: it has no .env or no docker-compose.yml."
     exit 2
   }
-  Set-Content -Path "$Dir/openldr.ps1" -Value $wrapper -Encoding utf8
+  Write-Wrapper
   Write-Host "OK Rewrote openldr.ps1 in $Dir. Nothing else was changed."
   exit 0
 }
@@ -373,8 +394,9 @@ Fetch "scripts/init-target-db.sql" "$Dir/config/init-target-db.sql"
 Fetch "scripts/init-keycloak-db.sql" "$Dir/config/init-keycloak-db.sql"
 Fetch "deploy/install/garage.toml" "$Dir/config/garage.toml"
 
-# The `openldr` operator CLI wrapper. $wrapper is defined near the top, so -WrapperOnly can write it.
-Set-Content -Path "$Dir/openldr.ps1" -Value $wrapper -Encoding utf8
+# The `openldr` operator CLI wrapper. $wrapper and Write-Wrapper are defined near the top, so
+# -WrapperOnly can write it.
+Write-Wrapper
 
 if ($MssqlDemo) {
   Fetch "deploy/install/docker-compose.mssql.yml" "$Dir/docker-compose.mssql.yml"

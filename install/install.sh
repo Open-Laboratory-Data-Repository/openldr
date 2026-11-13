@@ -83,8 +83,14 @@ MYSQL_SSL="false"
 AUTH=""
 DIR_SET=0
 WRAPPER_ONLY=0
+# The first option other than --dir and --wrapper-only, which --wrapper-only refuses.
+OTHER_OPTION=""
 
 while [ $# -gt 0 ]; do
+  case "$1" in
+    --dir|--wrapper-only) ;;
+    *) [ -n "$OTHER_OPTION" ] || OTHER_OPTION="$1" ;;
+  esac
   case "$1" in
     --dir) DIR="$2"; DIR_SET=1; shift 2 ;;
     --wrapper-only) WRAPPER_ONLY=1; shift ;;
@@ -135,8 +141,20 @@ done
 # see the COPY in apps/server/Dockerfile. The heredoc is quoted (`<<'WRAPPER'`) so `$(id -u)` is
 # written literally and evaluated when the wrapper RUNS, not when this installer writes it.
 # A function, so `--wrapper-only` can write the wrappers and nothing else.
+#
+# Each wrapper is written to a temporary file in the same folder, made executable, then renamed over
+# the old one. So a link named `openldr` is replaced by a real file and its target is left alone, a
+# read-only `openldr` is replaced (the folder decides, not the file), a terminal still running the old
+# wrapper keeps reading the old text, and a failed write leaves the old wrapper as it was.
+wrapper_failed() {
+  rm -f "$1"
+  echo "✗ Could not write $2. The wrapper that was there is unchanged." >&2
+  exit 1
+}
 write_wrappers() {
-cat > "$DIR/openldr" <<'WRAPPER'
+wrapper_tmp="$DIR/.openldr.$$.tmp"
+rm -f "$wrapper_tmp"
+if ! cat > "$wrapper_tmp" <<'WRAPPER'
 #!/bin/sh
 # OpenLDR operator CLI. Runs inside the api container.
 # Files must live under ./data (mounted at /data) — e.g. ./openldr ingest data/bundle.json
@@ -172,6 +190,7 @@ export MSYS_NO_PATHCONV=1
 say() { printf '%s\n' "$*" >&2; }
 nl='
 '
+cr=$(printf '\r')
 
 # Only fixed `-e NAME` words go in $pass, so it is left unquoted on purpose below.
 pass=''
@@ -197,39 +216,51 @@ if [ -n "$here" ] && [ -n "$session_root" ]; then
   session_file=$session_dir/${sum%% *}-${rest%% *}.json
 fi
 
-# The checks the CLI makes on its own session file, made before anything is read: no link, a
-# plain file in a real folder, and nothing group or others can read or change.
-check_session() {
-  if [ -h "$session_dir" ]; then
-    say "The session folder $session_dir is a link, so it is not used. Remove it and sign in again."
-    return 1
+# docker compose finds the stack from the working folder, so it runs from this install's folder,
+# the one whose session is handed in. Arguments are not affected: the CLI runs with -w /.
+go_home() {
+  if [ -z "$here" ] || ! cd -- "$here"; then
+    say 'Cannot find the folder this script is in, so the install it belongs to is not known.'
+    exit 1
   fi
+}
+
+# Reads the stored session into OPENLDR_SESSION after the checks the CLI makes on its own file:
+# no link, a plain file in a real folder, nothing group or others can read or change, and small
+# enough to hand in (a larger value fails at exec with "Argument list too long"). On a problem it
+# sets $problem to say what is wrong and fails; the caller says what it did about it.
+read_session() {
+  if [ -h "$session_dir" ]; then problem="The session folder $session_dir is a link"; return 1; fi
   case $(ls -ld -- "$session_dir" 2>/dev/null) in
     d???------*) ;;
-    d*) say "Other users can read or change the session folder $session_dir, so it is not used. Remove it and sign in again."; return 1 ;;
-    *) say "The session folder $session_dir is not a folder, so it is not used. Remove it and sign in again."; return 1 ;;
+    d*) problem="Other users can read or change the session folder $session_dir"; return 1 ;;
+    *) problem="The session folder $session_dir is not a folder"; return 1 ;;
   esac
-  if [ -h "$session_file" ]; then
-    say "The session file $session_file is a link, so it is not used. Remove it and sign in again."
-    return 1
-  fi
-  if [ ! -f "$session_file" ]; then
-    say "The session file $session_file is not a plain file, so it is not used. Remove it and sign in again."
-    return 1
-  fi
+  if [ -h "$session_file" ]; then problem="The session file $session_file is a link"; return 1; fi
+  if [ ! -f "$session_file" ]; then problem="The session file $session_file is not a plain file"; return 1; fi
   case $(ls -ld -- "$session_file" 2>/dev/null) in
     -???------*) ;;
-    *) say "Other users can read or change the session file $session_file, so it is not used. Remove it and sign in again."; return 1 ;;
+    *) problem="Other users can read or change the session file $session_file"; return 1 ;;
   esac
+  # 2>/dev/null first: redirections apply left to right, and a failed < is reported by the shell.
+  n=$(wc -c 2>/dev/null < "$session_file" | tr -cd '0-9')
+  if [ -n "$n" ] && [ "$n" -gt 65536 ]; then problem="The session file $session_file is too large"; return 1; fi
+  if ! OPENLDR_SESSION=$(cat -- "$session_file" 2>/dev/null); then
+    problem="The session file $session_file cannot be read"
+    return 1
+  fi
+}
+
+# True when there is a stored session file, or something in its place.
+has_session() {
+  [ -n "$session_file" ] && { [ -e "$session_file" ] || [ -h "$session_file" ]; }
 }
 
 # Hands the stored session in, when there is one.
 hand_session() {
-  [ -n "$session_file" ] || return 0
-  [ -e "$session_file" ] || [ -h "$session_file" ] || return 0
-  check_session || return 1
-  if ! OPENLDR_SESSION=$(cat -- "$session_file" 2>/dev/null); then
-    say "The session file $session_file cannot be read. Remove it and sign in again."
+  has_session || return 0
+  if ! read_session; then
+    say "$problem, so it is not used. Remove it and sign in again."
     return 1
   fi
   export OPENLDR_SESSION
@@ -265,6 +296,7 @@ login() {
     say 'Cannot find your home folder or the folder this script is in, so there is nowhere to keep the session. Set HOME.'
     exit 1
   fi
+  go_home
   has_user=0
   for a in "$@"; do
     case $a in --username|--username=*) has_user=1 ;; esac
@@ -299,7 +331,11 @@ login() {
     line=$(cli "$@" --password-stdin --session-out)
     code=$?
   fi
-  [ "$code" -eq 0 ] || exit "$code"
+  if [ "$code" -ne 0 ]; then
+    # The operator never typed --session-out. An older CLI in the images refuses it as unknown.
+    say 'If the message names --session-out, the images are older than this wrapper. Upgrade them first.'
+    exit "$code"
+  fi
   case $line in
     '' | *"$nl"*) say 'The sign-in gave no session this script can read, so nothing was stored.'; exit 1 ;;
     '{"version":1,"sessions":{'*) ;;
@@ -317,11 +353,22 @@ login() {
   exit 0
 }
 
-# Ends the session and removes the file, whatever the CLI answered.
+# Ends the session and removes the file, whatever the CLI answered. A file that fails the checks is
+# removed unused, since a file others can read should go, and the session it held is not ended.
 logout() {
-  if ! hand_session; then
+  go_home
+  if has_session && ! read_session; then
     remove_session
+    if has_session; then
+      say "$problem, so it was not used, and it could not be removed. Remove it yourself."
+    else
+      say "$problem, so it was removed without being used. The session on the server was not ended. It ends by itself after 12 idle hours."
+    fi
     exit 1
+  fi
+  if has_session; then
+    export OPENLDR_SESSION
+    pass="$pass -e OPENLDR_SESSION"
   fi
   cli "$@"
   code=$?
@@ -370,17 +417,20 @@ elif [ -n "${OPENLDR_KEY_FILE+x}" ]; then
     say 'OPENLDR_KEY_FILE is set but empty. Set it, or unset it.'
     exit 1
   fi
-  too_large="The key file named by OPENLDR_KEY_FILE is too large to hold a key: $f"
-  if [ -f "$f" ]; then
-    n=$(wc -c < "$f" 2>/dev/null | tr -cd '0-9')
-    if [ -n "$n" ] && [ "$n" -gt 4096 ]; then say "$too_large"; exit 1; fi
-  fi
-  if ! key=$(cat -- "$f" 2>/dev/null); then
+  if [ ! -r "$f" ] || [ -d "$f" ]; then
     say "The key file named by OPENLDR_KEY_FILE cannot be read: $f"
     exit 1
   fi
+  # At most 4097 bytes are read, so /dev/zero or a pipe that never ends cannot hang this. A NUL
+  # becomes a newline, which the shell can hold and which is refused below as a second line. The x
+  # keeps the trailing newlines that $(...) would drop, so the count is exact.
+  key=$(head -c 4097 -- "$f" 2>/dev/null | tr '\000' '\n'; echo x)
+  key=${key%x}
   n=$(printf '%s' "$key" | wc -c | tr -cd '0-9')
-  if [ "$n" -gt 4096 ]; then say "$too_large"; exit 1; fi
+  if [ "$n" -gt 4096 ]; then
+    say "The key file named by OPENLDR_KEY_FILE is too large to hold a key: $f"
+    exit 1
+  fi
   key=${key#"${key%%[![:space:]]*}"}
   key=${key%"${key##*[![:space:]]}"}
   if [ -z "$key" ]; then
@@ -388,7 +438,7 @@ elif [ -n "${OPENLDR_KEY_FILE+x}" ]; then
     exit 1
   fi
   case $key in
-    *"$nl"*) say "The key file named by OPENLDR_KEY_FILE holds more than one line: $f"; exit 1 ;;
+    *"$nl"* | *"$cr"*) say "The key file named by OPENLDR_KEY_FILE holds more than one line: $f"; exit 1 ;;
   esac
   OPENLDR_KEY=$key
   key=''
@@ -397,9 +447,16 @@ elif [ -n "${OPENLDR_KEY_FILE+x}" ]; then
 else
   hand_session || exit 1
 fi
+# After the key file is read: its path may be relative to where the caller stood.
+go_home
 exec docker compose exec -T $pass -u "$(id -u):$(id -g)" -w / api node /app/cli/dist/index.js "$@"
 WRAPPER
-chmod +x "$DIR/openldr" 2>/dev/null || true
+then
+  wrapper_failed "$wrapper_tmp" "$DIR/openldr"
+fi
+# chmod can fail on a Windows file system, where the bit means nothing; the rename still counts.
+chmod +x "$wrapper_tmp" 2>/dev/null || true
+mv -f "$wrapper_tmp" "$DIR/openldr" || wrapper_failed "$wrapper_tmp" "$DIR/openldr"
 
 # ⛔ On Windows the wrapper above is unusable from PowerShell. It has no file extension and
 # PowerShell does not read shebangs, so `./openldr` never runs: Windows falls back to file
@@ -412,7 +469,9 @@ chmod +x "$DIR/openldr" 2>/dev/null || true
 # for in PowerShell (unproven: nothing on the Linux build machine runs PowerShell).
 case "$(uname -s 2>/dev/null)" in
   MINGW*|MSYS*|CYGWIN*)
-    cat > "$DIR/openldr.ps1" <<'PSWRAPPER'
+    wrapper_tmp="$DIR/.openldr.ps1.$$.tmp"
+    rm -f "$wrapper_tmp"
+    if ! cat > "$wrapper_tmp" <<'PSWRAPPER'
 # OpenLDR operator CLI. Runs inside the api container.
 # Files must live under .\data (mounted at /data) - e.g. .\openldr.ps1 ingest data/bundle.json
 # Signing in: on Windows the CLI signs in with an access key, set in OPENLDR_KEY. `-e NAME` with no
@@ -433,6 +492,10 @@ foreach ($name in 'OPENLDR_KEY', 'OPENLDR_URL', 'OPENLDR_ALLOW_PLAIN_HTTP') {
 docker compose exec -T @pass -w / api node /app/cli/dist/index.js $args
 exit $LASTEXITCODE
 PSWRAPPER
+    then
+      wrapper_failed "$wrapper_tmp" "$DIR/openldr.ps1"
+    fi
+    mv -f "$wrapper_tmp" "$DIR/openldr.ps1" || wrapper_failed "$wrapper_tmp" "$DIR/openldr.ps1"
     echo "→ Also wrote openldr.ps1 (PowerShell cannot run the extensionless sh wrapper)"
     ;;
 esac
@@ -442,6 +505,10 @@ esac
 # upgrade by the documented steps leaves the old wrapper on disk, which hands in no credential.
 # No download, no .env change, no compose file, no Docker check, no start.
 if [ "$WRAPPER_ONLY" -eq 1 ]; then
+  if [ -n "$OTHER_OPTION" ]; then
+    echo "✗ --wrapper-only takes no other option than --dir (got $OTHER_OPTION)." >&2
+    exit 2
+  fi
   if [ "$DIR_SET" -eq 0 ]; then
     echo "✗ --wrapper-only needs --dir <the install folder>, so a fresh install is never made by accident." >&2
     exit 2
