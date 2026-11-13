@@ -1,6 +1,7 @@
 # DISA and OpenLDR v1 migration in CE: design
 
-Status: order approved by the operator on 2026-11-13. Document awaiting review. No code written.
+Status: order approved by the operator on 2026-11-13. Part 1 is ready to build after design C
+is merged. Parts 2 to 4 are not designed yet. No code written.
 Date: 2026-11-13.
 Replaces the route in: `docs/cdr-source-plugin-scoping.md` and
 `2026-07-16-cdr-fhir-ingest-to-ce-design.md`. Both describe moving data with `cdr-toolchain`.
@@ -461,6 +462,12 @@ current, and nothing reads it yet. Mode 1 keeps saving through the one-pass impo
   up lookups.
 
 ## 11. Open questions
+
+The operator's decision on 2026-11-13: stop designing here. Build part 1 as planned once
+design C is merged, then settle the rest with the country teams. The questions below are
+past what can be checked from this machine. The operator can run queries only on the sample
+databases the countries provide, never on a country's real servers. None of these
+questions blocks tasks 1 to 13 of the part 1 plan.
 
 For the operator:
 
