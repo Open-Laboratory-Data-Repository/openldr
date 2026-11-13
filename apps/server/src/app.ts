@@ -37,6 +37,7 @@ import { registerActivityRoutes } from './activity-routes';
 import { registerNotificationRoutes } from './notification-routes';
 import { registerMePreferencesRoutes } from './me-preferences-routes';
 import { registerSetupRoutes } from './setup-routes';
+import { registerSampleDataRoutes } from './sample-data-routes';
 import { registerLayoutRoutes } from './layout-routes';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
 import { registerQueryRoutes } from './query-routes';
@@ -228,6 +229,7 @@ export async function buildApp(ctx: AppContext) {
   registerNotificationRoutes(app, ctx);
   registerMePreferencesRoutes(app, ctx);
   registerSetupRoutes(app, ctx);
+  registerSampleDataRoutes(app, ctx);
   registerLayoutRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
   registerFacilitiesRoutes(app, ctx);

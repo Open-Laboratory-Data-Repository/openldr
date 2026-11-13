@@ -36,6 +36,7 @@ import { createWebhookReceiptService } from './workflow-receipts';
 import { createDbContext } from './db-context';
 import { seedDatabase } from './seed';
 import { wipeInternalDatabase, clearAuditAndRunHistory } from './danger';
+import type { SampleDataDeps } from './sample-data';
 import { createReportScheduler, type ReportScheduler } from './report-scheduler';
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
@@ -2101,6 +2102,10 @@ export {
   type SetupCheck, type SetupCheckDeps, type SetupCheckId, type SetupHint, type SetupReport, type SetupStatus,
 } from './setup-checks';
 export {
+  installHoldsLabData, loadSampleData, LAB_DATA_RESOURCE_TYPES,
+  type SampleDataDeps, type SampleDataCounts,
+} from './sample-data';
+export {
   getUserPreferences, saveUserPreferences, parseStoredPreferences, userPreferencesPatchSchema, studioPathSchema,
   type UserPreferences, type UserPreferencesPatch,
 } from './user-preferences';
@@ -2175,6 +2180,17 @@ export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
     ctx.logger.warn({ err }, 'starter-pack reseed after factory reset failed');
   });
   ctx.featureFlags.invalidate();
+}
+
+/** What sample data touches, taken from a running app context. The route uses this. */
+export function sampleDataDeps(ctx: AppContext): SampleDataDeps {
+  return {
+    cfg: ctx.cfg,
+    targetEngine: ctx.targetEngine,
+    targetDb: ctx.store.db as unknown as SampleDataDeps['targetDb'],
+    listByType: (type, limit) => ctx.fhirStore.listByType(type, limit),
+    seedTarget: ctx,
+  };
 }
 export { inspectConnectorConfig, updateConnectorConfig, hostConnectorPatchSchema, hostConnectorCreateSchema, createHostConnector, testHostConnector, removeConnector, type ConnectorConfigView, type HostConnectorInput } from './connector-config';
 
