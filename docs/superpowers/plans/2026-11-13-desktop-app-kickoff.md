@@ -41,10 +41,22 @@ follow from that.
   everything that needs none of that. Collect what does need it in one list (see "THE
   HANDS-ON LIST").
 - Write to me for a phone. Lead with the answer. Short lines. No wide tables in a status
-  message. I may not see cards or buttons, so put every question in the text of your
-  closing message, with its choices.
-- Nobody is at the screen. A window you open still appears there. Keep it short and
-  close it.
+  message.
+- Ask me every decision with the AskUserQuestion tool: 2 to 4 options I can tap, the
+  one you recommend first. State the same question in plain text in your message too.
+  The next-step box and session cards may not show on my phone, so never rely on them
+  alone.
+- Nobody is at the screen, and I cannot see it from the phone. A window you open still
+  appears there: keep it short and close it. After a UI change, look at the picture
+  yourself and send me the key ones with SendUserFile, with one line on what to look at.
+- A browser pane approval card shows only on the Linux PC. If the pane waits on one, do
+  not wait for me: test with curl and say the click is untested.
+- A tool call that stops while I am away is not a refusal. Say so plainly.
+
+PACE. Spend the tokens on building. Test what you need to prove a thing works, and no
+more. Keep the reviews and the gate: they are how the work stays right. Leave polish,
+extra variations of a check, and every follow-up for later, and list them. I will go
+through details and follow-ups with you afterwards.
 
 THE ORDER. This replaces the order in section 7 of the spec, which put the Windows and
 macOS check first and made it a stop point. That check now waits for me, and nothing
