@@ -207,6 +207,41 @@ export const en = {
       data_analyst: 'Data Analyst',
       system_auditor: 'System Auditor',
     },
+    accessKeys: {
+      menuItem: 'Access keys',
+      title: 'Access keys for {{username}}',
+      description: 'An access key lets a program act as this account with no person present.',
+      actions: 'Access key actions',
+      newKey: 'New key',
+      formActions: 'New key actions',
+      create: 'Create key',
+      name: 'Name',
+      expires: 'Expires',
+      noExpiry: 'No expiry',
+      expiryHint: 'The key works until the end of this day, in your time zone.',
+      key: 'Key',
+      copy: 'Copy key',
+      copied: 'Copied.',
+      shownOnce: 'This key cannot be shown again. Copy it now.',
+      copyByHand: 'Copy did not work here. Select the key and copy it by hand.',
+      colName: 'Name',
+      colPrefix: 'Prefix',
+      colCreated: 'Created',
+      colExpires: 'Expires',
+      colLastUsed: 'Last used',
+      colStatus: 'Status',
+      statusActive: 'Active',
+      statusRevoked: 'Revoked',
+      statusExpired: 'Expired',
+      rowActions: 'Actions for {{name}}',
+      revoke: 'Revoke',
+      revokeTitle: 'Revoke {{name}}?',
+      revokeDescription: 'A program that uses this key is refused from now on. This cannot be undone.',
+      empty: 'No access keys yet.',
+      loadError: 'Could not load the keys: {{error}}',
+      createError: 'Could not create the key: {{error}}',
+      revokeError: 'Could not revoke the key: {{error}}',
+    },
   },
   // Only the value sets table is translated so far — the rest of the Terminology page is still
   // hardcoded English.
@@ -343,6 +378,95 @@ export const en = {
     actions: 'Actions',
     searchPlaceholder: 'Search roles',
     noMatch: 'No roles match.',
+    // One entry per key in packages/rbac/src/catalog.ts: 'users.manage' is capability.users.manage.
+    // The English text is the catalog's own (parity.test.ts checks it).
+    capability: {
+      dashboards: {
+        view: { label: 'View dashboards', description: 'Open the Dashboards workspace and see activity widgets.' },
+        create: { label: 'Create dashboards', description: 'Add new dashboards.' },
+        edit: { label: 'Edit dashboards', description: 'Modify dashboard layout and widgets.' },
+        delete: { label: 'Delete dashboards', description: 'Remove dashboards.' },
+      },
+      reports: {
+        view: { label: 'View reports', description: 'Open the Reports workspace and see report definitions.' },
+        run: { label: 'Run reports', description: 'Execute and preview reports.' },
+        export: { label: 'Export reports', description: 'Download report output (PDF/data).' },
+        edit_templates: { label: 'Edit report templates', description: 'Create and edit report definitions, categories, and designs.' },
+      },
+      forms: {
+        view: { label: 'Use forms', description: 'Open forms and read their definitions.' },
+        submit: { label: 'Submit forms', description: 'Capture data by hand: submitting a form WRITES clinical records to the FHIR store and the read model.' },
+        edit: { label: 'Edit forms', description: 'Create and modify form definitions; export form bundles.' },
+        publish: { label: 'Publish forms', description: 'Publish new form versions.' },
+      },
+      workflows: {
+        view: { label: 'View workflows', description: 'Open the Workflows workspace and see definitions and runs.' },
+        edit: { label: 'Edit workflows', description: 'Create and modify workflow definitions.' },
+        run: { label: 'Run workflows', description: 'Trigger workflow executions.' },
+        manage_secrets: { label: 'Manage workflow secrets', description: 'View and set encrypted workflow secrets.' },
+      },
+      query: {
+        run: { label: 'Use query workbench', description: 'Run ad-hoc SQL queries against analytics data.' },
+      },
+      users: {
+        view: { label: 'View users', description: 'Open the Users workspace and see accounts.' },
+        manage: { label: 'Manage users', description: 'Create, edit, enable, and disable user accounts.' },
+        reset_password: { label: 'Reset passwords', description: "Reset a user's password or send a reset email." },
+        force_logout: { label: 'Force logout', description: 'End all of a user’s active sessions.' },
+      },
+      facilities: {
+        view: { label: 'View facilities', description: 'Open the Facilities workspace and see the facility register.' },
+        manage: { label: 'Manage facilities', description: 'Create, edit and remove facility records.' },
+      },
+      patients: {
+        view: { label: 'View patient index', description: 'Open the Patient Index. Names and identifiers are masked, and search matches an exact identifier only.' },
+        view_identifiers: { label: 'View patient identifiers', description: 'See patient names, identifiers, date of birth, phone and email in full, and search by name. Every unmasked view is audited.' },
+        manage: { label: 'Manage patient index', description: 'Name identifier systems and choose which ones are listed and searched.' },
+      },
+      roles: {
+        view: { label: 'View roles', description: 'Open the Roles workspace and see roles and their capabilities.' },
+        manage: { label: 'Manage roles', description: 'Create, edit, delete roles and assign them to users.' },
+      },
+      terminology: {
+        view: { label: 'Browse terminology', description: 'Browse coding systems, value sets, and mappings.' },
+        manage: { label: 'Manage terminology', description: 'Import, edit, and build terminology and ontologies.' },
+      },
+      marketplace: {
+        view: { label: 'View marketplace', description: 'Browse available and installed plugins.' },
+        manage: { label: 'Manage marketplace', description: 'Install, publish, enable, disable, and remove plugins and registries.' },
+      },
+      connectors: {
+        manage: { label: 'Manage connectors', description: 'Configure external database and service connectors.' },
+      },
+      sync: {
+        view: { label: 'View sync', description: 'See lab⇄central sync status and activity.' },
+        manage: { label: 'Manage sync', description: 'Configure sync, enroll sites, and resolve divergences.' },
+      },
+      settings: {
+        view: { label: 'View settings', description: 'Open the Settings workspace.' },
+        edit_general: { label: 'Edit general settings', description: 'Change general, number, and validation settings.' },
+        feature_flags: { label: 'Manage feature flags', description: 'Toggle feature flags.' },
+        danger_zone: { label: 'Danger zone', description: 'Run destructive maintenance actions.' },
+      },
+      data_exposure: {
+        manage: { label: 'Manage data exposure', description: 'Hide additional table columns in the dashboard builder. Built-in dimensions, raw SQL, and connector-backed reports are outside this policy.' },
+      },
+      activity: {
+        view: { label: 'View activity', description: 'See the payload-lifecycle activity feed.' },
+      },
+      notifications: {
+        view: { label: 'View notifications', description: 'Receive notifications and set preferences.' },
+      },
+      audit: {
+        view: { label: 'View audit log', description: 'Read the audit event log.' },
+      },
+      ingest: {
+        run: { label: 'Run the ingest pipeline', description: 'Send files through the ingest pipeline and retry failed batches. Both write clinical records.' },
+      },
+      data: {
+        export: { label: 'Export all data', description: 'Write every FHIR resource and every warehouse table to files, patient details included.' },
+      },
+    },
   },
   forms: {
     testsEmpty: 'No tests chosen yet.',

@@ -52,6 +52,8 @@ export interface LauncherDeps {
   /** The built studio. `start` refuses to run without its index.html. */
   studioDist: string;
   appVersion: string;
+  /** The bundle's plain CLI entry (cliEntryFile), given to the server as CLI_ENTRY. */
+  cliEntry: string;
 }
 
 export interface Launcher {
@@ -140,6 +142,15 @@ export function launcherFiles(
   const appVersion =
     manifestVersion(resolve(appDir, '..', '..', 'package.json')) ?? manifestVersion(join(appDir, 'package.json')) ?? '0.0.0';
   return { studioDist: resolve(appDir, '..', 'studio', 'dist'), appVersion };
+}
+
+/**
+ * The bundle's second entry, the plain `openldr` CLI (tsup.config.ts). The server starts it for each
+ * command sent through the app. From `src/` in a checkout it is missing until the bundle is built,
+ * and the server then answers that the CLI entry cannot be found.
+ */
+export function cliEntryFile(appDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')): string {
+  return join(appDir, 'dist', 'cli.js');
 }
 
 function dataPaths(dataDir: string | undefined): StandalonePaths {
@@ -517,6 +528,7 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
         host: opts.host,
         studioDist: deps.studioDist,
         appVersion: deps.appVersion,
+        cliEntry: deps.cliEntry,
       }),
     );
     const cfg = loadConfig({ ...process.env });
@@ -624,10 +636,49 @@ export async function runStatus(opts: { dataDir?: string }, print: (line: string
   return 0;
 }
 
+/** URL host names that reach only this computer. The URL parser writes the IPv6 loopback in brackets. */
+const LOCAL_URL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
 /**
- * Runs the `openldr` CLI against this install. It needs a running launcher, because the CLI
- * connects to the bundled Postgres. The CLI gets the server's environment without LOG_FILE, so
- * its log lines go to standard error as they do in Docker. Returns the CLI's exit code.
+ * The environment for a command that is not a recovery command: the running launcher's address and
+ * the release version, and no database setting. The caller's own OPENLDR_KEY, OPENLDR_KEY_FILE and
+ * session are left as they are. Database URLs and a secrets key from the shell are removed: this
+ * process never needs them, and the client must hold none (spec section 3).
+ */
+function useLauncherAddress(lock: LockInfo, appVersion: string, args: readonly string[]): void {
+  for (const key of Object.keys(process.env)) {
+    if (key.endsWith('_DATABASE_URL') || key === 'SECRETS_ENCRYPTION_KEY') delete process.env[key];
+  }
+  // The client sends its version and the server refuses another one. The server runs with this one.
+  process.env.APP_VERSION = appVersion;
+  // A caller who set OPENLDR_URL keeps it, with their own plain-HTTP choice.
+  if (process.env.OPENLDR_URL?.trim()) return;
+  // Otherwise the launcher's own address. A real --server-url still wins: the client reads the
+  // option before the variable. After a `--` the same words are plain arguments, and the client
+  // then uses this address, not the default port 3000.
+  const address = new URL(lock.address);
+  process.env.OPENLDR_URL = address.origin;
+  // The client refuses plain HTTP to a host that is not this computer's loopback. A launcher started
+  // with --host on one address (a Tailscale address, say) is still this computer, and the lock is
+  // where that address came from, so plain HTTP to it is allowed for this one call. It is not allowed
+  // when the caller's words carry --server-url in any form: that address is the caller's, and may be
+  // another machine. A word that only looks like the option counts too; the cost is plain HTTP off.
+  if (args.some((a) => a === '--server-url' || a.startsWith('--server-url='))) return;
+  if (!LOCAL_URL_HOSTS.has(address.hostname)) process.env.OPENLDR_ALLOW_PLAIN_HTTP = 'true';
+}
+
+/** The part of the CLI that runCli uses. Loaded on first use; tests stub it. */
+type CliProgram = Pick<typeof import('@openldr/cli/program'), 'buildClientProgram' | 'commandKindOf'>;
+
+/**
+ * Runs the `openldr` CLI against this install. It needs a running launcher.
+ *
+ * A recovery command (spec section 6.7) works on the database itself, so it gets the server's
+ * environment without LOG_FILE, and its log lines go to standard error as they do in Docker. Any
+ * other command, an unknown one and `--help` included, gets only the launcher's address and the
+ * release version: an app command then goes through the running app as a signed-in caller, and no
+ * database URL or secrets key is in this process. The kind is found before any environment is built.
+ * Returns the CLI's exit code.
  */
 export async function runCli(opts: { dataDir?: string; args: string[] }, print: (line: string) => void = defaultPrint): Promise<number> {
   const paths = dataPaths(opts.dataDir);
@@ -636,31 +687,37 @@ export async function runCli(opts: { dataDir?: string; args: string[] }, print: 
     print(START_FIRST);
     return 1;
   }
-  // A running launcher made the state file. Never make a new one here.
-  const state = await loadOrCreateState(paths, () =>
-    Promise.reject(new Error(`The state file ${paths.stateFile} is missing.`)),
-  );
-  const settings = postgresSettings(state);
-  const secrets = [state.secretsKey, state.pgSuperPassword, state.pgAppPassword];
-  // The lock carries the HTTP port. A lock from before that field gets the default; the CLI
-  // serves nothing on it.
-  const port = lock.httpPort ?? DEFAULT_PORT;
-  const { LOG_FILE: _serverLog, ...env } = buildEnvironment({
-    paths,
-    state,
-    ...postgresUrls(settings),
-    port,
-    host: DEFAULT_HOST,
-    ...launcherFiles(),
-  });
-  applyEnvironment(env);
-  delete process.env.LOG_FILE;
+  const cli: CliProgram = await import('@openldr/cli/program');
+  const secrets: string[] = [];
+  if ((await cli.commandKindOf(opts.args)) === 'recovery') {
+    // A running launcher made the state file. Never make a new one here.
+    const state = await loadOrCreateState(paths, () =>
+      Promise.reject(new Error(`The state file ${paths.stateFile} is missing.`)),
+    );
+    const settings = postgresSettings(state);
+    secrets.push(state.secretsKey, state.pgSuperPassword, state.pgAppPassword);
+    // The lock carries the HTTP port. A lock from before that field gets the default; the CLI
+    // serves nothing on it.
+    const port = lock.httpPort ?? DEFAULT_PORT;
+    const { LOG_FILE: _serverLog, ...env } = buildEnvironment({
+      paths,
+      state,
+      ...postgresUrls(settings),
+      port,
+      host: DEFAULT_HOST,
+      ...launcherFiles(),
+      cliEntry: cliEntryFile(),
+    });
+    applyEnvironment(env);
+    delete process.env.LOG_FILE;
+  } else {
+    useLauncherAddress(lock, launcherFiles().appVersion, opts.args);
+  }
 
-  // Loaded after the environment is set, as the server is.
-  const { buildProgram } = await import('@openldr/cli/program');
+  // Run as the openldr entry runs it (packages/cli/src/index.ts): parseAsync, with the 'node' argv form.
   process.exitCode = undefined;
   try {
-    await buildProgram().parseAsync(['node', 'openldr', ...opts.args]);
+    await cli.buildClientProgram().parseAsync(['node', 'openldr', ...opts.args]);
   } catch (err) {
     process.stderr.write(`${hideSecrets(err, secrets).message}\n`);
     return 1;

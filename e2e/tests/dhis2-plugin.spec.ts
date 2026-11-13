@@ -28,7 +28,7 @@ import { test, expect, type FrameLocator, type Page } from '@playwright/test';
  *   - Full stack up (postgres + minio), server built: node apps/server/dist/index.js
  *     with AUTH_DEV_BYPASS=true (the playwright webServer sets this).
  *   - migration 036 applied (runs on server boot).
- *   - UI-bearing dhis2-sink installed:
+ *   - UI-bearing dhis2-sink installed, with the server running (the install goes through it):
  *       pnpm build:dhis2-sink && pnpm make:marketplace-bundle
  *       pnpm openldr plugin install reference-plugins/dhis2-sink/plugin.wasm
  *   - For step 4 (the live metadata pull): docker compose --profile dhis2 up, and a

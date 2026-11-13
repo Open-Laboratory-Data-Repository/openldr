@@ -189,7 +189,7 @@ Le fichier testé était valide. Votre résultat dépend du contenu de votre fic
 
 ### 4. Importer dans la base de développement
 
-Exécutez cette étape lorsque vous voulez importer le fichier. Vérifiez que `.env` désigne vos bases et votre stockage de développement. Ces services doivent être démarrés.
+Exécutez cette étape lorsque vous voulez importer le fichier. Vérifiez que `.env` désigne vos bases et votre stockage de développement. Ces services doivent être démarrés. L'API doit aussi tourner, car `ingest` et `pipeline status` passent par elle. Avec `AUTH_DEV_BYPASS=true`, elle connecte ces commandes.
 
 ```sh
 pnpm openldr ingest files/my-file.json
@@ -225,6 +225,8 @@ Placez-le dans le dossier d'installation utilisé précédemment :
 Exécutez la commande depuis `~/Downloads/openldr_ce`. Gardez le préfixe `data/`, car le chemin est relatif à ce dossier.
 
 La CLI installée s'exécute dans le conteneur API. Le dossier `data` est partagé avec ce conteneur. Sur un serveur distant, placez le fichier dans le dossier de ce serveur. Un fichier enregistré sur votre portable n'y est pas automatiquement copié.
+
+La plupart des commandes, dont `ingest`, passent par le serveur OpenLDR en marche. <!-- cli:linux -->Connectez-vous d'abord avec `./openldr login`, ou définissez une clé d'accès dans `OPENLDR_KEY`.<!-- /cli --><!-- cli:mac -->Connectez-vous d'abord avec `./openldr login`, ou définissez une clé d'accès dans `OPENLDR_KEY`.<!-- /cli --><!-- cli:windows -->Définissez d'abord une clé d'accès dans `OPENLDR_KEY`. Sous Windows, le CLI se connecte uniquement avec une clé d'accès. Cela n'a pas été lancé sous Windows.<!-- /cli --> Lisez [Utilisateurs](/docs/users) pour créer une clé d'accès.
 
 Utilisez également `data/` pour les fichiers de sortie. Mettez les chemins contenant des espaces entre guillemets, comme `"data/my file.json"`. Chaque guide explique le format attendu. Exécuter un import écrit des dossiers.
 
@@ -293,7 +295,7 @@ L'essai a retrouvé l'aide après le démarrage du conteneur. Il n'a pas vérifi
 
 ### L'import indique ENOENT pour mon fichier
 
-L'erreur testée était `ingest failed: ENOENT: no such file or directory, open 'my-file.json'`.
+L'erreur testée était `ingest failed: ENOENT: no such file or directory, open 'my-file.json'`. Ce test date d'avant le passage des commandes par le serveur. Maintenant la CLI vérifie d'abord le fichier et affiche `Cannot find my-file.json.` La correction ci-dessous reste la même.
 
 Le fichier existait à côté du lanceur. Le conteneur ne pouvait pas le lire, car seul le dossier `data` était partagé.
 

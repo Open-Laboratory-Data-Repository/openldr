@@ -75,16 +75,44 @@ export async function createSetupCode(ctx: SignInContext): Promise<string> {
   return signIn.createSetupCode();
 }
 
+interface CreateLocalAccountInput { username: string; name?: string; email?: string; roles?: string[] }
+
 /** The account must change the returned password at first sign-in. Every role slug must exist,
- *  or nothing is created: the directory drops an unknown slug, which would leave a user with no role. */
+ *  or nothing is created: the directory drops an unknown slug, which would leave a user with no role.
+ *  With `password: 'none'` no credential row is made, so the account cannot sign in with a
+ *  password, and the result has no password field at all. */
 export async function createLocalAccount(
   ctx: AccountContext,
   actor: AuditActor,
-  input: { username: string; name?: string; email?: string; roles?: string[] },
-): Promise<{ user: DirectoryUser; temporaryPassword: string }> {
+  input: CreateLocalAccountInput & { password: 'none' },
+): Promise<{ user: DirectoryUser }>;
+// Kept last: `ReturnType<typeof createLocalAccount>` reads the last signature.
+export async function createLocalAccount(
+  ctx: AccountContext,
+  actor: AuditActor,
+  input: CreateLocalAccountInput & { password?: 'temporary' },
+): Promise<{ user: DirectoryUser; temporaryPassword: string }>;
+export async function createLocalAccount(
+  ctx: AccountContext,
+  actor: AuditActor,
+  input: CreateLocalAccountInput & { password?: 'temporary' | 'none' },
+): Promise<{ user: DirectoryUser; temporaryPassword?: string }> {
   requireLocalSignIn(ctx);
   for (const slug of input.roles ?? []) {
     if (!(await ctx.roles.getBySlug(slug))) throw new UnknownRoleError(slug);
+  }
+  if (input.password === 'none') {
+    const user = await ctx.auth.directory.create({
+      username: input.username,
+      firstName: input.name,
+      email: input.email,
+      roles: input.roles,
+    });
+    await recordAuditEvent(ctx, actor, {
+      action: 'user.create', entityType: 'user', entityId: user.id, before: null, after: user,
+      metadata: { username: user.username, password: 'none' },
+    });
+    return { user };
   }
   const temporaryPassword = generateTemporaryPassword();
   const user = await ctx.auth.directory.create({

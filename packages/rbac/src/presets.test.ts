@@ -40,6 +40,36 @@ describe('system role presets', () => {
     expect(SYSTEM_ROLES.filter((r) => r.locked).map((r) => r.slug)).toEqual(['lab_admin']);
   });
 
+  // Task 7 adds ingest.run and data.export. No Studio screen gives an unlocked preset the same power,
+  // so lab_admin holds them and every other preset stays exactly as it was.
+  it('lab_admin holds every new key and the other presets are unchanged unless listed', () => {
+    const role = (slug: string) => SYSTEM_ROLES.find((r) => r.slug === slug)!.capabilities;
+    for (const key of ['ingest.run', 'data.export']) {
+      expect(role('lab_admin')).toContain(key);
+      expect(SYSTEM_ROLES.filter((r) => r.capabilities.includes(key)).map((r) => r.slug)).toEqual(['lab_admin']);
+    }
+    expect(role('lab_manager')).toEqual([
+      'dashboards.view', 'dashboards.create', 'dashboards.edit', 'dashboards.delete',
+      'reports.view', 'reports.run', 'reports.export', 'reports.edit_templates',
+      'forms.view', 'forms.submit', 'forms.edit', 'forms.publish',
+      'workflows.view', 'workflows.edit', 'workflows.run', 'workflows.manage_secrets',
+      'query.run',
+      'terminology.view', 'terminology.manage',
+      'facilities.view', 'facilities.manage',
+      'patients.view', 'patients.view_identifiers', 'patients.manage',
+      'activity.view', 'notifications.view',
+    ]);
+    expect(role('data_analyst')).toEqual([
+      'dashboards.view', 'reports.view', 'reports.run', 'reports.export', 'forms.view', 'query.run',
+      'terminology.view', 'facilities.view', 'patients.view', 'activity.view', 'notifications.view',
+    ]);
+    expect(role('system_auditor')).toEqual([
+      'dashboards.view', 'reports.view', 'forms.view', 'terminology.view', 'facilities.view', 'patients.view',
+      'activity.view', 'notifications.view', 'audit.view',
+    ]);
+    expect(role('lab_technician')).toEqual(['forms.view', 'forms.submit']);
+  });
+
   it('every preset capability is a real catalog key', () => {
     const keys = new Set(CAPABILITY_KEYS);
     for (const r of SYSTEM_ROLES) for (const c of r.capabilities) expect(keys.has(c)).toBe(true);

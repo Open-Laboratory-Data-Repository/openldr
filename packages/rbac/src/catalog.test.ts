@@ -11,9 +11,10 @@ describe('capability catalog', () => {
   // read-only echo and started writing clinical records.
   // 38 -> 40: facilities.view and facilities.manage were added for the Facilities workspace.
   // 40 -> 43: patients.view, patients.view_identifiers and patients.manage for the Patient Index.
-  it('exposes 43 unique capability keys', () => {
-    expect(CAPABILITY_KEYS.length).toBe(43);
-    expect(new Set(CAPABILITY_KEYS).size).toBe(43);
+  // 43 -> 45: ingest.run and data.export, for CLI commands that no Studio screen covers.
+  it('exposes 45 unique capability keys', () => {
+    expect(CAPABILITY_KEYS.length).toBe(45);
+    expect(new Set(CAPABILITY_KEYS).size).toBe(45);
   });
 
   it('separates submitting a form from viewing one', () => {
@@ -36,6 +37,16 @@ describe('capability catalog', () => {
   it('groups partition the catalog with no orphan or duplicate', () => {
     const flat = CAPABILITY_GROUPS.flatMap((g) => g.capabilities.map((c) => c.key));
     expect(flat.sort()).toEqual([...CAPABILITY_KEYS].sort());
+  });
+});
+
+describe('keys for CLI commands no Studio screen covers', () => {
+  it('has ingest.run and data.export, each in its own group', () => {
+    const find = (key: string) => CAPABILITIES.find((c) => c.key === key);
+    expect(find('ingest.run')?.group).toBe('ingest');
+    expect(find('data.export')?.group).toBe('data');
+    expect(CAPABILITY_GROUPS.find((g) => g.key === 'ingest')?.label).toBe('Ingest');
+    expect(CAPABILITY_GROUPS.find((g) => g.key === 'data')?.label).toBe('Data');
   });
 });
 

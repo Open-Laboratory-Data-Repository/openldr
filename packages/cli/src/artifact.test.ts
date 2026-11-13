@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
@@ -135,6 +135,41 @@ describe('artifact publish', () => {
     expect(verifyBundle(copied).valid).toBe(true);
     await rm(dir, { recursive: true, force: true });
   });
+
+  // The id and version become folder names under --to. A self-signed bundle can say anything,
+  // so an id such as ../outside would put the copy outside --to.
+  it.each(['../outside', '..', '.', 'a/b', 'a\\b', 'a\0b', '/abs'])(
+    'publish refuses a bundle whose id is %j and writes nothing outside --to',
+    async (badId) => {
+      await runArtifactKeygen({ out: dir, json: true, force: false });
+      await runArtifactNew('form', 'intake', { out: dir, json: true });
+      const proj = join(dir, 'intake');
+      const manifestPath = join(proj, 'manifest.json');
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>;
+      await writeFile(manifestPath, JSON.stringify({ ...manifest, id: badId }));
+      const bundleDir = join(dir, 'bundle');
+      expect(await runArtifactPack(proj, { key: join(dir, 'publisher.priv'), out: bundleDir, json: true })).toBe(0);
+
+      const reg = join(dir, 'reg');
+      const to = join(reg, 'to');
+      const outside = join(reg, 'outside');
+      await mkdir(to, { recursive: true });
+      await mkdir(outside, { recursive: true });
+      const before = (await readdir(reg)).sort();
+      let stderr = '';
+      const err = vi.spyOn(process.stderr, 'write').mockImplementation((c: unknown) => { stderr += String(c); return true; });
+      try {
+        expect(await runArtifactPublish(bundleDir, { to, json: true })).toBe(1);
+      } finally {
+        err.mockRestore();
+      }
+      expect(stderr).toContain("artifact publish failed: the bundle's id or version is not a safe folder name");
+      expect(await readdir(to)).toEqual([]);
+      expect(await readdir(outside)).toEqual([]);
+      expect((await readdir(reg)).sort()).toEqual(before);
+      await rm(dir, { recursive: true, force: true });
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

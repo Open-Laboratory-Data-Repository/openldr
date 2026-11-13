@@ -176,7 +176,7 @@ Normal use needs an existing v1 database. For a disposable SQL Server only, [exa
 
 The fixture creates a database. Read it before running and use a disposable server without a database named guide_v1. Ask your database operator to create a read-only account for it. No login credential is supplied in the file.
 
-In a source checkout, `pnpm build:v1-import` stages the reference importer. It needs Rust and the wasm32-wasip1 target. Install its staged file with `pnpm openldr plugin install reference-plugins/openldr-v1-import/plugin.wasm`. The unsigned build is for a test installation. Use your organisation's approved signed package in normal use.
+In a source checkout, `pnpm build:v1-import` stages the reference importer. It needs Rust and the wasm32-wasip1 target. Install its staged file with `pnpm openldr plugin install reference-plugins/openldr-v1-import/plugin.wasm`. That command goes through the running API, so start it and sign in first. The unsigned build is for a test installation. Use your organisation's approved signed package in normal use.
 
 ## Troubleshooting
 

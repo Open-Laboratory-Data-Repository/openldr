@@ -1,6 +1,6 @@
 import { createAppContext, dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig, recordAuditEvent } from '@openldr/bootstrap';
 import { loadConfig, LAB_LOGO_MIME, type SyncConfigView, type SyncConfigInput } from '@openldr/config';
-import { cliActor } from './cli-actor';
+import { callerName, cliActor } from './cli-actor';
 
 interface JsonOpt { json: boolean }
 
@@ -27,7 +27,7 @@ export async function runSettingsFlagsSet(key: string, value: string, opts: Json
   const ctx = await createAppContext(loadConfig());
   try {
     const before = await ctx.featureFlags.get(key);
-    await ctx.featureFlags.set(key, value === 'true', 'cli');
+    await ctx.featureFlags.set(key, value === 'true', callerName());
     await recordAuditEvent(ctx, cliActor(), { action: 'settings.flag.update', entityType: 'app_setting', entityId: key, metadata: { key, before, after: value === 'true' } });
     emit(opts.json, { ok: true, key, value: value === 'true' }, `set ${key} = ${value}`);
     return 0;
@@ -58,7 +58,7 @@ export async function runSettingsNumbersSet(key: string, value: string, opts: Js
     const before = await ctx.numberSettings.get(key).catch(() => null);
     let after: number;
     try {
-      after = await ctx.numberSettings.set(key, n, 'cli');
+      after = await ctx.numberSettings.set(key, n, callerName());
     } catch (e) {
       process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
       return 1;
@@ -137,7 +137,7 @@ export async function runSettingsSyncSet(field: string, value: string, opts: Jso
     const input: SyncConfigInput = { ...viewToInput(current), [f]: coerceSyncField(f, value) };
     let saved: SyncConfigView;
     try {
-      saved = await setSyncConfig(ctx.appSettings, input, 'cli', ctx.encryptSecret);
+      saved = await setSyncConfig(ctx.appSettings, input, callerName(), ctx.encryptSecret);
     } catch (e) {
       process.stderr.write(`invalid value: ${e instanceof Error ? e.message : String(e)}\n`);
       return 1;
@@ -178,7 +178,7 @@ export async function runSettingsValidationSet(level: string, opts: JsonOpt): Pr
   try {
     const before = await ctx.validationStrictness.get();
     const after = level as ValidationLevel;
-    await ctx.validationStrictness.set(after, 'cli');
+    await ctx.validationStrictness.set(after, callerName());
     await recordAuditEvent(ctx, cliActor(), { action: 'settings.validation_strictness', entityType: 'app_setting', entityId: 'validation.strictness', before: { strictness: before }, after: { strictness: after } });
     emit(opts.json, { ok: true, strictness: after }, `set strictness = ${after}`);
     return 0;
@@ -282,7 +282,7 @@ export async function runSettingsLabSet(opts: LabSetOpts): Promise<number> {
 
   const ctx = await createAppContext(loadConfig());
   try {
-    const errors = await ctx.labIdentity.set(patch, 'cli');
+    const errors = await ctx.labIdentity.set(patch, callerName());
     if (errors.length) {
       for (const e of errors) {
         process.stderr.write(`${e.key}: ${e.reason}\n`);

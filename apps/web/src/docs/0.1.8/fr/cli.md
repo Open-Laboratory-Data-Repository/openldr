@@ -30,7 +30,7 @@ L’aide liste les commandes sans modifier les données. Le lanceur exécute dan
 
 ### 3. Lire les options de la commande choisie
 
-Utilisez --help à chaque niveau. Les lectures proposent souvent --json. Les exemples de modification ci-dessous sont des alternatives, pas un script successif. Utilisez --actor NAME pour identifier l’opérateur plutôt que le compte du conteneur dans l’audit.
+Utilisez --help à chaque niveau. Les lectures proposent souvent --json. Les exemples de modification ci-dessous sont des alternatives, pas un script successif. La plupart des commandes passent par le serveur en marche, donc connectez-vous d'abord avec ./openldr login ou une clé d'accès. Sous Windows, .\openldr.ps1 se connecte uniquement avec une clé d'accès, donc définissez OPENLDR_KEY. Cela n'a pas été lancé sous Windows. Voir [Connexion du CLI et clés d'accès](/docs/cli-access).
 
 ```sh
 {{operator:cli-group-help}}
@@ -78,7 +78,7 @@ Utilisez un dépôt source avec dépendances et .env configurés. Ce n’est pas
 
 ### 1. Lancer l’aide depuis la racine du dépôt
 
-La racine contient package.json, pnpm-workspace.yaml, apps et packages. Le CLI utilise les services de .env sans nécessiter les serveurs API ou Studio de développement.
+La racine contient package.json, pnpm-workspace.yaml, apps et packages. Les commandes de récupération comme db migrate et health utilisent les services de .env. Toutes les autres commandes vont à l'API à l'adresse OPENLDR_URL, par défaut http://127.0.0.1:3000, donc démarrez d'abord l'API. Avec AUTH_DEV_BYPASS=true, l'API connecte ces commandes pour vous.
 
 ```sh
 {{operator:cli-dev-help}}
@@ -105,7 +105,7 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `./openldr: not found` ou `no configuration file provided: not found` | Revenez dans le véritable dossier d'installation, puis exécutez `./openldr --help`. Vérifiez la présence du lanceur et du fichier Compose. |
 | `failed to connect to the docker API` avec une adresse `DOCKER_HOST` incorrecte | Exécutez `docker info`. Si cette valeur forcée est incorrecte, retirez-la avec `unset DOCKER_HOST`, puis réessayez `docker info` et l'aide CLI. Sous PowerShell : `$env:DOCKER_HOST = $null`. Cela ne démarre pas Docker. |
 | `service "api" is not running` | Vérifiez `docker compose ps -a api`, exécutez `docker compose up -d api`, puis réessayez l'aide. L'essai prouve la reprise du lanceur, pas le démarrage HTTP complet de l'application. |
-| `ingest failed: ENOENT` avec un fichier à côté du lanceur | Déplacez le fichier dans le dossier `data` de l'installation. Exécutez `./openldr fhir validate data/my-file.json`, puis importez ce chemin si vous le souhaitez. La CLI de développement lit les chemins locaux ordinaires. |
+| `ingest failed: ENOENT`, ou `Cannot find <file>.` depuis que les commandes passent par l'application, avec un fichier à côté du lanceur | Déplacez le fichier dans le dossier `data` de l'installation. Exécutez `./openldr fhir validate data/my-file.json`, puis importez ce chemin si vous le souhaitez. La CLI de développement lit les chemins locaux ordinaires. |
 | `workflows` | Voir `workflows --help` pour les options opérateur. |
 | `connectors` | Voir `connectors --help` pour les options opérateur. |
 | `import` | Voir `import --help` pour les options opérateur. |
@@ -149,7 +149,7 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `storage` | `copy` copie les objets d'un autre compartiment S3 dans le stockage de cette installation. |
 | `target-store` | Teste la connexion à l'entrepôt cible. |
 
-Les commandes CLI qui modifient des données (`sync enroll/rotate/revoke`, `user create/set-role/activate/deactivate`, `settings … set`, `settings danger …`, `db reset`, `db reproject`, `terminology import/create`, `query import`) enregistrent un événement d'audit. Le type d'acteur est **`cli`** et le nom d'acteur est recherché **dans le conteneur**, pas dans le nom d'utilisateur de l'opérateur. Sur une installation Docker, ce nom suit l'uid de l'hôte qui lance le script : l'uid 1000 correspond à `node`, et la plupart des autres uid n'ont aucun nom d'utilisateur dans le conteneur. C'est alors la valeur de repli `cli` qui est enregistrée. Utilisez l'option globale `--actor <name>` pour enregistrer le vrai nom de l'opérateur. Ces événements apparaissent sur la page Audit, à côté des actions faites dans l'interface.
+Les commandes CLI qui modifient des données (`sync enroll/rotate/revoke`, `user create/set-role/activate/deactivate`, `settings … set`, `settings danger …`, `db reset`, `db reproject`, `terminology import/create`, `query import`) enregistrent un événement d'audit. Une commande qui passe par l'application enregistre le compte connecté, et `--actor` y est refusé. Une commande de récupération, comme `db reset`, enregistre le type d'acteur **`cli`** avec le nom de l'opérateur sur cette machine, ou l'option globale `--actor <name>`. Sur une installation Docker, ce nom est cherché dans le conteneur, donc c'est souvent `node` ou `cli`. Ces événements apparaissent sur la page Audit, à côté des actions faites dans l'interface. [Connexion du CLI et clés d'accès](/docs/cli-access) donne la sorte de chaque commande.
 
 ## Tâches courantes
 
@@ -279,7 +279,7 @@ Ouvrez le menu **Actions** de la ligne du compte pour le désactiver ou l'active
 
 Les comptes qui ne se sont jamais connectés reçoivent aussi un blocage local. L'activation met d'abord à jour le fournisseur, puis lève ce blocage. Si l'une des deux écritures échoue, l'action signale une erreur. Une désactivation échouée peut laisser le compte activé chez le fournisseur alors qu'OpenLDR bloque l'accès. Une activation échouée peut laisser le compte activé chez le fournisseur alors que le blocage local reste en place. Rétablissez la connexion en échec et relancez la même action. Les enregistrements d'audit utilisent `user.status.failed` pour les échecs et `user.status` pour les réussites.
 
-Pour la CLI, utilisez `openldr user deactivate <local-id>` ou `openldr user activate <local-id>`. Trouvez l'ID local avec `openldr users list`. Les comptes liés mettent à jour les deux systèmes avec leur identifiant chez le fournisseur. Les comptes créés uniquement dans le stockage local changent localement. Les enregistrements d'audit de statut de la CLI identifient l'acteur comme `cli`.
+Pour la CLI, utilisez `openldr user deactivate <local-id>` ou `openldr user activate <local-id>`. Trouvez l'ID local avec `openldr users list`. Les comptes liés mettent à jour les deux systèmes avec leur identifiant chez le fournisseur. Les comptes créés uniquement dans le stockage local changent localement. Les enregistrements d'audit nomment le compte connecté.
 
 Si un autre changement de statut est en cours pour ce compte, l'API renvoie `409`. Attendez la fin de cette action, puis réessayez. Cela s'applique aussi quand Studio et la CLI modifient le même compte.
 
@@ -296,12 +296,12 @@ Usage: openldr user end-sessions [options] <username>
 ```
 
 - `openldr auth setup-code` affiche un code à usage unique pour créer le premier administrateur dans Studio. Il est valable 30 minutes, et un nouveau code remplace le précédent. Dès qu'un administrateur existe, la commande refuse avec `an administrator already exists`. Le code n'est jamais écrit dans le journal d'audit.
-- `openldr user create --username <u>` crée un compte qui peut se connecter. La commande affiche l'ID du nouvel utilisateur et un mot de passe temporaire, une seule fois. La personne doit changer ce mot de passe à la première connexion. `--role` prend l'identifiant d'un rôle comme `lab_technician`. Un rôle qui n'existe pas fait refuser la commande avec `no role named <slug>`, et rien n'est créé. Tant que le premier administrateur n'existe pas, la commande refuse et vous dit de lancer `openldr auth setup-code`.
+- `openldr user create --username <u>` crée un compte qui peut se connecter. La commande affiche l'ID du nouvel utilisateur et un mot de passe temporaire, une seule fois. La personne doit changer ce mot de passe à la première connexion. `--role` prend l'identifiant d'un rôle comme `lab_technician`. Un rôle qui n'existe pas fait refuser la commande avec `no role named <slug>`, et rien n'est créé. Elle passe par l'application, donc connectez-vous d'abord avec un compte qui a `users.manage`. Créez le premier administrateur dans Studio avec un code de configuration. `--no-password` crée un compte qui ne peut pas se connecter, pour une clé d'accès.
 - `openldr user assign-role <subject> <slug>` ajoute un rôle. En connexion locale, le sujet est l'ID de l'utilisateur affiché par `user create`. Avec un nom d'utilisateur, la commande annonce un succès et n'accorde rien.
 - `openldr user reset-password <username> --force` définit un nouveau mot de passe temporaire, l'affiche une seule fois et ferme les sessions de l'utilisateur. Celui-ci doit choisir un nouveau mot de passe à la connexion suivante. Sans `--force`, la commande refuse et ne change rien. C'est ainsi qu'on récupère le mot de passe oublié d'un administrateur.
 - `openldr user end-sessions <username>` déconnecte l'utilisateur partout. Le mot de passe ne change pas.
 
-`reset-password` et `end-sessions` comparent le nom d'utilisateur exactement, majuscules comprises. Avec Keycloak ou OIDC, elles refusent avec `local sign-in is not enabled`. `user create`, `reset-password` et `end-sessions` écrivent un événement d'audit avec le type d'acteur `cli`. Un mot de passe temporaire n'apparaît jamais dans le journal d'audit.
+`reset-password` et `end-sessions` comparent le nom d'utilisateur exactement, majuscules comprises. Avec Keycloak ou OIDC, elles refusent avec `local sign-in is not enabled`. `reset-password` écrit un événement d'audit avec le type d'acteur `cli`. `user create` et `end-sessions` passent par l'application, et leurs événements d'audit nomment le compte connecté. Un mot de passe temporaire n'apparaît jamais dans le journal d'audit.
 
 ```
 ./openldr user create --username amina --name "Amina Hassan" --role lab_technician
@@ -359,7 +359,7 @@ Activer ou désactiver un examen dans ce laboratoire, ou le retirer et le rétab
 
 ![Utiliser le catalogue avec vos codes.](guide:operator-cli-fr-11)
 
-`enable` et `disable` fonctionnent sur toute installation. `retire` et `restore` ne fonctionnent que là où cette installation possède le catalogue. Le retrait est réversible, donc aucune de ces commandes ne prend `--force`. Chacune est enregistrée dans le journal d'audit au nom de l'utilisateur CLI.
+`enable` et `disable` fonctionnent sur toute installation. `retire` et `restore` ne fonctionnent que là où cette installation possède le catalogue. Le retrait est réversible, donc aucune de ces commandes ne prend `--force`. Chacune est enregistrée dans le journal d'audit au nom du compte connecté.
 
 Importer une liste d'examens depuis un fichier CSV ou Excel (.xlsx) :
 
@@ -381,7 +381,7 @@ Sans `--apply`, rien n'est écrit. La commande affiche le nombre de lignes nouve
 
 ![Enregistrer la correspondance dans le fichier JSON.](guide:operator-cli-fr-13)
 
-Une réponse de catégorie est `"kind": "existing"` avec un `code`, ou `"kind": "new"` avec un `code` et un `display`. Seule une installation qui possède le catalogue peut importer. Un import appliqué est enregistré dans le journal d'audit au nom de l'utilisateur CLI. Exportez les examens actifs en CSV, vers la sortie standard ou vers un fichier :
+Une réponse de catégorie est `"kind": "existing"` avec un `code`, ou `"kind": "new"` avec un `code` et un `display`. Seule une installation qui possède le catalogue peut importer. Un import appliqué est enregistré dans le journal d'audit au nom du compte connecté. Exportez les examens actifs en CSV, vers la sortie standard ou vers un fichier :
 
 ### 14. Utiliser le catalogue avec vos codes
 
@@ -435,7 +435,7 @@ Lier les champs de résultat à LOINC :
 - `result-fields unlink` refuse de s'exécuter sans `--force`. `result-fields import` affiche un aperçu, sauf si `--apply --force` est donné. Un laboratoire qui reçoit son dictionnaire du central ne peut pas modifier les liens.
 - `openldr terminology import parameters <file>` reconstruit `test_map` après avoir chargé le dictionnaire.
 
-Chaque changement est enregistré dans le journal d'audit au nom de l'utilisateur CLI.
+Chaque changement est enregistré dans le journal d'audit au nom du compte connecté.
 
 ## Installer un pack de contenu
 
@@ -447,7 +447,7 @@ Chaque changement est enregistré dans le journal d'audit au nom de l'utilisateu
 
 ![Prévisualiser un pack approuvé avant installation.](guide:operator-cli-fr-18)
 
-`--dry-run` lance les vérifications et affiche les étapes. Pour chaque étape de liaison de codes, elle affiche combien de codes elle lierait. Pour chaque étape test-mappings ou result-mappings, elle liste les correspondances qu'elle créerait, garderait et ignorerait. Elle n'écrit rien. Un pack de contenu doit être signé par un éditeur. Réinstaller un pack déjà installé demande `--force`. Un pack dont la dernière installation a échoué s'installe de nouveau sans cette option. `openldr market update` accepte les mêmes options. Elle installe une version plus récente d'un pack installé sans `--force`. Elle refuse la même version ou une version plus ancienne, ainsi qu'un pack non installé, sauf si vous passez `--force`. `--json` affiche une sortie lisible par une machine. `openldr market list` affiche les packs avec leur statut. La CLI enregistre l'acteur sous `cli`.
+`--dry-run` lance les vérifications et affiche les étapes. Pour chaque étape de liaison de codes, elle affiche combien de codes elle lierait. Pour chaque étape test-mappings ou result-mappings, elle liste les correspondances qu'elle créerait, garderait et ignorerait. Elle n'écrit rien. Un pack de contenu doit être signé par un éditeur. Réinstaller un pack déjà installé demande `--force`. Un pack dont la dernière installation a échoué s'installe de nouveau sans cette option. `openldr market update` accepte les mêmes options. Elle installe une version plus récente d'un pack installé sans `--force`. Elle refuse la même version ou une version plus ancienne, ainsi qu'un pack non installé, sauf si vous passez `--force`. `--json` affiche une sortie lisible par une machine. `openldr market list` affiche les packs avec leur statut. Le journal d'audit nomme le compte connecté.
 
 ## Préférences personnelles
 

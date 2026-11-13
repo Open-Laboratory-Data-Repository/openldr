@@ -15,7 +15,7 @@ import {
 import { unpackBundle } from '@openldr/sync';
 import { loadConfig } from '@openldr/config';
 import { redactError } from './redact-error';
-import { cliActor } from './cli-actor';
+import { cliActor, servedCaller } from './cli-actor';
 
 // `openldr sync status|now` — surfaces the live SyncHandle (status + triggerNow) that the server
 // exposes under /api/settings/sync/*. Distinct from `openldr settings sync …`, which edits the stored
@@ -188,7 +188,8 @@ export async function runSyncEnroll(
 
   const ctx = await createAppContext(loadConfig());
   try {
-    const result = await enrollSite(ctx, { siteId, name: opts.name ?? null, centralUrl, actor: null });
+    // enrolledBy takes the account id, as the route passes it. Null outside served mode, as before.
+    const result = await enrollSite(ctx, { siteId, name: opts.name ?? null, centralUrl, actor: servedCaller()?.id ?? null });
     await recordAuditEvent(ctx, cliActor(), {
       action: 'settings.sync.enroll',
       entityType: 'sync_site',

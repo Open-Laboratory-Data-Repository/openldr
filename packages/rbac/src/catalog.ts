@@ -74,6 +74,9 @@ const RAW: Omit<CapabilityMeta, never>[] = [
   { key: 'notifications.view', group: 'observability', label: 'View notifications', description: 'Receive notifications and set preferences.' },
   // Audit
   { key: 'audit.view', group: 'audit', label: 'View audit log', description: 'Read the audit event log.' },
+  // Ingest and Data: CLI commands that no Studio screen covers (openldr ingest, pipeline retry, export).
+  { key: 'ingest.run', group: 'ingest', label: 'Run the ingest pipeline', description: 'Send files through the ingest pipeline and retry failed batches. Both write clinical records.' },
+  { key: 'data.export', group: 'data', label: 'Export all data', description: 'Write every FHIR resource and every warehouse table to files, patient details included.' },
 ];
 
 const GROUP_LABELS: Record<string, string> = {
@@ -94,6 +97,8 @@ const GROUP_LABELS: Record<string, string> = {
   data_exposure: 'Data Exposure',
   observability: 'Observability',
   audit: 'Audit',
+  ingest: 'Ingest',
+  data: 'Data',
 };
 
 export const CAPABILITIES: CapabilityMeta[] = RAW;

@@ -230,7 +230,7 @@ A utilização normal exige uma base v1 existente. Apenas num SQL Server descart
 
 O ficheiro cria uma base. Leia-o antes de executar e use um servidor descartável sem uma base chamada guide_v1. Peça ao operador uma conta só de leitura. O ficheiro não fornece credenciais de início de sessão.
 
-No código-fonte, `pnpm build:v1-import` prepara o importador de referência. Exige Rust e o destino wasm32-wasip1. Instale o ficheiro com `pnpm openldr plugin install reference-plugins/openldr-v1-import/plugin.wasm`. A compilação sem assinatura destina-se a testes. Na utilização normal, use o pacote assinado aprovado pela organização.
+No código-fonte, `pnpm build:v1-import` prepara o importador de referência. Exige Rust e o destino wasm32-wasip1. Instale o ficheiro com `pnpm openldr plugin install reference-plugins/openldr-v1-import/plugin.wasm`. Esse comando passa pela API em execução, por isso inicie-a e inicie sessão primeiro. A compilação sem assinatura destina-se a testes. Na utilização normal, use o pacote assinado aprovado pela organização.
 
 ## Resolução de problemas
 

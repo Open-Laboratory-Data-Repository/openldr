@@ -20,6 +20,14 @@ describe('actorFromRequest', () => {
     const a = actorFromRequest(reqWith({ id: 'u1', username: 'ada', displayName: 'Ada', roles: ['lab_admin'] }));
     expect(a).toEqual({ actorType: 'user', actorId: 'u1', actorName: 'ada' });
   });
+  it('says a request came through an access key, with the key name only', () => {
+    const a = actorFromRequest(reqWith({ id: 'u1', username: 'ada', displayName: null, roles: [], capabilities: [], accessKey: { id: 'k1', name: 'backup job' } }));
+    expect(a).toEqual({ actorType: 'user', actorId: 'u1', actorName: 'ada', origin: { via: 'access-key', keyName: 'backup job' } });
+  });
+  it('gives no origin for a request signed in with a token', () => {
+    const a = actorFromRequest(reqWith({ id: 'u1', username: 'ada', displayName: null, roles: [], capabilities: [] }));
+    expect('origin' in a).toBe(false);
+  });
   it('falls back to a system actor when no req.user', () => {
     const a = actorFromRequest(reqWith(undefined));
     expect(a).toEqual({ actorType: 'system', actorId: null, actorName: 'System' });

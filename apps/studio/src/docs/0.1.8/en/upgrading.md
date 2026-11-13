@@ -118,6 +118,23 @@ Check container state, app health and logs. Read representative data and uploade
 
 ![Illustration. Check the new application before resuming traffic.](upgrading-guide-verify.png)
 
+### 3. Replace the openldr wrapper
+
+Run this in the install folder once the images are on the new release. It rewrites only the `openldr` wrapper, and `openldr.ps1` where the installer writes one. It changes nothing else. Without it, the old wrapper sends no sign-in, and every command that goes through the app answers `Sign in first: openldr login, or set OPENLDR_KEY.`
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh | bash -s -- --wrapper-only --dir .
+```
+
+On Windows, in PowerShell:
+
+```powershell
+$installer = Invoke-RestMethod https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.ps1
+& ([scriptblock]::Create($installer)) -WrapperOnly -Dir C:\openldr_ce
+```
+
+Then sign in with `./openldr login`, or set `OPENLDR_KEY`. On Windows, `.\openldr.ps1` signs in with a key only, so set `OPENLDR_KEY`. Neither command was run against a real install. The PowerShell form was not run on Windows.
+
 **Expected result:** The release is checked before new work arrives. Keep verified backups and previous images according to the site retention policy.
 
 ## Troubleshooting interrupted requests
@@ -132,7 +149,7 @@ New installer Compose files set `stop_grace_period: ${OPENLDR_STOP_GRACE_PERIOD:
 
 OpenLDR waits for active requests and workers while shutting down. A handler that never returns can outlast the grace period. Logs and process state must establish whether the shutdown actually drained. Never run `docker compose down -v` during an upgrade.
 
-If an older warehouse lacks result statuses, the release notes can require `openldr db reproject --force` after upgrading. This rebuilds projected data from canonical resources. Do it only when the target release requires it.
+If an older warehouse lacks result statuses, the release notes can require `openldr db reproject --force` after upgrading. This rebuilds projected data from canonical resources. It goes through the running app, so sign in first as an account with the `settings.danger_zone` permission. Do it only when the target release requires it.
 
 ## Older MinIO deployments moving to Garage
 

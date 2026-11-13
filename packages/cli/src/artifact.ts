@@ -1,5 +1,5 @@
 import { mkdir, writeFile, readFile, access, cp } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { createHash, createPublicKey } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import {
@@ -17,6 +17,7 @@ import { createWasmConverter, createExtismRunner, type PluginRunner } from '@ope
 import { createIngestContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { redactError } from './redact-error';
+import { callerName, servedCaller } from './cli-actor';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -165,6 +166,11 @@ export async function runArtifactSign(
   return runArtifactPack(dir, { ...opts, out: dir });
 }
 
+/** One folder name: not empty, not `.` or `..`, and no `/`, `\` or NUL. */
+function isSafeSegment(s: string): boolean {
+  return s !== '' && s !== '.' && s !== '..' && !/[/\\\0]/.test(s);
+}
+
 export async function runArtifactPublish(
   bundleDir: string,
   opts: JsonOpt & {
@@ -188,9 +194,18 @@ export async function runArtifactPublish(
     return 1;
   }
 
+  // The id and version become folder names under --to, and a self-signed bundle can say anything.
+  // Refuse anything that is not one plain folder name, then check the result is still inside --to.
+  const { id, version } = bundle.manifest;
+  const dest = join(opts.to, id, version);
+  const root = resolve(opts.to);
+  const inside = root.endsWith(sep) ? root : root + sep;
+  if (!isSafeSegment(id) || !isSafeSegment(version) || !resolve(dest).startsWith(inside)) {
+    process.stderr.write(`artifact publish failed: the bundle's id or version is not a safe folder name\n`);
+    return 1;
+  }
+
   try {
-    const { id, version } = bundle.manifest;
-    const dest = join(opts.to, id, version);
     await cp(bundleDir, dest, { recursive: true });
 
     if (opts.install) {
@@ -198,13 +213,13 @@ export async function runArtifactPublish(
       try {
         const approval = opts.approve
           ? {
-              approvedBy: opts.approvedBy ?? 'cli',
+              approvedBy: opts.approvedBy ?? callerName(),
               acknowledgedCapabilities: bundle.manifest.capabilities,
             }
           : undefined;
         const installed = await ctx.plugins.install(bundle.wasm, bundle.raw, {
           publicKeyDer: bundle.publicKeyDer,
-          actor: { name: 'cli' },
+          actor: servedCaller() ?? { name: 'cli' },
           ui: bundle.ui,
           approval,
         });

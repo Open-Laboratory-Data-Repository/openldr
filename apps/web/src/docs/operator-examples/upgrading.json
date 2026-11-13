@@ -66,6 +66,10 @@
     "unix": "./openldr health --json",
     "windows": ".\\openldr.ps1 health --json"
   },
+  "upgrade-wrapper": {
+    "unix": "curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh | bash -s -- --wrapper-only --dir .",
+    "windows": "$installer = Invoke-RestMethod https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.ps1\n& ([scriptblock]::Create($installer)) -WrapperOnly -Dir C:\\openldr_ce"
+  },
   "upgrade-reproject": {
     "unix": "./openldr db reproject --force",
     "windows": ".\\openldr.ps1 db reproject --force"

@@ -16,13 +16,17 @@ export interface EnvironmentInput {
   host: string;
   studioDist: string;
   appVersion: string;
+  /** The bundle's plain CLI entry, dist/cli.js. The server starts it for a command sent through the app. */
+  cliEntry: string;
 }
 
 /**
  * Builds every key a standalone server needs, and nothing more. It reads nothing from
  * `process.env`, so nothing from the shell or a `.env` file leaks in.
  *
- * Every path is inside the data folder, apart from the studio build, which ships with the app.
+ * Every path is inside the data folder, apart from the studio build and the CLI entry, which ship
+ * with the app. CLI_ENTRY names the CLI the server starts for a command sent through the app; the
+ * server's own default looks beside its module, which in this bundle is the wrong folder.
  * `TERMINOLOGY_WORK_DIR` is the `work` folder, which `ensureFolders` creates: an ingest makes its
  * own scratch folder there and removes it. Unset, it would fall back to the system temp folder.
  *
@@ -57,6 +61,7 @@ export function buildEnvironment(input: EnvironmentInput): Record<string, string
     TERMINOLOGY_WORK_DIR: paths.work,
     WEB_DIST_DIR: input.studioDist,
     APP_VERSION: input.appVersion,
+    CLI_ENTRY: input.cliEntry,
   };
 }
 
@@ -81,6 +86,7 @@ function check(input: EnvironmentInput): void {
     ['paths.work', input.paths.work],
     ['paths.serverLog', input.paths.serverLog],
     ['studioDist', input.studioDist],
+    ['cliEntry', input.cliEntry],
   ];
   for (const [field, value] of absolute) {
     if (!isAbsolute(value)) refuse(field, 'must be an absolute path');

@@ -162,6 +162,15 @@ curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/ope
 
 Accepts `--dir`, `--branch`, `--seed` (loads the WHONET sample dataset), `--reset-db`, and `--no-services`. Windows: [`install/development.ps1`](install/development.ps1).
 
+With `--seed`, the script first checks that nothing listens on port 3000, on any address. It does this before it installs or changes anything. On a fresh setup or with `--reset-db`, it then works in this order:
+
+1. It builds the WHONET sample and the plugins.
+2. It checks port 3000, then runs `db reset` and `db seed`.
+3. It checks port 3000, then runs a second `db reset`.
+4. It checks port 3000, then starts its own API there and loads the sample through it.
+
+Any program listening on port 3000 stops the script at each check. After the first reset, a stop at a port check or at the API start says the database was reset. It also says how to run the script again. The load signs in through `AUTH_DEV_BYPASS=true`, which the script writes into a new `.env`. If your `.env` lacks it, the load is refused after the database was reset. A key in `OPENLDR_KEY` or `OPENLDR_KEY_FILE` is refused too, because the reset removed it. When the load fails, the script ends with `seed load failed` and does not say the database was reset. The API stays running after the load. None of this was run.
+
 ### 3. Manual setup
 
 **Prerequisites:** Node.js 20+ (LTS), pnpm (enable with `corepack enable`), Docker & Docker Compose.
@@ -185,11 +194,15 @@ pnpm -C apps/studio dev      # terminal 2 — Studio dev server (HMR)
 pnpm -C apps/web dev         # terminal 3 (optional) — public landing site + docs
 ```
 
-Optional sample data — builds the WASM plugins, resets the DB, and ingests a WHONET export. Requires the Rust/WASM toolchain (see [`wasm/rust-toolchain.toml`](wasm/rust-toolchain.toml)):
+Optional sample data. It builds the WASM plugins, resets the DB, and ingests a WHONET export. Requires the Rust/WASM toolchain (see [`wasm/rust-toolchain.toml`](wasm/rust-toolchain.toml)). The reset runs on the database itself. The plugin install and the ingest go through the running API at `OPENLDR_URL`, by default `http://127.0.0.1:3000`. That must be the API on the database you just reset. They need a signed-in caller. Right after the reset no account or key exists, so the API must run with `AUTH_DEV_BYPASS=true` in `.env`. Your shell must not set `OPENLDR_KEY` or `OPENLDR_KEY_FILE`. So stop the API first:
 
 ```bash
-pnpm e2e:seed
+pnpm e2e:seed:reset          # with the API stopped
+pnpm -C apps/server dev      # terminal 1: boots on the fresh schema
+pnpm e2e:seed:load           # through that API
 ```
+
+`pnpm e2e:seed` runs both halves in one line, and resets the schema under an API that is already running. Whether a running API copes with that was not checked. See [`e2e/README.md`](e2e/README.md).
 
 Opt-in backing services:
 

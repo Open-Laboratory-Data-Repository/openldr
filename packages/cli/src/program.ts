@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, Option, type ParseOptions } from 'commander';
 import { loadConfig } from '@openldr/config';
 import { createAppContext } from '@openldr/bootstrap';
 import { exitCodeFor, formatHealthTable } from './format';
@@ -17,7 +17,7 @@ import { runAuditList } from './audit';
 import { runWorkflowReceiptsList, runWorkflowReceiptShow } from './workflows';
 import {
   runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus, runUserPreferencesShow, runUserPreferencesSet,
-  runUserResetPassword, runUserEndSessions,
+  runUserResetPassword, runUserEndSessions, runUserKeyList, runUserKeyCreate, runUserKeyRevoke,
 } from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
@@ -59,10 +59,31 @@ import {
 } from './patients';
 import { runQueryExport, runQueryImport } from './query';
 import { setActorOverride } from './cli-actor';
+import { guardServed, NAME_OPTIONS, nameRefusalText } from './served';
+import { commandPath, runCommandsList } from './command-list';
+import { COMMAND_META, type CommandKind } from './command-meta';
+import { assertSafeUrl, CredentialError, findCredential, PlainHttpError, serverUrl } from './client/credentials';
+import { NOT_PREPARED, runThroughApp, wordsAfterPath } from './client/run-through-app';
+import { runLogin, runLogout, runWhoami, type LoginIo } from './client/session';
+import { homeOf } from './client/session-file';
+
+/** login, logout and whoami run in this process, on the real terminal and environment. */
+function loginIo(): LoginIo {
+  return {
+    env: process.env, platform: process.platform, homedir: homeOf(process.env, process.platform),
+    stdin: process.stdin, out: process.stdout, err: process.stderr,
+  };
+}
+
+/** The server address for login, logout and whoami: the client program's root --server-url, then
+ *  OPENLDR_URL, then the default. buildProgram() alone has no --server-url. */
+function sessionServerUrl(program: { opts(): Record<string, unknown> }): string {
+  return serverUrl({ url: program.opts().serverUrl as string | undefined, env: process.env });
+}
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
-//  - index.ts's module-level side effect is just `buildProgram().parseAsync(process.argv)`,
-//    unconditionally, exactly like a normal CLI entry point (no is-main-module guard to get wrong).
+//  - index.ts needs no is-main-module guard. It builds the tree and parses either the real
+//    process argv or, when the server started it, the argv the server handed over (served.ts).
 //  - tests can construct their own fresh Command per test to exercise commander's own option
 //    defaults (e.g. `facilities import`'s `--apply` default) without any shared state between
 //    tests and without triggering a real parse of the test runner's own argv.
@@ -1266,9 +1287,28 @@ export function buildProgram(): Command {
     .option('--name <n>', 'display name')
     .option('--email <e>', 'email')
     .option('--role <r...>', 'role (repeatable)')
+    .option('--no-password', 'make the account with no password, so it cannot sign in to Studio (for an account that uses access keys; local sign-in only)')
     .option('--json', 'emit JSON', false)
-    .action(async (opts: { username: string; name?: string; email?: string; role?: string[]; json: boolean }) => {
+    .action(async (opts: { username: string; name?: string; email?: string; role?: string[]; password: boolean; json: boolean }) => {
       try { process.exitCode = await runUserCreate(opts); } catch (err) { process.stderr.write(`user create failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  const userKey = user.command('key').description("A user's access keys, which let a program act as that user");
+  userKey.command('list <username>').description('List the user\'s access keys. A key itself is never shown again.')
+    .option('--json', 'emit JSON', false)
+    .action(async (username: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runUserKeyList(username, opts); } catch (err) { process.stderr.write(`user key list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  userKey.command('create <username>').description('Make an access key and print it once, alone on standard output')
+    .requiredOption('--name <name>', 'a name for the key, such as the program that uses it')
+    .option('--expires <date>', 'expiry: an ISO date-time ending in Z or an offset, or a bare YYYY-MM-DD, which means the end of that day in UTC')
+    .option('--json', 'emit { key, record } as JSON', false)
+    .action(async (username: string, opts: { name: string; expires?: string; json: boolean }) => {
+      try { process.exitCode = await runUserKeyCreate(username, opts); } catch (err) { process.stderr.write(`user key create failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  userKey.command('revoke <username> <keyId>').description('Revoke an access key (refuses without --force)')
+    .option('--force', 'confirm any program using the key loses access', false)
+    .action(async (username: string, keyId: string, opts: { force: boolean }) => {
+      try { process.exitCode = await runUserKeyRevoke(username, keyId, opts); } catch (err) { process.stderr.write(`user key revoke failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
   user.command('reset-password <username>')
     .description('Set a temporary password and end the user\'s sessions (local sign-in only; refuses without --force)')
@@ -1427,7 +1467,232 @@ export function buildProgram(): Command {
   artifact.command('publish <bundleDir>').requiredOption('--to <registryDir>').option('--install', 'also install into the running CE', false).option('--approve', 'approve requested capabilities on install', false).option('--approved-by <actor>').option('--json', 'emit JSON', false)
     .action(async (bundleDir: string, o: { to: string; install: boolean; approve: boolean; approvedBy?: string; json: boolean }) => { process.exitCode = await runArtifactPublish(bundleDir, o); });
 
+  // Reads only this tree and the command table. Needs no server and no database settings.
+  program.command('commands')
+    .description('List every command and how it runs: through the app, recovery, or on this machine')
+    .option('--json', 'emit JSON', false)
+    .action((opts: { json: boolean }) => { process.exitCode = runCommandsList(program, opts); });
+
+  // Sign a person in from this terminal (spec section 6.2). They talk to the server's sign-in
+  // routes and never to a database. There is no --password option: other users can read command lines.
+  program.command('login')
+    .description('Sign in to the OpenLDR server and keep the session for later commands')
+    .option('--username <name>', 'the account to sign in as (asked for when absent)')
+    .option('--password-stdin', 'read the password from standard input, one line', false)
+    // The Docker wrapper's plumbing (client/session-file.ts): print the session, keep no file. It is
+    // hidden from help, and no user doc names it.
+    .addOption(new Option('--session-out').hideHelp().default(false))
+    .action(async (o: { username?: string; passwordStdin: boolean; sessionOut: boolean }) => {
+      process.exitCode = await runLogin({
+        url: sessionServerUrl(program), username: o.username, passwordStdin: o.passwordStdin, sessionOut: o.sessionOut,
+      }, loginIo());
+    });
+  program.command('logout')
+    .description('End the session on the server and remove it from this machine')
+    .action(async () => { process.exitCode = await runLogout({ url: sessionServerUrl(program) }, loginIo()); });
+  program.command('whoami')
+    .description('Show the account, its roles, and how this machine signs in to the server')
+    .option('--json', 'emit JSON', false)
+    .action(async (o: { json: boolean }) => { process.exitCode = await runWhoami({ url: sessionServerUrl(program), json: o.json }, loginIo()); });
+
+  // Served mode only: refuse, before any action, a command the server did not check. Does nothing
+  // when the server did not start this process.
+  program.hook('preAction', (_root, actionCommand) => guardServed(program, actionCommand));
   program.hook('preAction', () => setActorOverride(program.opts().actor as string | undefined));
+
+  return program;
+}
+
+/** Ends the client program's parse after the hook sent or refused a command. process.exitCode holds
+ *  the result. The client program's parseAsync catches it, so it never reaches a caller. */
+class SentThroughApp extends Error {
+  constructor() {
+    super('The command was sent through the app.');
+    this.name = 'SentThroughApp';
+  }
+}
+
+export interface ClientIo {
+  out: NodeJS.WritableStream;
+  err: NodeJS.WritableStream;
+  signals: NodeJS.EventEmitter;
+  env: NodeJS.ProcessEnv;
+}
+
+/** The caller's words after the program name, as commander picks them (the 'node' and 'user' forms
+ *  only). Null for any other form. */
+function userArgsOf(argv: readonly string[] | undefined, parseOptions: ParseOptions | undefined): string[] | null {
+  const from = parseOptions?.from;
+  if (from === 'user') return argv ? [...argv] : null;
+  if (from !== undefined && from !== 'node') return null;
+  if (argv) return argv.slice(2);
+  if (process.versions.electron || process.execArgv.some((a) => ['-e', '--eval', '-p', '--print'].includes(a))) return null;
+  return process.argv.slice(2);
+}
+
+/** Parses a whole line with a fresh program, runs no action and prints nothing. Null when commander
+ *  refuses the line. */
+async function parseWithoutRunning(path: string, argv: string[]): Promise<{ args: string[]; opts: Record<string, unknown> } | null> {
+  const fresh = buildProgram();
+  let leaf: Command | undefined;
+  const quiet = (c: Command): void => {
+    c.exitOverride();
+    c.configureOutput({ writeOut: () => {}, writeErr: () => {}, outputError: () => {} });
+    if (c.parent && c.commands.length === 0 && commandPath(c) === path) leaf = c;
+    c.commands.forEach(quiet);
+  };
+  quiet(fresh);
+  const found = leaf;
+  if (!found) return null;
+  let got: { args: string[]; opts: Record<string, unknown> } | null = null;
+  found.action(() => { got = { args: [...found.args], opts: { ...found.opts() } }; });
+  try {
+    await fresh.parseAsync(argv, { from: 'user' });
+  } catch {
+    return null;
+  }
+  return got;
+}
+
+/** What a recovery command prints when this machine has no database settings (spec section 6.7). */
+export const NEEDS_DATABASE = 'This command works on the database itself. Run it on the machine that runs OpenLDR.';
+
+/**
+ * True when INTERNAL_DATABASE_URL is set once the config file has been looked for, the way a
+ * command's own loadConfig() looks for it. A mistake in any other setting is left for the command
+ * to report, with today's message.
+ */
+function hasDatabaseSettings(env: NodeJS.ProcessEnv): boolean {
+  try {
+    loadConfig(env);
+  } catch {
+    // The command reads the config again and says what is wrong.
+  }
+  return Boolean(env.INTERNAL_DATABASE_URL?.trim());
+}
+
+/**
+ * The table kind of the command these words name (the caller's words after the program name).
+ * Parsed with a fresh program that runs no action and prints nothing. Null when the words ask for
+ * help, name no command in the table, or do not parse. The standalone launcher uses it to decide,
+ * before it builds any environment, whether this call gets the database settings.
+ *
+ * The program's own preAction hooks still run: guardServed does nothing outside served mode, and
+ * setActorOverride records the same --actor the real run records next.
+ */
+export async function commandKindOf(words: readonly string[]): Promise<CommandKind | null> {
+  const fresh = buildProgram();
+  // The client program's root option, so a line that uses it parses here too.
+  fresh.option('--server-url <address>', 'the OpenLDR server to send commands to');
+  const found: { path?: string } = {};
+  const quiet = (c: Command): void => {
+    c.exitOverride();
+    c.configureOutput({ writeOut: () => {}, writeErr: () => {}, outputError: () => {} });
+    if (c.parent && c.commands.length === 0) c.action(() => { found.path = commandPath(c); });
+    c.commands.forEach(quiet);
+  };
+  quiet(fresh);
+  try {
+    await fresh.parseAsync([...words], { from: 'user' });
+  } catch {
+    return null;
+  }
+  const path = found.path;
+  return path !== undefined && Object.hasOwn(COMMAND_META, path) ? COMMAND_META[path]!.kind : null;
+}
+
+/**
+ * The program the `openldr` entry runs outside served mode. It is buildProgram() plus the root
+ * option --server-url and a preAction hook that sends each `app` command through the running app
+ * instead of running it here, always. Only a `local` command, a `recovery` command, and an `app`
+ * command whose table entry says this call is local run here. A recovery command with no database
+ * settings stops with NEEDS_DATABASE. No flag, setting or variable changes this (spec section 3).
+ *
+ * Call parseAsync with the 'node' argv form (index.ts) or { from: 'user' }. The words sent are taken
+ * from the argv that was parsed, not read again from process.argv.
+ */
+export function buildClientProgram(io: Partial<ClientIo> = {}): Command {
+  const out = io.out ?? process.stdout;
+  const err = io.err ?? process.stderr;
+  const signals = io.signals ?? process;
+  const env = io.env ?? process.env;
+  const program = buildProgram();
+  program.option('--server-url <address>', 'the OpenLDR server to send commands to (default: OPENLDR_URL, then http://127.0.0.1:3000)');
+
+  // Keeps the words commander parses, so the hook can send exactly those. A command the hook sent
+  // or refused ends the parse with SentThroughApp; it is caught here, so parseAsync resolves with
+  // process.exitCode set and no caller needs to know the error exists.
+  let userArgs: string[] | null = null;
+  const parseAsync = program.parseAsync.bind(program);
+  program.parseAsync = (async (argv?: readonly string[], parseOptions?: ParseOptions) => {
+    userArgs = userArgsOf(argv, parseOptions);
+    try {
+      return await parseAsync(argv, parseOptions);
+    } catch (e) {
+      if (e instanceof SentThroughApp) return program;
+      throw e;
+    }
+  }) as Command['parseAsync'];
+  // The hook is async, so a sync parse would not wait for it.
+  program.parse = (() => {
+    throw new Error('The openldr client program must be run with parseAsync, not parse.');
+  }) as Command['parse'];
+
+  const send = async (cmd: Command, path: string): Promise<number> => {
+    const fail = (message: string): number => { err.write(`${message}\n`); return 1; };
+    const meta = COMMAND_META[path]!;
+    const args = [...cmd.args];
+    const opts = { ...cmd.opts() };
+    const why = meta.refuse?.(args, opts) ?? null;
+    if (why) return fail(why);
+    if (program.getOptionValueSource('actor') === 'cli') {
+      return fail('--actor cannot be used through the app. The signed-in account is recorded.');
+    }
+    // Refused here, before anything is uploaded or started. The child refuses it too, for a
+    // hand-made request.
+    for (const flag of NAME_OPTIONS) {
+      const option = cmd.options.find((o) => o.long === flag);
+      if (option && cmd.getOptionValue(option.attributeName()) !== undefined) return fail(nameRefusalText(flag));
+    }
+    const tokens = userArgs ? wordsAfterPath(program, path, userArgs) : null;
+    if (!tokens) return fail(NOT_PREPARED);
+    let url: string;
+    let credential;
+    try {
+      url = serverUrl({ url: program.opts().serverUrl as string | undefined, env });
+      assertSafeUrl(url, env);
+      credential = await findCredential(env, url);
+    } catch (e) {
+      if (e instanceof PlainHttpError || e instanceof CredentialError) return fail(e.message);
+      throw e;
+    }
+    return runThroughApp({
+      path, tokens, meta, command: cmd, parsedArgs: args, parsedOpts: opts,
+      reparse: (argv) => parseWithoutRunning(path, argv),
+      url, credential, env, out, err, signals,
+    });
+  };
+
+  program.hook('preAction', async (_root, cmd) => {
+    const path = commandPath(cmd);
+    const meta = Object.hasOwn(COMMAND_META, path) ? COMMAND_META[path] : undefined;
+    if (!meta) {
+      // Fail closed: a command the table does not know is never run here unchecked.
+      err.write(`${path} has no entry in the command table, so it cannot run.\n`);
+      process.exitCode = 1;
+      throw new SentThroughApp();
+    }
+    if (meta.kind === 'recovery') {
+      if (hasDatabaseSettings(env)) return;
+      err.write(`${NEEDS_DATABASE}\n`);
+      process.exitCode = 1;
+      throw new SentThroughApp();
+    }
+    if (meta.kind !== 'app') return;
+    if (meta.localWhen?.([...cmd.args], cmd.opts())) return;
+    process.exitCode = await send(cmd, path);
+    throw new SentThroughApp();
+  });
 
   return program;
 }

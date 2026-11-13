@@ -222,7 +222,7 @@ A package whose details cannot load keeps installation disabled. Check registry 
 
 ## Use a local bundle from the CLI
 
-Follow [Start here](/docs/start-here) for CLI setup. From `openldr_ce`, CLI install reads a bundle directory on the server. It does not browse the Studio registry list. Verify and dry-run before applying an approved bundle.
+Follow [Start here](/docs/start-here) for CLI setup. From `openldr_ce`, CLI install sends a bundle directory from your machine to the running server, so sign in first. It does not browse the Studio registry list. Verify and dry-run before applying an approved bundle.
 
 ```shell
 pnpm openldr market list

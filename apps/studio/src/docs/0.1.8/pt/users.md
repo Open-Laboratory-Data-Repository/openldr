@@ -230,6 +230,36 @@ Verifique o nome de utilizador e selecione **Force sign-out**.
 
 ![A página confirma o fim de todas as sessões.](users-guide-logout-result.png)
 
+## Criar uma chave de acesso para uma IA
+
+Use isto quando um agente de IA ou um script tiver de correr comandos `openldr` com a sua própria conta. Age com a chave, sem nenhuma pessoa iniciar sessão. Isto exige Manage users. Crie primeiro a conta da IA com **Criar uma conta de operador** acima. Deixe **Password** em branco, e escolha o papel mais restrito que chega para o trabalho.
+
+1. Selecione **Users** no menu principal.
+2. Pesquise a conta da IA pelo nome de utilizador.
+3. Abra os pontos da linha e selecione **Chaves de acesso**.
+4. Abra os pontos no canto superior direito do painel e selecione **Nova chave**.
+5. Escreva um nome em **Nome**, por exemplo `claude-test`.
+6. Selecione **Expira em** e escolha o último dia em que a chave pode funcionar.
+7. Abra os pontos de **Nova chave** e selecione **Criar chave**.
+8. Selecione o botão de cópia ao lado de **Chave**, e cole a chave onde a IA a lê.
+
+**Resultado esperado:** a chave aparece uma só vez, com "Esta chave não pode voltar a ser mostrada. Copie-a agora." A tabela lista a chave como Ativa, com o nome e os primeiros caracteres da chave.
+
+Dê à IA a chave e o endereço do servidor. Só pode correr os comandos que o seu papel permite. Não pode correr os comandos que trabalham na própria base de dados, nem registar o trabalho em nome de outra pessoa. Cada comando que corre fica no registo Audit com a sua conta e o nome da chave. A página do site **Início de sessão do CLI e chaves de acesso** mostra como um programa usa a chave. Estes passos não foram verificados no ecrã. As etiquetas vêm dos textos do Studio.
+
+## Revogar uma chave de acesso
+
+Use isto quando o trabalho da IA terminar, ou quando uma chave possa ter sido divulgada.
+
+1. Selecione **Users** no menu principal.
+2. Pesquise a conta pelo nome de utilizador.
+3. Abra os pontos da linha e selecione **Chaves de acesso**.
+4. Encontre a chave pelo nome e pelos primeiros caracteres.
+5. Abra os pontos no fim da linha da chave e selecione **Revogar**.
+6. Confirme o nome da chave na confirmação e selecione **Revogar**.
+
+**Resultado esperado:** o estado da chave passa a Revogada. Um programa que a use é recusado a partir da chamada seguinte. Um comando que já tenha iniciado continua até ao fim. Uma revogação não pode ser anulada. Crie uma chave nova se a IA voltar a precisar de acesso.
+
 ## Usar Users num telemóvel
 
 Use o mesmo diretório e painel de conta no telemóvel. Colunas largas podem exigir deslocamento horizontal.
@@ -258,6 +288,8 @@ Use uma instalação de teste e um operador fictício. Siga as tarefas com o seu
 
 Users não permite eliminar contas. Desative o acesso quando uma conta já não deve entrar. Os campos abaixo de Role dependem do formulário Users publicado. O OpenLDR não configura aqui o envio de email do fornecedor.
 
+Uma chave só é mostrada uma vez, quando a cria. O Studio não guarda nenhuma cópia. Uma data de expiração significa o fim desse dia no fuso horário do seu navegador. Numa instalação Keycloak ou OIDC, dê os papéis à conta da IA aqui, em Users. Desativar a conta só no fornecedor de identidade não bloqueia as suas chaves. Desative-a aqui, ou revogue a chave.
+
 ## Resolução de problemas
 
 **New user ou as ações de palavra-passe não aparecem.** Leia o aviso acima do diretório. Peça ao administrador do fornecedor de identidade para configurar a administração de contas.
@@ -265,6 +297,14 @@ Users não permite eliminar contas. Desative o acesso quando uma conta já não 
 **A conta desaparece após mudar o estado.** Mude Status para Active, Disabled ou All statuses para a encontrar.
 
 **A conta foi guardada, mas a atribuição do papel falhou.** Mantenha o painel aberto, escolha um papel válido e guarde novamente. Não retire a última pessoa capaz de gerir papéis.
+
+**Chaves de acesso não aparece nos pontos da linha.** Exige Manage users. Peça a um administrador.
+
+**O botão de cópia não copia.** Por HTTP simples noutro endereço, o navegador pode bloquear a cópia. Selecione a chave em **Chave** e copie-a à mão.
+
+**A IA recebe "This account lacks the capability".** O seu papel não permite esse comando. Dê-lhe um papel que o permita, ou deixe a recusa.
+
+**A chave não é criada.** O Studio mostra "Não foi possível criar a chave: create access key failed: name holds a control character, such as a tab or a line break". O nome tem uma tabulação ou uma quebra de linha no meio. Escreva o nome outra vez.
 
 ## Guias relacionados
 

@@ -60,7 +60,7 @@ export const NAV: Array<{ slug: string; children?: string[] }> = [
   { slug: 'load-data' },
   { slug: 'v1-import' },
   { slug: 'connector-diagnose' },
-  { slug: 'cli' },
+  { slug: 'cli', children: ['cli-access'] },
   { slug: 'development' },
 ];
 

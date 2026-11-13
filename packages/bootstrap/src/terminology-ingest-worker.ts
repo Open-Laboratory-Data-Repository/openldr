@@ -59,3 +59,13 @@ export function createTerminologyIngestWorker(deps: TerminologyIngestWorkerDeps)
     async stop() { stopped = true; clearInterval(timer); await crashRecovery; },
   };
 }
+
+/** Build the worker only in the process that drains the queue, which is the API server.
+ *  Building it is not inert: it fails every `running` job at once. Every `openldr` CLI command
+ *  builds an `AppContext`, so without this gate a CLI command failed the server's live imports.
+ *  The CLI's own `terminology distribution import` runs its job inline and needs no worker. */
+export function createTerminologyIngestWorkerIfEnabled(
+  enabled: boolean, deps: TerminologyIngestWorkerDeps,
+): TerminologyIngestWorker | null {
+  return enabled ? createTerminologyIngestWorker(deps) : null;
+}

@@ -187,7 +187,10 @@ Ces variables existent pour que le développement local et les tests de bout en 
 
 | Variable | Par défaut | Rôle |
 | --- | --- | --- |
-| `TERMINOLOGY_WORK_DIR` | dossier temporaire du système | Dossier où une version de terminologie envoyée est décompressée pendant l'importation. Une version complète de SNOMED CT demande assez de place pour le zip et les fichiers décompressés en même temps. Faites pointer cette variable vers un disque plus grand quand le dossier temporaire du conteneur est petit. |
+| `TERMINOLOGY_WORK_DIR` | dossier temporaire du système | Dossier où une version de terminologie envoyée est décompressée pendant l'importation. Une version complète de SNOMED CT demande assez de place pour le zip et les fichiers décompressés en même temps. Faites pointer cette variable vers un disque plus grand quand le dossier temporaire du conteneur est petit. Sur une installation Docker qui utilise `terminology ontology build` par l'application, faites-la pointer vers un dossier qui survit à un nouveau conteneur. Prenez un volume Docker ou un montage où l'utilisateur du conteneur `api` peut écrire. Sinon `terminology ontology rebuild` échoue après une mise à niveau. Non testé. |
+| `CLI_ENTRY` | trouvé à côté du serveur | Le fichier d'entrée du CLI que le serveur lance pour une commande envoyée par l'application. L'image Docker et une copie du dépôt n'ont besoin d'aucune valeur. Ne le définissez que si le CLI se trouve ailleurs. Si le fichier est introuvable, la commande reçoit une réponse qui nomme ce réglage. |
+| `CLI_MAX_RUNNING` | `2` | Nombre de commandes envoyées par l'application qui tournent en même temps. Les autres attendent. Une commande qui attend 30 secondes reçoit « occupé ». Quand la valeur dépasse 1, un compte peut lancer au plus une commande de moins que cette valeur à la fois. Avec la valeur par défaut de 2, un compte lance une commande à la fois. |
+| `CLI_MAX_UPLOAD_BYTES` | `2147483648` (2 Gio) | Nombre maximal d'octets de fichiers qu'une commande envoyée par l'application peut téléverser. Un envoi plus gros est refusé avec un message qui nomme la limite. Les envois sont écrits sous `TERMINOLOGY_WORK_DIR`, qui doit donc avoir la place. |
 
 ## Stockage cible SQL Server
 

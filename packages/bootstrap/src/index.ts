@@ -10,7 +10,7 @@ import { createBlobFromConfig } from './s3-config';
 import { requireOidcIssuer, type Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
-import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -103,7 +103,7 @@ import { selectTargetStore } from './target-store';
 import { createPluginRegistry, CE_VERSION } from './plugin-registry';
 import { createProjectionWorker } from './projection-worker';
 import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importTerminologyResource, checkTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type ImportOrigin, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
-import { createTerminologyIngestWorker } from './terminology-ingest-worker';
+import { createTerminologyIngestWorkerIfEnabled } from './terminology-ingest-worker';
 import { createRunIngest } from './terminology-ingest-shared';
 import { recordAuditEvent, type AuditDetails } from './record-audit';
 
@@ -469,6 +469,8 @@ export interface AppContext {
   auth: AuthPort;
   /** Sign-in, sessions and first-admin setup. Set only when AUTH_ADAPTER=local. */
   localSignIn?: LocalSignIn;
+  /** Access keys, on every sign-in adapter. Use the functions in `access-keys.ts`, not the store. */
+  accessKeys: AccessKeyStore;
   blob: BlobStoragePort;
   eventing: EventingPort;
   store: TargetStorePort;
@@ -637,6 +639,12 @@ export interface AppContextOptions {
    *  under it on exit, leaving the row `running` for good. It also gates the boot rebuild enqueue,
    *  so a CLI command does not queue a full rebuild every time it runs. */
   runFacilityJobWorker?: boolean;
+  /** Does this process drain the terminology import queue?
+   *
+   *  ⛔ Only the API server sets it. Building the worker fails every `running` import at once, so in
+   *  a CLI process it failed the server's live terminology imports. See
+   *  `createTerminologyIngestWorkerIfEnabled`. */
+  runTerminologyIngestWorker?: boolean;
 }
 
 export async function createAppContext(cfg: Config, opts: AppContextOptions = {}): Promise<AppContext> {
@@ -647,6 +655,7 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   const users = createUserStore(internal.db, { withSubjectLock: internal.withAccountStatusLock });
   const roles = createRoleStore(internal.db);
+  const accessKeys = createAccessKeyStore(internal.db);
   let auth: AuthPort;
   let localSignIn: LocalSignIn | undefined;
   try {
@@ -1059,7 +1068,8 @@ const reporting: ReportingApi = {
   // building the ontology tree over the same `terminology` context used by the admin routes.
   const terminologyJobs = createTerminologyIngestJobStore(internal.db);
   const terminologyWorkDirBase = cfg.TERMINOLOGY_WORK_DIR ?? tmpdir();
-  const terminologyIngestWorker = createTerminologyIngestWorker({
+  // ⛔ Built only where it drains the queue. See `AppContextOptions.runTerminologyIngestWorker`.
+  const terminologyIngestWorker = createTerminologyIngestWorkerIfEnabled(opts.runTerminologyIngestWorker === true, {
     jobs: terminologyJobs,
     blob,
     audit,
@@ -1098,7 +1108,8 @@ const reporting: ReportingApi = {
   // stale runs and arms a poll timer; every `openldr` CLI command builds an `AppContext`, so an
   // unconditional construction here put that sweep in every CLI process — against the same database
   // a live server is mid-apply on. See `createFacilityImportWorkerIfEnabled`. The facility job
-  // worker above is gated the same way (`runFacilityJobWorker`); the terminology worker is not.
+  // worker above is gated the same way (`runFacilityJobWorker`), and so is the terminology worker
+  // (`runTerminologyIngestWorker`).
   const facilityImportRuns: FacilityImportRunStore = createFacilityImportRunStore(internal.db);
   const facilityImportWorker = createFacilityImportWorkerIfEnabled(opts.runFacilityImportWorker === true, {
     runs: facilityImportRuns,
@@ -1830,6 +1841,7 @@ const reporting: ReportingApi = {
     logger,
     auth,
     localSignIn,
+    accessKeys,
     blob,
     eventing,
     store,
@@ -1891,9 +1903,9 @@ const reporting: ReportingApi = {
         // The runtime stops both workers and ends the push LISTEN client it owns.
         await syncRuntime.stop();
         await projectionWorker.stop();
-        await terminologyIngestWorker.stop();
-        // Only processes that opted in own these two workers. See
-        // `AppContextOptions.runFacilityJobWorker` and `runFacilityImportWorker`.
+        // Only processes that opted in own these three workers. See
+        // `AppContextOptions.runTerminologyIngestWorker`, `runFacilityJobWorker` and `runFacilityImportWorker`.
+        await terminologyIngestWorker?.stop();
         await facilityJobWorker?.stop();
         await facilityImportWorker?.stop();
         if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
@@ -2138,6 +2150,12 @@ export {
   createSetupCode, createLocalAccount, resetLocalPassword, endLocalSessions, generateTemporaryPassword,
   LocalSignInNotEnabledError, SetupAlreadyDoneError, UnknownUserError, UnknownRoleError,
 } from './local-accounts';
+export {
+  ACCESS_KEY_PREFIX, generateAccessKey, hashAccessKey, looksLikeAccessKey,
+  createAccessKey, listAccessKeys, revokeAccessKey, resolveAccessKey, checkAccessKeyInput,
+  UnknownAccessKeyError, AccessKeyInputError, type KeyContext,
+} from './access-keys';
+export { SubjectLinkConflictError } from '@openldr/users';
 
 
 export { listUserDirectory, directoryPageInput } from './user-directory';

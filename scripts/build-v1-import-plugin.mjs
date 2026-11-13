@@ -4,7 +4,7 @@
 // Needs the Rust wasm32-wasip1 target (wasm/rust-toolchain.toml asks rustup for it). Unlike the
 // WHONET plugin, this crate has no C code, so no clang or WASI sysroot is needed.
 //
-// Install the staged plugin with:
+// Install the staged plugin, with the API running (the install goes through it), with:
 //   pnpm openldr plugin install reference-plugins/openldr-v1-import/plugin.wasm
 // The manifest has no publisher, so it installs unsigned. A release bundle for the marketplace is
 // packed and signed separately (`openldr artifact pack`).

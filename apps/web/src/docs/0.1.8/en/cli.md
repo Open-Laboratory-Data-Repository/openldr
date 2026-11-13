@@ -30,7 +30,7 @@ Help lists commands without changing records. The launcher executes inside the a
 
 ### 3. Read the selected command’s options
 
-Use --help at each command level. Most read commands support --json. Mutating examples below are alternatives, not a script to run in sequence. Use --actor NAME when an audited change must identify the operator instead of the container’s account name.
+Use --help at each command level. Most read commands support --json. Mutating examples below are alternatives, not a script to run in sequence. Most commands go through the running server, so sign in first with ./openldr login or an access key. On Windows, .\openldr.ps1 signs in with an access key only, so set OPENLDR_KEY. That was not run on Windows. See [CLI sign-in and access keys](/docs/cli-access).
 
 ```sh
 {{operator:cli-group-help}}
@@ -78,7 +78,7 @@ Use a source checkout with dependencies and .env already configured. It is not t
 
 ### 1. Run workspace help from the repository root
 
-The root contains package.json, pnpm-workspace.yaml, apps and packages. CLI operations use the services configured in .env; they do not need the API or Studio dev server running.
+The root contains package.json, pnpm-workspace.yaml, apps and packages. Recovery commands such as db migrate and health use the services configured in .env. Every other command goes to the API at OPENLDR_URL, by default http://127.0.0.1:3000, so start the API first. With AUTH_DEV_BYPASS=true the API signs these commands in for you.
 
 ```sh
 {{operator:cli-dev-help}}
@@ -105,7 +105,7 @@ These cases were reproduced on Linux with the installed launcher and real CLI in
 | `./openldr: not found` or `no configuration file provided: not found` | Return to the actual installation folder, then run `./openldr --help`. Check that the launcher and Compose file are there. |
 | `failed to connect to the docker API` with an incorrect `DOCKER_HOST` address | Run `docker info`. If the override is wrong, clear it with `unset DOCKER_HOST`, then retry `docker info` and CLI help. In PowerShell, clear it with `$env:DOCKER_HOST = $null`. This does not start a stopped Docker engine. |
 | `service "api" is not running` | Inspect `docker compose ps -a api`, run `docker compose up -d api`, then retry CLI help. The check proved launcher recovery, not full HTTP application startup. |
-| `ingest failed: ENOENT` when the file is beside the launcher | Move the file into the installation's `data` folder. Run `./openldr fhir validate data/my-file.json`, then import that same path when intended. The development CLI reads ordinary local paths instead. |
+| `ingest failed: ENOENT`, or `Cannot find <file>.` since commands go through the app, when the file is beside the launcher | Move the file into the installation's `data` folder. Run `./openldr fhir validate data/my-file.json`, then import that same path when intended. The development CLI reads ordinary local paths instead. |
 | `workflows` | Inspect durable webhook receipts |
 | `connectors` | List, inspect, test and diagnose host connectors |
 | `import` | Allow sources and manage database-plugin imports |
@@ -151,11 +151,11 @@ These cases were reproduced on Linux with the installed launcher and real CLI in
 
 Mutating CLI commands (`sync enroll/rotate/revoke`, `user create/set-role/activate/deactivate`,
 `settings … set`, `settings danger …`, `db reset`, `db reproject`, `terminology import/create`, `query import`) record an audit
-event with actor type **`cli`** and actor name looked up **inside the container**, not the
-operator's own username. On a Docker install that name follows the host uid running the
-wrapper: uid 1000 resolves to `node`, and most other uids have no container username at all,
-so the fallback `cli` is recorded instead. Use the global `--actor <name>` to record the
-operator's real name. They appear on the Audit page alongside UI actions.
+event. A command that goes through the app records the account that signed in, and `--actor` is
+refused there. A recovery command, such as `db reset`, records actor type **`cli`** with the
+operator's name on that machine, or the global `--actor <name>`. On a Docker install that name is
+looked up inside the container, so it is often `node` or `cli`. They appear on the Audit page
+alongside UI actions. [CLI sign-in and access keys](/docs/cli-access) lists the kind of each command.
 
 ## Common tasks
 
@@ -298,7 +298,7 @@ Open the account row's **Actions** menu to disable or enable it. Disabling write
 
 Accounts that have never signed in also receive a local block. Enabling updates the provider first, then lifts that block. If either write fails, the action reports an error. A failed disable can leave the provider enabled while OpenLDR blocks access. A failed enable can leave the provider enabled while the local block remains. Restore the failing connection and retry the same action. Audit records use `user.status.failed` for failures and `user.status` for success.
 
-For the CLI, use `openldr user deactivate <local-id>` or `openldr user activate <local-id>`. Find the local ID with `openldr users list`. Linked accounts update both systems using their provider subject. Accounts created only in the local store change locally. CLI status audit records identify the actor as `cli`.
+For the CLI, use `openldr user deactivate <local-id>` or `openldr user activate <local-id>`. Find the local ID with `openldr users list`. Linked accounts update both systems using their provider subject. Accounts created only in the local store change locally. The audit records name the signed-in account.
 
 If another status change is in progress for this account, the API returns `409`. Wait for that action to finish, then retry. This also applies when Studio and the CLI change the same account.
 
@@ -315,12 +315,12 @@ Usage: openldr user end-sessions [options] <username>
 ```
 
 - `openldr auth setup-code` prints a one-time code for creating the first administrator in Studio. It is valid for 30 minutes, and a new code replaces the earlier one. Once an administrator exists, it refuses with `an administrator already exists`. The code is never written to the audit log.
-- `openldr user create --username <u>` makes an account that can sign in. It prints the new user's ID and a temporary password, once. The person must change that password at first sign-in. `--role` takes a role slug such as `lab_technician`. A role that does not exist makes the command refuse with `no role named <slug>`, and nothing is created. Until the first administrator exists, the command refuses and tells you to run `openldr auth setup-code`.
+- `openldr user create --username <u>` makes an account that can sign in. It prints the new user's ID and a temporary password, once. The person must change that password at first sign-in. `--role` takes a role slug such as `lab_technician`. A role that does not exist makes the command refuse with `no role named <slug>`, and nothing is created. It goes through the app, so sign in first as an account with `users.manage`. Create the first administrator in Studio with a setup code. `--no-password` makes an account that cannot sign in, for an access key.
 - `openldr user assign-role <subject> <slug>` adds a role. Under local sign-in the subject is the user ID that `user create` prints. Given a username, the command reports success and grants nothing.
 - `openldr user reset-password <username> --force` sets a new temporary password, prints it once, and ends the user's sessions. The user must choose a new password at the next sign-in. Without `--force` it refuses and changes nothing. This is how a forgotten administrator password is recovered.
 - `openldr user end-sessions <username>` signs the user out everywhere. The password does not change.
 
-`reset-password` and `end-sessions` match the username exactly, including capital letters. Under Keycloak or OIDC they refuse with `local sign-in is not enabled`. `user create`, `reset-password` and `end-sessions` write an audit event with actor type `cli`. A temporary password never appears in the audit log.
+`reset-password` and `end-sessions` match the username exactly, including capital letters. Under Keycloak or OIDC they refuse with `local sign-in is not enabled`. `reset-password` writes an audit event with actor type `cli`. `user create` and `end-sessions` go through the app, and their audit events name the signed-in account. A temporary password never appears in the audit log.
 
 ```
 ./openldr user create --username amina --name "Amina Hassan" --role lab_technician
@@ -378,7 +378,7 @@ Switch a test on or off at this lab, or retire and restore it, by code:
 
 ![Use the catalog command for your own codes.](guide:operator-cli-en-11)
 
-`enable` and `disable` work on any install. `retire` and `restore` work only where this install owns the catalog. Retiring is reversible, so none of them takes `--force`. Each is recorded in the audit log as the CLI user.
+`enable` and `disable` work on any install. `retire` and `restore` work only where this install owns the catalog. Retiring is reversible, so none of them takes `--force`. Each is recorded in the audit log as the signed-in account.
 
 Import a test list from a CSV or Excel (.xlsx) file:
 
@@ -400,7 +400,7 @@ Without `--apply` nothing is written. The command prints the counts of new, chan
 
 ![Save the mapping in the named JSON file.](guide:operator-cli-en-13)
 
-A category answer is `"kind": "existing"` with a `code`, or `"kind": "new"` with a `code` and a `display`. Only an install that owns the catalog can import. An apply is recorded in the audit log as the CLI user. Export the active tests as CSV, to standard output or to a file:
+A category answer is `"kind": "existing"` with a `code`, or `"kind": "new"` with a `code` and a `display`. Only an install that owns the catalog can import. An apply is recorded in the audit log as the signed-in account. Export the active tests as CSV, to standard output or to a file:
 
 ### 14. Use the catalog command for your own codes
 
@@ -454,7 +454,7 @@ Link result fields to LOINC:
 - `result-fields unlink` refuses without `--force`. `result-fields import` previews unless `--apply --force` is given. A lab that receives its dictionary from central cannot change links.
 - `openldr terminology import parameters <file>` rebuilds `test_map` after it loads the dictionary.
 
-Each change is recorded in the audit log as the CLI user.
+Each change is recorded in the audit log as the signed-in account.
 
 ## Install a content pack
 
@@ -466,7 +466,7 @@ Each change is recorded in the audit log as the CLI user.
 
 ![Preview an approved content pack before installing.](guide:operator-cli-en-18)
 
-`--dry-run` runs the checks and prints the steps. For each link-matching step it prints how many codes it would link. For each test-mappings or result-mappings step it lists the mappings it would map, keep and skip. It writes nothing. A content pack must be signed by a publisher. Installing a pack that is already installed needs `--force`. A pack whose last install failed installs again without it. `openldr market update` takes the same flags. It installs a newer version of an installed pack without `--force`. It refuses the same or an older version, and a pack that is not installed, unless you pass `--force`. `--json` prints machine-readable output. `openldr market list` shows packs with their status. The CLI records the actor as `cli`.
+`--dry-run` runs the checks and prints the steps. For each link-matching step it prints how many codes it would link. For each test-mappings or result-mappings step it lists the mappings it would map, keep and skip. It writes nothing. A content pack must be signed by a publisher. Installing a pack that is already installed needs `--force`. A pack whose last install failed installs again without it. `openldr market update` takes the same flags. It installs a newer version of an installed pack without `--force`. It refuses the same or an older version, and a pack that is not installed, unless you pass `--force`. `--json` prints machine-readable output. `openldr market list` shows packs with their status. The audit log names the signed-in account.
 
 ## Personal preferences
 

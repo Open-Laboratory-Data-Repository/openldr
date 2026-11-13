@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { type Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import type { InternalSchema } from '@openldr/db';
 import type { TokenClaims } from '@openldr/ports';
 
@@ -15,6 +15,15 @@ export interface User {
   createdAt: string | null;
   /** True once the one-time token-roles -> RBAC user_roles backfill has run for this user. */
   rbacInitialized: boolean;
+}
+
+/** setSubjectStatus found a row by username with no subject, and another identity linked it
+ *  before the store's link update ran. Retryable. */
+export class SubjectLinkConflictError extends Error {
+  constructor() {
+    super('username subject changed during status update');
+    this.name = 'SubjectLinkConflictError';
+  }
 }
 
 export interface CreateUserInput {
@@ -42,8 +51,11 @@ export interface UserStore {
   blockSubject(subject: string): Promise<void>;
   unblockSubject(subject: string): Promise<void>;
   isSubjectBlocked(subject: string): Promise<boolean>;
-  /** Persist the subject and status together, including accounts that have never signed in. */
-  setSubjectStatus(input: { subject: string; username: string }, status: 'active' | 'disabled'): Promise<User>;
+  /** Persist the subject and status together, including accounts that have never signed in.
+   *  With `neverEnable`, the write itself keeps a disabled row disabled, in the same statement, so
+   *  a disable that lands after the caller last read the row is not undone. Returns the row as
+   *  written. Throws SubjectLinkConflictError when another identity links the row first. */
+  setSubjectStatus(input: { subject: string; username: string }, status: 'active' | 'disabled', opts?: { neverEnable?: boolean }): Promise<User>;
   /**
    * Just-in-time provision/link from verified token claims: resolve by subject,
    * else link an unclaimed username, else create. Reject an already-linked username. Does NOT change
@@ -161,21 +173,26 @@ export function createUserStore(db: Kysely<InternalSchema>, deps: {
     async isSubjectBlocked(subject) {
       return !!await db.selectFrom('account_access_blocks').select('subject').where('subject', '=', subject).executeTakeFirst();
     },
-    async setSubjectStatus(input, status) {
+    async setSubjectStatus(input, status, opts) {
       if (!input.subject) throw new Error('missing provider subject');
+      // The status to write onto an existing row. With neverEnable, a row that is disabled when the
+      // statement runs stays disabled.
+      const onExisting = opts?.neverEnable
+        ? sql<string>`case when users.status = 'disabled' then 'disabled' else ${status} end`
+        : status;
       const existing = await getBySubject(input.subject);
       const byName = existing ? undefined : await getByUsername(input.username);
       if (byName && byName.subject === null) {
-        const linked = await db.updateTable('users').set({ subject: input.subject, status, updated_at: new Date() })
+        const linked = await db.updateTable('users').set({ subject: input.subject, status: onExisting as never, updated_at: new Date() })
           .where('id', '=', byName.id).where('subject', 'is', null).returning(COLS).executeTakeFirst();
-        if (!linked) throw new Error('username subject changed during status update');
+        if (!linked) throw new SubjectLinkConflictError();
         return toUser(linked as unknown as Row);
       }
       // A provider username must never replace another identity's subject.
       const username = existing?.username ?? (byName ? `provider:${randomUUID()}` : input.username);
       const row = await db.insertInto('users').values({
         id: randomUUID(), subject: input.subject, username, status, roles: JSON.stringify([]) as never,
-      }).onConflict(oc => oc.column('subject').doUpdateSet({ status, updated_at: new Date() }))
+      }).onConflict(oc => oc.column('subject').doUpdateSet({ status: onExisting as never, updated_at: new Date() }))
         .returning(COLS).executeTakeFirstOrThrow();
       return toUser(row as unknown as Row);
     },

@@ -222,7 +222,7 @@ Un paquet dont les détails ne chargent pas garde l'installation désactivée. V
 
 ## Utiliser un paquet local depuis la CLI
 
-Suivez [Commencer ici](/docs/start-here) pour configurer la CLI. Depuis `openldr_ce`, l'installation CLI lit un répertoire de paquet sur le serveur. Elle ne parcourt pas les registres Studio. Vérifiez et simulez avant d'appliquer un paquet approuvé.
+Suivez [Commencer ici](/docs/start-here) pour configurer la CLI. Depuis `openldr_ce`, l'installation CLI envoie un répertoire de paquet de votre machine au serveur en marche, donc connectez-vous d'abord. Elle ne parcourt pas les registres Studio. Vérifiez et simulez avant d'appliquer un paquet approuvé.
 
 ```shell
 pnpm openldr market list

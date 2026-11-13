@@ -15,9 +15,20 @@ export interface AuditEventInput {
   before?: unknown;
   after?: unknown;
   metadata?: Record<string, unknown>;
+  /** How the actor reached the server, when not by a person's sign-in. Written into the row's
+   *  metadata under `origin`, so it needs no column. Never holds a key or any secret. */
+  origin?: { via: 'access-key' | 'cli'; keyName?: string };
 }
 
-export interface AuditEvent extends AuditEventInput {
+/** The row's metadata: the event's own, with `origin` beside it. The actor's origin wins over a
+ *  metadata key of the same name, so a caller's metadata cannot claim a false origin. */
+function rowMetadata(e: AuditEventInput): Record<string, unknown> | null {
+  if (!e.origin) return e.metadata ?? null;
+  return { ...(e.metadata ?? {}), origin: e.origin };
+}
+
+// A read row has no `origin` field. The store wrote it into `metadata.origin`.
+export interface AuditEvent extends Omit<AuditEventInput, 'origin'> {
   id: string;
   occurredAt: string;
 }
@@ -104,7 +115,7 @@ export function createAuditStore(db: Kysely<InternalSchema>): AuditStore {
           entity_id: e.entityId,
           before: (e.before ?? null) as never,
           after: (e.after ?? null) as never,
-          metadata: (e.metadata ?? null) as never,
+          metadata: rowMetadata(e) as never,
         })
         .execute();
       const row = await db.selectFrom('audit_events').selectAll().where('id', '=', id).executeTakeFirstOrThrow();

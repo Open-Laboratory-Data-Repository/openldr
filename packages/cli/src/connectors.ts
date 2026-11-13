@@ -1,13 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { loadConfig } from '@openldr/config';
 import { redactError } from './redact-error';
+import { cliNamedActor } from './cli-actor';
 import {
   createAppContext, inspectConnectorConfig, updateConnectorConfig, recordAuditEvent, hostConnectorPatchSchema,
   diagnoseConnector, DIAGNOSE_HINT_TEXT, type DiagnoseResult,
   hostConnectorCreateSchema, createHostConnector, testHostConnector, removeConnector,
 } from '@openldr/bootstrap';
-
-const CLI_ACTOR = { actorType: 'cli', actorId: null, actorName: 'cli' } as const;
 
 export async function runConnectorInspect(id: string): Promise<number> {
   const ctx = await createAppContext(loadConfig());
@@ -27,7 +26,7 @@ export async function runConnectorUpdate(id: string, file: string): Promise<numb
     const record = await ctx.connectors.get(id);
     if (!record?.type) throw new Error('host connector required');
     await updateConnectorConfig(ctx.connectors, id, patch, ctx.cfg.SECRETS_ENCRYPTION_KEY);
-    await recordAuditEvent(ctx, { actorType: 'cli', actorId: null, actorName: 'cli' }, {
+    await recordAuditEvent(ctx, cliNamedActor(), {
       action: 'connector.update', entityType: 'connector', entityId: id,
       metadata: { fields: Object.keys(patch) },
     });
@@ -56,7 +55,7 @@ export async function runConnectorDiagnose(id: string, opts: { json: boolean }):
     if (!record?.type) throw new Error('host connector required');
     const config = await ctx.connectors.getDecryptedConfig(id, ctx.cfg.SECRETS_ENCRYPTION_KEY);
     const result = await diagnoseConnector(record.type, config);
-    await recordAuditEvent(ctx, { actorType: 'cli', actorId: null, actorName: 'cli' }, {
+    await recordAuditEvent(ctx, cliNamedActor(), {
       action: 'connector.diagnose', entityType: 'connector', entityId: id,
       metadata: { ok: result.ok, failedStep: result.steps.find((step) => step.status === 'fail')?.id ?? null },
     });
@@ -84,7 +83,7 @@ export async function runConnectorAdd(file: string): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
     const id = await createHostConnector(ctx.connectors, input, ctx.cfg.SECRETS_ENCRYPTION_KEY);
-    await recordAuditEvent(ctx, CLI_ACTOR, {
+    await recordAuditEvent(ctx, cliNamedActor(), {
       action: 'connector.create', entityType: 'connector', entityId: id, metadata: { name: input.name, type: input.type },
     });
     process.stdout.write(JSON.stringify({ id }) + '\n');
@@ -97,7 +96,7 @@ export async function runConnectorTest(id: string): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
     const result = await testHostConnector(ctx.connectors, id, ctx.cfg.SECRETS_ENCRYPTION_KEY);
-    await recordAuditEvent(ctx, CLI_ACTOR, {
+    await recordAuditEvent(ctx, cliNamedActor(), {
       action: 'connector.test', entityType: 'connector', entityId: id, metadata: { outcome: result.ok ? 'ok' : 'failed' },
     });
     process.stdout.write(result.ok ? 'Connection OK\n' : `Connection failed: ${redactError(new Error(result.error))}\n`);
@@ -115,7 +114,7 @@ export async function runConnectorRemove(id: string, opts: { force: boolean }): 
   try {
     const removed = await removeConnector(ctx.connectors, id);
     if (!removed) { process.stderr.write('connector not found\n'); return 1; }
-    await recordAuditEvent(ctx, CLI_ACTOR, {
+    await recordAuditEvent(ctx, cliNamedActor(), {
       action: 'connector.delete', entityType: 'connector', entityId: id, metadata: { name: removed.name, pluginId: removed.pluginId },
     });
     process.stdout.write('{"ok":true}\n');

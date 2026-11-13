@@ -48,7 +48,7 @@ import {
 // (packages/cli/src/audit.ts) — unchanged, per the plan's constraint.
 import { FACILITY_COLUMNS } from '@openldr/table-query';
 import { parseWhereFlags } from './table-query-flags';
-import { cliActor } from './cli-actor';
+import { callerName, cliActor, cliNamedActor } from './cli-actor';
 import { redactError } from './redact-error';
 
 export interface FacilitiesImportOpts {
@@ -536,7 +536,7 @@ export async function runFacilitiesImport(path: string, requested: FacilitiesImp
     // preview above verbatim: `apply` was already falsy on that call, so there is nothing left for a
     // second one to do.
     const result: FacilityImportResult = opts.apply
-      ? await importFacilities(deps, csv, { ...importOptions, apply: true, requestedBy: 'cli' })
+      ? await importFacilities(deps, csv, { ...importOptions, apply: true, requestedBy: callerName() })
       : preview;
 
     // A dry run writes nothing, so it has nothing to audit — only an applied import is recorded.
@@ -1327,7 +1327,7 @@ export async function runFacilitiesRegisterSource(opts: FacilitiesRegisterSource
   const ctx = await createAppContext(loadConfig());
   try {
     const created = await createFacilityRegisterSourceStore(ctx.internalDb).create(parsed.data);
-    await recordAuditEvent(ctx, { actorType: 'cli', actorId: null, actorName: 'cli' }, {
+    await recordAuditEvent(ctx, cliNamedActor(), {
       action: 'facility.register-source.create', entityType: 'facility_register', entityId: parsed.data.url,
       metadata: { name: parsed.data.name, code: parsed.data.code },
     });
@@ -1549,7 +1549,7 @@ export async function runFacilitiesLinkMatching(opts: FacilitiesLinkMatchingOpts
 
     if (result.applied && result.counts.linked > 0) {
       try {
-        await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: 'cli' });
+        await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: callerName() });
       } catch (err) {
         process.stderr.write(`warning: the mappings were written, but queueing the facility map rebuild failed: ${redactError(err)}. Run: openldr facilities publish --apply\n`);
       }
@@ -1795,7 +1795,7 @@ export async function runFacilitiesDelete(opts: FacilitiesDeleteOpts): Promise<n
 
     // Refresh the warehouse copies, as the HTTP bulk delete does.
     try {
-      await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: 'cli' });
+      await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: callerName() });
     } catch (err) {
       process.stderr.write(`warning: the facilities were deleted, but queueing the facility map rebuild failed: ${redactError(err)}. Run: openldr facilities publish --apply
 `);

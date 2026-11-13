@@ -30,7 +30,7 @@ A ajuda lista comandos sem alterar dados. O lançador executa no contentor api; 
 
 ### 3. Ler opções do comando escolhido
 
-Use --help em cada nível. Leituras costumam aceitar --json. Exemplos de alteração abaixo são alternativas, não um script em sequência. Use --actor NAME para identificar o operador em vez da conta do contentor na auditoria.
+Use --help em cada nível. Leituras costumam aceitar --json. Exemplos de alteração abaixo são alternativas, não um script em sequência. A maioria dos comandos passa pelo servidor em execução, por isso inicie sessão primeiro com ./openldr login ou uma chave de acesso. No Windows, .\openldr.ps1 inicia sessão apenas com uma chave de acesso, por isso defina OPENLDR_KEY. Isto não foi corrido no Windows. Ver [Início de sessão do CLI e chaves de acesso](/docs/cli-access).
 
 ```sh
 {{operator:cli-group-help}}
@@ -78,7 +78,7 @@ Use um repositório fonte com dependências e .env configurados. Não é a pasta
 
 ### 1. Executar ajuda na raiz do repositório
 
-A raiz contém package.json, pnpm-workspace.yaml, apps e packages. O CLI usa serviços de .env sem precisar dos servidores de desenvolvimento API ou Studio.
+A raiz contém package.json, pnpm-workspace.yaml, apps e packages. Os comandos de recuperação, como db migrate e health, usam os serviços de .env. Todos os outros comandos vão para a API em OPENLDR_URL, por predefinição http://127.0.0.1:3000, por isso inicie primeiro a API. Com AUTH_DEV_BYPASS=true, a API inicia sessão por si nestes comandos.
 
 ```sh
 {{operator:cli-dev-help}}
@@ -105,7 +105,7 @@ Estes casos foram reproduzidos em Linux com o iniciador instalado e a CLI real n
 | `./openldr: not found` ou `no configuration file provided: not found` | Regresse à pasta real da instalação e execute `./openldr --help`. Confirme a presença do iniciador e do ficheiro Compose. |
 | `failed to connect to the docker API` com um endereço `DOCKER_HOST` incorreto | Execute `docker info`. Se esse valor forçado estiver errado, retire-o com `unset DOCKER_HOST`, depois repita `docker info` e a ajuda CLI. Em PowerShell: `$env:DOCKER_HOST = $null`. Isto não inicia o Docker. |
 | `service "api" is not running` | Verifique `docker compose ps -a api`, execute `docker compose up -d api` e repita a ajuda. O teste prova a recuperação do iniciador, não o arranque HTTP completo da aplicação. |
-| `ingest failed: ENOENT` com o ficheiro ao lado do iniciador | Mova o ficheiro para a pasta `data` da instalação. Execute `./openldr fhir validate data/my-file.json`, depois importe esse caminho se quiser. A CLI de desenvolvimento lê caminhos locais normais. |
+| `ingest failed: ENOENT`, ou `Cannot find <file>.` desde que os comandos passam pela aplicação, com o ficheiro ao lado do iniciador | Mova o ficheiro para a pasta `data` da instalação. Execute `./openldr fhir validate data/my-file.json`, depois importe esse caminho se quiser. A CLI de desenvolvimento lê caminhos locais normais. |
 | `workflows` | Veja `workflows --help` para opções do operador. |
 | `connectors` | Veja `connectors --help` para opções do operador. |
 | `import` | Veja `import --help` para opções do operador. |
@@ -151,13 +151,12 @@ Estes casos foram reproduzidos em Linux com o iniciador instalado e a CLI real n
 
 Os comandos da CLI que alteram dados (`sync enroll/rotate/revoke`, `user create/set-role/activate/deactivate`,
 `settings … set`, `settings danger …`, `db reset`, `db reproject`, `terminology import/create`, `query import`) registam um
-evento de auditoria com o tipo de ator **`cli`** e um nome de ator procurado **dentro do
-contentor**, não o nome de utilizador do próprio operador. Numa instalação Docker, esse
-nome segue o uid do anfitrião que executa o script: o uid 1000 corresponde a `node`, e a
-maioria dos outros uids não tem nenhum nome de utilizador no contentor, por isso fica
-registado o valor de recurso `cli`. Use a opção global `--actor <name>` para registar o
-nome real do operador. Estes eventos aparecem na página Auditoria, ao lado das ações feitas
-na interface.
+evento de auditoria. Um comando que passa pela aplicação regista a conta com sessão iniciada, e
+`--actor` é aí recusado. Um comando de recuperação, como `db reset`, regista o tipo de ator
+**`cli`** com o nome do operador nessa máquina, ou a opção global `--actor <name>`. Numa
+instalação Docker, esse nome é procurado dentro do contentor, por isso é muitas vezes `node` ou
+`cli`. Estes eventos aparecem na página Auditoria, ao lado das ações feitas na interface.
+[Início de sessão do CLI e chaves de acesso](/docs/cli-access) indica o tipo de cada comando.
 
 ## Tarefas comuns
 
@@ -306,7 +305,7 @@ Abra o menu **Ações** da linha da conta para a desativar ou ativar. A desativa
 
 As contas que nunca iniciaram sessão também recebem um bloqueio local. A ativação atualiza primeiro o fornecedor e depois levanta esse bloqueio. Se uma das escritas falhar, a ação indica um erro. Uma desativação que falhe pode deixar o fornecedor ativo enquanto o OpenLDR bloqueia o acesso. Uma ativação que falhe pode deixar o fornecedor ativo enquanto o bloqueio local se mantém. Restabeleça a ligação que falha e repita a mesma ação. Os registos de auditoria usam `user.status.failed` para as falhas e `user.status` para o sucesso.
 
-Na CLI, use `openldr user deactivate <local-id>` ou `openldr user activate <local-id>`. Encontre o ID local com `openldr users list`. As contas ligadas atualizam os dois sistemas através do seu identificador no fornecedor. As contas criadas só no armazenamento local mudam apenas localmente. Os registos de auditoria de estado feitos pela CLI identificam o ator como `cli`.
+Na CLI, use `openldr user deactivate <local-id>` ou `openldr user activate <local-id>`. Encontre o ID local com `openldr users list`. As contas ligadas atualizam os dois sistemas através do seu identificador no fornecedor. As contas criadas só no armazenamento local mudam apenas localmente. Os registos de auditoria nomeiam a conta com sessão iniciada.
 
 Se outra mudança de estado estiver em curso para esta conta, a API devolve `409`. Espere que essa ação termine e depois tente de novo. Isto também se aplica quando o Studio e a CLI alteram a mesma conta.
 
@@ -323,12 +322,12 @@ Usage: openldr user end-sessions [options] <username>
 ```
 
 - `openldr auth setup-code` mostra um código de uso único para criar o primeiro administrador no Studio. É válido durante 30 minutos, e um código novo substitui o anterior. Assim que existe um administrador, o comando recusa com `an administrator already exists`. O código nunca é escrito no registo de auditoria.
-- `openldr user create --username <u>` cria uma conta que pode iniciar sessão. O comando mostra o ID do novo utilizador e uma palavra-passe temporária, uma só vez. A pessoa tem de alterar essa palavra-passe no primeiro início de sessão. `--role` recebe o identificador de uma função, como `lab_technician`. Uma função que não existe faz o comando recusar com `no role named <slug>`, e nada é criado. Enquanto o primeiro administrador não existir, o comando recusa e diz-lhe para executar `openldr auth setup-code`.
+- `openldr user create --username <u>` cria uma conta que pode iniciar sessão. O comando mostra o ID do novo utilizador e uma palavra-passe temporária, uma só vez. A pessoa tem de alterar essa palavra-passe no primeiro início de sessão. `--role` recebe o identificador de uma função, como `lab_technician`. Uma função que não existe faz o comando recusar com `no role named <slug>`, e nada é criado. Passa pela aplicação, por isso inicie sessão primeiro com uma conta que tenha `users.manage`. Crie o primeiro administrador no Studio com um código de configuração. `--no-password` cria uma conta que não consegue iniciar sessão, para uma chave de acesso.
 - `openldr user assign-role <subject> <slug>` junta uma função. Com início de sessão local, o sujeito é o ID do utilizador que `user create` mostra. Com um nome de utilizador, o comando indica sucesso e não concede nada.
 - `openldr user reset-password <username> --force` define uma nova palavra-passe temporária, mostra-a uma só vez e termina as sessões do utilizador. O utilizador tem de escolher uma nova palavra-passe no próximo início de sessão. Sem `--force`, recusa e não altera nada. É assim que se recupera a palavra-passe esquecida de um administrador.
 - `openldr user end-sessions <username>` termina a sessão do utilizador em todo o lado. A palavra-passe não muda.
 
-`reset-password` e `end-sessions` comparam o nome de utilizador exatamente, incluindo maiúsculas. Com Keycloak ou OIDC, recusam com `local sign-in is not enabled`. `user create`, `reset-password` e `end-sessions` escrevem um evento de auditoria com o tipo de ator `cli`. Uma palavra-passe temporária nunca aparece no registo de auditoria.
+`reset-password` e `end-sessions` comparam o nome de utilizador exatamente, incluindo maiúsculas. Com Keycloak ou OIDC, recusam com `local sign-in is not enabled`. `reset-password` escreve um evento de auditoria com o tipo de ator `cli`. `user create` e `end-sessions` passam pela aplicação, e os seus eventos de auditoria nomeiam a conta com sessão iniciada. Uma palavra-passe temporária nunca aparece no registo de auditoria.
 
 ```
 ./openldr user create --username amina --name "Amina Hassan" --role lab_technician
@@ -386,7 +385,7 @@ Ligar ou desligar um teste neste laboratório, ou retirá-lo e repô-lo, pelo c�
 
 ![Usar o catálogo com os seus códigos.](guide:operator-cli-pt-11)
 
-`enable` e `disable` funcionam em qualquer instalação. `retire` e `restore` só funcionam onde esta instalação é dona do catálogo. Retirar é reversível, por isso nenhum destes comandos aceita `--force`. Cada um fica no registo de auditoria como o utilizador da CLI.
+`enable` e `disable` funcionam em qualquer instalação. `retire` e `restore` só funcionam onde esta instalação é dona do catálogo. Retirar é reversível, por isso nenhum destes comandos aceita `--force`. Cada um fica no registo de auditoria com a conta com sessão iniciada.
 
 Importar uma lista de testes de um ficheiro CSV ou Excel (.xlsx):
 
@@ -408,7 +407,7 @@ Sem `--apply`, nada é escrito. O comando mostra o número de linhas novas, alte
 
 ![Guardar o mapeamento no ficheiro JSON.](guide:operator-cli-pt-13)
 
-Uma resposta de categoria é `"kind": "existing"` com um `code`, ou `"kind": "new"` com um `code` e um `display`. Só uma instalação que seja dona do catálogo pode importar. Uma aplicação fica no registo de auditoria como o utilizador da CLI. Exporte os testes ativos em CSV, para a saída padrão ou para um ficheiro:
+Uma resposta de categoria é `"kind": "existing"` com um `code`, ou `"kind": "new"` com um `code` e um `display`. Só uma instalação que seja dona do catálogo pode importar. Uma importação aplicada fica no registo de auditoria com a conta com sessão iniciada. Exporte os testes ativos em CSV, para a saída padrão ou para um ficheiro:
 
 ### 14. Usar o catálogo com os seus códigos
 
@@ -462,7 +461,7 @@ Ligar campos de resultado ao LOINC:
 - `result-fields unlink` recusa correr sem `--force`. `result-fields import` só pré-visualiza, a menos que receba `--apply --force`. Um laboratório que recebe o dicionário do servidor central não pode alterar as ligações.
 - `openldr terminology import parameters <file>` reconstrói `test_map` depois de carregar o dicionário.
 
-Cada alteração fica no registo de auditoria como o utilizador da CLI.
+Cada alteração fica no registo de auditoria com a conta com sessão iniciada.
 
 ## Instalar um pacote de conteúdo
 
@@ -474,7 +473,7 @@ Cada alteração fica no registo de auditoria como o utilizador da CLI.
 
 ![Pré-visualizar um pacote aprovado antes de instalar.](guide:operator-cli-pt-18)
 
-`--dry-run` executa as verificações e mostra os passos. Para cada passo de associação de ligações, mostra quantos códigos ligaria. Para cada passo de mapeamentos de testes ou de resultados, lista os mapeamentos que criaria, manteria e ignoraria. Não escreve nada. Um pacote de conteúdo tem de estar assinado por um editor. Instalar um pacote que já está instalado exige `--force`. Um pacote cuja última instalação falhou volta a instalar-se sem essa opção. `openldr market update` aceita as mesmas opções. Instala uma versão mais recente de um pacote instalado sem `--force`. Recusa a mesma versão ou uma mais antiga, e um pacote que não está instalado, a menos que use `--force`. `--json` mostra uma saída legível por máquinas. `openldr market list` mostra os pacotes com o seu estado. A CLI regista o ator como `cli`.
+`--dry-run` executa as verificações e mostra os passos. Para cada passo de associação de ligações, mostra quantos códigos ligaria. Para cada passo de mapeamentos de testes ou de resultados, lista os mapeamentos que criaria, manteria e ignoraria. Não escreve nada. Um pacote de conteúdo tem de estar assinado por um editor. Instalar um pacote que já está instalado exige `--force`. Um pacote cuja última instalação falhou volta a instalar-se sem essa opção. `openldr market update` aceita as mesmas opções. Instala uma versão mais recente de um pacote instalado sem `--force`. Recusa a mesma versão ou uma mais antiga, e um pacote que não está instalado, a menos que use `--force`. `--json` mostra uma saída legível por máquinas. `openldr market list` mostra os pacotes com o seu estado. O registo de auditoria nomeia a conta com sessão iniciada.
 
 ## Preferências pessoais
 

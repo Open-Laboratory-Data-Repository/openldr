@@ -29,6 +29,7 @@ vi.mock('@openldr/bootstrap', async () => {
   const local = await import('../../bootstrap/src/local-accounts');
   return {
     ...await import('../../bootstrap/src/account-status'),
+    ...await import('../../bootstrap/src/access-keys'),
     ...local,
     createLocalAccount: vi.fn(local.createLocalAccount),
     resetLocalPassword: vi.fn(local.resetLocalPassword),
@@ -39,11 +40,14 @@ vi.mock('@openldr/bootstrap', async () => {
   };
 });
 
-import { createLocalAccount, resetLocalPassword, endLocalSessions } from '@openldr/bootstrap';
+import { createLocalAccount, resetLocalPassword, endLocalSessions, createAccessKey, hashAccessKey } from '@openldr/bootstrap';
+import { createAccessKeyStore } from '@openldr/db';
 import { accountFixture } from '../../bootstrap/src/account-status.test-support';
+import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
 
 import {
   runUserDirectoryList, runUserCreate, runUserSetRole, runUserSetStatus, runUserResetPassword, runUserEndSessions,
+  runUserKeyList, runUserKeyCreate, runUserKeyRevoke,
 } from './user';
 
 function localCtx() {
@@ -168,6 +172,14 @@ describe('user commands under local sign-in', () => {
     expect(ctx.auth.forceLogout).not.toHaveBeenCalled();
   });
 
+  it('does not print back an unknown username that holds a key', async () => {
+    const pasted = 'oldr_PASTEDkeyPASTEDkeyPASTEDkeyPASTEDkeyPA';
+    expect(await runUserEndSessions(pasted, { json: false })).toBe(1);
+    expect(await runUserResetPassword(pasted, { json: false, force: true })).toBe(1);
+    expect(err).toBe('no user has that name. Usernames here match exactly, including case.\n'.repeat(2));
+    expect(err + out).not.toContain(pasted);
+  });
+
   it('end-sessions exits 1 when local sign-in is off', async () => {
     const { localSignIn: _off, ...keycloakCtx } = ctx;
     mocks.createAppContext.mockResolvedValue(keycloakCtx);
@@ -244,6 +256,305 @@ describe('user commands under local sign-in', () => {
     expect(mocks.appCtx.users.create).toHaveBeenCalledWith({ username: 'bob', displayName: undefined, email: undefined, roles: undefined });
     expect(createLocalAccount).not.toHaveBeenCalled();
     expect(JSON.parse(out)).toEqual({ id: 'u1', username: 'bob', roles: [] });
+  });
+
+  it('creates an account with no password and prints no password', async () => {
+    const code = await runUserCreate({ username: 'bot', role: ['lab_technician'], password: false, json: false });
+
+    expect(code).toBe(0);
+    expect(createLocalAccount).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({ actorType: 'cli' }),
+      { username: 'bot', name: undefined, email: undefined, roles: ['lab_technician'], password: 'none' },
+    );
+    const directoryInput = ctx.auth.directory.create.mock.calls[0][0];
+    expect(directoryInput).not.toHaveProperty('password');
+    expect(directoryInput).not.toHaveProperty('temporaryPassword');
+    expect(out).toBe('created bot (u-new)\nbot has no password and cannot sign in to Studio.\n');
+    expect(out).not.toMatch(/temporary password/i);
+    expect(err).toBe('');
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({ action: 'user.create', entityId: 'u-new', metadata: expect.objectContaining({ password: 'none' }) }),
+    );
+  });
+
+  it('creates an account with no password and has no password field in the JSON output', async () => {
+    const code = await runUserCreate({ username: 'bot', password: false, json: true });
+
+    expect(code).toBe(0);
+    const body = JSON.parse(out);
+    expect(Object.keys(body)).toEqual(['user']);
+    expect(body.user).toMatchObject({ id: 'u-new', username: 'bot' });
+  });
+
+  it('user create --no-password under keycloak writes the local row as before', async () => {
+    mocks.createAppContext.mockResolvedValue(mocks.appCtx);
+    mocks.appCtx.users.create.mockResolvedValue({ id: 'u1', username: 'bob', roles: [] });
+
+    const code = await runUserCreate({ username: 'bob', password: false, json: true });
+
+    expect(code).toBe(0);
+    expect(mocks.appCtx.users.create).toHaveBeenCalledWith({ username: 'bob', displayName: undefined, email: undefined, roles: undefined });
+    expect(createLocalAccount).not.toHaveBeenCalled();
+    expect(JSON.parse(out)).toEqual({ id: 'u1', username: 'bob', roles: [] });
+  });
+});
+
+describe('user key commands (pg-mem)', () => {
+  let db: Awaited<ReturnType<typeof makeMigratedDb>>;
+  let keyCtx: {
+    accessKeys: ReturnType<typeof createAccessKeyStore>;
+    users: { get: (id: string) => Promise<unknown>; getByUsername: (username: string) => Promise<unknown> };
+    audit: object; logger: { warn: ReturnType<typeof vi.fn>; info: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
+    close: ReturnType<typeof vi.fn>;
+  };
+  let out: string;
+  let err: string;
+  const admin = { actorType: 'user' as const, actorId: null, actorName: 'admin' };
+  const people: Record<string, { id: string; username: string }> = {
+    bob: { id: 'u1', username: 'bob' },
+    ann: { id: 'u2', username: 'ann' },
+  };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    db = await makeMigratedDb();
+    for (const p of Object.values(people)) {
+      await db.insertInto('users').values({ id: p.id, subject: p.id, username: p.username, roles: JSON.stringify([]) as never }).execute();
+    }
+    keyCtx = {
+      accessKeys: createAccessKeyStore(db),
+      users: {
+        get: async (id: string) => Object.values(people).find((p) => p.id === id),
+        getByUsername: async (username: string) => people[username],
+      },
+      audit: {},
+      logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+      close: vi.fn(),
+    };
+    mocks.createAppContext.mockResolvedValue(keyCtx);
+    out = '';
+    err = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => { out += String(chunk); return true; });
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => { err += String(chunk); return true; });
+  });
+  afterEach(async () => { vi.restoreAllMocks(); await db.destroy(); });
+
+  const makeKey = (userId: string, name: string) => createAccessKey(keyCtx as never, admin, { userId, name });
+
+  function expectNoKeyLogged(key: string): void {
+    const logged = JSON.stringify(keyCtx.logger.warn.mock.calls) + JSON.stringify(keyCtx.logger.info.mock.calls)
+      + JSON.stringify(keyCtx.logger.error.mock.calls);
+    expect(logged).not.toContain(key);
+  }
+
+  it('lists keys as text and as JSON, without any key value', async () => {
+    const made = await makeKey('u1', 'ci');
+    await makeKey('u2', 'ann-key');
+
+    expect(await runUserKeyList('bob', { json: false })).toBe(0);
+    const lines = out.trimEnd().split('\n');
+    expect(lines).toHaveLength(1);
+    expect(lines[0].split('\t')).toEqual([made.record.id, 'ci', made.record.prefix, made.record.createdAt, '-', '-', '-']);
+    expect(out).not.toContain(made.key);
+    expect(out).not.toContain(hashAccessKey(made.key));
+    expect(out).not.toContain('ann-key');
+
+    out = '';
+    expect(await runUserKeyList('bob', { json: true })).toBe(0);
+    expect(JSON.parse(out)).toEqual([made.record]);
+    expect(out).not.toContain(made.key);
+    expect(out).not.toContain(hashAccessKey(made.key));
+    expect(keyCtx.close).toHaveBeenCalledTimes(2);
+  });
+
+  it('lists no keys as a plain line', async () => {
+    expect(await runUserKeyList('bob', { json: false })).toBe(0);
+    expect(out).toBe('(no keys)\n');
+  });
+
+  it('gives the same unknown-user message as the other user commands', async () => {
+    expect(await runUserKeyList('Bob', { json: false })).toBe(1);
+    expect(await runUserKeyCreate('Bob', { name: 'ci', json: false })).toBe(1);
+    expect(await runUserKeyRevoke('Bob', '00000000-0000-4000-8000-000000000001', { force: true })).toBe(1);
+    expect(err).toBe('no user named Bob. Usernames here match exactly, including case.\n'.repeat(3));
+    expect(out).toBe('');
+    expect(await db.selectFrom('access_keys').selectAll().execute()).toEqual([]);
+  });
+
+  it('creates a key and prints it once', async () => {
+    expect(await runUserKeyCreate('bob', { name: 'ci', json: false })).toBe(0);
+
+    expect(out).toMatch(/^oldr_[A-Za-z0-9_-]{43}\n$/);
+    const key = out.trimEnd();
+    expect(err).toContain('cannot be shown again');
+    expect(err.trimEnd().split('\n')).toHaveLength(1);
+    expect(err).not.toContain(key);
+    const rows = await db.selectFrom('access_keys').selectAll().execute();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ user_id: 'u1', name: 'ci', key_hash: hashAccessKey(key), expires_at: null });
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({ action: 'access_key.create', entityId: rows[0].id }),
+    );
+    expect(JSON.stringify(mocks.recordAuditEvent.mock.calls)).not.toContain(key);
+    expectNoKeyLogged(key);
+    expect(keyCtx.close).toHaveBeenCalled();
+  });
+
+  it('creates a key as one JSON object with the notice on standard error', async () => {
+    expect(await runUserKeyCreate('bob', { name: 'ci', json: true })).toBe(0);
+
+    const body = JSON.parse(out);
+    expect(Object.keys(body).sort()).toEqual(['key', 'record']);
+    expect(body.key).toMatch(/^oldr_/);
+    expect(body.record).toMatchObject({ userId: 'u1', name: 'ci', prefix: body.key.slice(0, 12) });
+    expect(err).toContain('cannot be shown again');
+    expect(err).not.toContain(body.key);
+  });
+
+  it('reads a bare --expires date as the end of that day in UTC, and takes a full date-time', async () => {
+    const year = new Date().getUTCFullYear() + 2;
+    expect(await runUserKeyCreate('bob', { name: 'dated', expires: `${year}-03-31`, json: true })).toBe(0);
+    expect(JSON.parse(out).record.expiresAt).toBe(`${year}-03-31T23:59:59.999Z`);
+
+    out = '';
+    expect(await runUserKeyCreate('bob', { name: 'timed', expires: `${year}-03-31T08:00:00+02:00`, json: true })).toBe(0);
+    expect(JSON.parse(out).record.expiresAt).toBe(`${year}-03-31T06:00:00.000Z`);
+  });
+
+  it('refuses an --expires that does not parse or is in the past', async () => {
+    const lastYear = new Date().getUTCFullYear() - 1;
+    for (const expires of ['soon', '99999', '2030-02-31', '2030-01-01T00:00', `${lastYear}-01-01`]) {
+      err = '';
+      expect(await runUserKeyCreate('bob', { name: 'ci', expires, json: false }), expires).toBe(1);
+      expect(err, expires).toMatch(/^--expires /);
+      expect(err.trimEnd().split('\n'), expires).toHaveLength(1);
+    }
+    expect(out).toBe('');
+    expect(await db.selectFrom('access_keys').selectAll().execute()).toEqual([]);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses an empty key name with a plain message', async () => {
+    expect(await runUserKeyCreate('bob', { name: '   ', json: false })).toBe(1);
+    expect(err).toBe('user key create refused: name is empty\n');
+    expect(out).toBe('');
+  });
+
+  it('refuses to revoke without --force', async () => {
+    const made = await makeKey('u1', 'ci');
+    mocks.createAppContext.mockClear();
+    mocks.recordAuditEvent.mockClear();
+
+    expect(await runUserKeyRevoke('bob', made.record.id, { force: false })).toBe(1);
+
+    expect(err).toContain('--force');
+    expect(err).toContain(made.record.id);
+    expect(out).toBe('');
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    const [row] = await db.selectFrom('access_keys').selectAll().execute();
+    expect(row.revoked_at).toBeNull();
+  });
+
+  it('refuses a key value in place of a key ID without echoing it', async () => {
+    const made = await makeKey('u1', 'ci');
+    mocks.createAppContext.mockClear();
+
+    for (const force of [false, true]) {
+      err = '';
+      expect(await runUserKeyRevoke('bob', made.key, { force })).toBe(1);
+      expect(err).toContain('not a key ID');
+      expect(err).not.toContain(made.key);
+      expect(err).not.toContain(made.record.prefix);
+    }
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+  });
+
+  it('refuses a key name with a tab or a line break, so the list stays one row per key', async () => {
+    for (const name of ['backup\tjob', 'backup\njob']) {
+      err = '';
+      expect(await runUserKeyCreate('bob', { name, json: false })).toBe(1);
+      expect(err).toBe('user key create refused: name holds a control character, such as a tab or a line break\n');
+    }
+    expect(out).toBe('');
+    expect(await db.selectFrom('access_keys').selectAll().execute()).toEqual([]);
+  });
+
+  it('refuses a key ID that is not UUID-shaped without echoing it, before the database', async () => {
+    const made = await makeKey('u1', 'ci');
+    mocks.createAppContext.mockClear();
+    // The key with its start cut off, and the key with a blank before it.
+    for (const keyId of [made.key.slice(5), ` ${made.key}`]) {
+      for (const force of [false, true]) {
+        err = '';
+        expect(await runUserKeyRevoke('bob', keyId, { force })).toBe(1);
+        expect(err).toBe('user key revoke refused: that is not a key ID. Find the ID with "openldr user key list".\n');
+      }
+    }
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+  });
+
+  it('refuses a username that holds a key, in each key command, without echoing it', async () => {
+    const made = await makeKey('u1', 'ci');
+    mocks.createAppContext.mockClear();
+    const asName = ` ${made.key}`;
+    const runs: Array<[string, () => Promise<number>]> = [
+      ['user key list', () => runUserKeyList(asName, { json: false })],
+      ['user key create', () => runUserKeyCreate(asName, { name: 'ci', json: false })],
+      ['user key revoke', () => runUserKeyRevoke(asName, made.record.id, { force: true })],
+    ];
+    for (const [command, run] of runs) {
+      err = '';
+      expect(await run()).toBe(1);
+      expect(err).toBe(`${command} refused: that looks like a key, not a username. Give the account's username.\n`);
+    }
+    expect(out).toBe('');
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+  });
+
+  it('revokes a key and audits it', async () => {
+    const made = await makeKey('u1', 'ci');
+    mocks.recordAuditEvent.mockClear();
+
+    expect(await runUserKeyRevoke('bob', made.record.id, { force: true })).toBe(0);
+
+    expect(out).toBe(`revoked key ${made.record.id} for bob\n`);
+    const [row] = await db.selectFrom('access_keys').selectAll().execute();
+    expect(row.revoked_at).not.toBeNull();
+    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({ action: 'access_key.revoke', entityId: made.record.id }),
+    );
+    expect(JSON.stringify(mocks.recordAuditEvent.mock.calls)).not.toContain(made.key);
+    expect(keyCtx.close).toHaveBeenCalled();
+  });
+
+  it('gives one message for an unknown key, another user\'s key and a revoked key', async () => {
+    const bobs = await makeKey('u1', 'ci');
+    const anns = await makeKey('u2', 'ann-key');
+    await runUserKeyRevoke('bob', bobs.record.id, { force: true });
+    mocks.recordAuditEvent.mockClear();
+    out = '';
+
+    const messages: string[] = [];
+    for (const keyId of ['00000000-0000-4000-8000-000000000002', anns.record.id, bobs.record.id]) {
+      err = '';
+      expect(await runUserKeyRevoke('bob', keyId, { force: true }), keyId).toBe(1);
+      messages.push(err.replace(keyId, '<id>'));
+    }
+    expect(messages[0]).toBe('bob has no unrevoked key <id>\n');
+    expect(new Set(messages).size).toBe(1);
+    expect(out).toBe('');
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    const annRow = await db.selectFrom('access_keys').selectAll().where('id', '=', anns.record.id).executeTakeFirstOrThrow();
+    expect(annRow.revoked_at).toBeNull();
   });
 });
 

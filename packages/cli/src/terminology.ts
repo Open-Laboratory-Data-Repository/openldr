@@ -2,7 +2,7 @@ import { readFileSync, createReadStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { loadConfig } from '@openldr/config';
 import { createAppContext, createTerminologyContext, resolveCodingSystemId, createRunIngest, runIngestJob, recordAuditEvent } from '@openldr/bootstrap';
-import { cliActor } from './cli-actor';
+import { callerName, cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 import { validateDistributionImportArgs, isActiveJobConflict } from './distribution-args';
 import { runDbReproject } from './db';
@@ -266,7 +266,7 @@ export async function runDistributionImport(system: string, opts: { file?: strin
     await ctx.blob.putStream(key, createReadStream(opts.file!), 'application/zip');
     let job;
     try {
-      job = await ctx.jobs.insertRunning({ systemType: system, codingSystemId, blobKey: key, version: opts.version ?? null, createdBy: 'cli' });
+      job = await ctx.jobs.insertRunning({ systemType: system, codingSystemId, blobKey: key, version: opts.version ?? null, createdBy: callerName() });
     } catch (err) {
       // No job row was created, so clean up the just-uploaded blob either way. Only a genuine
       // one-active-per-system conflict is reported as "already in progress"; a transient DB error

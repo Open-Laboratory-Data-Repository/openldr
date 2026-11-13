@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { AppContext } from '@openldr/bootstrap';
+import { looksLikeAccessKey, type AppContext } from '@openldr/bootstrap';
 import { safeRecord } from '@openldr/audit';
 import { CAPABILITY_KEYS } from '@openldr/rbac';
 import { reasonFromError, createAuthFailedThrottle, subFromUnverifiedToken, type AuthFailReason } from './auth-failed';
+import { INVALID_ACCESS_KEY, signInWithAccessKey } from './access-key-auth';
 
 export interface RequestActor {
   id: string;
@@ -10,6 +11,8 @@ export interface RequestActor {
   displayName: string | null;
   roles: string[];
   capabilities: string[];
+  /** Set when the request signed in with an access key. The key's row ID and name, never the key. */
+  accessKey?: { id: string; name: string };
 }
 
 declare module 'fastify' {
@@ -25,20 +28,39 @@ const LOCAL_SIGN_IN_PUBLIC_PATHS = new Set(['/api/auth/login', '/api/auth/refres
 // The one route a token marked `pwd_change` may reach. Exact path, so no other route shares it.
 const CHANGE_PASSWORD_PATH = '/api/auth/change-password';
 
-export function bearer(req: FastifyRequest): string | null {
+function headerBearer(req: FastifyRequest): string | null {
   const h = req.headers.authorization;
   if (h && h.startsWith('Bearer ')) { const t = h.slice('Bearer '.length).trim(); if (t) return t; }
+  return null;
+}
+
+/** The `access_token` query parameter on any path, trimmed, or null. */
+function queryAccessToken(req: FastifyRequest): string | null {
   const url = req.raw.url ?? '';
-  const path = url.split('?')[0];
+  if (!url.includes('?')) return null;
+  const tok = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('access_token');
+  return tok && tok.trim() ? tok.trim() : null;
+}
+
+export function bearer(req: FastifyRequest): string | null {
+  const fromHeader = headerBearer(req);
+  if (fromHeader) return fromHeader;
+  const path = (req.raw.url ?? '').split('?')[0];
   // Server-Sent Events streams (ontology build/rebuild) cannot set an Authorization header,
   // so accept the access token from the query string for THOSE routes only. It is verified
   // identically to a header token — no weakening of auth.
-  if (/^\/api\/terminology\/ontology\/[^/]+\/(build|rebuild)$/.test(path)) {
-    const qs = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
-    const tok = new URLSearchParams(qs).get('access_token');
-    if (tok && tok.trim()) return tok.trim();
-  }
+  if (/^\/api\/terminology\/ontology\/[^/]+\/(build|rebuild)$/.test(path)) return queryAccessToken(req);
   return null;
+}
+
+const isApiPath = (p: string): boolean => p === '/api' || p.startsWith('/api/');
+
+/** The request path the way the router reads it. The router drops `http(s)://host` from a
+ *  full-URL request line (the same pattern find-my-way uses) and decodes percent-escapes before it
+ *  matches, so `GET http://x/api/a` and `GET /%61pi/a` both reach `/api/a`. */
+function pathAsRouted(rawPath: string): string {
+  const p = rawPath.startsWith('/') ? rawPath : rawPath.replace(/^https?:\/\/.*?\//, '/');
+  try { return decodeURI(p); } catch { return p; }
 }
 
 const PROVIDER_DEFAULT_ROLE = (n: string): boolean =>
@@ -87,8 +109,18 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
   };
 
   app.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
-    const path = (req.raw.url ?? '').split('?')[0];
-    // Only /api/* is protected. /health and the static SPA stay public.
+    // Decide by the route the router matched, never by the raw request text alone. The router
+    // strips `http://host` and decodes percent-escapes before it matches, so the raw text of
+    // `GET http://x/api/a` or `GET /%61pi/a` has no `/api` prefix and yet reaches `/api/a`.
+    // `routeOptions.url` is the registered pattern, prefix included. It is unset when no route
+    // matched, and then only the not-found handler runs, so the path as routed decides.
+    const rawPath = (req.raw.url ?? '').split('?')[0]!;
+    const matched: string | undefined = req.routeOptions?.url;
+    const path = matched ?? pathAsRouted(rawPath);
+    // Only /api/* is protected. /health and the static SPA stay public. Protected when the matched
+    // route, the raw text or the path as routed is under /api, so nothing protected before is public now.
+    if (!isApiPath(path) && !isApiPath(rawPath) && !isApiPath(pathAsRouted(rawPath))) return;
+    // The public exceptions below apply only when the matched route is that exception.
     if (path === '/api/config') return; // public: the SPA reads OIDC settings before it has a token
     // Local sign-in: these routes check a password, a cookie or a setup code themselves. Only
     // when local sign-in is on, so Keycloak and OIDC installs keep answering 401 here.
@@ -102,7 +134,39 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
     // route (a machine client has no local user record, so users.syncFromClaims must not run for
     // it). The trailing slash scopes this to the sync subtree. Analogous to the hooks bypass above.
     if (path.startsWith('/api/sync/')) return;
-    if (path !== '/api' && !path.startsWith('/api/')) return;
+
+    // An access key is accepted in the Authorization header only. A key in the URL is refused
+    // unread, on every path and whatever the header holds, so it is never resolved or marked used.
+    // A key never reaches verifyToken. It is checked before the dev bypass: only a request with no
+    // credential at all gets the dev actor. A failure is audited with a reason and the address only.
+    const urlToken = queryAccessToken(req);
+    if (urlToken && looksLikeAccessKey(urlToken)) {
+      recordAuthFailed(req, 'invalid-access-key', null);
+      reply.code(INVALID_ACCESS_KEY.status);
+      return reply.send({ error: INVALID_ACCESS_KEY.error });
+    }
+    const headerToken = headerBearer(req);
+    if (headerToken && looksLikeAccessKey(headerToken)) {
+      let result: Awaited<ReturnType<typeof signInWithAccessKey>>;
+      try {
+        result = await signInWithAccessKey(ctx, headerToken);
+      } catch (e) {
+        // Not the error itself: its text or detail could quote a query parameter. A database
+        // error code (such as 57P01) is safe and enough to start looking.
+        const code = (e as { code?: unknown } | null)?.code;
+        ctx.logger.error({ code: typeof code === 'string' ? code : undefined }, 'access key sign-in failed');
+        recordAuthFailed(req, 'access-key-lookup-failed', null);
+        reply.code(401);
+        return reply.send({ error: 'authentication failed' });
+      }
+      if (!result.ok) {
+        recordAuthFailed(req, result.status === 403 ? 'account-disabled' : 'invalid-access-key', null);
+        reply.code(result.status);
+        return reply.send({ error: result.error });
+      }
+      req.user = result.user;
+      return;
+    }
 
     const token = bearer(req);
     if (!token) {

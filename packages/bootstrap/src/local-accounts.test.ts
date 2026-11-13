@@ -150,6 +150,31 @@ describe('createLocalAccount', () => {
     expect(auth.directory.create).not.toHaveBeenCalled();
     expect(audit.events).toHaveLength(0);
   });
+
+  it('with password none passes no password and returns none', async () => {
+    const { ctx, auth, audit } = makeCtx(fake({ setupRequired: false }));
+    const created = await createLocalAccount(ctx, actor, { username: 'dee', roles: ['lab_technician'], password: 'none' });
+    expect(auth.directory.create).toHaveBeenCalledWith({
+      username: 'dee', firstName: undefined, email: undefined, roles: ['lab_technician'],
+    });
+    const input = auth.directory.create.mock.calls[0]![0];
+    expect('password' in input).toBe(false);
+    expect('temporaryPassword' in input).toBe(false);
+    expect(created).toEqual({ user: expect.objectContaining({ id: 'new-id', username: 'dee' }) });
+    expect(audit.events).toHaveLength(1);
+    expect(audit.events[0]).toMatchObject({
+      action: 'user.create', entityType: 'user', entityId: 'new-id', metadata: { username: 'dee', password: 'none' },
+    });
+  });
+
+  it('with password temporary behaves as with no option', async () => {
+    const { ctx, auth, audit } = makeCtx(fake({ setupRequired: false }));
+    const { temporaryPassword } = await createLocalAccount(ctx, actor, { username: 'bo', password: 'temporary' });
+    expect(temporaryPassword).toMatch(/^[A-HJ-NP-Za-hj-np-z2-9]{16}$/);
+    expect(auth.directory.create).toHaveBeenCalledWith(expect.objectContaining({ password: temporaryPassword, temporaryPassword: true }));
+    expect(audit.events[0]).toMatchObject({ metadata: { username: 'bo' } });
+    expect(audit.events[0]!.metadata).toEqual({ username: 'bo' });
+  });
 });
 
 describe('endLocalSessions', () => {
@@ -226,6 +251,42 @@ describe('account status under local sign-in (pg-mem)', () => {
       expect(statusEvents).toHaveLength(2);
       expect(statusEvents[0]).toMatchObject({ metadata: { enabled: false, backend: 'provider', localId: user.id } });
       expect(JSON.stringify(events)).not.toContain(temporaryPassword);
+    } finally {
+      await db.destroy();
+    }
+  }, 30000);
+});
+
+describe('an account with no password (pg-mem)', () => {
+  it('creates an account with no password and no credential row', async () => {
+    const db = await makeMigratedDb();
+    try {
+      const store = createLocalAuthStore(db);
+      const users = createUserStore(db, { withSubjectLock: (_subject, work) => work(db) });
+      const roles = createRoleStore(db);
+      const { auth, signIn } = await createLocalAuth({ store, users, roles, secretKey: randomBytes(32), ping: async () => {} });
+      const events: Array<Record<string, unknown>> = [];
+      const ctx = {
+        localSignIn: signIn, auth, users, roles,
+        audit: { record: async (e: Record<string, unknown>) => { events.push(e); return e; } },
+        logger: { error() {}, warn() {}, info() {} },
+      } as unknown as AppContext;
+
+      await roles.seedSystemRoles();
+      const setupCode = await createSetupCode(ctx);
+      expect(await signIn.setup({ setupCode, username: 'root', password: 'first admin pw', ip: null, userAgent: null })).toMatchObject({ ok: true });
+
+      const created = await createLocalAccount(ctx, actor, { username: 'assistant', roles: ['data_analyst'], password: 'none' });
+      expect(Object.keys(created)).toEqual(['user']);
+      expect((await users.get(created.user.id))?.username).toBe('assistant');
+      expect(await store.getCredential(created.user.id)).toBeNull();
+      const credentialRows = await db.selectFrom('local_credentials').select('user_id').where('user_id', '=', created.user.id).execute();
+      expect(credentialRows).toEqual([]);
+
+      for (const password of ['', 'first admin pw', 'anything at all']) {
+        expect(await signIn.login({ identifier: 'assistant', password, ip: null, userAgent: null })).toMatchObject({ ok: false, reason: 'invalid' });
+      }
+      expect(events.find((e) => e.action === 'user.create')).toMatchObject({ metadata: { username: 'assistant', password: 'none' } });
     } finally {
       await db.destroy();
     }

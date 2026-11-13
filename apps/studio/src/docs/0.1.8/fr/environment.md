@@ -146,7 +146,10 @@ Activez les capacités de l'hôte uniquement pour les utilisateurs et installati
 | `WORKFLOW_FILE_ACCESS_ENABLED`, `WORKFLOW_FILE_ACCESS_ROOT` | false, vide | Accès aux fichiers de l'hôte et répertoire racine obligatoire. |
 | `WORKFLOW_EMAIL_POLL_MIN_SECONDS`, `WORKFLOW_EMAIL_MAX_PER_POLL` | 30, 50 | Intervalle minimal des déclencheurs de courriel et limite de messages par interrogation. |
 | `FACILITY_IMPORT_MAX_UPLOAD_BYTES` | 67108864 | Taille maximale d'envoi d'un registre d'établissements. L'augmenter exige aussi assez de mémoire pour le traitement. |
-| `TERMINOLOGY_WORK_DIR` | Facultatif | Répertoire de téléchargement et d'extraction de terminologie. |
+| `TERMINOLOGY_WORK_DIR` | Facultatif | Répertoire de téléchargement et d'extraction de terminologie. Sur une installation Docker qui utilise `terminology ontology build` par l'application, faites-le pointer vers un dossier qui survit à un nouveau conteneur. Prenez un volume ou un montage où l'utilisateur du conteneur `api` peut écrire. Non testé. |
+| `CLI_ENTRY` | Facultatif | Le fichier d'entrée du CLI que le serveur lance pour une commande envoyée par l'application. Laissez-le vide dans l'image Docker et dans une copie du dépôt. |
+| `CLI_MAX_RUNNING` | Facultatif | Nombre de commandes envoyées par l'application qui tournent en même temps. 2 par défaut. Les autres attendent, puis reçoivent « occupé » après 30 secondes. Au-delà de 1, un compte lance au plus une commande de moins que cette valeur à la fois. Avec 2, il en lance une à la fois. |
+| `CLI_MAX_UPLOAD_BYTES` | Facultatif | Nombre maximal d'octets de fichiers qu'une commande envoyée par l'application peut téléverser. 2147483648 (2 Gio) par défaut. |
 | `PLUGIN_UI_ENABLED`, `PLUGIN_EGRESS_ENABLED` | true, true | Interrupteurs généraux des pages et de l'intermédiaire des plugins, et de leur accès réseau. |
 | `PLUGIN_DATA_MAX_DOC_BYTES` | 8388608 | Taille maximale d'un document de l'intermédiaire. |
 | `PLUGIN_CRASH_LOG_DIR` | .openldr/crash | Répertoire persistant des marqueurs de plantage des plugins. |

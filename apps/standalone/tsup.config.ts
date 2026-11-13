@@ -20,7 +20,13 @@ function copyTerminologyFiles(): void {
 }
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  // index.js is the launcher. cli.js is the plain `openldr` CLI entry (packages/cli/src/index.ts),
+  // which the server starts for each command sent through the app; buildEnvironment names it in
+  // CLI_ENTRY (src/commands.ts, cliEntryFile).
+  entry: {
+    index: 'src/index.ts',
+    cli: join(here, '..', '..', 'packages', 'cli', 'src', 'index.ts'),
+  },
   format: ['esm'],
   target: 'node20',
   clean: true,

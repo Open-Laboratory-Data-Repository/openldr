@@ -189,7 +189,7 @@ O ficheiro testado era válido. O seu resultado depende do conteúdo do seu fich
 
 ### 4. Importar para a base de desenvolvimento
 
-Execute este passo quando quiser importar o ficheiro. Confirme que `.env` aponta para as bases e o armazenamento de desenvolvimento. Esses serviços devem estar iniciados.
+Execute este passo quando quiser importar o ficheiro. Confirme que `.env` aponta para as bases e o armazenamento de desenvolvimento. Esses serviços devem estar iniciados. A API também tem de estar a correr, porque `ingest` e `pipeline status` passam por ela. Com `AUTH_DEV_BYPASS=true`, ela inicia sessão nestes comandos.
 
 ```sh
 pnpm openldr ingest files/my-file.json
@@ -225,6 +225,8 @@ Coloque-o na pasta de instalação usada acima:
 Execute o comando em `~/Downloads/openldr_ce`. Mantenha o prefixo `data/`, pois o caminho é relativo a essa pasta.
 
 A CLI instalada executa dentro do contentor API. A pasta `data` é partilhada com esse contentor. Num servidor remoto, coloque o ficheiro na pasta desse servidor. Guardar um ficheiro no portátil não o copia para o servidor.
+
+A maioria dos comandos, incluindo `ingest`, passa pelo servidor OpenLDR em execução. <!-- cli:linux -->Inicie sessão primeiro com `./openldr login`, ou defina uma chave de acesso em `OPENLDR_KEY`.<!-- /cli --><!-- cli:mac -->Inicie sessão primeiro com `./openldr login`, ou defina uma chave de acesso em `OPENLDR_KEY`.<!-- /cli --><!-- cli:windows -->Defina primeiro uma chave de acesso em `OPENLDR_KEY`. No Windows, o CLI inicia sessão apenas com uma chave de acesso. Isto não foi corrido no Windows.<!-- /cli --> Leia [Utilizadores](/docs/users) para criar uma chave de acesso.
 
 Use também `data/` para ficheiros de saída. Coloque caminhos com espaços entre aspas, como `"data/my file.json"`. Cada guia explica o formato esperado. Executar uma importação escreve registos.
 
@@ -293,7 +295,7 @@ O teste voltou a obter ajuda depois de iniciar o contentor. Não verificou o arr
 
 ### A importação indica ENOENT para o ficheiro
 
-O erro testado foi `ingest failed: ENOENT: no such file or directory, open 'my-file.json'`.
+O erro testado foi `ingest failed: ENOENT: no such file or directory, open 'my-file.json'`. Esse teste é anterior à passagem dos comandos pelo servidor. Agora a CLI verifica primeiro o ficheiro e mostra `Cannot find my-file.json.` A correção abaixo é a mesma.
 
 O ficheiro existia ao lado do iniciador. O contentor não o conseguia ler, porque apenas a pasta `data` era partilhada.
 

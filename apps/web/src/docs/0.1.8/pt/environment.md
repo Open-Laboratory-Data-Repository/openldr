@@ -203,7 +203,10 @@ regista um aviso no arranque.
 
 | Variável | Omissão | Finalidade |
 | --- | --- | --- |
-| `TERMINOLOGY_WORK_DIR` | pasta temporária do sistema | Pasta onde uma versão de terminologia carregada é descomprimida durante a importação. Uma versão completa do SNOMED CT precisa de espaço para o zip e para os ficheiros descomprimidos ao mesmo tempo. Aponte-a para um disco maior quando a pasta temporária do contentor for pequena. |
+| `TERMINOLOGY_WORK_DIR` | pasta temporária do sistema | Pasta onde uma versão de terminologia carregada é descomprimida durante a importação. Uma versão completa do SNOMED CT precisa de espaço para o zip e para os ficheiros descomprimidos ao mesmo tempo. Aponte-a para um disco maior quando a pasta temporária do contentor for pequena. Numa instalação Docker que use `terminology ontology build` pela aplicação, aponte-a para uma pasta que sobreviva a um contentor novo. Use um volume Docker ou uma montagem onde o utilizador do contentor `api` possa escrever. Caso contrário, `terminology ontology rebuild` falha depois de uma atualização. Não testado. |
+| `CLI_ENTRY` | encontrado junto ao servidor | O ficheiro de entrada do CLI que o servidor inicia para um comando enviado pela aplicação. A imagem Docker e uma cópia do repositório não precisam de valor. Defina-o só quando o CLI estiver noutro sítio. Quando o ficheiro não é encontrado, o comando recebe uma resposta que nomeia esta definição. |
+| `CLI_MAX_RUNNING` | `2` | Quantos comandos enviados pela aplicação correm ao mesmo tempo. Os restantes esperam. Um comando que espera 30 segundos recebe "ocupado". Quando o valor é maior do que 1, uma conta pode correr no máximo menos um comando do que esse valor ao mesmo tempo. Com o valor predefinido de 2, uma conta corre um comando de cada vez. |
+| `CLI_MAX_UPLOAD_BYTES` | `2147483648` (2 GiB) | O máximo de bytes de ficheiros que um comando enviado pela aplicação pode carregar. Um envio maior é recusado com uma mensagem que nomeia o limite. Os envios são escritos em `TERMINOLOGY_WORK_DIR`, por isso essa pasta precisa de espaço. |
 
 ## Armazém de destino SQL Server
 

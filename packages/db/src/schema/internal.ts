@@ -230,6 +230,19 @@ export interface AuthSetupCodeTable {
   code_hash: string;
   expires_at: Date;
 }
+// Access keys (migration 117). Only the hash of a key is kept, never the key.
+export interface AccessKeysTable {
+  id: string;
+  user_id: string;
+  name: string;
+  key_hash: string;
+  prefix: string;
+  created_by: string | null;
+  created_at: Generated<Date>;
+  expires_at: Date | null;
+  revoked_at: Date | null;
+  last_used_at: Date | null;
+}
 
 export interface RolesTable {
   id: string;
@@ -1018,6 +1031,7 @@ export interface InternalSchema {
   auth_sessions: AuthSessionsTable;
   auth_signing_keys: AuthSigningKeysTable;
   auth_setup_code: AuthSetupCodeTable;
+  access_keys: AccessKeysTable;
   account_access_blocks: { subject: string };
   /** Pairs of patients marked "not duplicates" (migration 111). patient_a < patient_b. */
   patient_duplicate_dismissals: {

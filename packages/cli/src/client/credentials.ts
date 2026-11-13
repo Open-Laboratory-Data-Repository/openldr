@@ -1,0 +1,157 @@
+// Where a command sent through the app goes, and what it signs in with (spec section 6.3).
+//
+// The key travels only in the Authorization header. Nothing in this file puts it in a URL, a log
+// line or an error message. Messages name the setting or the file, never the value.
+
+import { open } from 'node:fs/promises';
+import { homeOf, refreshHanded, refreshSession, SessionError, sessionFileFor, type SessionPlace } from './session-file';
+
+/** The server address when neither --server-url nor OPENLDR_URL is set. */
+export const DEFAULT_SERVER_URL = 'http://127.0.0.1:3000';
+
+export interface Credential {
+  kind: 'key' | 'session' | 'none';
+  /** The whole Authorization header value, or null to send none. */
+  authorization: string | null;
+}
+
+/** The address cannot be used. The message is safe to print: it never quotes the address. */
+export class PlainHttpError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PlainHttpError';
+  }
+}
+
+/** The credential the caller set cannot be read. The message names where it came from, never the key. */
+export class CredentialError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CredentialError';
+  }
+}
+
+/** This machine. `[::1]` is how the URL parser writes the IPv6 loopback. */
+const THIS_MACHINE = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+/** A key file larger than this is not a key. */
+const MAX_KEY_FILE_BYTES = 4096;
+
+/** --server-url, then OPENLDR_URL, then the default. An empty OPENLDR_URL counts as unset. */
+export function serverUrl(opts: { url?: string; env: NodeJS.ProcessEnv }): string {
+  if (opts.url !== undefined) return opts.url;
+  const fromEnv = opts.env.OPENLDR_URL?.trim();
+  return fromEnv ? fromEnv : DEFAULT_SERVER_URL;
+}
+
+/**
+ * Throws PlainHttpError for an address that must not get a command. Arguments and uploaded files
+ * are as sensitive as a key, so this applies whether or not a credential was found.
+ */
+export function assertSafeUrl(url: string, env: NodeJS.ProcessEnv): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new PlainHttpError('The OpenLDR address is not a valid URL.');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new PlainHttpError('The OpenLDR address must start with http:// or https://.');
+  }
+  if (parsed.username !== '' || parsed.password !== '') {
+    throw new PlainHttpError('The OpenLDR address must not hold a user name or password.');
+  }
+  const allowed = env.OPENLDR_ALLOW_PLAIN_HTTP === 'true' || env.OPENLDR_ALLOW_PLAIN_HTTP === '1';
+  if (parsed.protocol === 'http:' && !THIS_MACHINE.has(parsed.hostname) && !allowed) {
+    throw new PlainHttpError(
+      `Refusing to send a credential over plain HTTP to ${parsed.hostname}. Use https, or set OPENLDR_ALLOW_PLAIN_HTTP=true.`,
+    );
+  }
+}
+
+/** A key as a header value. A key with a space or a control character cannot travel in a header. */
+function keyCredential(key: string, from: string): Credential {
+  if (!/^[\x21-\x7e]+$/.test(key)) throw new CredentialError(`The key in ${from} is not valid: it holds a space or a character a header cannot carry.`);
+  return { kind: 'key', authorization: `Bearer ${key}` };
+}
+
+/** The file's text, at most MAX_KEY_FILE_BYTES. Reads through a handle, so a pipe works too. */
+async function readKeyFile(file: string): Promise<string> {
+  const unreadable = () => new CredentialError(`The key file named by OPENLDR_KEY_FILE cannot be read: ${file}`);
+  let fh;
+  try {
+    fh = await open(file, 'r');
+  } catch {
+    throw unreadable();
+  }
+  try {
+    const buf = Buffer.alloc(MAX_KEY_FILE_BYTES + 1);
+    let total = 0;
+    for (;;) {
+      const { bytesRead } = await fh.read(buf, total, buf.length - total, null);
+      if (bytesRead === 0) break;
+      total += bytesRead;
+      if (total > MAX_KEY_FILE_BYTES) throw new CredentialError(`The key file named by OPENLDR_KEY_FILE is too large to hold a key: ${file}`);
+    }
+    return buf.subarray(0, total).toString('utf8');
+  } catch (err) {
+    if (err instanceof CredentialError) throw err;
+    throw unreadable();
+  } finally {
+    await fh.close().catch(() => {});
+  }
+}
+
+/**
+ * The session file from `openldr login`: the access token a refresh gives for this server, or null
+ * when there is no session. The cookie is sent, so the address is checked first. A refused refresh
+ * has removed the entry and gives null; any other failure is a CredentialError with a printable
+ * message.
+ */
+async function readSession(env: NodeJS.ProcessEnv, url: string, place: SessionPlace): Promise<Credential | null> {
+  // The Docker wrapper's hidden plumbing (session-file.ts): a session handed in for this one call.
+  // When it is set, no session file is read or written.
+  const handed = env.OPENLDR_SESSION;
+  const file = handed === undefined ? sessionFileFor(env, place) : null;
+  if (handed === undefined ? file === null : handed.trim() === '') return null;
+  assertSafeUrl(url, env);
+  let token: string | null;
+  try {
+    token = handed !== undefined ? await refreshHanded(url, handed) : await refreshSession(url, file!);
+  } catch (err) {
+    if (err instanceof SessionError) throw new CredentialError(err.message);
+    throw err;
+  }
+  return token === null ? null : { kind: 'session', authorization: `Bearer ${token}` };
+}
+
+/**
+ * OPENLDR_KEY, then the file named by OPENLDR_KEY_FILE, then the session (the one the Docker wrapper
+ * hands in as OPENLDR_SESSION when that is set, else the session file), then none. Only a
+ * variable that is not set at all is passed over. Set but empty (`OPENLDR_KEY_FILE=$TYPO` expands to
+ * nothing), or naming a file that is missing, unreadable or empty, stops here with CredentialError
+ * (Ruling 65): falling through to a session would run the command as someone else.
+ *
+ * `place` says where the session file is. By default it is found from this environment's HOME (or
+ * USERPROFILE on Windows), so an environment with neither has no session file.
+ */
+export async function findCredential(
+  env: NodeJS.ProcessEnv, url: string, place: SessionPlace = { platform: process.platform, homedir: homeOf(env, process.platform) },
+): Promise<Credential> {
+  const empty = (name: string) => new CredentialError(`${name} is set but empty. Set it, or unset it.`);
+  if (env.OPENLDR_KEY !== undefined) {
+    const key = env.OPENLDR_KEY.trim();
+    if (!key) throw empty('OPENLDR_KEY');
+    return keyCredential(key, 'OPENLDR_KEY');
+  }
+  const file = env.OPENLDR_KEY_FILE;
+  if (file !== undefined) {
+    if (file.trim() === '') throw empty('OPENLDR_KEY_FILE');
+    const fromFile = (await readKeyFile(file)).trim();
+    if (!fromFile) throw new CredentialError(`The key file named by OPENLDR_KEY_FILE is empty: ${file}`);
+    return keyCredential(fromFile, `the file ${file}`);
+  }
+  const session = await readSession(env, url, place);
+  if (session) return session;
+  return { kind: 'none', authorization: null };
+}

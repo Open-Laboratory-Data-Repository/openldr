@@ -222,7 +222,7 @@ Um pacote cujos detalhes não carregam mantém a instalação desativada. Verifi
 
 ## Usar um pacote local pela CLI
 
-Siga [Começar aqui](/docs/start-here) para configurar a CLI. Em `openldr_ce`, a instalação pela CLI lê um diretório de pacote no servidor. Não consulta a lista de registos do Studio. Verifique e simule antes de aplicar um pacote aprovado.
+Siga [Começar aqui](/docs/start-here) para configurar a CLI. Em `openldr_ce`, a instalação pela CLI envia um diretório de pacote da sua máquina para o servidor em execução, por isso inicie sessão primeiro. Não consulta a lista de registos do Studio. Verifique e simule antes de aplicar um pacote aprovado.
 
 ```shell
 pnpm openldr market list

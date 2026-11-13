@@ -118,6 +118,23 @@ Verifique o estado dos contentores, a saúde da aplicação e os registos. Leia 
 
 ![Ilustração. Verifique a nova aplicação antes de retomar o tráfego.](upgrading-guide-verify.png)
 
+### 3. Substituir o script openldr
+
+Corra isto na pasta de instalação depois de as imagens estarem na nova versão. Reescreve apenas o script `openldr`, e `openldr.ps1` onde o instalador escreve um. Não muda mais nada. Sem isto, o script antigo não envia início de sessão, e cada comando que passa pela aplicação responde `Sign in first: openldr login, or set OPENLDR_KEY.`
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh | bash -s -- --wrapper-only --dir .
+```
+
+No Windows, no PowerShell:
+
+```powershell
+$installer = Invoke-RestMethod https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.ps1
+& ([scriptblock]::Create($installer)) -WrapperOnly -Dir C:\openldr_ce
+```
+
+Depois inicie sessão com `./openldr login`, ou defina `OPENLDR_KEY`. No Windows, `.\openldr.ps1` inicia sessão apenas com uma chave, por isso defina `OPENLDR_KEY`. Nenhum dos comandos foi corrido numa instalação real. A forma PowerShell não foi corrida no Windows.
+
 **Resultado esperado:** a versão foi verificada antes de chegar novo trabalho. Mantenha as cópias verificadas e as imagens anteriores segundo a política de retenção local.
 
 ## Resolver problemas de pedidos interrompidos
@@ -132,7 +149,7 @@ Os novos ficheiros Compose do instalador definem `stop_grace_period: ${OPENLDR_S
 
 O OpenLDR espera pelos pedidos e processamentos ativos durante a paragem. Um processamento que nunca termina pode exceder esse tempo. Os registos e o estado dos processos devem confirmar se o trabalho acabou. Nunca execute `docker compose down -v` durante uma atualização.
 
-Se um armazém antigo não tiver estados de resultados, as notas de versão podem exigir `openldr db reproject --force` após atualizar. Isto reconstrói os dados projetados a partir dos recursos canónicos. Faça-o apenas quando a versão pretendida o exigir.
+Se um armazém antigo não tiver estados de resultados, as notas de versão podem exigir `openldr db reproject --force` após atualizar. Isto reconstrói os dados projetados a partir dos recursos canónicos. Passa pela aplicação em execução, por isso inicie sessão primeiro com uma conta que tenha a permissão `settings.danger_zone`. Faça-o apenas quando a versão pretendida o exigir.
 
 ## Instalações MinIO antigas a passar para Garage
 

@@ -71,4 +71,21 @@ describe('createAuditStore', () => {
     const listed = await store.list({});
     expect(listed.find((e) => e.id === ev.id)?.actorType).toBe('cli');
   });
+
+  // Where a request came from (an access key, the CLI) rides in metadata under `origin`, so no
+  // column or migration is needed. It sits beside the event's own metadata and wins over a key
+  // of the same name there, so a route cannot write a false origin.
+  it('writes origin into metadata beside the event metadata, and leaves rows without one alone', async () => {
+    const db = await makeMigratedDb();
+    const store = createAuditStore(db);
+    const origin = { via: 'access-key' as const, keyName: 'backup job' };
+    const withMeta = await store.record({ ...input, origin, metadata: { name: 'x', origin: 'spoofed' } });
+    expect((await store.get(withMeta.id))?.metadata).toEqual({ name: 'x', origin });
+    const noMeta = await store.record({ ...input, origin });
+    expect((await store.get(noMeta.id))?.metadata).toEqual({ origin });
+    const plain = await store.record({ ...input, metadata: { name: 'y' } });
+    expect((await store.get(plain.id))?.metadata).toEqual({ name: 'y' });
+    const bare = await store.record(input);
+    expect((await store.get(bare.id))?.metadata).toBeUndefined();
+  });
 });

@@ -1,6 +1,7 @@
 import { createAppContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import type { ReportDesignStore } from '@openldr/report-designer';
+import { callerName } from './cli-actor';
 
 type Writer = (s: string) => void;
 const stdout: Writer = (s) => process.stdout.write(s);
@@ -19,7 +20,7 @@ export async function deleteDesign(store: ReportDesignStore, id: string, opts: {
 }
 
 export async function publishDesign(store: ReportDesignStore, id: string, write: Writer = stdout): Promise<void> {
-  const d = await store.publish(id, 'cli');
+  const d = await store.publish(id, callerName());
   write(`published ${d.id}\n`);
 }
 

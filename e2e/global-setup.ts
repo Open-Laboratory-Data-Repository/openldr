@@ -6,13 +6,21 @@ const SEED_HELP = [
   '',
   'The stack appears unseeded or unreachable. Bring it up and seed it, then re-run:',
   '  docker compose up -d',
-  '  pnpm e2e:seed',
+  '  (stop the API if one runs on this database)',
+  '  pnpm e2e:seed:reset',
+  '  pnpm -C apps/server dev    (in another terminal: it boots on the fresh schema)',
+  '  pnpm e2e:seed:load         (goes through the API at OPENLDR_URL, default http://127.0.0.1:3000)',
+  'See e2e/README.md.',
 ].join('\n');
 const DOCS_SEED_HELP = [
   '',
   'The docs capture stack appears unseeded or unreachable. Bring it up and seed it, then re-run:',
   '  docker compose up -d',
-  '  pnpm docs:seed',
+  '  (stop the API if one runs on this database)',
+  '  pnpm docs:seed:reset',
+  '  pnpm -C apps/server dev    (in another terminal: it boots on the fresh schema)',
+  '  pnpm docs:seed:load        (goes through the API at OPENLDR_URL, default http://127.0.0.1:3000)',
+  'See e2e/README.md.',
 ].join('\n');
 
 // Fail fast with actionable instructions if the live stack has no data, instead of

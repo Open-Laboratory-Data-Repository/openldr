@@ -118,6 +118,23 @@ Vérifiez l'état des conteneurs, la santé de l'application et les journaux. Li
 
 ![Illustration. Vérifiez la nouvelle application avant de reprendre le trafic.](upgrading-guide-verify.png)
 
+### 3. Remplacer le script openldr
+
+Lancez ceci dans le dossier d'installation une fois les images passées à la nouvelle version. Cela réécrit seulement le script `openldr`, et `openldr.ps1` là où l'installateur en écrit un. Rien d'autre ne change. Sans cela, l'ancien script n'envoie aucune connexion, et chaque commande qui passe par l'application répond `Sign in first: openldr login, or set OPENLDR_KEY.`
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh | bash -s -- --wrapper-only --dir .
+```
+
+Sous Windows, dans PowerShell :
+
+```powershell
+$installer = Invoke-RestMethod https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.ps1
+& ([scriptblock]::Create($installer)) -WrapperOnly -Dir C:\openldr_ce
+```
+
+Connectez-vous ensuite avec `./openldr login`, ou définissez `OPENLDR_KEY`. Sous Windows, `.\openldr.ps1` se connecte uniquement avec une clé, donc définissez `OPENLDR_KEY`. Aucune des deux commandes n'a été lancée sur une vraie installation. La forme PowerShell n'a pas été lancée sous Windows.
+
 **Résultat attendu :** la version est contrôlée avant l'arrivée de nouveaux travaux. Gardez les sauvegardes vérifiées et les anciennes images selon la politique de conservation du site.
 
 ## Résoudre les problèmes de requêtes interrompues
@@ -132,7 +149,7 @@ Les nouveaux fichiers Compose de l'installateur définissent `stop_grace_period:
 
 OpenLDR attend les requêtes et traitements actifs pendant l'arrêt. Un traitement qui ne revient jamais peut dépasser le délai. Les journaux et l'état des processus doivent établir si les travaux se sont achevés. N'exécutez jamais `docker compose down -v` pendant une mise à niveau.
 
-Si un ancien entrepôt ne contient pas les statuts de résultat, les notes de version peuvent exiger `openldr db reproject --force` après la mise à niveau. Cela reconstruit les projections depuis les ressources canoniques. Faites-le uniquement si la version cible l'exige.
+Si un ancien entrepôt ne contient pas les statuts de résultat, les notes de version peuvent exiger `openldr db reproject --force` après la mise à niveau. Cela reconstruit les projections depuis les ressources canoniques. La commande passe par l'application en marche, donc connectez-vous d'abord avec un compte qui a la permission `settings.danger_zone`. Faites-le uniquement si la version cible l'exige.
 
 ## Anciens déploiements MinIO passant à Garage
 

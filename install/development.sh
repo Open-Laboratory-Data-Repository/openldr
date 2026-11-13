@@ -5,7 +5,8 @@
 # Flags:
 #   --dir <path>     where to clone (default ./openldr)
 #   --branch <name>  branch to clone (default main)
-#   --seed           also load WHONET sample data (needs the wasm build toolchain)
+#   --seed           also load WHONET sample data (needs the wasm build toolchain and port 3000 free; starts the API
+#                    for the load and leaves it running)
 #   --reset-db       force a db reset even on an existing setup (DESTRUCTIVE)
 #   --no-services    just clone + install; skip Docker + DB
 set -eu
@@ -30,11 +31,70 @@ done
 
 err() { echo "✗ $1" >&2; exit 1; }
 
+# The API for the sample load (--seed). The script starts it on this port itself and sends the load
+# there, whatever OPENLDR_URL the caller's shell holds.
+API_PORT=3000
+API_URL="http://127.0.0.1:$API_PORT"
+API_LOG="${TMPDIR:-/tmp}/openldr-dev-api.log"
+API_PID=""
+# Is the script's own API healthy yet? Used only while waiting for the API this script started.
+api_up() { API_URL="$API_URL" node -e "fetch(process.env.API_URL + '/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" >/dev/null 2>&1; }
+# Is the port free? A different question from api_up: any listener on the port, healthy or not, on
+# any address, makes it not free. It binds the port on all addresses, then on 127.0.0.1, then on
+# ::1 (skipped where the machine has no IPv6), and lets each go at once. Exit 0 free, 3 something
+# listens there, 4 a bind failed for another reason. Any other code means node itself failed.
+PORT_FREE_JS='
+const net = require("net");
+const port = Number(process.argv[1]);
+const hosts = [undefined, "127.0.0.1", "::1"];
+(function next(i) {
+  if (i === hosts.length) process.exit(0);
+  const s = net.createServer();
+  s.once("error", (e) => {
+    if (e.code === "EADDRINUSE" || e.code === "EACCES") process.exit(3);
+    if (i < 2) process.exit(4);
+    next(i + 1);
+  });
+  s.listen({ port, host: hosts[i], exclusive: true }, () => s.close(() => next(i + 1)));
+})(0);
+'
+# Stops the script unless the port is free. $1 says what has happened so far. $2 says how to run
+# the script again, and starts with a lower-case "run".
+require_port_free() {
+  rc=0
+  node -e "$PORT_FREE_JS" "$API_PORT" >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ]; then return 0; fi
+  if [ "$rc" -eq 3 ]; then err "Something is already listening on port $API_PORT. Stop that program. $1 Once the port is free, $2"; fi
+  err "The script could not check whether port $API_PORT is free (node exited with code $rc). $1 The check binds the port for a moment with node. Fix what stops that, then $2"
+}
+# The line the API logs once it has bound the port: Fastify's "Server listening at <address>", one
+# line per address, at info level, as JSON on standard output. The closing quote ends the JSON
+# string, so port 30000 does not match. Only this run's API writes to $API_LOG, which is emptied
+# at each start.
+LISTEN_LINE="listening at $API_URL\""
+own_api_listening() { grep -F -q "$LISTEN_LINE" "$API_LOG" 2>/dev/null; }
+# True while the API this script started is still running.
+own_api_alive() { [ -n "$API_PID" ] && kill -0 "$API_PID" 2>/dev/null; }
+# Stops only the API this script started, by its own process ID. A failed step or Ctrl+C runs it.
+stop_api() { if [ -n "$API_PID" ]; then kill "$API_PID" 2>/dev/null || true; API_PID=""; fi; }
+trap stop_api EXIT
+trap 'stop_api; exit 130' INT
+trap 'stop_api; exit 143' TERM
+
 # 1. Preflight
 command -v git >/dev/null 2>&1 || err "git is not installed."
 command -v node >/dev/null 2>&1 || err "Node.js >=20 is not installed. See https://nodejs.org/"
 NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]')
 [ "$NODE_MAJOR" -ge 20 ] || err "Node.js >=20 required (found $(node -v))."
+# With --seed, the port check comes first, before pnpm install, .env and docker compose. The sample
+# load goes through an API signed in by AUTH_DEV_BYPASS; a listener already on the port is not this
+# run's, and on a fresh checkout it is someone else's. Stopping here starts and writes nothing, so a
+# re-run after stopping it behaves as a first run. It checks before it knows whether it will seed,
+# so it can refuse a run that would have loaded nothing; the message says so.
+# Unproven: this part has not been run. macOS is unproven too.
+if [ "$SEED" -eq 1 ]; then
+  require_port_free "With --seed, the script would start its own API on port $API_PORT and load the sample data through it. It does that only on a fresh setup or with --reset-db, and not with --no-services, but it checks the port first in every case. Nothing has been installed, written, reset or started." "run this script again, or seed by hand in the order given in e2e/README.md."
+fi
 if ! command -v pnpm >/dev/null 2>&1; then
   if command -v corepack >/dev/null 2>&1; then
     echo "→ Enabling pnpm via corepack"
@@ -88,19 +148,98 @@ else
 
   # 6. DB init — only on a fresh setup so a re-run never wipes data; --reset-db forces it.
   if [ "$FRESH_ENV" -eq 1 ] || [ "$RESET_DB" -eq 1 ]; then
+    if [ "$SEED" -eq 1 ]; then
+      # How to run again after a stop in this step. This run may have written .env just now; a
+      # plain re-run would then skip the reset.
+      if [ "$FRESH_ENV" -eq 1 ]; then
+        RERUN_NOTE=" This run wrote .env, so a plain re-run would skip the reset."
+        RERUN="run this script again with --reset-db --seed, and the same --dir and --branch if you gave them."
+      else
+        RERUN_NOTE=""
+        RERUN="run this script again with the same options."
+      fi
+      # The two builds of e2e:seed:reset (see the second reset below). They need no database and
+      # take minutes, so they run here, before any port check, and not between a check and a reset.
+      echo "→ Building the WHONET sample (pnpm make:whonet-sample)"
+      pnpm make:whonet-sample || err "pnpm make:whonet-sample failed. Nothing has been reset or loaded.$RERUN_NOTE Fix the build, then $RERUN"
+      echo "→ Building the plugins (pnpm build:plugins)"
+      pnpm build:plugins || err "pnpm build:plugins failed. Nothing has been reset or loaded.$RERUN_NOTE Fix the build, then $RERUN"
+    fi
     echo "→ Waiting for Postgres to be ready…"
     i=0
     while [ "$i" -lt 30 ]; do
       docker compose exec -T postgres pg_isready -U openldr >/dev/null 2>&1 && break
       i=$((i + 1)); sleep 2
     done
+    # With --seed, the port is checked again right before the first reset. pnpm install, docker, the
+    # builds and the wait above take minutes, and a reset under an API this run did not start is the
+    # harm.
+    if [ "$SEED" -eq 1 ]; then
+      require_port_free "Nothing has been reset or loaded.$RERUN_NOTE" "$RERUN"
+    fi
     echo "→ Resetting the database (pnpm openldr db reset)"
     pnpm openldr db reset || err "db reset failed"
     echo "→ Seeding starter set (pnpm openldr db seed)"
     pnpm openldr db seed || err "db seed failed"
     if [ "$SEED" -eq 1 ]; then
-      echo "→ Seeding WHONET sample data (pnpm e2e:seed)"
-      pnpm e2e:seed || err "seed failed"
+      # 1. The second reset, which wipes the starter seed, as e2e:seed:reset always has. The two
+      #    builds above and this reset are the parts of e2e:seed:reset in package.json, run one by
+      #    one so a port check sits right before each reset. A change to e2e:seed:reset must be
+      #    repeated here.
+      require_port_free "The database has been reset once and seeded with the starter set, and no sample data was loaded.$RERUN_NOTE" "$RERUN"
+      echo "→ Resetting the database for the sample data (pnpm openldr db reset)"
+      pnpm openldr db reset || err "db reset failed"
+      # 2. Then an API on the fresh schema, on the script's own port. The port is checked again
+      #    right before the start. One process, no watcher, so its own process ID stops all of it.
+      require_port_free "The database has been reset and no sample data was loaded." "run this script again with --reset-db --seed, and the same --dir and --branch if you gave them."
+      NOT_LOADED="The database has been reset and no sample data was loaded. Once the cause is fixed, run this script again with --reset-db --seed, and the same --dir and --branch if you gave them."
+      echo "→ Starting the API for the sample load (node dev.mjs in apps/server on port $API_PORT, log in $API_LOG)"
+      (cd apps/server && PORT="$API_PORT" exec node dev.mjs) >"$API_LOG" 2>&1 &
+      API_PID=$!
+      # An answer on the port counts only while the script's own API is running: one that cannot
+      # bind the port exits at once, and an answer then comes from someone else's. So its process is
+      # checked on every pass before the probe, and once more after the probe answers.
+      # A live process is not enough: another program can take the port while this API boots, and
+      # answer the probe before this API tries to bind. So after the probe answers, the script also
+      # needs this API's own "listening at" line in its log. On Linux, once this API holds
+      # 127.0.0.1:3000 (or 0.0.0.0:3000), nothing else can listen there beside it, so the line
+      # proves the answer is this API's. On macOS and Windows that rule is unproven, so there the
+      # line narrows the window and may not close it.
+      i=0
+      while :; do
+        if ! own_api_alive; then
+          # Gone already: the exit trap must not signal a process ID that may be reused.
+          API_PID=""
+          err "The API stopped while starting (see $API_LOG). $NOT_LOADED"
+        fi
+        if api_up; then
+          # The probe can answer a moment before the line is written, so look a few times.
+          n=0
+          while ! own_api_listening; do
+            if ! own_api_alive; then
+              API_PID=""
+              err "The API stopped while starting (see $API_LOG). $NOT_LOADED"
+            fi
+            n=$((n + 1))
+            if [ "$n" -ge 5 ]; then
+              stop_api
+              err "The script could not confirm that its own API is the one answering on port $API_PORT, so it loaded nothing and stopped that API. The check looks in $API_LOG for the line Server listening at $API_URL. It needs the API's log at info level on standard output: LOG_LEVEL set to info, debug or trace, LOG_FILE unset, and LISTEN_HOST unset, 127.0.0.1 or 0.0.0.0, in .env and in your shell. The database has been reset and no sample data was loaded. Run this script again with --reset-db --seed once that holds."
+            fi
+            sleep 1
+          done
+          if ! own_api_alive; then
+            API_PID=""
+            err "The API stopped while starting (see $API_LOG). $NOT_LOADED"
+          fi
+          break
+        fi
+        i=$((i + 1))
+        [ "$i" -lt 60 ] || err "The API did not answer at $API_URL (see $API_LOG). $NOT_LOADED"
+        sleep 2
+      done
+      # 3. The load half, through that API and no other.
+      echo "→ Loading WHONET sample data (pnpm e2e:seed:load)"
+      OPENLDR_URL="$API_URL" pnpm e2e:seed:load || err "seed load failed"
     fi
   else
     echo "→ Skipping db reset (existing setup; pass --reset-db to wipe & re-init)"
@@ -117,3 +256,17 @@ Start the app in two terminals:
 Backing services: Postgres :5433 · S3 storage :9010 · Keycloak :8180
 Auth: AUTH_DEV_BYPASS is on (loads as a dev admin). Edit .env to use real Keycloak.
 EOF
+
+# The API started for the sample load stays up, so it is not started only to be stopped. It does
+# not restart on edits, and it holds port 3000, so step 1 above needs it stopped first.
+if [ -n "$API_PID" ] && ! own_api_alive; then
+  echo "The API started for the sample data has stopped since the load (see $API_LOG)."
+  API_PID=""
+fi
+if own_api_alive; then
+  echo "The API started for the sample data is running now as process $API_PID (log in $API_LOG)."
+  echo "It does not restart on edits. Stop it before step 1, while it is still running: kill $API_PID"
+  echo "A process ID is reused once its process ends, so do not use this one later."
+  API_PID=""
+fi
+trap - EXIT INT TERM

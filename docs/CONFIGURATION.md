@@ -96,7 +96,7 @@ openldr terminology import resource <codesystem.json>
 
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
-| `TERMINOLOGY_WORK_DIR` | path | the OS temp dir (`os.tmpdir()`) | Base directory the terminology ingest worker streams and unzips an uploaded distribution into. Each job gets a fresh subdirectory under it, removed when the job ends including on a mid-extract failure. |
+| `TERMINOLOGY_WORK_DIR` | path | the OS temp dir (`os.tmpdir()`) | Base directory the terminology ingest worker streams and unzips an uploaded distribution into. Each job gets a fresh subdirectory under it, removed when the job ends including on a mid-extract failure. Uploads for commands sent through the app go here too (see `CLI_MAX_UPLOAD_BYTES`). On a Docker install that uses `terminology ontology build` through the app, point it at a folder that survives the container being recreated, on a volume or mount the `api` user can write. Otherwise `terminology ontology rebuild` fails after an upgrade. Not tested. |
 
 Set this when the OS temp dir is small, which is the usual case in a container where `/tmp`
 is a modest tmpfs held in RAM. A full SNOMED CT release needs room for the zip and the
@@ -104,6 +104,14 @@ extracted tree at the same time, so an import can fail on disk space while the d
 plenty. It is read in two places, `packages/bootstrap/src/index.ts` for the server's ingest
 worker and `packages/cli/src/terminology.ts` for the CLI, so set it for both if you run
 imports from the CLI as well as the app.
+
+### CLI commands sent through the app
+
+| Variable | Type | Default | Effect |
+|---|---:|---:|---|
+| `CLI_ENTRY` | path | the first that exists of `../cli/dist/index.js` and `../../../packages/cli/dev.mjs`, beside the server's module | The CLI entry file `POST /api/cli/run` starts for a command sent through the app. A relative value is resolved against the server's working folder. Under `pnpm -C apps/server dev` (and `pnpm dev`) that folder is `apps/server`, so the CLI in a checkout is `../../packages/cli/dev.mjs`. An absolute path is safest. When no file is found, the run answers 503 with a message that names this setting. Nothing is checked at boot. |
+| `CLI_MAX_RUNNING` | integer | `2` | Commands run at once through the app. A caller waits up to 30 seconds for a free slot, then gets 503 `busy`. When the value is more than 1, one account may hold at most one fewer than this at once. So one account cannot take every slot. With the default of 2, one account runs one command at a time. |
+| `CLI_MAX_UPLOAD_BYTES` | integer | `2147483648` | The most file bytes one command may upload, counted after decoding. Over it answers 413 with a message that names the limit. Each request writes its uploads under `<TERMINOLOGY_WORK_DIR>/cli-runs/` (the OS temp dir when unset), removed when the request ends. A folder left there by a killed server is removed at a start after it is more than 24 hours old. One command is different: `terminology ontology build` keeps its upload under `<TERMINOLOGY_WORK_DIR>/cli-kept/`, so that `terminology ontology rebuild` can read it again. Each successful build leaves one more copy there. The clean-up at start does not touch `cli-kept`, and nothing else removes those copies. Behind the Docker gateway, a caller that comes through the gateway is also held to its `client_max_body_size 50m` (`deploy/nginx/openldr.conf.template`). That limit is on the whole request, and files travel in it base64-encoded, so the largest file is smaller. |
 
 ## Auth And OIDC
 

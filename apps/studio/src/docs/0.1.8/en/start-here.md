@@ -211,7 +211,7 @@ The test file was valid. Your result depends on the contents of your own file. V
 
 ### 4. Import into your development database
 
-Use this step when you intend to import the file. Check that the checkout's `.env` points to your development databases and storage. Those backing services must be running.
+Use this step when you intend to import the file. Check that the checkout's `.env` points to your development databases and storage. Those backing services must be running. The API must be running too, because `ingest` and `pipeline status` go through it. With `AUTH_DEV_BYPASS=true` it signs them in.
 
 ```sh
 pnpm openldr ingest files/my-file.json
@@ -251,6 +251,8 @@ In this example, put the file at `~/Downloads/openldr_ce/data/my-file.json`, ins
 Run the command from `~/Downloads/openldr_ce`. Keep the `data/` prefix in the file argument because it is relative to the installation folder.
 
 The installed CLI runs inside OpenLDR's API container. The `data` folder is shared with that container. This lets the command read files you place there.
+
+Most commands, `ingest` among them, go through the running OpenLDR server. <!-- cli:linux -->Sign in first with `./openldr login`, or set an access key in `OPENLDR_KEY`.<!-- /cli --><!-- cli:mac -->Sign in first with `./openldr login`, or set an access key in `OPENLDR_KEY`.<!-- /cli --><!-- cli:windows -->Set an access key in `OPENLDR_KEY` first. On Windows the CLI signs in with an access key only. This was not run on Windows.<!-- /cli --> Read [Users](/docs/users) to make an access key.
 
 If OpenLDR is on a remote server, place the file in that server's installation folder. Saving it on your laptop does not put it on the server.
 
@@ -329,7 +331,7 @@ Tested result: starting the stopped container restored the help command.
 
 ### The import reports ENOENT for my file
 
-The test reported `ingest failed: ENOENT: no such file or directory, open 'my-file.json'`.
+The test reported `ingest failed: ENOENT: no such file or directory, open 'my-file.json'`. That test ran before commands went through the server. Now the CLI checks the file first and says `Cannot find my-file.json.` The fix below is the same.
 
 The file existed on the computer, beside the launcher. The installed CLI could not see it because only the installation's `data` folder was shared with its container.
 

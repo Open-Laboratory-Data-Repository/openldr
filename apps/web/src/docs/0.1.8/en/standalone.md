@@ -171,7 +171,13 @@ To run two installs at once, give each its own `--data-dir` and its own `--port`
 
 ## Run CLI commands
 
-The `openldr` CLI works through the launcher. OpenLDR must be running, because the CLI connects to its database.
+The `openldr` CLI works through the launcher, and OpenLDR must be running. `cli` points the CLI at the launcher's own address, unless you set `OPENLDR_URL` or pass `--server-url`. It gives the database settings only to a recovery command, such as `doctor` below. Every other command goes through the running server, so sign in first:
+
+```sh
+pnpm openldr-standalone cli -- login
+```
+
+[CLI sign-in and access keys](/docs/cli-access) explains signing in, access keys and the recovery commands. A recovery command needs no sign-in:
 
 ```sh
 pnpm openldr-standalone cli -- doctor
@@ -198,9 +204,9 @@ Above these lines you also see pnpm's line, Node's WASI warning and one log line
 - The `--` is optional. `cli doctor` runs the same command.
 - `--data-dir` goes before the `--`, for example `pnpm openldr-standalone cli --data-dir /srv/openldr -- doctor`.
 - When a CLI message tells you to run an `openldr` command, run it through the launcher. `openldr auth setup-code` becomes `pnpm openldr-standalone cli -- auth setup-code`.
-- A command that writes a file, such as `sync export`, writes it to the checkout's root folder unless you give `--out`. Give `--out` a full path.
+- `sync export` needs `--out`. A relative path is taken from the checkout's root folder, so give `--out` a full path.
 
-`pnpm openldr` in a checkout does not reach a standalone install. It reads the checkout's own `.env` file and connects to the databases named there. Use `pnpm openldr-standalone cli` instead. [CLI reference](/docs/cli) lists every command.
+`pnpm openldr` in a checkout is not the same. For a recovery command it reads the checkout's own `.env` file and connects to the databases named there. It sends every other command to `OPENLDR_URL`, by default `http://127.0.0.1:3000`. Use `pnpm openldr-standalone cli` instead, so each command reaches this install. [CLI reference](/docs/cli) lists every command.
 
 ## Change a setting
 
@@ -230,6 +236,7 @@ The launcher reads no `.env` file. It sets these settings itself, and they alway
 | `TERMINOLOGY_WORK_DIR` | `work/` in the data folder |
 | `WEB_DIST_DIR` | The Studio build in the checkout |
 | `APP_VERSION` | The launcher's version |
+| `CLI_ENTRY` | `dist/cli.js` in the launcher's folder |
 
 So `LOG_LEVEL` stays `info`, and you cannot change it.
 

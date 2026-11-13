@@ -167,7 +167,7 @@ cd C:\openldr_ce
 
 #### From a source checkout
 
-The sample file is already included. From your test checkout at `~/Downloads/openldr_ce` or `C:\openldr_ce`, run the command below. It uses the databases configured in that checkout's `.env`.
+The sample file is already included. From your test checkout at `~/Downloads/openldr_ce` or `C:\openldr_ce`, run the command below. It goes through the running API, so start it and sign in first.
 
 ```sh
 pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-lab-data.json

@@ -8,8 +8,11 @@ import { cliActor } from './cli-actor';
 
 interface JsonOpt { json: boolean }
 
+/** In served mode, the signed-in account, as cliActor() gives. */
 function actor(): ImportActor {
-  return { type: 'cli', id: null, name: cliActor().actorName };
+  const a = cliActor();
+  if (a.actorType === 'user') return { type: 'user', id: a.actorId ?? null, name: a.actorName };
+  return { type: 'cli', id: null, name: a.actorName };
 }
 
 function emit(json: boolean, payload: unknown, human: string): void {

@@ -1,7 +1,9 @@
 import { safeRecord, type AuditStore, type AuditEventInput } from '@openldr/audit';
 import type { Logger } from '@openldr/core';
 
-export type AuditActor = Pick<AuditEventInput, 'actorType' | 'actorId' | 'actorName'>;
+/** `origin` says the actor came through an access key or the CLI. The store writes it into the
+ *  row's metadata. */
+export type AuditActor = Pick<AuditEventInput, 'actorType' | 'actorId' | 'actorName' | 'origin'>;
 
 export interface AuditDetails {
   action: string;
@@ -9,6 +11,7 @@ export interface AuditDetails {
   entityId: string;
   before?: unknown;
   after?: unknown;
+  /** `metadata.origin` is a reserved name: the store overwrites it with the actor's `origin`. */
   metadata?: Record<string, unknown>;
 }
 
