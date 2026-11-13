@@ -8,7 +8,8 @@
 // - recovery: runs on this machine, straight on the database, with no sign-in. Exactly the ten in
 //   the design (spec section 6.7). Nothing else may be added here.
 // - local: runs on the caller's machine and touches no database, no server and no context builder,
-//   whatever the options. Read from each command's code; command-meta.test.ts checks it.
+//   whatever the options. Read from each command's code; command-meta.test.ts checks it. The one
+//   exception is login, logout and whoami, which talk to the server's sign-in routes.
 //
 // Each entry was read from the command's code in packages/cli/src, not guessed from its name.
 // When unsure, the entry is app, which needs sign-in.
@@ -152,6 +153,13 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'fhir validate': { kind: 'local', paths: [inFile('file')] },
   'forms extract': { kind: 'local', paths: [inFile('questionnaire'), inFile('response')] },
   'market verify': { kind: 'local', paths: [inDir('dir')] },
+  // Sign a person in, out, and say who they are (spec section 6.2). They run on the caller's machine
+  // and touch no database and no context builder. They are the one kind of local command that talks
+  // to the server, and only to its sign-in routes and /api/me. command-meta.test.ts allows that
+  // network use for these three alone. Not destructive: logout ends only the caller's own session.
+  'login': { kind: 'local' },
+  'logout': { kind: 'local' },
+  'whoami': { kind: 'local' },
 
   // Recovery: straight on the database, no sign-in (spec section 6.7).
   'auth rebind-issuer': { kind: 'recovery', destructive: true },

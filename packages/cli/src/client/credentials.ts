@@ -4,6 +4,7 @@
 // line or an error message. Messages name the setting or the file, never the value.
 
 import { open } from 'node:fs/promises';
+import { homeOf, refreshSession, SessionError, sessionFileFor, type SessionPlace } from './session-file';
 
 /** The server address when neither --server-url nor OPENLDR_URL is set. */
 export const DEFAULT_SERVER_URL = 'http://127.0.0.1:3000';
@@ -101,9 +102,24 @@ async function readKeyFile(file: string): Promise<string> {
   }
 }
 
-/** The session file from `openldr login`. Login does not exist yet, so there is none. */
-async function readSession(_env: NodeJS.ProcessEnv, _url: string): Promise<Credential | null> {
-  return null;
+/**
+ * The session file from `openldr login`: the access token a refresh gives for this server, or null
+ * when there is no session. The cookie is sent, so the address is checked first. A refused refresh
+ * has removed the entry and gives null; any other failure is a CredentialError with a printable
+ * message.
+ */
+async function readSession(env: NodeJS.ProcessEnv, url: string, place: SessionPlace): Promise<Credential | null> {
+  const file = sessionFileFor(env, place);
+  if (file === null) return null;
+  assertSafeUrl(url, env);
+  let token: string | null;
+  try {
+    token = await refreshSession(url, file);
+  } catch (err) {
+    if (err instanceof SessionError) throw new CredentialError(err.message);
+    throw err;
+  }
+  return token === null ? null : { kind: 'session', authorization: `Bearer ${token}` };
 }
 
 /**
@@ -111,8 +127,13 @@ async function readSession(_env: NodeJS.ProcessEnv, _url: string): Promise<Crede
  * variable that is not set at all is passed over. Set but empty (`OPENLDR_KEY_FILE=$TYPO` expands to
  * nothing), or naming a file that is missing, unreadable or empty, stops here with CredentialError
  * (Ruling 65): falling through to a session would run the command as someone else.
+ *
+ * `place` says where the session file is. By default it is found from this environment's HOME (or
+ * USERPROFILE on Windows), so an environment with neither has no session file.
  */
-export async function findCredential(env: NodeJS.ProcessEnv, url: string): Promise<Credential> {
+export async function findCredential(
+  env: NodeJS.ProcessEnv, url: string, place: SessionPlace = { platform: process.platform, homedir: homeOf(env, process.platform) },
+): Promise<Credential> {
   const empty = (name: string) => new CredentialError(`${name} is set but empty. Set it, or unset it.`);
   if (env.OPENLDR_KEY !== undefined) {
     const key = env.OPENLDR_KEY.trim();
@@ -126,7 +147,7 @@ export async function findCredential(env: NodeJS.ProcessEnv, url: string): Promi
     if (!fromFile) throw new CredentialError(`The key file named by OPENLDR_KEY_FILE is empty: ${file}`);
     return keyCredential(fromFile, `the file ${file}`);
   }
-  const session = await readSession(env, url);
+  const session = await readSession(env, url, place);
   if (session) return session;
   return { kind: 'none', authorization: null };
 }

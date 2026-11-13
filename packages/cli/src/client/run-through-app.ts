@@ -14,8 +14,7 @@
 import { randomBytes } from 'node:crypto';
 import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { lstat, mkdir, open, readdir, realpath, rename, stat, unlink, type FileHandle } from 'node:fs/promises';
-import { request as httpRequest, type ClientRequest, type IncomingMessage, type RequestOptions } from 'node:http';
-import { request as httpsRequest } from 'node:https';
+import type { ClientRequest, IncomingMessage } from 'node:http';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import type { Command, Option } from 'commander';
@@ -23,6 +22,7 @@ import type { CommandMeta, PathKind, PathMark } from '../command-meta';
 import { runningVersion } from '../update';
 import { decodeFrames, encodeFrame, MAX_DATA_BYTES, PATH_PLACEHOLDER, type ClientFrame, type ServerFrame } from '../wire';
 import type { Credential } from './credentials';
+import { clean, connectionMessage, endpoint, REDIRECT_MESSAGE, sendRequest, SIGN_IN_FIRST } from './request';
 
 /** Printed when the line cannot be rewritten safely. Nothing has been sent. */
 export const NOT_PREPARED = 'This command line could not be prepared for the app. Nothing was sent.';
@@ -466,30 +466,6 @@ export function createUnmasker(pairs: ReadonlyArray<readonly [placeholder: strin
 // The request
 // ---------------------------------------------------------------------------------------------
 
-/** The address with this path under it. Any query or fragment on the address is dropped. */
-function endpoint(base: string, path: string): URL {
-  const u = new URL(base);
-  if (!u.pathname.endsWith('/')) u.pathname += '/';
-  u.search = '';
-  u.hash = '';
-  return new URL(path, u);
-}
-
-/** The address for a message: origin and path, never a query. assertSafeUrl refused any user name. */
-function shown(base: string): string {
-  const u = new URL(base);
-  return `${u.origin}${u.pathname === '/' ? '' : u.pathname.replace(/\/$/, '')}`;
-}
-
-function sendRequest(target: URL, options: RequestOptions): ClientRequest {
-  // agent: false gives each request its own connection. node:http never follows a redirect.
-  const opts: RequestOptions = { ...options, agent: false };
-  return target.protocol === 'https:' ? httpsRequest(target, opts) : httpRequest(target, opts);
-}
-
-/** Text from the server, safe for a terminal: no control characters, at most 500 characters. */
-const clean = (s: string): string => s.replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 500);
-
 /** Writes and waits while the stream is full. Never waits on a stream that has gone. */
 async function writeTo(stream: NodeJS.WritableStream, data: Buffer | string): Promise<void> {
   if (data.length === 0) return;
@@ -572,18 +548,14 @@ async function readRefusal(res: IncomingMessage): Promise<Record<string, unknown
 }
 
 function refusalMessage(status: number, body: Record<string, unknown> | null): string {
-  if (status >= 300 && status < 400) return 'OpenLDR answered with a redirect, which this client does not follow. Check the address.';
-  if (status === 401) return 'Sign in first: openldr login, or set OPENLDR_KEY.';
+  if (status >= 300 && status < 400) return REDIRECT_MESSAGE;
+  if (status === 401) return SIGN_IN_FIRST;
   if (status === 403 && typeof body?.capability === 'string') return `This account lacks the capability ${clean(body.capability)}.`;
   if (status === 503 && body?.error === 'busy') return 'OpenLDR is running other commands. Try again shortly.';
   if (typeof body?.error === 'string' && body.error.trim() !== '') return clean(body.error);
   return `OpenLDR answered with status ${status}.`;
 }
 
-/** A refused connection or a failed name lookup: nothing answered at the address. */
-const UNREACHABLE = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN']);
-/** The connection was made and then went: a reset, or a broken pipe while sending. */
-const LOST = new Set(['ECONNRESET', 'EPIPE']);
 /** How long the interrupt request may take before it is given up. */
 const INTERRUPT_TIMEOUT_MS = 5000;
 
@@ -760,10 +732,7 @@ async function exchange(
       const unread = await upload;
       if (forced !== null) return forced;
       if (unread !== null) return await fail(`Cannot read ${unread}.`);
-      const code = (e as NodeJS.ErrnoException).code;
-      if (code && UNREACHABLE.has(code)) return await fail(`Cannot reach OpenLDR at ${shown(url)}. Is it running?`);
-      if (code && !LOST.has(code)) return await fail(`Cannot reach OpenLDR at ${shown(url)}: ${code}.`);
-      return await fail('The connection to OpenLDR was lost.');
+      return await fail(connectionMessage(url, (e as NodeJS.ErrnoException).code));
     }
 
     if (res.statusCode !== 200) {

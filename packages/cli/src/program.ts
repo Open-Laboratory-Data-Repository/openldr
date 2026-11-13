@@ -64,6 +64,22 @@ import { commandPath, runCommandsList } from './command-list';
 import { COMMAND_META } from './command-meta';
 import { assertSafeUrl, CredentialError, findCredential, PlainHttpError, serverUrl } from './client/credentials';
 import { NOT_PREPARED, runThroughApp, wordsAfterPath } from './client/run-through-app';
+import { runLogin, runLogout, runWhoami, type LoginIo } from './client/session';
+import { homeOf } from './client/session-file';
+
+/** login, logout and whoami run in this process, on the real terminal and environment. */
+function loginIo(): LoginIo {
+  return {
+    env: process.env, platform: process.platform, homedir: homeOf(process.env, process.platform),
+    stdin: process.stdin, out: process.stdout, err: process.stderr,
+  };
+}
+
+/** The server address for login, logout and whoami: the client program's root --server-url, then
+ *  OPENLDR_URL, then the default. buildProgram() alone has no --server-url. */
+function sessionServerUrl(program: { opts(): Record<string, unknown> }): string {
+  return serverUrl({ url: program.opts().serverUrl as string | undefined, env: process.env });
+}
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
 //  - index.ts needs no is-main-module guard. It builds the tree and parses either the real
@@ -1456,6 +1472,23 @@ export function buildProgram(): Command {
     .description('List every command and how it runs: through the app, recovery, or on this machine')
     .option('--json', 'emit JSON', false)
     .action((opts: { json: boolean }) => { process.exitCode = runCommandsList(program, opts); });
+
+  // Sign a person in from this terminal (spec section 6.2). They talk to the server's sign-in
+  // routes and never to a database. There is no --password option: other users can read command lines.
+  program.command('login')
+    .description('Sign in to the OpenLDR server and keep the session for later commands')
+    .option('--username <name>', 'the account to sign in as (asked for when absent)')
+    .option('--password-stdin', 'read the password from standard input, one line', false)
+    .action(async (o: { username?: string; passwordStdin: boolean }) => {
+      process.exitCode = await runLogin({ url: sessionServerUrl(program), username: o.username, passwordStdin: o.passwordStdin }, loginIo());
+    });
+  program.command('logout')
+    .description('End the session on the server and remove it from this machine')
+    .action(async () => { process.exitCode = await runLogout({ url: sessionServerUrl(program) }, loginIo()); });
+  program.command('whoami')
+    .description('Show the account, its roles, and how this machine signs in to the server')
+    .option('--json', 'emit JSON', false)
+    .action(async (o: { json: boolean }) => { process.exitCode = await runWhoami({ url: sessionServerUrl(program), json: o.json }, loginIo()); });
 
   // Served mode only: refuse, before any action, a command the server did not check. Does nothing
   // when the server did not start this process.

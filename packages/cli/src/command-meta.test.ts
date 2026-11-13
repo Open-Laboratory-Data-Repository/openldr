@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import type { Command } from 'commander';
@@ -53,6 +55,8 @@ const TEN_PATHS = [
 const LOCAL_PATHS = [
   'artifact build', 'artifact keygen', 'artifact new', 'artifact pack', 'artifact sign', 'artifact test',
   'commands', 'errors list', 'facilities suggest-map', 'fhir validate', 'forms extract', 'market verify',
+  // Task 11: they sign a person in. See NETWORK_ALLOWED.
+  'login', 'logout', 'whoami',
 ];
 
 function byKind(kind: CommandKind): string[] {
@@ -749,6 +753,22 @@ const SAFE_NAMES = new Set([
 ]);
 const SECRET_ENV = /DATABASE|_DB_|_DB$|SECRET|PASSWORD|TOKEN|_KEY$|^KEY$|URL$/i;
 
+// Task 11 ruling: login, logout and whoami are local, yet they talk to the server to sign a person in.
+// Each may import a network module only in the files listed for it, each with its reason, by path
+// under packages/cli/src. Every other check in the walk still applies to them: no context builder,
+// no loadConfig, no read of a database URL or secret from process.env, no fetch. A listed file the
+// walk does not reach fails too, so the list cannot outlive its need.
+const SIGN_IN_NETWORK: Readonly<Record<string, string>> = {
+  'client/request.ts': 'the client\'s one way of making a request: node:http and node:https, never fetch, and no redirect '
+    + 'followed. session.ts and credentials.ts reach the network only through it, and only the address the caller gave, '
+    + 'after assertSafeUrl.',
+};
+const NETWORK_ALLOWED: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  login: SIGN_IN_NETWORK,
+  logout: SIGN_IN_NETWORK,
+  whoami: SIGN_IN_NETWORK,
+};
+
 interface Imp { from: string; name: string }
 interface Reexport { from: string; names: Map<string, string> | null }
 interface Mod {
@@ -810,13 +830,16 @@ function createWalker(read: (file: string) => string | undefined) {
     return null;
   };
 
-  interface State { seen: Set<string>; found: Set<string> }
-  const checkPackage = (spec: string, name: string, st: State): void => {
-    if (NETWORK.has(spec)) st.found.add(`network import ${spec}`);
-    else if (!SAFE_PACKAGES.has(spec) && !SAFE_NAMES.has(`${spec}:${name}`)) st.found.add(`${spec}:${name}`);
+  interface State { seen: Set<string>; found: Set<string>; allow: ReadonlyMap<string, string>; used: Set<string> }
+  const checkPackage = (file: string, spec: string, name: string, st: State): void => {
+    if (NETWORK.has(spec)) {
+      const rel = relative(SRC, file).split(sep).join('/');
+      if (st.allow.has(rel)) st.used.add(rel);
+      else st.found.add(`network import ${spec}`);
+    } else if (!SAFE_PACKAGES.has(spec) && !SAFE_NAMES.has(`${spec}:${name}`)) st.found.add(`${spec}:${name}`);
   };
   const useSpec = (file: string, spec: string, name: string, st: State): void => {
-    if (!spec.startsWith('.')) { checkPackage(spec, name, st); return; }
+    if (!spec.startsWith('.')) { checkPackage(file, spec, name, st); return; }
     const target = resolveRel(file, spec);
     if (!target) { st.found.add(`unresolved import ${spec} in ${basename(file)}`); return; }
     reachExport(target, name, st);
@@ -879,10 +902,12 @@ function createWalker(read: (file: string) => string | undefined) {
 
   return {
     mod,
-    /** Everything the walk flags, starting from one node of one file. */
-    reach(file: string, node: ts.Node): string[] {
-      const st: State = { seen: new Set(), found: new Set() };
+    /** Everything the walk flags, starting from one node of one file. `allow` lets a network import
+     *  through in the files it lists; a listed file the walk never reaches is flagged. */
+    reach(file: string, node: ts.Node, allow: Readonly<Record<string, string>> = {}): string[] {
+      const st: State = { seen: new Set(), found: new Set(), allow: new Map(Object.entries(allow)), used: new Set() };
       walk(file, node, st);
+      for (const rel of st.allow.keys()) if (!st.used.has(rel)) st.found.add(`allowed network use not needed: ${rel}`);
       return [...st.found].sort();
     },
   };
@@ -936,10 +961,15 @@ describe('local commands', () => {
     for (const path of byKind('local')) {
       const cb = actions.get(path);
       if (!cb) { report[path] = ['no .action found in program.ts']; continue; }
-      const found = walker.reach(join(SRC, 'program.ts'), cb);
+      const found = walker.reach(join(SRC, 'program.ts'), cb, NETWORK_ALLOWED[path]);
       if (found.length > 0) report[path] = found;
     }
     expect(report).toEqual({});
+  });
+
+  it('allows network use to login, logout and whoami alone, each a local command', () => {
+    expect(Object.keys(NETWORK_ALLOWED).sort()).toEqual(['login', 'logout', 'whoami']);
+    for (const path of Object.keys(NETWORK_ALLOWED)) expect(COMMAND_META[path]?.kind, path).toBe('local');
   });
 
   describe('the static check can fail', () => {
@@ -949,6 +979,18 @@ describe('local commands', () => {
       const found = walker.reach(join(SRC, 'program.ts'), actionsInProgram(walker).get('artifact publish')!);
       expect(found).toContain('createIngestContext');
       expect(found).toContain('loadConfig');
+    });
+    it('on the network for login, logout and whoami without their allow-list', () => {
+      const walker = createWalker(readReal);
+      const actions = actionsInProgram(walker);
+      for (const path of ['login', 'logout', 'whoami']) {
+        expect(walker.reach(join(SRC, 'program.ts'), actions.get(path)!), path).toEqual(['network import node:http', 'network import node:https']);
+      }
+    });
+    it('on an allow-list entry the command does not need', () => {
+      const walker = createWalker(readReal);
+      expect(walker.reach(join(SRC, 'program.ts'), actionsInProgram(walker).get('commands')!, SIGN_IN_NETWORK))
+        .toEqual(['allowed network use not needed: client/request.ts']);
     });
     it('on a relative import it cannot find', () => {
       expect(reachVirtual({ '/v/entry.ts': 'import { x } from "./missing.js";\nexport function run() { return x(); }\n' }))
@@ -1023,6 +1065,38 @@ describe('local commands', () => {
       process.exitCode = undefined;
       return { code, stdout };
     }
+
+    // Runs before the next test, which checks that every local command ran.
+    it('runs login, logout and whoami against a test server without calling a builder', async () => {
+      // A stand-in for the app on 127.0.0.1 port 0. It signs people in through another service and
+      // takes any caller as a dev account. The session file would go under the temporary folder.
+      const server = createServer((req, res) => {
+        res.setHeader('content-type', 'application/json');
+        if (req.url === '/api/config') res.end(JSON.stringify({ auth: { mode: 'keycloak' } }));
+        else if (req.url === '/api/me') res.end(JSON.stringify({ username: 'dev-admin', roles: ['lab_admin'] }));
+        else { res.statusCode = 404; res.end('{}'); }
+      });
+      await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+      const names = ['OPENLDR_URL', 'XDG_CONFIG_HOME', 'HOME', 'OPENLDR_KEY', 'OPENLDR_KEY_FILE'];
+      const saved = new Map(names.map((n) => [n, process.env[n]]));
+      try {
+        process.env.OPENLDR_URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+        process.env.XDG_CONFIG_HOME = join(dir, 'config');
+        process.env.HOME = dir;
+        delete process.env.OPENLDR_KEY;
+        delete process.env.OPENLDR_KEY_FILE;
+        // Refused before any password is read: this install does not sign people in itself, or
+        // standard input is a terminal. Either way it exits 1.
+        expect((await run(['login', '--username', 'someone', '--password-stdin'])).code).toBe(1);
+        expect((await run(['whoami', '--json'])).code).toBe(0);
+        expect((await run(['logout'])).code).toBe(0);
+      } finally {
+        for (const [n, v] of saved) { if (v === undefined) delete process.env[n]; else process.env[n] = v; }
+        server.closeAllConnections();
+        await new Promise<void>((done) => server.close(() => done()));
+      }
+      for (const [name, fn] of Object.entries(builders)) expect(fn, name).not.toHaveBeenCalled();
+    });
 
     it('runs every local command without calling a builder or the config loader', async () => {
       expect((await run(['errors', 'list', '--json'])).code).toBe(0);
