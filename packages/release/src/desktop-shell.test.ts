@@ -1047,8 +1047,52 @@ describe('desktop.ps1 (unproven: nothing here runs PowerShell)', () => {
 
   it('holds the checksum message and the "is running" message, and prints a stop with X', () => {
     expect(code).toContain("'The download does not match its checksum. Nothing was installed.'");
-    expect(code).toContain("'OpenLDR is running. Quit it from its tray icon, then run this again.'");
+    // The running refusal names the installed command. The & runs a quoted path in PowerShell.
+    expect(fns.get('Get-OpenLdrRunningMessage') ?? '').toContain(
+      '"OpenLDR is running. Quit it from its tray icon, or run: & `"$Target\\openldr-standalone.cmd`" stop. Then run this again."',
+    );
+    expect(code).not.toContain('Quit it from its tray icon, then run this again.');
+    expect(count(code, /throw \(Get-OpenLdrRunningMessage \$\w+\)/g)).toBe(3);
     expect(fns.get('Write-OpenLdrFail') ?? '').toContain('Write-Host "X $Message"');
+  });
+
+  it('checks whether OpenLDR runs before the download, inside the install function', () => {
+    const running = main.indexOf('Test-OpenLdrRunning $target');
+    expect(running).toBeGreaterThan(-1);
+    expect(running).toBeLessThan(main.indexOf('Find-OpenLdrVersion '));
+    expect(running).toBeLessThan(main.indexOf('Save-OpenLdrFile '));
+    expect(running).toBeLessThan(main.indexOf('CreateDirectory($dl)'));
+  });
+
+  it('appends the system\'s own reason to the five messages that replace an error', () => {
+    expect(fns.get('Find-OpenLdrVersion') ?? '').toMatch(/throw "Could not read the list of OpenLDR releases\.[^"\n]*\$\(\$_\.Exception\.Message\)"/);
+    expect(fns.get('Save-OpenLdrFile') ?? '').toMatch(/throw "Could not download \$Url\.[^"\n]*\$\(\$_\.Exception\.Message\)"/);
+    for (const sentence of [
+      'Could not move the older copy aside. Nothing was changed.',
+      'Could not move the new copy into place. The older copy was put back.',
+      'Could not move the new copy into place.',
+    ]) {
+      const line = main.split('\n').find((l) => l.includes(`throw "${sentence} The system said:`));
+      expect(line, sentence).toBeDefined();
+      expect(line).toMatch(/\$reason"|\$\(\$_\.Exception\.Message\)"/);
+    }
+    expect(count(main, /\$reason = \$_\.Exception\.Message/g)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('a failed clean-up after the swap is a warning that names the folder, and the shortcut still follows', () => {
+    const swapped = main.lastIndexOf('Move-OpenLdrPath $new $target');
+    const shortcut = main.indexOf('New-OpenLdrShortcut ');
+    expect(swapped).toBeGreaterThan(-1);
+    expect(shortcut).toBeGreaterThan(swapped);
+    const after = main.slice(swapped, shortcut).split('\n').map((l) => l.trim()).filter((l) => l !== '');
+    const removals = after.map((l, i) => [l, i] as const).filter(([l]) => l.startsWith('Remove-OpenLdrPath '));
+    expect(removals.map(([l]) => l)).toEqual(['Remove-OpenLdrPath $old $owned $dataDir', 'Remove-OpenLdrPath $dl $owned $dataDir']);
+    for (const [, i] of removals) expect(after[i - 1]).toBe('try {');
+    expect(after.join('\n')).toMatch(/Write-OpenLdrWarn "Could not remove \$old\./);
+    expect(after.join('\n')).toMatch(/Write-OpenLdrWarn "Could not remove \$dl\./);
+    // Once the new copy is in place, a later stop must not clean up after it.
+    expect(after.indexOf('$cleanup = $false')).toBeGreaterThan(-1);
+    expect(after.indexOf('$cleanup = $false')).toBeLessThan(removals[0]![1]);
   });
 
   it('never names --no-sandbox, RunAs, SetEnvironmentVariable, setx or HKLM', () => {

@@ -85,7 +85,7 @@ function Find-OpenLdrVersion([string]$ReleasesUrl) {
     # one object, and a foreach over the variable walks the array either way.
     $releases = Invoke-RestMethod -Uri $ReleasesUrl -UseBasicParsing
   } catch {
-    throw 'Could not read the list of OpenLDR releases. Try again in a few minutes, or pass -Version <X.Y.Z>.'
+    throw "Could not read the list of OpenLDR releases. Try again in a few minutes, or pass -Version <X.Y.Z>. The system said: $($_.Exception.Message)"
   }
   foreach ($release in $releases) {
     foreach ($asset in $release.assets) {
@@ -104,7 +104,7 @@ function Save-OpenLdrFile([string]$Url, [string]$OutFile) {
   try {
     Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing
   } catch {
-    throw "Could not download $Url. Check the version and the connection, then run this again."
+    throw "Could not download $Url. Check the version and the connection, then run this again. The system said: $($_.Exception.Message)"
   }
 }
 
@@ -146,6 +146,12 @@ function Test-OpenLdrStatus([string]$Command) {
   $ErrorActionPreference = 'Continue'
   & $Command status *> $null
   return ($LASTEXITCODE -eq 0)
+}
+
+# The refusal while OpenLDR runs. It names the installed command, for a person whose app was
+# killed or whose taskbar shows no tray icon. The & runs a quoted path in PowerShell.
+function Get-OpenLdrRunningMessage([string]$Target) {
+  return "OpenLDR is running. Quit it from its tray icon, or run: & `"$Target\openldr-standalone.cmd`" stop. Then run this again."
 }
 
 # True when OpenLDR runs from the installed copy: its own status says so, or a process runs from
@@ -279,7 +285,7 @@ function Remove-OpenLdrRunValues([string]$Exe) {
 # folder and its sign-in entry. The data folder is left alone.
 function Uninstall-OpenLdrDesktop([string]$Target, [string[]]$Remove, [string[]]$Owned, [string]$DataDir) {
   if ((Test-Path -LiteralPath $Target) -and (Test-OpenLdrRunning $Target)) {
-    throw 'OpenLDR is running. Quit it from its tray icon, then run this again.'
+    throw (Get-OpenLdrRunningMessage $Target)
   }
   $found = $false
   foreach ($path in $Remove) {
@@ -372,6 +378,11 @@ function Install-OpenLdrDesktop {
       return
     }
 
+    # Before anything is downloaded: never replace a copy OpenLDR is running from.
+    if ((Test-Path -LiteralPath $target) -and (Test-OpenLdrRunning $target)) {
+      throw (Get-OpenLdrRunningMessage $target)
+    }
+
     # 1. The version.
     if (-not $Version) {
       Write-OpenLdrStep 'Looking for the newest OpenLDR release with a desktop package for win32-x64'
@@ -402,9 +413,10 @@ function Install-OpenLdrDesktop {
     Assert-OpenLdrChecksum $zip $sums $archive
     Write-OpenLdrOk 'The download matches its checksum'
 
-    # 4. Never replace a copy OpenLDR is running from.
+    # 4. Never replace a copy OpenLDR is running from. Checked before the download too; this
+    # catches a start while the download ran.
     if ((Test-Path -LiteralPath $target) -and (Test-OpenLdrRunning $target)) {
-      throw 'OpenLDR is running. Quit it from its tray icon, then run this again.'
+      throw (Get-OpenLdrRunningMessage $target)
     }
 
     # 5. Unpack inside the download folder, then move the one top folder to .new.
@@ -415,29 +427,45 @@ function Install-OpenLdrDesktop {
     }
     Move-OpenLdrPath $unpacked $new $owned $dataDir
 
-    # 6. Swap the new copy in. If the second move fails, the older copy is put back.
-    if (Test-Path -LiteralPath $target) {
+    # 6. Swap the new copy in. If the second move fails, the older copy is put back. Each stop
+    # keeps the system's own reason, so a first failure can be read.
+    $hadOld = Test-Path -LiteralPath $target
+    if ($hadOld) {
       try {
         Move-OpenLdrPath $target $old $owned $dataDir
       } catch {
-        throw 'Could not move the older copy aside. Nothing was changed.'
+        $reason = $_.Exception.Message
+        throw "Could not move the older copy aside. Nothing was changed. The system said: $reason"
       }
       try {
         Move-OpenLdrPath $new $target $owned $dataDir
       } catch {
+        $reason = $_.Exception.Message
         Move-OpenLdrPath $old $target $owned $dataDir
-        throw 'Could not move the new copy into place. The older copy was put back.'
+        throw "Could not move the new copy into place. The older copy was put back. The system said: $reason"
       }
-      Remove-OpenLdrPath $old $owned $dataDir
     } else {
       try {
         Move-OpenLdrPath $new $target $owned $dataDir
       } catch {
-        throw 'Could not move the new copy into place.'
+        $reason = $_.Exception.Message
+        throw "Could not move the new copy into place. The system said: $reason"
       }
     }
-    Remove-OpenLdrPath $dl $owned $dataDir
+    # The new copy is in place. From here a failed clean-up is a warning, not a stop.
     $cleanup = $false
+    if ($hadOld) {
+      try {
+        Remove-OpenLdrPath $old $owned $dataDir
+      } catch {
+        Write-OpenLdrWarn "Could not remove $old. OpenLDR is installed; remove that folder by hand. The system said: $($_.Exception.Message)"
+      }
+    }
+    try {
+      Remove-OpenLdrPath $dl $owned $dataDir
+    } catch {
+      Write-OpenLdrWarn "Could not remove $dl. OpenLDR is installed; remove that folder by hand. The system said: $($_.Exception.Message)"
+    }
 
     # 7. The Start menu shortcut. The app is in place by now, so a failure here is a warning.
     $inMenu = $true
