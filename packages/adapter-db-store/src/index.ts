@@ -43,6 +43,10 @@ export interface DbStoreConfig {
 
 export interface DbStoreDeps {
   pool?: pg.Pool;
+  /** Told when a connection the pool holds idle dies, as all of them do when Postgres restarts. The
+   *  pool drops that connection and opens a new one for the next query. Absent = the loss is
+   *  ignored. Either way it no longer ends the process. */
+  onConnectionError?: (err: Error) => void;
 }
 
 export interface DbStore extends TargetStorePort {
@@ -51,6 +55,9 @@ export interface DbStore extends TargetStorePort {
 
 export function createDbStore(cfg: DbStoreConfig, deps: DbStoreDeps = {}): DbStore {
   const pool = deps.pool ?? new pg.Pool({ connectionString: cfg.url, types: pgNumberTypes as never });
+  // An emitter with no `error` listener throws, which ended the server whenever Postgres restarted.
+  // A stand-in pool in a test may have no events at all.
+  if (typeof pool.on === 'function') pool.on('error', (err: Error) => { deps.onConnectionError?.(err); });
   const db = new Kysely<TargetSchema>({ dialect: new PostgresDialect({ pool }) });
 
   return {

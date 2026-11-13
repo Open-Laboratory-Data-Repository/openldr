@@ -661,7 +661,14 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
 
   // The internal database comes first, because local sign-in keeps its accounts, sessions and
   // signing key there. Creating the pool opens no connection.
-  const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
+  //
+  // A database connection that dies while nothing is using it (Postgres restarted) is logged and
+  // nothing else: each pool opens a new one for the next query. With no listener, the `error` it
+  // emits ended this process, so any Postgres restart took the server down with it.
+  const onDbConnectionLost = (what: string) => (err: Error): void => {
+    logger.warn({ err }, `${what}: a database connection was lost; a new one is opened on the next use`);
+  };
+  const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL, { onConnectionError: onDbConnectionLost('internal database') });
   const users = createUserStore(internal.db, { withSubjectLock: internal.withAccountStatusLock });
   const roles = createRoleStore(internal.db);
   const accessKeys = createAccessKeyStore(internal.db);
@@ -701,8 +708,8 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
     throw error;
   }
   const blob = createBlobFromConfig(cfg);
-  const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
-  const selectedTarget = selectTargetStore(cfg);
+  const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL }, { onConnectionError: onDbConnectionLost('event bus') });
+  const selectedTarget = selectTargetStore(cfg, undefined, { onConnectionError: onDbConnectionLost('target database') });
   const { store, engine } = selectedTarget;
   const externalDb = store.db as unknown as Kysely<ExternalSchema>;
   const audit = createAuditStore(internal.db);
@@ -1378,6 +1385,11 @@ const reporting: ReportingApi = {
   // if the LISTEN connection can't be established (e.g. pooled/serverless PG), so a failure here
   // must never abort boot.
   const projectionListenClient = new pg.Client({ connectionString: cfg.INTERNAL_DATABASE_URL });
+  // This connection dies when Postgres restarts. Unheard, the `error` it emits ended the process.
+  // It is not reopened: the interval polling above is what the worker falls back to.
+  projectionListenClient.on('error', (err: Error) => {
+    logger.warn({ err }, 'projection worker: LISTEN connection lost; polling on the interval from here on');
+  });
   let projectionListenConnected = true;
   try {
     await projectionListenClient.connect();
@@ -1529,6 +1541,10 @@ const reporting: ReportingApi = {
       // Interval polling remains the correctness-bearing path: if this cannot connect (pooled or
       // serverless PG), push degrades to exactly the pre-S7 cadence rather than failing boot.
       const pushListenClient = new pg.Client({ connectionString: cfg.INTERNAL_DATABASE_URL });
+      // As for the projection worker's LISTEN connection: log the loss, and fall back to polling.
+      pushListenClient.on('error', (err: Error) => {
+        logger.warn({ err }, 'sync push worker: LISTEN connection lost; polling on the interval from here on');
+      });
       let pushListenConnected = true;
       try {
         await pushListenClient.connect();

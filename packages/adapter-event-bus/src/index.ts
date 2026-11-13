@@ -18,6 +18,11 @@ const DEFAULT_LEASE_MS = 300_000;
 
 export interface EventBusDeps {
   pool?: pg.Pool;
+  /** Told when a connection the bus holds dies, as all of them do when Postgres restarts: one the
+   *  pool held idle, or the one a worker keeps to LISTEN on. Nothing needs repair: the pool opens a
+   *  new connection for the next query, and a worker keeps polling on its interval. Absent = the
+   *  loss is ignored. Either way it no longer ends the process. */
+  onConnectionError?: (err: Error) => void;
 }
 
 export interface DrainResult {
@@ -49,6 +54,9 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
     throw new RangeError('leaseMs must be positive, finite, and at most 6442450941');
   }
   const pool = deps.pool ?? new pg.Pool({ connectionString: cfg.url });
+  // An emitter with no `error` listener throws, which ended the server whenever Postgres restarted.
+  // A stand-in pool in a test may have no events at all.
+  if (typeof pool.on === 'function') pool.on('error', (err: Error) => { deps.onConnectionError?.(err); });
   const handlers = new Map<string, EventHandler>();
   let activeDrain: Promise<DrainResult> | undefined;
   let closing = false;
@@ -217,6 +225,18 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
       if (stopped || closing) return;
       void drain().catch(() => undefined);
     };
+    // The LISTEN connection stays checked out, so the pool does not watch it. When it dies (Postgres
+    // restarted), hand it back as broken and carry on: the interval below still polls.
+    const onListenLost = (err: Error): void => {
+      const lost = listenClient;
+      listenClient = undefined;
+      if (lost) {
+        lost.removeListener('notification', tick);
+        lost.removeListener('error', onListenLost);
+        lost.release(true);
+      }
+      deps.onConnectionError?.(err);
+    };
     // Acquire the LISTEN client asynchronously. `.catch` prevents an unhandled
     // rejection if connect/listen fails; `ready` lets stop() await an in-flight
     // acquisition so a fast start→stop never leaks a still-connecting client.
@@ -227,8 +247,10 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
         return;
       }
       listenClient = client;
-      await listenClient.query('listen openldr_events');
-      if (!stopped) listenClient.on('notification', tick);
+      client.on('error', onListenLost);
+      await client.query('listen openldr_events');
+      // The connection may have died while that query ran; it is then already given back.
+      if (!stopped && listenClient === client) client.on('notification', tick);
     })().catch(() => undefined);
     const timer = setInterval(tick, intervalMs);
     const worker = {
@@ -241,6 +263,7 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
           await ready;
           if (listenClient) {
             listenClient.removeListener('notification', tick);
+            listenClient.removeListener('error', onListenLost);
             try {
               await listenClient.query('unlisten openldr_events');
               listenClient.release();
