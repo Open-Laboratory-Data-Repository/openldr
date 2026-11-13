@@ -1465,9 +1465,9 @@ export function buildProgram(): Command {
   return program;
 }
 
-/** Thrown by the client program after a command was sent through the app. process.exitCode holds
- *  the result. The entry catches it; it is not a failure. */
-export class SentThroughApp extends Error {
+/** Ends the client program's parse after the hook sent or refused a command. process.exitCode holds
+ *  the result. The client program's parseAsync catches it, so it never reaches a caller. */
+class SentThroughApp extends Error {
   constructor() {
     super('The command was sent through the app.');
     this.name = 'SentThroughApp';
@@ -1533,13 +1533,24 @@ export function buildClientProgram(io: Partial<ClientIo> = {}): Command {
   const program = buildProgram();
   program.option('--server-url <address>', 'the OpenLDR server to send commands to (default: OPENLDR_URL, then http://127.0.0.1:3000)');
 
-  // Keeps the words commander parses, so the hook can send exactly those.
+  // Keeps the words commander parses, so the hook can send exactly those. A command the hook sent
+  // or refused ends the parse with SentThroughApp; it is caught here, so parseAsync resolves with
+  // process.exitCode set and no caller needs to know the error exists.
   let userArgs: string[] | null = null;
   const parseAsync = program.parseAsync.bind(program);
-  program.parseAsync = ((argv?: readonly string[], parseOptions?: ParseOptions) => {
+  program.parseAsync = (async (argv?: readonly string[], parseOptions?: ParseOptions) => {
     userArgs = userArgsOf(argv, parseOptions);
-    return parseAsync(argv, parseOptions);
+    try {
+      return await parseAsync(argv, parseOptions);
+    } catch (e) {
+      if (e instanceof SentThroughApp) return program;
+      throw e;
+    }
   }) as Command['parseAsync'];
+  // The hook is async, so a sync parse would not wait for it.
+  program.parse = (() => {
+    throw new Error('The openldr client program must be run with parseAsync, not parse.');
+  }) as Command['parse'];
 
   const send = async (cmd: Command, path: string): Promise<number> => {
     const fail = (message: string): number => { err.write(`${message}\n`); return 1; };
@@ -1574,7 +1585,13 @@ export function buildClientProgram(io: Partial<ClientIo> = {}): Command {
     if (env.OPENLDR_THROUGH_APP !== '1') return;
     const path = commandPath(cmd);
     const meta = Object.hasOwn(COMMAND_META, path) ? COMMAND_META[path] : undefined;
-    if (!meta || meta.kind !== 'app') return;
+    if (!meta) {
+      // Fail closed: a command the table does not know is never run here unchecked.
+      err.write(`${path} has no entry in the command table, so it cannot run.\n`);
+      process.exitCode = 1;
+      throw new SentThroughApp();
+    }
+    if (meta.kind !== 'app') return;
     if (meta.localWhen?.([...cmd.args], cmd.opts())) return;
     process.exitCode = await send(cmd, path);
     throw new SentThroughApp();

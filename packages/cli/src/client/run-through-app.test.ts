@@ -17,10 +17,19 @@ vi.mock('@openldr/config', async (orig) => ({
   loadConfig: () => { throw new Error('loadConfig must not be called in this test'); },
 }));
 const spies = vi.hoisted(() => ({ layoutsList: vi.fn(async () => 0), artifactPublish: vi.fn(async () => 0) }));
+// A read of this one path never gives any bytes, to stand for a file read that hangs.
+const hang = vi.hoisted(() => ({ path: '' }));
+vi.mock('node:fs', async (orig) => {
+  const real = await orig<typeof import('node:fs')>();
+  const { Readable } = await import('node:stream');
+  const createReadStream = ((p: unknown, o?: unknown) =>
+    (hang.path !== '' && p === hang.path ? new Readable({ read() {} }) : real.createReadStream(p as string, o as never))) as typeof real.createReadStream;
+  return { ...real, createReadStream };
+});
 vi.mock('../layouts', async (orig) => ({ ...(await orig<typeof import('../layouts')>()), runLayoutsList: spies.layoutsList }));
 vi.mock('../artifact', async (orig) => ({ ...(await orig<typeof import('../artifact')>()), runArtifactPublish: spies.artifactPublish }));
 
-import { buildClientProgram, buildProgram, SentThroughApp } from '../program';
+import { buildClientProgram, buildProgram } from '../program';
 import { commandPath } from '../command-list';
 import type { CommandMeta } from '../command-meta';
 import { runningVersion } from '../update';
@@ -95,16 +104,17 @@ function refuse(status: number, body: Record<string, unknown>): Handler {
 
 interface Result { code: number | undefined; out: string; err: string; log: [string, string][] }
 
-/** Runs the client program over these words, as index.ts does, with OPENLDR_THROUGH_APP=1 unless env says otherwise. */
-async function cli(words: string[], env: NodeJS.ProcessEnv, signals: EventEmitter = new EventEmitter(), log: [string, string][] = []): Promise<Result> {
+/** Runs the client program over these words, as index.ts does, with OPENLDR_THROUGH_APP=1 unless env
+ *  says otherwise. parseAsync must resolve: nothing is caught here. */
+async function cli(
+  words: string[], env: NodeJS.ProcessEnv, signals: EventEmitter = new EventEmitter(), log: [string, string][] = [],
+  setup?: (program: Command) => void,
+): Promise<Result> {
   const sink = (name: string) => new Writable({ write(c, _e, cb) { log.push([name, Buffer.from(c).toString('utf8')]); cb(); } });
   const program = buildClientProgram({ out: sink('out'), err: sink('err'), signals, env: { OPENLDR_THROUGH_APP: '1', ...env } });
+  setup?.(program);
   process.exitCode = undefined;
-  try {
-    await program.parseAsync(['node', 'openldr', ...words]);
-  } catch (err) {
-    if (!(err instanceof SentThroughApp)) throw err;
-  }
+  await program.parseAsync(['node', 'openldr', ...words]);
   const code = process.exitCode as number | undefined;
   process.exitCode = undefined;
   const text = (n: string) => log.filter(([k]) => k === n).map(([, t]) => t).join('');
@@ -163,6 +173,30 @@ describe('the client program', () => {
     expect(r2.code).toBe(0);
   });
 
+  it('resolves parseAsync normally after sending, and refuses a plain parse() with one line', async () => {
+    const srv = await startServer(answers({ t: 'exit', code: 5 }));
+    const program = buildClientProgram({ out: new Writable({ write: (_c, _e, cb) => cb() }), env: { OPENLDR_THROUGH_APP: '1', OPENLDR_URL: srv.url } });
+    process.exitCode = undefined;
+    await expect(program.parseAsync(['node', 'openldr', 'layouts', 'list'])).resolves.toBe(program);
+    expect(process.exitCode).toBe(5);
+    process.exitCode = undefined;
+    expect(() => buildClientProgram().parse(['node', 'openldr', 'layouts', 'list'])).toThrow('The openldr client program must be run with parseAsync, not parse.');
+  });
+
+  it('refuses a command with no table entry when commands go through the app (fails closed)', async () => {
+    const extra = vi.fn();
+    const add = (p: Command) => { p.command('not-in-the-table').action(extra); };
+    const srv = await startServer(answers({ t: 'exit', code: 0 }));
+    const r = await cli(['not-in-the-table'], { OPENLDR_URL: srv.url }, new EventEmitter(), [], add);
+    expect(r.err).toBe('not-in-the-table has no entry in the command table, so it cannot run.\n');
+    expect(r.code).toBe(1);
+    expect(extra).not.toHaveBeenCalled();
+    expect(srv.calls).toHaveLength(0);
+    // Without OPENLDR_THROUGH_APP nothing changes yet (Task 12 removes the switch).
+    await cli(['not-in-the-table'], { OPENLDR_THROUGH_APP: undefined, OPENLDR_URL: srv.url }, new EventEmitter(), [], add);
+    expect(extra).toHaveBeenCalledTimes(1);
+  });
+
   it('with OPENLDR_THROUGH_APP=1 sends an app command and does not run it here', async () => {
     const srv = await startServer(answers({ t: 'exit', code: 0 }));
     const r = await cli(['layouts', 'list', '--json'], { OPENLDR_URL: srv.url });
@@ -178,8 +212,10 @@ describe('the client program', () => {
   it('takes --server-url anywhere on the line and never sends it', async () => {
     const srv = await startServer(answers({ t: 'exit', code: 0 }));
     await cli(['--server-url', srv.url, 'layouts', 'list'], { OPENLDR_URL: 'http://127.0.0.1:9' });
-    await cli(['layouts', '--server-url=' + srv.url, 'list', '--json'], {});
-    await cli(['layouts', 'list', '--json', '--server-url', srv.url], {});
+    // A closed port as the fallback: if --server-url parsing broke, the run fails instead of
+    // reaching the default address, which is the operator's dev server.
+    await cli(['layouts', '--server-url=' + srv.url, 'list', '--json'], { OPENLDR_URL: 'http://127.0.0.1:9' });
+    await cli(['layouts', 'list', '--json', '--server-url', srv.url], { OPENLDR_URL: 'http://127.0.0.1:9' });
     expect(srv.calls.map((c) => start(c).argv)).toEqual([['layouts', 'list'], ['layouts', 'list', '--json'], ['layouts', 'list', '--json']]);
   });
 
@@ -386,6 +422,14 @@ describe('refusals', () => {
     expect(r.code).toBe(1);
   });
 
+  it('says the connection was lost, not that OpenLDR cannot be reached, on a reset', async () => {
+    // The connection is made, then dropped before any answer.
+    const srv = await startServer((_call, req) => { req.socket.destroy(); });
+    const r = await cli(['layouts', 'list'], { OPENLDR_URL: srv.url });
+    expect(r.err).toBe('The connection to OpenLDR was lost.\n');
+    expect(r.code).toBe(1);
+  });
+
   it('prints the answer when the server refuses while the upload is still going', async () => {
     // 40 MiB, made here: well over the socket buffers and over the 16 MiB the server discards.
     const big = join(dir, 'big.bin');
@@ -515,19 +559,17 @@ describe('paths', () => {
     expect(srv.calls[1]!.frames.map((f) => f.t)).toEqual(['start', 'file', 'end', 'go']);
     expect(uploads(srv.calls[1]!).get(s.inputs[0]!.ref)!.get('')!.length).toBe(0);
 
-    // A folder: regular files, nested files, a link to a file, a link to another folder, and a link
-    // back to the folder itself, which is not walked twice. A FIFO is skipped. An empty folder is not sent.
+    // A folder: regular files, nested files, a link to a file inside, a link to a folder inside, and
+    // a link back to the folder itself. No real folder is walked twice: `link-dir` sorts before
+    // `sub`, so sub/deeper is sent once, as link-dir. A FIFO is skipped. An empty folder is not sent.
     const bundle = join(dir, 'my bundle');
-    const outside = join(dir, 'outside');
     await mkdir(join(bundle, 'sub', 'deeper'), { recursive: true });
     await mkdir(join(bundle, 'nothing-here'));
-    await mkdir(outside);
     await writeFile(join(bundle, 'manifest.json'), '{}');
     await writeFile(join(bundle, 'sub', 'ü ä.txt'), 'umlaut');
     await writeFile(join(bundle, 'sub', 'deeper', 'zero.bin'), '');
-    await writeFile(join(outside, 'shared.txt'), 'shared');
-    await symlink(join(outside, 'shared.txt'), join(bundle, 'link.txt'));
-    await symlink(outside, join(bundle, 'other'));
+    await symlink(join(bundle, 'sub', 'ü ä.txt'), join(bundle, 'link-in.txt'));
+    await symlink(join(bundle, 'sub', 'deeper'), join(bundle, 'link-dir'));
     await symlink(bundle, join(bundle, 'sub', 'loop'));
     let fifo = false;
     try { execFileSync('mkfifo', [join(bundle, 'pipe')]); fifo = true; } catch { /* no mkfifo: skip that part */ }
@@ -535,11 +577,60 @@ describe('paths', () => {
     s = start(srv.calls[2]!);
     expect(s.inputs).toEqual([{ ref: s.argv[2]!.slice(2), kind: 'input-dir', name: 'my bundle', keep: false }]);
     const tree = uploads(srv.calls[2]!).get(s.inputs[0]!.ref)!;
-    expect([...tree.keys()].sort()).toEqual(['link.txt', 'manifest.json', 'other/shared.txt', 'sub/deeper/zero.bin', 'sub/ü ä.txt']);
-    expect(tree.get('link.txt')!.toString()).toBe('shared');
+    expect([...tree.keys()].sort()).toEqual(['link-dir/zero.bin', 'link-in.txt', 'manifest.json', 'sub/ü ä.txt']);
+    expect(tree.get('link-in.txt')!.toString()).toBe('umlaut');
     expect(tree.get('sub/ü ä.txt')!.toString()).toBe('umlaut');
-    expect(tree.get('sub/deeper/zero.bin')!.length).toBe(0);
+    expect(tree.get('link-dir/zero.bin')!.length).toBe(0);
     if (fifo) expect(tree.has('pipe')).toBe(false);
+  });
+
+  it('refuses a link in an uploaded folder that points outside it or to nothing, before any request (Ruling 64)', async () => {
+    const srv = await startServer(answers({ t: 'exit', code: 0 }));
+    const outside = join(dir, 'outside');
+    await mkdir(outside);
+    await writeFile(join(outside, 'secret.txt'), 'not for upload');
+    const cases: [string, (bundle: string) => Promise<void>, (bundle: string) => string][] = [
+      ['a link to a file outside', (b) => symlink(join(outside, 'secret.txt'), join(b, 'file-out')),
+        (b) => `${join(b, 'file-out')} is a link that points outside ${b}.`],
+      ['a link to a folder outside', (b) => symlink(outside, join(b, 'sub', 'dir-out')),
+        (b) => `${join(b, 'sub', 'dir-out')} is a link that points outside ${b}.`],
+      ['a dangling link', (b) => symlink(join(b, 'gone'), join(b, 'dangling')),
+        (b) => `${join(b, 'dangling')} is a link to something that does not exist.`],
+    ];
+    for (const [name, makeLink, message] of cases) {
+      const bundle = await mkdtemp(join(dir, 'bundle-'));
+      await mkdir(join(bundle, 'sub'));
+      await writeFile(join(bundle, 'manifest.json'), '{}');
+      await makeLink(bundle);
+      const r = await cli(['market', 'install', bundle], { OPENLDR_URL: srv.url });
+      expect(r.err, name).toBe(`${message(bundle)}\n`);
+      expect(r.code, name).toBe(1);
+    }
+    expect(srv.calls).toHaveLength(0);
+  });
+
+  it('sends a file the caller named that is a link, but not a companion that links outside', async () => {
+    const srv = await startServer(answers({ t: 'exit', code: 0 }));
+    const real = join(dir, 'elsewhere', 'payload.json');
+    await mkdir(join(dir, 'elsewhere'));
+    await writeFile(real, '{"named":true}');
+    const named = join(dir, 'named.json');
+    await symlink(real, named);
+    await cli(['ingest', named], { OPENLDR_URL: srv.url });
+    const s = start(srv.calls[0]!);
+    expect(s.inputs[0]!.name).toBe('named.json');
+    expect(uploads(srv.calls[0]!).get(s.inputs[0]!.ref)!.get('')!.toString()).toBe('{"named":true}');
+
+    // plugin install reads manifest.json beside the wasm. Here it is a link out of that folder.
+    const pdir = join(dir, 'plugin');
+    await mkdir(pdir);
+    await writeFile(join(pdir, 'p.wasm'), Buffer.from([0, 97, 115, 109]));
+    await writeFile(join(dir, 'elsewhere', 'manifest.json'), '{}');
+    await symlink(join(dir, 'elsewhere', 'manifest.json'), join(pdir, 'manifest.json'));
+    const r = await cli(['plugin', 'install', join(pdir, 'p.wasm')], { OPENLDR_URL: srv.url });
+    expect(r.err).toBe(`${join(pdir, 'manifest.json')} is a link that points outside ${pdir}.\n`);
+    expect(r.code).toBe(1);
+    expect(srv.calls).toHaveLength(1);
   });
 
   it('sends a large file in data frames of at most 64 KiB', async () => {
@@ -689,12 +780,46 @@ describe('output files', () => {
       await readUntilGo(call, req);
       const ref = start(call).outputs[0]!.ref;
       stream200(res);
-      send(res, { t: 'run', id: 'r1' }, { t: 'file', ref, rel: 'sub/x.txt' }, { t: 'data', d: b64('x') }, { t: 'end' }, { t: 'exit', code: 0 });
+      // `sub` is a link out of the folder; `deeper` does not exist yet, so a careless mkdir would
+      // make it inside `elsewhere`.
+      send(res, { t: 'run', id: 'r1' }, { t: 'file', ref, rel: 'sub/deeper/x.txt' }, { t: 'data', d: b64('x') }, { t: 'end' }, { t: 'exit', code: 0 });
       res.end();
     });
     const r = await cli(['export', '--out', out], { OPENLDR_URL: srv.url });
     expect(r.err).toBe('OpenLDR sent a file name that is not allowed.\n');
+    expect(r.code).toBe(1);
     expect(await readdir(elsewhere)).toEqual([]);
+  });
+
+  it('writes through a link that stays inside the output folder', async () => {
+    const out = join(dir, 'exp');
+    await mkdir(join(out, 'real'), { recursive: true });
+    await symlink(join(out, 'real'), join(out, 'alias'));
+    const srv = await startServer(async (call, req, res) => {
+      await readUntilGo(call, req);
+      const ref = start(call).outputs[0]!.ref;
+      stream200(res);
+      send(res, { t: 'run', id: 'r1' }, { t: 'file', ref, rel: 'alias/new/x.txt' }, { t: 'data', d: b64('x') }, { t: 'end' }, { t: 'exit', code: 0 });
+      res.end();
+    });
+    const r = await cli(['export', '--out', out], { OPENLDR_URL: srv.url });
+    expect(r.code).toBe(0);
+    expect(await readFile(join(out, 'real', 'new', 'x.txt'), 'utf8')).toBe('x');
+  });
+
+  it('treats an exit frame with a file still open as a broken answer', async () => {
+    const target = join(dir, 'dups.csv');
+    const srv = await startServer(async (call, req, res) => {
+      await readUntilGo(call, req);
+      const ref = start(call).outputs[0]!.ref;
+      stream200(res);
+      send(res, { t: 'run', id: 'r1' }, { t: 'file', ref, rel: '' }, { t: 'data', d: b64('half') }, { t: 'exit', code: 0 });
+      res.end();
+    });
+    const r = await cli(['patients', 'duplicates', 'export', '--out', target], { OPENLDR_URL: srv.url });
+    expect(r.err).toBe('OpenLDR sent an answer this client cannot read.\n');
+    expect(r.code).toBe(1);
+    expect(await readdir(dir)).toEqual([]);
   });
 });
 
@@ -753,6 +878,58 @@ describe('interrupts', () => {
     const r = await running;
     expect(r.code).toBe(130);
     expect(signals.listenerCount('SIGINT')).toBe(0);
+  });
+
+  it('ends the interrupt request with the run, even when it never gets an answer', async () => {
+    let interruptClosed = false;
+    let interruptSeen = false;
+    const srv = await startServer(async (call, req, res) => {
+      if (call.url !== '/api/cli/run') {
+        // Never answers.
+        interruptSeen = true;
+        res.on('close', () => { interruptClosed = true; });
+        return;
+      }
+      await readUntilGo(call, req);
+      stream200(res);
+      send(res, { t: 'run', id: 'r1' }, { t: 'out', d: b64('ready\n') });
+      await waitFor(() => interruptSeen);
+      send(res, { t: 'exit', code: 3 });
+      res.end();
+    });
+    const signals = new EventEmitter();
+    const log: [string, string][] = [];
+    const running = cli(['layouts', 'list'], { OPENLDR_URL: srv.url }, signals, log);
+    await waitFor(() => log.some(([, t]) => t.includes('ready')));
+    signals.emit('SIGINT');
+    const r = await running;
+    expect(r.code).toBe(3);
+    await waitFor(() => interruptClosed, 2000);
+    // Ending it is not a failure to report.
+    expect(r.err).toBe('');
+  });
+
+  it('ends with 130 on a forced stop while a file read hangs', async () => {
+    const file = join(dir, 'hang.bin');
+    await writeFile(file, 'never read');
+    hang.path = file;
+    try {
+      let sawFile = false;
+      const srv = await startServer(async (call, req) => {
+        const it = req[Symbol.asyncIterator]() as AsyncIterator<Buffer>;
+        const shared: AsyncIterable<Buffer> = { [Symbol.asyncIterator]: () => ({ next: () => it.next(), return: async () => ({ done: true as const, value: undefined }) }) };
+        for await (const f of decodeFrames<ClientFrame>(shared)) if (f.t === 'file') sawFile = true;
+      });
+      const signals = new EventEmitter();
+      const running = cli(['ingest', file], { OPENLDR_URL: srv.url }, signals);
+      await waitFor(() => sawFile);
+      signals.emit('SIGINT');
+      const r = await running;
+      expect(r.code).toBe(130);
+      expect(srv.calls).toHaveLength(1);
+    } finally {
+      hang.path = '';
+    }
   });
 
   it('aborts the request and ends with 130 on a SIGINT before the run starts', async () => {

@@ -13,7 +13,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { createReadStream, readFileSync, statSync } from 'node:fs';
-import { mkdir, open, readdir, realpath, rename, stat, unlink, type FileHandle } from 'node:fs/promises';
+import { lstat, mkdir, open, readdir, realpath, rename, stat, unlink, type FileHandle } from 'node:fs/promises';
 import { request as httpRequest, type ClientRequest, type IncomingMessage, type RequestOptions } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { basename, dirname, join, resolve, sep } from 'node:path';
@@ -307,14 +307,40 @@ async function statOrRefuse(typed: string) {
   }
 }
 
+/** True when `real` is `root` or under it, comparing whole parts. Both are real paths. */
+const within = (real: string, root: string): boolean => real === root || real.startsWith(root.endsWith(sep) ? root : root + sep);
+
 /**
- * Regular files under a folder, sorted by name. A link to a file is followed. A link to a folder
- * is followed, but no real folder is walked twice. Anything else is skipped. An empty folder sends
- * nothing.
+ * Where a link found inside a folder really leads (Ruling 64). Throws Refusal, naming the link, when
+ * it leads nowhere or outside `realRoot`: an upload sends all it can reach, so a link to the home
+ * folder would send the home folder.
+ */
+async function linkInside(abs: string, shownAs: string, realRoot: string, folder: string): Promise<string> {
+  let real: string;
+  try {
+    real = await realpath(abs);
+  } catch {
+    throw new Refusal(`${shownAs} is a link to something that does not exist.`);
+  }
+  if (!within(real, realRoot)) throw new Refusal(`${shownAs} is a link that points outside ${folder}.`);
+  return real;
+}
+
+/**
+ * Regular files under a folder, sorted by name. A link, to a file or to a folder, is followed only
+ * when its real target is inside the folder's real path; any other link is a Refusal. No real
+ * folder is walked twice. Anything that is not a file, a folder or a link is skipped. An empty
+ * folder sends nothing.
  */
 async function walkFolder(root: string, typed: string, ref: string): Promise<Send[]> {
   const files: Send[] = [];
   const seen = new Set<string>();
+  let realRoot: string;
+  try {
+    realRoot = await realpath(root);
+  } catch {
+    throw new Refusal(`Cannot read ${typed}.`);
+  }
   const visit = async (abs: string, rel: string): Promise<void> => {
     let entries;
     try {
@@ -331,7 +357,8 @@ async function walkFolder(root: string, typed: string, ref: string): Promise<Sen
       const childRel = rel === '' ? e.name : `${rel}/${e.name}`;
       let kind: 'file' | 'dir' | null = e.isFile() ? 'file' : e.isDirectory() ? 'dir' : null;
       if (e.isSymbolicLink()) {
-        const st = await stat(childAbs).catch(() => null);
+        const real = await linkInside(childAbs, join(typed, childRel), realRoot, typed);
+        const st = await stat(real).catch(() => null);
         kind = st?.isFile() ? 'file' : st?.isDirectory() ? 'dir' : null;
       }
       if (kind === null) continue;
@@ -365,10 +392,19 @@ async function prepareUploads(plan: Plan, opts: Record<string, unknown>): Promis
         readSibling: (n) => (isPart(n) ? readText(join(beside, n)) : undefined),
       }) ?? [];
       const done = new Set<string>([name]);
+      let realBeside: string | null = null;
       for (const c of companions) {
         if (!isPart(c) || done.has(c)) continue;
         done.add(c);
         const abs = join(beside, c);
+        // The caller named the main file, not its companions: a companion that is a link must lead
+        // inside the main file's folder (Ruling 64). The main file itself may be a link.
+        const entry = await lstat(abs).catch(() => null);
+        if (entry?.isSymbolicLink()) {
+          realBeside ??= await realpath(beside).catch(() => null);
+          if (realBeside === null) throw new Refusal(`Cannot read ${beside}.`);
+          await linkInside(abs, abs, realBeside, beside);
+        }
         // A companion that is missing is not sent, and the command then fails as it does today.
         if (readText(abs) === undefined) continue;
         sends.push({ ref: input.ref, rel: c, abs, typed: abs });
@@ -481,6 +517,36 @@ class NotAllowedError extends Error {}
 class NotAskedError extends Error {}
 class LocalWriteError extends Error {}
 
+/**
+ * Makes the folders `parts` under the output folder `root` one level at a time. Each level that
+ * already exists is checked to really be inside `root` before anything is made under it, so a link
+ * already in the caller's folder cannot lead a new folder outside it. `root` itself is the caller's
+ * own choice and is made with its parents.
+ */
+async function makeInside(root: string, parts: string[], shownPath: string): Promise<void> {
+  try {
+    await mkdir(root, { recursive: true });
+  } catch {
+    throw new LocalWriteError(shownPath);
+  }
+  const realRoot = await realpath(root).catch(() => null);
+  if (!realRoot) throw new LocalWriteError(shownPath);
+  let at = root;
+  for (const part of parts) {
+    at = join(at, part);
+    if (!(await lstat(at).catch(() => null))) {
+      try {
+        await mkdir(at);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw new LocalWriteError(shownPath);
+      }
+    }
+    const real = await realpath(at).catch(() => null);
+    if (!real || !within(real, realRoot)) throw new NotAllowedError();
+    if (!(await stat(real).catch(() => null))?.isDirectory()) throw new LocalWriteError(shownPath);
+  }
+}
+
 function bytesOf(d: unknown): Buffer {
   if (typeof d !== 'string' || d.length > MAX_DATA_TEXT || d.length % 4 !== 0 || !BASE64.test(d)) throw new ProtocolError();
   const buf = Buffer.from(d, 'base64');
@@ -514,7 +580,12 @@ function refusalMessage(status: number, body: Record<string, unknown> | null): s
   return `OpenLDR answered with status ${status}.`;
 }
 
-const UNREACHABLE = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT', 'ECONNRESET']);
+/** A refused connection or a failed name lookup: nothing answered at the address. */
+const UNREACHABLE = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN']);
+/** The connection was made and then went: a reset, or a broken pipe while sending. */
+const LOST = new Set(['ECONNRESET', 'EPIPE']);
+/** How long the interrupt request may take before it is given up. */
+const INTERRUPT_TIMEOUT_MS = 5000;
 
 /** An output file being written under its temporary name. */
 interface Opened { handle: FileHandle; temp: string; target: string; shown: string }
@@ -611,14 +682,20 @@ async function exchange(
   let runId: string | null = null;
   let interrupts = 0;
   let forced: number | null = null;
+  /** The interrupt request, held so it can be ended with the run. */
+  let interruptReq: ClientRequest | null = null;
+  let finished = false;
 
   const interrupt = (id: string) => {
+    const couldNot = () => { if (!finished) void writeTo(err, 'The interrupt could not be sent to OpenLDR.\n'); };
     const r = sendRequest(endpoint(url, `api/cli/runs/${encodeURIComponent(id)}/interrupt`), { method: 'POST', headers: { ...auth } });
+    interruptReq = r;
+    r.setTimeout(INTERRUPT_TIMEOUT_MS, () => r.destroy(new Error('timed out')));
     r.on('response', (answer) => {
       answer.resume();
-      if (answer.statusCode !== 204 && answer.statusCode !== 200) void writeTo(err, 'The interrupt could not be sent to OpenLDR.\n');
+      if (answer.statusCode !== 204 && answer.statusCode !== 200) couldNot();
     });
-    r.on('error', () => { void writeTo(err, 'The interrupt could not be sent to OpenLDR.\n'); });
+    r.on('error', couldNot);
     r.end();
   };
   const onSigint = () => {
@@ -678,12 +755,14 @@ async function exchange(
       res = await answered;
     } catch (e) {
       stopUpload.abort();
+      // A forced end does not wait for the upload: a file read that hangs must not hold it.
+      if (forced !== null) return forced;
       const unread = await upload;
       if (forced !== null) return forced;
       if (unread !== null) return await fail(`Cannot read ${unread}.`);
       const code = (e as NodeJS.ErrnoException).code;
       if (code && UNREACHABLE.has(code)) return await fail(`Cannot reach OpenLDR at ${shown(url)}. Is it running?`);
-      if (code) return await fail(`Cannot reach OpenLDR at ${shown(url)}: ${code}.`);
+      if (code && !LOST.has(code)) return await fail(`Cannot reach OpenLDR at ${shown(url)}: ${code}.`);
       return await fail('The connection to OpenLDR was lost.');
     }
 
@@ -697,10 +776,13 @@ async function exchange(
     }
     return await readAnswer(res);
   } finally {
+    finished = true;
     signals.off('SIGINT', onSigint);
     stopUpload.abort();
     req.destroy();
     res?.destroy();
+    // A hanging interrupt request must not keep the process alive after the run.
+    (interruptReq as ClientRequest | null)?.destroy();
   }
 
   async function readAnswer(answer: IncomingMessage): Promise<number> {
@@ -742,16 +824,19 @@ async function exchange(
       if (written.has(key)) throw new NotAllowedError();
       written.add(key);
       const shownPath = target.kind === 'output-file' ? target.typed : join(target.typed, rel);
-      try {
-        await mkdir(dirname(path), { recursive: true });
-      } catch {
-        throw new LocalWriteError(shownPath);
-      }
-      if (root !== null) {
+      if (root === null) {
+        // The caller named this file, and so its folder.
+        try {
+          await mkdir(dirname(path), { recursive: true });
+        } catch {
+          throw new LocalWriteError(shownPath);
+        }
+      } else {
+        await makeInside(root, rel.split('/').slice(0, -1), shownPath);
         // A link inside the caller's folder must not lead the write somewhere else.
         const realRoot = await realpath(root).catch(() => null);
         const realParent = await realpath(dirname(path)).catch(() => null);
-        if (!realRoot || !realParent || (realParent !== realRoot && !realParent.startsWith(realRoot + sep))) throw new NotAllowedError();
+        if (!realRoot || !realParent || !within(realParent, realRoot)) throw new NotAllowedError();
       }
       const temp = join(dirname(path), `.${basename(path)}.${randomBytes(6).toString('hex')}.part`);
       try {
@@ -801,6 +886,8 @@ async function exchange(
           }
           opened = null;
         } else if (f.t === 'exit') {
+          // An exit with a file still open: the file never ended, so the answer is not whole.
+          if (opened) throw new ProtocolError();
           exit = Number.isInteger(f.code) && f.code >= 0 && f.code <= 255 ? f.code : 1;
           break;
         } else {

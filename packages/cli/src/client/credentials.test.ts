@@ -55,9 +55,18 @@ describe('findCredential', () => {
     const file = join(dir, 'key.txt');
     await writeFile(file, `  ${KEY}x\n`);
     expect(await findCredential({ OPENLDR_KEY: ` ${KEY} `, OPENLDR_KEY_FILE: file }, URL_)).toEqual({ kind: 'key', authorization: `Bearer ${KEY}` });
-    expect(await findCredential({ OPENLDR_KEY: '', OPENLDR_KEY_FILE: file }, URL_)).toEqual({ kind: 'key', authorization: `Bearer ${KEY}x` });
+    expect(await findCredential({ OPENLDR_KEY_FILE: file }, URL_)).toEqual({ kind: 'key', authorization: `Bearer ${KEY}x` });
     expect(await findCredential({}, URL_)).toEqual({ kind: 'none', authorization: null });
-    expect(await findCredential({ OPENLDR_KEY: '   ' }, URL_)).toEqual({ kind: 'none', authorization: null });
+    expect(await findCredential({ OPENLDR_KEY: undefined, OPENLDR_KEY_FILE: undefined }, URL_)).toEqual({ kind: 'none', authorization: null });
+  });
+
+  it('stops on a variable that is set but empty, naming it (Ruling 65)', async () => {
+    const file = join(dir, 'key.txt');
+    await writeFile(file, KEY);
+    for (const value of ['', '   ']) {
+      await expect(findCredential({ OPENLDR_KEY: value, OPENLDR_KEY_FILE: file }, URL_)).rejects.toThrow('OPENLDR_KEY is set but empty. Set it, or unset it.');
+      await expect(findCredential({ OPENLDR_KEY_FILE: value }, URL_)).rejects.toThrow('OPENLDR_KEY_FILE is set but empty. Set it, or unset it.');
+    }
   });
 
   it('stops on a key file that is missing or empty, naming the file and never falling through', async () => {

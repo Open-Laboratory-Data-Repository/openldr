@@ -107,15 +107,21 @@ async function readSession(_env: NodeJS.ProcessEnv, _url: string): Promise<Crede
 }
 
 /**
- * OPENLDR_KEY, then the file named by OPENLDR_KEY_FILE, then the session file, then none. An empty
- * OPENLDR_KEY counts as unset. A key file that is set but missing, unreadable or empty stops here
- * with CredentialError: falling through would run the command as someone else after a typo.
+ * OPENLDR_KEY, then the file named by OPENLDR_KEY_FILE, then the session file, then none. Only a
+ * variable that is not set at all is passed over. Set but empty (`OPENLDR_KEY_FILE=$TYPO` expands to
+ * nothing), or naming a file that is missing, unreadable or empty, stops here with CredentialError
+ * (Ruling 65): falling through to a session would run the command as someone else.
  */
 export async function findCredential(env: NodeJS.ProcessEnv, url: string): Promise<Credential> {
-  const key = env.OPENLDR_KEY?.trim();
-  if (key) return keyCredential(key, 'OPENLDR_KEY');
+  const empty = (name: string) => new CredentialError(`${name} is set but empty. Set it, or unset it.`);
+  if (env.OPENLDR_KEY !== undefined) {
+    const key = env.OPENLDR_KEY.trim();
+    if (!key) throw empty('OPENLDR_KEY');
+    return keyCredential(key, 'OPENLDR_KEY');
+  }
   const file = env.OPENLDR_KEY_FILE;
-  if (file !== undefined && file !== '') {
+  if (file !== undefined) {
+    if (file.trim() === '') throw empty('OPENLDR_KEY_FILE');
     const fromFile = (await readKeyFile(file)).trim();
     if (!fromFile) throw new CredentialError(`The key file named by OPENLDR_KEY_FILE is empty: ${file}`);
     return keyCredential(fromFile, `the file ${file}`);

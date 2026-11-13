@@ -1,4 +1,4 @@
-import { buildClientProgram, buildProgram, SentThroughApp } from './program';
+import { buildClientProgram, buildProgram } from './program';
 import { redactError } from './redact-error';
 import { enterRunDir, readHandoff, refuseHelp, ServedRefusal, setServedHandoff, type ServedHandoff } from './served';
 
@@ -25,12 +25,7 @@ function main(): void {
     return;
   }
   if (!handoff) {
-    // A command sent through the app ends its parse with SentThroughApp; process.exitCode holds the
-    // result. Any other rejection stays unhandled, as before.
-    buildClientProgram().parseAsync(process.argv).catch((err: unknown) => {
-      if (err instanceof SentThroughApp) return;
-      throw err;
-    });
+    buildClientProgram().parseAsync(process.argv);
     return;
   }
   setServedHandoff(handoff);
