@@ -26,36 +26,56 @@ $apiUrl = "http://127.0.0.1:$apiPort"
 $apiUp = { try { Invoke-WebRequest -UseBasicParsing -Uri "$apiUrl/health" -TimeoutSec 2 *> $null; $true } catch { $false } }
 $api = $null
 $apiLog = $null
-$inUse = "An API is already running at $apiUrl. Stop it and run this script again, or seed by hand in the order given in e2e/README.md."
+# The line the API logs once it has bound the port: Fastify's "Server listening at <address>", one
+# line per address, at info level, as JSON on standard output. The closing quote ends the JSON
+# string, so port 30000 does not match. Standard output goes to $apiLog, which only this run's API
+# writes and which is emptied at each start; standard error goes to a separate file.
+$listenLine = "listening at $apiUrl`""
 
 function Die($m) { Write-Error "X $m"; exit 1 }
 
 # Is the port free? A different question from $apiUp: any listener on the port, healthy or not, on
 # any address, makes it not free. It binds the port with exclusive use on all IPv6 and IPv4
 # addresses, then on 127.0.0.1 and ::1, and lets each go at once. The IPv6 binds are skipped where
-# the machine has no IPv6; any other failure counts as not free. .NET here, not `node -e`, because
-# a quoted JS snippet passed to node from PowerShell gets its quotes mangled.
+# the machine has no IPv6. Returns 'free', 'listening' (in use or access denied), or 'unknown'
+# when a bind failed for another reason. .NET here, not `node -e`, because a quoted JS snippet
+# passed to node from PowerShell gets its quotes mangled.
 # Unproven: written on Linux, never parsed by PowerShell, never run.
-function Test-PortFree([int]$port) {
+function Get-PortState([int]$port) {
   $tries = @(
     @([System.Net.IPAddress]::IPv6Any, $false), @([System.Net.IPAddress]::Any, $true),
     @([System.Net.IPAddress]::Loopback, $true), @([System.Net.IPAddress]::IPv6Loopback, $false)
   )
   foreach ($t in $tries) {
-    $listener = [System.Net.Sockets.TcpListener]::new($t[0], $port)
-    $listener.ExclusiveAddressUse = $true
+    $listener = $null
     try {
+      $listener = [System.Net.Sockets.TcpListener]::new($t[0], $port)
+      $listener.ExclusiveAddressUse = $true
       $listener.Start()
     } catch [System.Net.Sockets.SocketException] {
       $code = $_.Exception.SocketErrorCode
-      if ($t[1] -or $code -eq 'AddressAlreadyInUse' -or $code -eq 'AccessDenied') { return $false }
+      if ($code -eq 'AddressAlreadyInUse' -or $code -eq 'AccessDenied') { return 'listening' }
+      if ($t[1]) { return 'unknown' }
     } catch {
-      return $false
+      return 'unknown'
     } finally {
-      $listener.Stop()
+      if ($listener) { $listener.Stop() }
     }
   }
-  return $true
+  return 'free'
+}
+
+# Stops the script unless the port is free. $next says what has happened so far and what to do next.
+function Assert-PortFree([string]$next) {
+  $state = Get-PortState $apiPort
+  if ($state -eq 'free') { return }
+  if ($state -eq 'listening') { Die "Something is already listening on port $apiPort. Stop that program. $next" }
+  Die "The script could not check whether port $apiPort is free. $next"
+}
+
+# True when this run's API has logged that it listens on $apiUrl. A read that fails counts as no.
+function Test-OwnApiListening {
+  try { return [bool](Select-String -Path $apiLog -SimpleMatch -Pattern $listenLine -Quiet) } catch { return $false }
 }
 
 # True while the API this script started is still running.
@@ -72,8 +92,11 @@ if ($nodeMajor -lt 20) { Die "Node.js >=20 required (found $nodeVer)." }
 # With -Seed, the port check comes first, before pnpm install, .env and docker compose. The sample
 # load goes through an API signed in by AUTH_DEV_BYPASS; a listener already on the port is not this
 # run's, and on a fresh checkout it is someone else's. Stopping here starts and writes nothing, so a
-# re-run after stopping it behaves as a first run.
-if ($Seed -and -not (Test-PortFree $apiPort)) { Die $inUse }
+# re-run after stopping it behaves as a first run. It checks before it knows whether it will seed,
+# so it can refuse a run that would have loaded nothing; the message says so.
+if ($Seed) {
+  Assert-PortFree "With -Seed, the script would start its own API on port $apiPort and load the sample data through it. It does that only on a fresh setup or with -ResetDb, and not with -NoServices, but it checks the port first in every case. Nothing has been installed, written, reset or started. Once the port is free, run this script again, or seed by hand in the order given in e2e/README.md."
+}
 if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
   if (Get-Command corepack -ErrorAction SilentlyContinue) { Write-Host "-> Enabling pnpm via corepack"; corepack enable *> $null }
   if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) { Die "pnpm not found. See https://pnpm.io/installation (or run: corepack enable)." }
@@ -136,6 +159,16 @@ if ($NoServices) {
       if ($LASTEXITCODE -eq 0) { break }
       Start-Sleep 2
     }
+    # With -Seed, the port is checked again right before the first reset. pnpm install, docker and
+    # the wait above take minutes, and a reset under an API this run did not start is the harm.
+    # This run may have written .env just now; a plain re-run would then skip the reset.
+    if ($Seed) {
+      if ($freshEnv) {
+        Assert-PortFree "Nothing has been reset or loaded. This run wrote .env, so a plain re-run would skip the reset. Once the port is free, run this script again with -ResetDb -Seed, and the same -Dir and -Branch if you gave them."
+      } else {
+        Assert-PortFree "Nothing has been reset or loaded. Once the port is free, run this script again with the same options."
+      }
+    }
     Write-Host "-> Resetting the database (pnpm openldr db reset)"
     pnpm openldr db reset
     if ($LASTEXITCODE -ne 0) { Die "db reset failed" }
@@ -152,7 +185,7 @@ if ($NoServices) {
         # 2. Then an API on the fresh schema, on the script's own port. The steps above take
         #    minutes, so the port is checked again first. One node process with no watcher, so its
         #    own handle stops all of it. PORT is set for the child only, then put back.
-        if (-not (Test-PortFree $apiPort)) { Die $inUse }
+        Assert-PortFree "The database has been reset and no sample data was loaded. Once the port is free, run this script again with -ResetDb -Seed, and the same -Dir and -Branch if you gave them."
         $apiLog = Join-Path ([System.IO.Path]::GetTempPath()) 'openldr-dev-api.log'
         Write-Host "-> Starting the API for the sample load (node dev.mjs in apps/server on port $apiPort, log in $apiLog)"
         $oldPort = $env:PORT
@@ -163,9 +196,25 @@ if ($NoServices) {
         # An answer on the port counts only while the script's own API is running: one that cannot
         # bind the port exits at once, and an answer then comes from someone else's. So its process
         # is checked on every pass before the probe, and once more after the probe answers.
+        # A live process is not enough: another program can take the port while this API boots,
+        # and answer the probe before this API tries to bind. So after the probe answers, the
+        # script also needs this API's own "listening at" line in its standard output log. On
+        # Linux, once this API holds the port, nothing else can listen there beside it, so the line
+        # proves the answer is this API's. On macOS and Windows that rule is unproven, so there the
+        # line narrows the window and may not close it. Whether Select-String can read the log
+        # while Start-Process holds it open is unproven too; a failed read counts as no line.
         for ($i = 0; ; $i++) {
           if (-not (Test-OwnApiAlive)) { Die "The API stopped while starting (see $apiLog)." }
           if (& $apiUp) {
+            # The probe can answer a moment before the line is written, so look a few times.
+            for ($n = 1; -not (Test-OwnApiListening); $n++) {
+              if (-not (Test-OwnApiAlive)) { Die "The API stopped while starting (see $apiLog)." }
+              if ($n -ge 5) {
+                if (-not $api.HasExited) { $api.Kill() }
+                Die "The script could not confirm that its own API is the one answering on port $apiPort, so it loaded nothing and stopped that API. The check looks in $apiLog for the line Server listening at $apiUrl. It needs the API's log at info level on standard output: LOG_LEVEL set to info, debug or trace, LOG_FILE unset, and LISTEN_HOST unset, 127.0.0.1 or 0.0.0.0, in .env and in your session. The database has been reset and no sample data was loaded. Run this script again with -ResetDb -Seed once that holds."
+              }
+              Start-Sleep 1
+            }
             if (-not (Test-OwnApiAlive)) { Die "The API stopped while starting (see $apiLog)." }
             break
           }
