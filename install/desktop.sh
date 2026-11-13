@@ -13,6 +13,8 @@
 #                                  (default https://github.com/Open-Laboratory-Data-Repository/openldr/releases/download)
 #   OPENLDR_DESKTOP_USERNS_FILE    (default /proc/sys/kernel/apparmor_restrict_unprivileged_userns)
 #   OPENLDR_DESKTOP_APPARMOR_DIR   (default /etc/apparmor.d)
+#   OPENLDR_DESKTOP_APPARMOR_PARSER  a full path to apparmor_parser (default: /usr/sbin, then /sbin,
+#                                  then PATH)
 #
 # Only Linux is proven. Everything on the macOS path is not proven, waits for the operator.
 #
@@ -71,11 +73,15 @@ is_running() {
   return 1
 }
 
+# It runs under sudo, so the system's own copy wins over one found on PATH.
 find_apparmor_parser() {
-  apparmor_parser=$(command -v apparmor_parser 2>/dev/null) || apparmor_parser=''
+  apparmor_parser=${OPENLDR_DESKTOP_APPARMOR_PARSER-}
   for d in /usr/sbin /sbin; do
     if [ -z "$apparmor_parser" ] && [ -x "$d/apparmor_parser" ]; then apparmor_parser="$d/apparmor_parser"; fi
   done
+  if [ -z "$apparmor_parser" ]; then
+    apparmor_parser=$(command -v apparmor_parser 2>/dev/null) || apparmor_parser=''
+  fi
 }
 
 tmp_profile=''
@@ -95,11 +101,23 @@ checksum_of() {
   fi
 }
 
+# curl with the URL first and its options after. An https URL is fetched over https only, and a
+# redirect may not leave https either. A file: or http: base (the tests, or a package served from a
+# folder) is fetched as it is.
+fetch() {
+  url=$1
+  shift
+  case $url in
+    https://*) curl --proto '=https' --proto-redir '=https' "$@" "$url" ;;
+    *) curl "$@" "$url" ;;
+  esac
+}
+
 download() {
   if [ -t 2 ]; then
-    curl -fL --progress-bar -o "$2" "$1"
+    fetch "$1" -fL --progress-bar -o "$2"
   else
-    curl -fsSL -o "$2" "$1"
+    fetch "$1" -fsSL -o "$2"
   fi
 }
 
@@ -112,7 +130,7 @@ abandon() {
 
 uninstall() {
   if [ -e "$TARGET" ] && is_running; then
-    err "OpenLDR is running. Quit it from its tray icon, then run this again."
+    err "$RUNNING_MSG"
   fi
   found=0
   for p in "$TARGET" "$TARGET.old" "$TARGET.new" "$DL" "$MENU" "$APP_DIR" "$AUTOSTART_FILE" "$AUTOSTART_FILE_XDG"; do
@@ -263,6 +281,8 @@ main() {
   OLD="$TARGET.old"
   uid=$(id -u)
   profile_file="$APPARMOR_DIR/openldr-desktop-$uid"
+  # A person whose app was killed, or whose desktop shows no tray icon, can still stop it this way.
+  RUNNING_MSG="OpenLDR is running. Quit it from its tray icon, or run: \"$CMD\" stop. Then run this again."
 
   # Before anything moves: no folder this script replaces or removes may hold the data folder.
   for p in "$TARGET" "$OLD" "$NEW" "$DL" "$APP_DIR"; do refuse_data "$p"; done
@@ -281,11 +301,38 @@ main() {
     return 0
   fi
 
+  # Before anything is downloaded: the two refusals that cost nothing.
+  # Never replace a copy OpenLDR is running from.
+  if [ -e "$TARGET" ] && is_running; then
+    err "$RUNNING_MSG"
+  fi
+  # Linux: whether the system needs an AppArmor profile, and the path it names. AppArmor matches
+  # the real path, so a link above the app folder (the home folder, ~/.local or ~/.local/share) is
+  # followed: the path is built from the real folder that will hold the app.
+  needs_profile=0
+  if [ "$OS" = linux ]; then
+    userns=''
+    if [ -r "$USERNS_FILE" ]; then userns=$(tr -d ' \n' < "$USERNS_FILE") || userns=''; fi
+    if [ "$userns" = 1 ]; then
+      needs_profile=1
+      mkdir -p -- "$PARENT"
+      real_parent=$(CDPATH='' cd -P -- "$PARENT" && pwd -P) || err "Could not read the real path of $PARENT. Nothing was installed."
+      profile_bin="$real_parent/${TARGET##*/}/${BIN##*/}"
+      # The profile names the path in double quotes. A quote, a backslash or a line break would
+      # break it, and AppArmor reads * ? [ ] { } ^ as a pattern, which would widen what it covers.
+      case $profile_bin in
+        *'"'*|*'\'*|*"$nl"*|*'*'*|*'?'*|*'['*|*']'*|*'{'*|*'}'*|*'^'*)
+          err "The home folder's path holds a character the sandbox profile cannot carry. Nothing was installed."
+          ;;
+      esac
+    fi
+  fi
+
   # 1. The version.
   ARCHIVE_RE="openldr-desktop-[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*-$SYS\.tar\.gz"
   if [ -z "$VERSION" ]; then
     say "→ Looking for the newest OpenLDR release with a desktop package for $SYS"
-    releases=$(curl -fsSL "$RELEASES_URL" 2>/dev/null) ||
+    releases=$(fetch "$RELEASES_URL" -fsSL 2>/dev/null) ||
       err "Could not read the list of OpenLDR releases. Try again in a few minutes, or pass --version <X.Y.Z>."
     # No jq: break the text at every , and { so each "name" starts a line, whether the list came
     # pretty-printed or on one line. Releases come newest first, so the first match wins. A "name"
@@ -332,10 +379,11 @@ main() {
   fi
   say "✓ The download matches its checksum"
 
-  # 4. Never replace a copy OpenLDR is running from.
+  # 4. Never replace a copy OpenLDR is running from. Checked before the download too; this catches
+  # a start while the download ran.
   if [ -e "$TARGET" ] && is_running; then
     remove "$DL"
-    err "OpenLDR is running. Quit it from its tray icon, then run this again."
+    err "$RUNNING_MSG"
   fi
 
   # 5. Unpack beside the target, then move the one top folder to .new.
@@ -348,46 +396,34 @@ main() {
   [ -d "$DL/unpack/$TOP" ] || abandon "The package holds no $TOP folder. Nothing was installed."
   mv -- "$DL/unpack/$TOP" "$NEW"
 
-  # 6. Linux: an AppArmor profile, where the system will not let an app start its sandbox without one.
-  if [ "$OS" = linux ]; then
-    userns=''
-    if [ -r "$USERNS_FILE" ]; then userns=$(tr -d ' \n' < "$USERNS_FILE") || userns=''; fi
-    if [ "$userns" = 1 ]; then
-      # AppArmor matches the real path, so a home folder that is a link is followed here.
-      real_home=$(CDPATH='' cd -P -- "$HOME" && pwd -P)
-      # The profile names the path in double quotes. A quote, a backslash or a line break would
-      # break it, and AppArmor reads * ? [ ] { } ^ as a pattern, which would widen what it covers.
-      case $real_home in
-        *'"'*|*'\'*|*"$nl"*|*'*'*|*'?'*|*'['*|*']'*|*'{'*|*'}'*|*'^'*)
-          abandon "The home folder's path holds a character the sandbox profile cannot carry. Nothing was installed."
-          ;;
-      esac
-      trap cleanup_tmp EXIT
-      tmp_profile=$(mktemp "${TMPDIR:-/tmp}/openldr-desktop-profile.XXXXXX")
-      {
-        say 'abi <abi/4.0>,'
-        say 'include <tunables/global>'
-        say ''
-        say "profile openldr-desktop-$uid \"$real_home/.local/share/openldr-desktop/openldr-desktop\" flags=(unconfined) {"
-        say '  userns,'
-        say ''
-        say "  include if exists <local/openldr-desktop-$uid>"
-        say '}'
-      } > "$tmp_profile"
-      if [ -f "$profile_file" ] && cmp -s "$tmp_profile" "$profile_file"; then
-        :
-      else
-        say "→ This system does not let an app start its sandbox without an AppArmor profile."
-        say "→ This script will install a small profile for OpenLDR at $profile_file with sudo, which asks for the administrator password once."
-        find_apparmor_parser
-        # Load first, then write: a profile that fails to load is never left on disk.
-        if [ -z "$apparmor_parser" ] ||
-          ! sudo "$apparmor_parser" -r "$tmp_profile" ||
-          ! sudo install -m 0644 "$tmp_profile" "$profile_file"; then
-          abandon "The sandbox profile was not installed, so OpenLDR was not installed."
-        fi
-        say "✓ Installed the AppArmor profile $profile_file"
+  # 6. Linux: an AppArmor profile, where the system will not let an app start its sandbox without
+  # one. Its path was built and checked before the download.
+  if [ "$needs_profile" = 1 ]; then
+    trap cleanup_tmp EXIT
+    tmp_profile=$(mktemp "${TMPDIR:-/tmp}/openldr-desktop-profile.XXXXXX")
+    {
+      say 'abi <abi/4.0>,'
+      say 'include <tunables/global>'
+      say ''
+      say "profile openldr-desktop-$uid \"$profile_bin\" flags=(unconfined) {"
+      say '  userns,'
+      say ''
+      say "  include if exists <local/openldr-desktop-$uid>"
+      say '}'
+    } > "$tmp_profile"
+    if [ -f "$profile_file" ] && cmp -s "$tmp_profile" "$profile_file"; then
+      :
+    else
+      say "→ This system does not let an app start its sandbox without an AppArmor profile."
+      say "→ This script will install a small profile for OpenLDR at $profile_file with sudo, which asks for the administrator password once."
+      find_apparmor_parser
+      # Load first, then write: a profile that fails to load is never left on disk.
+      if [ -z "$apparmor_parser" ] ||
+        ! sudo "$apparmor_parser" -r "$tmp_profile" ||
+        ! sudo install -m 0644 "$tmp_profile" "$profile_file"; then
+        abandon "The sandbox profile was not installed, so OpenLDR was not installed."
       fi
+      say "✓ Installed the AppArmor profile $profile_file"
     fi
   fi
 

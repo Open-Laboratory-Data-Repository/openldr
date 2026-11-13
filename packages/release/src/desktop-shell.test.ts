@@ -1,11 +1,13 @@
 // Tests for install/desktop.sh, the one-line installer for the desktop app on Linux and macOS.
 //
 // Every run uses a clean environment: PATH with the fakes first, a temp HOME, a temp TMPDIR, the
-// four OPENLDR_DESKTOP_* overrides, and no XDG_* variable unless a test sets one to a temp folder.
+// five OPENLDR_DESKTOP_* overrides, and no XDG_* variable unless a test sets one to a temp folder.
 // Passing the real environment through would point --uninstall at the operator's real folders.
 // The fakes on PATH (sudo, apparmor_parser, uname, df, ps, codesign, update-desktop-database) mean
 // no test calls the real sudo or touches /etc/apparmor.d. The fake sudo also refuses any absolute
-// path outside the test's own temp folder.
+// path outside the test's own temp folder. The script looks for apparmor_parser in /usr/sbin and
+// /sbin before PATH, so every run names the fake through OPENLDR_DESKTOP_APPARMOR_PARSER. The fake
+// curl records each call, then runs the real one on the test's file: URLs.
 //
 // Only Linux is proven here. The macOS test runs the script's macOS branch against a fake uname
 // and a fake codesign on Linux: not proven, waits for the operator.
@@ -20,7 +22,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   writeFileSync, readFileSync, mkdtempSync, mkdirSync, rmSync, chmodSync, existsSync, readdirSync,
-  realpathSync, readlinkSync, renameSync, copyFileSync, statSync,
+  realpathSync, readlinkSync, renameSync, copyFileSync, statSync, symlinkSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir, platform } from 'node:os';
@@ -114,12 +116,21 @@ const RECORD = (tool: string) => [
   'for a in "$@"; do printf %s "$a" > "$d/arg.$i"; i=$((i + 1)); done',
 ];
 
-/** The real tar, found before the fakes go first on PATH. */
+/** The real tar and curl, found before the fakes go first on PATH. */
 const REAL_TAR = platform() === 'win32' ? '' : onPath('tar').stdout.trim();
+const REAL_CURL = platform() === 'win32' ? '' : onPath('curl').stdout.trim();
 
 const FAKES: Record<string, string[]> = {
   // Records each call, then runs the real tar, so a test can tell whether anything was unpacked.
   tar: ['#!/bin/sh', ...RECORD('tar'), `exec "${REAL_TAR}" "$@"`],
+  // Records each call, so a test can tell whether the archive was fetched. With ctl/curl-offline it
+  // fails as a dead network would, so an https URL in a test never reaches the network.
+  curl: [
+    '#!/bin/sh',
+    ...RECORD('curl'),
+    'if [ -e "$FAKE_ROOT/ctl/curl-offline" ]; then echo "fake curl: offline" >&2; exit 6; fi',
+    `exec "${REAL_CURL}" "$@"`,
+  ],
   // Records, then refuses anything outside the test's folder, then runs the command as this user.
   sudo: [
     '#!/bin/sh',
@@ -266,6 +277,7 @@ function host(homeName = 'home'): Host {
         OPENLDR_DESKTOP_DOWNLOAD_BASE: pathToFileURL(dirs.base).href,
         OPENLDR_DESKTOP_USERNS_FILE: join(root, 'userns'),
         OPENLDR_DESKTOP_APPARMOR_DIR: dirs.aa,
+        OPENLDR_DESKTOP_APPARMOR_PARSER: join(dirs.bin, 'apparmor_parser'),
         ...opts.env,
       };
       const shell = opts.shell ?? [BASH];
@@ -308,7 +320,11 @@ function twoReleases(homeName?: string): Host {
   return h;
 }
 
-const RUNNING = 'OpenLDR is running. Quit it from its tray icon, then run this again.';
+/** The refusal while OpenLDR runs. It names the installed command, for a person with no tray icon. */
+const running = (h: Host) => `OpenLDR is running. Quit it from its tray icon, or run: "${h.cmd}" stop. Then run this again.`;
+/** Each call that fetched the archive or its SHA256SUMS. */
+const archiveFetches = (r: Result) =>
+  r.calls.filter((c) => c.tool === 'curl' && c.args.some((a) => a.endsWith('.tar.gz') || a.endsWith('/SHA256SUMS')));
 const CHECKSUM = 'The download does not match its checksum. Nothing was installed.';
 const SANDBOX = 'The sandbox profile was not installed, so OpenLDR was not installed.';
 
@@ -484,9 +500,12 @@ describe.skipIf(platform() === 'win32')('install/desktop.sh on Linux', () => {
     h.ctl('status', '0');
     const r = h.run([]);
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain(`✗ ${RUNNING}`);
+    expect(r.stderr).toContain(`✗ ${running(h)}`);
     expect(runBin(h.bin)).toBe('openldr-desktop 0.1.10');
     for (const leftover of ['.new', '.download']) expect(existsSync(h.target + leftover)).toBe(false);
+    // Refused before the download: the archive was never fetched.
+    expect(archiveFetches(r)).toEqual([]);
+    expect(r.calls.filter((c) => c.tool === 'tar')).toEqual([]);
   });
 
   it('refuses an update when a process runs from the app folder, even when status says not running', () => {
@@ -496,8 +515,9 @@ describe.skipIf(platform() === 'win32')('install/desktop.sh on Linux', () => {
     h.ctl('ps', `${h.target}/resources/app/apps/standalone/node_modules/@embedded-postgres/linux-x64/native/bin/postgres -D /x\n`);
     const r = h.run([]);
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain(RUNNING);
+    expect(r.stderr).toContain(running(h));
     expect(runBin(h.bin)).toBe('openldr-desktop 0.1.10');
+    expect(archiveFetches(r)).toEqual([]);
   });
 
   it('does not take a sibling folder such as openldr-desktop-spike for the app', () => {
@@ -566,10 +586,76 @@ describe.skipIf(platform() === 'win32')('install/desktop.sh on Linux', () => {
       expect(r.code, homeName).toBe(1);
       expect(r.stderr).toContain("✗ The home folder's path holds a character the sandbox profile cannot carry. Nothing was installed.");
       expect(r.calls.filter((c) => c.tool === 'sudo')).toEqual([]);
+      // Refused before the download.
+      expect(archiveFetches(r), homeName).toEqual([]);
       for (const p of ['', '.new', '.download']) expect(existsSync(h.target + p), homeName + p).toBe(false);
       expect(existsSync(h.menu)).toBe(false);
       expect(readdirSync(h.aaDir)).toEqual([]);
     }
+  });
+
+  it('names the real path in the profile when ~/.local/share is a link', () => {
+    const h = twoReleases();
+    const elsewhere = join(h.root, 'elsewhere', 'share');
+    mkdirSync(elsewhere, { recursive: true });
+    mkdirSync(join(h.home, '.local'), { recursive: true });
+    symlinkSync(elsewhere, join(h.home, '.local/share'));
+    writeFileSync(join(h.root, 'userns'), '1\n');
+    const r = h.run([]);
+    expect(r.code, r.out).toBe(0);
+    const profile = readFileSync(join(h.aaDir, `openldr-desktop-${UID}`), 'utf8');
+    expect(profile).toContain(`profile openldr-desktop-${UID} "${realpathSync(elsewhere)}/openldr-desktop/openldr-desktop" flags=(unconfined) {`);
+    expect(runBin(join(realpathSync(elsewhere), 'openldr-desktop/openldr-desktop'))).toBe('openldr-desktop 0.1.11');
+  });
+
+  it('names the real path in the profile when ~/.local is a link', () => {
+    const h = twoReleases();
+    const elsewhere = join(h.root, 'elsewhere-local');
+    mkdirSync(elsewhere, { recursive: true });
+    symlinkSync(elsewhere, join(h.home, '.local'));
+    writeFileSync(join(h.root, 'userns'), '1\n');
+    const r = h.run([]);
+    expect(r.code, r.out).toBe(0);
+    const profile = readFileSync(join(h.aaDir, `openldr-desktop-${UID}`), 'utf8');
+    expect(profile).toContain(`"${realpathSync(elsewhere)}/share/openldr-desktop/openldr-desktop"`);
+  });
+
+  const SYSTEM_PARSER = ['/usr/sbin/apparmor_parser', '/sbin/apparmor_parser'].find((p) => existsSync(p));
+  it('takes apparmor_parser from /usr/sbin or /sbin before PATH when no override is set', { skip: SYSTEM_PARSER === undefined }, () => {
+    const h = twoReleases();
+    writeFileSync(join(h.root, 'userns'), '1\n');
+    // The fake sudo refuses a path outside the test's folder, so the system parser is named, never run.
+    const r = h.run([], { env: { OPENLDR_DESKTOP_APPARMOR_PARSER: '' } });
+    expect(r.code).toBe(1);
+    const sudo = r.calls.filter((c) => c.tool === 'sudo');
+    expect(sudo).toHaveLength(1);
+    expect(sudo[0]!.args[0]).toBe(SYSTEM_PARSER);
+    expect(r.stderr).toContain(`✗ ${SANDBOX}`);
+    expect(r.stderr).toContain('fake sudo: refusing');
+  });
+
+  it('asks curl for https only when the URL is https, and leaves a file: URL alone', () => {
+    const h = twoReleases();
+    h.ctl('curl-offline', '1');
+    const r = h.run([], {
+      env: { OPENLDR_DESKTOP_RELEASES_URL: 'https://example.invalid/releases', OPENLDR_DESKTOP_DOWNLOAD_BASE: 'https://example.invalid/dl' },
+    });
+    expect(r.code).toBe(1);
+    const list = r.calls.filter((c) => c.tool === 'curl');
+    expect(list).toHaveLength(1);
+    expect(list[0]!.args.join(' ')).toContain("--proto =https --proto-redir =https");
+    const d = h.run(['--version', '0.1.11'], { env: { OPENLDR_DESKTOP_DOWNLOAD_BASE: 'https://example.invalid/dl' } });
+    expect(d.code).toBe(1);
+    expect(d.stderr).toContain('Could not download https://example.invalid/dl/v0.1.11/');
+    const fetch = d.calls.filter((c) => c.tool === 'curl');
+    expect(fetch).toHaveLength(1);
+    expect(fetch[0]!.args.slice(0, 4)).toEqual(['--proto', '=https', '--proto-redir', '=https']);
+    h.ctl('curl-offline', null);
+    const f = h.run([]);
+    expect(f.code, f.out).toBe(0);
+    const curls = f.calls.filter((c) => c.tool === 'curl');
+    expect(curls.length).toBe(3);
+    for (const c of curls) expect(c.args).not.toContain('--proto');
   });
 
   for (const [sysName, unameS, unameM, sys] of [
@@ -798,7 +884,7 @@ describe.skipIf(platform() === 'win32')('install/desktop.sh on Linux', () => {
     h.ctl('status', '0');
     const r = h.run(['--uninstall']);
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain(RUNNING);
+    expect(r.stderr).toContain(`✗ ${running(h)}`);
     expect(runBin(h.bin)).toBe('openldr-desktop 0.1.11');
   });
 
