@@ -117,6 +117,49 @@ describe('COMMAND_META', () => {
     expect(bad).toEqual([]);
   });
 
+  // Ruling 51: keys the account must hold besides capability.
+  it('names only catalog keys in alsoRequires, none repeated and none equal to the capability', () => {
+    const known = new Set(CAPABILITY_KEYS);
+    const bad: string[] = [];
+    for (const [p, m] of Object.entries(COMMAND_META)) {
+      const also = m.alsoRequires ?? [];
+      if (m.alsoRequires && also.length === 0) bad.push(`${p}: empty alsoRequires`);
+      for (const k of also) if (!known.has(k)) bad.push(`${p}: ${k} not in the catalog`);
+      if (new Set(also).size !== also.length) bad.push(`${p}: a key repeated`);
+      if (m.capability && also.includes(m.capability)) bad.push(`${p}: repeats its capability`);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('gives alsoRequires to no recovery or local command', () => {
+    expect(Object.entries(COMMAND_META).filter(([, m]) => m.kind !== 'app' && m.alsoRequires !== undefined).map(([p]) => p)).toEqual([]);
+  });
+
+  it('facilities add-type needs both keys its route needs (facilities-routes.ts:2078)', () => {
+    const m = COMMAND_META['facilities add-type']!;
+    expect([m.capability, ...(m.alsoRequires ?? [])].sort()).toEqual(['facilities.manage', 'terminology.manage']);
+  });
+
+  it('lists exactly the commands that need a second key', () => {
+    const withSecond = Object.entries(COMMAND_META).filter(([, m]) => m.alsoRequires).map(([p, m]) => `${p}: ${m.capability} + ${m.alsoRequires!.join(', ')}`);
+    expect(withSecond.sort()).toEqual([
+      'facilities add-type: terminology.manage + facilities.manage',
+      'facilities jobs: facilities.manage + facilities.view',
+      'patients duplicates list: patients.view_identifiers + patients.view',
+      'patients list: patients.view_identifiers + patients.view',
+      'patients show: patients.view_identifiers + patients.view',
+      'report run: reports.export + reports.run',
+      'test-catalog map match: terminology.manage + terminology.view',
+      'test-catalog params: terminology.manage + terminology.view',
+    ]);
+  });
+
+  it('keeps alsoRequires frozen', () => {
+    const also = COMMAND_META['facilities add-type']!.alsoRequires as string[];
+    expect(Array.isArray(also)).toBe(true);
+    expect(() => { also.push('x'); }).toThrow(TypeError);
+  });
+
   it('command-meta imports nothing from bootstrap, config or a command file', () => {
     const source = readFileSync(join(SRC, 'command-meta.ts'), 'utf8');
     const lines = source.split('\n').filter((l) => /^\s*(import\b|export\b[^=]*\bfrom\b)|\brequire\(|\bimport\(/.test(l));
@@ -376,6 +419,11 @@ const LOCAL_FORCE_ONLY: Record<string, string> = {
   'artifact keygen': '--force writes over a key file in --out on the caller\'s own disk; nothing stored in OpenLDR changes',
 };
 
+// Destructive by what the code does, with no --force and no destructive word in the name.
+const DESTRUCTIVE_BY_READING: Record<string, string> = {
+  'sync import': 'a pull bundle reconciles whole terminology systems, and a delete record empties one (packages/bootstrap/src/sync-bundle.ts:280, :317)',
+};
+
 describe('destructive', () => {
   it('marks destructive every command that has a --force option', () => {
     const missing = leaves().filter(({ cmd, path }) => optsOf(cmd).some((o) => o.long === '--force') && !COMMAND_META[path]?.destructive && !LOCAL_FORCE_ONLY[path]);
@@ -387,6 +435,10 @@ describe('destructive', () => {
       expect(COMMAND_META[path]?.kind, path).toBe('local');
       expect(COMMAND_META[path]?.destructive, path).toBeUndefined();
     }
+  });
+
+  it('marks destructive the commands read as destructive although no option or word says so', () => {
+    for (const path of Object.keys(DESTRUCTIVE_BY_READING)) expect(COMMAND_META[path]?.destructive, path).toBe(true);
   });
 
   it('marks no local command destructive: a local command writes only the caller\'s own files', () => {

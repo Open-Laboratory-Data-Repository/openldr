@@ -23,6 +23,8 @@
 // as a file in apps/server/src and a line. A command that can read or write by option takes the
 // write key, because the check runs before the options matter. Where no route does the same thing,
 // the comment says why the key was chosen. Recovery and local commands have none.
+//
+// alsoRequires: further keys the account must hold, where one key is not enough (see CommandMeta).
 
 export type CommandKind = 'app' | 'recovery' | 'local';
 export type PathKind = 'input-file' | 'input-dir' | 'output-file' | 'output-dir';
@@ -57,6 +59,10 @@ export interface PathMark {
 export interface CommandMeta {
   readonly kind: CommandKind;
   readonly capability?: string;
+  /** Keys the account must hold besides `capability`. The server requires all of them before it
+   *  starts the command (Ruling 51). Set only where the command needs two keys and neither implies
+   *  the other: its route needs both, or it does what two routes with different keys do. */
+  readonly alsoRequires?: readonly string[];
   readonly destructive?: boolean;
   readonly paths?: readonly PathMark[];
   /** True means this call runs on the caller's own machine, although the command is not local. */
@@ -118,6 +124,7 @@ function freezeTable(entries: Record<string, CommandMeta>): Readonly<Record<stri
   for (const [path, meta] of Object.entries(entries)) {
     for (const mark of meta.paths ?? []) Object.freeze(mark);
     if (meta.paths) Object.freeze(meta.paths);
+    if (meta.alsoRequires) Object.freeze(meta.alsoRequires);
     table[path] = Object.freeze(meta);
   }
   return Object.freeze(table);
@@ -190,9 +197,9 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'export': { kind: 'app', capability: 'data.export', paths: [outDir('--out')] },
 
   // facilities-routes.ts:41 (view) and :42 (manage). IMPORT (:61) and UPLOAD (:149) are manage.
-  // Adds to a register's own facility-type list. The route (:2077) needs facilities.manage AND
-  // terminology.manage; the table holds one key, so this takes the vocabulary write's key.
-  'facilities add-type': { kind: 'app', capability: 'terminology.manage' },
+  // Adds to a register's own facility-type list. The route (:2077-2078) needs facilities.manage AND
+  // terminology.manage.
+  'facilities add-type': { kind: 'app', capability: 'terminology.manage', alsoRequires: ['facilities.manage'] },
   'facilities conflicts': { kind: 'app', capability: 'facilities.manage' }, // :1144
   'facilities delete': { kind: 'app', capability: 'facilities.manage', destructive: true }, // :1769
   // --apply can retire rows the register declares removed or leaves out.
@@ -202,7 +209,8 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'facilities import-run-revalidate': { kind: 'app', capability: 'facilities.manage', paths: [inFile('--column-map')] }, // :3013
   'facilities import-runs': { kind: 'app', capability: 'facilities.view' }, // :2790
   'facilities import-sources': { kind: 'app', capability: 'facilities.view' }, // :1926
-  'facilities jobs': { kind: 'app', capability: 'facilities.manage' }, // :1160 reads; --retry is :1195
+  // Always reads the health (:1160, view); --retry is :1195 (manage).
+  'facilities jobs': { kind: 'app', capability: 'facilities.manage', alsoRequires: ['facilities.view'] },
   'facilities link-matching': { kind: 'app', capability: 'facilities.manage' }, // :1088
   'facilities list': { kind: 'app', capability: 'facilities.view' }, // :907
   'facilities publish': { kind: 'app', capability: 'facilities.manage' }, // :1063
@@ -249,15 +257,18 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'market update': { kind: 'app', capability: 'marketplace.manage', destructive: true, paths: [inDir('dir')] }, // :193
 
   // patient-routes.ts:11-13. The routes unmask only for patients.view_identifiers (:15). The CLI
-  // unmasks on --identifiers, so a command with that option takes patients.view_identifiers.
+  // unmasks on --identifiers, and the server checks the key before the options are known to matter,
+  // so list, show and duplicates list take the key their strongest option needs (Ruling 52). This
+  // fails closed: a plain, masked call needs more than its route does. They also need patients.view,
+  // which the route itself requires (:11).
   'patients duplicates dismiss': { kind: 'app', capability: 'patients.manage', destructive: true }, // :55
   'patients duplicates export': { kind: 'app', capability: 'patients.view_identifiers', paths: [outFile('--out')] }, // :47
-  'patients duplicates list': { kind: 'app', capability: 'patients.view_identifiers' }, // :37
+  'patients duplicates list': { kind: 'app', capability: 'patients.view_identifiers', alsoRequires: ['patients.view'] }, // :37
   'patients duplicates restore': { kind: 'app', capability: 'patients.manage' }, // :55
   'patients identifier-systems list': { kind: 'app', capability: 'patients.view' }, // :77
   'patients identifier-systems set': { kind: 'app', capability: 'patients.manage' }, // :84
-  'patients list': { kind: 'app', capability: 'patients.view_identifiers' }, // :26
-  'patients show': { kind: 'app', capability: 'patients.view_identifiers' }, // :97
+  'patients list': { kind: 'app', capability: 'patients.view_identifiers', alsoRequires: ['patients.view'] }, // :26
+  'patients show': { kind: 'app', capability: 'patients.view_identifiers', alsoRequires: ['patients.view'] }, // :97
 
   // The pipeline's batches and queue. Reading them is what the activity feed shows
   // (activity-routes.ts:6, :9, :16). retry writes clinical records again, so it takes ingest.run.
@@ -291,12 +302,12 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'queue status': { kind: 'app', capability: 'activity.view' },
 
   // reports-routes.ts:45-48. run prints JSON, CSV or PDF. CSV and PDF are reports.export (:54, :74),
-  // JSON alone is reports.run (:197); the stronger is used.
+  // JSON is reports.run (:197). Neither key implies the other, so run needs both.
   'report glass-export': { kind: 'app', capability: 'reports.export', paths: [outFile('--out')] }, // :65
   'report list': { kind: 'app', capability: 'reports.view' }, // :51
   // With --format pdf and no --out it writes <id>.pdf in the working folder, which the app removes.
   'report run': {
-    kind: 'app', capability: 'reports.export', paths: [outFile('--out')],
+    kind: 'app', capability: 'reports.export', alsoRequires: ['reports.run'], paths: [outFile('--out')],
     refuse: (_args, opts) => (opts.format === 'pdf' && !hasOut(opts) ? 'Through the app, report run --format pdf needs --out <file>.' : null),
   },
 
@@ -349,7 +360,9 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
     kind: 'app', capability: 'sync.manage', paths: [outFile('--out')],
     refuse: (_args, opts) => (hasOut(opts) ? null : 'Through the app, sync export needs --out <file>.'),
   },
-  'sync import': { kind: 'app', capability: 'sync.manage', paths: [inFile('file')] },
+  // A pull bundle reconciles whole terminology systems, and a delete record empties one
+  // (packages/bootstrap/src/sync-bundle.ts:280, :317).
+  'sync import': { kind: 'app', capability: 'sync.manage', destructive: true, paths: [inFile('file')] },
   'sync list': { kind: 'app', capability: 'sync.manage' }, // :332
   // Re-points the duplicate's history at the survivor. There is no unmerge.
   'sync merge-patient': { kind: 'app', capability: 'sync.manage', destructive: true }, // :270
@@ -398,12 +411,13 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'test-catalog map export': { kind: 'app', capability: 'terminology.view', paths: [outFile('--out')] }, // mapping :93
   'test-catalog map import': { kind: 'app', capability: 'terminology.manage', destructive: true, paths: [inFile('file')] }, // mapping :104, :115
   'test-catalog map list': { kind: 'app', capability: 'terminology.view' }, // mapping :49
-  'test-catalog map match': { kind: 'app', capability: 'terminology.manage', destructive: true }, // mapping :147
+  // Lists the matches (mapping :139, view) and with --apply writes them (mapping :147, manage).
+  'test-catalog map match': { kind: 'app', capability: 'terminology.manage', alsoRequires: ['terminology.view'], destructive: true },
   'test-catalog map rebuild': { kind: 'app', capability: 'terminology.manage' }, // mapping :161
   // Replaces a code's mapping.
   'test-catalog map set': { kind: 'app', capability: 'terminology.manage', destructive: true }, // mapping :65
-  // --set replaces the test's result parameters.
-  'test-catalog params': { kind: 'app', capability: 'terminology.manage', destructive: true, paths: [inFile('--set')] }, // catalog :155
+  // Lists a test's result parameters (catalog :132, view); --set replaces them (catalog :155, manage).
+  'test-catalog params': { kind: 'app', capability: 'terminology.manage', alsoRequires: ['terminology.view'], destructive: true, paths: [inFile('--set')] },
   'test-catalog restore': { kind: 'app', capability: 'terminology.manage' }, // catalog :202
   'test-catalog result-fields export': { kind: 'app', capability: 'terminology.view', paths: [outFile('--out')] }, // fields :53
   'test-catalog result-fields import': { kind: 'app', capability: 'terminology.manage', destructive: true, paths: [inFile('file')] }, // fields :61, :69

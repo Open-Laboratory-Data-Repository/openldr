@@ -62,6 +62,7 @@ describe('listCommands', () => {
       options: [{ flags: '--force', description: 'confirm any program using the key loses access' }],
       kind: 'app',
       capability: 'users.manage',
+      alsoRequires: [],
       destructive: true,
     });
     const hide = listCommands(buildProgram()).find((r) => r.path === 'data-exposure hide');
@@ -73,6 +74,7 @@ describe('listCommands', () => {
   it('prints the capability from the command table, and null for a recovery or local command', () => {
     for (const r of listCommands(buildProgram())) {
       expect(r.capability, r.path).toBe(r.kind === 'app' ? COMMAND_META[r.path]!.capability : null);
+      expect(r.alsoRequires, r.path).toEqual(COMMAND_META[r.path]!.alsoRequires ?? []);
     }
   });
 });
@@ -95,7 +97,15 @@ describe('openldr commands', () => {
     expect(rows).toEqual(listCommands(buildProgram()));
     expect(rows.map((r) => r.path)).toContain('commands');
     for (const secret of ['s3cr3t-db-pass', 'secret-key-value-123', 'oldr_not-a-real-key-body']) expect(stdout).not.toContain(secret);
-    expect(Object.keys(rows[0]!).sort()).toEqual(['arguments', 'capability', 'description', 'destructive', 'kind', 'options', 'path']);
+    expect(Object.keys(rows[0]!).sort()).toEqual(['alsoRequires', 'arguments', 'capability', 'description', 'destructive', 'kind', 'options', 'path']);
+  });
+
+  it('prints every key a command needs in the JSON row', async () => {
+    const rows = JSON.parse((await runCommands(['--json'])).stdout) as CommandEntry[];
+    const addType = rows.find((r) => r.path === 'facilities add-type')!;
+    expect([addType.capability, ...addType.alsoRequires].sort()).toEqual(['facilities.manage', 'terminology.manage']);
+    expect(rows.find((r) => r.path === 'user key revoke')?.alsoRequires).toEqual([]);
+    expect(rows.find((r) => r.path === 'db migrate')?.alsoRequires).toEqual([]);
   });
 
   it('prints one line per command for a person', async () => {

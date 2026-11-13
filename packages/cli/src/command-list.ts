@@ -28,7 +28,10 @@ export interface CommandEntry {
   path: string; description: string;
   arguments: { name: string; required: boolean; variadic: boolean }[];
   options: { flags: string; description: string }[];
-  kind: CommandKind; capability: string | null; destructive: boolean;
+  kind: CommandKind; capability: string | null;
+  /** Keys needed besides capability; empty for most rows. */
+  alsoRequires: string[];
+  destructive: boolean;
 }
 
 /** One row per command, sorted by path. Throws for a command with no COMMAND_META entry. */
@@ -45,6 +48,7 @@ export function listCommands(program: Command): CommandEntry[] {
         options: cmd.options.map((o) => ({ flags: o.flags, description: o.description })),
         kind: meta.kind,
         capability: meta.capability ?? null,
+        alsoRequires: [...(meta.alsoRequires ?? [])],
         destructive: meta.destructive ?? false,
       };
     })
