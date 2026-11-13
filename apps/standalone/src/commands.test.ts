@@ -28,6 +28,7 @@ import {
   type LauncherDeps,
 } from './commands.js';
 import { newControlToken, requestStop, startControl, type ControlServer } from './control.js';
+import { newerDataMessage } from './data-version.js';
 import type { LauncherEvent } from './events.js';
 import { postgresUrls, type PostgresSettings } from './postgres.js';
 import { acquireLock, isLockLive, pathsFor, readLock, type StandalonePaths } from './state.js';
@@ -690,6 +691,74 @@ describe('runStart events', () => {
       expect(text).not.toContain(secret);
     }
   });
+});
+
+describe('runStart and the version that last used the data folder', () => {
+  it('refuses a folder a newer version used, before it reads the state file or starts Postgres', async () => {
+    // No state file, so a start that went past the check would create one.
+    await rm(paths.stateFile);
+    await writeFile(paths.versionFile, '{"version":"9.9.9"}\n');
+    const f = fakes();
+    expect(f.deps.appVersion).toBe('0.1.11');
+    await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toMatchObject({
+      message: newerDataMessage('9.9.9', f.deps.appVersion),
+    });
+    expect(f.pg.started).toBe(false);
+    expect(f.order).toEqual([]);
+    await expect(readFile(paths.stateFile, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readLock(paths)).toBeNull();
+    expect(await readFile(paths.versionFile, 'utf8')).toBe('{"version":"9.9.9"}\n');
+  });
+
+  it('records its version after a start that worked', async () => {
+    const f = fakes();
+    await start(f.deps);
+    expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+  });
+
+  it('replaces an older recorded version after a start that worked', async () => {
+    await writeFile(paths.versionFile, '{"version":"0.1.9"}\n');
+    const f = fakes();
+    await start(f.deps);
+    expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+  });
+
+  const failures: Array<{ how: string; arrange: (f: Fakes) => Promise<number> }> = [
+    {
+      how: 'at the port check',
+      arrange: async () => {
+        await hold(HELD);
+        return HELD;
+      },
+    },
+    {
+      how: 'when the server throws',
+      arrange: async (f) => {
+        f.deps.startServer = async () => {
+          throw new Error('boom');
+        };
+        return PORT;
+      },
+    },
+  ];
+  for (const { how, arrange } of failures) {
+    it(`a start that fails ${how} records nothing on a folder with no record`, async () => {
+      const f = fakes();
+      const port = await arrange(f);
+      await expect(runStart({ dataDir: root, port, host: '127.0.0.1' }, f.deps)).rejects.toThrow();
+      await expect(readFile(paths.versionFile, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+      await expectNothingLeft(f);
+    });
+
+    it(`a start that fails ${how} leaves an older record as it was`, async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.9"}\n');
+      const f = fakes();
+      const port = await arrange(f);
+      await expect(runStart({ dataDir: root, port, host: '127.0.0.1' }, f.deps)).rejects.toThrow();
+      expect(await readFile(paths.versionFile, 'utf8')).toBe('{"version":"0.1.9"}\n');
+      await expectNothingLeft(f);
+    });
+  }
 });
 
 describe('runStart undoes what it started when a step fails', () => {

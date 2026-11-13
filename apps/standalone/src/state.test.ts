@@ -117,6 +117,7 @@ describe('folders and state file', () => {
       work: '/d/work',
       stateFile: '/d/standalone.json',
       lockFile: '/d/standalone.lock',
+      versionFile: '/d/last-version.json',
       serverLog: '/d/logs/server.log',
       postgresLog: '/d/logs/postgres.log',
     });

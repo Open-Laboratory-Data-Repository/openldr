@@ -19,6 +19,8 @@ export interface StandalonePaths {
   work: string;
   stateFile: string;
   lockFile: string;
+  /** The version of OpenLDR that last started this folder (data-version.ts). */
+  versionFile: string;
   serverLog: string;
   postgresLog: string;
 }
@@ -123,6 +125,7 @@ export function pathsFor(root: string): StandalonePaths {
     work: join(root, 'work'),
     stateFile: join(root, 'standalone.json'),
     lockFile: join(root, 'standalone.lock'),
+    versionFile: join(root, 'last-version.json'),
     serverLog: join(logs, 'server.log'),
     postgresLog: join(logs, 'postgres.log'),
   };

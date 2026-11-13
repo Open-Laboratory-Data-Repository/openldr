@@ -16,6 +16,7 @@ import { loadConfig, type Config } from '@openldr/config';
 import { createLogger, makeCrashHandler, type Logger } from '@openldr/core';
 import type { RunningServer } from '@openldr/server/start';
 import { newControlToken, requestStop, startControl } from './control.js';
+import { checkDataVersion, recordDataVersion } from './data-version.js';
 import { buildEnvironment } from './environment.js';
 import type { LauncherEvent } from './events.js';
 import {
@@ -493,6 +494,10 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       throw err;
     }
 
+    // A folder a newer version used is refused before anything of it is read. Under the lock, so
+    // two launchers cannot race on the version file.
+    await checkDataVersion(paths, deps.appVersion);
+
     // 4. The state file.
     const state = await loadOrCreateState(paths, () => findFreePort(PREFERRED_PG_PORT));
     secrets.push(state.secretsKey, state.pgSuperPassword, state.pgAppPassword);
@@ -596,6 +601,8 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       if (errorCode(err) === 'EADDRINUSE') throw new Error(portTakenMessage(opts.port));
       throw err;
     }
+    // Only a start that worked marks the folder with this version.
+    await recordDataVersion(paths, deps.appVersion);
 
     // 11. The setup code goes to the terminal only, never to a log. With events on, a program runs
     //     this launcher and asks for a code itself, so none is made here.
