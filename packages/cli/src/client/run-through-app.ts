@@ -1,0 +1,831 @@
+// Sends one command to the running app and plays its answer back (spec section 6.5).
+//
+// This file decides what leaves the caller's machine and what the server may write on it:
+// - Path values the caller typed are replaced by placeholders, by their position on the line. The
+//   rewritten line is parsed again and compared with the first parse before anything is sent.
+// - Only the files and folders the command's path marks name are uploaded.
+// - The server is not trusted with paths: an output goes only to the place the caller named.
+// - Each output file is written under a temporary name beside its target and renamed when complete.
+//
+// HTTP goes through node:http and node:https, not fetch. A refusal can arrive while the upload is
+// still going, and the client must read it and stop sending. node:http hands over the answer as
+// soon as it arrives, and never follows a redirect, so a key can never be carried to another host.
+
+import { randomBytes } from 'node:crypto';
+import { createReadStream, readFileSync, statSync } from 'node:fs';
+import { mkdir, open, readdir, realpath, rename, stat, unlink, type FileHandle } from 'node:fs/promises';
+import { request as httpRequest, type ClientRequest, type IncomingMessage, type RequestOptions } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { basename, dirname, join, resolve, sep } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
+import type { Command, Option } from 'commander';
+import type { CommandMeta, PathKind, PathMark } from '../command-meta';
+import { runningVersion } from '../update';
+import { decodeFrames, encodeFrame, MAX_DATA_BYTES, PATH_PLACEHOLDER, type ClientFrame, type ServerFrame } from '../wire';
+import type { Credential } from './credentials';
+
+/** Printed when the line cannot be rewritten safely. Nothing has been sent. */
+export const NOT_PREPARED = 'This command line could not be prepared for the app. Nothing was sent.';
+
+/** A refusal before any request. The message is printed as one line, and the exit code is 1. */
+class Refusal extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'Refusal';
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// The words after the command path
+// ---------------------------------------------------------------------------------------------
+
+const maybeOption = (arg: string): boolean => arg.length > 1 && arg[0] === '-';
+/** commander's own Option.is(), which its typings leave out. */
+const isFlag = (o: Option, arg: string): boolean => o.short === arg || o.long === arg;
+
+/**
+ * The caller's words after the command path, with the root options and their values taken out,
+ * wherever they were typed. This follows commander's own reading of the root (parseOptions in
+ * commander 12): a root option is taken anywhere before `--`. Null when the line does not start
+ * with the command's words once root options are out, or when a root option has a short flag.
+ */
+export function wordsAfterPath(root: Command, path: string, userArgs: readonly string[]): string[] | null {
+  if (root.options.some((o) => o.short)) return null;
+  const rest: string[] = [];
+  for (let i = 0; i < userArgs.length; i += 1) {
+    const arg = userArgs[i]!;
+    if (arg === '--') {
+      rest.push(...userArgs.slice(i));
+      break;
+    }
+    if (maybeOption(arg)) {
+      const exact = root.options.find((o) => isFlag(o, arg));
+      if (exact) {
+        if (exact.required) i += 1;
+        else if (exact.optional && i + 1 < userArgs.length && !maybeOption(userArgs[i + 1]!)) i += 1;
+        continue;
+      }
+      if (/^--[^=]+=/.test(arg)) {
+        const withValue = root.options.find((o) => isFlag(o, arg.slice(0, arg.indexOf('='))));
+        if (withValue && (withValue.required || withValue.optional)) continue;
+      }
+    }
+    rest.push(arg);
+  }
+  const words = path.split(' ');
+  if (rest.length < words.length || words.some((w, i) => rest[i] !== w)) return null;
+  return rest.slice(words.length);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Which word holds which value
+// ---------------------------------------------------------------------------------------------
+
+/** A word, or the part of a word from `at` on, that holds an option's value. */
+interface ValueAt { option: Option; token: number; form: 'whole' | 'eq' | 'glued'; at: number }
+interface Scan { positional: number[]; values: ValueAt[]; terminator: number | null }
+
+/**
+ * Reads the words as the leaf command's parseOptions does (commander 12), and says which word holds
+ * each positional argument and each option value. Null on anything commander would have refused,
+ * which cannot happen after a parse that reached the action, or on a form this does not follow.
+ */
+function scanLeaf(cmd: Command, tokens: readonly string[]): Scan | null {
+  const find = (arg: string) => cmd.options.find((o) => isFlag(o, arg));
+  const positional: number[] = [];
+  const values: ValueAt[] = [];
+  // `skip`: the item's text is '-' + tokens[token].slice(skip). A whole word has skip 1.
+  const queue = tokens.map((text, token) => ({ text, token, skip: 1, whole: true }));
+  let active: Option | null = null;
+  while (queue.length > 0) {
+    const item = queue.shift()!;
+    const arg = item.text;
+    if (item.whole && arg === '--') {
+      for (const rest of queue) positional.push(rest.token);
+      return { positional, values, terminator: item.token };
+    }
+    if (active && !maybeOption(arg)) {
+      if (!item.whole) return null;
+      values.push({ option: active, token: item.token, form: 'whole', at: 0 });
+      continue;
+    }
+    active = null;
+    if (maybeOption(arg)) {
+      const option = find(arg);
+      if (option) {
+        const next = queue[0];
+        if (option.required || (option.optional && next !== undefined && !maybeOption(next.text))) {
+          const value = queue.shift();
+          if (!value || !value.whole) return null;
+          values.push({ option, token: value.token, form: 'whole', at: 0 });
+        }
+        active = option.variadic ? option : null;
+        continue;
+      }
+    }
+    if (arg.length > 2 && arg[0] === '-' && arg[1] !== '-') {
+      const option = find(`-${arg[1]}`);
+      if (option) {
+        // commander's combineFlagAndOptionalValue is on by default and this program never turns it off.
+        if (option.required || option.optional) {
+          values.push({ option, token: item.token, form: 'glued', at: item.skip + 1 });
+        } else {
+          queue.unshift({ text: `-${arg.slice(2)}`, token: item.token, skip: item.skip + 1, whole: false });
+        }
+        continue;
+      }
+    }
+    if (/^--[^=]+=/.test(arg)) {
+      const eq = arg.indexOf('=');
+      const option = find(arg.slice(0, eq));
+      if (option && (option.required || option.optional)) {
+        values.push({ option, token: item.token, form: 'eq', at: eq + item.skip });
+        continue;
+      }
+    }
+    // An unknown option would have stopped commander before the action.
+    if (maybeOption(arg) || !item.whole) return null;
+    positional.push(item.token);
+  }
+  return { positional, values, terminator: null };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The plan: the rewritten line, and what goes up and comes down
+// ---------------------------------------------------------------------------------------------
+
+interface Upload { ref: string; kind: 'input-file' | 'input-dir'; typed: string; keep: boolean; mark: PathMark }
+interface Download { ref: string; kind: 'output-file' | 'output-dir'; typed: string }
+interface Plan {
+  argv: string[];
+  inputs: Upload[];
+  outputs: Download[];
+  expectedArgs: string[];
+  expectedOpts: Record<string, unknown>;
+}
+
+/** 16 characters from the ref alphabet, so real output cannot hold a placeholder by chance. */
+const newRef = (): string => randomBytes(12).toString('base64url');
+
+/** A placeholder in place of the caller's path, or '' kept as it is where the mark allows it. */
+function placeholderFor(value: string, mark: PathMark, kind: PathKind, label: string, plan: Plan): string | null {
+  if (value === '') {
+    if (mark.allowEmpty) return null;
+    throw new Refusal(`${label} needs a file or folder name.`);
+  }
+  const ref = newRef();
+  if (kind === 'input-file' || kind === 'input-dir') plan.inputs.push({ ref, kind, typed: value, keep: mark.keep === true, mark });
+  else plan.outputs.push({ ref, kind, typed: value });
+  return `${PATH_PLACEHOLDER}${ref}`;
+}
+
+function planCall(input: {
+  path: string; tokens: readonly string[]; meta: CommandMeta; command: Command;
+  parsedArgs: readonly string[]; parsedOpts: Record<string, unknown>;
+}): Plan {
+  const { command: cmd, tokens, meta, parsedArgs, parsedOpts } = input;
+  const notPrepared = () => new Refusal(NOT_PREPARED);
+  const scan = scanLeaf(cmd, tokens);
+  if (!scan || !isDeepStrictEqual(scan.positional.map((i) => tokens[i]), [...parsedArgs])) throw notPrepared();
+
+  const plan: Plan = { argv: [], inputs: [], outputs: [], expectedArgs: [...parsedArgs], expectedOpts: { ...parsedOpts } };
+  /** Word index -> the words that replace it. */
+  const replace = new Map<number, string[]>();
+  const appended: string[] = [];
+  const rewrite = (v: ValueAt, ph: string) => {
+    const word = tokens[v.token]!;
+    if (v.form === 'whole') replace.set(v.token, [ph]);
+    else if (v.form === 'eq') replace.set(v.token, [word.slice(0, v.at) + ph]);
+    // The server replaces only a whole word or `--flag=`, so a glued short value is split in two.
+    else replace.set(v.token, [word.slice(0, v.at), ph]);
+  };
+  const strings = (raw: unknown): string[] => {
+    const list = Array.isArray(raw) ? raw : [raw];
+    if (!list.every((s): s is string => typeof s === 'string')) throw notPrepared();
+    return list;
+  };
+
+  for (const mark of meta.paths ?? []) {
+    const kind = typeof mark.kind === 'function' ? mark.kind([...parsedArgs], parsedOpts) : mark.kind;
+    if (mark.target.startsWith('-')) {
+      const option = cmd.options.find((o) => o.long === mark.target);
+      if (!option) throw notPrepared();
+      const key = option.attributeName();
+      const raw = parsedOpts[key];
+      if (raw === undefined) continue;
+      const list = strings(raw);
+      const found = scan.values.filter((v) => v.option === option);
+      const valueOf = (v: ValueAt) => tokens[v.token]!.slice(v.at);
+      if (cmd.getOptionValueSource(key) === 'cli') {
+        if (option.variadic) {
+          if (found.length !== list.length || found.some((v, n) => valueOf(v) !== list[n])) throw notPrepared();
+          plan.expectedOpts[key] = list.map((value, n) => {
+            const ph = placeholderFor(value, mark, kind, mark.target, plan);
+            if (ph === null) return value;
+            rewrite(found[n]!, ph);
+            return ph;
+          });
+        } else {
+          const last = found[found.length - 1];
+          if (!last || list.length !== 1 || valueOf(last) !== list[0]) throw notPrepared();
+          const ph = placeholderFor(list[0]!, mark, kind, mark.target, plan);
+          if (ph === null) continue;
+          // Every earlier occurrence gets the same placeholder: commander keeps the last, and the
+          // caller's other path strings need not leave the machine.
+          for (const v of found) rewrite(v, ph);
+          plan.expectedOpts[key] = ph;
+        }
+      } else {
+        // From a default or the environment: still a path the command uses. Sent explicitly.
+        const phs = list.map((value) => {
+          const ph = placeholderFor(value, mark, kind, mark.target, plan);
+          appended.push(`${option.long}=${ph ?? value}`);
+          return ph ?? value;
+        });
+        plan.expectedOpts[key] = option.variadic ? phs : phs[0];
+      }
+    } else {
+      const index = cmd.registeredArguments.findIndex((a) => a.name() === mark.target);
+      if (index < 0) throw notPrepared();
+      const arg = cmd.registeredArguments[index]!;
+      const raw: unknown = cmd.processedArgs[index];
+      // An absent variadic argument is an empty list in commander, not undefined.
+      if (raw === undefined || (Array.isArray(raw) && raw.length === 0)) continue;
+      const at = arg.variadic ? scan.positional.slice(index) : scan.positional.slice(index, index + 1);
+      // A positional that came from its default has no word to replace.
+      if (at.length === 0) throw notPrepared();
+      at.forEach((token, n) => {
+        const ph = placeholderFor(tokens[token]!, mark, kind, `<${mark.target}>`, plan);
+        if (ph === null) return;
+        replace.set(token, [ph]);
+        plan.expectedArgs[index + n] = ph;
+      });
+    }
+  }
+
+  // The server takes at most one ref per path mark. A variadic path mark could give more.
+  if (plan.inputs.length + plan.outputs.length > (meta.paths?.length ?? 0)) {
+    throw new Refusal('This command names more files than the app takes in one call. Run it once for each file.');
+  }
+
+  const words: string[] = input.path.split(' ');
+  tokens.forEach((word, i) => {
+    if (i === scan.terminator) words.push(...appended);
+    words.push(...(replace.get(i) ?? [word]));
+  });
+  if (scan.terminator === null) words.push(...appended);
+  plan.argv = words;
+  return plan;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The files to upload, checked before any request
+// ---------------------------------------------------------------------------------------------
+
+interface Send { ref: string; rel: string; abs: string; typed: string }
+
+/** One part of a name the server accepts: not empty, not `.` or `..`, no `/`, `\` or control character. */
+const isPart = (v: string): boolean => v !== '' && v !== '.' && v !== '..' && !/[/\\\x00-\x1f\x7f]/.test(v);
+const hasControl = (v: string): boolean => /[\x00-\x1f\x7f]/.test(v);
+
+/** A regular file's text, or undefined. Never opens anything else, so a FIFO cannot block it. */
+function readText(path: string): string | undefined {
+  try {
+    if (!statSync(path).isFile()) return undefined;
+    return readFileSync(path, 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+async function statOrRefuse(typed: string) {
+  try {
+    return await stat(typed);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT' || (err as NodeJS.ErrnoException).code === 'ENOTDIR') throw new Refusal(`Cannot find ${typed}.`);
+    throw new Refusal(`Cannot read ${typed}.`);
+  }
+}
+
+/**
+ * Regular files under a folder, sorted by name. A link to a file is followed. A link to a folder
+ * is followed, but no real folder is walked twice. Anything else is skipped. An empty folder sends
+ * nothing.
+ */
+async function walkFolder(root: string, typed: string, ref: string): Promise<Send[]> {
+  const files: Send[] = [];
+  const seen = new Set<string>();
+  const visit = async (abs: string, rel: string): Promise<void> => {
+    let entries;
+    try {
+      const real = await realpath(abs);
+      if (seen.has(real)) return;
+      seen.add(real);
+      entries = await readdir(abs, { withFileTypes: true });
+    } catch {
+      throw new Refusal(`Cannot read ${join(typed, rel)}.`);
+    }
+    entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const e of entries) {
+      const childAbs = join(abs, e.name);
+      const childRel = rel === '' ? e.name : `${rel}/${e.name}`;
+      let kind: 'file' | 'dir' | null = e.isFile() ? 'file' : e.isDirectory() ? 'dir' : null;
+      if (e.isSymbolicLink()) {
+        const st = await stat(childAbs).catch(() => null);
+        kind = st?.isFile() ? 'file' : st?.isDirectory() ? 'dir' : null;
+      }
+      if (kind === null) continue;
+      if (!isPart(e.name)) throw new Refusal(`Cannot send ${join(typed, childRel)}: its name holds a character the app does not accept.`);
+      if (kind === 'file') files.push({ ref, rel: childRel, abs: childAbs, typed: join(typed, childRel) });
+      else await visit(childAbs, childRel);
+    }
+  };
+  await visit(root, '');
+  return files;
+}
+
+/** Checks every input and lists the files to send. Throws Refusal naming the path. */
+async function prepareUploads(plan: Plan, opts: Record<string, unknown>): Promise<{ sends: Send[]; names: Map<string, string> }> {
+  const sends: Send[] = [];
+  const names = new Map<string, string>();
+  for (const input of plan.inputs) {
+    const st = await statOrRefuse(input.typed);
+    const name = basename(resolve(input.typed));
+    if (!isPart(name)) {
+      throw new Refusal(hasControl(name) ? `Cannot send ${input.typed}: its name holds a control character.` : `Cannot send ${input.typed}: it has no name the app accepts.`);
+    }
+    names.set(input.ref, name);
+    if (input.kind === 'input-file') {
+      if (!st.isFile()) throw new Refusal(`${input.typed} is not a file.`);
+      sends.push({ ref: input.ref, rel: '', abs: input.typed, typed: input.typed });
+      const beside = dirname(input.typed);
+      const companions = input.mark.companions?.({
+        opts,
+        readSelf: () => readText(input.typed),
+        readSibling: (n) => (isPart(n) ? readText(join(beside, n)) : undefined),
+      }) ?? [];
+      const done = new Set<string>([name]);
+      for (const c of companions) {
+        if (!isPart(c) || done.has(c)) continue;
+        done.add(c);
+        const abs = join(beside, c);
+        // A companion that is missing is not sent, and the command then fails as it does today.
+        if (readText(abs) === undefined) continue;
+        sends.push({ ref: input.ref, rel: c, abs, typed: abs });
+      }
+    } else {
+      if (!st.isDirectory()) throw new Refusal(`${input.typed} is not a folder.`);
+      sends.push(...(await walkFolder(input.typed, input.typed, input.ref)));
+    }
+  }
+  return { sends, names };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Turning placeholders in the output back into what the caller typed
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Replaces each placeholder with the caller's own text in a byte stream. A placeholder can be cut
+ * across two frames, so the tail of a chunk that could start one is held back for the next.
+ */
+export function createUnmasker(pairs: ReadonlyArray<readonly [placeholder: string, typed: string]>) {
+  const list = pairs.map(([ph, typed]) => ({ ph: Buffer.from(ph), typed: Buffer.from(typed) }));
+  const maxLen = list.reduce((m, p) => Math.max(m, p.ph.length), 0);
+  let held = Buffer.alloc(0);
+  const startsOne = (tail: Buffer) => list.some((p) => p.ph.length > tail.length && p.ph.subarray(0, tail.length).equals(tail));
+  return {
+    push(chunk: Buffer): Buffer {
+      const buf = held.length > 0 ? Buffer.concat([held, chunk]) : chunk;
+      const out: Buffer[] = [];
+      let i = 0;
+      for (;;) {
+        let at = -1;
+        let match: (typeof list)[number] | undefined;
+        for (const p of list) {
+          const found = buf.indexOf(p.ph, i);
+          if (found >= 0 && (at < 0 || found < at)) { at = found; match = p; }
+        }
+        if (!match) break;
+        out.push(buf.subarray(i, at), match.typed);
+        i = at + match.ph.length;
+      }
+      let keep = buf.length;
+      for (let q = Math.max(i, buf.length - maxLen + 1); q < buf.length; q += 1) {
+        if (startsOne(buf.subarray(q))) { keep = q; break; }
+      }
+      out.push(buf.subarray(i, keep));
+      held = Buffer.from(buf.subarray(keep));
+      return Buffer.concat(out);
+    },
+    flush(): Buffer {
+      const rest = held;
+      held = Buffer.alloc(0);
+      return rest;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The request
+// ---------------------------------------------------------------------------------------------
+
+/** The address with this path under it. Any query or fragment on the address is dropped. */
+function endpoint(base: string, path: string): URL {
+  const u = new URL(base);
+  if (!u.pathname.endsWith('/')) u.pathname += '/';
+  u.search = '';
+  u.hash = '';
+  return new URL(path, u);
+}
+
+/** The address for a message: origin and path, never a query. assertSafeUrl refused any user name. */
+function shown(base: string): string {
+  const u = new URL(base);
+  return `${u.origin}${u.pathname === '/' ? '' : u.pathname.replace(/\/$/, '')}`;
+}
+
+function sendRequest(target: URL, options: RequestOptions): ClientRequest {
+  // agent: false gives each request its own connection. node:http never follows a redirect.
+  const opts: RequestOptions = { ...options, agent: false };
+  return target.protocol === 'https:' ? httpsRequest(target, opts) : httpRequest(target, opts);
+}
+
+/** Text from the server, safe for a terminal: no control characters, at most 500 characters. */
+const clean = (s: string): string => s.replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 500);
+
+/** Writes and waits while the stream is full. Never waits on a stream that has gone. */
+async function writeTo(stream: NodeJS.WritableStream, data: Buffer | string): Promise<void> {
+  if (data.length === 0) return;
+  if (stream.write(data)) return;
+  await new Promise<void>((done) => {
+    const finish = () => {
+      stream.off('drain', finish);
+      stream.off('close', finish);
+      stream.off('error', finish);
+      done();
+    };
+    stream.on('drain', finish);
+    stream.on('close', finish);
+    stream.on('error', finish);
+  });
+}
+
+/** Strict base64 of at most MAX_DATA_BYTES, as the server sends it. */
+const MAX_DATA_TEXT = Math.ceil(MAX_DATA_BYTES / 3) * 4;
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+const RUN_ID = /^[A-Za-z0-9_-]{1,128}$/;
+
+class ProtocolError extends Error {}
+class NotAllowedError extends Error {}
+class NotAskedError extends Error {}
+class LocalWriteError extends Error {}
+
+function bytesOf(d: unknown): Buffer {
+  if (typeof d !== 'string' || d.length > MAX_DATA_TEXT || d.length % 4 !== 0 || !BASE64.test(d)) throw new ProtocolError();
+  const buf = Buffer.from(d, 'base64');
+  if (buf.length > MAX_DATA_BYTES) throw new ProtocolError();
+  return buf;
+}
+
+/** The first 64 KiB of a refusal's body as JSON, or null. */
+async function readRefusal(res: IncomingMessage): Promise<Record<string, unknown> | null> {
+  const parts: Buffer[] = [];
+  let total = 0;
+  try {
+    for await (const chunk of res) {
+      total += (chunk as Buffer).length;
+      if (total > 64 * 1024) break;
+      parts.push(chunk as Buffer);
+    }
+    const body = JSON.parse(Buffer.concat(parts).toString('utf8')) as unknown;
+    return typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function refusalMessage(status: number, body: Record<string, unknown> | null): string {
+  if (status >= 300 && status < 400) return 'OpenLDR answered with a redirect, which this client does not follow. Check the address.';
+  if (status === 401) return 'Sign in first: openldr login, or set OPENLDR_KEY.';
+  if (status === 403 && typeof body?.capability === 'string') return `This account lacks the capability ${clean(body.capability)}.`;
+  if (status === 503 && body?.error === 'busy') return 'OpenLDR is running other commands. Try again shortly.';
+  if (typeof body?.error === 'string' && body.error.trim() !== '') return clean(body.error);
+  return `OpenLDR answered with status ${status}.`;
+}
+
+const UNREACHABLE = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT', 'ECONNRESET']);
+
+/** An output file being written under its temporary name. */
+interface Opened { handle: FileHandle; temp: string; target: string; shown: string }
+
+export interface ThroughAppInput {
+  /** The command's path, such as 'user key create'. */
+  path: string;
+  /** The caller's words after the command path, root options taken out. */
+  tokens: string[];
+  meta: CommandMeta;
+  /** The leaf command that was parsed: its options and arguments say which word is which. */
+  command: Command;
+  parsedArgs: string[];
+  parsedOpts: Record<string, unknown>;
+  /** Parses a whole line (command path first) without running anything. Null when it does not parse. */
+  reparse: (argv: string[]) => Promise<{ args: string[]; opts: Record<string, unknown> } | null>;
+  url: string;
+  credential: Credential;
+  out: NodeJS.WritableStream;
+  err: NodeJS.WritableStream;
+  signals: NodeJS.EventEmitter;
+}
+
+/** Sends the command, plays the answer back, and returns the exit code. */
+export async function runThroughApp(input: ThroughAppInput): Promise<number> {
+  const fail = async (message: string): Promise<number> => {
+    await writeTo(input.err, `${message.split('\n')[0]}\n`);
+    return 1;
+  };
+
+  let plan: Plan;
+  let prepared: { sends: Send[]; names: Map<string, string> };
+  try {
+    plan = planCall(input);
+    // Check the work before sending: the rewritten line must parse the same, path values aside.
+    const again = await input.reparse(plan.argv).catch(() => null);
+    if (!again || !isDeepStrictEqual(again.args, plan.expectedArgs) || !isDeepStrictEqual(again.opts, plan.expectedOpts)) {
+      return await fail(NOT_PREPARED);
+    }
+    prepared = await prepareUploads(plan, input.parsedOpts);
+  } catch (err) {
+    if (err instanceof Refusal) return fail(err.message);
+    throw err;
+  }
+
+  const start: ClientFrame = {
+    t: 'start',
+    version: runningVersion(),
+    path: input.path,
+    argv: plan.argv,
+    inputs: plan.inputs.map((i) => ({ ref: i.ref, kind: i.kind, name: prepared.names.get(i.ref)!, keep: i.keep })),
+    outputs: plan.outputs.map((o) => ({ ref: o.ref, kind: o.kind })),
+  };
+  return exchange(input, plan, start, prepared.sends, fail);
+}
+
+class ReadFailure extends Error {
+  constructor(readonly typed: string) {
+    super('read failed');
+  }
+}
+
+/** The body: start, each file, go. Never an empty line, never an empty data frame. */
+async function* bodyOf(start: ClientFrame, sends: Send[]): AsyncGenerator<string> {
+  yield encodeFrame(start);
+  for (const s of sends) {
+    yield encodeFrame({ t: 'file', ref: s.ref, rel: s.rel });
+    try {
+      // highWaterMark bounds every chunk at 64 KiB, so one chunk is one data frame.
+      for await (const chunk of createReadStream(s.abs, { highWaterMark: MAX_DATA_BYTES })) {
+        const buf = chunk as Buffer;
+        if (buf.length > 0) yield encodeFrame({ t: 'data', d: buf.toString('base64') });
+      }
+    } catch {
+      throw new ReadFailure(s.typed);
+    }
+    yield encodeFrame({ t: 'end' });
+  }
+  yield encodeFrame({ t: 'go' });
+}
+
+async function exchange(
+  input: ThroughAppInput, plan: Plan, start: ClientFrame, sends: Send[], fail: (m: string) => Promise<number>,
+): Promise<number> {
+  const { url, credential, out, err, signals } = input;
+  const auth: Record<string, string> = credential.authorization ? { authorization: credential.authorization } : {};
+  const req = sendRequest(endpoint(url, 'api/cli/run'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-ndjson', accept: 'application/x-ndjson', ...auth },
+  });
+  req.on('error', () => {}); // every error is read from the promises below
+  const stopUpload = new AbortController();
+  let res: IncomingMessage | null = null;
+  let runId: string | null = null;
+  let interrupts = 0;
+  let forced: number | null = null;
+
+  const interrupt = (id: string) => {
+    const r = sendRequest(endpoint(url, `api/cli/runs/${encodeURIComponent(id)}/interrupt`), { method: 'POST', headers: { ...auth } });
+    r.on('response', (answer) => {
+      answer.resume();
+      if (answer.statusCode !== 204 && answer.statusCode !== 200) void writeTo(err, 'The interrupt could not be sent to OpenLDR.\n');
+    });
+    r.on('error', () => { void writeTo(err, 'The interrupt could not be sent to OpenLDR.\n'); });
+    r.end();
+  };
+  const onSigint = () => {
+    interrupts += 1;
+    // Before `run`, a closed connection is the interrupt. A second Ctrl+C ends the client.
+    if (runId === null || interrupts > 1) {
+      forced = 130;
+      stopUpload.abort();
+      req.destroy();
+      res?.destroy();
+      return;
+    }
+    interrupt(runId);
+  };
+  signals.on('SIGINT', onSigint);
+
+  const answered = new Promise<IncomingMessage>((resolveAnswer, rejectAnswer) => {
+    req.once('response', resolveAnswer);
+    req.once('error', rejectAnswer);
+    req.once('close', () => rejectAnswer(new Error('closed')));
+  });
+  answered.catch(() => {});
+
+  const waitDrain = () => new Promise<void>((done) => {
+    if (req.destroyed || stopUpload.signal.aborted) { done(); return; }
+    const finish = () => {
+      req.off('drain', finish);
+      req.off('close', finish);
+      stopUpload.signal.removeEventListener('abort', finish);
+      done();
+    };
+    req.on('drain', finish);
+    req.on('close', finish);
+    stopUpload.signal.addEventListener('abort', finish);
+  });
+  /** Resolves with the path that could not be read, or null. */
+  const upload = (async (): Promise<string | null> => {
+    try {
+      for await (const piece of bodyOf(start, sends)) {
+        if (stopUpload.signal.aborted || req.destroyed) return null;
+        if (!req.write(piece)) await waitDrain();
+      }
+      // The server reads nothing after go.
+      if (!stopUpload.signal.aborted && !req.destroyed) req.end();
+      return null;
+    } catch (e) {
+      if (e instanceof ReadFailure) {
+        req.destroy();
+        return e.typed;
+      }
+      return null;
+    }
+  })();
+
+  try {
+    try {
+      res = await answered;
+    } catch (e) {
+      stopUpload.abort();
+      const unread = await upload;
+      if (forced !== null) return forced;
+      if (unread !== null) return await fail(`Cannot read ${unread}.`);
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code && UNREACHABLE.has(code)) return await fail(`Cannot reach OpenLDR at ${shown(url)}. Is it running?`);
+      if (code) return await fail(`Cannot reach OpenLDR at ${shown(url)}: ${code}.`);
+      return await fail('The connection to OpenLDR was lost.');
+    }
+
+    if (res.statusCode !== 200) {
+      // A refusal can come while the upload is still going. Stop sending and read it.
+      stopUpload.abort();
+      const status = res.statusCode ?? 0;
+      const body = status >= 300 && status < 400 ? null : await readRefusal(res);
+      if (forced !== null) return forced;
+      return await fail(refusalMessage(status, body));
+    }
+    return await readAnswer(res);
+  } finally {
+    signals.off('SIGINT', onSigint);
+    stopUpload.abort();
+    req.destroy();
+    res?.destroy();
+  }
+
+  async function readAnswer(answer: IncomingMessage): Promise<number> {
+    const declared = new Map(plan.outputs.map((o) => [o.ref, o] as const));
+    const pairs = [...plan.inputs, ...plan.outputs].map((p) => [`${PATH_PLACEHOLDER}${p.ref}`, p.typed] as const);
+    const outMask = createUnmasker(pairs);
+    const errMask = createUnmasker(pairs);
+    const written = new Set<string>();
+    let opened: Opened | null = null;
+    let exit: number | null = null;
+    let sawError = false;
+    let problem: string | null = null;
+
+    const discard = async () => {
+      const o = opened;
+      opened = null;
+      if (!o) return;
+      await o.handle.close().catch(() => {});
+      await unlink(o.temp).catch(() => {});
+    };
+
+    const openOutput = async (ref: unknown, rel: unknown): Promise<Opened> => {
+      const target = typeof ref === 'string' ? declared.get(ref) : undefined;
+      if (!target) throw new NotAskedError();
+      if (typeof rel !== 'string') throw new ProtocolError();
+      let path: string;
+      let root: string | null = null;
+      if (target.kind === 'output-file') {
+        if (rel !== '') throw new NotAllowedError();
+        path = resolve(target.typed);
+      } else {
+        const parts = rel.split('/');
+        if (rel === '' || !parts.every(isPart)) throw new NotAllowedError();
+        root = resolve(target.typed);
+        path = join(root, ...parts);
+        if (!path.startsWith(root + sep)) throw new NotAllowedError();
+      }
+      const key = `${target.ref}\0${rel}`;
+      if (written.has(key)) throw new NotAllowedError();
+      written.add(key);
+      const shownPath = target.kind === 'output-file' ? target.typed : join(target.typed, rel);
+      try {
+        await mkdir(dirname(path), { recursive: true });
+      } catch {
+        throw new LocalWriteError(shownPath);
+      }
+      if (root !== null) {
+        // A link inside the caller's folder must not lead the write somewhere else.
+        const realRoot = await realpath(root).catch(() => null);
+        const realParent = await realpath(dirname(path)).catch(() => null);
+        if (!realRoot || !realParent || (realParent !== realRoot && !realParent.startsWith(realRoot + sep))) throw new NotAllowedError();
+      }
+      const temp = join(dirname(path), `.${basename(path)}.${randomBytes(6).toString('hex')}.part`);
+      try {
+        return { handle: await open(temp, 'wx'), temp, target: path, shown: shownPath };
+      } catch {
+        throw new LocalWriteError(shownPath);
+      }
+    };
+
+    try {
+      let first = true;
+      for await (const f of decodeFrames<ServerFrame>(answer)) {
+        if (first) {
+          if (f.t !== 'run' || typeof f.id !== 'string' || !RUN_ID.test(f.id)) throw new ProtocolError();
+          runId = f.id;
+          first = false;
+          continue;
+        }
+        if (f.t === 'out') await writeTo(out, outMask.push(bytesOf(f.d)));
+        else if (f.t === 'err') await writeTo(err, errMask.push(bytesOf(f.d)));
+        else if (f.t === 'error') {
+          // A failure on the server, perhaps part way through an output file: that file is dropped.
+          sawError = true;
+          await discard();
+          await writeTo(err, errMask.flush());
+          await writeTo(err, `OpenLDR: ${clean(typeof f.message === 'string' ? f.message : 'the command failed on the server.')}\n`);
+        } else if (f.t === 'file') {
+          if (opened) throw new ProtocolError();
+          opened = await openOutput(f.ref, f.rel);
+        } else if (f.t === 'data') {
+          const o = opened as Opened | null;
+          if (!o) throw new ProtocolError();
+          const buf = bytesOf(f.d);
+          try {
+            for (let at = 0; at < buf.length;) at += (await o.handle.write(buf, at, buf.length - at)).bytesWritten;
+          } catch {
+            throw new LocalWriteError(o.shown);
+          }
+        } else if (f.t === 'end') {
+          const o = opened as Opened | null;
+          if (!o) throw new ProtocolError();
+          try {
+            await o.handle.close();
+            await rename(o.temp, o.target);
+          } catch {
+            throw new LocalWriteError(o.shown);
+          }
+          opened = null;
+        } else if (f.t === 'exit') {
+          exit = Number.isInteger(f.code) && f.code >= 0 && f.code <= 255 ? f.code : 1;
+          break;
+        } else {
+          throw new ProtocolError();
+        }
+      }
+    } catch (e) {
+      if (e instanceof NotAllowedError) problem = 'OpenLDR sent a file name that is not allowed.';
+      else if (e instanceof NotAskedError) problem = 'OpenLDR sent a file this command did not ask for.';
+      else if (e instanceof LocalWriteError) problem = `Cannot write ${e.message}.`;
+      else if (e instanceof ProtocolError || (e as Error | null)?.name === 'FrameError') problem = 'OpenLDR sent an answer this client cannot read.';
+      // Anything else is the connection going; the checks below say so.
+    } finally {
+      await discard();
+    }
+
+    await writeTo(out, outMask.flush());
+    await writeTo(err, errMask.flush());
+    if (forced !== null) return forced;
+    if (problem !== null) return fail(problem);
+    if (exit === null) {
+      if (sawError) return 1;
+      return fail('The connection to OpenLDR was lost.');
+    }
+    // An output that failed on the server leaves the caller without a file it asked for.
+    return sawError ? 1 : exit;
+  }
+}

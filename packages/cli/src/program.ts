@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, type ParseOptions } from 'commander';
 import { loadConfig } from '@openldr/config';
 import { createAppContext } from '@openldr/bootstrap';
 import { exitCodeFor, formatHealthTable } from './format';
@@ -60,7 +60,10 @@ import {
 import { runQueryExport, runQueryImport } from './query';
 import { setActorOverride } from './cli-actor';
 import { guardServed } from './served';
-import { runCommandsList } from './command-list';
+import { commandPath, runCommandsList } from './command-list';
+import { COMMAND_META } from './command-meta';
+import { assertSafeUrl, CredentialError, findCredential, PlainHttpError, serverUrl } from './client/credentials';
+import { NOT_PREPARED, runThroughApp, wordsAfterPath } from './client/run-through-app';
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
 //  - index.ts needs no is-main-module guard. It builds the tree and parses either the real
@@ -1458,6 +1461,124 @@ export function buildProgram(): Command {
   // when the server did not start this process.
   program.hook('preAction', (_root, actionCommand) => guardServed(program, actionCommand));
   program.hook('preAction', () => setActorOverride(program.opts().actor as string | undefined));
+
+  return program;
+}
+
+/** Thrown by the client program after a command was sent through the app. process.exitCode holds
+ *  the result. The entry catches it; it is not a failure. */
+export class SentThroughApp extends Error {
+  constructor() {
+    super('The command was sent through the app.');
+    this.name = 'SentThroughApp';
+  }
+}
+
+export interface ClientIo {
+  out: NodeJS.WritableStream;
+  err: NodeJS.WritableStream;
+  signals: NodeJS.EventEmitter;
+  env: NodeJS.ProcessEnv;
+}
+
+/** The caller's words after the program name, as commander picks them (the 'node' and 'user' forms
+ *  only). Null for any other form. */
+function userArgsOf(argv: readonly string[] | undefined, parseOptions: ParseOptions | undefined): string[] | null {
+  const from = parseOptions?.from;
+  if (from === 'user') return argv ? [...argv] : null;
+  if (from !== undefined && from !== 'node') return null;
+  if (argv) return argv.slice(2);
+  if (process.versions.electron || process.execArgv.some((a) => ['-e', '--eval', '-p', '--print'].includes(a))) return null;
+  return process.argv.slice(2);
+}
+
+/** Parses a whole line with a fresh program, runs no action and prints nothing. Null when commander
+ *  refuses the line. */
+async function parseWithoutRunning(path: string, argv: string[]): Promise<{ args: string[]; opts: Record<string, unknown> } | null> {
+  const fresh = buildProgram();
+  let leaf: Command | undefined;
+  const quiet = (c: Command): void => {
+    c.exitOverride();
+    c.configureOutput({ writeOut: () => {}, writeErr: () => {}, outputError: () => {} });
+    if (c.parent && c.commands.length === 0 && commandPath(c) === path) leaf = c;
+    c.commands.forEach(quiet);
+  };
+  quiet(fresh);
+  const found = leaf;
+  if (!found) return null;
+  let got: { args: string[]; opts: Record<string, unknown> } | null = null;
+  found.action(() => { got = { args: [...found.args], opts: { ...found.opts() } }; });
+  try {
+    await fresh.parseAsync(argv, { from: 'user' });
+  } catch {
+    return null;
+  }
+  return got;
+}
+
+/**
+ * The program the `openldr` entry runs outside served mode. It is buildProgram() plus the root
+ * option --server-url, and, when OPENLDR_THROUGH_APP is '1', a preAction hook that sends each `app`
+ * command through the running app instead of running it here. `local` and `recovery` commands,
+ * and an `app` command whose table entry says this call is local, run here as before.
+ *
+ * Call parseAsync with the 'node' argv form (index.ts) or { from: 'user' }. The words sent are taken
+ * from the argv that was parsed, not read again from process.argv.
+ */
+export function buildClientProgram(io: Partial<ClientIo> = {}): Command {
+  const out = io.out ?? process.stdout;
+  const err = io.err ?? process.stderr;
+  const signals = io.signals ?? process;
+  const env = io.env ?? process.env;
+  const program = buildProgram();
+  program.option('--server-url <address>', 'the OpenLDR server to send commands to (default: OPENLDR_URL, then http://127.0.0.1:3000)');
+
+  // Keeps the words commander parses, so the hook can send exactly those.
+  let userArgs: string[] | null = null;
+  const parseAsync = program.parseAsync.bind(program);
+  program.parseAsync = ((argv?: readonly string[], parseOptions?: ParseOptions) => {
+    userArgs = userArgsOf(argv, parseOptions);
+    return parseAsync(argv, parseOptions);
+  }) as Command['parseAsync'];
+
+  const send = async (cmd: Command, path: string): Promise<number> => {
+    const fail = (message: string): number => { err.write(`${message}\n`); return 1; };
+    const meta = COMMAND_META[path]!;
+    const args = [...cmd.args];
+    const opts = { ...cmd.opts() };
+    const why = meta.refuse?.(args, opts) ?? null;
+    if (why) return fail(why);
+    if (program.getOptionValueSource('actor') === 'cli') {
+      return fail('--actor cannot be used through the app. The signed-in account is recorded.');
+    }
+    const tokens = userArgs ? wordsAfterPath(program, path, userArgs) : null;
+    if (!tokens) return fail(NOT_PREPARED);
+    let url: string;
+    let credential;
+    try {
+      url = serverUrl({ url: program.opts().serverUrl as string | undefined, env });
+      assertSafeUrl(url, env);
+      credential = await findCredential(env, url);
+    } catch (e) {
+      if (e instanceof PlainHttpError || e instanceof CredentialError) return fail(e.message);
+      throw e;
+    }
+    return runThroughApp({
+      path, tokens, meta, command: cmd, parsedArgs: args, parsedOpts: opts,
+      reparse: (argv) => parseWithoutRunning(path, argv),
+      url, credential, out, err, signals,
+    });
+  };
+
+  program.hook('preAction', async (_root, cmd) => {
+    if (env.OPENLDR_THROUGH_APP !== '1') return;
+    const path = commandPath(cmd);
+    const meta = Object.hasOwn(COMMAND_META, path) ? COMMAND_META[path] : undefined;
+    if (!meta || meta.kind !== 'app') return;
+    if (meta.localWhen?.([...cmd.args], cmd.opts())) return;
+    process.exitCode = await send(cmd, path);
+    throw new SentThroughApp();
+  });
 
   return program;
 }
