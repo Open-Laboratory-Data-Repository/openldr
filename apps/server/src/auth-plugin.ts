@@ -136,7 +136,7 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
         // error code (such as 57P01) is safe and enough to start looking.
         const code = (e as { code?: unknown } | null)?.code;
         ctx.logger.error({ code: typeof code === 'string' ? code : undefined }, 'access key sign-in failed');
-        recordAuthFailed(req, 'sync-failed', null);
+        recordAuthFailed(req, 'access-key-lookup-failed', null);
         reply.code(401);
         return reply.send({ error: 'authentication failed' });
       }

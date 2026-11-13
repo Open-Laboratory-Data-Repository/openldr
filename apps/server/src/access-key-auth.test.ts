@@ -151,6 +151,21 @@ describe('signing in with an access key', () => {
     expect((await f.app.inject({ method: 'GET', url: '/api/me' })).json()).toMatchObject({ username: 'dev-admin' });
   });
 
+  it('answers 401 when the key lookup fails, audits why, and logs only the error code', async () => {
+    const f = await setup();
+    const { key } = await f.makeKey();
+    const error = vi.fn();
+    f.ctx.logger.error = error as never;
+    vi.spyOn(f.accessKeys, 'findUsableByHash').mockRejectedValueOnce(Object.assign(new Error(`lookup of ${hashAccessKey(key)} failed`), { code: '57P01' }));
+    const res = await me(f, key);
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: 'authentication failed' });
+    expect(error).toHaveBeenCalledWith({ code: '57P01' }, 'access key sign-in failed');
+    const failed = await f.audit.list({ action: 'auth.failed' });
+    expect(failed.map((r) => r.entityId)).toEqual(['access-key-lookup-failed']);
+    expect(JSON.stringify(failed)).not.toContain(hashAccessKey(key));
+  });
+
   it('does not give a key request a session ID', async () => {
     const f = await setup();
     // Added before the first request, which readies the app.

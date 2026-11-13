@@ -11,6 +11,7 @@ export interface AuditDetails {
   entityId: string;
   before?: unknown;
   after?: unknown;
+  /** `metadata.origin` is a reserved name: the store overwrites it with the actor's `origin`. */
   metadata?: Record<string, unknown>;
 }
 

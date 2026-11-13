@@ -2,7 +2,7 @@
 // pg-mem with the real key, role, user and audit stores. These tests pin the wire shape. Not real
 // Postgres: the duplicate-hash path below uses a store that throws, not a real constraint error.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { bearer, keyFixture, TOKENS } from './access-key.test-support';
+import { bearer, DIRECTORY, keyFixture, TOKENS } from './access-key.test-support';
 
 type Fixture = Awaited<ReturnType<typeof keyFixture>>;
 let open: Fixture[] = [];
@@ -129,5 +129,96 @@ describe('/api/users/:id/keys', () => {
     const logged = JSON.stringify(error.mock.calls);
     expect(logged).not.toContain('abc123');
     expect(logged).not.toContain('duplicate key');
+  });
+
+  it('tells caches not to keep the create answer', async () => {
+    const f = await setup();
+    const res = await f.app.inject({ method: 'POST', url: '/api/users/bot-id/keys', headers: bearer(TOKENS.admin), payload: { name: 'x' } });
+    expect(res.statusCode).toBe(201);
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
+});
+
+// With identity admin (Keycloak with admin credentials here), Studio lists users from the
+// directory and sends the provider's id, which the local row keeps as `subject`.
+describe('/api/users/:id/keys with identity admin', () => {
+  const keysUrl = (id: string) => `/api/users/${id}/keys`;
+
+  it("lists, creates and revokes by the provider id that Studio sends", async () => {
+    const f = await setup({ identityAdmin: true });
+    const made = await f.app.inject({ method: 'POST', url: keysUrl('bot-sub'), headers: bearer(TOKENS.admin), payload: { name: 'backup job' } });
+    expect(made.statusCode).toBe(201);
+    const { record } = made.json();
+    expect(record.userId).toBe('bot-id');
+    const list = await f.app.inject({ method: 'GET', url: keysUrl('bot-sub'), headers: bearer(TOKENS.admin) });
+    expect(list.json()).toEqual({ keys: [record] });
+    const del = await f.app.inject({ method: 'DELETE', url: `${keysUrl('bot-sub')}/${record.id}`, headers: bearer(TOKENS.admin) });
+    expect(del.statusCode).toBe(204);
+    expect((await f.accessKeys.listForUser('bot-id'))[0].revokedAt).not.toBeNull();
+    // The local id is not a provider id, so it is not found in this mode.
+    expect((await f.app.inject({ method: 'GET', url: keysUrl('bot-id'), headers: bearer(TOKENS.admin) })).statusCode).toBe(404);
+  });
+
+  it('gives a directory account that never signed in an empty list, a 404 on revoke, and no local row', async () => {
+    const f = await setup({ identityAdmin: true });
+    const list = await f.app.inject({ method: 'GET', url: keysUrl('ai-sub'), headers: bearer(TOKENS.admin) });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toEqual({ keys: [] });
+    const del = await f.app.inject({ method: 'DELETE', url: `${keysUrl('ai-sub')}/some-key`, headers: bearer(TOKENS.admin) });
+    expect(del.statusCode).toBe(404);
+    expect(del.json()).toEqual({ error: 'not found' });
+    expect(await f.users.getBySubject('ai-sub')).toBeUndefined();
+  });
+
+  it('makes the local row on create for a directory account with none, and the key signs in with its capabilities', async () => {
+    const f = await setup({ identityAdmin: true });
+    // The AI account's limited role, given in Studio before it ever signed in.
+    await f.roles.assignRole('ai-sub', f.viewers.id);
+    const made = await f.app.inject({ method: 'POST', url: keysUrl('ai-sub'), headers: bearer(TOKENS.admin), payload: { name: 'assistant' } });
+    expect(made.statusCode).toBe(201);
+    const { key, record } = made.json();
+    const local = await f.users.getBySubject('ai-sub');
+    expect(local).toMatchObject({ id: record.userId, subject: 'ai-sub', username: DIRECTORY['ai-sub'].username, status: 'active', lastLoginAt: null });
+
+    const me = await f.app.inject({ method: 'GET', url: '/api/me', headers: bearer(key) });
+    expect(me.statusCode).toBe(200);
+    expect(me.json()).toMatchObject({ id: record.userId, username: 'ai', capabilities: ['users.view'] });
+    // A second create finds the row it made and does not make another.
+    expect((await f.app.inject({ method: 'POST', url: keysUrl('ai-sub'), headers: bearer(TOKENS.admin), payload: { name: 'second' } })).json().record.userId).toBe(record.userId);
+    expect((await f.users.list()).filter((u) => u.subject === 'ai-sub')).toHaveLength(1);
+  });
+
+  it('copies a disabled directory account as disabled, so its key is refused', async () => {
+    const f = await setup({ identityAdmin: true });
+    const made = await f.app.inject({ method: 'POST', url: keysUrl('off-sub'), headers: bearer(TOKENS.admin), payload: { name: 'x' } });
+    expect(made.statusCode).toBe(201);
+    expect(await f.users.getBySubject('off-sub')).toMatchObject({ status: 'disabled' });
+    const me = await f.app.inject({ method: 'GET', url: '/api/me', headers: bearer(made.json().key) });
+    expect(me.statusCode).toBe(403);
+  });
+
+  it('answers 404 on all three routes for an id the directory does not know', async () => {
+    const f = await setup({ identityAdmin: true });
+    for (const call of [
+      { method: 'GET' as const, url: keysUrl('nobody') },
+      { method: 'POST' as const, url: keysUrl('nobody'), payload: { name: 'x' } },
+      { method: 'DELETE' as const, url: `${keysUrl('nobody')}/k1` },
+    ]) {
+      const res = await f.app.inject({ ...call, headers: bearer(TOKENS.admin) });
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toEqual({ error: 'not found' });
+    }
+    expect(await f.users.getBySubject('nobody')).toBeUndefined();
+  });
+
+  // Local sign-in is identity admin too (packages/config/src/auth.ts). Its directory id is the
+  // local id, and a local row's subject is its id (packages/db/src/local-auth-store.ts).
+  it('finds a local sign-in account by its id, which is also its subject', async () => {
+    const f = await setup({ adapter: 'local' });
+    await f.db.insertInto('users').values({ id: 'loc-id', subject: 'loc-id', username: 'loc', roles: JSON.stringify([]) as never, rbac_initialized: true }).execute();
+    const made = await f.app.inject({ method: 'POST', url: keysUrl('loc-id'), headers: bearer(TOKENS.admin), payload: { name: 'x' } });
+    expect(made.statusCode).toBe(201);
+    expect(made.json().record.userId).toBe('loc-id');
+    expect((await f.app.inject({ method: 'GET', url: keysUrl('loc-id'), headers: bearer(TOKENS.admin) })).json().keys).toHaveLength(1);
   });
 });

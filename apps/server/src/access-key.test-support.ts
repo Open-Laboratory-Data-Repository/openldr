@@ -21,9 +21,19 @@ const CLAIMS: Record<string, { sub: string; preferred_username: string }> = {
 
 export const bearer = (value: string) => ({ authorization: `Bearer ${value}` });
 
-export async function keyFixture(opts: { devBypass?: boolean; logger?: Logger; adapter?: string } = {}) {
+/** The fake directory's accounts, keyed by provider id. `ai-sub` has no local row: it never signed in. */
+export const DIRECTORY: Record<string, { id: string; username: string; enabled: boolean }> = {
+  'admin-sub': { id: 'admin-sub', username: 'admin', enabled: true },
+  'viewer-sub': { id: 'viewer-sub', username: 'viewer', enabled: true },
+  'bot-sub': { id: 'bot-sub', username: 'bot', enabled: true },
+  'ai-sub': { id: 'ai-sub', username: 'ai', enabled: true },
+  'off-sub': { id: 'off-sub', username: 'off', enabled: false },
+};
+
+export async function keyFixture(opts: { devBypass?: boolean; logger?: Logger; adapter?: string; identityAdmin?: boolean } = {}) {
   const db = await makeMigratedDb();
-  const users = createUserStore(db);
+  // pg-mem has no advisory lock, so the subject lock runs the work directly.
+  const users = createUserStore(db, { withSubjectLock: async (_subject, work) => work(db) });
   const roles = createRoleStore(db);
   const accessKeys = createAccessKeyStore(db);
   const audit = createAuditStore(db);
@@ -47,13 +57,19 @@ export async function keyFixture(opts: { devBypass?: boolean; logger?: Logger; a
   await roles.assignRole('bot-sub', managers.id);
 
   const base = ctxWith('up');
+  // Identity admin on: Keycloak with admin credentials, and a directory that knows DIRECTORY.
+  // Off: ctxWith's directory, which answers "not configured".
+  const directory = opts.identityAdmin
+    ? { ...((base.auth as { directory: object }).directory), get: vi.fn(async (id: string) => DIRECTORY[id] ?? null) }
+    : (base.auth as { directory: object }).directory;
+  const adminCfg = opts.identityAdmin ? { KEYCLOAK_ADMIN_CLIENT_ID: 'fixture', KEYCLOAK_ADMIN_CLIENT_SECRET: 'fixture' } : {};
   const ctx = {
     ...base,
     logger: opts.logger ?? createLogger({ level: 'silent' }),
     internalDb: db as never,
     users, roles, accessKeys, audit,
-    auth: { ...(base.auth as object), verifyToken },
-    cfg: { ...(base.cfg as object), AUTH_DEV_BYPASS: opts.devBypass ?? false, AUTH_ADAPTER: opts.adapter ?? 'keycloak' },
+    auth: { ...(base.auth as object), verifyToken, directory },
+    cfg: { ...(base.cfg as object), AUTH_DEV_BYPASS: opts.devBypass ?? false, AUTH_ADAPTER: opts.adapter ?? 'keycloak', ...adminCfg },
   } as unknown as AppContext;
   const app = await buildApp(ctx);
 
@@ -65,5 +81,5 @@ export async function keyFixture(opts: { devBypass?: boolean; logger?: Logger; a
   };
   const allAuditRows = () => db.selectFrom('audit_events').selectAll().execute();
 
-  return { app, ctx, db, users, roles, accessKeys, audit, verifyToken, managers, makeKey, allAuditRows, close: () => app.close() };
+  return { app, ctx, db, users, roles, accessKeys, audit, verifyToken, managers, viewers, makeKey, allAuditRows, close: () => app.close() };
 }

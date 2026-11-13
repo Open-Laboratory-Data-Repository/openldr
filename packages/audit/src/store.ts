@@ -27,7 +27,8 @@ function rowMetadata(e: AuditEventInput): Record<string, unknown> | null {
   return { ...(e.metadata ?? {}), origin: e.origin };
 }
 
-export interface AuditEvent extends AuditEventInput {
+// A read row has no `origin` field. The store wrote it into `metadata.origin`.
+export interface AuditEvent extends Omit<AuditEventInput, 'origin'> {
   id: string;
   occurredAt: string;
 }

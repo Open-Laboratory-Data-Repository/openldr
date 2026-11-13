@@ -4,7 +4,9 @@ export type AuthFailReason =
   // Local sign-in: a wrong username or password, and a locked account.
   | 'bad-credentials' | 'locked'
   // An access key that is unknown, revoked, expired, sent in the URL, or whose user row is gone.
-  | 'invalid-access-key';
+  | 'invalid-access-key'
+  // The key, its account or its roles could not be read, for example with the database down.
+  | 'access-key-lookup-failed';
 
 /** Derive a stable reason from a jose (or other) verification error. Never inspects the token. */
 export function reasonFromError(e: unknown): AuthFailReason {
