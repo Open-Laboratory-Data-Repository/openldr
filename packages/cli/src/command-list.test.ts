@@ -18,6 +18,7 @@ vi.mock('@openldr/bootstrap', async (importOriginal) => ({
 }));
 
 import { buildProgram } from './program';
+import { COMMAND_META } from './command-meta';
 import { commandPath, leafCommands, listCommands, type CommandEntry } from './command-list';
 
 async function runCommands(args: string[]): Promise<{ code: number; stdout: string }> {
@@ -60,7 +61,7 @@ describe('listCommands', () => {
       ],
       options: [{ flags: '--force', description: 'confirm any program using the key loses access' }],
       kind: 'app',
-      capability: null,
+      capability: 'users.manage',
       destructive: true,
     });
     const hide = listCommands(buildProgram()).find((r) => r.path === 'data-exposure hide');
@@ -69,8 +70,10 @@ describe('listCommands', () => {
     expect(listCommands(buildProgram()).find((r) => r.path === 'db migrate')?.kind).toBe('recovery');
   });
 
-  it('leaves capability null on every row in this task', () => {
-    expect(listCommands(buildProgram()).filter((r) => r.capability !== null)).toEqual([]);
+  it('prints the capability from the command table, and null for a recovery or local command', () => {
+    for (const r of listCommands(buildProgram())) {
+      expect(r.capability, r.path).toBe(r.kind === 'app' ? COMMAND_META[r.path]!.capability : null);
+    }
   });
 });
 

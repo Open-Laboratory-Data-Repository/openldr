@@ -376,6 +376,93 @@ export const pt: EnShape = {
     actions: 'Ações',
     searchPlaceholder: 'Pesquisar funções',
     noMatch: 'Nenhuma função corresponde.',
+    capability: {
+      dashboards: {
+        view: { label: 'Ver painéis', description: 'Abrir a área de Painéis e ver os widgets de atividade.' },
+        create: { label: 'Criar painéis', description: 'Adicionar novos painéis.' },
+        edit: { label: 'Editar painéis', description: 'Alterar a disposição e os widgets de um painel.' },
+        delete: { label: 'Eliminar painéis', description: 'Remover painéis.' },
+      },
+      reports: {
+        view: { label: 'Ver relatórios', description: 'Abrir a área de Relatórios e ver as definições de relatórios.' },
+        run: { label: 'Executar relatórios', description: 'Executar e pré-visualizar relatórios.' },
+        export: { label: 'Exportar relatórios', description: 'Transferir o resultado de um relatório (PDF ou dados).' },
+        edit_templates: { label: 'Editar modelos de relatório', description: 'Criar e editar definições, categorias e designs de relatórios.' },
+      },
+      forms: {
+        view: { label: 'Usar formulários', description: 'Abrir formulários e ler as suas definições.' },
+        submit: { label: 'Submeter formulários', description: 'Registar dados à mão: submeter um formulário ESCREVE registos clínicos no repositório FHIR e no modelo de leitura.' },
+        edit: { label: 'Editar formulários', description: 'Criar e alterar definições de formulários; exportar pacotes de formulários.' },
+        publish: { label: 'Publicar formulários', description: 'Publicar novas versões de formulários.' },
+      },
+      workflows: {
+        view: { label: 'Ver fluxos de trabalho', description: 'Abrir a área de Fluxos de trabalho e ver definições e execuções.' },
+        edit: { label: 'Editar fluxos de trabalho', description: 'Criar e alterar definições de fluxos de trabalho.' },
+        run: { label: 'Executar fluxos de trabalho', description: 'Iniciar execuções de fluxos de trabalho.' },
+        manage_secrets: { label: 'Gerir segredos dos fluxos de trabalho', description: 'Ver e definir os segredos cifrados dos fluxos de trabalho.' },
+      },
+      query: {
+        run: { label: 'Usar a consola de consultas', description: 'Executar consultas SQL avulsas sobre os dados de análise.' },
+      },
+      users: {
+        view: { label: 'Ver utilizadores', description: 'Abrir a área de Utilizadores e ver as contas.' },
+        manage: { label: 'Gerir utilizadores', description: 'Criar, editar, ativar e desativar contas de utilizador.' },
+        reset_password: { label: 'Repor palavras-passe', description: 'Repor a palavra-passe de um utilizador ou enviar um e-mail de reposição.' },
+        force_logout: { label: 'Forçar o fim de sessão', description: 'Terminar todas as sessões ativas de um utilizador.' },
+      },
+      facilities: {
+        view: { label: 'Ver unidades', description: 'Abrir a área de Unidades e ver o registo de unidades.' },
+        manage: { label: 'Gerir unidades', description: 'Criar, editar e remover registos de unidades.' },
+      },
+      patients: {
+        view: { label: 'Ver o índice de pacientes', description: 'Abrir o índice de pacientes. Os nomes e identificadores ficam ocultos, e a pesquisa só encontra um identificador exato.' },
+        view_identifiers: { label: 'Ver identificadores de pacientes', description: 'Ver por inteiro os nomes, identificadores, datas de nascimento, telefones e e-mails dos pacientes, e pesquisar por nome. Cada vista sem ocultação é auditada.' },
+        manage: { label: 'Gerir o índice de pacientes', description: 'Dar nome aos sistemas de identificadores e escolher quais são listados e pesquisados.' },
+      },
+      roles: {
+        view: { label: 'Ver funções', description: 'Abrir a área de Funções e ver as funções e as suas capacidades.' },
+        manage: { label: 'Gerir funções', description: 'Criar, editar e eliminar funções e atribuí-las a utilizadores.' },
+      },
+      terminology: {
+        view: { label: 'Consultar a terminologia', description: 'Consultar sistemas de codificação, conjuntos de valores e mapeamentos.' },
+        manage: { label: 'Gerir a terminologia', description: 'Importar, editar e construir terminologia e ontologias.' },
+      },
+      marketplace: {
+        view: { label: 'Ver o marketplace', description: 'Consultar os plugins disponíveis e instalados.' },
+        manage: { label: 'Gerir o marketplace', description: 'Instalar, publicar, ativar, desativar e remover plugins e registos.' },
+      },
+      connectors: {
+        manage: { label: 'Gerir conectores', description: 'Configurar conectores para bases de dados e serviços externos.' },
+      },
+      sync: {
+        view: { label: 'Ver a sincronização', description: 'Ver o estado e a atividade da sincronização laboratório⇄central.' },
+        manage: { label: 'Gerir a sincronização', description: 'Configurar a sincronização, inscrever locais e resolver divergências.' },
+      },
+      settings: {
+        view: { label: 'Ver definições', description: 'Abrir a área de Definições.' },
+        edit_general: { label: 'Editar definições gerais', description: 'Alterar as definições gerais, numéricas e de validação.' },
+        feature_flags: { label: 'Gerir funcionalidades', description: 'Ativar ou desativar funcionalidades.' },
+        danger_zone: { label: 'Zona de perigo', description: 'Executar ações de manutenção destrutivas.' },
+      },
+      data_exposure: {
+        manage: { label: 'Gerir a exposição de dados', description: 'Ocultar outras colunas de tabelas no construtor de painéis. As dimensões incorporadas, o SQL direto e os relatórios que passam por um conector ficam fora desta regra.' },
+      },
+      activity: {
+        view: { label: 'Ver atividade', description: 'Ver o feed de atividade do ciclo de vida dos dados recebidos.' },
+      },
+      notifications: {
+        view: { label: 'Ver notificações', description: 'Receber notificações e definir preferências.' },
+      },
+      audit: {
+        view: { label: 'Ver o registo de auditoria', description: 'Ler o registo de eventos de auditoria.' },
+      },
+      ingest: {
+        run: { label: 'Executar o processo de ingestão', description: 'Enviar ficheiros pelo processo de ingestão e repetir lotes que falharam. Ambos escrevem registos clínicos.' },
+      },
+      data: {
+        export: { label: 'Exportar todos os dados', description: 'Escrever cada recurso FHIR e cada tabela do armazém em ficheiros, dados dos pacientes incluídos.' },
+      },
+    },
   },
   forms: {
     testsEmpty: 'Nenhum exame escolhido.',

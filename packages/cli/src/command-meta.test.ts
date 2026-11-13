@@ -6,6 +6,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import type { Command } from 'commander';
+import { CAPABILITY_KEYS, SYSTEM_ROLES } from '@openldr/rbac';
 
 // Every context builder and the config loader throw here. A local command that reaches one fails,
 // and the spy records the call. The real modules stay in place for everything else.
@@ -103,8 +104,17 @@ describe('COMMAND_META', () => {
     expect(COMMAND_META['terminology ontology build']?.paths).toEqual([{ target: 'dir', kind: 'input-dir', keep: true }]);
   });
 
-  it('leaves capability unset, for Task 7 to fill', () => {
-    expect(Object.values(COMMAND_META).filter((m) => m.capability !== undefined)).toEqual([]);
+  it('gives every app command a capability that is in the catalog', () => {
+    const known = new Set(CAPABILITY_KEYS);
+    const bad = Object.entries(COMMAND_META)
+      .filter(([, m]) => m.kind === 'app' && (m.capability === undefined || !known.has(m.capability)))
+      .map(([p, m]) => `${p}: ${m.capability ?? 'none'}`);
+    expect(bad).toEqual([]);
+  });
+
+  it('gives no capability to a recovery or local command', () => {
+    const bad = Object.entries(COMMAND_META).filter(([, m]) => m.kind !== 'app' && m.capability !== undefined).map(([p]) => p);
+    expect(bad).toEqual([]);
   });
 
   it('command-meta imports nothing from bootstrap, config or a command file', () => {
@@ -359,10 +369,28 @@ const READ_WORDS = new Set([
 ]);
 const lastWord = (path: string) => path.split(' ').at(-1)!;
 
+// Ruling 50: destructive is about data stored in OpenLDR and about access, not about files on the
+// caller's own disk. A local command whose --force only writes over the caller's own files is not
+// destructive.
+const LOCAL_FORCE_ONLY: Record<string, string> = {
+  'artifact keygen': '--force writes over a key file in --out on the caller\'s own disk; nothing stored in OpenLDR changes',
+};
+
 describe('destructive', () => {
   it('marks destructive every command that has a --force option', () => {
-    const missing = leaves().filter(({ cmd, path }) => optsOf(cmd).some((o) => o.long === '--force') && !COMMAND_META[path]?.destructive);
+    const missing = leaves().filter(({ cmd, path }) => optsOf(cmd).some((o) => o.long === '--force') && !COMMAND_META[path]?.destructive && !LOCAL_FORCE_ONLY[path]);
     expect(missing.map((l) => l.path)).toEqual([]);
+  });
+
+  it('lets off only local commands whose --force touches the caller\'s own files', () => {
+    for (const path of Object.keys(LOCAL_FORCE_ONLY)) {
+      expect(COMMAND_META[path]?.kind, path).toBe('local');
+      expect(COMMAND_META[path]?.destructive, path).toBeUndefined();
+    }
+  });
+
+  it('marks no local command destructive: a local command writes only the caller\'s own files', () => {
+    expect(byKind('local').filter((p) => COMMAND_META[p]?.destructive)).toEqual([]);
   });
 
   it('marks destructive every command named for removing, revoking or resetting', () => {
@@ -375,6 +403,146 @@ describe('destructive', () => {
   it('marks no read command destructive', () => {
     const wrong = Object.entries(COMMAND_META).filter(([path, m]) => READ_WORDS.has(lastWord(path)) && m.destructive).map(([p]) => p);
     expect(wrong).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Capabilities (Task 7). The server refuses an app command when the account lacks this key.
+// ---------------------------------------------------------------------------------------------
+
+// Keys that only let the holder read. Every other key lets the holder change something.
+const READ_ONLY_KEYS = new Set(['patients.view_identifiers', 'reports.run', 'reports.export', 'data.export']);
+const isReadKey = (key: string) => key.endsWith('.view') || READ_ONLY_KEYS.has(key);
+const capabilityOf = (path: string) => COMMAND_META[path]?.capability ?? '';
+const appPaths = () => byKind('app');
+
+const READ_NAMES = new Set(['list', 'show', 'status', 'inspect', 'export']);
+// Commands named for reading that take a key which also allows writing. Each is the key the matching
+// route reads with; the area has no read-only key, or the route chose the stronger one.
+const READ_NAME_WRITE_KEY: Record<string, string> = {
+  'connectors inspect': 'prints a connector\'s settings and which secrets are set; GET /api/connectors/:id/config needs connectors.manage (connectors-routes.ts:85)',
+  'connectors list': 'lists connectors; GET /api/connectors needs connectors.manage and the area has no view key (connectors-routes.ts:83)',
+  'data-exposure list': 'lists hidden columns; GET /api/dashboards/column-policy needs data_exposure.manage (dashboards-routes.ts:143)',
+  'data-exposure show': 'not a read: it exposes hidden columns, a write to the policy (dashboards-routes.ts:162)',
+  'import status': 'shows import runs; Studio lets only lab_admin read them, like the connector routes (plugin-broker.ts:170)',
+  'query export': 'writes saved queries to a file; POST /api/custom-queries/export needs query.run, the one query key (query-routes.ts:148)',
+  'settings flags list': 'lists feature flags; GET /api/settings/flags needs settings.feature_flags (settings-routes.ts:68)',
+  'settings numbers list': 'lists number settings; GET /api/settings/numbers needs settings.edit_general (settings-routes.ts:406)',
+  'settings sync show': 'shows the sync settings and which secrets are set; GET /api/settings/sync needs sync.manage (settings-routes.ts:107)',
+  'settings validation show': 'shows validation strictness; GET /api/settings/validation needs settings.edit_general (settings-routes.ts:430)',
+  'sync divergence list': 'lists divergences; GET /api/settings/sync/divergences needs sync.manage (settings-routes.ts:181)',
+  'sync divergence show': 'shows a divergence with the dropped content; its route needs sync.manage (settings-routes.ts:187)',
+  'sync export': 'writes a signed bundle of lab data to a file; no route does it, and sync.manage is the sync key only lab_admin holds',
+  'sync list': 'lists enrolled sites; GET /api/settings/sync/sites needs sync.manage (settings-routes.ts:332)',
+  'user key list': 'lists a user\'s access keys; GET /api/users/:id/keys needs users.manage (access-key-routes.ts:98)',
+};
+
+const WRITE_PREFIXES = [
+  'create', 'set', 'delete', 'remove', 'import', 'install', 'enable', 'disable', 'grant', 'revoke', 'reset', 'rotate',
+  'purge', 'retry', 'cancel', 'publish', 'restore', 'link', 'unlink', 'merge', 'amend',
+];
+// Commands whose name starts like a write but that only read, with a view key.
+const WRITE_NAME_VIEW_KEY: Record<string, string> = {
+  'facilities import-run': 'shows one import run; GET /api/facilities/import/runs/:id needs facilities.view (facilities-routes.ts:3068)',
+  'facilities import-runs': 'lists import runs; GET /api/facilities/import/runs needs facilities.view (facilities-routes.ts:2790)',
+  'facilities import-sources': 'lists the registers an import may name; GET /api/facilities/import/sources needs facilities.view (facilities-routes.ts:1926)',
+};
+
+// The command classes the Task 7 rulings name for extra care: running code or SQL the caller supplies,
+// sending lab data out in bulk, changing who can do what, reading secrets or connection details,
+// destroying data, and changing sign-in or the install.
+const EXTRA_CARE = [
+  // code or SQL
+  'plugin install', 'plugin run', 'plugin test', 'market install', 'market update', 'market rollback', 'artifact publish',
+  'query import', 'ingest', 'import start', 'import resume',
+  // lab data out in bulk
+  'export', 'report run', 'report glass-export', 'sync export', 'query export', 'patients duplicates export',
+  'patients list', 'patients show', 'patients duplicates list',
+  // who can do what
+  'roles create', 'roles edit', 'roles delete', 'roles grant', 'roles revoke', 'user assign-role', 'user unassign-role',
+  'user set-role', 'user create', 'user key create', 'user key list', 'user key revoke', 'user end-sessions',
+  'user activate', 'user deactivate', 'import allow', 'import revoke',
+  // secrets or connection details
+  'connectors inspect', 'connectors list', 'connectors diagnose', 'connectors test', 'connectors add', 'connectors update',
+  'settings sync show',
+  // destroys or resets
+  'settings danger', 'db reproject', 'terminology reproject', 'facilities delete', 'layouts delete', 'report-def delete',
+  'report-design delete', 'roles delete', 'connectors remove', 'plugin remove', 'market remove', 'terminology distribution purge',
+  'terminology ontology unlink', 'test-catalog map clear', 'test-catalog result-fields unlink', 'sync divergence clear',
+  'sync import', 'sync merge-patient',
+  // sign-in or the install
+  'settings flags set', 'settings numbers set', 'settings lab set', 'settings sync set', 'settings validation set',
+  'sync enroll', 'sync rotate', 'sync revoke',
+];
+// Extra-care commands whose key a role other than lab_admin holds, because Studio already gives that
+// role the same power through the route named.
+const STUDIO_GIVES_THE_SAME: Record<string, string> = {
+  'query import': 'POST /api/custom-queries/import needs query.run (query-routes.ts:162)',
+  'query export': 'POST /api/custom-queries/export needs query.run (query-routes.ts:148)',
+  'report run': 'GET /api/reports/:id.csv and :id.pdf need reports.export (reports-routes.ts:54, :74)',
+  'report glass-export': 'GET /api/reports/glass/ris.csv needs reports.export (reports-routes.ts:65)',
+  'patients duplicates export': 'GET /api/patients/duplicates/export needs patients.view_identifiers (patient-routes.ts:47)',
+  'patients list': 'GET /api/patients unmasks for patients.view_identifiers (patient-routes.ts:15, :26)',
+  'patients show': 'GET /api/patients/:ref unmasks for patients.view_identifiers (patient-routes.ts:15, :97)',
+  'patients duplicates list': 'GET /api/patients/duplicates unmasks for patients.view_identifiers (patient-routes.ts:15, :37)',
+  'facilities delete': 'POST /api/facilities/bulk-delete needs facilities.manage (facilities-routes.ts:1769)',
+  'report-def delete': 'DELETE /api/report-defs/:id needs reports.edit_templates (report-defs-routes.ts:42)',
+  'report-design delete': 'DELETE /api/report-designs/:id needs reports.edit_templates (report-designs-routes.ts:146)',
+  'terminology distribution purge': 'DELETE /api/terminology/publishers/:publisherId/distribution needs terminology.manage (terminology-admin-routes.ts:495)',
+  'terminology ontology unlink': 'DELETE /api/terminology/ontology/distributions/:id needs terminology.manage (ontology-routes.ts:19)',
+  'test-catalog map clear': 'POST /api/test-catalog/mappings/clear needs terminology.manage (test-mapping-routes.ts:79)',
+  'test-catalog result-fields unlink': 'DELETE /api/test-catalog/result-fields/:code/loinc needs terminology.manage (result-fields-routes.ts:41)',
+};
+
+describe('capabilities', () => {
+  it('a command named list, show, status, inspect or export does not need a write key', () => {
+    const wrong = appPaths()
+      .filter((p) => READ_NAMES.has(lastWord(p)) && !isReadKey(capabilityOf(p)) && !READ_NAME_WRITE_KEY[p])
+      .map((p) => `${p}: ${capabilityOf(p)}`);
+    expect(wrong).toEqual([]);
+  });
+
+  it('a command named for writing does not use a view key', () => {
+    const wrong = appPaths()
+      .filter((p) => WRITE_PREFIXES.some((w) => lastWord(p).startsWith(w)) && capabilityOf(p).endsWith('.view') && !WRITE_NAME_VIEW_KEY[p])
+      .map((p) => `${p}: ${capabilityOf(p)}`);
+    expect(wrong).toEqual([]);
+  });
+
+  it('keeps both allow-lists honest: real app commands, still needed', () => {
+    const bad: string[] = [];
+    for (const p of Object.keys(READ_NAME_WRITE_KEY)) {
+      if (COMMAND_META[p]?.kind !== 'app') bad.push(`${p}: not an app command`);
+      else if (!READ_NAMES.has(lastWord(p)) || isReadKey(capabilityOf(p))) bad.push(`${p}: not needed`);
+    }
+    for (const p of Object.keys(WRITE_NAME_VIEW_KEY)) {
+      if (COMMAND_META[p]?.kind !== 'app') bad.push(`${p}: not an app command`);
+      else if (!capabilityOf(p).endsWith('.view')) bad.push(`${p}: not needed`);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('gives an extra-care command a key only lab_admin holds, unless Studio gives a role the same power', () => {
+    const presetHolders = (key: string) => SYSTEM_ROLES.filter((r) => r.slug !== 'lab_admin' && r.capabilities.includes(key)).map((r) => r.slug);
+    const bad: string[] = [];
+    for (const p of EXTRA_CARE) {
+      if (COMMAND_META[p]?.kind !== 'app') { bad.push(`${p}: not an app command`); continue; }
+      const holders = presetHolders(capabilityOf(p));
+      if (holders.length > 0 && !STUDIO_GIVES_THE_SAME[p]) bad.push(`${p}: ${capabilityOf(p)} held by ${holders.join(', ')}`);
+      if (holders.length === 0 && STUDIO_GIVES_THE_SAME[p]) bad.push(`${p}: listed but only lab_admin holds ${capabilityOf(p)}`);
+    }
+    for (const p of Object.keys(STUDIO_GIVES_THE_SAME)) if (!EXTRA_CARE.includes(p)) bad.push(`${p}: listed but not extra care`);
+    expect(bad).toEqual([]);
+  });
+
+  // Spot checks on the keys the rulings and the brief fix by name.
+  it('uses the keys the brief and the routes name', () => {
+    for (const p of ['user key list', 'user key create', 'user key revoke']) expect(capabilityOf(p), p).toBe('users.manage');
+    for (const p of ['user list', 'user show']) expect(capabilityOf(p), p).toBe('users.view');
+    expect(capabilityOf('settings danger')).toBe('settings.danger_zone');
+    // Ruling: no weaker than plugin install and market install.
+    expect(capabilityOf('artifact publish')).toBe(capabilityOf('market install'));
+    expect(capabilityOf('plugin install')).toBe(capabilityOf('market install'));
   });
 });
 
@@ -398,8 +566,18 @@ describe('calls that cannot run through the app', () => {
     expect(refuse(['r1'], {})).toBeNull();
   });
 
+  // Ruling 50: --to comes back as an output folder, and an empty output value is not "no path".
+  it('artifact publish --install needs a folder for --to', () => {
+    const refuse = COMMAND_META['artifact publish']!.refuse!;
+    expect(refuse(['b'], { install: true, to: '' })).toBe('artifact publish needs a folder for --to.');
+    expect(refuse(['b'], { install: true, to: 'registry' })).toBeNull();
+    // Without --install the command runs on the caller's machine (localWhen), so the app never sees it.
+    expect(refuse(['b'], { install: false, to: '' })).toBeNull();
+    expect(refuse(['b'], { to: 'registry' })).toBeNull();
+  });
+
   it('no other command refuses', () => {
-    expect(Object.entries(COMMAND_META).filter(([, m]) => m.refuse).map(([p]) => p).sort()).toEqual(['report run', 'sync export']);
+    expect(Object.entries(COMMAND_META).filter(([, m]) => m.refuse).map(([p]) => p).sort()).toEqual(['artifact publish', 'report run', 'sync export']);
   });
 });
 
