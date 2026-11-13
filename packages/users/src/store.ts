@@ -17,6 +17,15 @@ export interface User {
   rbacInitialized: boolean;
 }
 
+/** setSubjectStatus found a row by username with no subject, and another identity linked it
+ *  before the store's link update ran. Retryable. */
+export class SubjectLinkConflictError extends Error {
+  constructor() {
+    super('username subject changed during status update');
+    this.name = 'SubjectLinkConflictError';
+  }
+}
+
 export interface CreateUserInput {
   username: string;
   displayName?: string;
@@ -176,9 +185,7 @@ export function createUserStore(db: Kysely<InternalSchema>, deps: {
       if (byName && byName.subject === null) {
         const linked = await db.updateTable('users').set({ subject: input.subject, status: onExisting as never, updated_at: new Date() })
           .where('id', '=', byName.id).where('subject', 'is', null).returning(COLS).executeTakeFirst();
-        if (!linked) {
-          throw Object.assign(new Error('username subject changed during status update'), { name: 'SubjectLinkConflictError' });
-        }
+        if (!linked) throw new SubjectLinkConflictError();
         return toUser(linked as unknown as Row);
       }
       // A provider username must never replace another identity's subject.

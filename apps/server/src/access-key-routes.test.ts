@@ -2,6 +2,7 @@
 // pg-mem with the real key, role, user and audit stores. These tests pin the wire shape. Not real
 // Postgres: the duplicate-hash path below uses a store that throws, not a real constraint error.
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SubjectLinkConflictError } from '@openldr/bootstrap';
 import { bearer, DIRECTORY, keyFixture, TOKENS } from './access-key.test-support';
 
 type Fixture = Awaited<ReturnType<typeof keyFixture>>;
@@ -296,18 +297,20 @@ describe('/api/users/:id/keys with identity admin', () => {
     const made = await f.app.inject({ method: 'POST', url: keysUrl('ai-sub'), headers: bearer(TOKENS.admin), payload: { name: 'x' } });
     expect(made.statusCode).toBe(201);
     expect(await f.users.getBySubject('ai-sub')).toMatchObject({ id: 'ai-local', status: 'disabled' });
+    // The directory said enabled and the route changed nothing, so it writes no status row.
+    expect(await f.audit.list({ action: 'user.status' })).toHaveLength(0);
     vi.restoreAllMocks();
     expect((await f.app.inject({ method: 'GET', url: '/api/me', headers: bearer(made.json().key) })).statusCode).toBe(403);
   });
 
   // The store throws this when a first sign-in links the row between its read by username and its
-  // update (packages/users/src/store.ts). pg-mem cannot reach inside that gap, so the store's
-  // answer is stood in for here, with the store's own name and text.
+  // update. packages/users/src/status.test.ts reaches that throw in the real store. Here the store's
+  // own class stands in for it, so a rename on either side fails this test.
   it('answers its own 409 when a sign-in links the row during the create', async () => {
     const f = await setup({ identityAdmin: true });
     vi.spyOn(f.users, 'withSubjectLock').mockImplementation(async (_subject, work) => work({
       ...f.users,
-      setSubjectStatus: async () => { throw Object.assign(new Error('username subject changed during status update'), { name: 'SubjectLinkConflictError' }); },
+      setSubjectStatus: async () => { throw new SubjectLinkConflictError(); },
     }));
     const res = await f.app.inject({ method: 'POST', url: keysUrl('ai-sub'), headers: bearer(TOKENS.admin), payload: { name: 'x' } });
     expect(res.statusCode).toBe(409);

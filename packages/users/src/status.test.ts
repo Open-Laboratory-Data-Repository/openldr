@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { newDb } from 'pg-mem';
 import { type Kysely } from 'kysely';
 import { internalMigrations, type InternalSchema } from '@openldr/db';
-import { createUserStore } from './store';
+import { createUserStore, SubjectLinkConflictError } from './store';
 
 async function setup() {
   const db = newDb().adapters.createKysely() as Kysely<InternalSchema>;
@@ -59,6 +59,37 @@ describe('subject status persistence', () => {
       expect(await users.setSubjectStatus({ subject: 'provider-1', username: 'ada' }, 'active', { neverEnable: true })).toMatchObject({ status: 'disabled' });
       expect(await users.setSubjectStatus({ subject: 'provider-1', username: 'ada' }, 'active')).toMatchObject({ status: 'active' });
       expect(await users.setSubjectStatus({ subject: 'provider-1', username: 'ada' }, 'disabled', { neverEnable: true })).toMatchObject({ status: 'disabled' });
+    } finally { await db.destroy(); }
+  });
+
+  // Another writer links the row between the store's read by username and its link update. pg-mem
+  // runs one statement at a time, so a query interceptor does that writer's update just before the
+  // link update runs. One connection, not a real race.
+  it('throws SubjectLinkConflictError when another identity links the row before the link update', async () => {
+    const mem = newDb();
+    const db = mem.adapters.createKysely() as Kysely<InternalSchema>;
+    await internalMigrations['006_users'].up(db);
+    await internalMigrations['095_account_access_blocks'].up(db);
+    await db.schema.alterTable('users').addColumn('rbac_initialized', 'boolean', c => c.notNull().defaultTo(false)).execute();
+    const users = createUserStore(db);
+    try {
+      const row = await users.create({ username: 'ada' });
+      let pending = true;
+      const seen: string[] = [];
+      mem.public.interceptQueries((query) => {
+        if (pending && /^\s*update\s+"users"/i.test(query)) {
+          pending = false;
+          seen.push(query);
+          mem.public.none(`update users set subject = 'provider-other' where id = '${row.id}'`);
+        }
+        return null;
+      });
+      const err = await users.setSubjectStatus({ subject: 'provider-1', username: 'ada' }, 'active').catch((e: unknown) => e);
+      expect(seen).toHaveLength(1);
+      expect(err).toBeInstanceOf(SubjectLinkConflictError);
+      expect(err).toMatchObject({ name: 'SubjectLinkConflictError', message: 'username subject changed during status update' });
+      expect(await users.get(row.id)).toMatchObject({ subject: 'provider-other', status: 'active' });
+      expect(await users.getBySubject('provider-1')).toBeUndefined();
     } finally { await db.destroy(); }
   });
 

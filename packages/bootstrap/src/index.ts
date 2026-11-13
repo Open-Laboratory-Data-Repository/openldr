@@ -2147,6 +2147,7 @@ export {
   createAccessKey, listAccessKeys, revokeAccessKey, resolveAccessKey, checkAccessKeyInput,
   UnknownAccessKeyError, AccessKeyInputError, type KeyContext,
 } from './access-keys';
+export { SubjectLinkConflictError } from '@openldr/users';
 
 
 export { listUserDirectory, directoryPageInput } from './user-directory';

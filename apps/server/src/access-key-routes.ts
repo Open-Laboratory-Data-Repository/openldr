@@ -5,7 +5,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   createAccessKey, listAccessKeys, revokeAccessKey, checkAccessKeyInput, AccessKeyInputError, UnknownAccessKeyError,
-  type AppContext,
+  SubjectLinkConflictError, type AppContext,
 } from '@openldr/bootstrap';
 import { resolveAuthCapabilities } from '@openldr/config';
 import { redact } from '@openldr/core';
@@ -66,7 +66,9 @@ export function registerAccessKeyRoutes(app: FastifyInstance<any, any, any, any>
   // disabled, in one statement.
   //
   // The read of the linkable row is for the audit row only. When the directory says disabled and
-  // the link turns an active row off, that is a status change, and it is audited as one. The row is
+  // the link turns an active row off, that is a status change, and it is audited as one. When the
+  // directory says enabled, the route never disables a row: a disabled result means another
+  // writer disabled it, and that writer records its own row. The row is
   // written after the lock is let go, as setAccountStatus does, so the audit store does not take a
   // second connection while the pinned one is held.
   async function localRowFor(owner: Exclude<KeyOwner, null>, req: FastifyRequest): Promise<string> {
@@ -79,7 +81,7 @@ export function registerAccessKeyRoutes(app: FastifyInstance<any, any, any, any>
       const status = owner.enabled ? 'active' : 'disabled';
       const made = await users.setSubjectStatus({ subject: owner.subject, username: owner.username }, status, { neverEnable: true });
       const linked = linkable !== undefined && linkable.subject === null && linkable.id === made.id;
-      if (linked && linkable.status === 'active' && made.status === 'disabled') {
+      if (!owner.enabled && linked && linkable.status === 'active' && made.status === 'disabled') {
         audit = {
           action: 'user.status', entityType: 'user', entityId: owner.subject,
           before: { id: linkable.id, subject: null, status: 'active' },
@@ -121,7 +123,7 @@ export function registerAccessKeyRoutes(app: FastifyInstance<any, any, any, any>
       userId = await localRowFor(owner, req);
     } catch (e) {
       // Another change holds the subject lock, or a first sign-in linked the row first. Retryable.
-      if (e instanceof Error && (e.name === 'AccountStatusConflictError' || e.name === 'SubjectLinkConflictError')) {
+      if (e instanceof SubjectLinkConflictError || (e instanceof Error && e.name === 'AccountStatusConflictError')) {
         return reply.code(409).send({ error: 'another change to this account is in progress; try again' });
       }
       throw e;
