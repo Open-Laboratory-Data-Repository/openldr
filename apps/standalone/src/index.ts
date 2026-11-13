@@ -16,6 +16,7 @@ import {
   runStop,
   type Launcher,
 } from './commands.js';
+import { eventSink } from './events.js';
 import { startPostgres, stopLeftoverPostgres } from './postgres.js';
 
 // After a hangup (the terminal was closed) writes to the terminal fail. A failed write must not
@@ -46,12 +47,16 @@ function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-async function start(opts: { dataDir?: string; port: number; host: string }): Promise<void> {
+async function start(opts: { dataDir?: string; port: number; host: string; eventsFd?: number }): Promise<void> {
   const signals = handleSignals({ source: process, print, exit: (code) => process.exit(code) });
+  const { eventsFd, ...startOpts } = opts;
+  // A program that runs the launcher reads these. A failed write is ignored, so a reader that has
+  // gone cannot end the launcher.
+  const emit = eventsFd === undefined ? undefined : eventSink(eventsFd);
 
   let launcher: Launcher;
   try {
-    launcher = await runStart(opts, {
+    launcher = await runStart(startOpts, {
       startPostgres,
       stopLeftoverPostgres,
       // Loaded only now, after runStart has set the environment the server reads when it loads.
@@ -61,9 +66,12 @@ async function start(opts: { dataDir?: string; port: number; host: string }): Pr
       now: () => new Date(),
       ...launcherFiles(),
       cliEntry: cliEntryFile(),
+      ...(emit ? { emit } : {}),
     });
   } catch (err) {
+    // runStart's errors have been through hideSecrets.
     printError(messageOf(err));
+    emit?.({ event: 'error', message: messageOf(err) });
     // A failed start leaves the server's update check running for a few seconds. Do not wait.
     process.exit(1);
   }
@@ -72,9 +80,11 @@ async function start(opts: { dataDir?: string; port: number; host: string }): Pr
   try {
     const result = await launcher.done;
     print(result === 'clean' ? STOPPED : STOPPED_FORCED);
+    emit?.({ event: 'stopped', result });
   } catch (err) {
     // A stop that left something behind is a failure, not a clean stop.
     printError(messageOf(err));
+    emit?.({ event: 'error', message: messageOf(err) });
     process.exit(1);
   }
   // Shutdown has finished. Exit now rather than wait for timers the server leaves behind.

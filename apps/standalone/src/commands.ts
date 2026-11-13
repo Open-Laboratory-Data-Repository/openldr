@@ -11,12 +11,13 @@ import { createServer } from 'node:net';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs } from 'node:util';
+import { parseArgs, type ParseArgsConfig } from 'node:util';
 import { loadConfig, type Config } from '@openldr/config';
 import { createLogger, makeCrashHandler, type Logger } from '@openldr/core';
 import type { RunningServer } from '@openldr/server/start';
 import { newControlToken, requestStop, startControl } from './control.js';
 import { buildEnvironment } from './environment.js';
+import type { LauncherEvent } from './events.js';
 import {
   findFreePort,
   postgresUrls,
@@ -54,6 +55,11 @@ export interface LauncherDeps {
   appVersion: string;
   /** The bundle's plain CLI entry (cliEntryFile), given to the server as CLI_ENTRY. */
   cliEntry: string;
+  /**
+   * Set with `--events-fd`: a program runs this launcher and reads its events. The start then makes
+   * no setup code: that program asks for one itself, and none is printed where it reads.
+   */
+  emit?: (e: LauncherEvent) => void;
 }
 
 export interface Launcher {
@@ -440,6 +446,7 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
   const stop = (force = false): Promise<StopResult> => {
     if (force) forceNow();
     if (!stopping) {
+      deps.emit?.({ event: 'stopping' });
       stopping = teardown();
       // The control port closes last, after the answer to a `stop` request has been written.
       // Not inside onStop: close() waits for that answer, which waits for onStop. A stop that
@@ -474,6 +481,7 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
         controlPort: control.port,
         token,
         httpPort: opts.port,
+        host: opts.host,
       });
     } catch (err) {
       if (err instanceof AlreadyRunningError) {
@@ -496,11 +504,15 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
 
     // 6 and 7. Postgres.
     await deps.stopLeftoverPostgres({ clusterDir: paths.cluster, settings });
+    deps.emit?.({ event: 'starting', step: 'postgres' });
     pg = await deps.startPostgres({
       clusterDir: paths.cluster,
       logFile: paths.postgresLog,
       settings,
-      onRecovering: () => deps.print(RECOVERING),
+      onRecovering: () => {
+        deps.print(RECOVERING);
+        deps.emit?.({ event: 'recovering' });
+      },
     });
     // Postgres runs in its own session and outlives this process unless told to stop. This hook
     // tells it to stop when this process exits by process.exit or by running out of work, without
@@ -577,6 +589,7 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
     }
 
     // 10. The server.
+    deps.emit?.({ event: 'starting', step: 'server' });
     try {
       server = await deps.startServer(cfg, log);
     } catch (err) {
@@ -584,15 +597,17 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       throw err;
     }
 
-    // 11. The setup code goes to the terminal only, never to a log.
+    // 11. The setup code goes to the terminal only, never to a log. With events on, a program runs
+    //     this launcher and asks for a code itself, so none is made here.
     const context = server.context;
-    if (await context.localSignIn?.setupRequired()) {
+    if (!deps.emit && (await context.localSignIn?.setupRequired())) {
       const { createSetupCode } = await import('@openldr/bootstrap');
       const code = await createSetupCode(context);
       deps.print(`No administrator exists yet. Open the address and enter this setup code: ${code}`);
       deps.print('The setup code is valid for 30 minutes. For a new one run: openldr-standalone cli -- auth setup-code');
     }
     deps.print(`OpenLDR is running at ${address}`);
+    deps.emit?.({ event: 'ready', address });
     deps.print(`Server log: ${paths.serverLog}`);
     if (!LOCAL_HOSTS.has(opts.host)) {
       deps.print(`Listening on ${opts.host}. Sign-in travels over plain HTTP on this network.`);
@@ -637,20 +652,30 @@ export async function runStop(opts: { dataDir?: string }, print: (line: string) 
   }
 }
 
-/** 0 when a launcher answers on this data folder, 3 when none does. */
-export async function runStatus(opts: { dataDir?: string }, print: (line: string) => void): Promise<number> {
+/**
+ * 0 when a launcher answers on this data folder, 3 when none does. With `json`, prints one JSON
+ * line and nothing else: `{dataDir, running: true, address, host?}`, `{dataDir, running: false}`,
+ * or `{dataDir, running: false, busy}` while a recovery command holds the folder.
+ */
+export async function runStatus(opts: { dataDir?: string; json?: boolean }, print: (line: string) => void): Promise<number> {
   const paths = dataPaths(opts.dataDir);
-  print(`Data folder: ${paths.root}`);
+  const dataDir = paths.root;
+  if (!opts.json) print(`Data folder: ${dataDir}`);
   const lock = await liveLock(paths);
   if (!lock) {
-    print(NOT_RUNNING);
+    print(opts.json ? JSON.stringify({ dataDir, running: false }) : NOT_RUNNING);
     return 3;
   }
   if (lock.holder === 'recovery') {
-    print(`${NOT_RUNNING} ${recoveryBusy(lock.pid)}`);
+    const busy = `${NOT_RUNNING} ${recoveryBusy(lock.pid)}`;
+    print(opts.json ? JSON.stringify({ dataDir, running: false, busy }) : busy);
     return 3;
   }
-  print(`OpenLDR is running at ${lock.address}`);
+  print(
+    opts.json
+      ? JSON.stringify({ dataDir, running: true, address: lock.address, ...(lock.host !== undefined ? { host: lock.host } : {}) })
+      : `OpenLDR is running at ${lock.address}`,
+  );
   return 0;
 }
 
@@ -928,8 +953,9 @@ export async function runCli(
 // The command line
 
 export type CommandLine =
-  | { command: 'start'; dataDir?: string; port: number; host: string }
-  | { command: 'stop' | 'status'; dataDir?: string }
+  | { command: 'start'; dataDir?: string; port: number; host: string; eventsFd?: number }
+  | { command: 'stop'; dataDir?: string }
+  | { command: 'status'; dataDir?: string; json?: boolean }
   | { command: 'cli'; dataDir?: string; args: string[] }
   | { command: 'help' };
 
@@ -946,8 +972,11 @@ export const USAGE = [
   'Commands:',
   '  start    Start Postgres and the server. Ctrl+C stops both.',
   '           --data-dir <folder>  --port <port> (default 3000)  --host <address> (default 127.0.0.1)',
+  '           --events-fd <n>  Write one JSON line per event to descriptor n (3 or higher).',
+  '                            No setup code is made or printed.',
   '  stop     Stop the launcher running on the data folder.  --data-dir <folder>',
   '  status   Say whether it is running, and where.  --data-dir <folder>',
+  '           --json  Print one JSON line instead.',
   '  cli      Run the openldr CLI against this install, for example: cli -- doctor',
   '           --data-dir <folder> goes before the --.',
 ].join('\n');
@@ -960,16 +989,28 @@ function parsePort(text: string): number {
   return port;
 }
 
-function parseOptions(command: string, args: string[], withListen: boolean) {
+/** A descriptor for events. 0, 1 and 2 are standard input, output and error. */
+function parseEventsFd(text: string): number {
+  const fd = /^\d+$/.test(text) ? Number(text) : NaN;
+  if (!Number.isSafeInteger(fd) || fd < 3) throw new UsageError('--events-fd must be a whole number, 3 or higher.');
+  return fd;
+}
+
+function parseOptions(command: 'start' | 'stop' | 'status', args: string[]) {
+  const options: ParseArgsConfig['options'] =
+    command === 'start'
+      ? { 'data-dir': { type: 'string' }, port: { type: 'string' }, host: { type: 'string' }, 'events-fd': { type: 'string' } }
+      : command === 'status'
+        ? { 'data-dir': { type: 'string' }, json: { type: 'boolean' } }
+        : { 'data-dir': { type: 'string' } };
   try {
-    return parseArgs({
-      args,
-      strict: true,
-      allowPositionals: false,
-      options: withListen
-        ? { 'data-dir': { type: 'string' }, port: { type: 'string' }, host: { type: 'string' } }
-        : { 'data-dir': { type: 'string' } },
-    }).values as { 'data-dir'?: string; port?: string; host?: string };
+    return parseArgs({ args, strict: true, allowPositionals: false, options }).values as {
+      'data-dir'?: string;
+      port?: string;
+      host?: string;
+      'events-fd'?: string;
+      json?: boolean;
+    };
   } catch (err) {
     throw new UsageError(`${command}: ${errorMessage(err)}`);
   }
@@ -1007,20 +1048,28 @@ export function parseCommandLine(argv: string[]): CommandLine {
   }
 
   if (command === 'start') {
-    const values = parseOptions(command, rest, true);
+    const values = parseOptions(command, rest);
     const dataDir = notBlank(command, '--data-dir', values['data-dir']);
+    const eventsFd = values['events-fd'] === undefined ? undefined : parseEventsFd(values['events-fd']);
     return {
       command,
       port: values.port === undefined ? DEFAULT_PORT : parsePort(values.port),
       host: notBlank(command, '--host', values.host) ?? DEFAULT_HOST,
       ...(dataDir !== undefined ? { dataDir } : {}),
+      ...(eventsFd !== undefined ? { eventsFd } : {}),
     };
   }
 
-  if (command === 'stop' || command === 'status') {
-    const values = parseOptions(command, rest, false);
+  if (command === 'stop') {
+    const values = parseOptions(command, rest);
     const dataDir = notBlank(command, '--data-dir', values['data-dir']);
     return { command, ...(dataDir !== undefined ? { dataDir } : {}) };
+  }
+
+  if (command === 'status') {
+    const values = parseOptions(command, rest);
+    const dataDir = notBlank(command, '--data-dir', values['data-dir']);
+    return { command, ...(dataDir !== undefined ? { dataDir } : {}), ...(values.json ? { json: true } : {}) };
   }
 
   throw new UsageError(`Unknown command: ${command}`);

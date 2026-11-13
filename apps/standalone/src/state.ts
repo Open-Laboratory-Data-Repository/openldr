@@ -47,6 +47,9 @@ export interface LockInfo {
    *  `cli` recovery command that started Postgres for itself because no launcher was running: the
    *  database is up, the server is not, and `address` names no place to open. */
   holder?: 'recovery';
+  /** The `--host` value the launcher was started with. Missing from locks written before it was
+   *  added. The address alone cannot say this: `0.0.0.0` is shown as `localhost`. */
+  host?: string;
 }
 
 export class StateFileError extends Error {
@@ -337,6 +340,7 @@ function parseLock(text: string): LockInfo | null {
   const info: LockInfo = { pid: d.pid as number, address: d.address, startedAt: d.startedAt, controlPort: d.controlPort, token: d.token };
   if (d.httpPort !== undefined) info.httpPort = d.httpPort;
   if (d.holder === 'recovery') info.holder = 'recovery';
+  if (isNonEmptyString(d.host)) info.host = d.host;
   return info;
 }
 

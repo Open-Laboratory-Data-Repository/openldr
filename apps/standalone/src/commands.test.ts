@@ -28,6 +28,7 @@ import {
   type LauncherDeps,
 } from './commands.js';
 import { newControlToken, requestStop, startControl, type ControlServer } from './control.js';
+import type { LauncherEvent } from './events.js';
 import { postgresUrls, type PostgresSettings } from './postgres.js';
 import { acquireLock, isLockLive, pathsFor, readLock, type StandalonePaths } from './state.js';
 
@@ -161,6 +162,8 @@ interface Fakes {
     die: () => void;
   };
   server: { started: boolean; closed: boolean; cfg?: Config };
+  /** How many times the server context made a setup code. */
+  setupCodeCalls: number;
   deps: LauncherDeps;
 }
 
@@ -197,6 +200,7 @@ function fakes(
     outside: undefined as unknown as Fakes['outside'],
     pg: { started: false, stopped: false, stopSyncCalls: 0, die: () => {} },
     server: { started: false, closed: false },
+    setupCodeCalls: 0,
     deps: undefined as unknown as LauncherDeps,
   };
   const exited = new Promise<void>((resolve) => (f.pg.die = resolve));
@@ -207,6 +211,7 @@ function fakes(
     localSignIn: {
       setupRequired: async () => Boolean(o.setupRequired),
       createSetupCode: async () => {
+        f.setupCodeCalls += 1;
         if (o.setupFails) throw new Error('setup code boom');
         return SETUP_CODE;
       },
@@ -598,6 +603,95 @@ describe('runStart', () => {
   });
 });
 
+describe('runStart events', () => {
+  /** Fakes whose `emit` collects every event. */
+  function withEvents(o: Parameters<typeof fakes>[0] = {}): Fakes & { events: LauncherEvent[] } {
+    const f = fakes(o);
+    const events: LauncherEvent[] = [];
+    f.deps.emit = (e) => events.push(e);
+    return Object.assign(f, { events });
+  }
+
+  it('a normal start emits starting/postgres, starting/server and ready with the returned address', async () => {
+    const f = withEvents();
+    const l = await start(f.deps);
+    expect(f.events).toEqual([
+      { event: 'starting', step: 'postgres' },
+      { event: 'starting', step: 'server' },
+      { event: 'ready', address: l.address },
+    ]);
+    expect(l.address).toBe(ADDRESS);
+  });
+
+  it('emits recovering between starting/postgres and starting/server, and still prints the line', async () => {
+    const f = withEvents();
+    const startPostgres = f.deps.startPostgres;
+    f.deps.startPostgres = async (opts) => {
+      opts.onRecovering?.();
+      return startPostgres(opts);
+    };
+    await start(f.deps);
+    expect(f.events.map((e) => e.event)).toEqual(['starting', 'recovering', 'starting', 'ready']);
+    expect(f.events[0]).toEqual({ event: 'starting', step: 'postgres' });
+    expect(f.events[2]).toEqual({ event: 'starting', step: 'server' });
+    expect(f.printed).toContain('The database is recovering after an unclean stop. This can take a few minutes.');
+  });
+
+  it('a start that fails after the lock emits stopping and no ready', async () => {
+    await hold(HELD);
+    const f = withEvents();
+    await expect(runStart({ dataDir: root, port: HELD, host: '127.0.0.1' }, f.deps)).rejects.toThrow(
+      `Port ${HELD} is already in use.`,
+    );
+    expect(f.events).toEqual([{ event: 'stopping' }]);
+    await expectNothingLeft(f);
+  });
+
+  it('writes the host into the lock', async () => {
+    await start(withEvents().deps, { host: '127.0.0.1' });
+    expect(await readFile(paths.lockFile, 'utf8')).toContain('"host":"127.0.0.1"');
+    expect((await readLock(paths))?.host).toBe('127.0.0.1');
+  });
+
+  it('with emit set, makes no setup code and prints no setup code line', async () => {
+    const f = withEvents({ setupRequired: true });
+    await start(f.deps);
+    expect(f.setupCodeCalls).toBe(0);
+    expect(f.printed.filter((line) => /setup code/i.test(line))).toEqual([]);
+    expect(f.printed.join('\n')).not.toContain(SETUP_CODE);
+    expect(f.printed).toContain(`OpenLDR is running at ${ADDRESS}`);
+  });
+
+  it('stop() emits stopping exactly once, even when called twice', async () => {
+    const f = withEvents();
+    const l = await start(f.deps);
+    launchers.splice(launchers.indexOf(l), 1);
+    await Promise.all([l.stop(), l.stop()]);
+    await l.stop();
+    await l.done;
+    expect(f.events.filter((e) => e.event === 'stopping')).toHaveLength(1);
+  });
+
+  it('no event holds the control token, the secrets key or a Postgres password', async () => {
+    const f = withEvents();
+    const startPostgres = f.deps.startPostgres;
+    f.deps.startPostgres = async (opts) => {
+      opts.onRecovering?.();
+      return startPostgres(opts);
+    };
+    const l = await start(f.deps);
+    const token = (await readLock(paths))!.token;
+    launchers.splice(launchers.indexOf(l), 1);
+    await l.stop();
+    await l.done;
+    const text = f.events.map((e) => JSON.stringify(e)).join('\n');
+    expect(f.events.length).toBeGreaterThan(3);
+    for (const secret of [token, state.secretsKey, state.pgSuperPassword, state.pgAppPassword]) {
+      expect(text).not.toContain(secret);
+    }
+  });
+});
+
 describe('runStart undoes what it started when a step fails', () => {
   const cases: Array<{ step: string; arrange: (f: Fakes) => Promise<void>; error: RegExp }> = [
     {
@@ -686,6 +780,56 @@ describe('runStatus', () => {
     const printed: string[] = [];
     expect(await runStatus({ dataDir: root }, (l) => printed.push(l))).toBe(3);
     expect(printed).toContain('OpenLDR is not running.');
+  });
+
+  it('with json, prints only the not-running line and exits 3', async () => {
+    const printed: string[] = [];
+    expect(await runStatus({ dataDir: root, json: true }, (l) => printed.push(l))).toBe(3);
+    expect(printed).toEqual([JSON.stringify({ dataDir: root, running: false })]);
+  });
+
+  it('with json, prints only the running line with the lock address and host, and exits 0', async () => {
+    await start(fakes().deps, { host: '127.0.0.1' });
+    const lock = await readLock(paths);
+    const printed: string[] = [];
+    expect(await runStatus({ dataDir: root, json: true }, (l) => printed.push(l))).toBe(0);
+    expect(printed).toHaveLength(1);
+    expect(printed[0]).toBe(JSON.stringify({ dataDir: root, running: true, address: ADDRESS, host: '127.0.0.1' }));
+    expect(JSON.parse(printed[0]!).address).toBe(lock!.address);
+  });
+
+  it('with json, leaves host out for a lock written without one', async () => {
+    const token = newControlToken();
+    const control = await startControl({ token, onStop: async () => 'clean' });
+    controls.push(control);
+    await acquireLock(paths, { pid: process.pid, address: ADDRESS, startedAt: STARTED_AT.toISOString(), controlPort: control.port, token });
+    const printed: string[] = [];
+    expect(await runStatus({ dataDir: root, json: true }, (l) => printed.push(l))).toBe(0);
+    expect(printed).toEqual([JSON.stringify({ dataDir: root, running: true, address: ADDRESS })]);
+    expect(JSON.parse(printed[0]!)).not.toHaveProperty('host');
+  });
+
+  it('with json, prints the busy line when a recovery command holds the folder, and exits 3', async () => {
+    const token = newControlToken();
+    const control = await startControl({ token, onStop: async () => 'clean' });
+    controls.push(control);
+    const lock = {
+      pid: 4242,
+      address: 'no address: a recovery command holds the data folder',
+      startedAt: STARTED_AT.toISOString(),
+      controlPort: control.port,
+      token,
+      holder: 'recovery' as const,
+    };
+    await acquireLock(paths, lock);
+    const plain: string[] = [];
+    expect(await runStatus({ dataDir: root }, (l) => plain.push(l))).toBe(3);
+    const printed: string[] = [];
+    expect(await runStatus({ dataDir: root, json: true }, (l) => printed.push(l))).toBe(3);
+    expect(printed).toEqual([JSON.stringify({ dataDir: root, running: false, busy: plain[1] })]);
+    expect(plain[1]).toBe(
+      'OpenLDR is not running. A recovery command is using the database (process 4242). Try again when it has finished.',
+    );
   });
 });
 
@@ -1776,5 +1920,23 @@ describe('parseCommandLine', () => {
     expect(() => parseCommandLine(['start', '--port', '3.5'])).toThrow('--port must be a whole number from 1 to 65535.');
     expect(() => parseCommandLine(['stop', '--port', '3000'])).toThrow();
     expect(() => parseCommandLine(['launch'])).toThrow('Unknown command: launch');
+  });
+
+  it('reads --events-fd on start, and only a whole number of 3 or higher', () => {
+    expect(parseCommandLine(['start', '--events-fd', '3'])).toEqual({ command: 'start', port: 3000, host: '127.0.0.1', eventsFd: 3 });
+    expect(parseCommandLine(['start'])).not.toHaveProperty('eventsFd');
+    for (const bad of ['2', 'x', '']) {
+      expect(() => parseCommandLine(['start', '--events-fd', bad])).toThrow(UsageError);
+      expect(() => parseCommandLine(['start', '--events-fd', bad])).toThrow('--events-fd must be a whole number, 3 or higher.');
+    }
+    expect(() => parseCommandLine(['stop', '--events-fd', '3'])).toThrow(UsageError);
+  });
+
+  it('reads --json on status only', () => {
+    expect(parseCommandLine(['status', '--json'])).toEqual({ command: 'status', json: true });
+    expect(parseCommandLine(['status', '--data-dir', '/d', '--json'])).toEqual({ command: 'status', dataDir: '/d', json: true });
+    expect(parseCommandLine(['status'])).not.toHaveProperty('json');
+    expect(() => parseCommandLine(['stop', '--json'])).toThrow(UsageError);
+    expect(() => parseCommandLine(['start', '--json'])).toThrow(UsageError);
   });
 });
