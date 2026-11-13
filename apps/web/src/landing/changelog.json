@@ -1,10 +1,124 @@
 {
-  "generatedAt": "2026-11-12",
+  "generatedAt": "2026-11-13",
   "days": [
+    {
+      "date": "2026-11-13",
+      "version": null,
+      "entries": [
+        {
+          "hash": "36446947",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "Say on the terminal when OpenLDR stops after an error"
+        },
+        {
+          "hash": "ff750e92",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "Keep stored files and long recoveries safe, and report the release version"
+        },
+        {
+          "hash": "e30ed3f0",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "Never send the database administrator password to an unproven server"
+        },
+        {
+          "hash": "2aa51b2a",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "End a forced stop cleanly and count one closed terminal as one signal"
+        },
+        {
+          "hash": "11b0620b",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "Stop cleanly on a closed terminal and print the address really served"
+        },
+        {
+          "hash": "ddd86c65",
+          "type": "feat",
+          "scope": "standalone",
+          "title": "Start, stop, status and cli commands"
+        },
+        {
+          "hash": "1df595cb",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "Give terminology work files their own folder"
+        },
+        {
+          "hash": "bb06efff",
+          "type": "feat",
+          "scope": "standalone",
+          "title": "Build the server environment for a standalone run"
+        },
+        {
+          "hash": "fd8a108b",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "Keep the control port reachable when idle connections pile up"
+        }
+      ]
+    },
     {
       "date": "2026-11-12",
       "version": null,
       "entries": [
+        {
+          "hash": "066d2ba0",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "Keep a stop answer through close, and create the state file without overwriting"
+        },
+        {
+          "hash": "e1d2a424",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "Make first start and stale-file cleanup safe against a cut-off run"
+        },
+        {
+          "hash": "96abf42e",
+          "type": "feat",
+          "scope": "standalone",
+          "title": "Data folder, state file and lock"
+        },
+        {
+          "hash": "dfe9f3cf",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "Clear a stale Postgres pid file so a start after a power cut works"
+        },
+        {
+          "hash": "0c6cdedb",
+          "type": "feat",
+          "scope": "standalone",
+          "title": "Run bundled Postgres 16 as an ordinary role"
+        },
+        {
+          "hash": "431f30ce",
+          "type": "feat",
+          "scope": "server",
+          "title": "Settings for the listen address, root redirect and log file"
+        },
+        {
+          "hash": "1fa0d135",
+          "type": "feat",
+          "scope": "config",
+          "title": "Choose file storage with BLOB_ADAPTER=fs"
+        },
+        {
+          "hash": "eb83c200",
+          "type": "fix",
+          "scope": "storage",
+          "title": "Refuse an empty folder and match sibling package version"
+        },
+        {
+          "hash": "9b0b97ba",
+          "type": "feat",
+          "scope": "storage",
+          "title": "File storage adapter on a local folder"
+        },
         {
           "hash": "20849315",
           "type": "fix",
