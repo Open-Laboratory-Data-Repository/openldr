@@ -11,7 +11,7 @@
 // Nothing the caller sent is logged or audited, except the command path. Arguments and files can
 // hold secrets (`settings sync set clientSecret <value>`).
 
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { lstat, mkdir, open, readdir, rm, type FileHandle } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -42,10 +42,16 @@ export const REFUSAL_DRAIN_BYTES = 16 * 1024 * 1024;
 export const REFUSAL_DRAIN_MS = 5_000;
 /** A caller that reads nothing for this long, while output waits for it, is treated as gone. */
 export const STALL_MS = 5 * 60_000;
-/** After the process has gone, how long a pump may wait on its pipe for the next chunk. Only that
- *  wait counts: a grandchild that holds the pipe open sends nothing. Time spent waiting on the caller
- *  does not count; `send` has its own STALL_MS. */
+/** After the process has gone, the one budget for reading what is left of its output. A grandchild
+ *  can hold the pipes open, silent or chatty; past the budget they are given up on. Time spent
+ *  waiting on the caller does not count, so a slow caller loses nothing; `send` has its own
+ *  STALL_MS. */
 export const PIPE_WAIT_MS = 3_000;
+/** How often the budget above is counted. */
+const BUDGET_TICK_MS = 100;
+/** Between `start` and `go`, the longest the body may send nothing. Uploads take no slot, so a
+ *  trickle would otherwise hold a connection, an open file and a request folder for ever. */
+export const UPLOAD_IDLE_MS = 60_000;
 /** The `start` frame must arrive within this long of the request starting. */
 export const START_DEADLINE_MS = 30_000;
 /** The longest `rel` a file frame may name. Linux cannot make a deeper path. */
@@ -75,6 +81,8 @@ export interface CliRouteOptions {
   /** The release this server is. Defaults to readAppVersion(). */
   version?: string;
   maxFiles?: number;
+  /** For tests: the budget after the process has gone. Defaults to PIPE_WAIT_MS. */
+  pipeWaitMs?: number;
 }
 
 /** A refusal before `run`. The message is safe to show the caller and holds nothing they sent,
@@ -96,7 +104,33 @@ class BytesAfterGo extends Error {
 
 /** The folders on the way to the files of one input-dir, keyed by part, so each file costs only
  *  its own number of parts and no path string is built. */
-type FolderTree = Map<string, FolderTree>;
+export type FolderTree = Map<string, FolderTree>;
+
+/**
+ * Adds the folders on the way to `rel` (parts joined by `/`, the last one the file) to the tree,
+ * and answers how many of them are new. Costs the number of parts in `rel`, whatever the tree holds.
+ */
+export function countNewFolders(tree: FolderTree, rel: string): number {
+  const parts = rel.split('/');
+  let node = tree;
+  let added = 0;
+  for (let n = 0; n < parts.length - 1; n += 1) {
+    let next = node.get(parts[n]!);
+    if (!next) {
+      next = new Map();
+      node.set(parts[n]!, next);
+      added += 1;
+    }
+    node = next;
+  }
+  return added;
+}
+
+/** A short fixed-size key for a file already sent, so the set of them does not grow with the
+ *  length of each name. */
+function sentKey(ref: string, rel: string): string {
+  return createHash('sha256').update(ref).update('\0').update(rel).digest('base64').slice(0, 22);
+}
 
 type Start = Extract<ClientFrame, { t: 'start' }>;
 type InputKind = Start['inputs'][number]['kind'];
@@ -300,6 +334,7 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
   const version = opts.version ?? readAppVersion();
   const maxUpload = cfg.CLI_MAX_UPLOAD_BYTES ?? 2_147_483_648;
   const maxFiles = opts.maxFiles ?? MAX_FILES;
+  const pipeWaitMs = opts.pipeWaitMs ?? PIPE_WAIT_MS;
   const workDir = resolve(cfg.TERMINOLOGY_WORK_DIR || tmpdir());
   const runsRoot = join(workDir, 'cli-runs');
   const keptRoot = join(workDir, 'cli-kept');
@@ -335,6 +370,8 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
     // After `go`, any byte at all is a protocol error (watchAfterGo).
     const chunks = payload[Symbol.asyncIterator]() as AsyncIterator<Buffer>;
     let afterGo = false;
+    /** Between `start` and `go`: the idle limit is armed again by each chunk. */
+    let uploading = false;
     let sourceDone = false;
     let lastChunk: Buffer | null = null;
     const shared: AsyncIterable<Buffer> = {
@@ -343,7 +380,10 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
           const r = await chunks.next();
           if (r.done) { sourceDone = true; return r; }
           if (afterGo && r.value.length > 0) throw new BytesAfterGo();
-          if (r.value.length > 0) lastChunk = r.value;
+          if (r.value.length > 0) {
+            lastChunk = r.value;
+            if (uploading) armIdle();
+          }
           return r;
         },
         return: async () => ({ done: true as const, value: undefined }),
@@ -409,14 +449,26 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
 
     // Fastify's request timeout is 0, so a body that stops short of `start` would hold its
     // connection and up to 1 MiB for ever. Past the deadline: 408, then the request is ended.
-    const startTimer = setTimeout(() => {
+    /** 408, then the request is ended. The pending read then fails, and the catch below sees that
+     *  the answer is sent and only cleans up. */
+    const timedOut = (message: string) => {
       if (reply.sent) return;
       const end = () => { payload.destroy(); req.raw.destroy(); };
       reply.raw.once('finish', end);
       reply.raw.once('close', end);
       reply.code(408);
-      void reply.send({ error: `The start frame did not arrive within ${START_DEADLINE_MS / 1000} seconds.` });
-    }, START_DEADLINE_MS);
+      void reply.send({ error: message });
+    };
+    const startTimer = setTimeout(
+      () => timedOut(`The start frame did not arrive within ${START_DEADLINE_MS / 1000} seconds.`),
+      START_DEADLINE_MS,
+    );
+    // Uploads take no slot, so a trickle between `start` and `go` must not hold the request for ever.
+    let idleTimer: NodeJS.Timeout | undefined;
+    const armIdle = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => timedOut(`No bytes arrived for ${UPLOAD_IDLE_MS / 1000} seconds.`), UPLOAD_IDLE_MS);
+    };
 
     let runDir: string | null = null;
     const keptMade: string[] = [];
@@ -437,6 +489,8 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
     try {
       const first = await nextFrame();
       clearTimeout(startTimer);
+      uploading = true;
+      armIdle();
       const start = readStart(first);
       if (start.version !== version) {
         throw new Refusal(409, `This client is version ${start.version} and OpenLDR is version ${version}. Use the same release on both.`);
@@ -462,7 +516,7 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
         if (problem) {
           // The path goes to the log only. The caller is told which setting to look at.
           ctx.logger.error({ folder: root, problem }, 'cli work folder refused');
-          throw new Refusal(503, `A folder under TERMINOLOGY_WORK_DIR ${problem}, so no command can run. The server log names it.`);
+          throw new Refusal(503, `A folder under TERMINOLOGY_WORK_DIR, or the system temp folder when it is unset, ${problem}, so no command can run. The server log names it.`);
         }
       }
 
@@ -492,8 +546,8 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       // The uploads, until `go`. Files and the folders made on the way to them both count.
       let bytes = 0;
       let entries = 0;
-      const countEntry = () => {
-        entries += 1;
+      const countEntries = (n: number) => {
+        entries += n;
         if (entries > maxFiles) throw new Refusal(413, `The upload has more than the limit of ${maxFiles} files.`);
       };
       const trees = new Map<string, FolderTree>();
@@ -508,21 +562,16 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
           const input = typeof f.ref === 'string' ? placed.get(f.ref) : undefined;
           if (!input || input.kind.startsWith('output')) throw new Refusal(400, 'A file names an unknown input.');
           const target = targetOf(input, f.rel);
-          const key = `${input.ref}\0${f.rel}`;
+          const key = sentKey(input.ref, f.rel);
           if (sent.has(key)) throw new Refusal(400, 'The same file was sent twice.');
           sent.add(key);
           if (input.kind === 'input-dir') {
             // Each folder on the way counts once.
-            let node: FolderTree | undefined = trees.get(input.ref);
-            if (!node) { node = new Map(); trees.set(input.ref, node); }
-            const parts = f.rel.split('/');
-            for (let n = 0; n < parts.length - 1; n += 1) {
-              let next: FolderTree | undefined = node.get(parts[n]!);
-              if (!next) { next = new Map(); node.set(parts[n]!, next); countEntry(); }
-              node = next;
-            }
+            let tree = trees.get(input.ref);
+            if (!tree) { tree = new Map(); trees.set(input.ref, tree); }
+            countEntries(countNewFolders(tree, f.rel));
           }
-          countEntry();
+          countEntries(1);
           try {
             if (input.kind === 'input-dir') await mkdir(dirname(target), { recursive: true, mode: 0o700 });
             openFile = await open(target, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | O_NOFOLLOW, 0o600);
@@ -554,6 +603,8 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
           await done.close();
         } else if (f.t === 'go') {
           if (openFile) throw new Refusal(400, 'Go came with a file still open.');
+          uploading = false;
+          clearTimeout(idleTimer);
           break;
         } else {
           throw new Refusal(400, 'A frame came out of order.');
@@ -613,6 +664,8 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       return reply.send({ error: r.message, ...r.extra });
     } finally {
       clearTimeout(startTimer);
+      uploading = false;
+      clearTimeout(idleTimer);
       if (!handedOver) {
         slot?.release();
         await cleanUp();
@@ -668,11 +721,22 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
      *  kill, frees its slot. */
     const stalled = () => { callerLeft(); out.destroy(); s.reply.raw.destroy(); };
 
+    /** How many writers are waiting on the caller now. While any is, the budget after exit stands still. */
+    let waitingOnCaller = 0;
+
     /** Writes one frame, waiting while the caller is slow. Does nothing once the caller has gone. */
     const send = async (f: ServerFrame): Promise<void> => {
       if (stop.signal.aborted || out.destroyed || out.writableEnded) return;
       if (out.write(encodeFrame(f))) return;
-      await new Promise<void>((resolveWait) => {
+      waitingOnCaller += 1;
+      try {
+        await waitForCaller();
+      } finally {
+        waitingOnCaller -= 1;
+      }
+    };
+    const waitForCaller = () =>
+      new Promise<void>((resolveWait) => {
         const done = () => {
           clearTimeout(stallTimer);
           out.off('drain', done);
@@ -685,7 +749,6 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
         out.on('close', done);
         stop.signal.addEventListener('abort', done);
       });
-    };
     const sendBytes = async (t: 'out' | 'err' | 'data', buf: Buffer): Promise<void> => {
       for (let i = 0; i < buf.length; i += MAX_DATA_BYTES) await send({ t, d: buf.subarray(i, i + MAX_DATA_BYTES).toString('base64') });
     };
@@ -695,34 +758,33 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       [p.path, `${PATH_PLACEHOLDER}${p.ref}`] as const,
       ...p.companions.map((c) => [join(p.base, c), c] as const),
     ]);
-    // After the process has gone, each pump may wait on its pipe for at most PIPE_WAIT_MS for the
-    // next chunk. Only that wait is timed; a wait in `send`, on the caller, is not.
+    // After the process has gone, one budget of pipeWaitMs for the rest of its output, counted in
+    // ticks. A tick counts only while no writer waits on the caller, so a slow caller loses nothing,
+    // and a grandchild that holds the pipes open, silent or chatty, is cut off at the budget.
     let processGone = false;
-    const guards = new Set<() => void>();
-    const pump = async (stream: NodeJS.ReadableStream & { destroy(): void }, t: 'out' | 'err'): Promise<void> => {
+    let pumpsDone = false;
+    let budgetUsed = 0;
+    let budgetTimer: NodeJS.Timeout | undefined;
+    const givePipesUp = () => {
+      handle.stdout.destroy();
+      handle.stderr.destroy();
+    };
+    const tick = () => {
+      budgetTimer = undefined;
+      if (pumpsDone) return;
+      if (waitingOnCaller === 0) budgetUsed += BUDGET_TICK_MS;
+      if (budgetUsed >= pipeWaitMs) { givePipesUp(); return; }
+      budgetTimer = setTimeout(tick, BUDGET_TICK_MS);
+    };
+    // Once the caller has gone, or the answer is cut off, nothing more of the output is wanted.
+    const onStop = () => { if (processGone) givePipesUp(); };
+    stop.signal.addEventListener('abort', onStop, { once: true });
+
+    const pump = async (stream: NodeJS.ReadableStream, t: 'out' | 'err'): Promise<void> => {
       const masker = createPathMasker(pairs);
-      const it = stream[Symbol.asyncIterator]() as AsyncIterator<Buffer>;
-      let waiting = false;
-      let timer: NodeJS.Timeout | undefined;
-      const arm = () => {
-        clearTimeout(timer);
-        if (waiting && processGone) timer = setTimeout(() => stream.destroy(), PIPE_WAIT_MS);
-      };
-      guards.add(arm);
       try {
-        for (;;) {
-          waiting = true;
-          arm();
-          const r = await it.next();
-          waiting = false;
-          clearTimeout(timer);
-          if (r.done) break;
-          await sendBytes(t, masker.push(r.value));
-        }
-      } catch { /* the pipe broke, or was given up on; the exit code says the rest */ } finally {
-        clearTimeout(timer);
-        guards.delete(arm);
-      }
+        for await (const chunk of stream) await sendBytes(t, masker.push(chunk as Buffer));
+      } catch { /* the pipe broke, or was given up on; the exit code says the rest */ }
       await sendBytes(t, masker.flush());
     };
 
@@ -738,6 +800,8 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
         await send({ t: 'file', ref, rel });
         const buf = Buffer.alloc(MAX_DATA_BYTES);
         for (;;) {
+          // Nothing more is sent once the caller has gone, so stop reading.
+          if (stop.signal.aborted) return;
           const { bytesRead } = await fh.read(buf, 0, buf.length, null);
           if (bytesRead === 0) break;
           await send({ t: 'data', d: buf.subarray(0, bytesRead).toString('base64') });
@@ -773,11 +837,13 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       await send({ t: 'run', id: handle.id });
       const pumps = Promise.all([pump(handle.stdout, 'out'), pump(handle.stderr, 'err')]);
       exitCode = await handle.exited;
-      // A grandchild can hold the pipes open after the process has gone. From now on, a pump that
-      // waits on its pipe too long gives up on it.
+      // A grandchild can hold the pipes open after the process has gone. From now on the budget runs.
       processGone = true;
-      for (const arm of guards) arm();
+      if (stop.signal.aborted) givePipesUp();
+      else budgetTimer = setTimeout(tick, BUDGET_TICK_MS);
       await pumps;
+      pumpsDone = true;
+      clearTimeout(budgetTimer);
       try {
         await sendOutputs();
       } catch (err) {
@@ -795,6 +861,11 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       // that has the whole answer finds nothing left behind.
       exitCode = await handle.exited;
       s.left.removeEventListener('abort', callerLeft);
+      stop.signal.removeEventListener('abort', onStop);
+      pumpsDone = true;
+      clearTimeout(budgetTimer);
+      // On a failure above, the pipes may still be open: nothing more of them is wanted.
+      givePipesUp();
       await removeFolder(s.runDir);
       // A kept upload is for a command that needs it again. A failed run recorded nothing that
       // points at it, so it goes: repeating a failing command must not fill the disk.

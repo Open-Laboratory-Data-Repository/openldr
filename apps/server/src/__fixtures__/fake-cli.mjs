@@ -2,7 +2,8 @@
 // the real CLI: the hand-off arrives as JSON on descriptor 3, and OPENLDR_SERVED_FD is '3'. It
 // touches no database. The first word of the hand-off's argv picks what it does.
 import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, closeSync, fstatSync, lstatSync, mkdirSync, readdirSync, readFileSync, readSync, symlinkSync, writeFileSync, writeSync } from 'node:fs';
+import { chmodSync, closeSync, fstatSync, lstatSync, mkdirSync, readdirSync, readFileSync, readSync, symlinkSync, writeFileSync } from 'node:fs';
+import net from 'node:net';
 import { dirname, join } from 'node:path';
 
 function readHandoff() {
@@ -137,6 +138,18 @@ switch (mode) {
     child.unref();
     break;
   }
+  case 'chatty': {
+    // Leaves a process behind that writes a line to this one's standard output every 100 ms, so
+    // the pipe is never quiet, until the given file exists (the test makes it), or two minutes.
+    const code = "const fs = require('fs'); setInterval(() => { if (fs.existsSync(process.argv[1])) process.exit(0); process.stdout.write('tick\\n'); }, 100); setTimeout(() => process.exit(0), 120000);";
+    const child = spawn(process.execPath, ['-e', code, rest[0]], {
+      stdio: ['ignore', 'inherit', 'inherit'],
+      detached: true,
+    });
+    process.stderr.write(`grandchild ${child.pid}\n`);
+    child.unref();
+    break;
+  }
   case 'lock': {
     // A folder this user cannot write in, with a file in it, so removing the tree fails.
     const sub = join(rest[0], 'locked');
@@ -162,30 +175,30 @@ switch (mode) {
     break;
   }
   case 'fill': {
-    // Writes until the pipe to the server stays full for a second, which happens only when the
-    // server is stuck sending to its caller. Then exits at once, leaving a full pipe behind, and
-    // puts the exact byte count in the given file.
-    process.stdout._handle?.setBlocking?.(false);
-    const piece = Buffer.alloc(16 * 1024, 121);
-    let written = 0;
+    // Writes until the channel to the server stays full for a second, which happens only when the
+    // server is stuck sending to its caller. Then exits at once, leaving the channel full, and puts
+    // in the given file the bytes the kernel took whole. At most one 4 KiB piece more may have gone
+    // in part. Node gives a spawned child a socket here, not a FIFO, so /proc/self/fd/1 cannot be
+    // reopened (ENXIO). A second, non-blocking stream over descriptor 1 (public net.Socket API)
+    // shows a full channel as data left waiting in user space. Tested on Linux only.
+    const out = new net.Socket({ fd: 1, readable: false, writable: true });
+    const piece = Buffer.alloc(4 * 1024, 121);
+    let taken = 0;
     let stuck = 0;
-    const loop = () => {
-      for (;;) {
-        try {
-          written += writeSync(1, piece);
-          stuck = 0;
-        } catch (e) {
-          if (e.code !== 'EAGAIN') throw e;
-          stuck += 1;
-          if (stuck >= 10) {
-            writeFileSync(rest[0], String(written));
-            process.exit(0);
-          }
-          return void setTimeout(loop, 100);
-        }
+    const check = () => {
+      if (out.writableLength === 0) { stuck = 0; return void fill(); }
+      stuck += 1;
+      if (stuck >= 10) {
+        writeFileSync(rest[0], String(taken));
+        process.exit(0);
       }
+      setTimeout(check, 100);
     };
-    loop();
+    const fill = () => {
+      while (out.writableLength === 0) out.write(piece, () => { taken += piece.length; });
+      setTimeout(check, 100);
+    };
+    fill();
     break;
   }
   case 'flood': {

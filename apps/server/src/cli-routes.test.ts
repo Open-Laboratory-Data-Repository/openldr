@@ -24,7 +24,10 @@ import { buildApp } from './app';
 import type { RequestActor } from './auth-plugin';
 import { ctxWith } from './test-helpers';
 import { createCliRunner, KILL_AFTER_MS, SLOT_WAIT_MS } from './cli-runner';
-import { createPathMasker, PIPE_WAIT_MS, REFUSAL_DRAIN_MS, registerCliRoutes, STALL_MS, START_DEADLINE_MS } from './cli-routes';
+import {
+  countNewFolders, createPathMasker, PIPE_WAIT_MS, REFUSAL_DRAIN_MS, registerCliRoutes, STALL_MS, START_DEADLINE_MS, UPLOAD_IDLE_MS,
+  type FolderTree,
+} from './cli-routes';
 import { readAppVersion } from './version';
 
 const FAKE = fileURLToPath(new URL('./__fixtures__/fake-cli.mjs', import.meta.url));
@@ -90,7 +93,7 @@ function scratchDir(): string {
   return d;
 }
 
-async function harness(o: { entry?: string | null; maxUploadBytes?: number; maxRunning?: number; maxFiles?: number; work?: string } = {}): Promise<Harness> {
+async function harness(o: { entry?: string | null; maxUploadBytes?: number; maxRunning?: number; maxFiles?: number; work?: string; pipeWaitMs?: number } = {}): Promise<Harness> {
   const work = o.work ?? mkdtempSync(join(tmpdir(), 'cli-routes-'));
   const logs: string[] = [];
   const logger = fakeLogger(logs);
@@ -112,7 +115,7 @@ async function harness(o: { entry?: string | null; maxUploadBytes?: number; maxR
   registerCliRoutes(
     app,
     { cfg: { TERMINOLOGY_WORK_DIR: work, CLI_MAX_UPLOAD_BYTES: o.maxUploadBytes ?? 2_147_483_648, CLI_MAX_RUNNING: 2 }, audit: store, logger: logger as never },
-    { runner, entry: () => (o.entry === undefined ? FAKE : o.entry), version: VERSION, maxFiles: o.maxFiles },
+    { runner, entry: () => (o.entry === undefined ? FAKE : o.entry), version: VERSION, maxFiles: o.maxFiles, pipeWaitMs: o.pipeWaitMs },
   );
   const url = await app.listen({ host: '127.0.0.1', port: 0 });
   const h = { app, url, work, audit, logs, started: () => started };
@@ -241,6 +244,14 @@ function pidOf(stderr: string, word = 'pid'): number {
 }
 function alive(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch { return false; }
+}
+/** Lets a test's grandchild end by making its release file, and kills it if it does not. It is the
+ *  test's own process, started by its own fake CLI. */
+async function endGrandchild(release: string, pid: number): Promise<void> {
+  writeFileSync(release, 'go');
+  if (!pid) return;
+  for (let i = 0; i < 300 && alive(pid); i += 1) await realSleep(10);
+  if (alive(pid)) process.kill(pid, 'SIGKILL');
 }
 
 const cliRows = (h: Harness) => h.audit.filter((e) => e.action === 'cli.run');
@@ -432,7 +443,7 @@ describe('POST /api/cli/run refusals', () => {
     const a = await post(h1, { user: 'admin', body: body(start('audit list', ['echo']), GO) });
     expect(a.status).toBe(503);
     // The answer names the setting, never the server's path. The log names the folder.
-    expect(String(a.json().error)).toContain('TERMINOLOGY_WORK_DIR');
+    expect(String(a.json().error)).toContain('TERMINOLOGY_WORK_DIR, or the system temp folder when it is unset');
     expect(String(a.json().error)).toContain('not a real folder');
     expect(a.text.includes(owned)).toBe(false);
     expect(readdirSync(other)).toEqual([]);
@@ -755,8 +766,9 @@ describe('POST /api/cli/run', () => {
       };
       pump();
     });
-    // The server stopped at the first byte: what was sent is what the socket buffers hold.
-    expect(r.sent).toBeLessThan(4 * MiB);
+    // The server stopped at the first byte: what was sent is what the socket buffers hold, far
+    // short of the 256 MiB on offer. The bound leaves room for large kernel buffers.
+    expect(r.sent).toBeLessThan(32 * MiB);
     expect(r.ms).toBeLessThan(5_000);
     await until(() => cliRows(h).length === 1, 'audit row');
     // The interrupt can land before the command sets its SIGINT handler (130) or after (0).
@@ -793,7 +805,8 @@ describe('POST /api/cli/run', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const h = await harness();
     const s = stream(h, 'admin', '{"t":"sta', { keepOpen: true });
-    await realSleep(100);
+    // The handler has set its deadline once there is a timer.
+    await until(() => vi.getTimerCount() === 1, 'the start deadline');
     await vi.advanceTimersByTimeAsync(START_DEADLINE_MS - 1);
     expect(s.state.status).toBe(0);
     await vi.advanceTimersByTimeAsync(1);
@@ -801,6 +814,29 @@ describe('POST /api/cli/run', () => {
     expect(s.state.status).toBe(408);
     expect(h.started()).toBe(0);
     expect(folders(h)).toEqual([]);
+  });
+
+  it('answers 408 and removes the folder when an upload sends nothing for 60 seconds', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const h = await harness();
+    const s = stream(h, 'admin', body(start('connectors add', ['echo', '@@f'], { inputs: [inFile('f', 'a.csv')] }), { t: 'file', ref: 'f', rel: '' }, { t: 'data', d: 'AAAA' }), { keepOpen: true });
+    await until(() => folders(h).length === 1, 'the request folder');
+    // The uploaded file, to see each new chunk arrive.
+    const runDir = join(h.work, folders(h)[0]!);
+    const upload = join(runDir, readdirSync(runDir)[0]!, 'a.csv');
+    await until(() => existsSync(upload) && statSync(upload).size === 3, 'the first bytes');
+    await until(() => vi.getTimerCount() === 1, 'the idle limit');
+    // A byte just before the limit starts it again.
+    await vi.advanceTimersByTimeAsync(UPLOAD_IDLE_MS - 1);
+    s.req.write(encodeFrame({ t: 'data', d: 'BBBB' }));
+    await until(() => statSync(upload).size === 6, 'the second bytes');
+    await vi.advanceTimersByTimeAsync(UPLOAD_IDLE_MS - 1);
+    expect(s.state.status).toBe(0);
+    await vi.advanceTimersByTimeAsync(1);
+    await until(() => s.state.closed, 'the request to end');
+    expect(s.state.status).toBe(408);
+    await until(() => folders(h).length === 0, 'the folder to go');
+    expect(h.started()).toBe(0);
   });
 
   it('refuses a file name longer than 4096 bytes and makes nothing for it', async () => {
@@ -827,24 +863,15 @@ describe('POST /api/cli/run', () => {
     expect(over.status).toBe(413);
   });
 
-  it('counts each folder once for many files under one long shared name, quickly', async () => {
-    // 1900 folders deep (3800 bytes, near the longest path Linux takes) and 400 files under them:
-    // 2300 entries.
-    const prefix = 'a/'.repeat(1900);
-    const files = Array.from({ length: 400 }, (_, i) => file('d', `${prefix}f${i}`, ''));
-    const text = body(start('market install', ['echo'], { inputs: [inDir('d', 'deep')] }), ...files, GO);
-    const at = await harness({ maxFiles: 2300 });
-    const t0 = Date.now();
-    const ok = await post(at, { user: 'admin', body: text });
-    const took = Date.now() - t0;
-    expect(ok.exit).toBe(0);
-    // Generous. Counted by building every prefix string, as in fix round 1, this took several times
-    // longer; most of what is left is the file system's own work.
-    expect(took).toBeLessThan(4_000);
-    // The count is exact: 10 shared folders and 5 files is 15, so a limit of 14 is passed.
-    const small = body(start('market install', ['echo'], { inputs: [inDir('d', 'deep')] }), ...Array.from({ length: 5 }, (_, i) => file('d', `${'s/'.repeat(10)}f${i}`, '')), GO);
-    expect((await post(await harness({ maxFiles: 15 }), { user: 'admin', body: small })).exit).toBe(0);
-    expect((await post(await harness({ maxFiles: 14 }), { user: 'admin', body: small })).status).toBe(413);
+  it('counts each folder once for many files under one shared name', async () => {
+    // 10 shared folders, a folder beside them, and 5 files: 10 + 1 + 5 = 16, so 15 is passed.
+    const files = [
+      ...Array.from({ length: 4 }, (_, i) => file('d', `${'s/'.repeat(10)}f${i}`, '')),
+      file('d', 's/s/other/f', ''),
+    ];
+    const small = body(start('market install', ['echo'], { inputs: [inDir('d', 'deep')] }), ...files, GO);
+    expect((await post(await harness({ maxFiles: 16 }), { user: 'admin', body: small })).exit).toBe(0);
+    expect((await post(await harness({ maxFiles: 15 }), { user: 'admin', body: small })).status).toBe(413);
   });
 
   it('keeps every byte of a slow caller\'s output after the command has gone, then sends exit', async () => {
@@ -874,7 +901,10 @@ describe('POST /api/cli/run', () => {
     (response as IncomingMessage | null)!.resume();
     await until(() => ended, 'the end of the answer');
     const a = answer(200, { 'content-type': 'application/x-ndjson' }, text);
-    expect(Buffer.byteLength(a.stdout)).toBe(total);
+    // Every byte the kernel took whole arrives; at most one 4 KiB piece more went in part.
+    const got = Buffer.byteLength(a.stdout);
+    expect(got).toBeGreaterThanOrEqual(total);
+    expect(got).toBeLessThan(total + 4 * 1024);
     expect(a.frames.at(-1)).toEqual({ t: 'exit', code: 0 });
   });
 
@@ -1109,8 +1139,8 @@ describe('POST /api/cli/run', () => {
     try {
       await until(() => /grandchild \d+/.test(s.out().stderr), 'the grandchild');
       grandchild = pidOf(s.out().stderr, 'grandchild');
-      // The command has exited; each pump waits on its pipe, with one timer each.
-      await until(() => vi.getTimerCount() === 2, 'the pipe waits');
+      // The command has exited; the budget after exit is the one timer.
+      await until(() => vi.getTimerCount() === 1, 'the budget after exit');
       await vi.advanceTimersByTimeAsync(PIPE_WAIT_MS - 1);
       expect(s.state.ended).toBe(false);
       await vi.advanceTimersByTimeAsync(1);
@@ -1123,6 +1153,52 @@ describe('POST /api/cli/run', () => {
       writeFileSync(release, 'go');
     }
     await until(() => !alive(grandchild), 'the grandchild to end');
+  });
+
+  it('cuts off a grandchild that keeps writing after the command has gone, and frees the slot', async () => {
+    // Real timers with a short budget: the grandchild writes every 100 ms of real time, more often
+    // than any quiet-pipe limit could notice.
+    const h = await harness({ maxRunning: 1, pipeWaitMs: 500 });
+    const release = join(scratchDir(), 'release-chatty');
+    let grandchild = 0;
+    try {
+      const s = stream(h, 'admin', body(start('audit list', ['chatty', release]), GO));
+      await until(() => /grandchild \d+/.test(s.out().stderr), 'the grandchild');
+      grandchild = pidOf(s.out().stderr, 'grandchild');
+      await s.printed('tick');
+      await s.done();
+      expect(s.out().exit).toBe(0);
+      expect(alive(grandchild)).toBe(true);
+      await until(() => cliRows(h).length === 1, 'audit row');
+      // The slot is free: with one slot, the next command runs.
+      expect((await post(h, { user: 'admin', body: body(start('audit list', ['echo', 'next']), GO) })).stdout).toBe('["echo","next"]\n');
+      // And the server closes.
+      const cap = new AbortController();
+      await Promise.race([h.app.close(), realSleep(5_000, undefined, { signal: cap.signal }).then(() => { throw new Error('close hung'); })]);
+      cap.abort();
+      open.splice(open.indexOf(h), 1);
+      rmSync(h.work, { recursive: true, force: true });
+    } finally {
+      await endGrandchild(release, grandchild);
+    }
+  });
+
+  it('stops reading a chatty grandchild at once when the caller leaves after the command has gone', async () => {
+    // A budget far longer than the test: only the caller leaving can end the run.
+    const h = await harness({ pipeWaitMs: 600_000 });
+    const release = join(scratchDir(), 'release-chatty');
+    let grandchild = 0;
+    try {
+      const s = stream(h, 'admin', body(start('audit list', ['chatty', release]), GO));
+      await until(() => /grandchild \d+/.test(s.out().stderr), 'the grandchild');
+      grandchild = pidOf(s.out().stderr, 'grandchild');
+      await s.printed('tick');
+      s.req.destroy();
+      await until(() => cliRows(h).length === 1, 'the run to end');
+      expect(alive(grandchild)).toBe(true);
+    } finally {
+      await endGrandchild(release, grandchild);
+    }
   });
 
   it('interrupts running commands on shutdown and leaves no process behind', async () => {
@@ -1270,6 +1346,31 @@ describe('buildApp', () => {
     expect(app.hasRoute({ method: 'POST', url: '/api/cli/run' })).toBe(true);
     expect(app.hasRoute({ method: 'POST', url: '/api/cli/runs/:id/interrupt' })).toBe(true);
     await app.close();
+  });
+});
+
+describe('countNewFolders', () => {
+  it('counts each folder on the way once, and never the file', () => {
+    const tree: FolderTree = new Map();
+    expect(countNewFolders(tree, 'f')).toBe(0);
+    expect(countNewFolders(tree, 'a/b/f')).toBe(2);
+    expect(countNewFolders(tree, 'a/b/g')).toBe(0);
+    expect(countNewFolders(tree, 'a/c/f')).toBe(1);
+    // A folder named like a file elsewhere is its own folder.
+    expect(countNewFolders(tree, 'f/x')).toBe(1);
+  });
+
+  it('costs each name its own number of parts, however long the shared start', () => {
+    // 1900 folders deep and 400 files under them, with no disk. Counting by building every prefix
+    // string, as in fix round 1, took seconds on this shape.
+    const prefix = 'a/'.repeat(1900);
+    const tree: FolderTree = new Map();
+    const t0 = Date.now();
+    let total = 0;
+    for (let i = 0; i < 400; i += 1) total += countNewFolders(tree, `${prefix}f${i}`);
+    const took = Date.now() - t0;
+    expect(total).toBe(1900);
+    expect(took).toBeLessThan(1_000);
   });
 });
 
