@@ -1,4 +1,5 @@
 export * from './cleanup';
+export * from './desktop-pack';
 export * from './gate';
 export * from './manifest';
 export * from './preconditions';

@@ -29,6 +29,24 @@ On Ubuntu 24.04 and later, Electron's sandbox needs an AppArmor profile that a c
 install. For development there, `pnpm --filter @openldr/desktop dev` starts it with
 `--no-sandbox`. A packaged app never turns the sandbox off.
 
+## Pack the app
+
+Build the three packages as above, then:
+
+```bash
+pnpm pack:desktop all        # or linux-x64, darwin-arm64, win32-x64
+```
+
+This writes one archive per system and a `SHA256SUMS` file to `dist/desktop/v<version>/` at the
+repo root. `--out <folder>` puts them under another folder. The version is the root
+`package.json` version.
+
+Packing runs on Linux only. It needs symbolic links, file modes and GNU tar. The macOS and
+Windows archives need the network once: Electron's zips and the two Postgres packages are
+downloaded and checked against `checksums.json` and `pnpm-lock.yaml`. Only the Linux archive has
+been started here. The macOS and Windows archives are not proven and wait for a run on those
+systems.
+
 ## Environment overrides
 
 These are for development and tests only.

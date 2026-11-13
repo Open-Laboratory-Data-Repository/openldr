@@ -28,6 +28,7 @@
     "gen:fhir-paths": "tsx scripts/gen-fhir-paths.ts",
     "gen:fhir-bindings": "tsx scripts/gen-fhir-bindings.ts",
     "release": "tsx scripts/release.ts",
+    "pack:desktop": "tsx scripts/pack-desktop.ts",
     "e2e": "turbo build --filter=@openldr/studio --filter=@openldr/server && pnpm --filter @openldr/e2e e2e",
     "verify:ui": "turbo build --filter=@openldr/studio --filter=@openldr/server && pnpm --filter @openldr/e2e capture",
     "docs:screenshots": "turbo build --filter=@openldr/studio --filter=@openldr/server && pnpm --filter @openldr/e2e docs:screenshots",

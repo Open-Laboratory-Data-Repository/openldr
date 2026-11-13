@@ -274,7 +274,8 @@ function main(): void {
       platform: process.platform,
       home: homedir(),
       execPath: process.execPath,
-      appArgs: app.isPackaged ? [] : [app.getAppPath()],
+      // defaultApp is true only when started as `electron <folder>`. isPackaged goes by the binary's name.
+      appArgs: process.defaultApp ? [app.getAppPath()] : [],
       getLoginItemSettings: () => app.getLoginItemSettings(),
       setLoginItemSettings: (v) => app.setLoginItemSettings(v),
     };
