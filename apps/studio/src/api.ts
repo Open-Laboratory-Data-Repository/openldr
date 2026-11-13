@@ -3346,16 +3346,24 @@ export const diagnoseConnector = (id: string): Promise<DiagnoseResult> =>
 
 // Mirrors SetupReport in packages/bootstrap/src/setup-checks.ts. Studio cannot import bootstrap,
 // so the id and hint lists are repeated here; SetupChecks.test.tsx checks each has its strings.
-export const SETUP_CHECK_IDS = ['adapters', 'signIn', 'secretsKey', 'labName', 'timeZone', 'connectors', 'sync'] as const;
+export const SETUP_CHECK_IDS = ['adapters', 'signIn', 'secretsKey', 'labName', 'timeZone', 'connectors', 'sync', 'facilities'] as const;
 export const SETUP_HINTS = [
   'adapterDown', 'adapterDegraded', 'signInOff', 'signInSetup', 'secretsKeyMissing', 'labNameDefault', 'timeZoneEmpty',
-  'timeZoneSqlServer', 'connectorFailed', 'syncIncomplete', 'syncFailing', 'checkError',
+  'timeZoneSqlServer', 'connectorFailed', 'syncIncomplete', 'syncFailing', 'facilitiesUnmatched', 'checkError',
 ] as const;
 export type SetupStatus = 'pass' | 'warn' | 'fail' | 'skip';
 export interface SetupCheck { id: (typeof SETUP_CHECK_IDS)[number]; status: SetupStatus; detail?: string; hint?: (typeof SETUP_HINTS)[number]; fix?: string }
 export interface SetupReport { ok: boolean; checks: SetupCheck[] }
 export const runSetupChecks = (): Promise<SetupReport> =>
   authFetch('/api/settings/setup-checks', { method: 'POST' }).then((r) => okJson<SetupReport>(r, 'run setup checks'));
+
+// Sample data, as `openldr db seed` loads it (apps/server/src/sample-data-routes.ts). The server
+// allows it only on an install that holds no lab data, and checks again on the load itself.
+export const fetchSampleDataAllowed = (): Promise<boolean> =>
+  authFetch('/api/settings/sample-data').then((r) => okJson<{ allowed: boolean }>(r, 'check sample data')).then((b) => b.allowed === true);
+/** A 409 (`has_lab_data`, `sample_data_busy`) or a 500 rejects with the server's sentence. */
+export const loadSampleData = (): Promise<void> =>
+  authFetch('/api/settings/sample-data', { method: 'POST' }).then((r) => okJson<unknown>(r, 'load sample data')).then(() => undefined);
 
 // Import plugins that can read a host connector, and whether an admin allowed each one.
 export interface ConnectorImportPlugin { id: string; version: string; allowed: boolean }

@@ -12,11 +12,32 @@ import { keepSessionFresh, localLogout, localRefresh, type LocalSession } from '
 import { LoginPage } from './LoginPage';
 import { SetupPage } from './SetupPage';
 import { ChangePasswordPage } from './ChangePasswordPage';
+import { FirstRunPage } from '../first-run/FirstRunPage';
 import { Button } from '@/components/ui/button';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 
 /** Module-level guard: prevents StrictMode double-invocation from issuing two signinRedirects. */
 let redirecting = false;
+
+/**
+ * Set in this tab when SetupPage makes the first administrator, and removed when the first-run
+ * flow ends or the session does. Session storage, so a reload in the middle shows the flow again
+ * and no other tab or person ever sees it.
+ */
+export const FIRST_RUN_KEY = 'openldr.firstRun';
+
+function readFirstRun(): boolean {
+  try { return sessionStorage.getItem(FIRST_RUN_KEY) === '1'; } catch { return false; }
+}
+
+function writeFirstRun(on: boolean): void {
+  try {
+    if (on) sessionStorage.setItem(FIRST_RUN_KEY, '1');
+    else sessionStorage.removeItem(FIRST_RUN_KEY);
+  } catch {
+    // Storage is blocked. The flow then shows until it ends or the page reloads.
+  }
+}
 
 /** Test-only: reset module-level state between tests. */
 export function __resetAuthProviderState(): void { redirecting = false; }
@@ -64,6 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [localScreen, setLocalScreen] = useState<'login' | 'change' | 'setup' | null>(null);
   /** The last sign-out did not reach the server. The sign-in page warns and offers a retry. */
   const [signOutFailed, setSignOutFailed] = useState(false);
+  /** This person just made the first administrator in this tab, and has not finished the first run. */
+  const [firstRun, setFirstRun] = useState(readFirstRun);
   const localModeRef = useRef(false);
   /** Stops the running refresh timer. Null when no local session is running. */
   const localStopRef = useRef<(() => void) | null>(null);
@@ -76,8 +99,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStopRef.current = null;
   };
 
+  const endFirstRun = () => {
+    writeFirstRun(false);
+    setFirstRun(false);
+  };
+
   const showLocalSignIn = () => {
     stopLocalTimer();
+    // The next person to sign in in this tab may not be the one who made the administrator.
+    endFirstRun();
     setAccessToken(null);
     setUser(null);
     setCapabilities([]);
@@ -156,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           const session = await localRefresh();
           if (!active) return;
-          if (!session) { setLocalScreen('login'); setLoading(false); return; }
+          if (!session) { endFirstRun(); setLocalScreen('login'); setLoading(false); return; }
           await openLocalSession(session);
           return;
         }
@@ -226,7 +256,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   if (localScreen === 'setup') {
     return (
       <SetupPage
-        onSignedIn={(session) => { void openLocalSession(session); }}
+        onSignedIn={(session) => {
+          writeFirstRun(true);
+          setFirstRun(true);
+          void openLocalSession(session);
+        }}
         onSignInInstead={() => setLocalScreen('login')}
       />
     );
@@ -285,5 +319,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  return <AuthContext.Provider value={{ authCapabilities, user, loading, hasCapability, signOut, authEnforced, authMode }}>{children}</AuthContext.Provider>;
+  const auth: AuthState = { authCapabilities, user, loading, hasCapability, signOut, authEnforced, authMode };
+
+  // Straight after the first administrator is made, the first-run steps come before the app.
+  if (firstRun && authMode === 'local' && user) {
+    return <AuthContext.Provider value={auth}><FirstRunPage onDone={endFirstRun} /></AuthContext.Provider>;
+  }
+
+  return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>;
 }
