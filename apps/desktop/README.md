@@ -39,6 +39,7 @@ These are for development and tests only.
 | `OPENLDR_DESKTOP_PORT` | Use exactly this port. The app remembers nothing. |
 | `OPENLDR_DESKTOP_USER_DIR` | The app's own folder (settings, log, browser profile). Without it, `OpenLDR Desktop` under the system's app data folder. |
 | `OPENLDR_DESKTOP_SELFCHECK` | A file path. The app writes one JSON object there about what it shows, then quits. |
+| `OPENLDR_DESKTOP_SELFCHECK_THEN` | What the app does after it writes the self-check file: `close` closes the window and keeps running, `stay` does nothing. Without it, the app quits. |
 
 From a worktree, also set `OPENLDR_SKIP_ENV_FILE=true`. Otherwise the server finds the main
 checkout's `.env` and its databases.

@@ -18,6 +18,7 @@ export const pt: EnShape = {
     setupTitle: 'Criar o administrador',
     setupCode: 'Código de configuração',
     setupCodeHint: 'Execute "openldr auth setup-code" no servidor para obter um.',
+    setupCodeFromApp: 'Preenchido pela aplicação OpenLDR.',
     newPassword: 'Nova palavra-passe',
     repeatPassword: 'Repetir a palavra-passe',
     currentPassword: 'Palavra-passe atual',

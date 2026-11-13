@@ -7,6 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, powerMonitor, session, shell, Tray } from 'electron';
 import { setAutostart, startedHidden, type AutostartDeps } from './autostart';
+import { bridgeHandlers } from './bridge';
 import { RETRY_CHANNEL, SCREEN_CHANNEL } from './channels';
 import { DesktopController, pageState, type Screen } from './controller';
 import * as launcher from './launcher';
@@ -155,6 +156,21 @@ function main(): void {
       return { action: 'deny' };
     });
   });
+
+  // Studio's two calls. bridge.ts checks each sender against the launcher's address, and answers
+  // only while that address is this computer. The code itself is never logged.
+  const handlers = bridgeHandlers({
+    address: () => controller?.bridgeAddress(),
+    requestSetupCode: () =>
+      launcher.requestSetupCode(target).catch((err: unknown) => {
+        log(`Studio asked for a code and got none: ${err instanceof Error ? err.message : String(err)}`);
+        throw err;
+      }),
+    info: () => ({ version: app.getVersion(), platform: process.platform }),
+  });
+  for (const [channel, handle] of Object.entries(handlers)) {
+    ipcMain.handle(channel, (event) => handle(event.senderFrame?.url ?? ''));
+  }
 
   ipcMain.on(RETRY_CHANNEL, (event) => {
     // Only from one of the app's own pages.

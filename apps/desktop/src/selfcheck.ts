@@ -1,7 +1,9 @@
 // The builder's self-check. When OPENLDR_DESKTOP_SELFCHECK names a file, the app waits until it
-// shows the error screen, or until Studio has drawn its setup page or its sign-in form. It then
-// writes one JSON object about what it shows to that file. It reports whether things exist, never
-// a field's value. The setup code field is hidden by a style rule before anything else is done.
+// shows the error screen, or until Studio has drawn its setup page or its sign-in form. On the
+// setup page with the app's bridge there, it also waits for the app's answer to fill the setup code
+// field. It then writes one JSON object about what it shows to that file. It reports whether things
+// exist and the setup code's length, never a field's value. The setup code field is hidden by a
+// style rule before anything else is done.
 
 import { renameSync, writeFileSync } from 'node:fs';
 
@@ -26,6 +28,12 @@ export interface SelfcheckReport {
   address: string | null;
   title: string;
   setupPage: boolean;
+  /** `typeof window.openldrDesktop` in Studio's page. */
+  bridge: string;
+  /** The setup code field's value length, or null without the field. The value never leaves the page. */
+  setupCodeLength: number | null;
+  /** Whether the setup code field is read-only, as it is once the app has filled it. */
+  setupCodeLocked: boolean;
   attached: boolean;
   electron: string;
   node: string;
@@ -35,20 +43,38 @@ export interface SelfcheckReport {
 /** Hides the setup code field, so a window on a real screen never shows a code. */
 export const HIDE_SETUP_CODE_CSS = '#local-setup-code { visibility: hidden !important; }';
 
-/** Reads only the title and whether two elements exist. */
-const PROBE_SCRIPT = `({
-  title: document.title,
-  setupPage: document.getElementById('local-setup-code') !== null,
-  signIn: document.getElementById('local-sign-in-username') !== null,
-})`;
+/** Reads the title, whether two elements exist, and the setup code field's state. Of its value, only the length. */
+const PROBE_SCRIPT = `(() => {
+  const code = document.getElementById('local-setup-code');
+  return {
+    title: document.title,
+    setupPage: code !== null,
+    signIn: document.getElementById('local-sign-in-username') !== null,
+    bridge: typeof window.openldrDesktop,
+    setupCodeLength: code === null ? null : code.value.length,
+    setupCodeLocked: code !== null && code.readOnly === true,
+    setupCodeWaiting: code !== null && code.disabled === true,
+  };
+})()`;
 
 interface Facts {
   title: string;
   setupPage: boolean;
   signIn: boolean;
+  bridge: string;
+  setupCodeLength: number | null;
+  setupCodeLocked: boolean;
+  /** The field is disabled while Studio waits for the app's answer. */
+  setupCodeWaiting: boolean;
 }
 
-/** How long to wait for React to draw the setup page or the sign-in form. */
+/** True while Studio has drawn neither page, or its setup page still waits for the app. */
+function studioNotSettled(f: Facts): boolean {
+  if (!f.setupPage && !f.signIn) return true;
+  return f.setupPage && f.bridge === 'object' && f.setupCodeWaiting;
+}
+
+/** How long to wait for React to draw the setup page or the sign-in form, and for the app's setup code. */
 const STUDIO_WAIT_MS = 20_000;
 /** How long to wait for the app's own page to show the error title. */
 const PAGE_WAIT_MS = 5_000;
@@ -92,12 +118,28 @@ export class Selfcheck {
   }
 
   private async probe(): Promise<Facts> {
-    const none: Facts = { title: '', setupPage: false, signIn: false };
+    const none: Facts = {
+      title: '',
+      setupPage: false,
+      signIn: false,
+      bridge: '',
+      setupCodeLength: null,
+      setupCodeLocked: false,
+      setupCodeWaiting: false,
+    };
     try {
       const v = await Promise.race([this.deps.run(PROBE_SCRIPT), this.deps.sleep(2000).then(() => none)]);
       if (typeof v !== 'object' || v === null) return none;
       const r = v as Record<string, unknown>;
-      return { title: typeof r.title === 'string' ? r.title : '', setupPage: r.setupPage === true, signIn: r.signIn === true };
+      return {
+        title: typeof r.title === 'string' ? r.title : '',
+        setupPage: r.setupPage === true,
+        signIn: r.signIn === true,
+        bridge: typeof r.bridge === 'string' ? r.bridge : '',
+        setupCodeLength: typeof r.setupCodeLength === 'number' ? r.setupCodeLength : null,
+        setupCodeLocked: r.setupCodeLocked === true,
+        setupCodeWaiting: r.setupCodeWaiting === true,
+      };
     } catch {
       return none;
     }
@@ -110,7 +152,7 @@ export class Selfcheck {
       this.deps.log(`self-check: the style rule was not added: ${err instanceof Error ? err.message : String(err)}`);
     }
     let facts = await this.probe();
-    for (let waited = 0; !facts.setupPage && !facts.signIn && waited < STUDIO_WAIT_MS; waited += STEP_MS) {
+    for (let waited = 0; studioNotSettled(facts) && waited < STUDIO_WAIT_MS; waited += STEP_MS) {
       if (this.finished) return;
       await this.deps.sleep(STEP_MS);
       facts = await this.probe();
@@ -136,6 +178,9 @@ export class Selfcheck {
       address: this.deps.address() ?? null,
       title: facts.title,
       setupPage: facts.setupPage,
+      bridge: facts.bridge,
+      setupCodeLength: facts.setupCodeLength,
+      setupCodeLocked: facts.setupCodeLocked,
       attached: this.deps.attached(),
       electron: process.versions.electron ?? '',
       node: process.versions.node,

@@ -16,6 +16,7 @@ export const en = {
     setupTitle: 'Create the administrator',
     setupCode: 'Setup code',
     setupCodeHint: 'Run "openldr auth setup-code" on the server to get one.',
+    setupCodeFromApp: 'Filled in by the OpenLDR app.',
     newPassword: 'New password',
     repeatPassword: 'Repeat password',
     currentPassword: 'Current password',
