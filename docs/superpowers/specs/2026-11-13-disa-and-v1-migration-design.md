@@ -298,8 +298,16 @@ A copy reads one source. The v1 plugin copies v1. The DISA plugin copies DISA an
 v1 SQL. So v1 crosses the link once, and both mode 1 and mode 2 use that one copy. Part 4
 pairs a DISA copy with a v1 copy for the check.
 
-For the v1 plugin there is one set, `requests`, with the key query and the four detail
-queries it already has (`queries.rs:160` to `:187`).
+For the v1 plugin there is one set, `requests`, with the key query it already has
+(`queries.rs:160`) and one detail query per table.
+
+A copy's detail query reads every column of its table, with the key first:
+`SELECT [RequestID] AS [__key], * FROM ... WHERE [RequestID] IN ({{keys}})`. It does not
+reuse the import's column list. Checked on 2026-11-13 against a Mozambique v1 restore: the
+Requests table has 63 columns and the import reads 53 (`queries.rs:94`). The ten it skips
+include `LIMSVendorCode`, which names the system that wrote the record, and `DateTimeStamp`.
+Part 4 needs the first and top-up needs the second. Reading every column also covers a
+site whose v1 tables carry columns this repo has never seen.
 
 ### 9.2 The copy store
 
@@ -400,8 +408,22 @@ yet. They are in section 11. The candidates:
 - A hash of the binary column, computed at the source and compared with the stored marker.
   On 2014 this needs slicing for anything over 8,000 bytes.
 
+What is known for v1, from a Mozambique restore on 2026-11-13. The restore holds generated
+data, 557,151 request rows, so it shows the table shapes and nothing about real volumes.
+
+- No v1 table has a row version column.
+- Requests, LabResults, Patients and ASTResults each have `DateTimeStamp` and
+  `LIMSDateTimeStamp`, both `datetime`, filled on every row.
+- No index covers `DateTimeStamp`. The Requests indexes are on `RequestID, OBRSetID` and on
+  the clinical dates paired with a panel code. A top-up that filters on `DateTimeStamp`
+  would scan the table, so it has to page by key range to stay under 30 seconds.
+- Not known: whether the program that writes v1 moves `DateTimeStamp` when it corrects a
+  row.
+
+The DISA half is still unchecked. No DISA database is restored.
+
 The first full copy does not depend on this. Top-up is the last task in the part 1 plan and
-waits for the two facts.
+waits for these facts.
 
 ### 9.5 Screens, CLI and docs
 
@@ -450,6 +472,23 @@ For the operator:
 3. **Mozambique's mode.** Mozambique has GXAlert and SISLab records in v1 that never came
    from DISA. Mode 2 would flag every one of them. Does Mozambique run mode 2, mode 1, or
    mode 2 with a later mode 1 pass over the flagged records?
+
+   The operator's view on 2026-11-13: flagging every v1 record that has no DISA record does
+   not work when other systems write to v1, and the plugin needs rules. The candidate rule,
+   not yet agreed:
+
+   | v1 request | What happens |
+   |---|---|
+   | Written by DISA, and DISA has the record | Checked, then saved from DISA |
+   | Written by DISA, and DISA has no record | Flagged for a person |
+   | Written by another system | Saved from v1, unchecked, marked as v1-only |
+
+   What tells the rule who wrote a record. v1 has a column for it, `LIMSVendorCode`, four
+   characters. In the Mozambique restore every request row holds `DISA`, and so does every
+   lab in the dictionary. That restore is generated data with DISA rows only, so it does
+   not show what GXAlert and SISLab rows hold. A count of request rows by `LIMSVendorCode`
+   on the real Mozambique and Zambia v1 databases settles it. The values go in as plugin
+   options per site, never in code.
 
 Settled on 2026-11-13: the copy screens live on each plugin's own page. See 7.3. The part 1
 plan was already written that way and does not change.

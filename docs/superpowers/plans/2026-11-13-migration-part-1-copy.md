@@ -515,7 +515,7 @@ Expected: PASS.
 - Test: `wasm/openldr-v1-import/src/queries.rs` (unit tests), `packages/plugins/src/v1-import.integration.test.ts`
 
 **Interfaces:**
-- Produces: the wasm entrypoint `import_copy`. Input `{ options }`. Output `{ "sets": [ { "name": "requests", "keyQuery": { "sql": ... }, "detailQueries": [ ... ] } ] }`. The key query and the four detail queries are the ones `queries()` returns (`queries.rs:160`), unchanged. Each detail query already selects `[RequestID]` first, which the copy relies on.
+- Produces: the wasm entrypoint `import_copy`. Input `{ options }`. Output `{ "sets": [ { "name": "requests", "keyQuery": { "sql": ... }, "detailQueries": [ ... ] } ] }`. The key query is the one `queries()` returns (`queries.rs:160`), unchanged, filters included. The four detail queries are new. Each is `SELECT [RequestID] AS [__key], * FROM <table> WHERE [RequestID] IN ({{keys}}) ORDER BY <the same columns the import orders by>`, with the names `requests`, `results`, `patients` and `ast`. They read every column, because the import's list skips ten Requests columns the later parts need (spec 9.1).
 
 - [ ] **Step 1: Write the failing Rust tests**
 
@@ -528,8 +528,17 @@ fn copy_is_one_set_with_the_import_queries() {
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0]["name"], "requests");
     assert_eq!(sets[0]["keyQuery"], queries(&o)["keyQuery"]);
-    assert_eq!(sets[0]["detailQueries"], queries(&o)["detailQueries"]);
+    let details = sets[0]["detailQueries"].as_array().unwrap();
+    let names: Vec<&str> = details.iter().map(|d| d["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["requests", "results", "patients", "ast"]);
+    for d in details {
+        let sql = d["sql"].as_str().unwrap();
+        assert!(sql.starts_with("SELECT [RequestID] AS [__key], * FROM "), "{sql}");
+        assert!(sql.contains(" WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID]"), "{sql}");
+    }
 }
+#[test]
+fn copy_reads_the_database_the_option_names() { /* database: "OpenLDRData" gives [OpenLDRData].[dbo].[Requests] in every query */ }
 #[test]
 fn copy_takes_the_same_options_and_refuses_the_same_bad_ones() { /* database, from, to, panels; unknown option is an error */ }
 ```
@@ -541,7 +550,7 @@ Expected: FAIL, `copy` not found.
 
 - [ ] **Step 3: Add `queries::copy`, `import_copy` in `lib.rs` with its `#[plugin_fn]`, and the build script entries**
 
-- [ ] **Step 4: Extend the integration test**: the built wasm answers `import_copy`, and the answer passes the copy service's own checks
+- [ ] **Step 4: Extend the integration test**: the built wasm answers `import_copy`, and the answer passes the copy service's own checks. That includes `validateSelectSql` accepting `SELECT [RequestID] AS [__key], *`. If it refuses a star, stop and report. Do not loosen the check without the operator.
 
 Run: `cd wasm && cargo test -p openldr-v1-import`, then `pnpm build:v1-import`, then `pnpm --filter @openldr/plugins test -- v1-import`
 Expected: PASS. `pnpm build:v1-import` needs Rust and the `wasm32-wasip1` target.
