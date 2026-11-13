@@ -74,6 +74,8 @@ async function deadLock(): Promise<LockInfo> {
 }
 
 const mode = async (p: string) => (await stat(p)).mode & 0o777;
+/** Windows has no Unix file modes. The mode tests do not run there, and the behaviour is unproven. */
+const WINDOWS = process.platform === 'win32';
 const leftovers = async () => (await readdir(paths.root)).filter((n) => n !== 'standalone.lock' && !['blobs', 'logs', 'crash', 'work'].includes(n));
 
 describe('resolveDataDir', () => {
@@ -120,7 +122,7 @@ describe('folders and state file', () => {
     });
   });
 
-  it('creates the root owner-only and the state file owner-only', async () => {
+  it.skipIf(WINDOWS)('creates the root owner-only and the state file owner-only', async () => {
     expect(await mode(paths.root)).toBe(0o700);
     for (const d of [paths.blobs, paths.logs, paths.crash, paths.work]) expect((await stat(d)).isDirectory()).toBe(true);
     await loadOrCreateState(paths, pick);
@@ -128,7 +130,7 @@ describe('folders and state file', () => {
     expect(await leftovers()).toEqual(['standalone.json']);
   });
 
-  it('makes an existing data folder owner-only', async () => {
+  it.skipIf(WINDOWS)('makes an existing data folder owner-only', async () => {
     const root = join(await tempRoot(), 'open');
     await mkdir(root, { mode: 0o755 });
     await chmod(root, 0o755);
@@ -226,7 +228,7 @@ describe('lock', () => {
     expect(await readLock(paths)).toBeNull();
   });
 
-  it('writes the lock owner-only and reads it back', async () => {
+  it.skipIf(WINDOWS)('writes the lock owner-only and reads it back', async () => {
     const info = await liveLock(101);
     await acquireLock(paths, info);
     expect(await mode(paths.lockFile)).toBe(0o600);
@@ -321,7 +323,8 @@ describe('lock', () => {
     expect(await isLockLive(live, { attempts: Number.NaN, pingTimeoutMs: Number.NaN, pauseMs: Number.NaN })).toBe(true);
   });
 
-  it.skipIf(process.getuid?.() === 0)(
+  // A read-only folder needs Unix modes, so this does not run on Windows. Unproven there.
+  it.skipIf(process.getuid?.() === 0 || WINDOWS)(
     'keeps the moved lock when putting a live one back fails, and names where it is',
     async () => {
       // The lock goes in a subfolder so that folder alone can be made read-only: the link back

@@ -5,10 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  RECOVERY_NOTICE_MS,
+  START_TIMEOUT_MS,
   findFreePort,
   isBindFailure,
   postgresUrls,
   readPostmasterPid,
+  startClock,
   startPostgres,
   stopLeftoverPostgres,
   type PostgresSettings,
@@ -398,6 +401,46 @@ describe('cluster folder checks', () => {
     expect(readdirSync(root)).toEqual(['keep.txt']);
     expect(existsSync(`${clusterDir}.init-k1ll3d.pw`)).toBe(false);
     expect(existsSync(`${clusterDir}.init-k1ll3d`)).toBe(false);
+  });
+});
+
+describe('startClock', () => {
+  it('gives up after 120 seconds in which nothing answers', () => {
+    expect(START_TIMEOUT_MS).toBe(120_000);
+    const clock = startClock(0);
+    expect(clock.expired(119_999)).toBe(false);
+    expect(clock.expired(120_000)).toBe(true);
+  });
+
+  it('never gives up while Postgres keeps answering that it is recovering', () => {
+    const clock = startClock(0);
+    // Ten minutes of "starting up" answers, one every 100 ms.
+    for (let at = 50_000; at <= 650_000; at += 100) {
+      clock.recovering(at);
+      expect(clock.expired(at)).toBe(false);
+    }
+    // Then nothing answers: the 120 seconds count from the last answer.
+    expect(clock.expired(650_000 + 119_999)).toBe(false);
+    expect(clock.expired(650_000 + 120_000)).toBe(true);
+  });
+
+  it('calls onRecovering once, when the recovery has lasted more than 5 seconds', () => {
+    let calls = 0;
+    const clock = startClock(0, () => (calls += 1));
+    clock.recovering(1000);
+    clock.recovering(1000 + RECOVERY_NOTICE_MS);
+    expect(calls).toBe(0);
+    clock.recovering(1000 + RECOVERY_NOTICE_MS + 1);
+    expect(calls).toBe(1);
+    for (let at = 7000; at < 60_000; at += 100) clock.recovering(at);
+    expect(calls).toBe(1);
+  });
+
+  it('never calls onRecovering for a start with no recovery', () => {
+    let calls = 0;
+    const clock = startClock(0, () => (calls += 1));
+    expect(clock.expired(60_000)).toBe(false);
+    expect(calls).toBe(0);
   });
 });
 

@@ -13,6 +13,7 @@ import {
   StopError,
   UsageError,
   handleSignals,
+  launcherFiles,
   parseCommandLine,
   runCli,
   runStart,
@@ -40,12 +41,16 @@ vi.mock('@openldr/cli/program', () => ({
   }),
 }));
 
-/** The HTTP port the launcher under test checks. Nothing listens on it but the bind check. */
-const PORT = 3991;
-/** A port a test holds, to see the launcher refuse it. */
-const HELD = 3990;
+/**
+ * The HTTP port the launcher under test checks. Nothing listens on it but the bind check. The
+ * operating system picks it for each test, so a real run or another checkout's tests on this
+ * computer cannot collide with it.
+ */
+let PORT: number;
+/** A port a test holds, to see the launcher refuse it. Also picked for each test. */
+let HELD: number;
 const SETUP_CODE = 'TEST-SETUP-CODE-7Q2X';
-const ADDRESS = `http://localhost:${PORT}/studio/`;
+let ADDRESS: string;
 const STARTED_AT = new Date('2026-11-13T08:00:00.000Z');
 
 const WATCHED_EVENTS = ['exit', 'uncaughtException', 'unhandledRejection', 'SIGINT', 'SIGTERM'] as const;
@@ -88,6 +93,8 @@ beforeEach(async () => {
   tcpServersBefore = tcpServers();
   cli.calls = [];
   cli.run = undefined;
+  [PORT, HELD] = await twoFreePorts();
+  ADDRESS = `http://localhost:${PORT}/studio/`;
 
   root = await mkdtemp(join(tmpdir(), 'sa-commands-'));
   studio = await mkdtemp(join(tmpdir(), 'sa-studio-'));
@@ -270,6 +277,15 @@ async function deadPort(): Promise<number> {
   return port;
 }
 
+/** Two different ports the operating system picked, both free again when this returns. */
+async function twoFreePorts(): Promise<[number, number]> {
+  const servers = [createServer(), createServer()];
+  await Promise.all(servers.map((s) => new Promise<void>((r) => s.listen(0, '127.0.0.1', () => r()))));
+  const ports = servers.map((s) => (s.address() as AddressInfo).port);
+  await Promise.all(servers.map((s) => new Promise<void>((r) => s.close(() => r()))));
+  return [ports[0]!, ports[1]!];
+}
+
 /** What a failed start must leave: no lock, no Postgres, and (checked in afterEach) no listener. */
 async function expectNothingLeft(f: Fakes): Promise<void> {
   expect(await readLock(paths)).toBeNull();
@@ -284,7 +300,12 @@ describe('runStart', () => {
 
     expect(f.order).toEqual(['pg.leftover', 'pg.start', 'server.start']);
     expect(f.pg.leftoverOpts).toEqual({ clusterDir: paths.cluster, settings });
-    expect(f.pg.startOpts).toEqual({ clusterDir: paths.cluster, logFile: paths.postgresLog, settings });
+    expect(f.pg.startOpts).toEqual({
+      clusterDir: paths.cluster,
+      logFile: paths.postgresLog,
+      settings,
+      onRecovering: expect.any(Function),
+    });
     expect(f.printed).toEqual([`OpenLDR is running at ${ADDRESS}`, `Server log: ${paths.serverLog}`]);
     expect(f.server.cfg).toMatchObject({
       PORT,
@@ -327,6 +348,21 @@ describe('runStart', () => {
     expect(f.printed.join('\n')).toContain(SETUP_CODE);
   });
 
+  it('prints one line when Postgres says it is recovering', async () => {
+    const f = fakes();
+    const startPostgres = f.deps.startPostgres;
+    f.deps.startPostgres = async (opts) => {
+      opts.onRecovering?.();
+      return startPostgres(opts);
+    };
+    await start(f.deps);
+    expect(f.printed).toEqual([
+      'The database is recovering after an unclean stop. This can take a few minutes.',
+      `OpenLDR is running at ${ADDRESS}`,
+      `Server log: ${paths.serverLog}`,
+    ]);
+  });
+
   it('stops Postgres and releases the lock when the server fails to start', async () => {
     const f = fakes();
     f.deps.startServer = async () => {
@@ -341,7 +377,7 @@ describe('runStart', () => {
     await hold(HELD);
     const f = fakes();
     await expect(runStart({ dataDir: root, port: HELD, host: '127.0.0.1' }, f.deps)).rejects.toThrowError(
-      /^Port 3990 is already in use\. Choose another with --port\.$/,
+      new RegExp(`^Port ${HELD} is already in use\\. Choose another with --port\\.$`),
     );
     expect(f.pg.started).toBe(false);
     expect(f.order).toEqual([]);
@@ -354,7 +390,7 @@ describe('runStart', () => {
       throw Object.assign(new Error(`listen EADDRINUSE: address already in use 127.0.0.1:${PORT}`), { code: 'EADDRINUSE' });
     };
     await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrowError(
-      /^Port 3991 is already in use\. Choose another with --port\.$/,
+      new RegExp(`^Port ${PORT} is already in use\\. Choose another with --port\\.$`),
     );
     await expectNothingLeft(f);
   });
@@ -772,8 +808,20 @@ describe('runCli', () => {
   });
 });
 
+/** True when this computer lets a server listen on `host`. Some have no IPv6 loopback. */
+function canListenOn(host: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const s = createServer();
+    s.once('error', () => resolve(false));
+    s.listen({ port: 0, host }, () => s.close(() => resolve(true)));
+  });
+}
+const HAS_IPV6_LOOPBACK = await canListenOn('::1');
+
 describe('the address really served', () => {
-  it('prints and records a specific IPv4 host, and status and cli still find the launcher', async () => {
+  // Linux answers on all of 127.0.0.0/8. macOS has only 127.0.0.1 unless told otherwise, so this
+  // test is unproven there and does not run.
+  it.runIf(process.platform === 'linux')('prints and records a specific IPv4 host, and status and cli still find the launcher', async () => {
     const f = fakes();
     const l = await start(f.deps, { host: '127.0.0.2' });
     const served = `http://127.0.0.2:${PORT}/studio/`;
@@ -793,13 +841,15 @@ describe('the address really served', () => {
     expect(port).toBe(String(PORT));
   });
 
-  it('shows localhost for 0.0.0.0, and for ::1 with no plain-HTTP warning', async () => {
+  it('shows localhost for 0.0.0.0', async () => {
     const wide = fakes();
     const l = await start(wide.deps, { host: '0.0.0.0' });
     expect(l.address).toBe(ADDRESS);
     expect(wide.printed).toContain(`OpenLDR is running at ${ADDRESS}`);
-    await stopped(l);
+  });
 
+  // Runs only where ::1 can be bound.
+  it.runIf(HAS_IPV6_LOOPBACK)('shows localhost for ::1, with no plain-HTTP warning', async () => {
     const loop6 = fakes();
     const l6 = await start(loop6.deps, { host: '::1' });
     expect(l6.address).toBe(ADDRESS);
@@ -1229,6 +1279,26 @@ describe('handleSignals', () => {
       expect(unhandled).toEqual([]);
     } finally {
       process.off('unhandledRejection', onUnhandled);
+    }
+  });
+});
+
+describe('launcherFiles', () => {
+  it('reports the release version from the root package.json, and the app version only when that cannot be read', async () => {
+    const top = await mkdtemp(join(tmpdir(), 'sa-version-'));
+    try {
+      const app = join(top, 'apps', 'standalone');
+      await mkdir(app, { recursive: true });
+      await writeFile(join(top, 'package.json'), JSON.stringify({ name: 'openldr', version: '9.8.7' }));
+      await writeFile(join(app, 'package.json'), JSON.stringify({ name: '@openldr/standalone', version: '0.0.1' }));
+      expect(launcherFiles(app)).toEqual({ appVersion: '9.8.7', studioDist: join(top, 'apps', 'studio', 'dist') });
+
+      await writeFile(join(top, 'package.json'), '{ not json');
+      expect(launcherFiles(app).appVersion).toBe('0.0.1');
+      await rm(join(top, 'package.json'));
+      expect(launcherFiles(app).appVersion).toBe('0.0.1');
+    } finally {
+      await rm(top, { recursive: true, force: true });
     }
   });
 });

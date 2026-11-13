@@ -90,6 +90,7 @@ export const STOPPED_FORCED = 'Stopped, but the server did not finish in 60 seco
 const NOT_RUNNING = 'OpenLDR is not running.';
 const START_FIRST = 'Start OpenLDR first: openldr-standalone start';
 const STUDIO_MISSING = 'The studio is not built. Run: pnpm --filter @openldr/studio build';
+export const RECOVERING = 'The database is recovering after an unclean stop. This can take a few minutes.';
 export const WORKFLOW_ROOT_REFUSED =
   'WORKFLOW_FILE_ACCESS_ROOT must not be the OpenLDR data folder, hold it, or sit inside it.';
 
@@ -110,19 +111,27 @@ const FOREIGN_KEYS = new Set(['IDENTITY_ADMIN_ADAPTER', 'AUTH_DEV_USERNAME', 'AU
 // ---------------------------------------------------------------------------------------------
 // Shared helpers
 
-/**
- * The built studio and this app's version. From `src/` in a checkout and from `dist/` in the
- * bundle, the app folder is one level up, and the studio build is next to it in `apps/`.
- */
-export function launcherFiles(): { studioDist: string; appVersion: string } {
-  const appDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-  let appVersion = '0.0.0';
+/** The `version` field of a package.json, or undefined when it cannot be read. */
+function manifestVersion(file: string): string | undefined {
   try {
-    const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8')) as { version?: string };
-    if (pkg.version) appVersion = pkg.version;
+    const pkg = JSON.parse(readFileSync(file, 'utf8')) as { version?: unknown };
+    return typeof pkg.version === 'string' && pkg.version !== '' ? pkg.version : undefined;
   } catch {
-    // Keep the fallback.
+    return undefined;
   }
+}
+
+/**
+ * The built studio and the release version. From `src/` in a checkout and from `dist/` in the
+ * bundle, the app folder is one level up, and the studio build is next to it in `apps/`. The
+ * release version is the checkout root's package.json, two levels above the app folder: a release
+ * bumps that one. The app's own package.json is the fallback when the root one cannot be read.
+ */
+export function launcherFiles(
+  appDir = resolve(dirname(fileURLToPath(import.meta.url)), '..'),
+): { studioDist: string; appVersion: string } {
+  const appVersion =
+    manifestVersion(resolve(appDir, '..', '..', 'package.json')) ?? manifestVersion(join(appDir, 'package.json')) ?? '0.0.0';
   return { studioDist: resolve(appDir, '..', 'studio', 'dist'), appVersion };
 }
 
@@ -441,7 +450,12 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
 
     // 6 and 7. Postgres.
     await deps.stopLeftoverPostgres({ clusterDir: paths.cluster, settings });
-    pg = await deps.startPostgres({ clusterDir: paths.cluster, logFile: paths.postgresLog, settings });
+    pg = await deps.startPostgres({
+      clusterDir: paths.cluster,
+      logFile: paths.postgresLog,
+      settings,
+      onRecovering: () => deps.print(RECOVERING),
+    });
     // Postgres runs in its own session and outlives this process unless told to stop. This hook
     // tells it to stop when this process exits by process.exit or by running out of work, without
     // the normal stop: a crash handler, a second Ctrl+C during the start, a third signal. It is

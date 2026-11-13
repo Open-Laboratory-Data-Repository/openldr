@@ -57,8 +57,14 @@ export interface RunningPostgres {
 
 const SUPERUSER = 'postgres';
 const HOST = '127.0.0.1';
-/** How long a start may take before it is given up. Crash recovery after a power cut counts. */
-const START_TIMEOUT_MS = 120_000;
+/**
+ * How long a start waits while nothing answers on the port. Time in which Postgres answers
+ * "starting up" (crash recovery) does not count: a long recovery cut off here would start over at
+ * every launch.
+ */
+export const START_TIMEOUT_MS = 120_000;
+/** How long a recovery lasts before `onRecovering` is called. */
+export const RECOVERY_NOTICE_MS = 5000;
 const IS_WINDOWS = process.platform === 'win32';
 
 // ---------------------------------------------------------------------------------------------
@@ -628,10 +634,38 @@ function summarise(logText: string): string {
   return lines.slice(-3).join(' | ');
 }
 
+/**
+ * The start's deadline. It runs only while nothing answers on the port. Each "starting up" answer
+ * (57P03) moves it a full START_TIMEOUT_MS on, so a crash recovery may take as long as it needs.
+ * `onRecovering` is called once, the first time a recovery has lasted more than
+ * RECOVERY_NOTICE_MS.
+ */
+export function startClock(startedAt: number, onRecovering?: () => void) {
+  let deadline = startedAt + START_TIMEOUT_MS;
+  let recoveringSince: number | undefined;
+  let told = false;
+  return {
+    /** Postgres answered "starting up" at `at`. */
+    recovering(at: number): void {
+      deadline = at + START_TIMEOUT_MS;
+      recoveringSince ??= at;
+      if (!told && at - recoveringSince > RECOVERY_NOTICE_MS) {
+        told = true;
+        onRecovering?.();
+      }
+    },
+    expired(at: number): boolean {
+      return at >= deadline;
+    },
+  };
+}
+
 export async function startPostgres(opts: {
   clusterDir: string;
   logFile: string;
   settings: PostgresSettings;
+  /** Called once when Postgres has been recovering for more than RECOVERY_NOTICE_MS. */
+  onRecovering?: () => void;
 }): Promise<RunningPostgres> {
   const { clusterDir, logFile, settings } = opts;
   const { port } = settings;
@@ -721,7 +755,7 @@ export async function startPostgres(opts: {
   const stopSync = () => sendFastShutdown();
 
   try {
-    const deadline = Date.now() + START_TIMEOUT_MS;
+    const clock = startClock(Date.now(), opts.onRecovering);
     for (;;) {
       if (exited) {
         const log = logSince(logFile, logStart);
@@ -729,7 +763,7 @@ export async function startPostgres(opts: {
         const why = summarise(log);
         throw new Error(`Postgres stopped during start with exit code ${exitCode}.${why ? ` ${why}.` : ''} See ${logFile}.`);
       }
-      if (Date.now() >= deadline) {
+      if (clock.expired(Date.now())) {
         throw new Error(`Postgres did not accept connections within ${START_TIMEOUT_MS / 1000} seconds. See ${logFile}.`);
       }
       const { client, connect } = superClient(settings);
@@ -753,6 +787,8 @@ export async function startPostgres(opts: {
         await client.end().catch(() => {});
       }
       const code = errorCode(failure);
+      // The child is alive (checked at the top of the loop) and recovering: no deadline.
+      if (code === '57P03') clock.recovering(Date.now());
       const retry = code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === '57P03';
       if (!retry) {
         // Give a Postgres that failed to bind a moment to exit, so the port message wins.

@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { chmod, mkdir, mkdtemp, readdir, rm, stat } from 'node:fs/promises';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { existsSync, readlinkSync, realpathSync } from 'node:fs';
+import { chmod, mkdir, mkdtemp, open, readdir, rm, stat } from 'node:fs/promises';
+import type { FileHandle } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { Readable } from 'node:stream';
@@ -93,6 +95,7 @@ describe('createFsBucket', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await chmod(dir, 0o700).catch(() => {});
     await chmod(join(dir, 'tmp'), 0o700).catch(() => {});
     await rm(parent, { recursive: true, force: true });
@@ -136,6 +139,9 @@ describe('createFsBucket', () => {
       '/abs',
       'a/../b',
       '..',
+      '../escape', // would land in dir, beside objects/
+      'a/../../escape', // the same, by way of a folder
+      '../../escape', // would land beside dir
       'a//b',
       'a/./b',
       'a\\b',
@@ -153,7 +159,9 @@ describe('createFsBucket', () => {
       await expect(bucket.exists(key)).rejects.toBeInstanceOf(BlobKeyError);
       await expect(bucket.delete(key)).rejects.toBeInstanceOf(BlobKeyError);
     }
-    expect(await listEverythingUnder(dir)).toEqual([]); // nothing was written anywhere
+    // Nothing was written anywhere: not in the folder, and not beside it, where `../../escape`
+    // would land.
+    expect(await listEverythingUnder(parent)).toEqual(['store/']);
 
     // A part of exactly 255 bytes is allowed.
     await bucket.put(`ok/${'x'.repeat(255)}`, 'fine');
@@ -223,7 +231,8 @@ describe('createFsBucket', () => {
     expect(peak - base).toBeLessThan(16 * MiB);
   });
 
-  it('lets a reader see the old object or the new one, never a partial one', async () => {
+  // Windows may refuse a rename over a file that is open for reading. Unproven there, so skipped.
+  it.skipIf(process.platform === 'win32')('lets a reader see the old object or the new one, never a partial one', async () => {
     const A = Buffer.alloc(MiB, 'a');
     const B = Buffer.alloc(8 * MiB, 'b');
     await bucket.put('doc', A);
@@ -310,6 +319,70 @@ describe('createFsBucket', () => {
     expect(await readdir(join(dir, 'tmp'))).toEqual([]);
   });
 
+  /** The prototype every FileHandle shares, so a spy on its `sync` sees every flush. */
+  async function fileHandlePrototype(): Promise<FileHandle> {
+    const fh = await open(join(parent, 'probe'), 'w');
+    await fh.close();
+    await rm(join(parent, 'probe'));
+    return Object.getPrototypeOf(fh) as FileHandle;
+  }
+
+  // Reads which file or folder each flush was for from /proc, so Linux only. No test can cut the
+  // power, so this shows the flushes happen, and in what order. It cannot show they are enough.
+  it.runIf(process.platform === 'linux')(
+    'flushes the folder that holds a new object after the rename, and each folder it made for it',
+    async () => {
+      const proto = await fileHandlePrototype();
+      const original = proto.sync;
+      const real = realpathSync(dir);
+      let target = '';
+      const synced: Array<{ path: string; targetThere: boolean }> = [];
+      vi.spyOn(proto, 'sync').mockImplementation(async function (this: FileHandle) {
+        synced.push({ path: readlinkSync(`/proc/self/fd/${this.fd}`), targetThere: existsSync(target) });
+        return original.call(this);
+      });
+
+      target = join(dir, 'objects', 'a', 'b', 'c');
+      await bucket.put('a/b/c', 'x');
+      // First the file's own bytes, in tmp/, before the rename.
+      expect(synced[0]!.path.startsWith(join(real, 'tmp') + sep)).toBe(true);
+      expect(synced[0]!.targetThere).toBe(false);
+      // Then, after the rename, the folder that holds it, and each folder made for it up to the
+      // parent of the first one made (objects/ was made by this put too).
+      expect(synced.slice(1)).toEqual([
+        { path: join(real, 'objects', 'a', 'b'), targetThere: true },
+        { path: join(real, 'objects', 'a'), targetThere: true },
+        { path: join(real, 'objects'), targetThere: true },
+        { path: real, targetThere: true },
+      ]);
+
+      // Into a folder that already exists, only that folder.
+      synced.length = 0;
+      target = join(dir, 'objects', 'a', 'b', 'd');
+      await bucket.putStream('a/b/d', Readable.from([Buffer.from('y')]));
+      expect(synced.slice(1)).toEqual([{ path: join(real, 'objects', 'a', 'b'), targetThere: true }]);
+    },
+  );
+
+  it.runIf(process.platform === 'linux')(
+    'ignores a folder flush the file system cannot do, and fails on any other flush error',
+    async () => {
+      const proto = await fileHandlePrototype();
+      const original = proto.sync;
+      let folderError = 'EINVAL';
+      vi.spyOn(proto, 'sync').mockImplementation(async function (this: FileHandle) {
+        if ((await this.stat()).isDirectory()) throw Object.assign(new Error(`folder flush ${folderError}`), { code: folderError });
+        return original.call(this);
+      });
+      await expect(bucket.put('k1', 'one')).resolves.toBeUndefined();
+      folderError = 'ENOTSUP';
+      await expect(bucket.put('k2', 'two')).resolves.toBeUndefined();
+      folderError = 'EIO';
+      await expect(bucket.put('k3', 'three')).rejects.toMatchObject({ code: 'EIO' });
+      expect(await readdir(join(dir, 'tmp'))).toEqual([]);
+    },
+  );
+
   it('overwrites an existing key', async () => {
     await bucket.put('k', 'first, and longer than the second');
     await bucket.put('k', 'second');
@@ -329,7 +402,8 @@ describe('createFsBucket', () => {
     expect(Buffer.from(await fresh.get('x/y')).toString()).toBe('streamed');
   });
 
-  it('reports health as up, and as down when the folder is not writable', async () => {
+  // A read-only folder needs Unix modes. Unproven on Windows, so skipped there.
+  it.skipIf(process.platform === 'win32')('reports health as up, and as down when the folder is not writable', async () => {
     const up = await bucket.healthCheck();
     expect(up.status).toBe('up');
     expect(up.detail).toBe('file storage ready');

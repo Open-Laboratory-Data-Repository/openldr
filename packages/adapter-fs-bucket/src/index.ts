@@ -66,6 +66,26 @@ export function createFsBucket(cfg: FsBucketConfig): BlobStoragePort {
     return full;
   }
 
+  /**
+   * Flushes a folder's entries to disk. Without it, a power cut can lose a rename into the
+   * folder even though the file's own bytes were flushed. Windows cannot open a folder for this,
+   * so it is skipped there (unproven). A file system that cannot flush a folder answers EINVAL
+   * or ENOTSUP; that is ignored. Any other error fails the write.
+   */
+  async function syncFolder(folder: string): Promise<void> {
+    if (process.platform === 'win32') return;
+    let fh: FileHandle | undefined;
+    try {
+      fh = await open(folder, 'r');
+      await fh.sync();
+    } catch (err) {
+      const code = errCode(err);
+      if (code !== 'EINVAL' && code !== 'ENOTSUP') throw err;
+    } finally {
+      await fh?.close().catch(() => {});
+    }
+  }
+
   /** Write a new temporary file, flush it, then rename it over `target`. Removes it on failure. */
   async function writeAtomic(target: string, write: (fh: FileHandle) => Promise<void>): Promise<void> {
     await mkdir(tmpDir, { recursive: true });
@@ -73,6 +93,7 @@ export function createFsBucket(cfg: FsBucketConfig): BlobStoragePort {
     const tmp = join(tmpDir, `${randomUUID()}.tmp`);
     let fh: FileHandle | undefined;
     let created = false;
+    let firstMade: string | undefined;
     try {
       fh = await open(tmp, 'wx');
       created = true;
@@ -80,12 +101,23 @@ export function createFsBucket(cfg: FsBucketConfig): BlobStoragePort {
       await fh.sync();
       await fh.close();
       fh = undefined;
-      await mkdir(dirname(target), { recursive: true });
+      // The first folder this made, if it made any.
+      firstMade = await mkdir(dirname(target), { recursive: true });
       await rename(tmp, target);
     } catch (err) {
       await fh?.close().catch(() => {});
       if (created) await unlink(tmp).catch(() => {});
       throw err;
+    }
+    // The database row that names this object is flushed when it commits. Flush the new entry
+    // too, so the row cannot outlive the file after a power cut. When folders were made for it,
+    // each new folder's entry in its parent is flushed as well, up to the parent of the first one.
+    let folder = dirname(target);
+    const last = firstMade === undefined ? folder : dirname(firstMade);
+    for (;;) {
+      await syncFolder(folder);
+      if (folder === last || dirname(folder) === folder) break;
+      folder = dirname(folder);
     }
   }
 

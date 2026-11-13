@@ -268,10 +268,14 @@ describe('control channel', () => {
     const c = await control(token);
     const idle = await hostile(c.port, 16);
     await new Promise((r) => setTimeout(r, 50));
+    expect(idle.filter((h) => h.closed)).toEqual([]);
     expect(await pingControl({ controlPort: c.port, token })).toBe(true);
     expect(await isLockLive({ pid: 1, address: 'a', startedAt: 's', controlPort: c.port, token })).toBe(true);
     expect(await requestStop({ controlPort: c.port, token }, 2000)).toBe('clean');
-    expect(idle.length).toBe(16);
+    // The ping was the 17th connection waiting, so the oldest idle one made room for it. The
+    // ping's own connection was answered before the next request came, so no other was dropped.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(idle.map((h, i) => (h.closed ? i : -1)).filter((i) => i >= 0)).toEqual([0]);
   });
 
   it('holds at most 16 connections that have not sent a request', async () => {
