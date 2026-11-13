@@ -59,8 +59,9 @@ export async function keyFixture(opts: { devBypass?: boolean; logger?: Logger; a
   const base = ctxWith('up');
   // Identity admin on: Keycloak with admin credentials, and a directory that knows DIRECTORY.
   // Off: ctxWith's directory, which answers "not configured".
+  const directoryGet = vi.fn(async (id: string): Promise<(typeof DIRECTORY)[string] | null> => DIRECTORY[id] ?? null);
   const directory = opts.identityAdmin
-    ? { ...((base.auth as { directory: object }).directory), get: vi.fn(async (id: string) => DIRECTORY[id] ?? null) }
+    ? { ...((base.auth as { directory: object }).directory), get: directoryGet }
     : (base.auth as { directory: object }).directory;
   const adminCfg = opts.identityAdmin ? { KEYCLOAK_ADMIN_CLIENT_ID: 'fixture', KEYCLOAK_ADMIN_CLIENT_SECRET: 'fixture' } : {};
   const ctx = {
@@ -81,5 +82,5 @@ export async function keyFixture(opts: { devBypass?: boolean; logger?: Logger; a
   };
   const allAuditRows = () => db.selectFrom('audit_events').selectAll().execute();
 
-  return { app, ctx, db, users, roles, accessKeys, audit, verifyToken, managers, viewers, makeKey, allAuditRows, close: () => app.close() };
+  return { app, ctx, db, users, roles, accessKeys, audit, verifyToken, directoryGet, managers, viewers, makeKey, allAuditRows, close: () => app.close() };
 }

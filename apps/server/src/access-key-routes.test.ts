@@ -211,6 +211,73 @@ describe('/api/users/:id/keys with identity admin', () => {
     expect(await f.users.getBySubject('nobody')).toBeUndefined();
   });
 
+  // `openldr user create` makes a row with no subject. setSubjectStatus links such a row by
+  // username when it makes the key's row, and must not turn a disabled one back on.
+  it('keeps a disabled local row with the same username disabled when it links it, so the key is refused', async () => {
+    const f = await setup({ identityAdmin: true });
+    await f.db.insertInto('users').values({ id: 'ai-local', subject: null, username: 'ai', status: 'disabled', roles: JSON.stringify([]) as never }).execute();
+    const made = await f.app.inject({ method: 'POST', url: keysUrl('ai-sub'), headers: bearer(TOKENS.admin), payload: { name: 'x' } });
+    expect(made.statusCode).toBe(201);
+    expect(made.json().record.userId).toBe('ai-local');
+    expect(await f.users.getBySubject('ai-sub')).toMatchObject({ id: 'ai-local', status: 'disabled' });
+    const me = await f.app.inject({ method: 'GET', url: '/api/me', headers: bearer(made.json().key) });
+    expect(me.statusCode).toBe(403);
+    await expect(f.audit.list({ action: 'user.status' })).resolves.toEqual([]);
+  });
+
+  it('links an active local row with the same username as active', async () => {
+    const f = await setup({ identityAdmin: true });
+    await f.db.insertInto('users').values({ id: 'ai-local', subject: null, username: 'ai', status: 'active', roles: JSON.stringify([]) as never }).execute();
+    const made = await f.app.inject({ method: 'POST', url: keysUrl('ai-sub'), headers: bearer(TOKENS.admin), payload: { name: 'x' } });
+    expect(made.json().record.userId).toBe('ai-local');
+    expect(await f.users.getBySubject('ai-sub')).toMatchObject({ id: 'ai-local', status: 'active' });
+    expect((await f.app.inject({ method: 'GET', url: '/api/me', headers: bearer(made.json().key) })).statusCode).toBe(200);
+  });
+
+  // The dev actor, a row from an older install, or a row the CLI made can have no subject and
+  // still hold keys. Such a row is found by its local id.
+  it('lists and revokes the keys of a local row with no subject, on local sign-in', async () => {
+    const f = await setup({ adapter: 'local', identityAdmin: true });
+    await f.db.insertInto('users').values({ id: 'old-id', subject: null, username: 'old', roles: JSON.stringify([]) as never }).execute();
+    const record = await f.accessKeys.create({ userId: 'old-id', name: 'old key', keyHash: 'h'.repeat(64), prefix: 'oldr_abcdefg', createdBy: null, expiresAt: null });
+    const list = await f.app.inject({ method: 'GET', url: keysUrl('old-id'), headers: bearer(TOKENS.admin) });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toEqual({ keys: [record] });
+    const del = await f.app.inject({ method: 'DELETE', url: `${keysUrl('old-id')}/${record.id}`, headers: bearer(TOKENS.admin) });
+    expect(del.statusCode).toBe(204);
+    expect(f.directoryGet).not.toHaveBeenCalled();
+  });
+
+  it('answers 502 with redacted text when the directory fails, and 503 when its admin client is not set up', async () => {
+    const f = await setup({ identityAdmin: true });
+    const calls = [
+      { method: 'GET' as const, url: keysUrl('ai-sub') },
+      { method: 'POST' as const, url: keysUrl('ai-sub'), payload: { name: 'x' } },
+      { method: 'DELETE' as const, url: `${keysUrl('ai-sub')}/k1` },
+    ];
+    f.directoryGet.mockRejectedValue(new Error('provider down at https://admin:hunter2@kc.example'));
+    for (const call of calls) {
+      const res = await f.app.inject({ ...call, headers: bearer(TOKENS.admin) });
+      expect(res.statusCode).toBe(502);
+      expect(res.json()).toEqual({ error: 'provider down at https://admin:***@kc.example' });
+    }
+    f.directoryGet.mockRejectedValue(Object.assign(new Error('admin not configured'), { name: 'IdentityAdminNotConfiguredError' }));
+    for (const call of calls) {
+      const res = await f.app.inject({ ...call, headers: bearer(TOKENS.admin) });
+      expect(res.statusCode).toBe(503);
+      expect(res.json()).toEqual({ error: 'identity provider admin client is not configured' });
+    }
+    expect(await f.users.getBySubject('ai-sub')).toBeUndefined();
+  });
+
+  it('answers 409 with its own text when another change holds the account lock', async () => {
+    const f = await setup({ identityAdmin: true });
+    vi.spyOn(f.users, 'withSubjectLock').mockRejectedValueOnce(Object.assign(new Error('another account status change is in progress; retry the action'), { name: 'AccountStatusConflictError' }));
+    const res = await f.app.inject({ method: 'POST', url: keysUrl('ai-sub'), headers: bearer(TOKENS.admin), payload: { name: 'x' } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: 'another change to this account is in progress; try again' });
+  });
+
   // Local sign-in is identity admin too (packages/config/src/auth.ts). Its directory id is the
   // local id, and a local row's subject is its id (packages/db/src/local-auth-store.ts).
   it('finds a local sign-in account by its id, which is also its subject', async () => {
