@@ -4,7 +4,7 @@
 # Flags:
 #   -Dir <path>     where to clone (default ./openldr)
 #   -Branch <name>  branch to clone (default main)
-#   -Seed           also load WHONET sample data (needs the wasm build toolchain; runs the API for it)
+#   -Seed           also load WHONET sample data (needs the wasm build toolchain; starts the API for the load and leaves it running)
 #   -ResetDb        force a db reset even on an existing setup (DESTRUCTIVE)
 #   -NoServices     just clone + install; skip Docker + DB
 param(
@@ -89,6 +89,17 @@ if ($NoServices) {
       if ($LASTEXITCODE -eq 0) { break }
       Start-Sleep 2
     }
+    # The sample load (e2e:seed:load) goes through the API at OPENLDR_URL, signed in by
+    # AUTH_DEV_BYPASS. Look before any reset: an API already answering there is used as it is, and
+    # it must be the one on this checkout's database. Nothing here can check that.
+    # Unproven twice over: edited on Linux, never parsed by PowerShell, never run.
+    $apiUrl = if ($env:OPENLDR_URL) { $env:OPENLDR_URL.TrimEnd('/') } else { 'http://127.0.0.1:3000' }
+    $apiUp = { try { Invoke-WebRequest -UseBasicParsing -Uri "$apiUrl/health" -TimeoutSec 2 *> $null; $true } catch { $false } }
+    $apiWasUp = $false
+    if ($Seed -and (& $apiUp)) {
+      $apiWasUp = $true
+      Write-Host "-> An API already answers at $apiUrl. The sample load will go to it; it must run on this checkout's database."
+    }
     Write-Host "-> Resetting the database (pnpm openldr db reset)"
     pnpm openldr db reset
     if ($LASTEXITCODE -ne 0) { Die "db reset failed" }
@@ -96,26 +107,33 @@ if ($NoServices) {
     pnpm openldr db seed
     if ($LASTEXITCODE -ne 0) { Die "db seed failed" }
     if ($Seed) {
-      # The plugin install and the ingest in e2e:seed go through the running API, signed in by
-      # AUTH_DEV_BYPASS. So the API must answer first: one already running is used, else one is
-      # started for the seed and its whole process tree is stopped after. Unproven: this script
-      # was edited on Linux and has not been run since.
-      $apiUp = { try { Invoke-WebRequest -UseBasicParsing -Uri http://127.0.0.1:3000/health -TimeoutSec 2 *> $null; $true } catch { $false } }
-      $api = $null
-      if (-not (& $apiUp)) {
-        Write-Host "-> Starting the API for the sample data (pnpm -C apps/server dev)"
-        $api = Start-Process -FilePath pnpm -ArgumentList '-C', 'apps/server', 'dev' -PassThru -WindowStyle Hidden
-        for ($i = 0; $i -lt 60 -and -not (& $apiUp); $i++) { Start-Sleep 2 }
-        if (-not (& $apiUp)) {
-          taskkill /T /F /PID $api.Id *> $null
-          Die "The API did not answer on http://127.0.0.1:3000. Start it with: pnpm -C apps/server dev, then run: pnpm e2e:seed"
+      $keepApi = $false
+      try {
+        # 1. The reset half needs no server.
+        Write-Host "-> Preparing WHONET sample data (pnpm e2e:seed:reset)"
+        pnpm e2e:seed:reset
+        if ($LASTEXITCODE -ne 0) { Die "seed reset failed" }
+        # 2. Then an API on the fresh schema, unless one was already there. One node process with
+        #    no watcher, so its own handle stops all of it.
+        if (-not $apiWasUp) {
+          $apiLog = Join-Path ([System.IO.Path]::GetTempPath()) 'openldr-dev-api.log'
+          Write-Host "-> Starting the API for the sample load (node dev.mjs in apps/server, log in $apiLog)"
+          $api = Start-Process -FilePath node -ArgumentList 'dev.mjs' -WorkingDirectory (Resolve-Path apps/server).Path -PassThru -NoNewWindow -RedirectStandardOutput $apiLog -RedirectStandardError "$apiLog.err"
+          for ($i = 0; -not (& $apiUp); $i++) {
+            if ($api.HasExited) { Die "The API stopped while starting (see $apiLog)." }
+            if ($i -ge 60) { Die "The API did not answer at $apiUrl (see $apiLog)." }
+            Start-Sleep 2
+          }
         }
+        # 3. The load half, through that API.
+        Write-Host "-> Loading WHONET sample data (pnpm e2e:seed:load)"
+        pnpm e2e:seed:load
+        if ($LASTEXITCODE -ne 0) { Die "seed load failed" }
+        $keepApi = $true
+      } finally {
+        # A failed step or Ctrl+C stops only the API this script started, by its handle.
+        if ($api -and -not $keepApi -and -not $api.HasExited) { $api.Kill() }
       }
-      Write-Host "-> Seeding WHONET sample data (pnpm e2e:seed)"
-      pnpm e2e:seed
-      $seedExit = $LASTEXITCODE
-      if ($api) { taskkill /T /F /PID $api.Id *> $null }
-      if ($seedExit -ne 0) { Die "seed failed" }
     }
   } else {
     Write-Host "-> Skipping db reset (existing setup; pass -ResetDb to wipe & re-init)"
@@ -130,3 +148,9 @@ Write-Host "  1) pnpm -C apps/server dev      # API on http://localhost:3000"
 Write-Host "  2) pnpm -C apps/studio dev      # Studio UI on http://localhost:5173 (proxies /api)"
 Write-Host "Backing services: Postgres :5433, S3 storage :9010, Keycloak :8180"
 Write-Host "Auth: AUTH_DEV_BYPASS is on (loads as a dev admin). Edit .env to use real Keycloak."
+# The API started for the sample load stays up, so it is not started only to be stopped. It does
+# not restart on edits, and it holds port 3000, so step 1 above needs it stopped first.
+if ($api -and -not $api.HasExited) {
+  Write-Host "The API started for the sample data is still running (process $($api.Id), log in $apiLog)."
+  Write-Host "It does not restart on edits. Stop it with: Stop-Process -Id $($api.Id), then run step 1."
+}

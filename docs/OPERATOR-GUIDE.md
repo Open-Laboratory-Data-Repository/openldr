@@ -49,11 +49,15 @@ Start the web app in a second shell:
 pnpm -C apps/studio dev
 ```
 
-For screenshot/e2e data, seed WHONET sample data:
+For screenshot/e2e data, seed WHONET sample data. The reset half works on the database itself; the load half goes through the running API at `OPENLDR_URL` (default `http://127.0.0.1:3000`), which must be the API on the database you just reset:
 
 ```bash
-pnpm e2e:seed
+pnpm e2e:seed:reset          # with the API stopped
+pnpm -C apps/server dev      # boots on the fresh schema
+pnpm e2e:seed:load           # through that API
 ```
+
+`pnpm e2e:seed` runs both in one line and resets the schema under a running API, which was not checked. See `e2e/README.md`.
 
 ## Dashboards
 

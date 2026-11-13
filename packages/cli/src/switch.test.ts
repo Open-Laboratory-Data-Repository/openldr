@@ -60,6 +60,7 @@ vi.mock('./artifact', async (orig) => ({ ...(await orig<typeof import('./artifac
 import { buildClientProgram, buildProgram, commandKindOf, NEEDS_DATABASE } from './program';
 import { COMMAND_META, type PathKind } from './command-meta';
 import { commandPath, leafCommands } from './command-list';
+import { cliActor } from './cli-actor';
 
 const SRC = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(SRC, '..', '..', '..');
@@ -180,16 +181,20 @@ describe('the switch', () => {
 
     const covered: string[] = [];
     const wrong: string[] = [];
+    const skipped: string[] = [];
     for (const cmd of leafCommands(buildProgram())) {
       const path = commandPath(cmd);
       const meta = COMMAND_META[path]!;
-      // artifact publish is the one app command with a local form; it has its own test below.
-      if (meta.kind !== 'app' || meta.localWhen) continue;
+      if (meta.kind !== 'app') continue;
+      // An app command with a local form has its own test below. Listed, so a new one cannot drop
+      // out of this loop unseen.
+      if (meta.localWhen) { skipped.push(path); continue; }
       const r = await client(lineFor(cmd, path, files, extra[path]), env);
       if (r.err === expected && r.code === 1 && r.out === '') covered.push(path);
       else wrong.push(`${path}: code ${r.code}, ${JSON.stringify(r.err)}`);
     }
     expect(wrong).toEqual([]);
+    expect(skipped).toEqual(['artifact publish']);
     const appPaths = Object.entries(COMMAND_META).filter(([, m]) => m.kind === 'app' && !m.localWhen).map(([p]) => p).sort();
     expect(covered.sort()).toEqual(appPaths);
     // One from each of several groups, named, so a loop that silently skipped a group would show.
@@ -222,13 +227,19 @@ describe('the switch', () => {
     const srv = await recorder();
     try {
       const base = { OPENLDR_SKIP_ENV_FILE: 'true', OPENLDR_URL: srv.url };
-      // With the settings: run here, as today, --actor included. Nothing is sent.
+      // With the settings: run here, as today, --actor included. Nothing is sent. The audit actor is
+      // read inside the command, where the command itself would read it.
+      const actors: string[] = [];
+      commands.dbMigrate.mockImplementation(async () => { actors.push(cliActor().actorName); return 0; });
       const r = await client(['db', 'migrate'], { ...base, ...dbEnv });
       expect(commands.dbMigrate).toHaveBeenCalledTimes(1);
       expect(r).toEqual({ code: 0, out: '', err: '' });
       const withActor = await client(['--actor', 'ops-bob', 'db', 'migrate'], { ...base, ...dbEnv });
       expect(commands.dbMigrate).toHaveBeenCalledTimes(2);
       expect(withActor.err).toBe('');
+      expect(actors[1]).toBe('ops-bob');
+      expect(actors[0]).not.toBe('ops-bob');
+      expect(cliActor()).toMatchObject({ actorType: 'cli', actorName: 'ops-bob' });
 
       // Without them: one line, exit 1, and the command never starts.
       for (const words of [['db', 'migrate'], ['doctor'], ['user', 'reset-password', 'someone'], ['auth', 'setup-code']]) {
@@ -247,8 +258,9 @@ describe('the switch', () => {
   it('keeps today\'s message for any other configuration mistake in a recovery command', async () => {
     // The command reads process.env itself, so the settings go there, as they would in real use.
     // The database settings are present; another setting is wrong.
-    const before = process.env.TARGET_STORE_ADAPTER;
-    Object.assign(process.env, dbEnv, { TARGET_STORE_ADAPTER: 'not-a-store' });
+    // A closed port as the address, so no mistake here could reach port 3000.
+    const before = { TARGET_STORE_ADAPTER: process.env.TARGET_STORE_ADAPTER, OPENLDR_URL: process.env.OPENLDR_URL };
+    Object.assign(process.env, dbEnv, { TARGET_STORE_ADAPTER: 'not-a-store', OPENLDR_URL: closed });
     let stderr = '';
     vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => { stderr += String(chunk); return true; });
     try {
@@ -256,7 +268,7 @@ describe('the switch', () => {
       expect(r.code).toBe(1);
       expect(r.err).toBe('');
     } finally {
-      if (before === undefined) delete process.env.TARGET_STORE_ADAPTER; else process.env.TARGET_STORE_ADAPTER = before;
+      for (const [k, v] of Object.entries(before)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
     }
     expect(stderr).toContain('health failed: Invalid configuration');
     expect(stderr).toContain('TARGET_STORE_ADAPTER');

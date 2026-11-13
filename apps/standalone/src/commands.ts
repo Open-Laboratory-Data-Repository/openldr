@@ -645,14 +645,17 @@ const LOCAL_URL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
  * session are left as they are. Database URLs and a secrets key from the shell are removed: this
  * process never needs them, and the client must hold none (spec section 3).
  */
-function useLauncherAddress(lock: LockInfo, appVersion: string): void {
+function useLauncherAddress(lock: LockInfo, appVersion: string, args: readonly string[]): void {
   for (const key of Object.keys(process.env)) {
     if (key.endsWith('_DATABASE_URL') || key === 'SECRETS_ENCRYPTION_KEY') delete process.env[key];
   }
   // The client sends its version and the server refuses another one. The server runs with this one.
   process.env.APP_VERSION = appVersion;
-  // A caller who named a server keeps it, with their own plain-HTTP choice.
+  // A caller who named a server keeps it, with their own plain-HTTP choice. The root option is read
+  // anywhere on the line, in both forms, so any word that looks like it counts. Counting one too many
+  // only leaves plain HTTP off.
   if (process.env.OPENLDR_URL?.trim()) return;
+  if (args.some((a) => a === '--server-url' || a.startsWith('--server-url='))) return;
   const address = new URL(lock.address);
   process.env.OPENLDR_URL = address.origin;
   // The client refuses plain HTTP to a host that is not this computer's loopback. A launcher started
@@ -705,7 +708,7 @@ export async function runCli(opts: { dataDir?: string; args: string[] }, print: 
     applyEnvironment(env);
     delete process.env.LOG_FILE;
   } else {
-    useLauncherAddress(lock, launcherFiles().appVersion);
+    useLauncherAddress(lock, launcherFiles().appVersion, opts.args);
   }
 
   // Run as the openldr entry runs it (packages/cli/src/index.ts): parseAsync, with the 'node' argv form.

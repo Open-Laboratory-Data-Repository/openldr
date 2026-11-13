@@ -27,24 +27,41 @@ Uint8Array hex/base64 polyfill — a separate concern that stays.)
 
 ## Bring up + seed the stack
 
-    docker compose up -d        # Postgres / storage (Garage) / Keycloak (git-ignored override ports)
-    pnpm -C apps/server dev     # in another terminal: the seed's install and ingest go through it
-    pnpm e2e:seed               # make sample -> build plugin -> db reset -> install plugin -> ingest WHONET
+The seed has two halves. The reset half (`pnpm e2e:seed:reset`) makes the sample, builds the
+plugin and runs `db reset`, which works on the database itself and needs no server. The load
+half (`pnpm e2e:seed:load`) runs `plugin install` and `ingest`. Those are sent through the
+running app at `OPENLDR_URL`, by default `http://127.0.0.1:3000`, signed in by the server's
+`AUTH_DEV_BYPASS=true`. That must be the server running on the database that was just reset.
+Nothing checks this: a server from another checkout on port 3000 would take the load instead.
 
-`pnpm e2e:seed` needs Docker up and the Rust/wasi toolchain (for `build:plugins`). It also needs
-the API running with `AUTH_DEV_BYPASS=true`: `db reset` works on the database itself, but
-`plugin install` and `ingest` are sent through the running app. Without one they stop with
-`Cannot reach OpenLDR at http://127.0.0.1:3000. Is it running?`. For an API on another port, set
-`OPENLDR_URL` to its address. `pnpm docs:seed` needs the same.
+The safe order:
+
+    docker compose up -d        # 1. Postgres / storage (Garage) / Keycloak (git-ignored override ports)
+                                # 2. stop the API if one runs on this database
+    pnpm e2e:seed:reset         # 3. make sample -> build plugin -> db reset
+    pnpm -C apps/server dev     # 4. in another terminal: the API boots on the fresh schema
+    pnpm e2e:seed:load          # 5. install plugin -> ingest WHONET, through that API
+
+Without a server in step 5, the load stops with
+`Cannot reach OpenLDR at http://127.0.0.1:3000. Is it running?`. For an API on another port,
+set `OPENLDR_URL` to its address for step 5.
+
+`pnpm e2e:seed` runs both halves in one line. It resets the schema under a server that is
+already running, and whether a running server copes with that was not checked. Use it only when
+you accept that. `pnpm docs:seed` works the same way, with `pnpm docs:seed:reset` and
+`pnpm docs:seed:load`.
+
+The seed needs Docker up and the Rust/wasi toolchain (for `build:plugins`).
 
 ## Run
 
     pnpm e2e          # 5 deterministic smoke specs (pass/fail)
     pnpm verify:ui    # capture screenshots -> e2e/artifacts/screenshots/
 
-Both build the SPA + server first; Playwright's `webServer` launches the built server
-(reusing an already-running one). If the DB isn't seeded, `globalSetup` fails fast with
-the exact commands to run.
+Both build the SPA + server first. Playwright's `webServer` then starts the built server, but
+only when nothing answers on its port yet (`reuseExistingServer`). If the dev server from the
+seed steps is still running, Playwright uses that one and the built server is not started. If
+the DB isn't seeded, `globalSetup` fails fast with the commands to run.
 
 ## Agent visual verification
 

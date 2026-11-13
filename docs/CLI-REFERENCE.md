@@ -228,4 +228,4 @@ duplicates.
 - every command family help page;
 - every leaf subcommand help page.
 
-Live examples that require services, databases, Keycloak, or DHIS2 should be run only after `.env` is configured and `docker compose up -d` plus `pnpm e2e:seed` have completed.
+Live examples that require services, databases, Keycloak, or DHIS2 should be run only after `.env` is configured and `docker compose up -d` plus the seed have completed, in the order `e2e/README.md` gives (`pnpm e2e:seed:reset` with the API stopped, start the API, then `pnpm e2e:seed:load`).

@@ -5,7 +5,7 @@
 # Flags:
 #   --dir <path>     where to clone (default ./openldr)
 #   --branch <name>  branch to clone (default main)
-#   --seed           also load WHONET sample data (needs the wasm build toolchain; runs the API for it)
+#   --seed           also load WHONET sample data (needs the wasm build toolchain; starts the API for the load and leaves it running)
 #   --reset-db       force a db reset even on an existing setup (DESTRUCTIVE)
 #   --no-services    just clone + install; skip Docker + DB
 set -eu
@@ -29,6 +29,18 @@ while [ $# -gt 0 ]; do
 done
 
 err() { echo "✗ $1" >&2; exit 1; }
+
+# The API the sample load goes to (--seed): the CLI's own default unless OPENLDR_URL says otherwise.
+API_URL="${OPENLDR_URL:-http://127.0.0.1:3000}"
+API_LOG="${TMPDIR:-/tmp}/openldr-dev-api.log"
+API_PID=""
+API_WAS_UP=0
+api_up() { API_URL="$API_URL" node -e "fetch(process.env.API_URL + '/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" >/dev/null 2>&1; }
+# Stops only the API this script started, by its own process ID. A failed step or Ctrl+C runs it.
+stop_api() { if [ -n "$API_PID" ]; then kill "$API_PID" 2>/dev/null || true; API_PID=""; fi; }
+trap stop_api EXIT
+trap 'stop_api; exit 130' INT
+trap 'stop_api; exit 143' TERM
 
 # 1. Preflight
 command -v git >/dev/null 2>&1 || err "git is not installed."
@@ -94,39 +106,39 @@ else
       docker compose exec -T postgres pg_isready -U openldr >/dev/null 2>&1 && break
       i=$((i + 1)); sleep 2
     done
+    # The sample load (e2e:seed:load) goes through the API at OPENLDR_URL, signed in by
+    # AUTH_DEV_BYPASS. Look before any reset: an API already answering there is used as it is,
+    # and it must be the one on this checkout's database. Nothing here can check that.
+    # Unproven: this part has not been run. macOS is unproven too.
+    if [ "$SEED" -eq 1 ] && api_up; then
+      API_WAS_UP=1
+      echo "→ An API already answers at $API_URL. The sample load will go to it; it must run on this checkout's database."
+    fi
     echo "→ Resetting the database (pnpm openldr db reset)"
     pnpm openldr db reset || err "db reset failed"
     echo "→ Seeding starter set (pnpm openldr db seed)"
     pnpm openldr db seed || err "db seed failed"
     if [ "$SEED" -eq 1 ]; then
-      # The plugin install and the ingest in e2e:seed go through the running API, signed in by
-      # AUTH_DEV_BYPASS. So the API must answer first: one already running is used, else one is
-      # started for the seed in its own process group, and the group is stopped after.
-      # Unproven: this part has not been run. macOS is unproven too.
-      api_up() { node -e "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" >/dev/null 2>&1; }
-      API_PID=""
-      API_LOG="${TMPDIR:-/tmp}/openldr-dev-api.log"
-      if ! api_up; then
-        echo "→ Starting the API for the sample data (pnpm -C apps/server dev, log in $API_LOG)"
-        set -m
-        pnpm -C apps/server dev >"$API_LOG" 2>&1 &
+      # 1. The reset half needs no server.
+      echo "→ Preparing WHONET sample data (pnpm e2e:seed:reset)"
+      pnpm e2e:seed:reset || err "seed reset failed"
+      # 2. Then an API on the fresh schema, unless one was already there.
+      if [ "$API_WAS_UP" -eq 0 ]; then
+        echo "→ Starting the API for the sample load (node dev.mjs in apps/server, log in $API_LOG)"
+        # One process, no watcher, so its own process ID stops all of it.
+        (cd apps/server && exec node dev.mjs) >"$API_LOG" 2>&1 &
         API_PID=$!
-        set +m
         i=0
         until api_up; do
+          kill -0 "$API_PID" 2>/dev/null || err "The API stopped while starting (see $API_LOG)."
           i=$((i + 1))
-          if [ "$i" -ge 60 ]; then
-            kill -TERM -- "-$API_PID" 2>/dev/null || true
-            err "The API did not answer on http://127.0.0.1:3000 (see $API_LOG). Start it with: pnpm -C apps/server dev, then run: pnpm e2e:seed"
-          fi
+          [ "$i" -lt 60 ] || err "The API did not answer at $API_URL (see $API_LOG)."
           sleep 2
         done
       fi
-      echo "→ Seeding WHONET sample data (pnpm e2e:seed)"
-      SEED_EXIT=0
-      pnpm e2e:seed || SEED_EXIT=$?
-      if [ -n "$API_PID" ]; then kill -TERM -- "-$API_PID" 2>/dev/null || true; fi
-      [ "$SEED_EXIT" -eq 0 ] || err "seed failed"
+      # 3. The load half, through that API.
+      echo "→ Loading WHONET sample data (pnpm e2e:seed:load)"
+      pnpm e2e:seed:load || err "seed load failed"
     fi
   else
     echo "→ Skipping db reset (existing setup; pass --reset-db to wipe & re-init)"
@@ -143,3 +155,12 @@ Start the app in two terminals:
 Backing services: Postgres :5433 · S3 storage :9010 · Keycloak :8180
 Auth: AUTH_DEV_BYPASS is on (loads as a dev admin). Edit .env to use real Keycloak.
 EOF
+
+# The API started for the sample load stays up, so it is not started only to be stopped. It does
+# not restart on edits, and it holds port 3000, so step 1 above needs it stopped first.
+if [ -n "$API_PID" ]; then
+  echo "The API started for the sample data is still running (process $API_PID, log in $API_LOG)."
+  echo "It does not restart on edits. Stop it with: kill $API_PID, then run step 1."
+  API_PID=""
+fi
+trap - EXIT INT TERM

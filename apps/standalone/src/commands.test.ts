@@ -940,6 +940,22 @@ describe('runCli', () => {
     expect(env.OPENLDR_ALLOW_PLAIN_HTTP).toBeUndefined();
   });
 
+  it("never allows plain HTTP for the caller's own --server-url, in either form", async () => {
+    await lockAt('http://100.64.0.7:3999/studio/');
+    for (const args of [
+      ['--server-url', 'http://10.0.0.5:3000', 'layouts', 'list'],
+      ['layouts', '--server-url=http://10.0.0.5:3000', 'list'],
+      ['layouts', 'list', '--server-url', 'http://10.0.0.5:3000'],
+    ]) {
+      shellEnvironment();
+      const env = await envSeenBy(args);
+      expect(env.OPENLDR_ALLOW_PLAIN_HTTP, args.join(' ')).toBeUndefined();
+    }
+    // The launcher's own address on the same lock still gets it.
+    shellEnvironment();
+    expect((await envSeenBy(['layouts', 'list'])).OPENLDR_ALLOW_PLAIN_HTTP).toBe('true');
+  });
+
   it("leaves the caller's own OPENLDR_URL and plain-HTTP setting alone", async () => {
     shellEnvironment();
     await lockAt('http://100.64.0.7:3999/studio/');
