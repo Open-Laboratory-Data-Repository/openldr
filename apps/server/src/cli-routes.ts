@@ -42,8 +42,14 @@ export const REFUSAL_DRAIN_BYTES = 16 * 1024 * 1024;
 export const REFUSAL_DRAIN_MS = 5_000;
 /** A caller that reads nothing for this long, while output waits for it, is treated as gone. */
 export const STALL_MS = 5 * 60_000;
-/** After the process has gone, how long its output pipes may stay open (a grandchild can hold them). */
+/** After the process has gone, how long a pump may wait on its pipe for the next chunk. Only that
+ *  wait counts: a grandchild that holds the pipe open sends nothing. Time spent waiting on the caller
+ *  does not count; `send` has its own STALL_MS. */
 export const PIPE_WAIT_MS = 3_000;
+/** The `start` frame must arrive within this long of the request starting. */
+export const START_DEADLINE_MS = 30_000;
+/** The longest `rel` a file frame may name. Linux cannot make a deeper path. */
+export const MAX_REL_BYTES = 4096;
 /** The child refuses a larger hand-off, so the server does not send one. */
 const MAX_HANDOFF_BYTES = 1024 * 1024;
 /** The longest base64 text of one `data` frame. */
@@ -79,6 +85,18 @@ class Refusal extends Error {
     this.name = 'Refusal';
   }
 }
+
+/** A byte came after `go`. */
+class BytesAfterGo extends Error {
+  constructor() {
+    super('Bytes came after go.');
+    this.name = 'BytesAfterGo';
+  }
+}
+
+/** The folders on the way to the files of one input-dir, keyed by part, so each file costs only
+ *  its own number of parts and no path string is built. */
+type FolderTree = Map<string, FolderTree>;
 
 type Start = Extract<ClientFrame, { t: 'start' }>;
 type InputKind = Start['inputs'][number]['kind'];
@@ -145,7 +163,8 @@ async function privateFolderProblem(path: string): Promise<string | null> {
   const st = await lstat(path).catch(() => null);
   if (!st || st.isSymbolicLink() || !st.isDirectory()) return 'is not a real folder';
   if (process.platform !== 'win32') {
-    if (typeof process.getuid === 'function' && st.uid !== process.getuid()) return 'is owned by another user';
+    // The effective user, since that is who makes the files.
+    if (typeof process.geteuid === 'function' && st.uid !== process.geteuid()) return 'is owned by another user';
     if ((st.mode & 0o022) !== 0) return 'can be written by other users';
   }
   return null;
@@ -313,11 +332,40 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
 
     // One reader of the body for the whole request. Its return() does not end the body, so after a
     // refusal the rest can still be read and thrown away, and the caller can read the answer.
+    // After `go`, any byte at all is a protocol error (watchAfterGo).
     const chunks = payload[Symbol.asyncIterator]() as AsyncIterator<Buffer>;
+    let afterGo = false;
+    let sourceDone = false;
+    let lastChunk: Buffer | null = null;
     const shared: AsyncIterable<Buffer> = {
-      [Symbol.asyncIterator]: () => ({ next: () => chunks.next(), return: async () => ({ done: true as const, value: undefined }) }),
+      [Symbol.asyncIterator]: () => ({
+        next: async () => {
+          const r = await chunks.next();
+          if (r.done) { sourceDone = true; return r; }
+          if (afterGo && r.value.length > 0) throw new BytesAfterGo();
+          if (r.value.length > 0) lastChunk = r.value;
+          return r;
+        },
+        return: async () => ({ done: true as const, value: undefined }),
+      }),
     };
     const frames = decodeFrames<Record<string, unknown>>(shared)[Symbol.asyncIterator]();
+    /**
+     * After `go`: reads on, so the socket keeps flowing and a closed connection is seen at once.
+     * 'clean' when the body ends with nothing after `go`; 'bytes' at the first byte after it, read
+     * already or arriving later; 'gone' when the body cannot be read (the caller left).
+     */
+    const watchAfterGo = async (): Promise<'clean' | 'bytes' | 'gone'> => {
+      afterGo = true;
+      // `go` ended a line. Bytes after that line's newline in the same chunk are after `go`.
+      if (!sourceDone && lastChunk && lastChunk[lastChunk.length - 1] !== 0x0a) return 'bytes';
+      try {
+        const r = await frames.next();
+        return r.done ? 'clean' : 'bytes';
+      } catch (err) {
+        return err instanceof BytesAfterGo || err instanceof FrameError ? 'bytes' : 'gone';
+      }
+    };
     /**
      * After a refusal: reads what is left of the body and throws it away, so a caller part way
      * through its upload can read the answer. At most REFUSAL_DRAIN_BYTES decoded, for at most
@@ -359,6 +407,17 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
     const left = new AbortController();
     reply.raw.on('close', () => { if (!reply.raw.writableFinished) left.abort(); });
 
+    // Fastify's request timeout is 0, so a body that stops short of `start` would hold its
+    // connection and up to 1 MiB for ever. Past the deadline: 408, then the request is ended.
+    const startTimer = setTimeout(() => {
+      if (reply.sent) return;
+      const end = () => { payload.destroy(); req.raw.destroy(); };
+      reply.raw.once('finish', end);
+      reply.raw.once('close', end);
+      reply.code(408);
+      void reply.send({ error: `The start frame did not arrive within ${START_DEADLINE_MS / 1000} seconds.` });
+    }, START_DEADLINE_MS);
+
     let runDir: string | null = null;
     const keptMade: string[] = [];
     let openFile: FileHandle | null = null;
@@ -376,7 +435,9 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
     };
 
     try {
-      const start = readStart(await nextFrame());
+      const first = await nextFrame();
+      clearTimeout(startTimer);
+      const start = readStart(first);
       if (start.version !== version) {
         throw new Refusal(409, `This client is version ${start.version} and OpenLDR is version ${version}. Use the same release on both.`);
       }
@@ -399,8 +460,9 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       for (const root of start.inputs.some((i) => i.keep) ? [runsRoot, keptRoot] : [runsRoot]) {
         const problem = await privateFolderProblem(root);
         if (problem) {
+          // The path goes to the log only. The caller is told which setting to look at.
           ctx.logger.error({ folder: root, problem }, 'cli work folder refused');
-          throw new Refusal(503, `The folder ${root} ${problem}, so no command can run. Remove it or fix it.`);
+          throw new Refusal(503, `A folder under TERMINOLOGY_WORK_DIR ${problem}, so no command can run. The server log names it.`);
         }
       }
 
@@ -434,25 +496,30 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
         entries += 1;
         if (entries > maxFiles) throw new Refusal(413, `The upload has more than the limit of ${maxFiles} files.`);
       };
-      const madeDirs = new Set<string>();
+      const trees = new Map<string, FolderTree>();
       const sent = new Set<string>();
       for (;;) {
         const f = await nextFrame();
         if (!f) throw new Refusal(400, 'The request ended before go.');
         if (f.t === 'file') {
           if (openFile) throw new Refusal(400, 'A file is already open.');
+          // Before anything else looks at it.
+          if (typeof f.rel !== 'string' || Buffer.byteLength(f.rel) > MAX_REL_BYTES) throw new Refusal(400, 'A file name is not allowed.');
           const input = typeof f.ref === 'string' ? placed.get(f.ref) : undefined;
           if (!input || input.kind.startsWith('output')) throw new Refusal(400, 'A file names an unknown input.');
-          if (typeof f.rel !== 'string') throw new Refusal(400, 'A file name is not allowed.');
           const target = targetOf(input, f.rel);
           const key = `${input.ref}\0${f.rel}`;
           if (sent.has(key)) throw new Refusal(400, 'The same file was sent twice.');
           sent.add(key);
           if (input.kind === 'input-dir') {
+            // Each folder on the way counts once.
+            let node: FolderTree | undefined = trees.get(input.ref);
+            if (!node) { node = new Map(); trees.set(input.ref, node); }
             const parts = f.rel.split('/');
-            for (let n = 1; n < parts.length; n += 1) {
-              const dir = parts.slice(0, n).join('/');
-              if (!madeDirs.has(dir)) { madeDirs.add(dir); countEntry(); }
+            for (let n = 0; n < parts.length - 1; n += 1) {
+              let next: FolderTree | undefined = node.get(parts[n]!);
+              if (!next) { next = new Map(); node.set(parts[n]!, next); countEntry(); }
+              node = next;
             }
           }
           countEntry();
@@ -522,11 +589,11 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
         throw new Refusal(500, 'The command could not be started.');
       }
 
-      // From here the answer is a stream, and streamRun owns the folder and the slot. Nothing more
-      // is read from the body: what follows `go` stays unread.
+      // From here the answer is a stream, and streamRun owns the folders and the slot. The body is
+      // still read, and any byte after `go` interrupts the command.
       handedOver = true;
       const out = new PassThrough({ highWaterMark: 64 * 1024 });
-      void streamRun({ req, reply, user, start, placed, runDir, slot, handle, out, left: left.signal, drain });
+      void streamRun({ req, reply, user, start, placed, runDir, kept: [...keptMade], slot, handle, out, left: left.signal, afterGo: watchAfterGo() });
       reply.header('content-type', 'application/x-ndjson; charset=utf-8');
       reply.header('cache-control', 'no-store');
       return reply.send(out);
@@ -537,12 +604,15 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       slot?.release();
       slot = null;
       await cleanUp();
+      // The start deadline already answered 408 and ends the request.
+      if (reply.sent) return reply;
       // Let a caller that is still uploading read the answer, within the drain's bounds.
       void drain();
       if (runner.closing) reply.header('connection', 'close');
       reply.code(r.status);
       return reply.send({ error: r.message, ...r.extra });
     } finally {
+      clearTimeout(startTimer);
       if (!handedOver) {
         slot?.release();
         await cleanUp();
@@ -554,8 +624,10 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
   async function streamRun(s: {
     req: FastifyRequest; reply: FastifyReply; user: RequestActor; start: Start; placed: Map<string, Placed>;
     runDir: string; slot: Slot; handle: RunHandle; out: PassThrough; left: AbortSignal;
-    /** The bounded discard of what is left of the body, then the end of the request. */
-    drain: () => Promise<void>;
+    /** Kept upload folders, removed when the command fails. */
+    kept: string[];
+    /** What the body did after `go`. */
+    afterGo: Promise<'clean' | 'bytes' | 'gone'>;
   }): Promise<void> {
     const { out, handle } = s;
     out.on('error', () => {});
@@ -566,6 +638,24 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
     const callerLeft = () => { handle.interrupt(); stop.abort(); };
     if (s.left.aborted) callerLeft();
     else s.left.addEventListener('abort', callerLeft, { once: true });
+
+    // A byte after `go` is a protocol error: interrupt the command, say why, and end the request.
+    // A body that cannot be read means the caller left.
+    void s.afterGo.then((what) => {
+      if (what === 'clean') return;
+      if (what === 'gone') { callerLeft(); return; }
+      handle.interrupt();
+      if (!out.destroyed && !out.writableEnded) {
+        out.write(encodeFrame({ t: 'error', message: 'Bytes came after go. The command was interrupted.' }));
+      }
+      stop.abort();
+      out.end();
+      const end = () => s.req.raw.destroy();
+      s.reply.raw.once('finish', end);
+      s.reply.raw.once('close', end);
+      // A caller that reads nothing would never let the answer finish.
+      setTimeout(end, 1_000).unref();
+    });
     // On shutdown the command is interrupted by the runner. A caller that stops reading must not
     // hold the shutdown: after twice the kill wait, stop writing to it.
     const onClosing = () => {
@@ -605,11 +695,34 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       [p.path, `${PATH_PLACEHOLDER}${p.ref}`] as const,
       ...p.companions.map((c) => [join(p.base, c), c] as const),
     ]);
-    const pump = async (stream: NodeJS.ReadableStream, t: 'out' | 'err'): Promise<void> => {
+    // After the process has gone, each pump may wait on its pipe for at most PIPE_WAIT_MS for the
+    // next chunk. Only that wait is timed; a wait in `send`, on the caller, is not.
+    let processGone = false;
+    const guards = new Set<() => void>();
+    const pump = async (stream: NodeJS.ReadableStream & { destroy(): void }, t: 'out' | 'err'): Promise<void> => {
       const masker = createPathMasker(pairs);
+      const it = stream[Symbol.asyncIterator]() as AsyncIterator<Buffer>;
+      let waiting = false;
+      let timer: NodeJS.Timeout | undefined;
+      const arm = () => {
+        clearTimeout(timer);
+        if (waiting && processGone) timer = setTimeout(() => stream.destroy(), PIPE_WAIT_MS);
+      };
+      guards.add(arm);
       try {
-        for await (const chunk of stream) await sendBytes(t, masker.push(chunk as Buffer));
-      } catch { /* the pipe broke; the exit code says the rest */ }
+        for (;;) {
+          waiting = true;
+          arm();
+          const r = await it.next();
+          waiting = false;
+          clearTimeout(timer);
+          if (r.done) break;
+          await sendBytes(t, masker.push(r.value));
+        }
+      } catch { /* the pipe broke, or was given up on; the exit code says the rest */ } finally {
+        clearTimeout(timer);
+        guards.delete(arm);
+      }
       await sendBytes(t, masker.flush());
     };
 
@@ -660,18 +773,10 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       await send({ t: 'run', id: handle.id });
       const pumps = Promise.all([pump(handle.stdout, 'out'), pump(handle.stderr, 'err')]);
       exitCode = await handle.exited;
-      // A grandchild can hold the pipes open after the process has gone. Wait a little, then stop
-      // reading them.
-      let pipeTimer: NodeJS.Timeout | undefined;
-      const late = await Promise.race([
-        pumps.then(() => false),
-        new Promise<boolean>((done) => { pipeTimer = setTimeout(() => done(true), PIPE_WAIT_MS); }),
-      ]);
-      clearTimeout(pipeTimer);
-      if (late) {
-        handle.stdout.destroy();
-        handle.stderr.destroy();
-      }
+      // A grandchild can hold the pipes open after the process has gone. From now on, a pump that
+      // waits on its pipe too long gives up on it.
+      processGone = true;
+      for (const arm of guards) arm();
       await pumps;
       try {
         await sendOutputs();
@@ -691,6 +796,9 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       exitCode = await handle.exited;
       s.left.removeEventListener('abort', callerLeft);
       await removeFolder(s.runDir);
+      // A kept upload is for a command that needs it again. A failed run recorded nothing that
+      // points at it, so it goes: repeating a failing command must not fill the disk.
+      if (exitCode !== 0) for (const dir of s.kept) await removeFolder(dir);
       ctx.logger.info({ command: s.start.path, accountId: s.user.id, exitCode, interrupted: handle.interrupted }, 'cli command finished');
       const base = actorFromRequest(s.req);
       const actor: AuditActor = {
@@ -715,9 +823,9 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       // A connection kept open after the answer would hold the server's close until the caller
       // drops it.
       if (runner.closing) s.req.raw.socket?.end();
-      // Bytes sent after `go` were never read, so the socket is paused and would never see the
-      // caller close it. Now that the answer is written, the same bounded discard as a refusal.
-      if (!s.req.raw.complete) void s.drain();
+      // A body still open after the whole answer can bring nothing allowed: end the request. The
+      // watcher reads it, so nothing is left unread and the close is clean.
+      if (!s.req.raw.complete) s.req.raw.destroy();
       s.slot.release();
     }
   }

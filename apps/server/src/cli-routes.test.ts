@@ -5,7 +5,7 @@
 // hook over pg-mem. The audit store and logger in the header tests are fakes that record what they
 // are given. Linux only: Windows and macOS are unproven.
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import http, { type IncomingHttpHeaders, type IncomingMessage } from 'node:http';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
@@ -24,7 +24,7 @@ import { buildApp } from './app';
 import type { RequestActor } from './auth-plugin';
 import { ctxWith } from './test-helpers';
 import { createCliRunner, KILL_AFTER_MS, SLOT_WAIT_MS } from './cli-runner';
-import { createPathMasker, PIPE_WAIT_MS, REFUSAL_DRAIN_MS, registerCliRoutes, STALL_MS } from './cli-routes';
+import { createPathMasker, PIPE_WAIT_MS, REFUSAL_DRAIN_MS, registerCliRoutes, STALL_MS, START_DEADLINE_MS } from './cli-routes';
 import { readAppVersion } from './version';
 
 const FAKE = fileURLToPath(new URL('./__fixtures__/fake-cli.mjs', import.meta.url));
@@ -431,10 +431,12 @@ describe('POST /api/cli/run refusals', () => {
     const h1 = await harness({ work: linked });
     const a = await post(h1, { user: 'admin', body: body(start('audit list', ['echo']), GO) });
     expect(a.status).toBe(503);
-    expect(String(a.json().error)).toContain(join(linked, 'cli-runs'));
+    // The answer names the setting, never the server's path. The log names the folder.
+    expect(String(a.json().error)).toContain('TERMINOLOGY_WORK_DIR');
     expect(String(a.json().error)).toContain('not a real folder');
+    expect(a.text.includes(owned)).toBe(false);
     expect(readdirSync(other)).toEqual([]);
-    expect(h1.logs.some((l) => l.includes('cli work folder refused'))).toBe(true);
+    expect(h1.logs.some((l) => l.includes('cli work folder refused') && l.includes(join(linked, 'cli-runs')))).toBe(true);
 
     // A folder others can write in.
     const open777 = join(owned, 'open');
@@ -452,7 +454,9 @@ describe('POST /api/cli/run refusals', () => {
     const h3 = await harness({ work: keptOpen });
     const c = await post(h3, { user: 'admin', body: body(start('terminology ontology build', ['echo'], { inputs: [inDir('k', 'dist', true)] }), file('k', 'a', 'a'), GO) });
     expect(c.status).toBe(503);
-    expect(String(c.json().error)).toContain(join(keptOpen, 'cli-kept'));
+    expect(String(c.json().error)).toContain('TERMINOLOGY_WORK_DIR');
+    expect(c.text.includes(owned)).toBe(false);
+    expect(h3.logs.some((l) => l.includes(join(keptOpen, 'cli-kept')))).toBe(true);
     // A command that keeps nothing still runs, and makes its own folder 0700.
     const d = await post(h3, { user: 'admin', body: body(start('audit list', ['echo']), GO) });
     expect(d.exit).toBe(0);
@@ -727,34 +731,151 @@ describe('POST /api/cli/run', () => {
     expect(folders(h)).toEqual([]);
   });
 
-  it('reads nothing of the body after go', async () => {
+  it('interrupts the run at a byte after go, and reads no further than that', async () => {
     const h = await harness();
-    // The command runs for 600 ms. Were the rest of the body read, all 128 MiB would be sent by then.
-    const total = 128 * MiB;
-    const r = await new Promise<{ sent: number; exit: number | undefined }>((resolve) => {
+    // A raw client that sends `go` and then keeps sending, as fast as the server takes it.
+    const total = 256 * MiB;
+    const head = body(start('audit list', ['sleep', '600000']), GO);
+    const junk = Buffer.alloc(64 * 1024, 0x78);
+    const url = new URL(h.url);
+    const t0 = Date.now();
+    const r = await new Promise<{ sent: number; got: string; ms: number }>((resolve) => {
       let sent = 0;
-      let text = '';
-      const req = http.request(`${h.url}/api/cli/run`, { method: 'POST', headers: { 'content-type': 'application/x-ndjson', 'x-test-user': 'admin' } }, (res) => {
-        res.on('data', (c: Buffer) => { text += c.toString(); });
-        res.on('end', () => {
-          const done = sent;
-          req.destroy();
-          resolve({ sent: done, exit: answer(200, { 'content-type': 'application/x-ndjson' }, text).exit });
-        });
-      });
-      req.on('error', () => {});
-      req.write(body(start('audit list', ['sleep', '600']), GO));
-      const junk = Buffer.alloc(64 * 1024, 0x0a);
+      let got = '';
+      const s = net.connect(Number(url.port), '127.0.0.1');
+      s.on('data', (c: Buffer) => { got += c.toString(); });
+      s.on('error', () => {});
+      s.on('close', () => resolve({ sent, got, ms: Date.now() - t0 }));
+      s.write(`POST /api/cli/run HTTP/1.1\r\nHost: test\r\nContent-Type: application/x-ndjson\r\nx-test-user: admin\r\nContent-Length: ${total + head.length}\r\n\r\n${head}`);
       const pump = () => {
-        while (sent < total && !req.destroyed) {
+        while (sent < total && !s.destroyed) {
           sent += junk.length;
-          if (!req.write(junk)) return void req.once('drain', pump);
+          if (!s.write(junk)) return void s.once('drain', pump);
         }
       };
       pump();
     });
-    expect(r.exit).toBe(0);
-    expect(r.sent).toBeLessThan(total);
+    // The server stopped at the first byte: what was sent is what the socket buffers hold.
+    expect(r.sent).toBeLessThan(4 * MiB);
+    expect(r.ms).toBeLessThan(5_000);
+    await until(() => cliRows(h).length === 1, 'audit row');
+    // The interrupt can land before the command sets its SIGINT handler (130) or after (0).
+    expect(cliRows(h)[0]!.metadata).toMatchObject({ interrupted: true });
+    expect(folders(h)).toEqual([]);
+  });
+
+  it('interrupts the run at a byte that comes after go later, and says why', async () => {
+    const h = await harness();
+    const s = stream(h, 'admin', body(start('audit list', ['sleep', '600000']), GO), { keepOpen: true });
+    await s.printed('sleeping');
+    s.req.write('x');
+    await s.done();
+    expect(s.out().frames).toContainEqual({ t: 'error', message: 'Bytes came after go. The command was interrupted.' });
+    await until(() => cliRows(h).length === 1, 'audit row');
+    expect(cliRows(h)[0]!.metadata).toEqual({ exitCode: 0, interrupted: true });
+    // A body that ends at go is fine: the earlier tests all send one.
+  });
+
+  it('notices a caller that closes right after go, while the command prints nothing', async () => {
+    const h = await harness();
+    const dir = scratchDir();
+    const marker = join(dir, 'hush-sigint');
+    const ready = join(dir, 'hush-ready');
+    const s = stream(h, 'admin', body(start('audit list', ['hush', marker, ready]), GO), { keepOpen: true });
+    await until(() => existsSync(ready), 'the quiet command to listen for SIGINT');
+    s.req.destroy();
+    await until(() => existsSync(marker), 'SIGINT to reach the quiet command');
+    await until(() => cliRows(h).length === 1, 'audit row');
+    expect(cliRows(h)[0]!.metadata).toEqual({ exitCode: 0, interrupted: true });
+  });
+
+  it('answers 408 and ends the request when start does not arrive within 30 seconds', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const h = await harness();
+    const s = stream(h, 'admin', '{"t":"sta', { keepOpen: true });
+    await realSleep(100);
+    await vi.advanceTimersByTimeAsync(START_DEADLINE_MS - 1);
+    expect(s.state.status).toBe(0);
+    await vi.advanceTimersByTimeAsync(1);
+    await until(() => s.state.closed, 'the request to end');
+    expect(s.state.status).toBe(408);
+    expect(h.started()).toBe(0);
+    expect(folders(h)).toEqual([]);
+  });
+
+  it('refuses a file name longer than 4096 bytes and makes nothing for it', async () => {
+    const h = await harness();
+    const rel = `${'a/'.repeat(2048)}b`;
+    expect(Buffer.byteLength(rel)).toBe(4097);
+    const r = await post(h, { user: 'admin', body: body(start('market install', ['echo'], { inputs: [inDir('d', 'd')] }), file('d', rel, 'x'), GO) });
+    expect(r.status).toBe(400);
+    // Refused by the length check, not later by the file system after making folders.
+    expect(r.json()).toEqual({ error: 'A file name is not allowed.' });
+    expect(h.logs.some((l) => l.includes('cli upload could not be written'))).toBe(false);
+    expect(h.started()).toBe(0);
+    expect(folders(h)).toEqual([]);
+  });
+
+  it('counts the folders of a deep name, each once', async () => {
+    // 499 folders and one file: 500 entries.
+    const rel = `${'d/'.repeat(499)}f`;
+    const at = await harness({ maxFiles: 500 });
+    const ok = await post(at, { user: 'admin', body: body(start('market install', ['echo'], { inputs: [inDir('d', 'deep')] }), file('d', rel, 'x'), GO) });
+    expect(ok.exit).toBe(0);
+    const under = await harness({ maxFiles: 499 });
+    const over = await post(under, { user: 'admin', body: body(start('market install', ['echo'], { inputs: [inDir('d', 'deep')] }), file('d', rel, 'x'), GO) });
+    expect(over.status).toBe(413);
+  });
+
+  it('counts each folder once for many files under one long shared name, quickly', async () => {
+    // 1900 folders deep (3800 bytes, near the longest path Linux takes) and 400 files under them:
+    // 2300 entries.
+    const prefix = 'a/'.repeat(1900);
+    const files = Array.from({ length: 400 }, (_, i) => file('d', `${prefix}f${i}`, ''));
+    const text = body(start('market install', ['echo'], { inputs: [inDir('d', 'deep')] }), ...files, GO);
+    const at = await harness({ maxFiles: 2300 });
+    const t0 = Date.now();
+    const ok = await post(at, { user: 'admin', body: text });
+    const took = Date.now() - t0;
+    expect(ok.exit).toBe(0);
+    // Generous. Counted by building every prefix string, as in fix round 1, this took several times
+    // longer; most of what is left is the file system's own work.
+    expect(took).toBeLessThan(4_000);
+    // The count is exact: 10 shared folders and 5 files is 15, so a limit of 14 is passed.
+    const small = body(start('market install', ['echo'], { inputs: [inDir('d', 'deep')] }), ...Array.from({ length: 5 }, (_, i) => file('d', `${'s/'.repeat(10)}f${i}`, '')), GO);
+    expect((await post(await harness({ maxFiles: 15 }), { user: 'admin', body: small })).exit).toBe(0);
+    expect((await post(await harness({ maxFiles: 14 }), { user: 'admin', body: small })).status).toBe(413);
+  });
+
+  it('keeps every byte of a slow caller\'s output after the command has gone, then sends exit', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const h = await harness();
+    // `fill` writes until the server is stuck on this caller, then exits with its pipe still full.
+    const marker = join(scratchDir(), 'fill-count');
+    let response: IncomingMessage | null = null;
+    let text = '';
+    let ended = false;
+    const req = http.request(`${h.url}/api/cli/run`, { method: 'POST', headers: { 'content-type': 'application/x-ndjson', 'x-test-user': 'admin' } }, (res) => {
+      response = res;
+      res.pause(); // reads nothing for now
+      res.setEncoding('utf8');
+      res.on('data', (c: string) => { text += c; });
+      res.on('end', () => { ended = true; });
+    });
+    req.on('error', () => {});
+    req.end(body(start('audit list', ['fill', marker]), GO));
+    // The command has written everything it could and gone, leaving bytes in its pipe.
+    await until(() => existsSync(marker), 'the command to finish writing');
+    const total = Number(readFileSync(marker, 'utf8'));
+    expect(total).toBeGreaterThan(64 * 1024);
+    await realSleep(300);
+    // The caller still reads nothing, for three times the pipe limit.
+    await vi.advanceTimersByTimeAsync(3 * PIPE_WAIT_MS);
+    (response as IncomingMessage | null)!.resume();
+    await until(() => ended, 'the end of the answer');
+    const a = answer(200, { 'content-type': 'application/x-ndjson' }, text);
+    expect(Buffer.byteLength(a.stdout)).toBe(total);
+    expect(a.frames.at(-1)).toEqual({ t: 'exit', code: 0 });
   });
 
   it('sends an output file and an output folder back', async () => {
@@ -814,6 +935,16 @@ describe('POST /api/cli/run', () => {
     expect(kept).toHaveLength(1);
     expect(kept[0]!.startsWith('cli-kept/')).toBe(true);
     expect(existsSync(join(h.work, kept[0]!, 'dist', 'a.txt'))).toBe(true);
+  });
+
+  it('removes a kept upload when its command fails', async () => {
+    const h = await harness();
+    const r = await post(h, {
+      user: 'admin',
+      body: body(start('terminology ontology build', ['fail', '2'], { inputs: [inDir('k', 'dist', true)] }), file('k', 'a.txt', 'a'), GO),
+    });
+    expect(r.exit).toBe(2);
+    expect(folders(h)).toEqual([]);
   });
 
   it('removes the request folder after a clean run, a failed run and a refused run', async () => {
@@ -971,19 +1102,27 @@ describe('POST /api/cli/run', () => {
   it('stops waiting for output pipes a grandchild holds open, a few seconds after the command has gone', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const h = await harness();
-    const s = stream(h, 'admin', body(start('audit list', ['orphan', '2500']), GO));
-    await until(() => /grandchild \d+/.test(s.out().stderr), 'the grandchild');
-    const grandchild = pidOf(s.out().stderr, 'grandchild');
-    // The command has exited; the pipe wait is the one timer.
-    await until(() => vi.getTimerCount() === 1, 'the pipe wait');
-    expect(s.state.ended).toBe(false);
-    await vi.advanceTimersByTimeAsync(PIPE_WAIT_MS);
-    await s.done();
-    expect(s.out().exit).toBe(0);
-    // The run ended while the grandchild still held the pipes.
-    expect(alive(grandchild)).toBe(true);
-    await until(() => cliRows(h).length === 1, 'audit row');
-    await until(() => !alive(grandchild), 'the grandchild to end by itself');
+    // The grandchild lives until the test makes this file, so no real-time race decides the test.
+    const release = join(scratchDir(), 'release-grandchild');
+    const s = stream(h, 'admin', body(start('audit list', ['orphan', release]), GO));
+    let grandchild = 0;
+    try {
+      await until(() => /grandchild \d+/.test(s.out().stderr), 'the grandchild');
+      grandchild = pidOf(s.out().stderr, 'grandchild');
+      // The command has exited; each pump waits on its pipe, with one timer each.
+      await until(() => vi.getTimerCount() === 2, 'the pipe waits');
+      await vi.advanceTimersByTimeAsync(PIPE_WAIT_MS - 1);
+      expect(s.state.ended).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await s.done();
+      expect(s.out().exit).toBe(0);
+      // The run ended while the grandchild still held the pipes.
+      expect(alive(grandchild)).toBe(true);
+      await until(() => cliRows(h).length === 1, 'audit row');
+    } finally {
+      writeFileSync(release, 'go');
+    }
+    await until(() => !alive(grandchild), 'the grandchild to end');
   });
 
   it('interrupts running commands on shutdown and leaves no process behind', async () => {

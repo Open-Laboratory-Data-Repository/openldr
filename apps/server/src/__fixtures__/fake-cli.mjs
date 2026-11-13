@@ -2,7 +2,7 @@
 // the real CLI: the hand-off arrives as JSON on descriptor 3, and OPENLDR_SERVED_FD is '3'. It
 // touches no database. The first word of the hand-off's argv picks what it does.
 import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, closeSync, fstatSync, lstatSync, mkdirSync, readdirSync, readFileSync, readSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, fstatSync, lstatSync, mkdirSync, readdirSync, readFileSync, readSync, symlinkSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 function readHandoff() {
@@ -56,6 +56,17 @@ switch (mode) {
     process.stderr.write(`pid ${process.pid}\n`);
     process.stdout.write('sleeping\n');
     setTimeout(() => process.exit(0), Number(rest[0] ?? 60_000));
+    break;
+  }
+  case 'hush': {
+    // Prints nothing at all, and exits 0 on SIGINT. Writes the first file when it gets SIGINT, and
+    // the second once it is listening for it.
+    process.on('SIGINT', () => {
+      if (rest[0]) writeFileSync(rest[0], 'sigint');
+      process.exit(0);
+    });
+    if (rest[1]) writeFileSync(rest[1], 'ready');
+    setInterval(() => {}, 60_000);
     break;
   }
   case 'stubborn': {
@@ -115,8 +126,10 @@ switch (mode) {
     process.stdout.write(`read ${join(dirname(rest[0]), rest[1])}\n`);
     break;
   case 'orphan': {
-    // Leaves a process behind that holds this one's standard output and error open for a while.
-    const child = spawn(process.execPath, ['-e', `setTimeout(() => {}, ${Number(rest[0] ?? 4000)})`], {
+    // Leaves a process behind that holds this one's standard output and error open until the given
+    // file exists (the test makes it), or two minutes at most.
+    const code = "const fs = require('fs'); setInterval(() => { if (fs.existsSync(process.argv[1])) process.exit(0); }, 50); setTimeout(() => process.exit(0), 120000);";
+    const child = spawn(process.execPath, ['-e', code, rest[0]], {
       stdio: ['ignore', 'inherit', 'inherit'],
       detached: true,
     });
@@ -146,6 +159,33 @@ switch (mode) {
     const at = Number(rest[1]);
     process.stdout.write(text.subarray(0, at));
     setTimeout(() => process.stdout.write(text.subarray(at)), 100);
+    break;
+  }
+  case 'fill': {
+    // Writes until the pipe to the server stays full for a second, which happens only when the
+    // server is stuck sending to its caller. Then exits at once, leaving a full pipe behind, and
+    // puts the exact byte count in the given file.
+    process.stdout._handle?.setBlocking?.(false);
+    const piece = Buffer.alloc(16 * 1024, 121);
+    let written = 0;
+    let stuck = 0;
+    const loop = () => {
+      for (;;) {
+        try {
+          written += writeSync(1, piece);
+          stuck = 0;
+        } catch (e) {
+          if (e.code !== 'EAGAIN') throw e;
+          stuck += 1;
+          if (stuck >= 10) {
+            writeFileSync(rest[0], String(written));
+            process.exit(0);
+          }
+          return void setTimeout(loop, 100);
+        }
+      }
+    };
+    loop();
     break;
   }
   case 'flood': {
