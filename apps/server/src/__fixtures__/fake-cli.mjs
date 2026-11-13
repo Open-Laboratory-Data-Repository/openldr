@@ -1,7 +1,8 @@
 // A stand-in for the openldr CLI, for the server tests only. The server starts it the way it starts
 // the real CLI: the hand-off arrives as JSON on descriptor 3, and OPENLDR_SERVED_FD is '3'. It
 // touches no database. The first word of the hand-off's argv picks what it does.
-import { closeSync, fstatSync, lstatSync, mkdirSync, readdirSync, readFileSync, readSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { chmodSync, closeSync, fstatSync, lstatSync, mkdirSync, readdirSync, readFileSync, readSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 function readHandoff() {
@@ -45,7 +46,7 @@ switch (mode) {
     process.stderr.write(`${handoff.caller.username}\n`);
     break;
   case 'self':
-    process.stdout.write(JSON.stringify({ argv: process.argv, env: process.env, cwd: process.cwd(), handoff }));
+    process.stdout.write(JSON.stringify({ argv: process.argv, env: process.env, cwd: process.cwd(), pid: process.pid, handoff }));
     break;
   case 'sleep': {
     process.on('SIGINT', () => {
@@ -104,7 +105,31 @@ switch (mode) {
       symlinkSync(rest[1], join(dir, 'link.txt'));
       symlinkSync(join(rest[1], '..'), join(dir, 'linkdir'));
     }
+    // A named pipe: opening it to read would wait for a writer for ever.
+    if (spawnSync('mkfifo', [join(dir, 'pipe')]).status !== 0) process.stderr.write('no mkfifo\n');
     process.stdout.write(`wrote ${dir}\n`);
+    break;
+  }
+  case 'companion':
+    // The full path of a file beside the given one.
+    process.stdout.write(`read ${join(dirname(rest[0]), rest[1])}\n`);
+    break;
+  case 'orphan': {
+    // Leaves a process behind that holds this one's standard output and error open for a while.
+    const child = spawn(process.execPath, ['-e', `setTimeout(() => {}, ${Number(rest[0] ?? 4000)})`], {
+      stdio: ['ignore', 'inherit', 'inherit'],
+      detached: true,
+    });
+    process.stderr.write(`grandchild ${child.pid}\n`);
+    child.unref();
+    break;
+  }
+  case 'lock': {
+    // A folder this user cannot write in, with a file in it, so removing the tree fails.
+    const sub = join(rest[0], 'locked');
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(join(sub, 'f.txt'), 'x');
+    chmodSync(sub, 0o500);
     break;
   }
   case 'print':

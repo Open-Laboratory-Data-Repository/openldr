@@ -30,7 +30,7 @@ export const DIRECTORY: Record<string, { id: string; username: string; enabled: 
   'off-sub': { id: 'off-sub', username: 'off', enabled: false },
 };
 
-export async function keyFixture(opts: { devBypass?: boolean; logger?: Logger; adapter?: string; identityAdmin?: boolean } = {}) {
+export async function keyFixture(opts: { devBypass?: boolean; logger?: Logger; adapter?: string; identityAdmin?: boolean; cfg?: Record<string, unknown> } = {}) {
   const db = await makeMigratedDb();
   // pg-mem has no advisory lock, so the subject lock runs the work directly.
   const users = createUserStore(db, { withSubjectLock: async (_subject, work) => work(db) });
@@ -70,7 +70,7 @@ export async function keyFixture(opts: { devBypass?: boolean; logger?: Logger; a
     internalDb: db as never,
     users, roles, accessKeys, audit,
     auth: { ...(base.auth as object), verifyToken, directory },
-    cfg: { ...(base.cfg as object), AUTH_DEV_BYPASS: opts.devBypass ?? false, AUTH_ADAPTER: opts.adapter ?? 'keycloak', ...adminCfg },
+    cfg: { ...(base.cfg as object), AUTH_DEV_BYPASS: opts.devBypass ?? false, AUTH_ADAPTER: opts.adapter ?? 'keycloak', ...adminCfg, ...opts.cfg },
   } as unknown as AppContext;
   const app = await buildApp(ctx);
 

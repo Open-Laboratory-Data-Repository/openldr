@@ -15,13 +15,13 @@ import { randomBytes } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { lstat, mkdir, open, readdir, rm, type FileHandle } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve, sep } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { PassThrough, Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AuditStore } from '@openldr/audit';
 import { recordAuditEvent, type AuditActor } from '@openldr/bootstrap';
 import type { Logger } from '@openldr/core';
-import { COMMAND_META } from '@openldr/cli/meta';
+import { COMMAND_META, type CommandMeta, type PathKind } from '@openldr/cli/meta';
 import {
   decodeFrames, encodeFrame, FrameError, MAX_DATA_BYTES, PATH_PLACEHOLDER, REF_PATTERN,
   type ClientFrame, type ServedHandoff, type ServerFrame,
@@ -34,8 +34,16 @@ import {
 import { holdsCapability } from './rbac';
 import { readAppVersion } from './version';
 
-/** The most files one request may upload. */
+/** The most files and folders one request may upload. */
 export const MAX_FILES = 100_000;
+/** After a refusal, the most of the rest of the body that is read and thrown away, decoded, and
+ *  for how long. Then the request is ended. A client that reads the answer as it comes stops first. */
+export const REFUSAL_DRAIN_BYTES = 16 * 1024 * 1024;
+export const REFUSAL_DRAIN_MS = 5_000;
+/** A caller that reads nothing for this long, while output waits for it, is treated as gone. */
+export const STALL_MS = 5 * 60_000;
+/** After the process has gone, how long its output pipes may stay open (a grandchild can hold them). */
+export const PIPE_WAIT_MS = 3_000;
 /** The child refuses a larger hand-off, so the server does not send one. */
 const MAX_HANDOFF_BYTES = 1024 * 1024;
 /** The longest base64 text of one `data` frame. */
@@ -85,14 +93,62 @@ interface Placed {
   base: string;
   /** The real path that replaces the placeholder. */
   path: string;
+  /** The companion files written beside an input-file's main file. */
+  companions: string[];
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isRef = (v: unknown): v is string => typeof v === 'string' && REF_PATTERN.test(v);
 
-/** One part of a name: not empty, not `.` or `..`, and no `/`, `\` or NUL. */
+/** One part of a name: not empty, not `.` or `..`, and no `/`, `\`, control character or DEL.
+ *  `ingest` records the base name, so a newline in it would reach a stored row. */
 function isPart(v: string): boolean {
-  return v !== '' && v !== '.' && v !== '..' && !/[/\\\0]/.test(v);
+  return v !== '' && v !== '.' && v !== '..' && !/[/\\\x00-\x1f\x7f]/.test(v);
+}
+
+/**
+ * Checks the declared inputs and outputs against the command's path marks: no more of them than it
+ * has marks, only kinds a mark can have, and a kept upload only where a mark keeps one. A mark
+ * whose kind is a function (it depends on the other arguments) accepts a file or a folder, either
+ * way: the server does not parse the arguments to know which.
+ */
+function checkPaths(start: Start, meta: CommandMeta): void {
+  const marks = meta.paths ?? [];
+  if (start.inputs.length + start.outputs.length > marks.length) {
+    throw new Refusal(400, `This command takes at most ${marks.length} files or folders.`);
+  }
+  const kinds = new Set<PathKind>();
+  for (const mark of marks) {
+    if (typeof mark.kind === 'function') for (const k of ['input-file', 'input-dir', 'output-file', 'output-dir'] as const) kinds.add(k);
+    else kinds.add(mark.kind);
+  }
+  for (const p of [...start.inputs, ...start.outputs]) {
+    if (!kinds.has(p.kind)) throw new Refusal(400, `This command takes no ${p.kind}.`);
+  }
+  if (start.inputs.some((i) => i.keep) && !marks.some((m) => m.keep)) {
+    throw new Refusal(400, 'This command keeps no upload.');
+  }
+}
+
+/**
+ * Makes sure a folder under the work folder is one this server alone controls: a real folder, not a
+ * link, owned by this user, with no write bit for group or others. Made with mode 0700 when missing.
+ * On a shared machine another user could make /tmp/cli-runs first. Returns why it cannot be used,
+ * or null. The owner and mode checks are skipped on Windows, where they mean nothing (unproven).
+ */
+async function privateFolderProblem(path: string): Promise<string | null> {
+  try {
+    await mkdir(path, { mode: 0o700 });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return `cannot be made (${(err as NodeJS.ErrnoException).code ?? 'error'})`;
+  }
+  const st = await lstat(path).catch(() => null);
+  if (!st || st.isSymbolicLink() || !st.isDirectory()) return 'is not a real folder';
+  if (process.platform !== 'win32') {
+    if (typeof process.getuid === 'function' && st.uid !== process.getuid()) return 'is owned by another user';
+    if ((st.mode & 0o022) !== 0) return 'can be written by other users';
+  }
+  return null;
 }
 
 /** Checks `start` field by field. The messages name the field, never its value. */
@@ -229,6 +285,16 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
   const runsRoot = join(workDir, 'cli-runs');
   const keptRoot = join(workDir, 'cli-kept');
 
+  /** Removes a request or kept folder. A failure is logged with its code and the folder's own
+   *  name (a random id), never what was in it. */
+  const removeFolder = async (dir: string): Promise<void> => {
+    try {
+      await rm(dir, { recursive: true, force: true });
+    } catch (err) {
+      ctx.logger.warn({ code: (err as NodeJS.ErrnoException | null)?.code, folder: basename(dir) }, 'cli folder could not be removed');
+    }
+  };
+
   // Stop running commands before the server stops taking requests, so each caller gets its exit
   // frame and each audit row is written before the context closes (start.ts closes the app first).
   app.addHook('preClose', async () => { await runner.close(); });
@@ -252,17 +318,32 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       [Symbol.asyncIterator]: () => ({ next: () => chunks.next(), return: async () => ({ done: true as const, value: undefined }) }),
     };
     const frames = decodeFrames<Record<string, unknown>>(shared)[Symbol.asyncIterator]();
-    /** Reads what is left of the body and throws it away. Past the budget, the body is ended. */
-    const drain = async (budget: number): Promise<void> => {
+    /**
+     * After a refusal: reads what is left of the body and throws it away, so a caller part way
+     * through its upload can read the answer. At most REFUSAL_DRAIN_BYTES decoded, for at most
+     * REFUSAL_DRAIN_MS. Then the request is ended, once the answer has been written.
+     */
+    const drain = async (): Promise<void> => {
       let seen = 0;
+      let ended = false;
+      const letGo = () => {
+        if (ended) return;
+        ended = true;
+        const destroy = () => { payload.destroy(); req.raw.destroy(); };
+        if (reply.raw.writableFinished || reply.raw.destroyed) destroy();
+        else { reply.raw.once('finish', destroy); reply.raw.once('close', destroy); }
+      };
+      const timer = setTimeout(letGo, REFUSAL_DRAIN_MS);
       try {
-        for (;;) {
+        while (!ended) {
           const r = await chunks.next();
           if (r.done) return;
           seen += r.value.length;
-          if (seen > budget) { payload.destroy(); return; }
+          if (seen > REFUSAL_DRAIN_BYTES) letGo();
         }
-      } catch { /* the caller left */ }
+      } catch { /* the caller left */ } finally {
+        clearTimeout(timer);
+      }
     };
     const nextFrame = async (): Promise<Record<string, unknown> | null> => {
       try {
@@ -291,7 +372,7 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       runDir = null;
       keptMade.length = 0;
       if (file) await file.close().catch(() => {});
-      for (const dir of dirs) if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {});
+      for (const dir of dirs) if (dir) await removeFolder(dir);
     };
 
     try {
@@ -304,38 +385,56 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       if (meta.kind !== 'app' || !meta.capability) throw new Refusal(400, `${start.path} does not run through the app.`);
       const missing = [meta.capability, ...(meta.alsoRequires ?? [])].find((key) => !holdsCapability(user, key));
       if (missing) throw new Refusal(403, 'insufficient capability', { capability: missing });
+      checkPaths(start, meta);
       const entry = entryOf();
       if (!entry) throw new Refusal(503, 'The CLI entry file cannot be found. Set CLI_ENTRY to its path.');
       if (runner.closing) throw new Refusal(503, 'The server is stopping.');
+
+      // The folders this request uses must be the server's own, before anything goes in them.
+      try {
+        await mkdir(workDir, { recursive: true, mode: 0o700 });
+      } catch (err) {
+        throw uploadFailed(err, ctx.logger);
+      }
+      for (const root of start.inputs.some((i) => i.keep) ? [runsRoot, keptRoot] : [runsRoot]) {
+        const problem = await privateFolderProblem(root);
+        if (problem) {
+          ctx.logger.error({ folder: root, problem }, 'cli work folder refused');
+          throw new Refusal(503, `The folder ${root} ${problem}, so no command can run. Remove it or fix it.`);
+        }
+      }
 
       // The request folder and one server-made folder for each input and output.
       const id = randomBytes(32).toString('base64url');
       const placed = new Map<string, Placed>();
       try {
-        await mkdir(runsRoot, { recursive: true, mode: 0o700 });
         runDir = join(runsRoot, id);
         await mkdir(runDir, { mode: 0o700 });
         for (const input of start.inputs) {
-          if (input.keep) await mkdir(keptRoot, { recursive: true, mode: 0o700 });
           const base = join(input.keep ? keptRoot : runDir, randomBytes(12).toString('hex'));
           await mkdir(base, { mode: 0o700 });
           if (input.keep) keptMade.push(base);
           const path = join(base, input.name);
           if (input.kind === 'input-dir') await mkdir(path, { mode: 0o700 });
-          placed.set(input.ref, { ref: input.ref, kind: input.kind, name: input.name, base, path });
+          placed.set(input.ref, { ref: input.ref, kind: input.kind, name: input.name, base, path, companions: [] });
         }
         for (const output of start.outputs) {
           const base = join(runDir, randomBytes(12).toString('hex'));
           await mkdir(base, { mode: 0o700 });
-          placed.set(output.ref, { ref: output.ref, kind: output.kind, name: '', base, path: join(base, 'output') });
+          placed.set(output.ref, { ref: output.ref, kind: output.kind, name: '', base, path: join(base, 'output'), companions: [] });
         }
       } catch (err) {
         throw uploadFailed(err, ctx.logger);
       }
 
-      // The uploads, until `go`.
+      // The uploads, until `go`. Files and the folders made on the way to them both count.
       let bytes = 0;
-      let files = 0;
+      let entries = 0;
+      const countEntry = () => {
+        entries += 1;
+        if (entries > maxFiles) throw new Refusal(413, `The upload has more than the limit of ${maxFiles} files.`);
+      };
+      const madeDirs = new Set<string>();
       const sent = new Set<string>();
       for (;;) {
         const f = await nextFrame();
@@ -349,18 +448,27 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
           const key = `${input.ref}\0${f.rel}`;
           if (sent.has(key)) throw new Refusal(400, 'The same file was sent twice.');
           sent.add(key);
-          files += 1;
-          if (files > maxFiles) throw new Refusal(413, `The upload has more than the limit of ${maxFiles} files.`);
+          if (input.kind === 'input-dir') {
+            const parts = f.rel.split('/');
+            for (let n = 1; n < parts.length; n += 1) {
+              const dir = parts.slice(0, n).join('/');
+              if (!madeDirs.has(dir)) { madeDirs.add(dir); countEntry(); }
+            }
+          }
+          countEntry();
           try {
             if (input.kind === 'input-dir') await mkdir(dirname(target), { recursive: true, mode: 0o700 });
             openFile = await open(target, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | O_NOFOLLOW, 0o600);
           } catch (err) {
             throw uploadFailed(err, ctx.logger);
           }
+          if (input.kind === 'input-file' && f.rel !== '') input.companions.push(f.rel);
         } else if (f.t === 'data') {
           if (!openFile) throw new Refusal(400, 'Data came with no open file.');
           const d = f.d;
-          if (typeof d !== 'string' || d.length > MAX_DATA_TEXT || d.length % 4 !== 0 || !BASE64.test(d)) {
+          // An empty file is `file` then `end`. An empty data frame would let a caller send frames
+          // for ever without counting a byte.
+          if (typeof d !== 'string' || d === '' || d.length > MAX_DATA_TEXT || d.length % 4 !== 0 || !BASE64.test(d)) {
             throw new Refusal(400, 'A data frame is not valid base64 of at most 64 KiB.');
           }
           const buf = Buffer.from(d, 'base64');
@@ -414,11 +522,11 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
         throw new Refusal(500, 'The command could not be started.');
       }
 
-      // From here the answer is a stream, and streamRun owns the folder and the slot.
+      // From here the answer is a stream, and streamRun owns the folder and the slot. Nothing more
+      // is read from the body: what follows `go` stays unread.
       handedOver = true;
-      void drain(Number.POSITIVE_INFINITY);
       const out = new PassThrough({ highWaterMark: 64 * 1024 });
-      void streamRun({ req, reply, user, start, placed, runDir, slot, handle, out, left: left.signal });
+      void streamRun({ req, reply, user, start, placed, runDir, slot, handle, out, left: left.signal, drain });
       reply.header('content-type', 'application/x-ndjson; charset=utf-8');
       reply.header('cache-control', 'no-store');
       return reply.send(out);
@@ -429,8 +537,8 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       slot?.release();
       slot = null;
       await cleanUp();
-      // Let a caller that is still uploading finish its write and read the answer, up to the limit.
-      void drain(maxUpload);
+      // Let a caller that is still uploading read the answer, within the drain's bounds.
+      void drain();
       if (runner.closing) reply.header('connection', 'close');
       reply.code(r.status);
       return reply.send({ error: r.message, ...r.extra });
@@ -446,6 +554,8 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
   async function streamRun(s: {
     req: FastifyRequest; reply: FastifyReply; user: RequestActor; start: Start; placed: Map<string, Placed>;
     runDir: string; slot: Slot; handle: RunHandle; out: PassThrough; left: AbortSignal;
+    /** The bounded discard of what is left of the body, then the end of the request. */
+    drain: () => Promise<void>;
   }): Promise<void> {
     const { out, handle } = s;
     out.on('error', () => {});
@@ -464,17 +574,23 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
     if (runner.closingSignal.aborted) onClosing();
     else runner.closingSignal.addEventListener('abort', onClosing, { once: true });
 
+    /** The caller read nothing for STALL_MS: it is treated as gone, and the interrupt, then the
+     *  kill, frees its slot. */
+    const stalled = () => { callerLeft(); out.destroy(); s.reply.raw.destroy(); };
+
     /** Writes one frame, waiting while the caller is slow. Does nothing once the caller has gone. */
     const send = async (f: ServerFrame): Promise<void> => {
       if (stop.signal.aborted || out.destroyed || out.writableEnded) return;
       if (out.write(encodeFrame(f))) return;
       await new Promise<void>((resolveWait) => {
         const done = () => {
+          clearTimeout(stallTimer);
           out.off('drain', done);
           out.off('close', done);
           stop.signal.removeEventListener('abort', done);
           resolveWait();
         };
+        const stallTimer = setTimeout(() => { stalled(); done(); }, STALL_MS);
         out.on('drain', done);
         out.on('close', done);
         stop.signal.addEventListener('abort', done);
@@ -483,7 +599,12 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
     const sendBytes = async (t: 'out' | 'err' | 'data', buf: Buffer): Promise<void> => {
       for (let i = 0; i < buf.length; i += MAX_DATA_BYTES) await send({ t, d: buf.subarray(i, i + MAX_DATA_BYTES).toString('base64') });
     };
-    const pairs = [...s.placed.values()].map((p) => [p.path, `${PATH_PLACEHOLDER}${p.ref}`] as const);
+    // Each real path becomes its placeholder. A companion's folder is named by no placeholder, so
+    // its full path becomes its bare file name.
+    const pairs = [...s.placed.values()].flatMap((p) => [
+      [p.path, `${PATH_PLACEHOLDER}${p.ref}`] as const,
+      ...p.companions.map((c) => [join(p.base, c), c] as const),
+    ]);
     const pump = async (stream: NodeJS.ReadableStream, t: 'out' | 'err'): Promise<void> => {
       const masker = createPathMasker(pairs);
       try {
@@ -539,6 +660,18 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       await send({ t: 'run', id: handle.id });
       const pumps = Promise.all([pump(handle.stdout, 'out'), pump(handle.stderr, 'err')]);
       exitCode = await handle.exited;
+      // A grandchild can hold the pipes open after the process has gone. Wait a little, then stop
+      // reading them.
+      let pipeTimer: NodeJS.Timeout | undefined;
+      const late = await Promise.race([
+        pumps.then(() => false),
+        new Promise<boolean>((done) => { pipeTimer = setTimeout(() => done(true), PIPE_WAIT_MS); }),
+      ]);
+      clearTimeout(pipeTimer);
+      if (late) {
+        handle.stdout.destroy();
+        handle.stderr.destroy();
+      }
       await pumps;
       try {
         await sendOutputs();
@@ -548,6 +681,8 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       }
       await send({ t: 'exit', code: exitCode });
     } catch (err) {
+      // The command may still be running: stop it before waiting for it below.
+      handle.interrupt();
       ctx.logger.error({ name: (err as Error | null)?.name }, 'cli run failed while streaming');
       await send({ t: 'error', message: 'The command failed on the server.' }).catch(() => {});
     } finally {
@@ -555,7 +690,7 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       // that has the whole answer finds nothing left behind.
       exitCode = await handle.exited;
       s.left.removeEventListener('abort', callerLeft);
-      await rm(s.runDir, { recursive: true, force: true }).catch(() => {});
+      await removeFolder(s.runDir);
       ctx.logger.info({ command: s.start.path, accountId: s.user.id, exitCode, interrupted: handle.interrupted }, 'cli command finished');
       const base = actorFromRequest(s.req);
       const actor: AuditActor = {
@@ -580,6 +715,9 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       // A connection kept open after the answer would hold the server's close until the caller
       // drops it.
       if (runner.closing) s.req.raw.socket?.end();
+      // Bytes sent after `go` were never read, so the socket is paused and would never see the
+      // caller close it. Now that the answer is written, the same bounded discard as a refusal.
+      if (!s.req.raw.complete) void s.drain();
       s.slot.release();
     }
   }

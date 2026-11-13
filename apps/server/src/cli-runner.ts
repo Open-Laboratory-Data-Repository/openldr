@@ -257,6 +257,10 @@ export function createCliRunner(opts: CliRunnerOptions): CliRunner {
         env: childEnv(opts.env ?? process.env, opts.settings, opts.cwd),
         stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
         windowsHide: true,
+        // Its own process group, so a Ctrl+C on a server in a terminal does not reach the child as
+        // well as the runner's own SIGINT. A second SIGINT stops `import start` mid-page. Windows
+        // gives it its own console instead (unproven).
+        detached: true,
       });
       let finished = false;
       let interrupted = false;

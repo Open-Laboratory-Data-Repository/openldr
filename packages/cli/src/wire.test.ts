@@ -74,6 +74,20 @@ describe('wire', () => {
     await expect(all(decodeFrames(chunks(`{"t":"out","d":"${'A'.repeat(MAX_LINE_BYTES - 17)}"}\n`)))).rejects.toThrow(FrameError);
   });
 
+  it('refuses an empty line, so a body of newlines stops at the first', async () => {
+    let pulled = 0;
+    async function* newlines(): AsyncIterable<Uint8Array> {
+      for (;;) {
+        pulled += 1;
+        yield Buffer.alloc(64 * 1024, 10);
+      }
+    }
+    await expect(all(decodeFrames(newlines()))).rejects.toThrow('A line is empty.');
+    expect(pulled).toBe(1);
+    await expect(all(decodeFrames(chunks('{"t":"go"}\n\n{"t":"go"}\n')))).rejects.toThrow(FrameError);
+    await expect(all(decodeFrames(chunks('{"t":"go"}\n', '\n')))).rejects.toThrow(FrameError);
+  });
+
   it('refuses a line that is not a JSON object with a type, without quoting it', async () => {
     for (const bad of ['nope\n', '[1]\n', '"x"\n', '{"d":"secret-value"}\n', '{"t":3}\n']) {
       const err = await all(decodeFrames(chunks(bad))).catch((e: unknown) => e);

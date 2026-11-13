@@ -78,8 +78,8 @@ function parseLine(line: Buffer): unknown {
 /**
  * The frames in a byte stream, in order. Lines are split on bytes, so a letter cut across two chunks
  * is whole again before it is read. Throws FrameError on a line over MAX_LINE_BYTES, as soon as it is
- * over, and on a line that is not a JSON object with a string `t`. Empty lines are skipped. The
- * shape beyond `t` is the reader's to check.
+ * over, on an empty line, and on a line that is not a JSON object with a string `t`. The shape
+ * beyond `t` is the reader's to check.
  */
 export async function* decodeFrames<T>(source: AsyncIterable<Uint8Array>): AsyncIterable<T> {
   let pending: Buffer[] = [];
@@ -97,7 +97,10 @@ export async function* decodeFrames<T>(source: AsyncIterable<Uint8Array>): Async
       pending = [];
       pendingBytes = 0;
       start = nl + 1;
-      if (line.length > 0) yield parseLine(line) as T;
+      // encodeFrame never writes one, and skipping them would let a body of newlines cost time
+      // with no bound.
+      if (line.length === 0) throw new FrameError('A line is empty.');
+      yield parseLine(line) as T;
     }
     if (start < buf.length) {
       const rest = buf.subarray(start);
