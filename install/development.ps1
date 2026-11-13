@@ -4,7 +4,7 @@
 # Flags:
 #   -Dir <path>     where to clone (default ./openldr)
 #   -Branch <name>  branch to clone (default main)
-#   -Seed           also load WHONET sample data (needs the wasm build toolchain; starts the API for the load and leaves it running)
+#   -Seed           also load WHONET sample data (needs the wasm build toolchain and port 3000 free; starts the API for the load and leaves it running)
 #   -ResetDb        force a db reset even on an existing setup (DESTRUCTIVE)
 #   -NoServices     just clone + install; skip Docker + DB
 param(
@@ -16,6 +16,15 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $RepoUrl = "https://github.com/Open-Laboratory-Data-Repository/openldr.git"
+
+# The API for the sample load (-Seed). The script starts it on this port itself and sends the load
+# there, whatever OPENLDR_URL the session holds. $api and $apiLog start empty: under `irm | iex`
+# this runs in the caller's scope, and a second run must not find the first run's process.
+$apiPort = 3000
+$apiUrl = "http://127.0.0.1:$apiPort"
+$apiUp = { try { Invoke-WebRequest -UseBasicParsing -Uri "$apiUrl/health" -TimeoutSec 2 *> $null; $true } catch { $false } }
+$api = $null
+$apiLog = $null
 
 function Die($m) { Write-Error "X $m"; exit 1 }
 
@@ -83,22 +92,18 @@ if ($NoServices) {
 
   # 6. DB init - only on a fresh setup so a re-run never wipes data; -ResetDb forces it.
   if ($freshEnv -or $ResetDb) {
+    # The sample load (e2e:seed:load) goes through an API, signed in by AUTH_DEV_BYPASS. An API
+    # already answering on the port is not this run's: on a fresh checkout it is someone else's, and
+    # the load would land in its database. So stop before any reset, load or start.
+    # Unproven twice over: edited on Linux, never parsed by PowerShell, never run.
+    if ($Seed -and (& $apiUp)) {
+      Die "An API is already running at $apiUrl. Stop it and run this script again, or seed by hand in the order given in e2e/README.md."
+    }
     Write-Host "-> Waiting for Postgres to be ready..."
     for ($i = 0; $i -lt 30; $i++) {
       docker compose exec -T postgres pg_isready -U openldr *> $null
       if ($LASTEXITCODE -eq 0) { break }
       Start-Sleep 2
-    }
-    # The sample load (e2e:seed:load) goes through the API at OPENLDR_URL, signed in by
-    # AUTH_DEV_BYPASS. Look before any reset: an API already answering there is used as it is, and
-    # it must be the one on this checkout's database. Nothing here can check that.
-    # Unproven twice over: edited on Linux, never parsed by PowerShell, never run.
-    $apiUrl = if ($env:OPENLDR_URL) { $env:OPENLDR_URL.TrimEnd('/') } else { 'http://127.0.0.1:3000' }
-    $apiUp = { try { Invoke-WebRequest -UseBasicParsing -Uri "$apiUrl/health" -TimeoutSec 2 *> $null; $true } catch { $false } }
-    $apiWasUp = $false
-    if ($Seed -and (& $apiUp)) {
-      $apiWasUp = $true
-      Write-Host "-> An API already answers at $apiUrl. The sample load will go to it; it must run on this checkout's database."
     }
     Write-Host "-> Resetting the database (pnpm openldr db reset)"
     pnpm openldr db reset
@@ -113,22 +118,29 @@ if ($NoServices) {
         Write-Host "-> Preparing WHONET sample data (pnpm e2e:seed:reset)"
         pnpm e2e:seed:reset
         if ($LASTEXITCODE -ne 0) { Die "seed reset failed" }
-        # 2. Then an API on the fresh schema, unless one was already there. One node process with
-        #    no watcher, so its own handle stops all of it.
-        if (-not $apiWasUp) {
-          $apiLog = Join-Path ([System.IO.Path]::GetTempPath()) 'openldr-dev-api.log'
-          Write-Host "-> Starting the API for the sample load (node dev.mjs in apps/server, log in $apiLog)"
+        # 2. Then an API on the fresh schema, on the script's own port. One node process with no
+        #    watcher, so its own handle stops all of it. PORT is set for the child only, then put back.
+        $apiLog = Join-Path ([System.IO.Path]::GetTempPath()) 'openldr-dev-api.log'
+        Write-Host "-> Starting the API for the sample load (node dev.mjs in apps/server on port $apiPort, log in $apiLog)"
+        $oldPort = $env:PORT
+        try {
+          $env:PORT = "$apiPort"
           $api = Start-Process -FilePath node -ArgumentList 'dev.mjs' -WorkingDirectory (Resolve-Path apps/server).Path -PassThru -NoNewWindow -RedirectStandardOutput $apiLog -RedirectStandardError "$apiLog.err"
-          for ($i = 0; -not (& $apiUp); $i++) {
-            if ($api.HasExited) { Die "The API stopped while starting (see $apiLog)." }
-            if ($i -ge 60) { Die "The API did not answer at $apiUrl (see $apiLog)." }
-            Start-Sleep 2
-          }
+        } finally { $env:PORT = $oldPort }
+        for ($i = 0; -not (& $apiUp); $i++) {
+          if ($api.HasExited) { Die "The API stopped while starting (see $apiLog)." }
+          if ($i -ge 60) { Die "The API did not answer at $apiUrl (see $apiLog)." }
+          Start-Sleep 2
         }
-        # 3. The load half, through that API.
+        # 3. The load half, through that API and no other.
         Write-Host "-> Loading WHONET sample data (pnpm e2e:seed:load)"
-        pnpm e2e:seed:load
-        if ($LASTEXITCODE -ne 0) { Die "seed load failed" }
+        $oldUrl = $env:OPENLDR_URL
+        try {
+          $env:OPENLDR_URL = $apiUrl
+          pnpm e2e:seed:load
+          $loadExit = $LASTEXITCODE
+        } finally { $env:OPENLDR_URL = $oldUrl }
+        if ($loadExit -ne 0) { Die "seed load failed" }
         $keepApi = $true
       } finally {
         # A failed step or Ctrl+C stops only the API this script started, by its handle.
@@ -151,6 +163,7 @@ Write-Host "Auth: AUTH_DEV_BYPASS is on (loads as a dev admin). Edit .env to use
 # The API started for the sample load stays up, so it is not started only to be stopped. It does
 # not restart on edits, and it holds port 3000, so step 1 above needs it stopped first.
 if ($api -and -not $api.HasExited) {
-  Write-Host "The API started for the sample data is still running (process $($api.Id), log in $apiLog)."
-  Write-Host "It does not restart on edits. Stop it with: Stop-Process -Id $($api.Id), then run step 1."
+  Write-Host "The API started for the sample data is running now as process $($api.Id) (log in $apiLog)."
+  Write-Host "It does not restart on edits. Stop it before step 1, while it is still running: Stop-Process -Id $($api.Id)"
+  Write-Host "A process ID is reused once its process ends, so do not use this one later."
 }

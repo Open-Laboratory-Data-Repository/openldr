@@ -950,10 +950,22 @@ describe('runCli', () => {
       shellEnvironment();
       const env = await envSeenBy(args);
       expect(env.OPENLDR_ALLOW_PLAIN_HTTP, args.join(' ')).toBeUndefined();
+      // The variable still names the launcher; a real --server-url wins over it in the client.
+      expect(env.OPENLDR_URL, args.join(' ')).toBe('http://100.64.0.7:3999');
     }
     // The launcher's own address on the same lock still gets it.
     shellEnvironment();
     expect((await envSeenBy(['layouts', 'list'])).OPENLDR_ALLOW_PLAIN_HTTP).toBe('true');
+  });
+
+  it('keeps the launcher address when --server-url comes after --, where the client reads it as a word', async () => {
+    await lockAt('http://100.64.0.7:3999/studio/');
+    shellEnvironment();
+    // After `--` commander treats these as plain arguments, so the client never sees an address in
+    // them. Without OPENLDR_URL it would fall back to port 3000 with the caller's key.
+    const env = await envSeenBy(['ingest', 'file.sqlite', '--', '--server-url', 'http://10.0.0.5:3000']);
+    expect(env.OPENLDR_URL).toBe('http://100.64.0.7:3999');
+    expect(env.OPENLDR_ALLOW_PLAIN_HTTP).toBeUndefined();
   });
 
   it("leaves the caller's own OPENLDR_URL and plain-HTTP setting alone", async () => {

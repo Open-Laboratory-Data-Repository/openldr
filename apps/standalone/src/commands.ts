@@ -651,16 +651,19 @@ function useLauncherAddress(lock: LockInfo, appVersion: string, args: readonly s
   }
   // The client sends its version and the server refuses another one. The server runs with this one.
   process.env.APP_VERSION = appVersion;
-  // A caller who named a server keeps it, with their own plain-HTTP choice. The root option is read
-  // anywhere on the line, in both forms, so any word that looks like it counts. Counting one too many
-  // only leaves plain HTTP off.
+  // A caller who set OPENLDR_URL keeps it, with their own plain-HTTP choice.
   if (process.env.OPENLDR_URL?.trim()) return;
-  if (args.some((a) => a === '--server-url' || a.startsWith('--server-url='))) return;
+  // Otherwise the launcher's own address. A real --server-url still wins: the client reads the
+  // option before the variable. After a `--` the same words are plain arguments, and the client
+  // then uses this address, not the default port 3000.
   const address = new URL(lock.address);
   process.env.OPENLDR_URL = address.origin;
   // The client refuses plain HTTP to a host that is not this computer's loopback. A launcher started
   // with --host on one address (a Tailscale address, say) is still this computer, and the lock is
-  // where that address came from, so plain HTTP to it is allowed for this one call.
+  // where that address came from, so plain HTTP to it is allowed for this one call. It is not allowed
+  // when the caller's words carry --server-url in any form: that address is the caller's, and may be
+  // another machine. A word that only looks like the option counts too; the cost is plain HTTP off.
+  if (args.some((a) => a === '--server-url' || a.startsWith('--server-url='))) return;
   if (!LOCAL_URL_HOSTS.has(address.hostname)) process.env.OPENLDR_ALLOW_PLAIN_HTTP = 'true';
 }
 

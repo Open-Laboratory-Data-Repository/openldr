@@ -5,7 +5,8 @@
 # Flags:
 #   --dir <path>     where to clone (default ./openldr)
 #   --branch <name>  branch to clone (default main)
-#   --seed           also load WHONET sample data (needs the wasm build toolchain; starts the API for the load and leaves it running)
+#   --seed           also load WHONET sample data (needs the wasm build toolchain and port 3000 free; starts the API
+#                    for the load and leaves it running)
 #   --reset-db       force a db reset even on an existing setup (DESTRUCTIVE)
 #   --no-services    just clone + install; skip Docker + DB
 set -eu
@@ -30,11 +31,12 @@ done
 
 err() { echo "✗ $1" >&2; exit 1; }
 
-# The API the sample load goes to (--seed): the CLI's own default unless OPENLDR_URL says otherwise.
-API_URL="${OPENLDR_URL:-http://127.0.0.1:3000}"
+# The API for the sample load (--seed). The script starts it on this port itself and sends the load
+# there, whatever OPENLDR_URL the caller's shell holds.
+API_PORT=3000
+API_URL="http://127.0.0.1:$API_PORT"
 API_LOG="${TMPDIR:-/tmp}/openldr-dev-api.log"
 API_PID=""
-API_WAS_UP=0
 api_up() { API_URL="$API_URL" node -e "fetch(process.env.API_URL + '/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" >/dev/null 2>&1; }
 # Stops only the API this script started, by its own process ID. A failed step or Ctrl+C runs it.
 stop_api() { if [ -n "$API_PID" ]; then kill "$API_PID" 2>/dev/null || true; API_PID=""; fi; }
@@ -100,20 +102,19 @@ else
 
   # 6. DB init — only on a fresh setup so a re-run never wipes data; --reset-db forces it.
   if [ "$FRESH_ENV" -eq 1 ] || [ "$RESET_DB" -eq 1 ]; then
+    # The sample load (e2e:seed:load) goes through an API, signed in by AUTH_DEV_BYPASS. An API
+    # already answering on the port is not this run's: on a fresh checkout it is someone else's,
+    # and the load would land in its database. So stop before any reset, load or start.
+    # Unproven: this part has not been run. macOS is unproven too.
+    if [ "$SEED" -eq 1 ] && api_up; then
+      err "An API is already running at $API_URL. Stop it and run this script again, or seed by hand in the order given in e2e/README.md."
+    fi
     echo "→ Waiting for Postgres to be ready…"
     i=0
     while [ "$i" -lt 30 ]; do
       docker compose exec -T postgres pg_isready -U openldr >/dev/null 2>&1 && break
       i=$((i + 1)); sleep 2
     done
-    # The sample load (e2e:seed:load) goes through the API at OPENLDR_URL, signed in by
-    # AUTH_DEV_BYPASS. Look before any reset: an API already answering there is used as it is,
-    # and it must be the one on this checkout's database. Nothing here can check that.
-    # Unproven: this part has not been run. macOS is unproven too.
-    if [ "$SEED" -eq 1 ] && api_up; then
-      API_WAS_UP=1
-      echo "→ An API already answers at $API_URL. The sample load will go to it; it must run on this checkout's database."
-    fi
     echo "→ Resetting the database (pnpm openldr db reset)"
     pnpm openldr db reset || err "db reset failed"
     echo "→ Seeding starter set (pnpm openldr db seed)"
@@ -122,23 +123,25 @@ else
       # 1. The reset half needs no server.
       echo "→ Preparing WHONET sample data (pnpm e2e:seed:reset)"
       pnpm e2e:seed:reset || err "seed reset failed"
-      # 2. Then an API on the fresh schema, unless one was already there.
-      if [ "$API_WAS_UP" -eq 0 ]; then
-        echo "→ Starting the API for the sample load (node dev.mjs in apps/server, log in $API_LOG)"
-        # One process, no watcher, so its own process ID stops all of it.
-        (cd apps/server && exec node dev.mjs) >"$API_LOG" 2>&1 &
-        API_PID=$!
-        i=0
-        until api_up; do
-          kill -0 "$API_PID" 2>/dev/null || err "The API stopped while starting (see $API_LOG)."
-          i=$((i + 1))
-          [ "$i" -lt 60 ] || err "The API did not answer at $API_URL (see $API_LOG)."
-          sleep 2
-        done
-      fi
-      # 3. The load half, through that API.
+      # 2. Then an API on the fresh schema, on the script's own port. One process, no watcher, so
+      #    its own process ID stops all of it.
+      echo "→ Starting the API for the sample load (node dev.mjs in apps/server on port $API_PORT, log in $API_LOG)"
+      (cd apps/server && PORT="$API_PORT" exec node dev.mjs) >"$API_LOG" 2>&1 &
+      API_PID=$!
+      i=0
+      until api_up; do
+        if ! kill -0 "$API_PID" 2>/dev/null; then
+          # Gone already: the exit trap must not signal a process ID that may be reused.
+          API_PID=""
+          err "The API stopped while starting (see $API_LOG)."
+        fi
+        i=$((i + 1))
+        [ "$i" -lt 60 ] || err "The API did not answer at $API_URL (see $API_LOG)."
+        sleep 2
+      done
+      # 3. The load half, through that API and no other.
       echo "→ Loading WHONET sample data (pnpm e2e:seed:load)"
-      pnpm e2e:seed:load || err "seed load failed"
+      OPENLDR_URL="$API_URL" pnpm e2e:seed:load || err "seed load failed"
     fi
   else
     echo "→ Skipping db reset (existing setup; pass --reset-db to wipe & re-init)"
@@ -159,8 +162,9 @@ EOF
 # The API started for the sample load stays up, so it is not started only to be stopped. It does
 # not restart on edits, and it holds port 3000, so step 1 above needs it stopped first.
 if [ -n "$API_PID" ]; then
-  echo "The API started for the sample data is still running (process $API_PID, log in $API_LOG)."
-  echo "It does not restart on edits. Stop it with: kill $API_PID, then run step 1."
+  echo "The API started for the sample data is running now as process $API_PID (log in $API_LOG)."
+  echo "It does not restart on edits. Stop it before step 1, while it is still running: kill $API_PID"
+  echo "A process ID is reused once its process ends, so do not use this one later."
   API_PID=""
 fi
 trap - EXIT INT TERM
