@@ -304,7 +304,7 @@ Une clé n'est affichée qu'une fois, à sa création. Studio n'en garde aucune 
 
 **L'IA reçoit « This account lacks the capability ».** Son rôle n'autorise pas cette commande. Donnez-lui un rôle qui l'autorise, ou laissez le refus.
 
-**La clé n'est pas créée.** Studio affiche « Impossible de créer la clé : name holds a control character, such as a tab or a line break ». Le nom contient une tabulation ou un saut de ligne, souvent venu d'un collage. Saisissez de nouveau le nom.
+**La clé n'est pas créée.** Studio affiche « Impossible de créer la clé : create access key failed: name holds a control character, such as a tab or a line break ». Le nom contient une tabulation ou un saut de ligne à l'intérieur. Saisissez de nouveau le nom.
 
 ## Guides associés
 

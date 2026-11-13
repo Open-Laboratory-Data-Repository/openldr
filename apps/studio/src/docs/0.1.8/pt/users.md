@@ -304,7 +304,7 @@ Uma chave só é mostrada uma vez, quando a cria. O Studio não guarda nenhuma c
 
 **A IA recebe "This account lacks the capability".** O seu papel não permite esse comando. Dê-lhe um papel que o permita, ou deixe a recusa.
 
-**A chave não é criada.** O Studio mostra "Não foi possível criar a chave: name holds a control character, such as a tab or a line break". O nome tem uma tabulação ou uma quebra de linha, muitas vezes vinda de uma colagem. Escreva o nome outra vez.
+**A chave não é criada.** O Studio mostra "Não foi possível criar a chave: create access key failed: name holds a control character, such as a tab or a line break". O nome tem uma tabulação ou uma quebra de linha no meio. Escreva o nome outra vez.
 
 ## Guias relacionados
 

@@ -116,7 +116,7 @@ Não existe a opção `--password`, porque os outros utilizadores da máquina co
 
 `openldr logout` termina a sessão no servidor e retira-a da sua máquina.
 
-`login`, `whoami` e `logout` desistem quando o servidor aceita a ligação e não responde durante 30 segundos. Mostram então `Cannot reach OpenLDR at <address>: ETIMEDOUT.`
+`login`, `whoami` e `logout` desistem quando o servidor aceita a ligação e não responde durante 30 segundos. Mostram então `Cannot reach OpenLDR at <address>: ETIMEDOUT.` `logout` acrescenta uma frase depois.
 
 A sessão fica guardada num ficheiro que só você pode ler:
 
@@ -156,6 +156,8 @@ Assim, um script pode guardar a chave num ficheiro sem nunca a mostrar no ecrã.
 ```sh
 (umask 077; openldr user key create ai-reader --name claude-test --expires 2026-12-31 > ai-reader.key)
 ```
+
+Apague primeiro um `ai-reader.key` antigo. O `umask` não muda um ficheiro que já existe.
 
 `--expires` aceita uma data, ou uma data e hora ISO que termina em `Z` ou num desvio horário. Uma data simples, como `2026-12-31`, significa o fim desse dia em UTC. No Studio, uma data escolhida significa o fim desse dia no fuso horário do seu navegador. Sem expiração, a chave funciona até a revogar.
 
@@ -293,7 +295,7 @@ Estes usos funcionavam antes e agora dão erro. Um script pode encontrá-los.
 - Um ficheiro que muda durante o envio interrompe o comando. Envie-o outra vez. Não corrido.
 - Um programa que corre o CLI e não lê nada da saída durante 5 minutos perde o comando. O servidor interrompe-o. Não corrido.
 - Ctrl+C também interrompe o comando no servidor. Um comando que não pare é terminado à força após 10 segundos. Não corrido.
-- Se o servidor parar durante um comando, o CLI mostra `OpenLDR stopped while this command was running.` na saída de erro. O código de saída é 130, ou 137 quando o comando teve de ser terminado à força. Não corrido.
+- Se o servidor parar durante um comando, o CLI mostra `OpenLDR stopped while this command was running.` na saída de erro. Na maioria dos comandos, o código de saída é 130, ou 137 quando o comando teve de ser terminado à força. `import start` devolve o seu próprio código. Uma paragem brusca mostra antes `The connection to OpenLDR was lost.` Não corrido.
 - Cada comando que passa pela aplicação mostra uma linha de registo JSON do servidor na saída de erro. Numa instalação sem sincronização, é uma linha com `"msg":"sync disabled (not configured)"`. A saída padrão fica limpa, por isso a saída `--json` continua legível. Um script que trate qualquer saída de erro como falha vai falhar.
 
 ## Quem pode correr o quê
@@ -337,17 +339,17 @@ Um comando que altera algo, como `user create`, também escreve a sua própria l
 
 | Definição | Predefinição | O que faz |
 | --- | --- | --- |
-| `CLI_MAX_RUNNING` | `2` | Quantos comandos correm ao mesmo tempo. Os outros esperam até 30 segundos e depois recebem `OpenLDR is running other commands. Try again shortly.` |
+| `CLI_MAX_RUNNING` | `2` | Quantos comandos correm ao mesmo tempo. Os outros esperam até 30 segundos e depois recebem `OpenLDR is running other commands. Try again shortly.` Não corrido. |
 | `CLI_MAX_UPLOAD_BYTES` | `2147483648` (2 GiB) | O máximo de bytes de ficheiros que um comando pode enviar. |
 | `CLI_ENTRY` | encontrado junto ao servidor | O ficheiro do CLI que o servidor inicia. Defina-o só quando o CLI estiver noutro sítio. |
 
 Quando `CLI_MAX_RUNNING` é maior do que 1, uma conta pode correr no máximo menos um comando do que esse valor ao mesmo tempo. Assim, uma conta não ocupa todos os lugares. Com o valor predefinido de 2, uma conta corre um comando de cada vez, e o segundo comando espera. Não corrido.
 
-O servidor escreve os envios em `TERMINOLOGY_WORK_DIR`, ou na pasta temporária do sistema quando `TERMINOLOGY_WORK_DIR` não está definida. Os envios de um comando são apagados quando ele termina. Se o servidor for morto durante um comando, o que fica é apagado no arranque seguinte, quando tiver mais de 24 horas. Não corrido. `terminology ontology build` guarda a sua pasta em `cli-kept`, para que `terminology ontology rebuild` a possa ler outra vez. A limpeza no arranque não toca em `cli-kept`. Cada construção bem-sucedida deixa lá mais uma cópia.
+O servidor escreve os envios em `TERMINOLOGY_WORK_DIR`, ou na pasta temporária do sistema quando `TERMINOLOGY_WORK_DIR` não está definida. Os envios de um comando são apagados quando ele termina. Se o servidor for morto durante um comando, o que fica é apagado num arranque em que já tenha mais de 24 horas. Não corrido. `terminology ontology build` guarda a sua pasta em `cli-kept`, para que `terminology ontology rebuild` a possa ler outra vez. A limpeza no arranque não toca em `cli-kept`. Cada construção bem-sucedida deixa lá mais uma cópia.
 
 Numa instalação Docker, se usar `terminology ontology build` pela aplicação, aponte `TERMINOLOGY_WORK_DIR` para uma pasta que sobreviva à recriação do contentor. Caso contrário, `terminology ontology rebuild` falha depois de uma atualização. A pasta tem de estar num volume Docker ou numa montagem, e o utilizador do contentor `api` tem de conseguir escrever nela. Isto não foi testado.
 
-Uma instalação Docker põe o gateway, um proxy nginx, à frente do servidor. Um CLI noutra máquina que envia os comandos para o endereço do gateway encontra mais dois limites. O gateway recusa um pedido com mais de 50 MiB (`client_max_body_size 50m`), por isso um envio maior falha aí. Também corta um comando que não envia nenhuma saída durante 120 segundos (`proxy_read_timeout 120s`). O script `./openldr` não passa pelo gateway, por isso nenhum destes limites se aplica a ele. Não corrido.
+Uma instalação Docker põe o gateway, um proxy nginx, à frente do servidor. Um CLI noutra máquina que envia os comandos para o endereço do gateway encontra mais dois limites. O gateway recusa um pedido com mais de 50 MiB (`client_max_body_size 50m`). Os ficheiros viajam codificados em base64 dentro do pedido, por isso o maior ficheiro aceite é mais pequeno do que isso. Também corta um comando que não envia nenhuma saída durante 120 segundos (`proxy_read_timeout 120s`). O script `./openldr` não passa pelo gateway, por isso nenhum destes limites se aplica a ele. Não corrido.
 
 [Variáveis de ambiente](/docs/environment) lista todas as definições.
 
@@ -409,7 +411,7 @@ O início de sessão e as permissões limitam uma pessoa ou um programa que só 
 | `Cannot reach OpenLDR at <address>: ETIMEDOUT.` | `login`, `whoami` ou `logout` não recebeu resposta em 30 segundos. |
 | `OpenLDR stopped while this command was running.` | O servidor parou durante o comando. Corra-o outra vez quando o servidor voltar. |
 | `This client is version <a> and OpenLDR is version <b>. Use the same release on both.` | Atualize o CLI ou o servidor para que sejam da mesma versão. |
-| `OpenLDR is running other commands. Try again shortly.` | Já estão a correr `CLI_MAX_RUNNING` comandos. |
+| `OpenLDR is running other commands. Try again shortly.` | Já estão a correr `CLI_MAX_RUNNING` comandos, ou esta conta já corre a sua parte. Não corrido. |
 | `This command works on the database itself. Run it on the machine that runs OpenLDR.` | Um comando de recuperação foi corrido onde não há definições de base de dados. |
 | `Refusing to send a credential over plain HTTP to <host>. ...` | Use https, ou defina `OPENLDR_ALLOW_PLAIN_HTTP=true` numa rede de confiança. |
 | `The key file named by OPENLDR_KEY_FILE cannot be read: <file>` | Verifique o caminho e o dono do ficheiro. |

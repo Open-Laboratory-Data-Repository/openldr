@@ -116,7 +116,7 @@ Il n'y a pas d'option `--password`, car les autres utilisateurs de la machine pe
 
 `openldr logout` termine la session sur le serveur et la retire de votre machine.
 
-`login`, `whoami` et `logout` abandonnent quand le serveur prend la connexion et ne répond pas pendant 30 secondes. Ils affichent alors `Cannot reach OpenLDR at <address>: ETIMEDOUT.`
+`login`, `whoami` et `logout` abandonnent quand le serveur prend la connexion et ne répond pas pendant 30 secondes. Ils affichent alors `Cannot reach OpenLDR at <address>: ETIMEDOUT.` `logout` ajoute une phrase après.
 
 La session est gardée dans un fichier que vous seul pouvez lire :
 
@@ -156,6 +156,8 @@ Un script peut donc garder la clé dans un fichier sans jamais l'afficher. Le `u
 ```sh
 (umask 077; openldr user key create ai-reader --name claude-test --expires 2026-12-31 > ai-reader.key)
 ```
+
+Supprimez d'abord un ancien `ai-reader.key`. Le `umask` ne change pas un fichier qui existe déjà.
 
 `--expires` prend une date, ou une date-heure ISO qui se termine par `Z` ou par un décalage. Une date seule, comme `2026-12-31`, désigne la fin de ce jour en UTC. Dans Studio, une date choisie désigne la fin de ce jour dans le fuseau horaire de votre navigateur. Sans expiration, la clé fonctionne jusqu'à sa révocation.
 
@@ -293,7 +295,7 @@ Ces usages fonctionnaient avant et donnent maintenant une erreur. Un script peut
 - Un fichier qui change pendant son envoi arrête la commande. Envoyez-le de nouveau. Non lancé.
 - Un programme qui lance le CLI et ne lit rien de sa sortie pendant 5 minutes perd la commande. Le serveur l'arrête. Non lancé.
 - Ctrl+C arrête aussi la commande sur le serveur. Une commande qui ne s'arrête pas est tuée après 10 secondes. Non lancé.
-- Si le serveur s'arrête pendant une commande, le CLI affiche `OpenLDR stopped while this command was running.` sur la sortie d'erreur. Le code de sortie est 130, ou 137 quand la commande a dû être tuée. Non lancé.
+- Si le serveur s'arrête pendant une commande, le CLI affiche `OpenLDR stopped while this command was running.` sur la sortie d'erreur. Pour la plupart des commandes, le code de sortie est 130, ou 137 quand la commande a dû être tuée. `import start` renvoie son propre code. Un arrêt brutal affiche plutôt `The connection to OpenLDR was lost.` Non lancé.
 - Chaque commande passée par l'application affiche une ligne de journal JSON du serveur sur la sortie d'erreur. Sur une installation sans synchronisation, c'est une ligne avec `"msg":"sync disabled (not configured)"`. La sortie standard reste propre, donc la sortie `--json` reste lisible. Un script qui traite toute sortie d'erreur comme un échec échouera.
 
 ## Qui peut lancer quoi
@@ -337,17 +339,17 @@ Une commande qui modifie quelque chose, comme `user create`, écrit aussi sa pro
 
 | Réglage | Par défaut | Ce qu'il fait |
 | --- | --- | --- |
-| `CLI_MAX_RUNNING` | `2` | Nombre de commandes qui tournent en même temps. Les autres attendent jusqu'à 30 secondes, puis reçoivent `OpenLDR is running other commands. Try again shortly.` |
+| `CLI_MAX_RUNNING` | `2` | Nombre de commandes qui tournent en même temps. Les autres attendent jusqu'à 30 secondes, puis reçoivent `OpenLDR is running other commands. Try again shortly.` Non lancé. |
 | `CLI_MAX_UPLOAD_BYTES` | `2147483648` (2 Gio) | Nombre maximal d'octets de fichiers qu'une commande peut envoyer. |
 | `CLI_ENTRY` | trouvé à côté du serveur | Le fichier du CLI que le serveur lance. Ne le définissez que si le CLI se trouve ailleurs. |
 
-Quand `CLI_MAX_RUNNING` vaut plus de 1, un compte peut lancer au plus une commande de moins à la fois. Un compte ne peut donc pas prendre toutes les places. Avec la valeur par défaut de 2, un compte lance une commande à la fois, et sa deuxième commande attend. Non lancé.
+Quand `CLI_MAX_RUNNING` vaut plus de 1, un compte peut lancer au plus une commande de moins que cette valeur à la fois. Un compte ne peut donc pas prendre toutes les places. Avec la valeur par défaut de 2, un compte lance une commande à la fois, et sa deuxième commande attend. Non lancé.
 
-Le serveur écrit les envois sous `TERMINOLOGY_WORK_DIR`, ou dans le dossier temporaire du système quand ce réglage n'est pas défini. Les envois d'une commande sont supprimés à sa fin. Si le serveur est tué pendant une commande, ce qui reste est supprimé au démarrage suivant, une fois vieux de plus de 24 heures. Non lancé. `terminology ontology build` garde son dossier dans `cli-kept`, pour que `terminology ontology rebuild` puisse le relire. Le nettoyage au démarrage ne touche pas `cli-kept`. Chaque construction réussie y laisse une copie de plus.
+Le serveur écrit les envois sous `TERMINOLOGY_WORK_DIR`, ou dans le dossier temporaire du système quand ce réglage n'est pas défini. Les envois d'une commande sont supprimés à sa fin. Si le serveur est tué pendant une commande, ce qui reste est supprimé lors d'un démarrage où il a plus de 24 heures. Non lancé. `terminology ontology build` garde son dossier dans `cli-kept`, pour que `terminology ontology rebuild` puisse le relire. Le nettoyage au démarrage ne touche pas `cli-kept`. Chaque construction réussie y laisse une copie de plus.
 
 Sur une installation Docker, si vous utilisez `terminology ontology build` par l'application, faites pointer `TERMINOLOGY_WORK_DIR` vers un dossier qui survit à la recréation du conteneur. Sinon `terminology ontology rebuild` échoue après une mise à niveau. Le dossier doit être sur un volume Docker ou un montage, et l'utilisateur du conteneur `api` doit pouvoir y écrire. Cela n'a pas été testé.
 
-Une installation Docker place la passerelle, un proxy nginx, devant le serveur. Un CLI sur une autre machine qui envoie ses commandes à l'adresse de la passerelle rencontre deux limites de plus. La passerelle refuse une requête de plus de 50 Mio (`client_max_body_size 50m`), donc un envoi plus gros échoue là. Elle coupe aussi une commande qui n'envoie aucune sortie pendant 120 secondes (`proxy_read_timeout 120s`). Le script `./openldr` ne passe pas par la passerelle, donc aucune de ces limites ne s'applique à lui. Non lancé.
+Une installation Docker place la passerelle, un proxy nginx, devant le serveur. Un CLI sur une autre machine qui envoie ses commandes à l'adresse de la passerelle rencontre deux limites de plus. La passerelle refuse une requête de plus de 50 Mio (`client_max_body_size 50m`). Les fichiers voyagent encodés en base64 dans la requête, donc le plus gros fichier accepté est plus petit que cela. Elle coupe aussi une commande qui n'envoie aucune sortie pendant 120 secondes (`proxy_read_timeout 120s`). Le script `./openldr` ne passe pas par la passerelle, donc aucune de ces limites ne s'applique à lui. Non lancé.
 
 [Variables d'environnement](/docs/environment) liste tous les réglages.
 
@@ -409,7 +411,7 @@ La connexion et les permissions limitent une personne ou un programme qui ne dé
 | `Cannot reach OpenLDR at <address>: ETIMEDOUT.` | `login`, `whoami` ou `logout` n'a reçu aucune réponse en 30 secondes. |
 | `OpenLDR stopped while this command was running.` | Le serveur s'est arrêté pendant la commande. Relancez-la quand le serveur est revenu. |
 | `This client is version <a> and OpenLDR is version <b>. Use the same release on both.` | Mettez à jour le CLI ou le serveur pour qu'ils soient de la même version. |
-| `OpenLDR is running other commands. Try again shortly.` | `CLI_MAX_RUNNING` commandes tournent déjà. |
+| `OpenLDR is running other commands. Try again shortly.` | `CLI_MAX_RUNNING` commandes tournent déjà, ou ce compte lance déjà sa part. Non lancé. |
 | `This command works on the database itself. Run it on the machine that runs OpenLDR.` | Une commande de récupération a été lancée là où il n'y a pas de réglages de base de données. |
 | `Refusing to send a credential over plain HTTP to <host>. ...` | Utilisez https, ou définissez `OPENLDR_ALLOW_PLAIN_HTTP=true` sur un réseau de confiance. |
 | `The key file named by OPENLDR_KEY_FILE cannot be read: <file>` | Vérifiez le chemin et le propriétaire du fichier. |

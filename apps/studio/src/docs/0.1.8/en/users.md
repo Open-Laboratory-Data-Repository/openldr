@@ -304,7 +304,7 @@ A key is shown only once, when you create it. Studio keeps no copy. An expiry da
 
 **The AI gets "This account lacks the capability".** Its role does not allow that command. Give it a role that does, or leave it refused.
 
-**The key is not made.** Studio shows "Could not create the key: name holds a control character, such as a tab or a line break". The name holds a tab or a line break, often from a paste. Type the name again.
+**The key is not made.** Studio shows "Could not create the key: create access key failed: name holds a control character, such as a tab or a line break". The name holds a tab or a line break inside it. Type the name again.
 
 ## Related guides
 

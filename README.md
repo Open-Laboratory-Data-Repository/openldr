@@ -169,7 +169,7 @@ With `--seed`, the script first checks that nothing listens on port 3000, on any
 3. It checks port 3000, then runs a second `db reset`.
 4. It checks port 3000, then starts its own API there and loads the sample through it.
 
-Any program listening on port 3000 stops the script at each check. A stop after a reset says the database was reset and how to run the script again. The load signs in through `AUTH_DEV_BYPASS=true`, which the script writes into a new `.env`. If your `.env` lacks it, the load is refused after the database was reset. A key in `OPENLDR_KEY` or `OPENLDR_KEY_FILE`, or an `openldr login` session for `http://127.0.0.1:3000`, is refused too, because the reset removed it. The API stays running after the load. None of this was run.
+Any program listening on port 3000 stops the script at each check. After the first reset, a stop at a port check or at the API start says the database was reset. It also says how to run the script again. The load signs in through `AUTH_DEV_BYPASS=true`, which the script writes into a new `.env`. If your `.env` lacks it, the load is refused after the database was reset. A key in `OPENLDR_KEY` or `OPENLDR_KEY_FILE` is refused too, because the reset removed it. When the load fails, the script ends with `seed load failed` and does not say the database was reset. The API stays running after the load. None of this was run.
 
 ### 3. Manual setup
 

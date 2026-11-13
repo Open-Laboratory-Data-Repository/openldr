@@ -116,7 +116,7 @@ There is no `--password` option, because other users on the machine can read com
 
 `openldr logout` ends the session on the server and removes it from your machine.
 
-`login`, `whoami` and `logout` give up when the server takes the connection and sends no answer for 30 seconds. They then print `Cannot reach OpenLDR at <address>: ETIMEDOUT.`
+`login`, `whoami` and `logout` give up when the server takes the connection and sends no answer for 30 seconds. They then print `Cannot reach OpenLDR at <address>: ETIMEDOUT.` `logout` adds a sentence after it.
 
 The session is kept in a file only you can read:
 
@@ -156,6 +156,8 @@ So a script can keep the key in a file and never show it on screen. The `umask` 
 ```sh
 (umask 077; openldr user key create ai-reader --name claude-test --expires 2026-12-31 > ai-reader.key)
 ```
+
+Remove an old `ai-reader.key` first. The `umask` does not change a file that already exists.
 
 `--expires` takes a date or an ISO date-time ending in `Z` or an offset. A bare date, such as `2026-12-31`, means the end of that day in UTC. In Studio, a chosen date means the end of that day in your browser's time zone. With no expiry, the key works until you revoke it.
 
@@ -293,7 +295,7 @@ These used to work and now give an error. A script may meet them.
 - A file that changes while it is being sent stops the command. Send it again. Not run.
 - A program that runs the CLI and reads nothing of its output for 5 minutes loses the command. The server stops it. Not run.
 - Ctrl+C stops the command on the server too. A command that does not stop is killed after 10 seconds. Not run.
-- If the server stops while a command runs, the CLI prints `OpenLDR stopped while this command was running.` on standard error. The exit code is 130, or 137 when the command had to be killed. Not run.
+- If the server stops while a command runs, the CLI prints `OpenLDR stopped while this command was running.` on standard error. For most commands the exit code is 130, or 137 when the command had to be killed. `import start` returns its own code. A hard stop prints `The connection to OpenLDR was lost.` instead. Not run.
 - Every command sent through the app prints a JSON log line from the server on standard error. On an install with no sync it is one line, with `"msg":"sync disabled (not configured)"`. Standard output stays clean, so `--json` output still parses. A script that treats any standard error output as a failure will fail.
 
 ## Who can run what
@@ -337,17 +339,17 @@ A command that changes something, such as `user create`, also writes its own aud
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `CLI_MAX_RUNNING` | `2` | Commands that run at once. Others wait up to 30 seconds, then get `OpenLDR is running other commands. Try again shortly.` |
+| `CLI_MAX_RUNNING` | `2` | Commands that run at once. Others wait up to 30 seconds, then get `OpenLDR is running other commands. Try again shortly.` Not run. |
 | `CLI_MAX_UPLOAD_BYTES` | `2147483648` (2 GiB) | The most file bytes one command may send. |
 | `CLI_ENTRY` | found beside the server | The CLI file the server starts. Set it only when the CLI sits somewhere else. |
 
 When `CLI_MAX_RUNNING` is more than 1, one account may run at most one fewer than that at once. So one account cannot take every slot. With the default of 2, one account runs one command at a time, and its second command waits. Not run.
 
-The server writes uploads under `TERMINOLOGY_WORK_DIR`, or the system temp folder when that is unset. A command's uploads are removed when it ends. If the server is killed during a command, what is left is removed at the next start, once it is more than 24 hours old. Not run. `terminology ontology build` keeps its folder in `cli-kept`, so that `terminology ontology rebuild` can read it again. The clean-up at start does not touch `cli-kept`. Each successful build leaves one more copy there.
+The server writes uploads under `TERMINOLOGY_WORK_DIR`, or the system temp folder when that is unset. A command's uploads are removed when it ends. If the server is killed during a command, what is left is removed at a start after it is more than 24 hours old. Not run. `terminology ontology build` keeps its folder in `cli-kept`, so that `terminology ontology rebuild` can read it again. The clean-up at start does not touch `cli-kept`. Each successful build leaves one more copy there.
 
 On a Docker install, if you use `terminology ontology build` through the app, set `TERMINOLOGY_WORK_DIR` to a folder that survives the container being recreated. Otherwise `terminology ontology rebuild` fails after an upgrade. The folder must be on a Docker volume or a mount, and the `api` container's user must be able to write to it. This was not tested.
 
-A Docker install puts the gateway, an nginx proxy, in front of the server. A CLI on another machine that sends its commands to the gateway's address meets two more limits. The gateway refuses a request of more than 50 MiB (`client_max_body_size 50m`), so a bigger upload fails there. It also cuts off a command that sends no output for 120 seconds (`proxy_read_timeout 120s`). The `./openldr` wrapper does not go through the gateway, so neither limit applies to it. Not run.
+A Docker install puts the gateway, an nginx proxy, in front of the server. A CLI on another machine that sends its commands to the gateway's address meets two more limits. The gateway refuses a request of more than 50 MiB (`client_max_body_size 50m`). Files travel base64-encoded inside the request, so the largest file that gets through is smaller than that. It also cuts off a command that sends no output for 120 seconds (`proxy_read_timeout 120s`). The `./openldr` wrapper does not go through the gateway, so neither limit applies to it. Not run.
 
 [Environment variables](/docs/environment) lists every setting.
 
@@ -409,7 +411,7 @@ Sign-in and permissions limit a person or program that holds only a key or a ses
 | `Cannot reach OpenLDR at <address>: ETIMEDOUT.` | `login`, `whoami` or `logout` got no answer in 30 seconds. |
 | `OpenLDR stopped while this command was running.` | The server stopped during the command. Run it again once the server is back. |
 | `This client is version <a> and OpenLDR is version <b>. Use the same release on both.` | Update the CLI or the server so both are the same release. |
-| `OpenLDR is running other commands. Try again shortly.` | `CLI_MAX_RUNNING` commands are already running. |
+| `OpenLDR is running other commands. Try again shortly.` | `CLI_MAX_RUNNING` commands are already running, or this account already runs its share. Not run. |
 | `This command works on the database itself. Run it on the machine that runs OpenLDR.` | A recovery command was run where there are no database settings. |
 | `Refusing to send a credential over plain HTTP to <host>. ...` | Use https, or set `OPENLDR_ALLOW_PLAIN_HTTP=true` on a trusted network. |
 | `The key file named by OPENLDR_KEY_FILE cannot be read: <file>` | Check the path and the file's owner. |
