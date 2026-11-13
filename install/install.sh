@@ -145,18 +145,26 @@ done
 # Each wrapper is written to a temporary file in the same folder, made executable, then renamed over
 # the old one. So a link named `openldr` is replaced by a real file and its target is left alone, a
 # read-only `openldr` is replaced (the folder decides, not the file), a terminal still running the old
-# wrapper keeps reading the old text, and a failed write leaves the old wrapper as it was.
+# wrapper keeps reading the old text, and a failed write leaves the old wrapper as it was. A link to a
+# folder is the one exception: see place_wrapper.
 wrapper_failed() {
   rm -f "$1" 2>/dev/null || true
   echo "✗ Could not write $2. The wrapper that was there is unchanged." >&2
   exit 1
 }
 # Moves the written wrapper ($1) to its name ($2). `mv` onto a folder, or onto a link to one, would
-# put the file inside it, so a link is removed first and a real folder is refused. (`mv -T` would
-# say this in one flag, but it is not portable.)
+# put the file inside it, so a link to a folder is removed first and a real folder is refused. A link
+# to a file, or to nothing, is left for the rename, which replaces it in one step. (`mv -T` would say
+# this in one flag, but it is not portable.)
 place_wrapper() {
-  if [ -h "$2" ]; then
+  if [ -h "$2" ] && [ -d "$2" ]; then
     rm -f "$2" || wrapper_failed "$1" "$2"
+    # The old link is gone now, so a failed rename keeps the new wrapper and says where it is.
+    if ! mv -f "$1" "$2"; then
+      echo "✗ Could not write $2. The link that was there was removed. The new wrapper is in $1. Rename it to $2." >&2
+      exit 1
+    fi
+    return 0
   elif [ -d "$2" ]; then
     rm -f "$1" 2>/dev/null || true
     echo "✗ $2 is a folder, not the wrapper. Remove or rename it, then run the installer again." >&2
@@ -220,14 +228,17 @@ cli() {
 self=$0
 i=0
 while [ -h "$self" ] && [ "$i" -lt 40 ]; do
-  target=$(readlink -- "$self") || break
+  # 2>/dev/null: where readlink is missing, the shell's own "not found" line stays out of the output.
+  target=$(readlink -- "$self" 2>/dev/null) || break
   case $target in
     /*) self=$target ;;
     *) self=$(dirname -- "$self")/$target ;;
   esac
   i=$((i + 1))
 done
-here=$(CDPATH='' cd -- "$(dirname -- "$self")" 2>/dev/null && pwd -P) || here=''
+# -P: a `..` in a relative link is taken on disk. A plain cd takes it by text, so a link reached
+# through a linked folder would lead to the wrong folder.
+here=$(CDPATH='' cd -P -- "$(dirname -- "$self")" 2>/dev/null && pwd -P) || here=''
 
 # Where this install's session is kept. A relative XDG_CONFIG_HOME is ignored, as the CLI ignores it.
 case ${XDG_CONFIG_HOME-} in
@@ -250,9 +261,10 @@ go_home() {
     say 'Cannot find the folder this script is in, so the install it belongs to is not known.'
     exit 1
   fi
-  # A copy of this script elsewhere cannot be traced back to its install.
-  if [ ! -f docker-compose.yml ]; then
-    say "This script must stay in its install folder, or be a link to it. $here has no docker-compose.yml."
+  # A copy of this script elsewhere cannot be traced back to its install. Both files are checked, as
+  # --wrapper-only checks them, so another project's compose file is not taken for an install.
+  if [ ! -f .env ] || [ ! -f docker-compose.yml ]; then
+    say "This script must stay in its install folder, or be a link to it. $here has no .env or no docker-compose.yml."
     exit 1
   fi
 }

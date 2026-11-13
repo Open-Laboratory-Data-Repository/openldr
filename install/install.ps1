@@ -113,8 +113,10 @@ exit $LASTEXITCODE
 # sh installer does: a link is replaced by a real file, and a failed write leaves the old wrapper.
 # Stops with a message and exit 1 when it cannot, whatever $ErrorActionPreference is.
 #
-# Move-Item onto an existing folder moves the file inside it, like mv. So a link named openldr.ps1
-# (to a file or a folder) is deleted first, without following it, and a real folder is refused.
+# Move-Item onto an existing folder moves the file inside it, like mv. So a link named openldr.ps1 to
+# a folder is deleted first, without following it, and a real folder is refused. A link to a file is
+# left for Move-Item -Force to replace, as the sh installer leaves it for mv. When the move fails after
+# a link was deleted, the temporary file is kept and the message names it.
 # By reading only: unproven, nothing on the Linux build machine runs PowerShell.
 function Write-Wrapper {
   $target = Join-Path $Dir 'openldr.ps1'
@@ -124,15 +126,20 @@ function Write-Wrapper {
     Write-Host "X $target is a folder, not the wrapper. Remove or rename it, then run the installer again." -ForegroundColor Red
     exit 1
   }
+  $removedLink = $false
   try {
     Set-Content -LiteralPath $temp -Value $wrapper -Encoding utf8 -ErrorAction Stop
-    if ($existing -and $existing.LinkType) {
-      # These delete the link itself. Remove-Item on a link to a folder can ask about its contents.
-      if ($existing.PSIsContainer) { [System.IO.Directory]::Delete($existing.FullName) }
-      else { [System.IO.File]::Delete($existing.FullName) }
+    if ($existing -and $existing.LinkType -and $existing.PSIsContainer) {
+      # This deletes the link itself. Remove-Item on a link to a folder can ask about its contents.
+      [System.IO.Directory]::Delete($existing.FullName)
+      $removedLink = $true
     }
     Move-Item -LiteralPath $temp -Destination $target -Force -ErrorAction Stop
   } catch {
+    if ($removedLink) {
+      Write-Host "X Could not write $target. The link that was there was removed. The new wrapper is in $temp. Rename it to $target." -ForegroundColor Red
+      exit 1
+    }
     Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
     Write-Host "X Could not write $target. The wrapper that was there is unchanged." -ForegroundColor Red
     exit 1

@@ -654,8 +654,9 @@ function wrapperHost(): WrapperHost {
     const wrapper = join(folder, 'openldr');
     writeFileSync(wrapper, heredoc('WRAPPER'));
     chmodSync(wrapper, 0o755);
-    // What makes a folder an install, to the wrapper.
+    // What makes a folder an install, to the wrapper, as to --wrapper-only.
     writeFileSync(join(folder, 'docker-compose.yml'), 'services: {}\n');
+    writeFileSync(join(folder, '.env'), 'OPENLDR_VERSION=0.1.8\n');
     return { wrapper, sessionFile: sessionFileOf(dirs.home, folder) };
   };
   const first = install('w');
@@ -738,6 +739,21 @@ const UID_GID = platform() === 'win32' ? '' : `${process.getuid?.()}:${process.g
 /** Everything the wrapper puts before the CLI's own arguments, with these `-e` names. */
 const prefix = (...names: string[]) => [
   'compose', 'exec', '-T', ...names.flatMap((n) => ['-e', n]), '-u', UID_GID, '-w', '/', 'api', 'node', '/app/cli/dist/index.js',
+];
+
+/** The wrapper's refusal when its folder is not an install. */
+const notInstall = (folder: string) =>
+  `This script must stay in its install folder, or be a link to it. ${realpathSync(folder)} has no .env or no docker-compose.yml.\n`;
+
+const onPath = (cmd: string) => spawnSync('sh', ['-c', `command -v ${cmd}`], { encoding: 'utf8' });
+/** sh's own path, for a run whose PATH does not hold it. */
+const SH_PATH = platform() === 'win32' ? '' : onPath('sh').stdout.trim();
+/** The shells a test runs the wrapper under: sh (dash on Debian and Ubuntu), bash, and busybox sh
+ *  where it is installed. */
+const SHELLS: [string, string[]][] = [
+  ['sh', ['sh']],
+  ['bash', [BASH]],
+  ...(platform() !== 'win32' && onPath('busybox').status === 0 ? [['busybox sh', ['busybox', 'sh']] as [string, string[]]] : []),
 ];
 
 /** Every file under `dir`, as paths relative to it. */
@@ -1181,7 +1197,7 @@ describe.skipIf(platform() === 'win32')('the ./openldr wrapper', () => {
       const r = h.run(['report', 'list'], { command: ['sh', '-c', heredoc('WRAPPER'), join(links, 'loop-a')] });
       expect(Date.now() - started).toBeLessThan(15_000);
       expect(r.code).toBe(1);
-      expect(r.stderr).toBe(`This script must stay in its install folder, or be a link to it. ${realpathSync(links)} has no docker-compose.yml.\n`);
+      expect(r.stderr).toBe(notInstall(links));
       expect(r.calls).toEqual([]);
     });
 
@@ -1191,7 +1207,77 @@ describe.skipIf(platform() === 'win32')('the ./openldr wrapper', () => {
       writeFileSync(copy, heredoc('WRAPPER'), { mode: 0o755 });
       const r = h.run(['report', 'list'], { command: [copy] });
       expect(r.code).toBe(1);
-      expect(r.stderr).toBe(`This script must stay in its install folder, or be a link to it. ${realpathSync(links)} has no docker-compose.yml.\n`);
+      expect(r.stderr).toBe(notInstall(links));
+      expect(r.calls).toEqual([]);
+    });
+
+    // A copy in another project's folder that has a compose file of its own would otherwise run
+    // `docker compose exec api` there and hand an exported key to it.
+    it('a copy in a folder with a compose file and no .env stops, and hands nothing in', () => {
+      const { h, links } = setup();
+      writeFileSync(join(links, 'docker-compose.yml'), 'services: {}\n');
+      const copy = join(links, 'openldr');
+      writeFileSync(copy, heredoc('WRAPPER'), { mode: 0o755 });
+      const r = h.run(['report', 'list'], { command: [copy], env: { OPENLDR_KEY: W_KEY } });
+      expect(r.code).toBe(1);
+      expect(r.stderr).toBe(notInstall(links));
+      expect(r.calls).toEqual([]);
+    });
+
+    // `ln -sr` makes a relative link like this one. Its `..` must be taken on disk, from the folder the
+    // link really is in, not by text from the linked folder it was reached through.
+    describe.each(SHELLS)('a relative link reached through a linked folder, under %s', (_name, shell) => {
+      /** <root>/a/b/u/bin is a link to <root>/opt/deep/bin, which holds openldr -> ../../../instA/openldr.
+       *  By text, a/b/u/bin/../../.. is <root>/a. On disk, opt/deep/bin/../../.. is <root>. */
+      const layout = () => {
+        const { h } = setup();
+        mkdirSync(join(h.root, 'opt', 'deep', 'bin'), { recursive: true });
+        mkdirSync(join(h.root, 'a', 'b', 'u'), { recursive: true });
+        symlinkSync(join(h.root, 'opt', 'deep', 'bin'), join(h.root, 'a', 'b', 'u', 'bin'));
+        const a = h.install('instA');
+        symlinkSync('../../../instA/openldr', join(h.root, 'opt', 'deep', 'bin', 'openldr'));
+        const A_MARKER = W_SESSION.replace('WRAPPER1', 'AMARKER1');
+        writeFileSync(a.sessionFile, `${A_MARKER}\n`, { mode: 0o600 });
+        return { h, A_MARKER, link: join(h.root, 'a', 'b', 'u', 'bin', 'openldr'), instA: realpathSync(join(h.root, 'instA')) };
+      };
+
+      it('runs the install the link leads to', () => {
+        const { h, A_MARKER, link, instA } = layout();
+        const r = h.run(['report', 'list'], { command: [...shell, link] });
+        expect(r.stderr).toBe('');
+        expect(r.code).toBe(0);
+        expect(r.calls).toHaveLength(1);
+        expect(r.calls[0]!.cwd).toBe(instA);
+        expect(r.calls[0]!.env.OPENLDR_SESSION).toBe(A_MARKER);
+      });
+
+      it('and not the install the text of the path leads to', () => {
+        const { h, A_MARKER, link, instA } = layout();
+        const decoy = h.install('a/instA');
+        const DECOY_MARKER = W_SESSION.replace('WRAPPER1', 'DECOYMK1');
+        writeFileSync(decoy.sessionFile, `${DECOY_MARKER}\n`, { mode: 0o600 });
+        const r = h.run(['report', 'list'], { command: [...shell, link] });
+        expect(r.code).toBe(0);
+        expect(r.calls).toHaveLength(1);
+        expect(r.calls[0]!.cwd).toBe(instA);
+        expect(r.calls[0]!.env.OPENLDR_SESSION).toBe(A_MARKER);
+      });
+    });
+
+    it('with no readlink on PATH, says only its own message', () => {
+      const { h, links } = setup();
+      symlinkSync(h.wrapper, join(links, 'openldr'));
+      // A PATH of the tools the wrapper uses, without readlink.
+      const tools = join(h.root, 'tools');
+      mkdirSync(tools);
+      for (const t of ['dirname', 'cksum', 'ls', 'cat', 'wc', 'tr', 'id', 'head']) {
+        const at = spawnSync('sh', ['-c', `command -v ${t}`], { encoding: 'utf8' }).stdout.trim();
+        symlinkSync(at, join(tools, t));
+      }
+      const r = h.run(['report', 'list'], { command: [SH_PATH, join(links, 'openldr')], env: { PATH: `${join(h.root, 'bin')}:${tools}` } });
+      expect(r.code).toBe(1);
+      // readlink is missing, so the loop stops at the link, whose folder is not an install.
+      expect(r.stderr).toBe(notInstall(links));
       expect(r.calls).toEqual([]);
     });
   });
@@ -1361,7 +1447,13 @@ describe.skipIf(platform() === 'win32')('the ./openldr wrapper', () => {
  */
 function wrapperOnly(
   args: string[], folder: (dir: string) => void,
-  how: { piped?: 'sh' | 'bash'; uname?: string; staleTempFolder?: boolean } = {},
+  how: {
+    piped?: 'sh' | 'bash'; uname?: string; staleTempFolder?: boolean;
+    /** The shell that runs the installer file; bash by default. */
+    shell?: 'sh' | 'bash';
+    /** More fake tools: name to script text, with {dir} and {rec} filled in. */
+    tools?: Record<string, string>;
+  } = {},
 ): { code: number; out: string; dir: string; cwd: string; called: string[] } {
   const root = tempDir('openldr-wrapper-only-');
   const bin = join(root, 'bin');
@@ -1379,6 +1471,9 @@ function wrapperOnly(
     writeFileSync(join(bin, 'uname'), `#!/bin/sh\necho ${how.uname}\n`);
     chmodSync(join(bin, 'uname'), 0o755);
   }
+  for (const [tool, text] of Object.entries(how.tools ?? {})) {
+    writeFileSync(join(bin, tool), text.replaceAll('{dir}', dir).replaceAll('{rec}', rec), { mode: 0o755 });
+  }
   const installer = join(REPO, 'install/install.sh').replace(/\\/g, '/');
   const words = args.map((a) => a.replace('{dir}', dir));
   // Piped, as the docs show it: `curl ... | bash -s -- --wrapper-only --dir .`, from a local copy.
@@ -1386,7 +1481,7 @@ function wrapperOnly(
     ? [how.piped === 'sh' ? 'sh' : BASH, ['-s', '--', ...words], readFileSync(installer, 'utf8')]
     : how.staleTempFolder
       ? ['sh', ['-c', 'd=$1; shift; mkdir -- "$d/.openldr.$$.tmp" && exec "$@"', 'sh', dir, BASH, installer, ...words], '']
-      : [BASH, [installer, ...words], ''];
+      : [how.shell === 'sh' ? 'sh' : BASH, [installer, ...words], ''];
   const r = spawnSync(cmd, argv, {
     cwd,
     encoding: 'utf8',
@@ -1518,6 +1613,83 @@ describe.skipIf(platform() === 'win32')('install.sh --wrapper-only', () => {
     expect(lstatSync(join(r.dir, 'openldr')).isFile()).toBe(true);
     expect(readFileSync(join(r.dir, 'openldr'), 'utf8')).toBe(heredoc('WRAPPER'));
     expect(readdirSync(target)).toEqual([]);
+  });
+
+  // The fake rm and mv below are found on PATH under sh (dash here) and bash. busybox sh runs its own
+  // rm and mv as built-ins and never looks on PATH, so these tests prove nothing about busybox.
+  const REAL_RM = platform() === 'win32' ? '' : onPath('rm').stdout.trim();
+  /** An rm that refuses, and records, any call that names the wrapper. Any other call goes to rm. */
+  const RM_GUARD = [
+    '#!/bin/sh',
+    'for a in "$@"; do',
+    '  if [ "$a" = "{dir}/openldr" ]; then echo "rm $*" >> "{rec}/called"; exit 1; fi',
+    'done',
+    `exec '${REAL_RM}' "$@"`,
+    '',
+  ].join('\n');
+  const MV_FAILS = '#!/bin/sh\necho "mv $*" >> "{rec}/called"\nexit 1\n';
+  const INSTALL_FILES = ['.env', 'config/', 'config/garage.toml', 'docker-compose.yml', 'openldr'];
+
+  describe.each(['sh', 'bash'] as const)('when the old wrapper is a link, under %s', (shell) => {
+    it.each(['a file', 'nothing'] as const)('a link to %s is replaced by the rename alone, never removed first', (to) => {
+      let target = '';
+      const r = wrapperOnly(['--wrapper-only', '--dir', '{dir}'], (dir) => {
+        install(dir);
+        target = join(dir, '..', 'elsewhere.txt');
+        if (to === 'a file') writeFileSync(target, 'marker: not a wrapper\n');
+        rmSync(join(dir, 'openldr'));
+        symlinkSync(target, join(dir, 'openldr'));
+      }, { shell, tools: { rm: RM_GUARD } });
+      expect(r.called).toEqual([]);
+      expect(r.code).toBe(0);
+      expect(lstatSync(join(r.dir, 'openldr')).isFile()).toBe(true);
+      expect(readFileSync(join(r.dir, 'openldr'), 'utf8')).toBe(heredoc('WRAPPER'));
+      if (to === 'a file') expect(readFileSync(target, 'utf8')).toBe('marker: not a wrapper\n');
+      else expect(existsSync(target)).toBe(false);
+      expect(filesUnder(r.dir)).toEqual(INSTALL_FILES);
+    });
+
+    it('a failed rename after removing a link to a folder keeps the new wrapper and says where it is', () => {
+      let target = '';
+      const r = wrapperOnly(['--wrapper-only', '--dir', '{dir}'], (dir) => {
+        install(dir);
+        target = join(dir, '..', 'a-folder');
+        mkdirSync(target);
+        rmSync(join(dir, 'openldr'));
+        symlinkSync(target, join(dir, 'openldr'));
+      }, { shell, tools: { mv: MV_FAILS } });
+      expect(r.code).toBe(1);
+      const temps = readdirSync(r.dir).filter((f) => /^\.openldr\.\d+\.tmp$/.test(f));
+      expect(temps).toHaveLength(1);
+      const temp = join(r.dir, temps[0]!);
+      expect(readFileSync(temp, 'utf8')).toBe(heredoc('WRAPPER'));
+      expect(r.out).toContain(
+        `Could not write ${r.dir}/openldr. The link that was there was removed. The new wrapper is in ${temp}. Rename it to ${r.dir}/openldr.`,
+      );
+      expect(r.out).not.toContain('unchanged');
+      expect(() => lstatSync(join(r.dir, 'openldr'))).toThrow();
+      expect(readdirSync(target)).toEqual([]);
+      expect(r.called).toEqual([`mv -f ${temp} ${r.dir}/openldr`]);
+    });
+
+    it('a link to a folder that cannot be removed stops with the could-not-write message and keeps the link', () => {
+      let target = '';
+      const r = wrapperOnly(['--wrapper-only', '--dir', '{dir}'], (dir) => {
+        install(dir);
+        target = join(dir, '..', 'a-folder');
+        mkdirSync(target);
+        rmSync(join(dir, 'openldr'));
+        symlinkSync(target, join(dir, 'openldr'));
+      }, { shell, tools: { rm: RM_GUARD } });
+      expect(r.code).toBe(1);
+      expect(r.out).toContain(`Could not write ${r.dir}/openldr. The wrapper that was there is unchanged.`);
+      expect(r.out).not.toContain('Rewrote the openldr wrapper');
+      expect(lstatSync(join(r.dir, 'openldr')).isSymbolicLink()).toBe(true);
+      expect(readdirSync(target)).toEqual([]);
+      // The temporary file is gone.
+      expect(filesUnder(r.dir)).toEqual(INSTALL_FILES);
+      expect(r.called).toEqual([`rm -f ${r.dir}/openldr`]);
+    });
   });
 
   it('refuses a real folder named openldr, writes nothing into it, and leaves no temporary file', () => {
