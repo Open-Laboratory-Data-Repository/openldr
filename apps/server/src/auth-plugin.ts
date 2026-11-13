@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { AppContext } from '@openldr/bootstrap';
+import { looksLikeAccessKey, type AppContext } from '@openldr/bootstrap';
 import { safeRecord } from '@openldr/audit';
 import { CAPABILITY_KEYS } from '@openldr/rbac';
 import { reasonFromError, createAuthFailedThrottle, subFromUnverifiedToken, type AuthFailReason } from './auth-failed';
+import { INVALID_ACCESS_KEY, signInWithAccessKey } from './access-key-auth';
 
 export interface RequestActor {
   id: string;
@@ -10,6 +11,8 @@ export interface RequestActor {
   displayName: string | null;
   roles: string[];
   capabilities: string[];
+  /** Set when the request signed in with an access key. The key's row ID and name, never the key. */
+  accessKey?: { id: string; name: string };
 }
 
 declare module 'fastify' {
@@ -25,19 +28,28 @@ const LOCAL_SIGN_IN_PUBLIC_PATHS = new Set(['/api/auth/login', '/api/auth/refres
 // The one route a token marked `pwd_change` may reach. Exact path, so no other route shares it.
 const CHANGE_PASSWORD_PATH = '/api/auth/change-password';
 
-export function bearer(req: FastifyRequest): string | null {
+function headerBearer(req: FastifyRequest): string | null {
   const h = req.headers.authorization;
   if (h && h.startsWith('Bearer ')) { const t = h.slice('Bearer '.length).trim(); if (t) return t; }
+  return null;
+}
+
+/** The `access_token` query parameter on any path, trimmed, or null. */
+function queryAccessToken(req: FastifyRequest): string | null {
   const url = req.raw.url ?? '';
-  const path = url.split('?')[0];
+  if (!url.includes('?')) return null;
+  const tok = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('access_token');
+  return tok && tok.trim() ? tok.trim() : null;
+}
+
+export function bearer(req: FastifyRequest): string | null {
+  const fromHeader = headerBearer(req);
+  if (fromHeader) return fromHeader;
+  const path = (req.raw.url ?? '').split('?')[0];
   // Server-Sent Events streams (ontology build/rebuild) cannot set an Authorization header,
   // so accept the access token from the query string for THOSE routes only. It is verified
   // identically to a header token — no weakening of auth.
-  if (/^\/api\/terminology\/ontology\/[^/]+\/(build|rebuild)$/.test(path)) {
-    const qs = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
-    const tok = new URLSearchParams(qs).get('access_token');
-    if (tok && tok.trim()) return tok.trim();
-  }
+  if (/^\/api\/terminology\/ontology\/[^/]+\/(build|rebuild)$/.test(path)) return queryAccessToken(req);
   return null;
 }
 
@@ -103,6 +115,39 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
     // it). The trailing slash scopes this to the sync subtree. Analogous to the hooks bypass above.
     if (path.startsWith('/api/sync/')) return;
     if (path !== '/api' && !path.startsWith('/api/')) return;
+
+    // An access key is accepted in the Authorization header only. A key in the URL is refused
+    // unread, on every path and whatever the header holds, so it is never resolved or marked used.
+    // A key never reaches verifyToken. It is checked before the dev bypass: only a request with no
+    // credential at all gets the dev actor. A failure is audited with a reason and the address only.
+    const urlToken = queryAccessToken(req);
+    if (urlToken && looksLikeAccessKey(urlToken)) {
+      recordAuthFailed(req, 'invalid-access-key', null);
+      reply.code(INVALID_ACCESS_KEY.status);
+      return reply.send({ error: INVALID_ACCESS_KEY.error });
+    }
+    const headerToken = headerBearer(req);
+    if (headerToken && looksLikeAccessKey(headerToken)) {
+      let result: Awaited<ReturnType<typeof signInWithAccessKey>>;
+      try {
+        result = await signInWithAccessKey(ctx, headerToken);
+      } catch (e) {
+        // Not the error itself: its text or detail could quote a query parameter. A database
+        // error code (such as 57P01) is safe and enough to start looking.
+        const code = (e as { code?: unknown } | null)?.code;
+        ctx.logger.error({ code: typeof code === 'string' ? code : undefined }, 'access key sign-in failed');
+        recordAuthFailed(req, 'sync-failed', null);
+        reply.code(401);
+        return reply.send({ error: 'authentication failed' });
+      }
+      if (!result.ok) {
+        recordAuthFailed(req, result.status === 403 ? 'account-disabled' : 'invalid-access-key', null);
+        reply.code(result.status);
+        return reply.send({ error: result.error });
+      }
+      req.user = result.user;
+      return;
+    }
 
     const token = bearer(req);
     if (!token) {

@@ -66,6 +66,17 @@ describe('sync routes — POST /api/sync/push', () => {
     expect(calls.apply.length).toBe(0);
   });
 
+  // An access key is a user credential, not a site's. It never reaches verifyToken here either.
+  it('401 for an access key, without calling verifyToken', async () => {
+    let verified = 0;
+    const { ctx, calls } = fakeCtx({ verify: async () => { verified += 1; return { sub: 'client-1', site_id: SITE }; } });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/push', headers: { authorization: 'Bearer oldr_made-up' }, payload: { fromSeq: 0, records: [rec('p1', 1, 1)] } });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: 'invalid token' });
+    expect(verified).toBe(0);
+    expect(calls.apply.length).toBe(0);
+  });
+
   it('403 when token has no site_id claim', async () => {
     const { ctx } = fakeCtx({ verify: async () => ({ sub: 'client-1' }) });
     const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/push', headers: AUTH, payload: { fromSeq: 0, records: [rec('p1', 1, 1)] } });

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { servePull, serveAmendments, serveConceptsPage, serveMapElementsPage, type AppContext } from '@openldr/bootstrap';
+import { servePull, serveAmendments, serveConceptsPage, serveMapElementsPage, looksLikeAccessKey, type AppContext } from '@openldr/bootstrap';
 import type { PushBatch, PushResponse, SyncRecord } from '@openldr/sync';
 
 // Site principal derived from a machine client's bearer token. The user-auth onRequest hook
@@ -19,6 +19,11 @@ async function sitePrincipal(
     // caller's bare `return` cannot be clobbered by wrap-thenable even if a payload grows past the
     // compression threshold. See the comment block on registerSyncRoutes.
     await reply.code(401).send({ error: 'authentication required' });
+    return;
+  }
+  // An access key is a user credential and never reaches verifyToken (auth-plugin.ts does the same).
+  if (looksLikeAccessKey(token)) {
+    await reply.code(401).send({ error: 'invalid token' });
     return;
   }
   let claims: Awaited<ReturnType<typeof ctx.auth.verifyToken>>;
