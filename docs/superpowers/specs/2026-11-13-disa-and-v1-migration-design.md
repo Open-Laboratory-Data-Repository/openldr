@@ -90,7 +90,8 @@ Goals:
 - The copy keeps up with a source that is still in use, until v1 is switched off.
 - In mode 2, a DISA record is saved only after it matches its v1 twin and passes the audit
   rules.
-- A lab administrator can read why a record was held back, with the values, in Studio.
+- A lab administrator can read why a record was held back, with the values, on the
+  plugin's page.
 - A v1 record with no DISA record is listed for a person to check.
 - Every start, stop, resume and delete is in the audit log, and runs show in Activity.
 - `cdr-toolchain` is no longer needed once part 4 lands.
@@ -212,6 +213,17 @@ In mode 2 a v1 record with no DISA record is not migrated. CE lists it for a per
 - The v1 plugin stays in this repo (`wasm/openldr-v1-import`).
 - The DISA plugin lives in its own repository, under a neutral name, and ships through the
   marketplace. See the open questions in section 11.
+- **Every screen for a migration lives on the plugin's own page.** The operator decided this
+  on 2026-11-13: "Each plugin should handle its full features itself without having to
+  disturb the core functions of openldr_ce." And: "openldr_ce doesn't even know what disa
+  it, but it knows plugins." These plugins matter only to sites that have DISA and v1, so
+  Studio gets no migration screen of its own. CE core offers operations any plugin page can
+  call. The page decides what to show.
+- This covers the copy controls in part 1 and the held-back view and the v1-only list in
+  part 4.
+- The v1 plugin's page in this repo is the reference. The DISA plugin's page starts as a
+  copy of it. If the DISA vendor ships an official plugin later, sites use that one, and CE
+  core does not change.
 
 ### 7.4 What the operator decided about failures
 
@@ -227,7 +239,7 @@ In mode 2 a v1 record with no DISA record is not migrated. CE lists it for a per
 | 1. Copy | Copy store, copy run, retry without a person, carry on after a restart, top-up passes | CE core, the v1 plugin, a query-only DISA plugin |
 | 2. DISA plugin | Decoder, mapping to FHIR, audit rules, in Rust | DISA plugin repo |
 | 3. Compare | The v1 check, in Rust | DISA plugin repo |
-| 4. Check step and screens | Check run on the copy, save from the copy, held-back view, v1-only list, workflows switch | CE core and Studio |
+| 4. Check step and screens | Check run on the copy, save from the copy, held-back view, v1-only list, workflows switch | CE core for the operations, each plugin's page for the screens |
 
 The order is 1, then 2 and 3 while the copy runs, then 4.
 
@@ -438,14 +450,9 @@ For the operator:
 3. **Mozambique's mode.** Mozambique has GXAlert and SISLab records in v1 that never came
    from DISA. Mode 2 would flag every one of them. Does Mozambique run mode 2, mode 1, or
    mode 2 with a later mode 1 pass over the flagged records?
-4. **Where the copy screens live.** This design puts them on each importer plugin's own
-   page, as import controls are today. The cost: the DISA plugin, in its own repository,
-   has to build the same copy screen and the same confirm step again. The other way is one
-   Studio screen that lists every copy, built once with the Studio components, with the
-   plugin declaring its options in the manifest. That is more work in CE core now, and the
-   DISA plugin then ships no screen at all. Part 4's held-back view will be a Studio screen
-   either way. Tasks 1 to 7 of the part 1 plan are the same for both. Tasks 8, 10 and 11
-   change.
+
+Settled on 2026-11-13: the copy screens live on each plugin's own page. See 7.3. The part 1
+plan was already written that way and does not change.
 
 Unknown, and settled only by running part 1 at a site:
 
