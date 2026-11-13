@@ -168,6 +168,12 @@ describe('COMMAND_META', () => {
     expect(lines).toEqual([]);
   });
 
+  it('lets an empty path through only on settings lab set --logo-file', () => {
+    const flagged = Object.entries(COMMAND_META).flatMap(([path, meta]) =>
+      (meta.paths ?? []).filter((m) => m.allowEmpty).map((m) => `${path} ${m.target}`));
+    expect(flagged).toEqual(['settings lab set --logo-file']);
+  });
+
   it('cannot be changed by a caller', () => {
     const table = COMMAND_META as Record<string, unknown>;
     expect(() => { table['new command'] = { kind: 'recovery' }; }).toThrow(TypeError);

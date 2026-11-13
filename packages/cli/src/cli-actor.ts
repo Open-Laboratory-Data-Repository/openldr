@@ -40,6 +40,14 @@ export function callerName(): string {
   return servedHandoff()?.caller.username ?? 'cli';
 }
 
+/** The signed-in account as `{ id, name }`, for the plugin, marketplace and sync code that takes
+ *  an actor of that shape, as the Studio routes pass it. Null outside served mode, so each caller
+ *  keeps what it passed before. */
+export function servedCaller(): { id: string; name: string } | null {
+  const handoff = servedHandoff();
+  return handoff ? { id: handoff.caller.id, name: handoff.caller.username } : null;
+}
+
 /** The audit actor for the places that record the fixed name 'cli' rather than the OS user. In
  *  served mode, the signed-in account, as cliActor() gives. */
 export function cliNamedActor(): AuditActor {

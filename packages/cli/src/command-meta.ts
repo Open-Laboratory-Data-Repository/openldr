@@ -40,10 +40,12 @@ export interface CompanionContext {
 
 /**
  * One argument or option that names a file or folder.
- * On an input mark, an empty string as its value means "no path": for example
- * `settings lab set --logo-file ''` clears the logo. The client sends an empty value as is and
- * uploads nothing. An empty value on an output mark names no folder or file, so a command that
- * needs one refuses it (see `artifact publish`).
+ * An empty string as its value is refused through the app, on every mark without `allowEmpty`.
+ * Most commands read an empty path as their working folder (`market install ''` reads
+ * manifest.json there), which would let a caller use a folder on the server they did not upload.
+ * `allowEmpty` is set only where the command's own code gives the empty string a meaning:
+ * `settings lab set --logo-file ''` clears the logo. The client sends that value as is and
+ * uploads nothing.
  */
 export interface PathMark {
   /** An option's long flag such as '--out', or a positional argument's name such as 'file'. */
@@ -54,6 +56,8 @@ export interface PathMark {
   readonly keep?: boolean;
   /** Plain file names beside this file that the command also reads, so they are uploaded with it. */
   readonly companions?: (ctx: CompanionContext) => string[];
+  /** True when an empty value means "no path" to the command, so it is not refused. */
+  readonly allowEmpty?: true;
 }
 
 export interface CommandMeta {
@@ -339,8 +343,8 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'settings danger': { kind: 'app', capability: 'settings.danger_zone', destructive: true }, // :507
   'settings flags list': { kind: 'app', capability: 'settings.feature_flags' }, // :68
   'settings flags set': { kind: 'app', capability: 'settings.feature_flags' }, // :390
-  // Writes over the stored logo and letterhead fields.
-  'settings lab set': { kind: 'app', capability: 'settings.edit_general', destructive: true, paths: [inFile('--logo-file')] }, // :89
+  // Writes over the stored logo and letterhead fields. --logo-file '' clears the logo (settings.ts).
+  'settings lab set': { kind: 'app', capability: 'settings.edit_general', destructive: true, paths: [{ target: '--logo-file', kind: 'input-file', allowEmpty: true }] }, // :89
   'settings lab show': { kind: 'app', capability: 'reports.view' }, // :78
   'settings numbers list': { kind: 'app', capability: 'settings.edit_general' }, // :406
   'settings numbers set': { kind: 'app', capability: 'settings.edit_general' }, // :410

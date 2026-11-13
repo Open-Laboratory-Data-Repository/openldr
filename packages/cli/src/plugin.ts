@@ -3,6 +3,7 @@ import { basename, dirname, join } from 'node:path';
 import { createIngestContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { uiEntryOf } from './command-meta';
+import { servedCaller } from './cli-actor';
 
 interface JsonOpt {
   json: boolean;
@@ -34,7 +35,9 @@ export async function runPluginInstall(wasmPath: string, opts: JsonOpt & { manif
     const manifestPath = opts.manifest ?? join(dirname(wasmPath), 'manifest.json');
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     const ui = readAdjacentUi(manifest, dirname(manifestPath));
-    const installed = await ctx.plugins.install(wasm, manifest, { ui });
+    // In served mode the signed-in account. Otherwise no actor, as before: the runtime records 'system'.
+    const caller = servedCaller();
+    const installed = await ctx.plugins.install(wasm, manifest, caller ? { ui, actor: caller } : { ui });
     emit(opts.json, { id: installed.id, version: installed.version }, `installed ${installed.id}@${installed.version}`);
     return 0;
   } finally {
@@ -92,7 +95,9 @@ export async function runPluginRun(input: string, opts: JsonOpt & { plugin: stri
 export async function runPluginRemove(id: string, opts: JsonOpt & { version?: string }): Promise<number> {
   const ctx = await createIngestContext(loadConfig());
   try {
-    await ctx.plugins.remove(id, opts.version);
+    const caller = servedCaller();
+    if (caller) await ctx.plugins.remove(id, opts.version, { actor: caller });
+    else await ctx.plugins.remove(id, opts.version);
     emit(opts.json, { removed: id, version: opts.version ?? 'all' }, `removed ${id}${opts.version ? '@' + opts.version : ' (all versions)'}`);
     return 0;
   } finally {

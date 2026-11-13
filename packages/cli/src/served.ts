@@ -11,14 +11,17 @@
 // server checked their capability for one command, and this file makes sure only that command runs,
 // only on files in that request's folders, and under that caller's name.
 
-import { closeSync, fstatSync, readFileSync, realpathSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { closeSync, fstatSync, lstatSync, readSync, realpathSync } from 'node:fs';
+import { dirname, isAbsolute, join, parse, resolve, sep } from 'node:path';
 import type { Command } from 'commander';
 import { COMMAND_META, type PathMark } from './command-meta';
 import { commandPath } from './command-list';
 import { SERVED_FD, SERVED_FD_ENV, type ServedHandoff } from './handoff';
 
 export { SERVED_FD, SERVED_FD_ENV, type ServedHandoff } from './handoff';
+
+/** The most the hand-off may hold. More is an error, not a longer read. */
+export const MAX_HANDOFF_BYTES = 1024 * 1024;
 
 /** The variable was set but the hand-off could not be read or has the wrong shape. */
 export class HandoffError extends Error {
@@ -43,10 +46,16 @@ export function servedHandoff(): ServedHandoff | null {
   return current;
 }
 
-/** Sets the hand-off the rest of the CLI sees. index.ts calls it once with what readHandoff()
- *  gave. Tests call it to reach the guard without a real descriptor. */
-export function setServedHandoff(handoff: ServedHandoff | null): void {
-  current = handoff ? freeze(handoff) : null;
+/** Sets the hand-off the rest of the CLI sees, once. index.ts calls it with what readHandoff()
+ *  gave. A second call throws, so no code the command runs can change who the caller is. */
+export function setServedHandoff(handoff: ServedHandoff): void {
+  if (current) throw new Error('The served hand-off is already set.');
+  current = freeze(handoff);
+}
+
+/** For tests only: forget the hand-off, so the next test can set its own. */
+export function resetServedHandoffForTests(): void {
+  current = null;
 }
 
 function freeze(h: ServedHandoff): ServedHandoff {
@@ -70,17 +79,32 @@ export function readHandoff(): ServedHandoff | null {
   // A program the command starts must not inherit the variable.
   delete process.env[SERVED_FD_ENV];
   if (flag !== String(SERVED_FD)) throw new HandoffError(`${SERVED_FD_ENV} must be ${SERVED_FD}.`);
-  let text: string;
+  const text = readDescriptor();
+  try { closeSync(SERVED_FD); } catch { /* already closed */ }
+  return parseHandoff(text);
+}
+
+/** Reads descriptor 3 to its end, at most MAX_HANDOFF_BYTES. */
+function readDescriptor(): string {
+  const chunks: Buffer[] = [];
+  let total = 0;
   try {
     // Only a pipe or a socket. Without one, descriptor 3 may be one Node opened for itself.
     const stat = fstatSync(SERVED_FD);
     if (!stat.isFIFO() && !stat.isSocket()) throw new Error('not a pipe');
-    text = readFileSync(SERVED_FD, 'utf8');
+    const buf = Buffer.alloc(64 * 1024);
+    for (;;) {
+      const n = readSync(SERVED_FD, buf, 0, buf.length, null);
+      if (n === 0) break;
+      total += n;
+      if (total > MAX_HANDOFF_BYTES) break;
+      chunks.push(Buffer.from(buf.subarray(0, n)));
+    }
   } catch {
     throw new HandoffError(`The hand-off on descriptor ${SERVED_FD} could not be read.`);
   }
-  try { closeSync(SERVED_FD); } catch { /* already closed */ }
-  return parseHandoff(text);
+  if (total > MAX_HANDOFF_BYTES) throw new HandoffError('The hand-off is larger than 1 MiB.');
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -122,6 +146,41 @@ export function parseHandoff(text: string): ServedHandoff {
   };
 }
 
+/**
+ * Moves the process into the request's folder. The child does this itself rather than trusting the
+ * working folder it was started in, because a command given an empty or missing path reads there.
+ * Throws ServedRefusal when the folder cannot be entered or its real path is the root of the disk.
+ */
+export function enterRunDir(handoff: ServedHandoff): void {
+  const real = realOf(handoff.runDir);
+  if (real === null) throw new ServedRefusal("This request's folder cannot be used.");
+  if (dirname(real) === real) throw new ServedRefusal("This request's folder is the root of the disk.");
+  try {
+    process.chdir(real);
+  } catch {
+    throw new ServedRefusal("This request's folder cannot be used.");
+  }
+}
+
+const HELP_TOKENS = new Set(['--help', '-h', '--version', '-V']);
+
+/**
+ * Refuses an argv that asks for help or a version instead of a command, before it is parsed: help
+ * runs no preAction hook, so the guard would never see it. Then turns help off on every command of
+ * the program, so no other spelling (`user help key`, `-hx`) reaches it either.
+ */
+export function refuseHelp(program: Command, argv: readonly string[]): void {
+  if (argv[0] === 'help' || argv.some((t) => HELP_TOKENS.has(t))) {
+    throw new ServedRefusal('Help is not run through the app. Run the command on its own for help.');
+  }
+  const walk = (c: Command): void => {
+    c.helpCommand(false);
+    c.helpOption(false);
+    for (const sub of c.commands) walk(sub);
+  };
+  walk(program);
+}
+
 const NAME_OPTIONS = ['--approved-by'] as const;
 
 function nameRefusal(flag: string): ServedRefusal {
@@ -156,11 +215,11 @@ export function guardServed(program: Command, cmd: Command): void {
 
   if (meta.paths?.length) {
     const roots = [h.runDir, ...h.keptDirs].map(realOf).filter((r): r is string => r !== null);
-    for (const mark of meta.paths) checkMark(cmd, mark, args, opts, roots);
+    for (const mark of meta.paths) checkMark(cmd, mark, roots);
   }
 }
 
-function checkMark(cmd: Command, mark: PathMark, args: string[], opts: Record<string, unknown>, roots: string[]): void {
+function checkMark(cmd: Command, mark: PathMark, roots: string[]): void {
   const outside = () => new ServedRefusal(`${mark.target} is outside this request's folder.`);
   let raw: unknown;
   if (mark.target.startsWith('-')) {
@@ -173,13 +232,12 @@ function checkMark(cmd: Command, mark: PathMark, args: string[], opts: Record<st
     raw = cmd.processedArgs[index];
   }
   if (raw === undefined) return;
-  const kind = typeof mark.kind === 'function' ? mark.kind(args, opts) : mark.kind;
   for (const value of Array.isArray(raw) ? raw : [raw]) {
     if (typeof value !== 'string') throw outside();
     if (value === '') {
-      // An empty input means "no path" (settings lab set --logo-file ''). An empty output would
-      // write into the working folder.
-      if (kind === 'input-file' || kind === 'input-dir') continue;
+      // Most commands read an empty path as their working folder. Only a mark the table flags
+      // means "no path" by it (settings lab set --logo-file '').
+      if (mark.allowEmpty) continue;
       throw new ServedRefusal(`${mark.target} needs a file or folder name.`);
     }
     if (!isInside(value, roots)) throw outside();
@@ -195,20 +253,27 @@ function isInside(value: string, roots: string[]): boolean {
   return roots.some((root) => real === root || real.startsWith(root.endsWith(sep) ? root : root + sep));
 }
 
-/** The real location of an absolute path: symbolic links resolved on the nearest part that exists,
- *  and the rest, which does not exist yet, added back. Null when it cannot be worked out. */
+/**
+ * The real location of an absolute path, worked out one part at a time. A part that is a link is
+ * resolved, and a link that cannot be resolved (its target is missing, or it loops) gives null: a
+ * write through it would land wherever it points. Only a part with no entry at all is "not made
+ * yet", and then the rest of the path is added back as it is. Any other error gives null.
+ */
 function realOf(path: string): string | null {
-  let head = resolve(path);
-  const tail: string[] = [];
-  for (;;) {
+  const full = resolve(path);
+  let real = parse(full).root;
+  const parts = full.slice(real.length).split(sep).filter((p) => p !== '');
+  for (let i = 0; i < parts.length; i += 1) {
+    const next = join(real, parts[i]!);
+    let isLink: boolean;
     try {
-      return join(realpathSync(head), ...tail);
+      isLink = lstatSync(next).isSymbolicLink();
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') return null;
-      const up = dirname(head);
-      if (up === head) return null;
-      tail.unshift(basename(head));
-      head = up;
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return join(next, ...parts.slice(i + 1));
+      return null;
     }
+    if (!isLink) { real = next; continue; }
+    try { real = realpathSync(next); } catch { return null; }
   }
+  return real;
 }

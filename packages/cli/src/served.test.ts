@@ -46,7 +46,10 @@ vi.mock('./terminology', async (orig) => ({
 }));
 
 import { buildProgram } from './program';
-import { HandoffError, parseHandoff, ServedRefusal, setServedHandoff, type ServedHandoff } from './served';
+import {
+  enterRunDir, HandoffError, MAX_HANDOFF_BYTES, parseHandoff, refuseHelp, resetServedHandoffForTests, ServedRefusal,
+  setServedHandoff, type ServedHandoff,
+} from './served';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TSX = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
@@ -69,6 +72,12 @@ beforeAll(() => {
   writeFileSync(join(keptDir, 'bundle.json'), '{}');
   writeFileSync(join(base, 'run10', 'x'), 'x');
   symlinkSync('/etc', join(runDir, 'link'));
+  // A link whose target does not exist: a write through it would create a file outside runDir.
+  symlinkSync(join(base, 'outside', 'made.json'), join(runDir, 'dangling'));
+  // A link that stays inside runDir, and a run folder that is itself a link.
+  symlinkSync(join(runDir, 'loinc'), join(runDir, 'inner'));
+  symlinkSync(runDir, join(base, 'runlink'));
+  symlinkSync('/', join(base, 'rootlink'));
 });
 
 afterAll(() => rmSync(base, { recursive: true, force: true }));
@@ -139,6 +148,12 @@ describe('reading the hand-off from descriptor 3', () => {
     expect(JSON.parse(otherFd.stdout)).toMatchObject({ error: 'HandoffError', envLeft: null });
   });
 
+  it('refuses a hand-off larger than 1 MiB', async () => {
+    const big = JSON.stringify({ ...GOOD, argv: ['roles', 'list', 'x'.repeat(MAX_HANDOFF_BYTES)] });
+    const r = await runChild(probeScript(), [], { servedFd: '3', fd3: big });
+    expect(JSON.parse(r.stdout)).toEqual({ error: 'HandoffError', message: 'The hand-off is larger than 1 MiB.', envLeft: null });
+  });
+
   it('the entry prints one line and exits 1 on a bad hand-off, never running its own argv', async () => {
     // `commands` needs no database. If the entry fell back to its argv, it would print the list.
     const r = await runChild(join(HERE, 'index.ts'), ['commands'], { servedFd: '3', fd3: '{"path":' });
@@ -155,6 +170,36 @@ describe('reading the hand-off from descriptor 3', () => {
     expect(r.code).toBe(1);
     expect(r.stdout).toBe('');
     expect(r.stderr).toBe('commands does not run through the app.\n');
+  });
+
+  it('the entry refuses help and version in served mode, and exits 1', async () => {
+    for (const argv of [['roles', 'list', '--help'], ['help', 'roles'], ['--version']]) {
+      const handoff = { ...GOOD, argv, runDir };
+      const r = await runChild(join(HERE, 'index.ts'), [], { servedFd: '3', fd3: JSON.stringify(handoff) });
+      expect(r.code, argv.join(' ')).toBe(1);
+      expect(r.stdout).toBe('');
+      expect(r.stderr).toBe('Help is not run through the app. Run the command on its own for help.\n');
+    }
+  });
+
+  it('the entry refuses a run folder it cannot enter, or one that is the root of the disk', async () => {
+    const missing = { ...GOOD, runDir: join(base, 'no-such-run') };
+    const a = await runChild(join(HERE, 'index.ts'), [], { servedFd: '3', fd3: JSON.stringify(missing) });
+    expect([a.code, a.stderr]).toEqual([1, "This request's folder cannot be used.\n"]);
+    const root = { ...GOOD, runDir: join(base, 'rootlink') };
+    const b = await runChild(join(HERE, 'index.ts'), [], { servedFd: '3', fd3: JSON.stringify(root) });
+    expect([b.code, b.stderr]).toEqual([1, "This request's folder is the root of the disk.\n"]);
+  });
+
+  it('the entry prints one redacted line and no stack for an error that is not a refusal', async () => {
+    // query export passes the guard, then loadConfig() throws: the child has no database settings.
+    const handoff = { ...GOOD, path: 'query export', argv: ['query', 'export', '--out', join(runDir, 'q.json')], runDir };
+    const r = await runChild(join(HERE, 'index.ts'), [], { servedFd: '3', fd3: JSON.stringify(handoff) });
+    expect(r.code).toBe(1);
+    expect(r.stdout).toBe('');
+    expect(r.stderr.endsWith('\n')).toBe(true);
+    expect(r.stderr.trimEnd().split('\n')).toHaveLength(1);
+    expect(r.stderr).not.toMatch(/\n\s+at /);
   });
 });
 
@@ -196,8 +241,9 @@ describe('checking the shape of the hand-off', () => {
 // The guard, in-process, against the real command tree.
 // ---------------------------------------------------------------------------------------------
 
-function parseServed(path: string, argv: string[], kept: string[] = [keptDir]): Promise<unknown> {
-  setServedHandoff({ path, argv, caller: CALLER, runDir, keptDirs: kept });
+function parseServed(path: string, argv: string[], kept: string[] = [keptDir], run: string = runDir): Promise<unknown> {
+  resetServedHandoffForTests();
+  setServedHandoff({ path, argv, caller: CALLER, runDir: run, keptDirs: kept });
   return buildProgram().exitOverride().parseAsync(['node', 'openldr', ...argv]);
 }
 
@@ -211,7 +257,7 @@ describe('the served guard', () => {
   beforeEach(() => {
     for (const m of Object.values(mocks)) m.mockClear();
   });
-  afterEach(() => setServedHandoff(null));
+  afterEach(() => resetServedHandoffForTests());
 
   it('runs the command in the hand-off with its output unchanged', async () => {
     const argv = ['audit', 'list', '--where', 'action:eq:form.create', '--sort', '-occurredAt'];
@@ -292,6 +338,54 @@ describe('the served guard', () => {
     expect(mocks.runQueryExport).not.toHaveBeenCalled();
   });
 
+  it('refuses an empty value for an input mark the table does not flag', async () => {
+    // market install '' would read manifest.json from the working folder.
+    expect(await refusal('market install', ['market', 'install', ''])).toBe('dir needs a file or folder name.');
+    expect(mocks.runMarketInstall).not.toHaveBeenCalled();
+    // An empty input folder that would be built from and recorded.
+    expect(await refusal('terminology ontology build', ['terminology', 'ontology', 'build', 'snomed', '']))
+      .toBe('dir needs a file or folder name.');
+    expect(mocks.runOntologyBuild).not.toHaveBeenCalled();
+    expect(await refusal('sync import', ['sync', 'import', ''])).toBe('file needs a file or folder name.');
+    expect(mocks.runSyncImport).not.toHaveBeenCalled();
+  });
+
+  it('refuses a link whose target does not exist', async () => {
+    const dangling = join(runDir, 'dangling');
+    expect(await refusal('query export', ['query', 'export', '--out', dangling])).toBe("--out is outside this request's folder.");
+    expect(await refusal('query export', ['query', 'export', '--out', join(dangling, 'x.json')])).toBe("--out is outside this request's folder.");
+    expect(mocks.runQueryExport).not.toHaveBeenCalled();
+  });
+
+  it('refuses a value with a trailing slash', async () => {
+    expect(await refusal('sync import', ['sync', 'import', `${runDir}/bundle.json/`])).toBe("file is outside this request's folder.");
+    expect(await refusal('terminology import', ['terminology', 'import', 'loinc', `${runDir}/loinc/`]))
+      .toBe("path is outside this request's folder.");
+    expect(mocks.runSyncImport).not.toHaveBeenCalled();
+    expect(mocks.runTerminologyImport).not.toHaveBeenCalled();
+  });
+
+  it('checks a marked positional after --', async () => {
+    expect(await refusal('sync import', ['sync', 'import', '--', '/etc/hostname'])).toBe("file is outside this request's folder.");
+    expect(mocks.runSyncImport).not.toHaveBeenCalled();
+    await parseServed('sync import', ['sync', 'import', '--', join(runDir, 'bundle.json')]);
+    expect(mocks.runSyncImport).toHaveBeenCalledTimes(1);
+    expect(mocks.runSyncImport.mock.calls[0]![0]).toBe(join(runDir, 'bundle.json'));
+  });
+
+  it('accepts a link that points inside, and a run folder that is itself a link', async () => {
+    await parseServed('terminology import', ['terminology', 'import', 'loinc', join(runDir, 'inner')]);
+    await parseServed('query export', ['query', 'export', '--out', join(runDir, 'inner', 'new.json')]);
+    expect(mocks.runTerminologyImport).toHaveBeenCalledTimes(1);
+    expect(mocks.runQueryExport).toHaveBeenCalledTimes(1);
+
+    const runlink = join(base, 'runlink');
+    await parseServed('sync import', ['sync', 'import', join(runlink, 'bundle.json')], [], runlink);
+    await parseServed('sync import', ['sync', 'import', join(runDir, 'bundle.json')], [], runlink);
+    await parseServed('sync import', ['sync', 'import', join(runDir, 'bundle.json')], [], `${runDir}/`);
+    expect(mocks.runSyncImport).toHaveBeenCalledTimes(3);
+  });
+
   it('accepts a marked path inside the request folder and inside a kept folder', async () => {
     await parseServed('sync import', ['sync', 'import', join(runDir, 'bundle.json')]);
     await parseServed('sync import', ['sync', 'import', join(keptDir, 'bundle.json')]);
@@ -312,6 +406,40 @@ describe('the served guard', () => {
     expect(mocks.runSettingsLabSet).toHaveBeenCalledTimes(1);
   });
 
+  it('refuses help before parsing, and turns help off on every command', async () => {
+    const msg = 'Help is not run through the app. Run the command on its own for help.';
+    for (const argv of [['roles', 'list', '--help'], ['roles', 'list', '-h'], ['help', 'roles'], ['--version'], ['-V']]) {
+      expect(() => refuseHelp(buildProgram(), argv), argv.join(' ')).toThrow(msg);
+    }
+    // Spellings the token check does not see reach no help either.
+    for (const argv of [['user', 'help', 'key'], ['roles', 'list', '-hx']]) {
+      const program = buildProgram().exitOverride().configureOutput({ writeErr: () => {}, writeOut: () => {} });
+      refuseHelp(program, argv);
+      const err = await program.parseAsync(['node', 'openldr', ...argv]).then(() => null, (e: { code?: string }) => e);
+      expect(err?.code, argv.join(' ')).not.toBe('commander.helpDisplayed');
+      expect(err).not.toBeNull();
+    }
+  });
+
+  it('sets the hand-off once', () => {
+    setServedHandoff({ path: 'roles list', argv: [], caller: CALLER, runDir, keptDirs: [] });
+    expect(() => setServedHandoff({ path: 'db migrate', argv: [], caller: CALLER, runDir, keptDirs: [] }))
+      .toThrow('The served hand-off is already set.');
+  });
+
+  it('moves into the real run folder, and refuses one it cannot use', () => {
+    const before = process.cwd();
+    try {
+      enterRunDir({ ...GOOD, runDir: join(base, 'runlink') });
+      expect(process.cwd()).toBe(runDir);
+    } finally {
+      process.chdir(before);
+    }
+    expect(() => enterRunDir({ ...GOOD, runDir: join(base, 'no-such-run') })).toThrow("This request's folder cannot be used.");
+    expect(() => enterRunDir({ ...GOOD, runDir: join(base, 'rootlink') })).toThrow("This request's folder is the root of the disk.");
+    expect(process.cwd()).toBe(before);
+  });
+
   it('refuses a kept-folder path when the hand-off names no kept folder', async () => {
     const err = await parseServed('sync import', ['sync', 'import', join(keptDir, 'bundle.json')], []).then(() => null, (e: unknown) => e);
     expect(err).toBeInstanceOf(ServedRefusal);
@@ -319,7 +447,7 @@ describe('the served guard', () => {
   });
 
   it('does nothing when there is no hand-off', async () => {
-    setServedHandoff(null);
+    resetServedHandoffForTests();
     await buildProgram().exitOverride().parseAsync(['node', 'openldr', '--actor', 'bob', 'db', 'migrate']);
     expect(mocks.runDbMigrate).toHaveBeenCalledTimes(1);
   });

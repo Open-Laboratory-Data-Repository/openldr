@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { callerName, cliActor, cliNamedActor, setActorOverride } from './cli-actor';
-import { setServedHandoff, type ServedHandoff } from './served';
+import { callerName, cliActor, cliNamedActor, servedCaller, setActorOverride } from './cli-actor';
+import { resetServedHandoffForTests, setServedHandoff, type ServedHandoff } from './served';
 
 afterEach(() => setActorOverride(undefined));
 
@@ -27,11 +27,12 @@ describe('cliActor in served mode', () => {
     path: 'roles list', argv: ['roles', 'list'], runDir: '/srv/run1', keptDirs: [],
     caller: { id: 'u-1', username: 'alice', displayName: 'Alice', keyName },
   });
-  afterEach(() => setServedHandoff(null));
+  afterEach(() => resetServedHandoffForTests());
 
   it('records the account as the audit actor in served mode, and cli otherwise', () => {
     expect(cliActor().actorType).toBe('cli');
     expect(callerName()).toBe('cli');
+    expect(servedCaller()).toBeNull();
     expect(cliNamedActor()).toEqual({ actorType: 'cli', actorId: null, actorName: 'cli' });
 
     setServedHandoff(handoff('ci'));
@@ -39,6 +40,7 @@ describe('cliActor in served mode', () => {
     expect(cliActor()).toEqual(served);
     expect(cliNamedActor()).toEqual(served);
     expect(callerName()).toBe('alice');
+    expect(servedCaller()).toEqual({ id: 'u-1', name: 'alice' });
   });
 
   it('leaves the key name out for a session, and ignores --actor', () => {

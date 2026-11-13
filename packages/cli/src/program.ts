@@ -63,8 +63,8 @@ import { guardServed } from './served';
 import { runCommandsList } from './command-list';
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
-//  - index.ts's module-level side effect is just `buildProgram().parseAsync(process.argv)`,
-//    unconditionally, exactly like a normal CLI entry point (no is-main-module guard to get wrong).
+//  - index.ts needs no is-main-module guard. It builds the tree and parses either the real
+//    process argv or, when the server started it, the argv the server handed over (served.ts).
 //  - tests can construct their own fresh Command per test to exercise commander's own option
 //    defaults (e.g. `facilities import`'s `--apply` default) without any shared state between
 //    tests and without triggering a real parse of the test runner's own argv.

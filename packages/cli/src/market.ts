@@ -4,7 +4,7 @@ import { createInternalDb, createMarketplaceInstallStore } from '@openldr/db';
 import { readBundle, verifyBundle, type Bundle } from '@openldr/marketplace';
 import { isNewerVersion } from '@openldr/core';
 import { redactError } from './redact-error';
-import { callerName } from './cli-actor';
+import { callerName, servedCaller } from './cli-actor';
 
 interface JsonOpt {
   json: boolean;
@@ -14,8 +14,9 @@ function emit(json: boolean, payload: unknown, human: string): void {
   process.stdout.write(json ? JSON.stringify(payload, null, 2) + '\n' : human + '\n');
 }
 
-/** Who did it, for the plugin and marketplace stores: the signed-in account in served mode, 'cli' otherwise. */
-const actor = (): { name: string } => ({ name: callerName() });
+/** Who did it, for the plugin and marketplace stores: the signed-in account with its id in served
+ *  mode, the name 'cli' otherwise. */
+const actor = (): { id?: string; name: string } => servedCaller() ?? { name: 'cli' };
 
 // ---------------------------------------------------------------------------
 // verify
@@ -182,7 +183,7 @@ async function installPack(
         return 1;
       }
     }
-    const result = await ctx.marketplacePacks.install(bundle, { actor: { id: null, name: callerName() } });
+    const result = await ctx.marketplacePacks.install(bundle, { actor: servedCaller() ?? { id: null, name: 'cli' } });
     if (result.status === 'failed') {
       if (opts.json) emit(true, result, '');
       else process.stderr.write(`failed at step ${result.failedStep}: ${redactError(result.error)}\n`);
