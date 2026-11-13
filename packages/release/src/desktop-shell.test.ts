@@ -89,8 +89,11 @@ function archive(version: string, sys: Sys): string {
     writeFileSync(join(top, 'Info.plist'), '<plist/>\n');
     const pg = join(top, 'Resources/app/apps/standalone/node_modules/@embedded-postgres/darwin-arm64/native');
     writeExe(join(pg, 'bin/postgres'), '#!/bin/sh\nexit 0\n');
-    mkdirSync(join(pg, 'lib'), { recursive: true });
+    mkdirSync(join(pg, 'lib/postgresql/extension'), { recursive: true });
     writeFileSync(join(pg, 'lib/libpq.5.dylib'), 'lib');
+    // The real archive holds about 90 entries under native/lib/postgresql/, some a level deeper.
+    writeFileSync(join(pg, 'lib/postgresql/plpgsql.dylib'), 'lib');
+    writeFileSync(join(pg, 'lib/postgresql/extension/plpgsql.control'), 'control');
   }
   const out = join(work, archiveName(version, sys));
   execFileSync('tar', ['-czf', out, '-C', stage, sys === 'linux-x64' ? 'openldr-desktop' : 'OpenLDR.app']);
@@ -111,7 +114,12 @@ const RECORD = (tool: string) => [
   'for a in "$@"; do printf %s "$a" > "$d/arg.$i"; i=$((i + 1)); done',
 ];
 
+/** The real tar, found before the fakes go first on PATH. */
+const REAL_TAR = platform() === 'win32' ? '' : onPath('tar').stdout.trim();
+
 const FAKES: Record<string, string[]> = {
+  // Records each call, then runs the real tar, so a test can tell whether anything was unpacked.
+  tar: ['#!/bin/sh', ...RECORD('tar'), `exec "${REAL_TAR}" "$@"`],
   // Records, then refuses anything outside the test's folder, then runs the command as this user.
   sudo: [
     '#!/bin/sh',
@@ -326,6 +334,8 @@ describe.skipIf(platform() === 'win32')('install/desktop.sh on Linux', () => {
       for (const leftover of ['.new', '.old', '.download']) expect(existsSync(h.target + leftover)).toBe(false);
       expect(r.calls.some((c) => c.tool === 'update-desktop-database')).toBe(true);
       expect(r.calls.some((c) => c.tool === 'sudo')).toBe(false);
+      // The fake tar is the one the script uses, so the checksum tests can count on it.
+      expect(r.calls.filter((c) => c.tool === 'tar')).toHaveLength(1);
     });
   }
 
@@ -381,6 +391,8 @@ describe.skipIf(platform() === 'win32')('install/desktop.sh on Linux', () => {
       expect(r.code).toBe(1);
       expect(r.stderr).toContain(`✗ ${CHECKSUM}`);
       for (const p of ['', '.new', '.download']) expect(existsSync(h.target + p)).toBe(false);
+      // Nothing was unpacked, not even to be cleaned up after.
+      expect(r.calls.filter((c) => c.tool === 'tar')).toEqual([]);
     });
   }
 
@@ -392,6 +404,7 @@ describe.skipIf(platform() === 'win32')('install/desktop.sh on Linux', () => {
     const r = h.run(['--version', '0.1.11']);
     expect(r.code).toBe(1);
     expect(r.stderr).toContain(CHECKSUM);
+    expect(r.calls.filter((c) => c.tool === 'tar')).toEqual([]);
     expect(runBin(h.bin)).toBe('openldr-desktop 0.1.10');
   });
 
@@ -495,6 +508,22 @@ describe.skipIf(platform() === 'win32')('install/desktop.sh on Linux', () => {
     expect(runBin(h.bin)).toBe('openldr-desktop 0.1.11');
   });
 
+  // The real ps, not the fake: the running check must not match its own grep. The app folder is a
+  // temp path, so no real process holds it.
+  for (const [name, shell] of SHELLS) {
+    it(`with the real ps, an update and an --uninstall go through (${name})`, () => {
+      const h = twoReleases();
+      expect(h.run(['--version', '0.1.10'], { shell }).code).toBe(0);
+      rmSync(join(h.root, 'bin/ps'));
+      const u = h.run([], { shell });
+      expect(u.code, u.out).toBe(0);
+      expect(runBin(h.bin)).toBe('openldr-desktop 0.1.11');
+      const x = h.run(['--uninstall'], { shell });
+      expect(x.code, x.out).toBe(0);
+      expect(existsSync(h.target)).toBe(false);
+    });
+  }
+
   for (const shell of [['sh'], [BASH]]) {
     it(`the menu entry passes desktop-file-validate (${shell[0] === 'sh' ? 'sh' : 'bash'})`, { skip: !HAS_VALIDATE }, () => {
       for (const homeName of ['home', 'my home', 'a$b%c`d']) {
@@ -508,14 +537,56 @@ describe.skipIf(platform() === 'win32')('install/desktop.sh on Linux', () => {
     });
   }
 
-  it('escapes the Exec path as the desktop entry rules ask', () => {
-    const h = twoReleases('a$b%c`d');
-    expect(h.run([]).code).toBe(0);
-    const want = `${h.home}/.local/share/openldr-desktop/openldr-desktop`
-      .replace(/["`$\\]/g, (c) => `\\${c}`);
-    const exec = `"${want}"`.replace(/\\/g, '\\\\').replace(/%/g, '%%');
-    expect(readFileSync(h.menu, 'utf8')).toContain(`Exec=${exec}\n`);
+  // dash's echo reads backslashes, so this runs under both shells.
+  for (const [name, shell] of SHELLS) {
+    it(`escapes the Exec path as the desktop entry rules ask, and writes the profile path whole (${name})`, () => {
+      for (const homeName of ['a$b%c`d', 'a\\b"c']) {
+        const h = twoReleases(homeName);
+        const i = h.run([], { shell });
+        expect(i.code, `${homeName}: ${i.out}`).toBe(0);
+        const want = `${h.home}/.local/share/openldr-desktop/openldr-desktop`
+          .replace(/["`$\\]/g, (c) => `\\${c}`);
+        const exec = `"${want}"`.replace(/\\/g, '\\\\').replace(/%/g, '%%');
+        expect(readFileSync(h.menu, 'utf8')).toContain(`Exec=${exec}\n`);
+      }
+      // A home with $ and a backtick may carry a profile; the path in it is written as it is.
+      const h = twoReleases('a$b%c`d');
+      writeFileSync(join(h.root, 'userns'), '1\n');
+      const r = h.run([], { shell });
+      expect(r.code, r.out).toBe(0);
+      expect(readFileSync(join(h.aaDir, `openldr-desktop-${UID}`), 'utf8')).toBe(profileText(h));
+    });
+  }
+
+  it('refuses a home whose path holds a character the profile cannot carry, before any sudo', () => {
+    for (const homeName of ['a*b', 'a"b', 'a{b}', 'a[b]', 'a?b', 'a^b', 'a\\b']) {
+      const h = twoReleases(homeName);
+      writeFileSync(join(h.root, 'userns'), '1\n');
+      const r = h.run([]);
+      expect(r.code, homeName).toBe(1);
+      expect(r.stderr).toContain("✗ The home folder's path holds a character the sandbox profile cannot carry. Nothing was installed.");
+      expect(r.calls.filter((c) => c.tool === 'sudo')).toEqual([]);
+      for (const p of ['', '.new', '.download']) expect(existsSync(h.target + p), homeName + p).toBe(false);
+      expect(existsSync(h.menu)).toBe(false);
+      expect(readdirSync(h.aaDir)).toEqual([]);
+    }
   });
+
+  for (const [sysName, unameS, unameM, sys] of [
+    ['Linux', 'Linux', 'x86_64', 'linux-x64'], ['macOS', 'Darwin', 'arm64', 'darwin-arm64'],
+  ] as const) {
+    it(`refuses a home with a line break on ${sysName}, before anything is written`, () => {
+      const h = host('a\nb');
+      h.ctl('uname-s', `${unameS}\n`);
+      h.ctl('uname-m', `${unameM}\n`);
+      h.publish('0.1.11', sys);
+      const r = h.run(['--version', '0.1.11']);
+      expect(r.code).toBe(1);
+      expect(r.stderr).toContain("✗ The home folder's path holds a line break. Nothing was installed.");
+      expect(r.calls).toEqual([]);
+      expect(readdirSync(h.home)).toEqual([]);
+    });
+  }
 
   it('moves a leftover .old copy back before anything else', () => {
     const h = twoReleases();
@@ -705,6 +776,22 @@ describe.skipIf(platform() === 'win32')('install/desktop.sh on Linux', () => {
     expect(readlinkSync(link)).toBe('/usr/bin/true');
   });
 
+  it('never removes or moves a folder that holds the data folder', () => {
+    const h = twoReleases();
+    expect(h.run(['--version', '0.1.10']).code).toBe(0);
+    const data = join(h.target, 'data');
+    mkdirSync(data);
+    writeFileSync(join(data, 'marker'), 'lab data');
+    for (const args of [['--uninstall'], []]) {
+      const r = h.run(args, { env: { OPENLDR_HOME: data } });
+      expect(r.code, r.out).toBe(1);
+      expect(r.stderr).toContain(`✗ OpenLDR's data folder ${data} is inside ${h.target}. Nothing was changed.`);
+      expect(readFileSync(join(data, 'marker'), 'utf8')).toBe('lab data');
+      expect(runBin(h.bin)).toBe('openldr-desktop 0.1.10');
+      expect(r.calls.filter((c) => c.tool === 'tar')).toEqual([]);
+    }
+  });
+
   it('--uninstall refuses while OpenLDR is running', () => {
     const h = twoReleases();
     expect(h.run([]).code).toBe(0);
@@ -774,19 +861,24 @@ describe.skipIf(platform() === 'win32')('install/desktop.sh on macOS (fakes only
     const app = join(h.home, 'Applications/OpenLDR.app');
     expect(runBin(join(app, 'Contents/MacOS/Electron'))).toBe('openldr-desktop 0.1.11');
     const sign = r.calls.filter((c) => c.tool === 'codesign').map((c) => c.args);
-    const pg = join(app, 'Contents/Resources/app/apps/standalone/node_modules/@embedded-postgres/darwin-arm64/native');
-    // Inside out: the Postgres files first, then the whole app. The paths are the final ones or the
-    // .new ones, so compare by their tail.
+    const pg = 'Contents/Resources/app/apps/standalone/node_modules/@embedded-postgres/darwin-arm64/native';
+    // Inside out: every Postgres file at every depth, then the whole app last. All of it on the
+    // .new copy, before the swap.
+    const newApp = `${app}.new`;
     expect(sign.map((a) => a.slice(0, -1))).toEqual([
+      ['--force', '--sign', '-'],
+      ['--force', '--sign', '-'],
       ['--force', '--sign', '-'],
       ['--force', '--sign', '-'],
       ['--force', '--deep', '--sign', '-'],
     ]);
-    const tails = sign.map((a) => a[a.length - 1]!.replace(/^.*OpenLDR\.app(\.new)?/, ''));
-    expect(tails).toEqual([
-      pg.replace(/^.*OpenLDR\.app/, '') + '/bin/postgres',
-      pg.replace(/^.*OpenLDR\.app/, '') + '/lib/libpq.5.dylib',
-      '',
+    const paths = sign.map((a) => a[a.length - 1]!);
+    expect(paths[paths.length - 1]).toBe(newApp);
+    expect(paths.slice(0, -1).sort()).toEqual([
+      `${newApp}/${pg}/bin/postgres`,
+      `${newApp}/${pg}/lib/libpq.5.dylib`,
+      `${newApp}/${pg}/lib/postgresql/extension/plpgsql.control`,
+      `${newApp}/${pg}/lib/postgresql/plpgsql.dylib`,
     ]);
     expect(r.calls.filter((c) => c.tool === 'sudo')).toHaveLength(0);
     expect(existsSync(h.menu)).toBe(false);
