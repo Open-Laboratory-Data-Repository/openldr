@@ -10,9 +10,11 @@ import { seedDatabase, type FormSeedTarget } from './seed';
 
 /** FHIR resource types that mean the install holds lab data. seedEssentials, which runs on every
  *  boot, writes none of them, so a fresh install holds none. seedDatabase writes an Organization,
- *  a Location and a Patient, so a second load is refused. */
+ *  a Location and a Patient, so a second load is refused. A QuestionnaireResponse is a saved form
+ *  response, which is a lab record too. */
 export const LAB_DATA_RESOURCE_TYPES = [
   'Patient', 'ServiceRequest', 'Specimen', 'Observation', 'DiagnosticReport', 'Organization', 'Location',
+  'QuestionnaireResponse',
 ] as const;
 
 /** Warehouse tables that mean the install holds lab data. They fill when the projector runs. */

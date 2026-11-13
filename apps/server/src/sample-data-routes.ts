@@ -41,12 +41,27 @@ export function registerSampleDataRoutes(app: FastifyInstance<any, any, any, any
       try {
         counts = await load();
       } catch (err) {
-        ctx.logger.error({ err }, 'sample data load failed');
+        // Not the error itself: its text could hold a host or a query. Its name and a database
+        // error code are safe and enough to start looking.
+        const e = err as { name?: unknown; code?: unknown } | null;
+        ctx.logger.error({
+          name: typeof e?.name === 'string' ? e.name : undefined,
+          code: typeof e?.code === 'string' ? e.code : undefined,
+        }, 'sample data load failed');
+        // seedDatabase writes the sample organization, location and patient first, so a load that
+        // fails partway can leave sample data behind. Record who asked, with no error text.
+        try {
+          await recordAudit(ctx, req, {
+            action: 'settings.sample_data.load', entityType: 'system', entityId: 'sample-data',
+            metadata: { ok: false },
+          });
+        } catch { /* the 500 still goes out */ }
         return reply.code(500).send({ error: 'Sample data could not be loaded.' });
       }
       await recordAudit(ctx, req, {
         action: 'settings.sample_data.load', entityType: 'system', entityId: 'sample-data',
         metadata: {
+          ok: true,
           formsSeeded: counts.formsSeeded,
           workflowsSeeded: counts.workflowsSeeded,
           connectorsSeeded: counts.connectorsSeeded,

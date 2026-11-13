@@ -49,13 +49,13 @@ describe('installHoldsLabData', () => {
     expect(await installHoldsLabData(deps)).toBe(true);
   });
 
-  it('checks exactly the seven FHIR resource types', () => {
+  it('checks exactly the eight FHIR resource types', () => {
     expect([...LAB_DATA_RESOURCE_TYPES].sort()).toEqual(
-      ['DiagnosticReport', 'Location', 'Observation', 'Organization', 'Patient', 'ServiceRequest', 'Specimen'],
+      ['DiagnosticReport', 'Location', 'Observation', 'Organization', 'Patient', 'QuestionnaireResponse', 'ServiceRequest', 'Specimen'],
     );
   });
 
-  for (const type of ['Patient', 'ServiceRequest', 'Specimen', 'Observation', 'DiagnosticReport', 'Organization', 'Location']) {
+  for (const type of ['Patient', 'ServiceRequest', 'Specimen', 'Observation', 'DiagnosticReport', 'Organization', 'Location', 'QuestionnaireResponse']) {
     it(`is true when the FHIR store holds a ${type}`, async () => {
       const { deps, fhirStore } = await build();
       await fhirStore.save({ resourceType: type, id: `x-${type}` } as never);

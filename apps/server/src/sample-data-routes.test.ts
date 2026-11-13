@@ -15,9 +15,14 @@ function build(opts: {
   audited?: unknown[];
   holdsLabData?: () => Promise<boolean>;
   load?: () => Promise<SampleDataCounts>;
+  record?: (e: unknown) => Promise<void>;
+  logged?: unknown[];
 } = {}) {
   const audited = opts.audited ?? [];
-  const ctx = { audit: { record: async (e: unknown) => { audited.push(e); } }, logger: { error() {}, warn() {} } } as unknown as AppContext;
+  const logged = opts.logged ?? [];
+  const record = opts.record ?? (async (e: unknown) => { audited.push(e); });
+  const log = (...a: unknown[]) => { logged.push(a); };
+  const ctx = { audit: { record }, logger: { error: log, warn: log } } as unknown as AppContext;
   const app = Fastify();
   const capabilities = opts.capabilities ?? ['settings.danger_zone'];
   app.addHook('onRequest', async (req) => { req.user = { id: 'u1', username: 'admin', displayName: null, roles: [], capabilities } as never; });
@@ -65,7 +70,7 @@ describe('sample data routes', () => {
     expect(load).toHaveBeenCalledOnce();
     expect(audited).toEqual([expect.objectContaining({
       actorType: 'user', actorId: 'u1', action: 'settings.sample_data.load',
-      entityType: 'system', entityId: 'sample-data', metadata: counts,
+      entityType: 'system', entityId: 'sample-data', metadata: { ok: true, ...counts },
     })]);
   });
 
@@ -92,18 +97,37 @@ describe('sample data routes', () => {
     expect(third.json()).toMatchObject({ code: 'has_lab_data' });
   });
 
-  it('a load that throws clears the busy flag', async () => {
+  it('a load that throws writes an ok: false audit row with no error text, and clears the busy flag', async () => {
+    const thrown = Object.assign(new Error('seed failed at 10.0.0.5'), { code: '57P01' });
     const load = vi.fn<() => Promise<SampleDataCounts>>()
-      .mockRejectedValueOnce(new Error('seed failed at 10.0.0.5'))
+      .mockRejectedValueOnce(thrown)
       .mockResolvedValueOnce(counts);
     const audited: unknown[] = [];
-    const app = build({ load, audited });
+    const logged: unknown[] = [];
+    const app = build({ load, audited, logged });
     const failed = await app.inject({ method: 'POST', url: URL });
     expect(failed.statusCode).toBe(500);
+    expect(failed.json()).toEqual({ error: expect.any(String) });
     expect(JSON.stringify(failed.json())).not.toContain('10.0.0.5');
-    expect(audited).toEqual([]);
+    expect(audited).toEqual([expect.objectContaining({
+      actorType: 'user', actorId: 'u1', action: 'settings.sample_data.load',
+      entityType: 'system', entityId: 'sample-data', metadata: { ok: false },
+    })]);
+    for (const part of ['seed failed', '10.0.0.5']) expect(JSON.stringify(audited)).not.toContain(part);
+    // The log holds the error's name and code, never its message or the object.
+    expect(logged).toEqual([[{ name: 'Error', code: '57P01' }, 'sample data load failed']]);
     const next = await app.inject({ method: 'POST', url: URL });
     expect(next.statusCode).toBe(200);
     expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it('a failed load still answers 500 when the audit write throws', async () => {
+    const app = build({
+      load: async () => { throw new Error('seed failed'); },
+      record: async () => { throw new Error('audit store down'); },
+    });
+    const res = await app.inject({ method: 'POST', url: URL });
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toEqual({ error: 'Sample data could not be loaded.' });
   });
 });
