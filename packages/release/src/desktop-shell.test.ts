@@ -9,9 +9,13 @@
 //
 // Only Linux is proven here. The macOS test runs the script's macOS branch against a fake uname
 // and a fake codesign on Linux: not proven, waits for the operator.
+//
+// The last describe reads install/desktop.ps1, the Windows installer, as text. Nothing here runs
+// PowerShell.
 
 import { describe, it, expect, afterAll } from 'vitest';
 import { resolveGitBash } from './git-bash';
+import { archiveName as packArchiveName } from './desktop-pack';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
@@ -812,5 +816,115 @@ describe.skipIf(platform() === 'win32')('install/desktop.sh on macOS (fakes only
     expect(r.out).toContain('System Settings');
     expect(r.out).toContain(data);
     expect(r.calls.filter((c) => c.tool === 'sudo')).toHaveLength(0);
+  });
+});
+
+// install/desktop.ps1 is read as text. Nothing on this machine runs PowerShell, so every line of
+// it is not proven, waits for the operator. These tests pin the shape a reader relies on.
+describe('desktop.ps1 (unproven: nothing here runs PowerShell)', () => {
+  const PS1 = join(REPO, 'install/desktop.ps1');
+  const bytes = existsSync(PS1) ? readFileSync(PS1) : Buffer.alloc(0);
+  const text = bytes.toString('utf8').replace(/\r\n/g, '\n');
+  // The code alone. The script keeps every comment on a line of its own.
+  const code = text.split('\n').filter((line) => !/^\s*#/.test(line)).join('\n');
+  const MAIN = 'Install-OpenLdrDesktop';
+
+  /** The body of each function defined at the start of a line, found by counting braces. */
+  function functions(src: string): Map<string, string> {
+    const out = new Map<string, string>();
+    const re = /^function ([\w-]+)[^{\n]*\{/gm;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) {
+      let depth = 1;
+      let i = m.index + m[0].length;
+      for (; i < src.length && depth > 0; i++) {
+        if (src[i] === '{') depth++;
+        else if (src[i] === '}') depth--;
+      }
+      out.set(m[1]!, src.slice(m.index + m[0].length, i - 1));
+      re.lastIndex = i;
+    }
+    return out;
+  }
+  const fns = functions(code);
+  const main = fns.get(MAIN) ?? '';
+  const count = (src: string, re: RegExp) => (src.match(re) ?? []).length;
+
+  it('exists and is ASCII only', () => {
+    expect(bytes.length).toBeGreaterThan(0);
+    const bad = [...bytes].findIndex((b) => b > 0x7f);
+    expect(bad).toBe(-1);
+  });
+
+  it('checks the checksum before the first unpack, inside the install function', () => {
+    const check = main.indexOf('Assert-OpenLdrChecksum ');
+    const unpack = main.indexOf('Expand-OpenLdrArchive ');
+    expect(check).toBeGreaterThan(-1);
+    expect(unpack).toBeGreaterThan(check);
+    // The install function unpacks only through that one call.
+    expect(main).not.toContain('tar.exe');
+    expect(main).not.toContain('Expand-Archive');
+    expect(fns.get('Assert-OpenLdrChecksum') ?? '').toContain('Get-FileHash -LiteralPath $Zip -Algorithm SHA256');
+  });
+
+  it('holds the checksum message and the "is running" message, and prints a stop with X', () => {
+    expect(code).toContain("'The download does not match its checksum. Nothing was installed.'");
+    expect(code).toContain("'OpenLDR is running. Quit it from its tray icon, then run this again.'");
+    expect(fns.get('Write-OpenLdrFail') ?? '').toContain('Write-Host "X $Message"');
+  });
+
+  it('never names --no-sandbox, RunAs, SetEnvironmentVariable, setx or HKLM', () => {
+    for (const s of ['--no-sandbox', 'RunAs', 'SetEnvironmentVariable', 'HKLM', 'HKEY_LOCAL_MACHINE']) {
+      expect(text).not.toContain(s);
+    }
+    expect(text).not.toMatch(/\bsetx\b/i);
+  });
+
+  it('holds no exit statement, and sets $ErrorActionPreference only inside a function', () => {
+    expect(code).not.toMatch(/\bexit\b/i);
+    const assign = /\$ErrorActionPreference\s*=/g;
+    const inside = [...fns.values()].reduce((n, body) => n + count(body, assign), 0);
+    expect(count(code, assign)).toBeGreaterThan(0);
+    expect(inside).toBe(count(code, assign));
+    expect(main).toContain("$ErrorActionPreference = 'Stop'");
+  });
+
+  it('names System32\\tar.exe and turns the progress bar off inside the install function', () => {
+    expect(code).toContain('System32\\tar.exe');
+    expect(main).toContain("$ProgressPreference = 'SilentlyContinue'");
+  });
+
+  it('names the app folder, the shortcut, the command, the data folder and the Run key', () => {
+    expect(code).toContain('"$env:LOCALAPPDATA\\Programs\\OpenLDR"');
+    expect(code).toContain('OpenLDR.lnk');
+    expect(code).toContain('openldr-standalone.cmd');
+    // The Windows folder resolveDataDir in apps/standalone/src/state.ts picks.
+    expect(code).toContain('"$env:LOCALAPPDATA\\OpenLDR"');
+    expect(code).toContain('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run');
+  });
+
+  it('removes and moves paths only through the two guarded functions', () => {
+    const removes = /\bRemove-Item\b(?!Property)/g;
+    const moves = /\bMove-Item\b|\bRename-Item\b|\]::Move\(/g;
+    expect(count(code, removes)).toBeGreaterThan(0);
+    expect(count(fns.get('Remove-OpenLdrPath') ?? '', removes)).toBe(count(code, removes));
+    expect(count(code, moves)).toBeGreaterThan(0);
+    expect(count(fns.get('Move-OpenLdrPath') ?? '', moves)).toBe(count(code, moves));
+  });
+
+  it('has a param block with $Version and [switch]$Uninstall, and calls the install function on its last line', () => {
+    expect(code).toMatch(/^param\(\s*\[string\]\$Version = '',\s*\[switch\]\$Uninstall\s*\)/m);
+    expect(code.trimEnd().split('\n').pop()).toBe(`${MAIN} -Version $Version -Uninstall:$Uninstall`);
+  });
+
+  it('has an asset name pattern that matches archiveName for win32-x64 and nothing else', () => {
+    const m = /'(\^openldr-desktop-[^']*win32-x64[^']*)'/.exec(code);
+    expect(m).not.toBeNull();
+    const re = new RegExp(m![1]!);
+    const name = packArchiveName('0.1.12', 'win32-x64');
+    expect(name).toBe('openldr-desktop-0.1.12-win32-x64.zip');
+    expect(re.exec(name)?.[1]).toBe('0.1.12');
+    expect(re.test(packArchiveName('0.1.12', 'linux-x64'))).toBe(false);
+    expect(re.test('openldr-desktop-0.2.0-beta.1-win32-x64.zip')).toBe(false);
   });
 });
