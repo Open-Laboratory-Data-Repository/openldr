@@ -14,6 +14,11 @@ export function requireRole(...roles: string[]) {
   };
 }
 
+/** True when the signed-in actor holds `cap`. The one test behind requireCapability. */
+export function holdsCapability(user: { capabilities?: string[] }, cap: string): boolean {
+  return (user.capabilities ?? []).includes(cap);
+}
+
 /** preHandler guard: requires the request actor to hold `cap`. */
 export function requireCapability(cap: string) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
@@ -21,7 +26,7 @@ export function requireCapability(cap: string) {
       reply.code(401);
       return reply.send({ error: 'authentication required' });
     }
-    if (!(req.user.capabilities ?? []).includes(cap)) {
+    if (!holdsCapability(req.user, cap)) {
       reply.code(403);
       return reply.send({ error: 'insufficient capability' });
     }
@@ -35,7 +40,7 @@ export function requireAnyCapability(...caps: string[]) {
       reply.code(401);
       return reply.send({ error: 'authentication required' });
     }
-    if (!(req.user.capabilities ?? []).some((c) => caps.includes(c))) {
+    if (!caps.some((c) => holdsCapability(req.user!, c))) {
       reply.code(403);
       return reply.send({ error: 'insufficient capability' });
     }

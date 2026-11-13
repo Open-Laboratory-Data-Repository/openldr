@@ -147,6 +147,9 @@ Ative as capacidades do anfitrião apenas para utilizadores e instalações que 
 | `WORKFLOW_EMAIL_POLL_MIN_SECONDS`, `WORKFLOW_EMAIL_MAX_PER_POLL` | 30, 50 | Intervalo mínimo dos acionadores de email e limite de mensagens por consulta. |
 | `FACILITY_IMPORT_MAX_UPLOAD_BYTES` | 67108864 | Tamanho máximo de envio do registo de unidades. Aumentá-lo também exige memória suficiente para o processamento. |
 | `TERMINOLOGY_WORK_DIR` | Opcional | Pasta de descarga e extração de terminologia. |
+| `CLI_ENTRY` | Opcional | O ficheiro de entrada do CLI que o servidor inicia para um comando enviado pela aplicação. Deixe-o vazio na imagem Docker e numa cópia do repositório. |
+| `CLI_MAX_RUNNING` | Opcional | Quantos comandos enviados pela aplicação correm ao mesmo tempo. Predefinição 2. Os restantes esperam e recebem "ocupado" após 30 segundos. |
+| `CLI_MAX_UPLOAD_BYTES` | Opcional | O máximo de bytes de ficheiros que um comando enviado pela aplicação pode carregar. Predefinição 2147483648 (2 GiB). |
 | `PLUGIN_UI_ENABLED`, `PLUGIN_EGRESS_ENABLED` | true, true | Interruptores gerais das páginas e do intermediário de plugins, e do acesso à rede. |
 | `PLUGIN_DATA_MAX_DOC_BYTES` | 8388608 | Tamanho máximo de documento do intermediário. |
 | `PLUGIN_CRASH_LOG_DIR` | .openldr/crash | Pasta persistente dos marcadores de falha dos plugins. |

@@ -42,6 +42,7 @@ import { registerPluginUiRoutes } from './plugin-ui-routes';
 import { registerQueryRoutes } from './query-routes';
 import { registerSyncRoutes } from './sync-routes';
 import { registerFacilitiesRoutes } from './facilities-routes';
+import { registerCliRoutes } from './cli-routes';
 import { createConnectorStore, createCustomQueryGroupStore, createCustomQueryStore, createPatientResolver, referenceCapture } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
 import { registerLocalAuthRoutes } from './local-auth-routes';
@@ -230,6 +231,9 @@ export async function buildApp(ctx: AppContext) {
   registerLayoutRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
   registerFacilitiesRoutes(app, ctx);
+  // Runs a CLI command for a signed-in caller. Its preClose hook stops running commands, so the
+  // shutdown in start.ts (app first, context last) records each one before the context closes.
+  registerCliRoutes(app, ctx);
 
   // Off by default: / then falls through to the 404 below, and the landing site owns it.
   if (ctx.cfg.ROOT_REDIRECT_TO_STUDIO) {

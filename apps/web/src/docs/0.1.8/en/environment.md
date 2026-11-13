@@ -201,6 +201,9 @@ to start with it enabled under `NODE_ENV=production`. When it is on, Studio show
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `TERMINOLOGY_WORK_DIR` | system temp folder | Folder where an uploaded terminology release is unzipped during import. A full SNOMED CT release needs room for the zip and the unzipped files at once. Point this at a larger disk when the container's temp folder is small. |
+| `CLI_ENTRY` | found beside the server | The CLI entry file the server starts to run a command sent through the app. The Docker image and a checkout need no value. Set it only when the CLI sits somewhere else. When the file cannot be found, such a command gets an answer that names this setting. |
+| `CLI_MAX_RUNNING` | `2` | How many commands sent through the app run at once. The rest wait. A command that waits 30 seconds gets "busy". |
+| `CLI_MAX_UPLOAD_BYTES` | `2147483648` (2 GiB) | The most file bytes one command sent through the app may upload. A bigger upload is refused with a message that names the limit. Uploads are written under `TERMINOLOGY_WORK_DIR`, so that folder needs the room. |
 
 ## SQL Server target store
 

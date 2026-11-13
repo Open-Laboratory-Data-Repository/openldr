@@ -152,6 +152,8 @@ export function parseHandoff(text: string): ServedHandoff {
  * Throws ServedRefusal when the folder cannot be entered or its real path is the root of the disk.
  */
 export function enterRunDir(handoff: ServedHandoff): void {
+  // The folder holds a caller's uploads, and loadConfig() walks up from here for a .env.
+  process.env.OPENLDR_SKIP_ENV_FILE = 'true';
   const real = realOf(handoff.runDir);
   if (real === null) throw new ServedRefusal("This request's folder cannot be used.");
   if (dirname(real) === real) throw new ServedRefusal("This request's folder is the root of the disk.");

@@ -91,8 +91,8 @@ interface ChildResult { code: number | null; stdout: string; stderr: string }
 /** Starts `node --import tsx <script> ...args` in a temporary folder, with an environment built
  *  from an allow-list: no database URL, no secrets key, and the dev .env never read. `fd3`
  *  undefined gives the child no fourth descriptor; a string is written on a fourth pipe. */
-function runChild(script: string, args: string[], opts: { servedFd?: string; fd3?: string }): Promise<ChildResult> {
-  const env: Record<string, string> = { PATH: process.env.PATH ?? '', HOME: base, OPENLDR_SKIP_ENV_FILE: 'true' };
+function runChild(script: string, args: string[], opts: { servedFd?: string; fd3?: string; env?: Record<string, string> }): Promise<ChildResult> {
+  const env: Record<string, string> = { PATH: process.env.PATH ?? '', HOME: base, OPENLDR_SKIP_ENV_FILE: 'true', ...opts.env };
   if (opts.servedFd !== undefined) env.OPENLDR_SERVED_FD = opts.servedFd;
   const stdio: ('ignore' | 'pipe')[] = opts.fd3 === undefined ? ['ignore', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe', 'pipe'];
   // The command tree loads WASI, which prints a warning on standard error at start.
@@ -192,9 +192,10 @@ describe('reading the hand-off from descriptor 3', () => {
   });
 
   it('the entry prints one redacted line and no stack for an error that is not a refusal', async () => {
-    // query export passes the guard, then loadConfig() throws: the child has no database settings.
+    // query export passes the guard, then fails: its database setting is not a URL, so it cannot
+    // connect to anything whatever defaults the config gains later.
     const handoff = { ...GOOD, path: 'query export', argv: ['query', 'export', '--out', join(runDir, 'q.json')], runDir };
-    const r = await runChild(join(HERE, 'index.ts'), [], { servedFd: '3', fd3: JSON.stringify(handoff) });
+    const r = await runChild(join(HERE, 'index.ts'), [], { servedFd: '3', fd3: JSON.stringify(handoff), env: { INTERNAL_DATABASE_URL: 'not-a-url' } });
     expect(r.code).toBe(1);
     expect(r.stdout).toBe('');
     expect(r.stderr.endsWith('\n')).toBe(true);
@@ -438,6 +439,20 @@ describe('the served guard', () => {
     expect(() => enterRunDir({ ...GOOD, runDir: join(base, 'no-such-run') })).toThrow("This request's folder cannot be used.");
     expect(() => enterRunDir({ ...GOOD, runDir: join(base, 'rootlink') })).toThrow("This request's folder is the root of the disk.");
     expect(process.cwd()).toBe(before);
+  });
+
+  it('sets OPENLDR_SKIP_ENV_FILE itself, so no .env near the uploads is read', () => {
+    const before = process.cwd();
+    const saved = process.env.OPENLDR_SKIP_ENV_FILE;
+    delete process.env.OPENLDR_SKIP_ENV_FILE;
+    try {
+      enterRunDir({ ...GOOD, runDir });
+      expect(process.env.OPENLDR_SKIP_ENV_FILE).toBe('true');
+    } finally {
+      process.chdir(before);
+      if (saved === undefined) delete process.env.OPENLDR_SKIP_ENV_FILE;
+      else process.env.OPENLDR_SKIP_ENV_FILE = saved;
+    }
   });
 
   it('refuses a kept-folder path when the hand-off names no kept folder', async () => {

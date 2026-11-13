@@ -89,6 +89,14 @@ export const ConfigSchema = z
     // Working dir for terminology distribution download + extraction (needs disk headroom for SNOMED).
     TERMINOLOGY_WORK_DIR: z.string().optional(),
 
+    // Running a CLI command through the app (POST /api/cli/run). CLI_ENTRY is the CLI's entry file;
+    // unset, the server looks beside its own entry for the image layout, then the checkout layout.
+    CLI_ENTRY: z.string().optional(),
+    // How many commands run at once. The rest wait, and get "busy" after 30 seconds.
+    CLI_MAX_RUNNING: z.coerce.number().int().positive().default(2),
+    // The most file bytes one command may upload, counted after decoding.
+    CLI_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(2_147_483_648),
+
     // OIDC issuer URL. Keycloak mode uses the realm base URL. Required for keycloak and oidc
     // (checked below). Local sign-in has no external issuer.
     OIDC_ISSUER_URL: z.string().url().optional(),

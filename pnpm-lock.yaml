@@ -133,6 +133,9 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      '@openldr/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@openldr/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins

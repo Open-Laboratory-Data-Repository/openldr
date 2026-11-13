@@ -147,6 +147,9 @@ Enable host-level capabilities only for the users and installations that need th
 | `WORKFLOW_EMAIL_POLL_MIN_SECONDS`, `WORKFLOW_EMAIL_MAX_PER_POLL` | 30, 50 | Email trigger polling floor and per-poll message limit. |
 | `FACILITY_IMPORT_MAX_UPLOAD_BYTES` | 67108864 | Facility register upload ceiling. Raising it also needs enough worker memory. |
 | `TERMINOLOGY_WORK_DIR` | Optional | Terminology download and extraction directory. |
+| `CLI_ENTRY` | Optional | The CLI entry file the server starts for a command sent through the app. Leave it unset in the Docker image and in a checkout. |
+| `CLI_MAX_RUNNING` | Optional | How many commands sent through the app run at once. Default 2. The rest wait, and get "busy" after 30 seconds. |
+| `CLI_MAX_UPLOAD_BYTES` | Optional | The most file bytes one command sent through the app may upload. Default 2147483648 (2 GiB). |
 | `PLUGIN_UI_ENABLED`, `PLUGIN_EGRESS_ENABLED` | true, true | Plugin page/broker and network-access master switches. |
 | `PLUGIN_DATA_MAX_DOC_BYTES` | 8388608 | Maximum broker document size. |
 | `PLUGIN_CRASH_LOG_DIR` | .openldr/crash | Durable plugin crash-marker directory. |

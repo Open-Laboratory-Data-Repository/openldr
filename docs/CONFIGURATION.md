@@ -97,6 +97,9 @@ openldr terminology import resource <codesystem.json>
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
 | `TERMINOLOGY_WORK_DIR` | path | the OS temp dir (`os.tmpdir()`) | Base directory the terminology ingest worker streams and unzips an uploaded distribution into. Each job gets a fresh subdirectory under it, removed when the job ends including on a mid-extract failure. |
+| `CLI_ENTRY` | path | the first that exists of `../cli/dist/index.js` and `../../../packages/cli/dev.mjs`, beside the server's module | The CLI entry file `POST /api/cli/run` starts for a command sent through the app. A relative value is resolved against the server's working folder. When no file is found, the run answers 503 with a message that names this setting. Nothing is checked at boot. |
+| `CLI_MAX_RUNNING` | integer | `2` | Commands run at once through the app. A caller waits up to 30 seconds for a free slot, then gets 503 `busy`. |
+| `CLI_MAX_UPLOAD_BYTES` | integer | `2147483648` | The most file bytes one command may upload, counted after decoding. Over it answers 413 with a message that names the limit. Each request writes its uploads under `<TERMINOLOGY_WORK_DIR>/cli-runs/` (the OS temp dir when unset), removed when the request ends. |
 
 Set this when the OS temp dir is small, which is the usual case in a container where `/tmp`
 is a modest tmpfs held in RAM. A full SNOMED CT release needs room for the zip and the
