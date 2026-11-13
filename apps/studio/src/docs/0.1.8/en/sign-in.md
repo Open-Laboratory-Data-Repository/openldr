@@ -91,7 +91,9 @@ A new install has no accounts. Until someone creates the first administrator, St
 5. In **Password** and **Repeat password**, type the password.
 6. Select **Create the administrator**.
 
-**Expected result:** Studio opens, signed in as the new administrator, with the **Administrator** role. The page does not appear again on this install.
+**Expected result:** you are signed in as the new administrator, with the **Administrator** role, and [First run](/docs/first-run) opens. The page does not appear again on this install.
+
+In the OpenLDR app, you skip step 1. The app fills in **Setup code**, and the hint under it says **Filled in by the OpenLDR app.**
 
 Running the command again replaces the earlier code. Until the first administrator exists, `openldr doctor` warns on its Sign-in line. See [Setup checks](/docs/setup-checks).
 
@@ -174,6 +176,7 @@ openldr user end-sessions <username>
 - **Studio sent me back to the sign-in page.** The session ended. That happens after 12 hours with no use, after 7 days, when an administrator ends it, or when you change your password on another device. Sign in again.
 - **Could not reach the server. Try again.** Studio cannot reach the server. Check your connection, then try again.
 - **The setup page says the code is wrong or has expired.** A code lasts 30 minutes, and each new code replaces the one before. Run `openldr auth setup-code` again and type the newest code.
+- **In the OpenLDR app, the setup code field is empty.** The app fills it in only for an OpenLDR it started itself. If OpenLDR was already running when the app started, quit the app and start it again. Or run `openldr-standalone cli -- auth setup-code` and type the code.
 - **The setup page says the username is already in use.** Choose another username.
 - **The setup page says an administrator already exists.** Someone finished setup first. Select **Sign in**.
 - **The last administrator forgot their password.** Someone with access to the server runs `openldr user reset-password <username> --force`. It prints a temporary password.
@@ -183,3 +186,4 @@ openldr user end-sessions <username>
 - [Your preferences](/docs/user-preferences)
 - [Users and roles](/docs/users)
 - [Setup checks](/docs/setup-checks)
+- [First run](/docs/first-run)

@@ -104,6 +104,24 @@ Selecione **Run again**. Aguarde o fim das verificações.
 
 ![Ler o novo resumo e tratar as falhas e avisos restantes.](setup-checks-guide-rerun-result.png)
 
+## Carregar dados de exemplo
+
+Use esta ação para experimentar o OpenLDR numa instalação nova. Carrega os mesmos dados de exemplo que o passo dos dados de exemplo do [Primeiro arranque](/docs/first-run). O menu só a oferece enquanto a instalação não tiver dados de laboratório. Precisa da permissão Zona de perigo. Administrator tem-na.
+
+### 1. Abrir as ações da página
+
+Selecione os pontos no canto superior direito da página.
+
+### 2. Escolher Carregar dados de exemplo
+
+Selecione **Carregar dados de exemplo**. Abre-se uma caixa com o título **Dados de exemplo** e uma frase sobre o que contêm.
+
+### 3. Confirmar
+
+Selecione **Carregar dados de exemplo** na caixa. Para sair sem carregar, selecione **Cancelar**. Durante o carregamento, a página mostra **A carregar os dados de exemplo…**.
+
+**Resultado esperado:** as verificações voltam a ser executadas. **Carregar dados de exemplo** já não está no menu, porque a instalação tem agora dados de laboratório.
+
 ## Ler as verificações num telemóvel
 
 Use a mesma página no telemóvel. Cada verificação inclui o estado e as indicações.
@@ -140,6 +158,10 @@ O relatório descreve as verificações no momento da execução. All checks pas
 
 **Uma página ligada está indisponível.** Peça ajuda a um administrador com permissão para alterar essa definição.
 
+**Carregar dados de exemplo não está no menu.** A instalação já tem dados de laboratório, ou a sua função não tem a permissão Zona de perigo. Um paciente, um pedido de análise, uma amostra, um resultado, uma resposta de formulário guardada, uma organização ou um local contam como dados de laboratório.
+
+**Não foi possível carregar os dados de exemplo:** seguido de um motivo. O carregamento não terminou. Parte dos dados de exemplo pode já estar lá, e o menu deixa então de oferecer o carregamento. O registo do servidor tem o motivo.
+
 ## Guias relacionados
 
-Leia [Laboratório](/docs/laboratory) para os dados do laboratório emissor, [Conectores](/docs/connectors) para testar ligações e [Começar aqui](/docs/start-here) para a instalação e a linha de comandos.
+Leia [Laboratório](/docs/laboratory) para os dados do laboratório emissor, [Conectores](/docs/connectors) para testar ligações e [Começar aqui](/docs/start-here) para a instalação e a linha de comandos. Leia [Primeiro arranque](/docs/first-run) para os passos depois de criar o primeiro administrador.

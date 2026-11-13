@@ -104,6 +104,24 @@ Select **Run again**. Wait for the checks to finish.
 
 ![Read the new summary and address any remaining failed checks or warnings.](setup-checks-guide-rerun-result.png)
 
+## Load sample data
+
+Use this to try OpenLDR on a new install. It loads the same sample data as the sample data step in [First run](/docs/first-run). The menu offers it only while the install holds no lab data. You need the Danger zone permission. Administrator has it.
+
+### 1. Open the page actions
+
+Select the dots at the top right of Setup checks.
+
+### 2. Choose Load sample data
+
+Select **Load sample data**. A box opens with the title **Sample data** and a sentence on what it holds.
+
+### 3. Confirm
+
+Select **Load sample data** in the box. To leave without loading, select **Cancel**. While it loads, the page shows **Loading sample data…**.
+
+**Expected result:** the checks run again. **Load sample data** is no longer in the menu, because the install now holds lab data.
+
 ## Read setup checks on a phone
 
 Use the same page on a phone. Each check includes its status and advice.
@@ -140,6 +158,10 @@ The report describes the checks at the time they ran. All checks passed does not
 
 **A linked page is unavailable.** Ask an administrator with permission to edit that setting.
 
+**Load sample data is not in the menu.** The install already holds lab data, or your role does not have the Danger zone permission. A patient, a lab request, a specimen, a result, a saved form response, an organization or a location counts as lab data.
+
+**Sample data could not be loaded:** followed by a reason. The load did not finish. Some sample data may already be in place, and then the menu no longer offers it. The server log has the reason.
+
 ## Related guides
 
-Read [Laboratory](/docs/laboratory) for issuing-lab details. Read [Connectors](/docs/connectors) for connection tests. Read [Start here](/docs/start-here) for installation and command-line setup.
+Read [Laboratory](/docs/laboratory) for issuing-lab details. Read [Connectors](/docs/connectors) for connection tests. Read [Start here](/docs/start-here) for installation and command-line setup. Read [First run](/docs/first-run) for the steps after the first administrator is made.

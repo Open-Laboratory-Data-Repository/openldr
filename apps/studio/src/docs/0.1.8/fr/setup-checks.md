@@ -104,6 +104,24 @@ Sélectionnez **Run again**. Attendez la fin des vérifications.
 
 ![Lire le nouveau résumé et traiter les échecs et avertissements restants.](setup-checks-guide-rerun-result.png)
 
+## Charger les données d'exemple
+
+Utilisez cette action pour essayer OpenLDR sur une nouvelle installation. Elle charge les mêmes données d'exemple que l'étape des données d'exemple du [Premier démarrage](/docs/first-run). Le menu ne la propose que tant que l'installation ne contient aucune donnée de laboratoire. Vous avez besoin de la permission Zone de danger. Administrator l'a.
+
+### 1. Ouvrir les actions de la page
+
+Sélectionnez les points en haut à droite de la page.
+
+### 2. Choisir Charger les données d'exemple
+
+Sélectionnez **Charger les données d'exemple**. Une fenêtre s'ouvre avec le titre **Données d'exemple** et une phrase sur leur contenu.
+
+### 3. Confirmer
+
+Sélectionnez **Charger les données d'exemple** dans la fenêtre. Pour sortir sans charger, sélectionnez **Annuler**. Pendant le chargement, la page affiche **Chargement des données d'exemple…**.
+
+**Résultat attendu :** les vérifications se relancent. **Charger les données d'exemple** n'est plus dans le menu, car l'installation contient maintenant des données de laboratoire.
+
 ## Lire les vérifications sur un téléphone
 
 Utilisez la même page sur téléphone. Chaque vérification présente son état et ses conseils.
@@ -140,6 +158,10 @@ Le rapport décrit les vérifications au moment de leur exécution. All checks p
 
 **Une page liée est inaccessible.** Demandez à un administrateur ayant la permission de modifier ce paramètre.
 
+**Charger les données d'exemple n'est pas dans le menu.** L'installation contient déjà des données de laboratoire, ou votre rôle n'a pas la permission Zone de danger. Un patient, une demande d'analyse, un échantillon, un résultat, une réponse de formulaire enregistrée, une organisation ou un site comptent comme données de laboratoire.
+
+**Les données d'exemple n'ont pas pu être chargées :** suivi d'une raison. Le chargement ne s'est pas terminé. Une partie des données d'exemple peut déjà être en place, et le menu ne propose alors plus le chargement. Le journal du serveur indique la raison.
+
 ## Guides associés
 
-Consultez [Laboratoire](/docs/laboratory) pour les informations du laboratoire émetteur, [Connecteurs](/docs/connectors) pour tester les connexions et [Commencer ici](/docs/start-here) pour l'installation et la ligne de commande.
+Consultez [Laboratoire](/docs/laboratory) pour les informations du laboratoire émetteur, [Connecteurs](/docs/connectors) pour tester les connexions et [Commencer ici](/docs/start-here) pour l'installation et la ligne de commande. Consultez [Premier démarrage](/docs/first-run) pour les étapes qui suivent la création du premier administrateur.

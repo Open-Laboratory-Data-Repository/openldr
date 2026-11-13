@@ -91,7 +91,9 @@ Une nouvelle installation n'a aucun compte. Tant que personne n'a créé le prem
 5. Dans **Mot de passe** et **Répéter le mot de passe**, tapez le mot de passe.
 6. Sélectionnez **Créer l'administrateur**.
 
-**Résultat attendu :** Studio s'ouvre, connecté au nom du nouvel administrateur, avec le rôle **Administrator**. La page ne revient plus sur cette installation.
+**Résultat attendu :** vous êtes connecté au nom du nouvel administrateur, avec le rôle **Administrator**, et le [Premier démarrage](/docs/first-run) s'ouvre. La page ne revient plus sur cette installation.
+
+Dans l'application OpenLDR, vous sautez l'étape 1. L'application remplit **Code de configuration**, et l'indication sous le champ dit **Rempli par l'application OpenLDR.**
 
 Relancer la commande remplace le code précédent. Tant que le premier administrateur n'existe pas, `openldr doctor` affiche un avertissement sur sa ligne Sign-in. Voir [Vérifications d'installation](/docs/setup-checks).
 
@@ -174,6 +176,7 @@ openldr user end-sessions <username>
 - **Studio m'a renvoyé à la page de connexion.** La session s'est terminée. Cela arrive après 12 heures sans utilisation, après 7 jours, quand un administrateur la ferme, ou quand vous changez votre mot de passe sur un autre appareil. Reconnectez-vous.
 - **Impossible de joindre le serveur. Réessayez.** Studio ne joint pas le serveur. Vérifiez votre connexion, puis réessayez.
 - **La page de configuration dit que le code est incorrect ou a expiré.** Un code dure 30 minutes, et chaque nouveau code remplace le précédent. Relancez `openldr auth setup-code` et tapez le code le plus récent.
+- **Dans l'application OpenLDR, le champ du code de configuration est vide.** L'application ne le remplit que pour un OpenLDR qu'elle a démarré elle-même. Si OpenLDR tournait déjà quand l'application a démarré, quittez l'application et relancez-la. Ou lancez `openldr-standalone cli -- auth setup-code` et tapez le code.
 - **La page de configuration dit que le nom d'utilisateur est déjà utilisé.** Choisissez un autre nom d'utilisateur.
 - **La page de configuration dit qu'un administrateur existe déjà.** Quelqu'un a terminé la configuration avant vous. Sélectionnez **Se connecter**.
 - **Le dernier administrateur a oublié son mot de passe.** Une personne qui a accès au serveur lance `openldr user reset-password <username> --force`. La commande affiche un mot de passe temporaire.
@@ -183,3 +186,4 @@ openldr user end-sessions <username>
 - [Vos préférences](/docs/user-preferences)
 - [Utilisateurs et rôles](/docs/users)
 - [Vérifications d'installation](/docs/setup-checks)
+- [Premier démarrage](/docs/first-run)
