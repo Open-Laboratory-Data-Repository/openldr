@@ -78,7 +78,10 @@ export async function checkDataVersion(paths: VersionPaths, appVersion: string):
   }
 }
 
-/** Records the current version as the one that last started the folder. */
+/**
+ * Records the current version as the one that last started the folder. runStart calls it just
+ * before the server starts, because the server may migrate the database even when it then fails.
+ */
 export async function recordDataVersion(paths: VersionPaths, appVersion: string): Promise<void> {
   if (!knownVersion(appVersion)) return;
   const recorded = await readRecorded(paths);

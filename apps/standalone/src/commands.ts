@@ -593,7 +593,11 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       crashRemovers.push(() => process.off(kind, handler));
     }
 
-    // 10. The server.
+    // 10. The server. A start that reaches the server may migrate the database, even when the
+    //     server then fails to start. So the folder is marked with this version first. A record
+    //     without a migration refuses an older launcher safely; a migration without a record lets
+    //     it through to a migration error that tells the person nothing.
+    await recordDataVersion(paths, deps.appVersion);
     deps.emit?.({ event: 'starting', step: 'server' });
     try {
       server = await deps.startServer(cfg, log);
@@ -601,8 +605,6 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       if (errorCode(err) === 'EADDRINUSE') throw new Error(portTakenMessage(opts.port));
       throw err;
     }
-    // Only a start that worked marks the folder with this version.
-    await recordDataVersion(paths, deps.appVersion);
 
     // 11. The setup code goes to the terminal only, never to a log. With events on, a program runs
     //     this launcher and asks for a code itself, so none is made here.

@@ -723,7 +723,8 @@ describe('runStart and the version that last used the data folder', () => {
     expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
   });
 
-  const failures: Array<{ how: string; arrange: (f: Fakes) => Promise<number> }> = [
+  /** Starts that fail before the server could migrate anything. They must not mark the folder. */
+  const before: Array<{ how: string; arrange: (f: Fakes) => Promise<number> }> = [
     {
       how: 'at the port check',
       arrange: async () => {
@@ -732,16 +733,16 @@ describe('runStart and the version that last used the data folder', () => {
       },
     },
     {
-      how: 'when the server throws',
+      how: 'when Postgres fails to start',
       arrange: async (f) => {
-        f.deps.startServer = async () => {
-          throw new Error('boom');
+        f.deps.startPostgres = async () => {
+          throw new Error('postgres boom');
         };
         return PORT;
       },
     },
   ];
-  for (const { how, arrange } of failures) {
+  for (const { how, arrange } of before) {
     it(`a start that fails ${how} records nothing on a folder with no record`, async () => {
       const f = fakes();
       const port = await arrange(f);
@@ -759,6 +760,28 @@ describe('runStart and the version that last used the data folder', () => {
       await expectNothingLeft(f);
     });
   }
+
+  // The server runs the migrations, and can fail after them. So the folder is marked before it starts.
+  it('a start whose server throws has already recorded its version', async () => {
+    await writeFile(paths.versionFile, '{"version":"0.1.9"}\n');
+    const f = fakes();
+    f.deps.startServer = async () => {
+      throw new Error('boom');
+    };
+    await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow('boom');
+    expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+    await expectNothingLeft(f);
+  });
+
+  it('a version record that cannot be written fails the start, stops Postgres and releases the lock', async () => {
+    // A folder where the file should be: the read gives nothing to go by, and the rename over it fails.
+    await mkdir(paths.versionFile);
+    const f = fakes();
+    await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow();
+    expect(f.pg.started).toBe(true);
+    expect(f.server.started).toBe(false);
+    await expectNothingLeft(f);
+  });
 });
 
 describe('runStart undoes what it started when a step fails', () => {
