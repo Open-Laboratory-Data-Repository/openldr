@@ -14,7 +14,12 @@ export interface SelectedTargetStore {
 
 // The composition-root seam (DP-1): the only place that chooses a concrete target-store adapter.
 // `engineOverride` lets the CLI `target-store test --engine` probe a specific engine.
-export function selectTargetStore(cfg: Config, engineOverride?: TargetEngine): SelectedTargetStore {
+export function selectTargetStore(
+  cfg: Config,
+  engineOverride?: TargetEngine,
+  // Told when a Postgres connection the store's pool holds idle dies. See `DbStoreDeps`.
+  deps: { onConnectionError?: (err: Error) => void } = {},
+): SelectedTargetStore {
   // Config's TARGET_STORE_ADAPTER is 'pg'|'mssql'|'mysql'; TargetEngine is 'postgres'|'mssql'|'mysql' — map 'pg'→'postgres'.
   const engine: TargetEngine = engineOverride ?? (
     cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql'
@@ -69,7 +74,7 @@ export function selectTargetStore(cfg: Config, engineOverride?: TargetEngine): S
   }
   return {
     engine,
-    store: createDbStore({ url: cfg.TARGET_DATABASE_URL }),
+    store: createDbStore({ url: cfg.TARGET_DATABASE_URL }, { onConnectionError: deps.onConnectionError }),
     withQueryTimeout: (_timeoutMs, operation) => operation(),
   };
 }

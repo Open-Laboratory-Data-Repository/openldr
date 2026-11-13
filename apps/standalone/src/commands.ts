@@ -93,6 +93,18 @@ export const STOPPED = 'Stopped.';
 export const STOPPED_FORCED = 'Stopped, but the server did not finish in 60 seconds. Work in flight will be retried.';
 const NOT_RUNNING = 'OpenLDR is not running.';
 const START_FIRST = 'Start OpenLDR first: openldr-standalone start';
+/** Said on standard error when `cli` starts Postgres for a recovery command, and when it has stopped it. */
+export const RECOVERY_NOTICE = 'OpenLDR is not running. Starting its database for this command.';
+export const RECOVERY_DONE = 'The database is stopped again.';
+const NEVER_RAN = 'This data folder holds no OpenLDR database yet. Start OpenLDR once first: openldr-standalone start';
+const STARTED_MEANWHILE = 'OpenLDR was started while this command was beginning. Run the command again.';
+/** What a recovery lock puts where a launcher's lock has the address to open. It must not be empty. */
+const RECOVERY_ADDRESS = 'no address: a recovery command holds the data folder';
+function recoveryBusy(pid: number): string {
+  return `A recovery command is using the database (process ${pid}). Try again when it has finished.`;
+}
+/** The signals that end a terminal session. A handler stops Postgres before the process goes. */
+const SESSION_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
 const STUDIO_MISSING = 'The studio is not built. Run: pnpm --filter @openldr/studio build';
 export const RECOVERING = 'The database is recovering after an unclean stop. This can take a few minutes.';
 export const WORKFLOW_ROOT_REFUSED =
@@ -465,6 +477,8 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       });
     } catch (err) {
       if (err instanceof AlreadyRunningError) {
+        // A recovery command has Postgres up on this cluster. A second Postgres must not start.
+        if (err.info.holder === 'recovery') throw new Error(recoveryBusy(err.info.pid));
         // The message is built from two fields: the lock also holds the other launcher's token.
         throw new Error(`OpenLDR is already running (process ${err.info.pid}) at ${err.info.address}.`);
       }
@@ -632,6 +646,10 @@ export async function runStatus(opts: { dataDir?: string }, print: (line: string
     print(NOT_RUNNING);
     return 3;
   }
+  if (lock.holder === 'recovery') {
+    print(`${NOT_RUNNING} ${recoveryBusy(lock.pid)}`);
+    return 3;
+  }
   print(`OpenLDR is running at ${lock.address}`);
   return 0;
 }
@@ -671,61 +689,239 @@ function useLauncherAddress(lock: LockInfo, appVersion: string, args: readonly s
 type CliProgram = Pick<typeof import('@openldr/cli/program'), 'buildClientProgram' | 'commandKindOf'>;
 
 /**
- * Runs the `openldr` CLI against this install. It needs a running launcher.
+ * What `cli` needs to run a recovery command when no launcher is running: it then starts the
+ * bundled Postgres itself, for that one command.
+ */
+export interface CliDeps {
+  startPostgres: typeof startPostgres;
+  stopLeftoverPostgres: typeof stopLeftoverPostgres;
+  now: () => Date;
+  /** One line for the person, on standard error. Standard output belongs to the command. */
+  notice: (line: string) => void;
+  /** Where SIGINT, SIGTERM and SIGHUP arrive: the process. */
+  signals: Pick<NodeJS.Process, 'on' | 'off'>;
+  exit: (code: number) => void;
+}
+
+/** A Postgres that `cli` started for one recovery command, and the lock that goes with it. */
+interface OwnDatabase {
+  lock: LockInfo;
+  /** Stops Postgres and frees the data folder. */
+  stop(): Promise<void>;
+}
+
+/**
+ * Starts the bundled Postgres with no server, for a recovery command on an install whose launcher
+ * is not running. That is when recovery is needed most: an install that will not start cannot be
+ * repaired through a launcher.
+ *
+ * It takes the same lock a launcher takes, with a control port behind it, so the lock counts as
+ * live. A `start` meanwhile is then refused, and cannot bring up a second Postgres on this cluster.
+ * A `stop` request is answered when the command has ended; the command is not cut short.
+ */
+async function startDatabaseAlone(paths: StandalonePaths, deps: CliDeps, secrets: string[]): Promise<OwnDatabase> {
+  // A folder that never ran has nothing to recover, and this must never make a state file or a cluster.
+  if (!existsSync(paths.stateFile) || !existsSync(join(paths.cluster, 'PG_VERSION'))) throw new Error(NEVER_RAN);
+
+  const token = newControlToken();
+  let finish!: () => void;
+  const finished = new Promise<void>((r) => (finish = r));
+  const control = await startControl({ token, onStop: () => finished.then(() => 'clean' as const) });
+  /** Frees the data folder. The control port closes last: close() waits for a `stop` request's answer. */
+  const letGo = async (): Promise<void> => {
+    await releaseLock(paths, token).catch(() => {});
+    finish();
+    await control.close();
+  };
+
+  const lock: LockInfo = {
+    pid: process.pid,
+    address: RECOVERY_ADDRESS,
+    startedAt: deps.now().toISOString(),
+    controlPort: control.port,
+    token,
+    httpPort: DEFAULT_PORT,
+    holder: 'recovery',
+  };
+  try {
+    await acquireLock(paths, lock);
+  } catch (err) {
+    finish();
+    await control.close();
+    // A launcher took the lock between the check and here. Its Postgres is the one to use.
+    if (err instanceof AlreadyRunningError) throw new Error(STARTED_MEANWHILE);
+    throw err;
+  }
+
+  // Postgres runs in its own session and outlives this process unless told to stop (see runStart).
+  // A signal with no handler ends the process with no exit hook at all, so Ctrl+C, a closed
+  // terminal and a plain kill get a handler here. It goes on before Postgres can start: a signal
+  // that arrives while Postgres is starting cannot stop it yet (there is no handle to it), so it is
+  // remembered and honoured as soon as the start returns.
+  let running: RunningPostgres | undefined;
+  let interrupted = false;
+  const onSignal = (): void => {
+    interrupted = true;
+    if (!running) return;
+    running.stopSync();
+    deps.exit(130);
+  };
+  for (const signal of SESSION_SIGNALS) deps.signals.on(signal, onSignal);
+  const signalsOff = (): void => {
+    for (const signal of SESSION_SIGNALS) deps.signals.off(signal, onSignal);
+  };
+
+  let pg: RunningPostgres;
+  try {
+    const state = await loadOrCreateState(paths, () =>
+      Promise.reject(new Error(`The state file ${paths.stateFile} is missing.`)),
+    );
+    secrets.push(state.secretsKey, state.pgSuperPassword, state.pgAppPassword);
+    const settings = postgresSettings(state);
+    deps.notice(RECOVERY_NOTICE);
+    // As `start` does: a Postgres left by a power cut or a killed launcher is stopped first.
+    await deps.stopLeftoverPostgres({ clusterDir: paths.cluster, settings });
+    pg = await deps.startPostgres({
+      clusterDir: paths.cluster,
+      logFile: paths.postgresLog,
+      settings,
+      onRecovering: () => deps.notice(RECOVERING),
+    });
+  } catch (err) {
+    signalsOff();
+    await letGo();
+    throw err;
+  }
+
+  // The exit hook covers a crash and process.exit, as in runStart.
+  const started = pg;
+  const exitHook = (): void => started.stopSync();
+  process.on('exit', exitHook);
+  const stop = async (): Promise<void> => {
+    signalsOff();
+    try {
+      await started.stop();
+    } finally {
+      process.off('exit', exitHook);
+      await letGo();
+    }
+  };
+
+  if (interrupted) {
+    await stop();
+    deps.exit(130);
+    throw new InterruptedError();
+  }
+  running = started;
+  return { lock, stop };
+}
+
+/** The person pressed Ctrl+C before the command began. Nothing is said: they know. */
+class InterruptedError extends Error {
+  constructor() {
+    super('Interrupted.');
+    this.name = 'InterruptedError';
+  }
+}
+
+/**
+ * Runs the `openldr` CLI against this install.
  *
  * A recovery command (spec section 6.7) works on the database itself, so it gets the server's
  * environment without LOG_FILE, and its log lines go to standard error as they do in Docker. Any
  * other command, an unknown one and `--help` included, gets only the launcher's address and the
  * release version: an app command then goes through the running app as a signed-in caller, and no
  * database URL or secrets key is in this process. The kind is found before any environment is built.
- * Returns the CLI's exit code.
+ *
+ * With no launcher running, an app command is refused: there is no app to go through. A recovery
+ * command starts the bundled Postgres for itself and stops it again (startDatabaseAlone), when the
+ * caller gave `deps`. Returns the CLI's exit code.
  */
-export async function runCli(opts: { dataDir?: string; args: string[] }, print: (line: string) => void = defaultPrint): Promise<number> {
+export async function runCli(
+  opts: { dataDir?: string; args: string[] },
+  print: (line: string) => void = defaultPrint,
+  deps?: CliDeps,
+): Promise<number> {
   const paths = dataPaths(opts.dataDir);
-  const lock = await liveLock(paths);
-  if (!lock) {
-    print(START_FIRST);
+  let lock = await liveLock(paths);
+  // The database is up for someone else's recovery command and will stop under this one.
+  if (lock?.holder === 'recovery') {
+    print(recoveryBusy(lock.pid));
     return 1;
   }
   const cli: CliProgram = await import('@openldr/cli/program');
+  const recovery = (await cli.commandKindOf(opts.args)) === 'recovery';
   const secrets: string[] = [];
-  if ((await cli.commandKindOf(opts.args)) === 'recovery') {
-    // A running launcher made the state file. Never make a new one here.
-    const state = await loadOrCreateState(paths, () =>
-      Promise.reject(new Error(`The state file ${paths.stateFile} is missing.`)),
-    );
-    const settings = postgresSettings(state);
-    secrets.push(state.secretsKey, state.pgSuperPassword, state.pgAppPassword);
-    // The lock carries the HTTP port. A lock from before that field gets the default; the CLI
-    // serves nothing on it.
-    const port = lock.httpPort ?? DEFAULT_PORT;
-    const { LOG_FILE: _serverLog, ...env } = buildEnvironment({
-      paths,
-      state,
-      ...postgresUrls(settings),
-      port,
-      host: DEFAULT_HOST,
-      ...launcherFiles(),
-      cliEntry: cliEntryFile(),
-    });
-    applyEnvironment(env);
-    delete process.env.LOG_FILE;
-  } else {
-    useLauncherAddress(lock, launcherFiles().appVersion, opts.args);
+  let own: OwnDatabase | undefined;
+  if (!lock) {
+    if (!recovery || !deps) {
+      print(START_FIRST);
+      return 1;
+    }
+    try {
+      own = await startDatabaseAlone(paths, deps, secrets);
+    } catch (err) {
+      if (err instanceof InterruptedError) return 130;
+      print(hideSecrets(err, secrets).message);
+      return 1;
+    }
+    lock = own.lock;
   }
+  const held = lock;
 
-  // Run as the openldr entry runs it (packages/cli/src/index.ts): parseAsync, with the 'node' argv form.
-  process.exitCode = undefined;
-  try {
+  const run = async (): Promise<number> => {
+    if (recovery) {
+      // A launcher, or startDatabaseAlone, has read the state file. Never make a new one here.
+      const state = await loadOrCreateState(paths, () =>
+        Promise.reject(new Error(`The state file ${paths.stateFile} is missing.`)),
+      );
+      const settings = postgresSettings(state);
+      secrets.push(state.secretsKey, state.pgSuperPassword, state.pgAppPassword);
+      // The lock carries the HTTP port. A lock from before that field gets the default; the CLI
+      // serves nothing on it.
+      const port = held.httpPort ?? DEFAULT_PORT;
+      const { LOG_FILE: _serverLog, ...env } = buildEnvironment({
+        paths,
+        state,
+        ...postgresUrls(settings),
+        port,
+        host: DEFAULT_HOST,
+        ...launcherFiles(),
+        cliEntry: cliEntryFile(),
+      });
+      applyEnvironment(env);
+      delete process.env.LOG_FILE;
+    } else {
+      useLauncherAddress(held, launcherFiles().appVersion, opts.args);
+    }
+
+    // Run as the openldr entry runs it (packages/cli/src/index.ts): parseAsync, with the 'node' argv form.
+    process.exitCode = undefined;
     await cli.buildClientProgram().parseAsync(['node', 'openldr', ...opts.args]);
+    // The CLI's commands report failure through process.exitCode.
+    const code = process.exitCode as number | string | null | undefined;
+    const n = typeof code === 'number' ? code : typeof code === 'string' && code !== '' ? Number(code) : 0;
+    return Number.isInteger(n) ? n : 1;
+  };
+
+  let code: number;
+  try {
+    code = await run();
   } catch (err) {
     process.stderr.write(`${hideSecrets(err, secrets).message}\n`);
-    return 1;
+    code = 1;
   }
-  // The CLI's commands report failure through process.exitCode.
-  const code = process.exitCode as number | string | null | undefined;
-  const n = typeof code === 'number' ? code : typeof code === 'string' && code !== '' ? Number(code) : 0;
-  return Number.isInteger(n) ? n : 1;
+  if (own && deps) {
+    try {
+      await own.stop();
+      deps.notice(RECOVERY_DONE);
+    } catch (err) {
+      // Something may be left behind, so this is a failure whatever the command said.
+      process.stderr.write(`${hideSecrets(err, secrets).message}\n`);
+      if (code === 0) code = 1;
+    }
+  }
+  return code;
 }
 
 // ---------------------------------------------------------------------------------------------

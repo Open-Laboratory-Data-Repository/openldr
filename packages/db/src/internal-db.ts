@@ -8,8 +8,19 @@ export interface InternalDb {
   withAccountStatusLock<T>(subject: string, work: (db: Kysely<InternalSchema>) => Promise<T>): Promise<T>;
 }
 
-export function createInternalDb(url: string, deps: { pool?: pg.Pool } = {}): InternalDb {
+export interface InternalDbDeps {
+  pool?: pg.Pool;
+  /** Told when a connection the pool holds idle dies, as all of them do when Postgres restarts. The
+   *  pool drops that connection and opens a new one for the next query, so there is nothing to
+   *  repair here. Absent = the loss is ignored. Either way it no longer ends the process. */
+  onConnectionError?: (err: Error) => void;
+}
+
+export function createInternalDb(url: string, deps: InternalDbDeps = {}): InternalDb {
   const pool = deps.pool ?? new pg.Pool({ connectionString: url });
+  // An emitter with no `error` listener throws, which ended the server whenever Postgres restarted.
+  // A stand-in pool in a test may have no events at all.
+  if (typeof pool.on === 'function') pool.on('error', (err: Error) => { deps.onConnectionError?.(err); });
   const db = new Kysely<InternalSchema>({ dialect: new PostgresDialect({ pool }) });
   return {
     db, close: () => db.destroy(),
