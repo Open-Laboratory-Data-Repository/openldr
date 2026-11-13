@@ -304,6 +304,10 @@ Pour restaurer, arrêtez OpenLDR, remettez le dossier copié à son emplacement 
 | `Could not confirm that OpenLDR stopped: ...` | Lancez `status`. S'il tourne encore, appuyez sur Ctrl+C dans son terminal. |
 | `The database is recovering after an unclean stop. This can take a few minutes.` | Attendez. Le démarrage reprend de lui-même quand Postgres a fini sa réparation. |
 | `WORKFLOW_FILE_ACCESS_ROOT must not be the OpenLDR data folder, hold it, or sit inside it.` | Donnez à `WORKFLOW_FILE_ACCESS_ROOT` un dossier hors du dossier de données, puis redémarrez. |
+| `OpenLDR stopped after an error. See <path>.` | Le lanceur s'est arrêté. Le journal du serveur en donne la raison. Relancez `start`. |
+| `The database stopped by itself. OpenLDR has stopped. See <path>.` | Le lanceur s'est arrêté. Le journal de Postgres en donne la raison. Relancez `start`. |
+
+Si la base s'arrête pendant qu'OpenLDR tourne, OpenLDR s'arrête aussi. Vous pouvez voir l'une ou l'autre des deux dernières lignes.
 
 ## Guides associés
 

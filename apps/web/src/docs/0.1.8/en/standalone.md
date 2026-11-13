@@ -304,6 +304,10 @@ To restore, stop OpenLDR, put the copied folder back where it was, and start aga
 | `Could not confirm that OpenLDR stopped: ...` | Run `status`. If it still runs, press Ctrl+C in its terminal. |
 | `The database is recovering after an unclean stop. This can take a few minutes.` | Wait. The start goes on by itself once Postgres has finished its repair. |
 | `WORKFLOW_FILE_ACCESS_ROOT must not be the OpenLDR data folder, hold it, or sit inside it.` | Set `WORKFLOW_FILE_ACCESS_ROOT` to a folder outside the data folder, then start again. |
+| `OpenLDR stopped after an error. See <path>.` | The launcher has stopped. The server log holds the reason. Run `start` again. |
+| `The database stopped by itself. OpenLDR has stopped. See <path>.` | The launcher has stopped. The Postgres log holds the reason. Run `start` again. |
+
+If the database stops while OpenLDR runs, OpenLDR stops too. Either of the last two lines can be the one you see.
 
 ## Related guides
 
