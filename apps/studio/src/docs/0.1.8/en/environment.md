@@ -77,6 +77,10 @@ The application parser and installer have different defaults. The parser default
 | `NODE_ENV` | Parser: development | Set production for deployed services. |
 | `PORT` | 3000 | Internal API listening port. |
 | `LOG_LEVEL` | info | Server log level. |
+| `LISTEN_HOST` | 0.0.0.0 | Address the API listens on. 0.0.0.0 means every network interface. |
+| `ROOT_REDIRECT_TO_STUDIO` | false | When true, the server answers / with a redirect to /studio/. Leave it false when the public landing site serves /. |
+| `LOG_FILE` | Unset | File the server writes its logs to, instead of standard output. Lines are added to the end, and a missing folder is created. If the file cannot be opened, the server does not start. |
+| `OPENLDR_SKIP_ENV_FILE` | Unset | Set to `true` to stop the server and the CLI reading a `.env` file. Every setting must then come from the environment. |
 | `TRUST_PROXY` | Unset | Trust proxy hops for client IP attribution. Use only the actual trusted proxy chain. |
 | `OPENLDR_VERSION` | Deployment image tag | Pin the approved application release for upgrades. |
 | `SERVER_NAME`, `PUBLIC_ORIGIN` | Deployment values | Public hostname and complete external origin. |
@@ -99,10 +103,11 @@ The internal database always uses Postgres. Select the warehouse engine through 
 | `MYSQL_HOST`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` | Required for mysql | MySQL or MariaDB warehouse connection. |
 | `MYSQL_PORT` | 3306 | MySQL warehouse port. |
 | `MYSQL_SSL`, `MYSQL_SSL_REJECT_UNAUTHORIZED` | false, false | Warehouse TLS and certificate verification options. |
-| `BLOB_ADAPTER` | minio | S3 adapter selector. It also supports the bundled Garage service. |
-| `S3_ENDPOINT`, `S3_BUCKET` | Required | Object service endpoint and bucket. |
+| `BLOB_ADAPTER` | minio | File storage: minio or fs. minio uses an S3 service, including the bundled Garage service. fs keeps files in the folder named by `BLOB_DIR`. |
+| `BLOB_DIR` | Required for fs | Folder that holds the stored files. |
+| `S3_ENDPOINT`, `S3_BUCKET` | Required for minio | Object service endpoint and bucket. |
 | `S3_REGION`, `S3_FORCE_PATH_STYLE` | us-east-1, true | S3 region and path addressing. |
-| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Private credentials | Object-storage access. Garage requires its supported key format. |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Private credentials, required for minio | Object-storage access. Garage requires its supported key format. |
 | `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` | Installer-generated | Garage service secrets. Preserve them with its configuration. |
 | `EVENTING_ADAPTER` | pg | Application event-store implementation. |
 

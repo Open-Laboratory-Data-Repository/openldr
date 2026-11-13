@@ -229,6 +229,11 @@ export async function buildApp(ctx: AppContext) {
   registerSyncRoutes(app, ctx);
   registerFacilitiesRoutes(app, ctx);
 
+  // Off by default: / then falls through to the 404 below, and the landing site owns it.
+  if (ctx.cfg.ROOT_REDIRECT_TO_STUDIO) {
+    app.get('/', (_req, reply) => reply.redirect('/studio/', 302));
+  }
+
   // Serve the built SPA under /studio/* — the landing site owns /.
   // API + health routes are registered above and always win.
   // WEB_DIST_DIR overrides the location for container deploys (the SPA may not sit at

@@ -20,7 +20,14 @@ export const ConfigSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(3000),
+    // Address the HTTP server binds to. The default is every interface.
+    LISTEN_HOST: z.string().min(1).default('0.0.0.0'),
+    // When on, GET / answers 302 to /studio/. Off by default, so / stays a 404 for the landing site.
+    ROOT_REDIRECT_TO_STUDIO: envBoolean(false),
     LOG_LEVEL: z.string().default('info'),
+    // When set, logs go to this file (append, parent folder created) instead of standard output.
+    // createLogger in @openldr/core reads it from process.env. Empty counts as unset.
+    LOG_FILE: z.string().optional(),
 
     // Reverse-proxy trust for `req.ip` / X-Forwarded-For (Fastify `trustProxy`). Unset = OFF: don't
     // trust XFF, so req.ip is the direct socket peer — correct for dev/direct and prevents a client
@@ -41,7 +48,10 @@ export const ConfigSchema = z
 
     AUTH_ADAPTER: z.enum(['keycloak', 'oidc', 'local']).default('keycloak'),
     IDENTITY_ADMIN_ADAPTER: z.enum(['keycloak', 'none', 'local']).optional(),
-    BLOB_ADAPTER: z.enum(['minio']).default('minio'),
+    // `minio` is any S3 service (MinIO or the bundled Garage). `fs` stores files in the folder BLOB_DIR.
+    BLOB_ADAPTER: z.enum(['minio', 'fs']).default('minio'),
+    // Folder for file storage (required when BLOB_ADAPTER=fs).
+    BLOB_DIR: z.string().min(1).optional(),
     EVENTING_ADAPTER: z.enum(['pg']).default('pg'),
     TARGET_STORE_ADAPTER: z.enum(['pg', 'mssql', 'mysql']).default('pg'),
 
@@ -68,12 +78,12 @@ export const ConfigSchema = z
     MYSQL_SSL: envBoolean(false),
     MYSQL_SSL_REJECT_UNAUTHORIZED: envBoolean(false),
 
-    // S3 / blob storage.
-    S3_ENDPOINT: z.string().url(),
+    // S3 / blob storage (endpoint, keys and bucket are required when BLOB_ADAPTER=minio).
+    S3_ENDPOINT: z.string().url().optional(),
     S3_REGION: z.string().default('us-east-1'),
-    S3_ACCESS_KEY_ID: z.string().min(1),
-    S3_SECRET_ACCESS_KEY: z.string().min(1),
-    S3_BUCKET: z.string().min(1),
+    S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+    S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    S3_BUCKET: z.string().min(1).optional(),
     S3_FORCE_PATH_STYLE: envBoolean(true),
 
     // Working dir for terminology distribution download + extraction (needs disk headroom for SNOMED).
@@ -238,6 +248,15 @@ export const ConfigSchema = z
       }
     } else if (!cfg.TARGET_DATABASE_URL) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['TARGET_DATABASE_URL'], message: 'TARGET_DATABASE_URL is required when TARGET_STORE_ADAPTER=pg' });
+    }
+    if (cfg.BLOB_ADAPTER === 'minio') {
+      for (const key of ['S3_ENDPOINT', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY', 'S3_BUCKET'] as const) {
+        if (cfg[key] === undefined) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is required when BLOB_ADAPTER=minio` });
+        }
+      }
+    } else if (cfg.BLOB_DIR === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['BLOB_DIR'], message: 'BLOB_DIR is required when BLOB_ADAPTER=fs' });
     }
     if (cfg.NODE_ENV === 'production' && cfg.AUTH_DEV_BYPASS === true) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['AUTH_DEV_BYPASS'], message: 'AUTH_DEV_BYPASS must be off in production' });

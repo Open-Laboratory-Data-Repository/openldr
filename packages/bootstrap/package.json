@@ -15,6 +15,7 @@
     "@openldr/adapter-auth": "workspace:*",
     "@openldr/adapter-db-store": "workspace:*",
     "@openldr/adapter-event-bus": "workspace:*",
+    "@openldr/adapter-fs-bucket": "workspace:*",
     "@openldr/adapter-mssql-store": "workspace:*",
     "@openldr/adapter-mysql-store": "workspace:*",
     "@openldr/adapter-s3-bucket": "workspace:*",

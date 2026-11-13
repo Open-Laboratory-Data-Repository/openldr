@@ -1,4 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { loadConfig } from './load';
 
 const valid = {
@@ -91,5 +94,52 @@ describe('config MySQL boolean flags', () => {
   it('parses MYSQL_SSL_REJECT_UNAUTHORIZED (default false, "true" -> true)', () => {
     expect(loadConfig({ ...basePg } as never).MYSQL_SSL_REJECT_UNAUTHORIZED).toBe(false);
     expect(loadConfig({ ...basePg, MYSQL_SSL_REJECT_UNAUTHORIZED: 'true' } as never).MYSQL_SSL_REJECT_UNAUTHORIZED).toBe(true);
+  });
+});
+
+// loadConfig() with no argument loads the nearest .env into process.env, once per module.
+// Each test gets a fresh module, a temporary working folder holding a .env, and a process.env
+// with every required key but LOG_LEVEL, which only the .env sets.
+describe('OPENLDR_SKIP_ENV_FILE', () => {
+  let savedEnv: NodeJS.ProcessEnv;
+  let savedCwd: string;
+  let dir: string;
+
+  beforeEach(() => {
+    savedEnv = { ...process.env };
+    savedCwd = process.cwd();
+    dir = mkdtempSync(join(tmpdir(), 'openldr-skip-env-'));
+    writeFileSync(join(dir, '.env'), 'LOG_LEVEL=trace\n');
+    process.chdir(dir);
+    delete process.env.LOG_LEVEL;
+    delete process.env.OPENLDR_SKIP_ENV_FILE;
+    Object.assign(process.env, valid);
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    process.chdir(savedCwd);
+    for (const key of Object.keys(process.env)) if (!(key in savedEnv)) delete process.env[key];
+    Object.assign(process.env, savedEnv);
+    rmSync(dir, { recursive: true, force: true });
+    vi.resetModules();
+  });
+
+  it('reads the .env when the switch is unset', async () => {
+    const { loadConfig: fresh } = await import('./load');
+    expect(fresh().LOG_LEVEL).toBe('trace');
+  });
+
+  it.each(['true', '1'])('does not read the .env when the switch is %s', async (value) => {
+    process.env.OPENLDR_SKIP_ENV_FILE = value;
+    const { loadConfig: fresh } = await import('./load');
+    expect(fresh().LOG_LEVEL).toBe('info');
+    expect(process.env.LOG_LEVEL).toBeUndefined();
+  });
+
+  it('reads the .env when the switch has any other value', async () => {
+    process.env.OPENLDR_SKIP_ENV_FILE = 'false';
+    const { loadConfig: fresh } = await import('./load');
+    expect(fresh().LOG_LEVEL).toBe('trace');
   });
 });

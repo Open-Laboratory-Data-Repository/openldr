@@ -164,6 +164,58 @@ importers:
         specifier: 2.1.8
         version: 2.1.8(@types/node@25.9.3)(jsdom@25.0.1(supports-color@5.5.0))(lightningcss@1.32.0)(supports-color@5.5.0)
 
+  apps/standalone:
+    dependencies:
+      '@openldr/bootstrap':
+        specifier: workspace:*
+        version: link:../../packages/bootstrap
+      '@openldr/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@openldr/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@openldr/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@openldr/server':
+        specifier: workspace:*
+        version: link:../server
+      cpu-features:
+        specifier: ^0.0.10
+        version: 0.0.10
+      embedded-postgres:
+        specifier: 16.15.0-beta.19
+        version: 16.15.0-beta.19
+      pdfkit:
+        specifier: ^0.15.0
+        version: 0.15.2
+      pg:
+        specifier: 8.21.0
+        version: 8.21.0
+      quickjs-emscripten:
+        specifier: 0.32.0
+        version: 0.32.0
+      ssh2:
+        specifier: ^1.17.0
+        version: 1.17.0
+    devDependencies:
+      '@types/pg':
+        specifier: 8.20.0
+        version: 8.20.0
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(supports-color@7.2.0)(tsx@4.22.4)(typescript@5.7.2)
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.4
+      typescript:
+        specifier: ^5.7.2
+        version: 5.7.2
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@22.19.21)(jsdom@25.0.1(supports-color@7.2.0))(lightningcss@1.32.0)(supports-color@7.2.0)
+
   apps/studio:
     dependencies:
       '@codemirror/lang-javascript':
@@ -545,6 +597,22 @@ importers:
         specifier: 2.1.8
         version: 2.1.8(@types/node@25.9.3)(jsdom@25.0.1(supports-color@7.2.0))(lightningcss@1.32.0)(supports-color@7.2.0)
 
+  packages/adapter-fs-bucket:
+    dependencies:
+      '@openldr/core':
+        specifier: workspace:*
+        version: link:../core
+      '@openldr/ports':
+        specifier: workspace:*
+        version: link:../ports
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.7.2
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@22.19.21)(jsdom@25.0.1(supports-color@7.2.0))(lightningcss@1.32.0)(supports-color@7.2.0)
+
   packages/adapter-mssql-store:
     dependencies:
       '@openldr/core':
@@ -653,6 +721,9 @@ importers:
       '@openldr/adapter-event-bus':
         specifier: workspace:*
         version: link:../adapter-event-bus
+      '@openldr/adapter-fs-bucket':
+        specifier: workspace:*
+        version: link:../adapter-fs-bucket
       '@openldr/adapter-mssql-store':
         specifier: workspace:*
         version: link:../adapter-mssql-store
@@ -1832,6 +1903,54 @@ packages:
     resolution: {integrity: sha512-+MKAJEOfaBe5SmV6t34p80MMKhjvUz0vRrvVJbPT0WElzaOJ/1xs+D+KDv+tD/NE5ujfrChEcshd4fLn0wpiqg==}
     peerDependencies:
       react: '>=16.8.0'
+
+  '@embedded-postgres/darwin-arm64@16.15.0-beta.19':
+    resolution: {integrity: sha512-pXgn5H+fHX+jjjE4NcvG2+J3uob8rzuoV0VWXOPkGJqUcaKfctcNFm7Z7DwR2kG5SaXwyfww/q0/OwtQHG7Ivg==}
+    engines: {node: '>=16'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@embedded-postgres/darwin-x64@16.15.0-beta.19':
+    resolution: {integrity: sha512-Ic3Z2xL4Lfb1pcub15by9XPQwGcVsR0owbEXnhktRu6KEHvqmGzleyQ4puTUQIHtxuHXL5o7SJu3QPUwbijx7w==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@embedded-postgres/linux-arm64@16.15.0-beta.19':
+    resolution: {integrity: sha512-vD+fCbf++iOCXLWTeGP3jedaTP3S33fyIR+z5wsG0pkT43S5f+4zO6GHvKPvukMcV+ooor1ARQJEo2TdUiPa+A==}
+    engines: {node: '>=16'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@embedded-postgres/linux-arm@16.15.0-beta.19':
+    resolution: {integrity: sha512-hlJCL5kxJw39HNZmMyQ+dJko4H1jh4E9MEB5o5uoun8O0RvSFCjcALcTChkL2hHe9UXuIabWOjckMWzhLZz/Zg==}
+    engines: {node: '>=16'}
+    cpu: [arm]
+    os: [linux]
+
+  '@embedded-postgres/linux-ia32@16.15.0-beta.19':
+    resolution: {integrity: sha512-UWNmUrLw43Y1QX7uo4spdotV3bn8Ma8u2cY4+C8wOc7c3XK7r/NEW50+SLfGYOI7LLTQQ++7YJcIchYMoVcS0w==}
+    engines: {node: '>=16'}
+    cpu: [ia32]
+    os: [linux]
+
+  '@embedded-postgres/linux-ppc64@16.15.0-beta.19':
+    resolution: {integrity: sha512-Y0Y03DFgfHu/Z+E5pmarAqrUgBzeeqGilJxqbacK185V8NqaaStj5JV5epXIZ1YGxaydfBfHJZ7acTVwH4Z3Yw==}
+    engines: {node: '>=16'}
+    cpu: [ppc64]
+    os: [linux]
+
+  '@embedded-postgres/linux-x64@16.15.0-beta.19':
+    resolution: {integrity: sha512-TXULIde/Cmev3x+mtPjO3PY57M4/Q96Df6dVf0npGVhw5hKAFdhcVFwUXcRxOn+p8JcfpSTWoD4UwLiFHuJX+Q==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [linux]
+
+  '@embedded-postgres/windows-x64@16.15.0-beta.19':
+    resolution: {integrity: sha512-WRXocVOMYzCweLMLEBKNBZwAup9cnZSkJhHqodrFitiQTsxFxCEak7tq5ITu23igqQs4kJTjA6XqxCMR4wytTg==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [win32]
 
   '@emotion/is-prop-valid@1.4.0':
     resolution: {integrity: sha512-QgD4fyscGcbbKwJmqNvUMSE02OsHUa+lAWKdEUIJKgqe5IwRSKd7+KhibEWdaKwgjLj0DRSHA9biAIqGBk05lw==}
@@ -4705,6 +4824,10 @@ packages:
   electron-to-chromium@1.5.372:
     resolution: {integrity: sha512-M3yhbAlilnwqC8D21t28UCDGHyitShTmmLRU/H+b74P6Ski16Nb9HONYEaVpMj/pwC7BEo5B95FpjODLCWbtfA==}
 
+  embedded-postgres@16.15.0-beta.19:
+    resolution: {integrity: sha512-dbbCrhVlTYAq4k8eXcwj0QzlHAf/20pHy7AoEQu2YQLXX9F7lpr0vDV3AMsnrzFYTl1AszS2kGJh2CCETKxWKw==}
+    engines: {node: '>=16'}
+
   encoding-japanese@2.2.0:
     resolution: {integrity: sha512-EuJWwlHPZ1LbADuKTClvHtwbaFn4rOD+dRAbWysqEOXRc2Uui0hJInNJrsdH0c+OhJA4nrCBdSkW4DD5YxAo6A==}
     engines: {node: '>=8.10.0'}
@@ -4858,6 +4981,10 @@ packages:
   events@3.3.0:
     resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
     engines: {node: '>=0.8.x'}
+
+  exit-hook@5.1.0:
+    resolution: {integrity: sha512-INjr2xyxHo7bhAqf5ong++GZPPnpcuBcaXUKt03yf7Fie9yWD7FapL4teOU0+awQazGs5ucBh7xWs/AD+6nhog==}
+    engines: {node: '>=20'}
 
   expect-type@1.3.0:
     resolution: {integrity: sha512-knvyeauYhqjOYvQ66MznSMs83wmHrCycNEN6Ao+2AeYEfxUIkuiVxdEa1qlGEPK+We3n0THiDciYSsCcgW/DoA==}
@@ -6068,8 +6195,14 @@ packages:
   pg-cloudflare@1.4.0:
     resolution: {integrity: sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A==}
 
+  pg-cloudflare@1.4.1:
+    resolution: {integrity: sha512-6PQbsFWZcp9EmJEwy5cGQ2La+AMWpP46lgbb8X+U/XsHIUweYDNCpeuKck5RxL2MdVFi7krbbEi5nX4Zh7JhrQ==}
+
   pg-connection-string@2.13.0:
     resolution: {integrity: sha512-EMnU9E2fSULdsbErBbMaXJvFeD9B4+nPcM3f+4lsiCR0BHLPrLVjv3DbyM2hgQQviKJaTWIRRTjKjWlHg3p2ig==}
+
+  pg-connection-string@2.14.1:
+    resolution: {integrity: sha512-qR3kGNPBLpCNtz0evbKA0Y/MRFXwSSdT+pTJvYp/bXTcReZbvX1kzF0IyTc1QnxqF7AZbOeBhNL8R5mYQZV/MA==}
 
   pg-int8@1.0.1:
     resolution: {integrity: sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==}
@@ -6118,12 +6251,24 @@ packages:
   pg-protocol@1.14.0:
     resolution: {integrity: sha512-n5taZ1kO3s9ngDTVxsEznOqCyToTgz0FLuPq0B33COy5pPpuWJpY3/2oRBVETuOgzdqRXfWpM9HIhp2LBBT1BA==}
 
+  pg-protocol@1.16.1:
+    resolution: {integrity: sha512-p9VOFMiHB/ZbJATetbg+99PxssTVSQRnyuPSQ67mN1+1KBOjZaZ83ZQzltnxPhJwSsC3nwVjJ10DVJlerbFzLg==}
+
   pg-types@2.2.0:
     resolution: {integrity: sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==}
     engines: {node: '>=4'}
 
   pg@8.21.0:
     resolution: {integrity: sha512-AUP1EYJuHraQGsVoCQVIcM7TEJVGtDzxWtGFZd8rds9d+CCXlU5Js1rYgfLNvxy9iJrpHjGrRjoi/3BT9fRyiA==}
+    engines: {node: '>= 16.0.0'}
+    peerDependencies:
+      pg-native: '>=3.0.1'
+    peerDependenciesMeta:
+      pg-native:
+        optional: true
+
+  pg@8.23.1:
+    resolution: {integrity: sha512-aL96AHANtWjPLDOLqnhx+ngp9+UK7ETEU8VJrDCGvsSSi/mGLcWYsS6Herg7lmaBJe4uwrfqsa7gTEFaSizDoQ==}
     engines: {node: '>= 16.0.0'}
     peerDependencies:
       pg-native: '>=3.0.1'
@@ -8040,6 +8185,30 @@ snapshots:
     dependencies:
       react: 18.3.1
       tslib: 2.8.1
+
+  '@embedded-postgres/darwin-arm64@16.15.0-beta.19':
+    optional: true
+
+  '@embedded-postgres/darwin-x64@16.15.0-beta.19':
+    optional: true
+
+  '@embedded-postgres/linux-arm64@16.15.0-beta.19':
+    optional: true
+
+  '@embedded-postgres/linux-arm@16.15.0-beta.19':
+    optional: true
+
+  '@embedded-postgres/linux-ia32@16.15.0-beta.19':
+    optional: true
+
+  '@embedded-postgres/linux-ppc64@16.15.0-beta.19':
+    optional: true
+
+  '@embedded-postgres/linux-x64@16.15.0-beta.19':
+    optional: true
+
+  '@embedded-postgres/windows-x64@16.15.0-beta.19':
+    optional: true
 
   '@emotion/is-prop-valid@1.4.0':
     dependencies:
@@ -10575,6 +10744,22 @@ snapshots:
 
   electron-to-chromium@1.5.372: {}
 
+  embedded-postgres@16.15.0-beta.19:
+    dependencies:
+      exit-hook: 5.1.0
+      pg: 8.23.1
+    optionalDependencies:
+      '@embedded-postgres/darwin-arm64': 16.15.0-beta.19
+      '@embedded-postgres/darwin-x64': 16.15.0-beta.19
+      '@embedded-postgres/linux-arm': 16.15.0-beta.19
+      '@embedded-postgres/linux-arm64': 16.15.0-beta.19
+      '@embedded-postgres/linux-ia32': 16.15.0-beta.19
+      '@embedded-postgres/linux-ppc64': 16.15.0-beta.19
+      '@embedded-postgres/linux-x64': 16.15.0-beta.19
+      '@embedded-postgres/windows-x64': 16.15.0-beta.19
+    transitivePeerDependencies:
+      - pg-native
+
   encoding-japanese@2.2.0: {}
 
   encoding-sniffer@0.2.1:
@@ -10859,6 +11044,8 @@ snapshots:
   eventemitter3@4.0.7: {}
 
   events@3.3.0: {}
+
+  exit-hook@5.1.0: {}
 
   expect-type@1.3.0: {}
 
@@ -12343,7 +12530,12 @@ snapshots:
   pg-cloudflare@1.4.0:
     optional: true
 
+  pg-cloudflare@1.4.1:
+    optional: true
+
   pg-connection-string@2.13.0: {}
+
+  pg-connection-string@2.14.1: {}
 
   pg-int8@1.0.1: {}
 
@@ -12363,7 +12555,13 @@ snapshots:
     dependencies:
       pg: 8.21.0
 
+  pg-pool@3.14.0(pg@8.23.1):
+    dependencies:
+      pg: 8.23.1
+
   pg-protocol@1.14.0: {}
+
+  pg-protocol@1.16.1: {}
 
   pg-types@2.2.0:
     dependencies:
@@ -12382,6 +12580,16 @@ snapshots:
       pgpass: 1.0.5
     optionalDependencies:
       pg-cloudflare: 1.4.0
+
+  pg@8.23.1:
+    dependencies:
+      pg-connection-string: 2.14.1
+      pg-pool: 3.14.0(pg@8.23.1)
+      pg-protocol: 1.16.1
+      pg-types: 2.2.0
+      pgpass: 1.0.5
+    optionalDependencies:
+      pg-cloudflare: 1.4.1
 
   pgpass@1.0.5:
     dependencies:
@@ -13276,6 +13484,34 @@ snapshots:
     optionalDependencies:
       postcss: 8.5.15
       typescript: 5.9.3
+    transitivePeerDependencies:
+      - jiti
+      - supports-color
+      - tsx
+      - yaml
+
+  tsup@8.5.1(jiti@2.7.0)(postcss@8.5.15)(supports-color@7.2.0)(tsx@4.22.4)(typescript@5.7.2):
+    dependencies:
+      bundle-require: 5.1.0(esbuild@0.27.7)
+      cac: 6.7.14
+      chokidar: 4.0.3
+      consola: 3.4.2
+      debug: 4.4.3(supports-color@7.2.0)
+      esbuild: 0.27.7
+      fix-dts-default-cjs-exports: 1.0.1
+      joycon: 3.1.1
+      picocolors: 1.1.1
+      postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)
+      resolve-from: 5.0.0
+      rollup: 4.61.1
+      source-map: 0.7.6
+      sucrase: 3.35.1
+      tinyexec: 0.3.2
+      tinyglobby: 0.2.17
+      tree-kill: 1.2.2
+    optionalDependencies:
+      postcss: 8.5.15
+      typescript: 5.7.2
     transitivePeerDependencies:
       - jiti
       - supports-color

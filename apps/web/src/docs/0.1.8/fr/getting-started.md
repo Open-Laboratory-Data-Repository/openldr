@@ -15,6 +15,14 @@ Choisissez l'ordinateur qui stockera les données et exécutera OpenLDR. Il doit
 | Code source pour le développement | Suivez [Développement](/docs/development). Cette méthode utilise les commandes du projet plutôt que la CLI installée. |
 | Installation OpenLDR existante | Suivez [Mises à niveau planifiées](/docs/upgrading). Une nouvelle installation n'est pas nécessaire. |
 
+OpenLDR existe en trois niveaux. Le serveur OpenLDR est le même dans chacun. Seuls la base de données, le stockage des fichiers et la connexion changent.
+
+| Niveau | Base de données | Fichiers stockés | Connexion | Par où commencer |
+| --- | --- | --- | --- | --- |
+| Autonome | Postgres 16, fourni avec OpenLDR | Un dossier sur le disque | Les comptes propres à OpenLDR | [Exécuter sans Docker](/docs/standalone). Un seul ordinateur, sans Docker. Seul Linux a été testé. |
+| Serveur | Postgres dans Docker | Stockage Garage dans Docker | Les comptes propres à OpenLDR par défaut, Keycloak si vous le choisissez | Les [Prérequis](/docs/requirements), puis [Installation](/docs/install). |
+| Grande échelle | Plusieurs bases de données | Pas encore décidé | Keycloak ou la connexion d'un ministère | Prévu. Ce niveau n'a pas encore d'installation propre. |
+
 ## Installer et vérifier le résultat
 
 L'installateur crée la configuration, génère les mots de passe et démarre les services. Exécutez-le sur l'hôte choisi.

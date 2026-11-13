@@ -143,6 +143,26 @@ describe('local sign-in config', () => {
   });
 });
 
+describe('storage config', () => {
+  const parse = (env: Record<string, unknown>) => ConfigSchema.parse(env);
+
+  it('keeps minio as the default and still requires the S3 settings', () => {
+    expect(parse(base).BLOB_ADAPTER).toBe('minio');
+    const { S3_ENDPOINT: _drop, ...rest } = base;
+    expect(() => parse(rest)).toThrow(/S3_ENDPOINT/);
+  });
+  it('accepts file storage with a folder and no S3 settings', () => {
+    const { S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET, ...rest } = base;
+    expect(parse({ ...rest, BLOB_ADAPTER: 'fs', BLOB_DIR: '/tmp/x' }).BLOB_DIR).toBe('/tmp/x');
+  });
+  it('refuses file storage with no folder', () => {
+    expect(() => parse({ ...base, BLOB_ADAPTER: 'fs' })).toThrow(/BLOB_DIR/);
+  });
+  it('refuses an empty folder name', () => {
+    expect(() => parse({ ...base, BLOB_ADAPTER: 'fs', BLOB_DIR: '' })).toThrow(/BLOB_DIR/);
+  });
+});
+
 describe('the public development secrets key', () => {
   const MESSAGE = 'SECRETS_ENCRYPTION_KEY is the public development key from .env.example. Generate a new one for a real install.';
 
@@ -161,5 +181,27 @@ describe('the public development secrets key', () => {
   it('leaves another key alone in production', () => {
     const key = Buffer.alloc(32, 9).toString('base64');
     expect(ConfigSchema.parse({ ...base, NODE_ENV: 'production', AUTH_ADAPTER: 'local', SECRETS_ENCRYPTION_KEY: key }).SECRETS_ENCRYPTION_KEY).toBe(key);
+  });
+});
+
+describe('listen address, root redirect and log file', () => {
+  it('defaults LISTEN_HOST to all interfaces and the redirect to off', () => {
+    const cfg = ConfigSchema.parse(base);
+    expect(cfg.LISTEN_HOST).toBe('0.0.0.0');
+    expect(cfg.ROOT_REDIRECT_TO_STUDIO).toBe(false);
+    expect(cfg.LOG_FILE).toBeUndefined();
+  });
+  it('accepts a LISTEN_HOST override', () => {
+    expect(ConfigSchema.parse({ ...base, LISTEN_HOST: '127.0.0.1' }).LISTEN_HOST).toBe('127.0.0.1');
+  });
+  it('refuses an empty LISTEN_HOST', () => {
+    expect(ConfigSchema.safeParse({ ...base, LISTEN_HOST: '' }).success).toBe(false);
+  });
+  it('parses ROOT_REDIRECT_TO_STUDIO as a string boolean', () => {
+    expect(ConfigSchema.parse({ ...base, ROOT_REDIRECT_TO_STUDIO: 'true' }).ROOT_REDIRECT_TO_STUDIO).toBe(true);
+    expect(ConfigSchema.parse({ ...base, ROOT_REDIRECT_TO_STUDIO: '0' }).ROOT_REDIRECT_TO_STUDIO).toBe(false);
+  });
+  it('accepts a LOG_FILE path', () => {
+    expect(ConfigSchema.parse({ ...base, LOG_FILE: '/var/log/openldr/server.log' }).LOG_FILE).toBe('/var/log/openldr/server.log');
   });
 });

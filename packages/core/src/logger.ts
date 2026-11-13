@@ -62,5 +62,17 @@ export function createLogger(opts?: { level?: string; name?: string }): Logger {
       },
     },
   };
+  // LOG_FILE wins over both standard output and standard error. Writes are synchronous so the
+  // last line a crash handler logs before it exits the process is not lost in a buffer.
+  const logFile = process.env.LOG_FILE;
+  if (logFile) return pino(options, openLogFile(logFile));
   return logFd === 2 ? pino(options, destination({ fd: 2, sync: true })) : pino(options);
+}
+
+function openLogFile(file: string): ReturnType<typeof destination> {
+  try {
+    return destination({ dest: file, sync: true, append: true, mkdir: true });
+  } catch (err) {
+    throw new Error(`cannot open LOG_FILE ${file}: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }

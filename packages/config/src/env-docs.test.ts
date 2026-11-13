@@ -15,6 +15,7 @@ const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const READ_OUTSIDE_SCHEMA = [
   'SYNC_ALLOW_INSECURE_TRANSPORT', // packages/config/src/sync.ts
   'OPENLDR_SITE_ID', // packages/db/src/fhir-store.ts
+  'OPENLDR_SKIP_ENV_FILE', // packages/config/src/load.ts
 ];
 
 const DOC_PAGES = [

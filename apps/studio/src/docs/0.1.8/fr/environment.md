@@ -77,6 +77,10 @@ L'analyseur de l'application et l'installateur ont des valeurs par défaut diff�
 | `NODE_ENV` | Analyseur : development | Utilisez production pour les services déployés. |
 | `PORT` | 3000 | Port d'écoute interne de l'API. |
 | `LOG_LEVEL` | info | Niveau des journaux du serveur. |
+| `LISTEN_HOST` | 0.0.0.0 | Adresse d'écoute de l'API. 0.0.0.0 signifie toutes les interfaces réseau. |
+| `ROOT_REDIRECT_TO_STUDIO` | false | Si true, le serveur répond à / par une redirection vers /studio/. Laissez false quand le site public d'accueil sert /. |
+| `LOG_FILE` | Non défini | Fichier où le serveur écrit ses journaux, à la place de la sortie standard. Les lignes sont ajoutées à la fin, et un dossier manquant est créé. Si le fichier ne peut pas être ouvert, le serveur ne démarre pas. |
+| `OPENLDR_SKIP_ENV_FILE` | Non défini | Mettez `true` pour que le serveur et la CLI ne lisent pas de fichier `.env`. Chaque réglage doit alors venir de l'environnement. |
 | `TRUST_PROXY` | Non défini | Proxys de confiance pour attribuer l'IP du client. Utilisez uniquement la chaîne de proxys réellement fiable. |
 | `OPENLDR_VERSION` | Étiquette d'image du déploiement | Fixez la version approuvée pour les mises à niveau. |
 | `SERVER_NAME`, `PUBLIC_ORIGIN` | Valeurs du déploiement | Nom d'hôte public et origine externe complète. |
@@ -99,10 +103,11 @@ La base interne utilise toujours Postgres. Choisissez le moteur d'entrepôt avec
 | `MYSQL_HOST`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` | Obligatoires pour mysql | Connexion à l'entrepôt MySQL ou MariaDB. |
 | `MYSQL_PORT` | 3306 | Port de l'entrepôt MySQL. |
 | `MYSQL_SSL`, `MYSQL_SSL_REJECT_UNAUTHORIZED` | false, false | Options TLS et de vérification des certificats de l'entrepôt. |
-| `BLOB_ADAPTER` | minio | Sélecteur d'adaptateur S3. Prend aussi en charge le service Garage fourni. |
-| `S3_ENDPOINT`, `S3_BUCKET` | Obligatoires | Adresse du service objet et compartiment. |
+| `BLOB_ADAPTER` | minio | Stockage des fichiers : minio ou fs. minio utilise un service S3, y compris le service Garage fourni. fs range les fichiers dans le dossier indiqué par `BLOB_DIR`. |
+| `BLOB_DIR` | Obligatoire pour fs | Dossier qui contient les fichiers stockés. |
+| `S3_ENDPOINT`, `S3_BUCKET` | Obligatoires pour minio | Adresse du service objet et compartiment. |
 | `S3_REGION`, `S3_FORCE_PATH_STYLE` | us-east-1, true | Région S3 et adressage par chemin. |
-| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Identifiants privés | Accès au stockage objet. Garage exige son format de clé pris en charge. |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Identifiants privés, obligatoires pour minio | Accès au stockage objet. Garage exige son format de clé pris en charge. |
 | `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` | Générés par l'installateur | Secrets du service Garage. Conservez-les avec sa configuration. |
 | `EVENTING_ADAPTER` | pg | Implémentation du stockage des événements de l'application. |
 

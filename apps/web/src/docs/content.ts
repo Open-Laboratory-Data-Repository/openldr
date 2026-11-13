@@ -54,7 +54,7 @@ export const DEFAULT_DOC_VERSION: string =
 export const NAV: Array<{ slug: string; children?: string[] }> = [
   { slug: 'getting-started' },
   { slug: 'requirements' },
-  { slug: 'install', children: ['windows-server', 'upgrading'] },
+  { slug: 'install', children: ['windows-server', 'standalone', 'upgrading'] },
   { slug: 'environment' },
   { slug: 'auth-providers' },
   { slug: 'load-data' },

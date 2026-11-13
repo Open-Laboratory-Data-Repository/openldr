@@ -48,6 +48,18 @@ describe('DocsPage', () => {
     expect(within(nav).getByRole('link', { name: headings[1].textContent! })).not.toHaveAttribute('aria-current');
   });
 
+  it('lists only the sections of the standalone page in On this page, not its numbered steps', () => {
+    renderDocs('/docs/standalone');
+    const nav = screen.getByRole('navigation', { name: 'On this page' });
+    const links = within(nav).getAllByRole('link').map(link => link.textContent);
+    const sections = [...document.querySelectorAll<HTMLElement>('.doc-markdown h2')].map(heading => heading.textContent);
+    expect(sections).toContain('Build it');
+    expect(links).toEqual(sections);
+    for (const step of document.querySelectorAll<HTMLElement>('.doc-markdown h3')) {
+      expect(links).not.toContain(step.textContent);
+    }
+  });
+
   it('renders the installer illustration without stripping its media identifier', () => {
     renderDocs('/docs/getting-started');
     expect(screen.getByRole('img', { name: /Illustration of installer output/ })).toBeInTheDocument();

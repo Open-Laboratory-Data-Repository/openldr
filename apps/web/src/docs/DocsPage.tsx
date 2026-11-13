@@ -343,7 +343,7 @@ export function DocsPage() {
     setLocale(value as DocLocale);
     rememberLocale(value as DocLocale);
   };
-  const toc = useMemo(() => (body ? extractToc(stripLeadingH1(body)).filter(entry => !(showInstallPlatform || key === 'requirements' || key === 'windows-server' || OPERATOR_PAGES.includes(key)) || entry.level === 2) : []), [body, showInstallPlatform, key]);
+  const toc = useMemo(() => (body ? extractToc(stripLeadingH1(body)).filter(entry => !(showInstallPlatform || key === 'requirements' || key === 'windows-server' || key === 'standalone' || OPERATOR_PAGES.includes(key)) || entry.level === 2) : []), [body, showInstallPlatform, key]);
   const showToc = wantsToc(toc);
 
   // Opening another page keeps the window's scroll position, which drops the reader into the

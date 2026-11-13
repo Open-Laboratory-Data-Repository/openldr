@@ -1,4 +1,4 @@
-import { loadConfig } from '@openldr/config';
+import { loadConfig, type Config } from '@openldr/config';
 import {
   copyStorage, toS3BucketConfig, createAppContext, recordAuditEvent,
   type StorageCopyReport,
@@ -37,10 +37,25 @@ export async function runStorageCopy(
   opts: StorageCopyOpts,
   deps: {
     copy?: typeof copyStorage;
+    config?: () => Config;
     targetConfig?: () => S3BucketConfig;
     audit?: (report: StorageCopyReport) => Promise<void>;
   } = {},
 ): Promise<number> {
+  let cfg: Config | undefined;
+  if (!deps.targetConfig) {
+    try {
+      cfg = (deps.config ?? loadConfig)();
+    } catch (err) {
+      process.stderr.write(`storage copy failed: ${redactError(err)}\n`);
+      return 1;
+    }
+    // Checked before the flags: under file storage no set of flags can make this command work.
+    if (cfg.BLOB_ADAPTER === 'fs') {
+      process.stderr.write('storage copy works between two S3 buckets. This install stores files in a folder.\n');
+      return 1;
+    }
+  }
   const missing = (['fromEndpoint', 'fromKey', 'fromSecret', 'fromBucket'] as const)
     .filter((k) => !opts[k]);
   if (missing.length > 0) {
@@ -49,7 +64,7 @@ export async function runStorageCopy(
     return 1;
   }
   try {
-    const targetCfg = (deps.targetConfig ?? (() => toS3BucketConfig(loadConfig())))();
+    const targetCfg = deps.targetConfig ? deps.targetConfig() : toS3BucketConfig(cfg!);
     if (targetCfg.endpoint === opts.fromEndpoint && targetCfg.bucket === opts.fromBucket) {
       process.stderr.write('storage copy: source and target are the same bucket\n');
       return 1;

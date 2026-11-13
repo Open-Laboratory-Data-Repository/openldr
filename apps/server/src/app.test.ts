@@ -86,6 +86,64 @@ describe('SPA static root (WEB_DIST_DIR)', () => {
   });
 });
 
+describe('GET / and ROOT_REDIRECT_TO_STUDIO', () => {
+  const withRedirect = (on: boolean) => {
+    const ctx = ctxWith('up');
+    return { ...ctx, cfg: { ...ctx.cfg, ROOT_REDIRECT_TO_STUDIO: on } } as typeof ctx;
+  };
+
+  // `/` answers differently with and without a built studio, so pin both, as they answer today.
+  async function withWebDist<T>(built: boolean, run: () => Promise<T>): Promise<T> {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'webdist-'));
+    if (built) writeFileSync(join(dir, 'index.html'), '<!doctype html><div id="root">SPA</div>');
+    const saved = process.env.WEB_DIST_DIR;
+    process.env.WEB_DIST_DIR = built ? dir : join(dir, 'missing');
+    try {
+      return await run();
+    } finally {
+      if (saved === undefined) delete process.env.WEB_DIST_DIR;
+      else process.env.WEB_DIST_DIR = saved;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('answers 404 at / by default, with no built studio', async () => {
+    await withWebDist(false, async () => {
+      const app = await buildApp(ctxWith('up'));
+      const r = await app.inject({ method: 'GET', url: '/' });
+      expect(r.statusCode).toBe(404);
+      expect(r.json()).toEqual({ message: 'Route GET:/ not found', error: 'Not Found', statusCode: 404 });
+      await app.close();
+    });
+  });
+
+  it('answers 404 at / by default, with a built studio', async () => {
+    await withWebDist(true, async () => {
+      const app = await buildApp(withRedirect(false));
+      const r = await app.inject({ method: 'GET', url: '/' });
+      expect(r.statusCode).toBe(404);
+      expect(r.json()).toEqual({ error: 'not found' });
+      await app.close();
+    });
+  });
+
+  it('redirects / to /studio/ when the setting is on', async () => {
+    await withWebDist(true, async () => {
+      const app = await buildApp(withRedirect(true));
+      const r = await app.inject({ method: 'GET', url: '/' });
+      expect(r.statusCode).toBe(302);
+      expect(r.headers.location).toBe('/studio/');
+      // The studio itself is still served.
+      const spa = await app.inject({ method: 'GET', url: '/studio/dashboard' });
+      expect(spa.statusCode).toBe(200);
+      await app.close();
+    });
+  });
+});
+
 describe('GET /api/config', () => {
   it('returns authEnforced and OIDC shape from ctx.cfg', async () => {
     const app = await buildApp(ctxWith('up'));

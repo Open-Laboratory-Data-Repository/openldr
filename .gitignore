@@ -26,6 +26,9 @@ temp/
 # Portable Python runtime downloaded by @openldr/bootstrap at runtime/test time (not source)
 packages/bootstrap/Python/
 
+# Terminology files the standalone build copies next to its bundle (apps/standalone/tsup.config.ts)
+apps/standalone/fixtures/
+
 # Claude Code workspace config. Two entries ARE tracked. `launch.json` names the dev
 # servers `/run` and the browser preview start. `skills/` holds repo rules that every
 # session must load, so it belongs to the repo the same way AGENTS.md does. The siblings

@@ -15,6 +15,14 @@ Choose the computer that will store your data and run OpenLDR. It needs to stay 
 | A source checkout for development | Follow [Development](/docs/development). This uses workspace commands rather than the installed CLI. |
 | An existing OpenLDR installation | Follow [Planned upgrades](/docs/upgrading). You do not need a new installation. |
 
+OpenLDR comes in three tiers. The OpenLDR server is the same in each. Only the database, the file storage and the sign-in change.
+
+| Tier | Database | Stored files | Sign-in | Start here |
+| --- | --- | --- | --- | --- |
+| Standalone | Postgres 16, bundled with OpenLDR | A folder on disk | OpenLDR's own accounts | [Run without Docker](/docs/standalone). One computer, no Docker. Only Linux has been tested. |
+| Server | Postgres in Docker | Garage storage in Docker | OpenLDR's own accounts by default, Keycloak if you choose it | [Requirements](/docs/requirements), then [Install](/docs/install). |
+| Heavy | Several databases | Not decided yet | Keycloak or a ministry sign-in | Planned. It has no install of its own yet. |
+
 ## Install and check the result
 
 The installer creates the configuration, generates passwords and starts the services. Run it on your chosen host.
