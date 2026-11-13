@@ -1016,8 +1016,9 @@ describe('POST /api/cli/run', () => {
   it('runs two at once and makes the third wait, then answers busy after 30 seconds', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const h = await harness();
+    // Two accounts: one account may hold only one of the two slots.
     const a = stream(h, 'admin', body(start('audit list', ['sleep', '600000']), GO));
-    const b = stream(h, 'admin', body(start('audit list', ['sleep', '600000']), GO));
+    const b = stream(h, 'other', body(start('audit list', ['sleep', '600000']), GO));
     await a.printed('sleeping');
     await b.printed('sleeping');
     let third: Answer | null = null;
@@ -1033,14 +1034,37 @@ describe('POST /api/cli/run', () => {
     expect(folders(h)).toHaveLength(2);
     // The waiter wrote no audit row; the two running ones write theirs when they end.
     expect(cliRows(h)).toEqual([]);
-    for (const s of [a, b]) {
-      const status = await interrupt(h, 'admin', await s.runId());
+    for (const [who, s] of [['admin', a], ['other', b]] as const) {
+      const status = await interrupt(h, who, await s.runId());
       expect(status.status).toBe(204);
     }
     await a.done();
     await b.done();
     await until(() => cliRows(h).length === 2, 'two audit rows');
     expect(folders(h)).toEqual([]);
+  });
+
+  it('with 2 slots, holds one account to one command while another account starts', async () => {
+    const h = await harness();
+    const a = stream(h, 'admin', body(start('audit list', ['sleep', '600000']), GO));
+    await a.printed('sleeping');
+    // A slot is free, but it is not this account's to take.
+    const a2 = stream(h, 'admin', body(start('audit list', ['echo', 'a2']), GO));
+    await until(() => folders(h).length === 2, 'second request folder');
+    await realSleep(100);
+    expect(a2.state.frames).toEqual([]);
+    expect(h.started()).toBe(1);
+    // Another account takes it at once.
+    const b = stream(h, 'other', body(start('audit list', ['sleep', '600000']), GO));
+    await b.printed('sleeping');
+    expect(h.started()).toBe(2);
+    // When the first ends, the account's second starts.
+    await interrupt(h, 'admin', await a.runId());
+    await a.done();
+    await a2.printed('a2');
+    await interrupt(h, 'other', await b.runId());
+    await b.done();
+    await a2.done();
   });
 
   it('frees nothing it did not hold when a caller leaves while waiting, and leaves no folder', async () => {

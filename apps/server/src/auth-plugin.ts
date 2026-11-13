@@ -53,6 +53,16 @@ export function bearer(req: FastifyRequest): string | null {
   return null;
 }
 
+const isApiPath = (p: string): boolean => p === '/api' || p.startsWith('/api/');
+
+/** The request path the way the router reads it. The router drops `http(s)://host` from a
+ *  full-URL request line (the same pattern find-my-way uses) and decodes percent-escapes before it
+ *  matches, so `GET http://x/api/a` and `GET /%61pi/a` both reach `/api/a`. */
+function pathAsRouted(rawPath: string): string {
+  const p = rawPath.startsWith('/') ? rawPath : rawPath.replace(/^https?:\/\/.*?\//, '/');
+  try { return decodeURI(p); } catch { return p; }
+}
+
 const PROVIDER_DEFAULT_ROLE = (n: string): boolean =>
   n.startsWith('default-roles') || n === 'offline_access' || n === 'uma_authorization';
 
@@ -99,8 +109,18 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
   };
 
   app.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
-    const path = (req.raw.url ?? '').split('?')[0];
-    // Only /api/* is protected. /health and the static SPA stay public.
+    // Decide by the route the router matched, never by the raw request text alone. The router
+    // strips `http://host` and decodes percent-escapes before it matches, so the raw text of
+    // `GET http://x/api/a` or `GET /%61pi/a` has no `/api` prefix and yet reaches `/api/a`.
+    // `routeOptions.url` is the registered pattern, prefix included. It is unset when no route
+    // matched, and then only the not-found handler runs, so the path as routed decides.
+    const rawPath = (req.raw.url ?? '').split('?')[0]!;
+    const matched: string | undefined = req.routeOptions?.url;
+    const path = matched ?? pathAsRouted(rawPath);
+    // Only /api/* is protected. /health and the static SPA stay public. Protected when the matched
+    // route, the raw text or the path as routed is under /api, so nothing protected before is public now.
+    if (!isApiPath(path) && !isApiPath(rawPath) && !isApiPath(pathAsRouted(rawPath))) return;
+    // The public exceptions below apply only when the matched route is that exception.
     if (path === '/api/config') return; // public: the SPA reads OIDC settings before it has a token
     // Local sign-in: these routes check a password, a cookie or a setup code themselves. Only
     // when local sign-in is on, so Keycloak and OIDC installs keep answering 401 here.
@@ -114,7 +134,6 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
     // route (a machine client has no local user record, so users.syncFromClaims must not run for
     // it). The trailing slash scopes this to the sync subtree. Analogous to the hooks bypass above.
     if (path.startsWith('/api/sync/')) return;
-    if (path !== '/api' && !path.startsWith('/api/')) return;
 
     // An access key is accepted in the Authorization header only. A key in the URL is refused
     // unread, on every path and whatever the header holds, so it is never resolved or marked used.

@@ -1,8 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
+import { connect } from 'node:net';
+import type { AddressInfo } from 'node:net';
 import type { AppContext } from '@openldr/bootstrap';
 import { CAPABILITY_KEYS } from '@openldr/rbac';
 import { registerAuth } from './auth-plugin';
+import { requireCapability } from './rbac';
 
 type Claims = { sub: string; [k: string]: unknown };
 
@@ -314,5 +317,97 @@ describe('registerAuth with local sign-in', () => {
     const numeric = await withProbes(ctx({ verify: async () => ({ sub: 's1', sid: 42 }) }));
     const b = await numeric.inject({ method: 'POST', url: '/api/auth/change-password', headers: { authorization: 'Bearer good' } });
     expect(b.json().sessionId).toBeNull();
+  });
+});
+
+// `inject` cannot send these request lines, so this suite uses a real listener and a raw socket.
+// The router strips `http://host` and decodes percent-escapes before it matches a route, so the
+// hook must decide by the route it matched, not by the raw request text.
+describe('registerAuth decides by the matched route, not the raw request line', () => {
+  /** Send one raw request line and read the status and body. */
+  function rawGet(port: number, target: string): Promise<{ status: number; body: string }> {
+    return new Promise((resolve, reject) => {
+      const sock = connect(port, '127.0.0.1');
+      let data = '';
+      sock.setEncoding('latin1');
+      sock.on('data', (c: string) => { data += c; });
+      sock.on('error', reject);
+      sock.on('end', () => {
+        const status = Number(/^HTTP\/1\.1 (\d{3})/.exec(data)?.[1] ?? 0);
+        resolve({ status, body: data.slice(data.indexOf('\r\n\r\n') + 4) });
+      });
+      sock.write(`GET ${target} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n`);
+    });
+  }
+
+  /** The same path in the four request-line forms. The encoded form escapes the first letter. */
+  function forms(path: string): Record<string, string> {
+    const ch = path[1]!;
+    const encoded = `/%${ch.charCodeAt(0).toString(16)}${path.slice(2)}`;
+    return { path, full: `http://anything${path}`, encoded, both: `http://anything${encoded}` };
+  }
+
+  // A key-shaped value, made up for this test. It must be refused before anything reads it.
+  const URL_KEY = `oldr_${'A'.repeat(43)}`;
+
+  async function listening() {
+    const c = ctx({ bypass: false });
+    const keyStoreReads: string[] = [];
+    Object.assign(c, {
+      localSignIn: {},
+      // Any read of the key store is recorded. A key in the URL must never get that far.
+      accessKeys: new Proxy({}, { get: (_t, prop) => { keyStoreReads.push(String(prop)); return undefined; } }),
+    });
+    const app = Fastify();
+    registerAuth(app, c);
+    const seen = (req: { user?: unknown }) => ({ user: req.user ?? null });
+    app.get('/api/thing', async (req) => seen(req));
+    app.get('/api/capped', { preHandler: requireCapability('roles.manage') }, async (req) => seen(req));
+    app.get('/api/config', async (req) => seen(req));
+    app.get('/api/auth/login', async (req) => seen(req));
+    app.get('/api/workflows/hooks/*', async (req) => seen(req));
+    app.get('/api/sync/pull', async (req) => seen(req));
+    app.get('/health', async (req) => seen(req));
+    // Registered under a prefix, so the matched pattern must carry the prefix.
+    await app.register(async (p) => { p.get('/thing', async (req) => seen(req)); }, { prefix: '/api/pre' });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    return { app, c, keyStoreReads, port: (app.server.address() as AddressInfo).port };
+  }
+
+  const ROUTES = [
+    '/api/thing', '/api/capped', '/api/pre/thing', '/api/config', '/api/auth/login',
+    '/api/workflows/hooks/abc', '/api/sync/pull', '/health', '/api/zzz',
+  ];
+  const NEEDS_SIGN_IN = new Set(['/api/thing', '/api/capped', '/api/pre/thing', '/api/zzz']);
+
+  it('gives every form the answer the path form gets, and never answers a signed-in route without sign-in', async () => {
+    const { app, c, keyStoreReads, port } = await listening();
+    try {
+      for (const route of ROUTES) {
+        for (const query of ['', `?access_token=${URL_KEY}`]) {
+          const expected = await rawGet(port, `${route}${query}`);
+          if (NEEDS_SIGN_IN.has(route)) expect(expected.status, `${route}${query}`).toBe(401);
+          else if (route !== '/api/zzz') expect(expected.status, `${route}${query}`).not.toBe(401);
+          for (const [name, target] of Object.entries(forms(route))) {
+            const got = await rawGet(port, `${target}${query}`);
+            expect({ status: got.status, body: got.body }, `${name} ${target}${query}`).toEqual({ status: expected.status, body: expected.body });
+          }
+        }
+      }
+      // The URL key was refused unread on every form.
+      expect(keyStoreReads).toEqual([]);
+      expect(JSON.stringify((c.audit.record as ReturnType<typeof vi.fn>).mock.calls)).not.toContain(URL_KEY);
+    } finally { await app.close(); }
+  });
+
+  it('refuses a key in the URL of a signed-in route in every form, with the key error', async () => {
+    const { app, port } = await listening();
+    try {
+      for (const target of Object.values(forms('/api/thing'))) {
+        const got = await rawGet(port, `${target}?access_token=${URL_KEY}`);
+        expect(got.status, target).toBe(401);
+        expect(JSON.parse(got.body), target).toEqual({ error: 'invalid access key' });
+      }
+    } finally { await app.close(); }
   });
 });

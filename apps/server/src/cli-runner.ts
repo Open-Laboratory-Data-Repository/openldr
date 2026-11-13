@@ -147,8 +147,9 @@ export interface RunHandle {
 
 export interface CliRunner {
   /** Waits for a free slot. Throws BusyError after the wait, ClosingError on shutdown, LeftError
-   *  when the signal aborts. */
-  acquire(signal?: AbortSignal): Promise<Slot>;
+   *  when the signal aborts. With an `ownerId` and more than one slot, one account holds at most
+   *  `maxRunning - 1` slots at once, so one account cannot shut every other account out. */
+  acquire(signal?: AbortSignal, ownerId?: string): Promise<Slot>;
   /** Starts the child. Throws ClosingError when the server is stopping; the caller still holds the slot. */
   start(slot: Slot, input: { id: string; entry: string; ownerId: string; handoff: ServedHandoff }): RunHandle;
   /** The running command with this id, when this account started it. */
@@ -175,9 +176,11 @@ export interface CliRunnerOptions {
 
 interface HeldSlot extends Slot {
   released: Promise<void>;
+  ownerId: string | undefined;
 }
 
 interface Waiter {
+  ownerId: string | undefined;
   resolve(slot: Slot): void;
   reject(err: Error): void;
   cleanup(): void;
@@ -193,13 +196,25 @@ export function createCliRunner(opts: CliRunnerOptions): CliRunner {
   let closing = false;
   let closed: Promise<void> | null = null;
   const closingCtl = new AbortController();
+  // One account's share. With one slot there is nothing to share, and nothing changes.
+  const share = max > 1 ? max - 1 : max;
 
-  const newSlot = (): HeldSlot => {
+  const heldBy = (ownerId: string): number => {
+    let n = 0;
+    for (const s of held) if (s.ownerId === ownerId) n += 1;
+    return n;
+  };
+  /** A free slot, and the account (when named) is under its share. */
+  const canStart = (ownerId: string | undefined): boolean =>
+    held.size < max && (ownerId === undefined || heldBy(ownerId) < share);
+
+  const newSlot = (ownerId: string | undefined): HeldSlot => {
     let done!: () => void;
     const released = new Promise<void>((r) => { done = r; });
     let open = true;
     const slot: HeldSlot = {
       released,
+      ownerId,
       release() {
         if (!open) return;
         open = false;
@@ -212,11 +227,15 @@ export function createCliRunner(opts: CliRunnerOptions): CliRunner {
     return slot;
   };
 
+  /** Starts waiters in arrival order. A waiter held back by its own account's share is passed
+   *  over, so it never blocks a waiter from another account behind it. */
   const handOn = (): void => {
-    while (!closing && held.size < max && waiters.length > 0) {
-      const w = waiters.shift()!;
+    for (let i = 0; !closing && held.size < max && i < waiters.length;) {
+      const w = waiters[i]!;
+      if (!canStart(w.ownerId)) { i += 1; continue; }
+      waiters.splice(i, 1);
       w.cleanup();
-      w.resolve(newSlot());
+      w.resolve(newSlot(w.ownerId));
     }
   };
 
@@ -224,10 +243,12 @@ export function createCliRunner(opts: CliRunnerOptions): CliRunner {
     get closing() { return closing; },
     closingSignal: closingCtl.signal,
 
-    acquire(signal) {
+    acquire(signal, ownerId) {
       if (closing) return Promise.reject(new ClosingError());
       if (signal?.aborted) return Promise.reject(new LeftError());
-      if (held.size < max && waiters.length === 0) return Promise.resolve(newSlot());
+      // Start now when this caller may, and no waiter ahead of it may. A waiter held back only by
+      // its own share does not make this caller wait.
+      if (canStart(ownerId) && !waiters.some((w) => canStart(w.ownerId))) return Promise.resolve(newSlot(ownerId));
       return new Promise<Slot>((resolve, reject) => {
         const leave = (err: Error) => {
           const i = waiters.indexOf(waiter);
@@ -238,6 +259,7 @@ export function createCliRunner(opts: CliRunnerOptions): CliRunner {
         const timer = setTimeout(() => leave(new BusyError()), waitMs);
         const onAbort = () => leave(new LeftError());
         const waiter: Waiter = {
+          ownerId,
           resolve,
           reject,
           cleanup: () => {

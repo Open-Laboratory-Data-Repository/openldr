@@ -624,7 +624,7 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       }
 
       try {
-        slot = await runner.acquire(left.signal);
+        slot = await runner.acquire(left.signal, user.id);
       } catch (err) {
         if (err instanceof BusyError) throw new Refusal(503, 'busy');
         if (err instanceof ClosingError) throw new Refusal(503, 'The server is stopping.');

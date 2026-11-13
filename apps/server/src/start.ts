@@ -49,7 +49,11 @@ export async function startServer(cfg: Config, logger: Logger): Promise<RunningS
   //
   // ⛔ The same holds for the facility job queue (`runFacilityJobWorker`). Dropping it parks every
   // facility-map rebuild and registry projection, and the Facilities chip reads "Updating" forever.
-  const ctx = await createAppContext(cfg, { runFacilityImportWorker: true, runFacilityJobWorker: true });
+  // And for the terminology import queue (`runTerminologyIngestWorker`): dropping it leaves every
+  // Studio terminology upload `queued` for good.
+  const ctx = await createAppContext(cfg, {
+    runFacilityImportWorker: true, runFacilityJobWorker: true, runTerminologyIngestWorker: true,
+  });
 
   // What is open so far, in the order it was opened. On a failed start these close newest first.
   const opened: Array<() => unknown> = [() => ctx.close()];

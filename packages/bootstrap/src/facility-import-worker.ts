@@ -570,11 +570,9 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
  * sweep failed it, `requestCancel` then read a terminal row, and the operator was told their import
  * "has already finished and cannot be cancelled".
  *
- * ⚠ SCOPED TO THIS WORKER ALONE. `createFacilityJobWorker` and `createTerminologyIngestWorker` are
- * constructed the same way and sweep the same way, so the PATTERN is shared — but what a CLI process
- * takes over there is a re-queueable rebuild/ingest job, not a national register's exclusive lock,
- * and silently stopping CLI processes from draining those two queues would be a behaviour change
- * nothing in this repo asked for. They are deliberately left constructed unconditionally.
+ * `createFacilityJobWorker` and `createTerminologyIngestWorker` sweep the same way, and are now gated
+ * the same way (`runFacilityJobWorker`, `runTerminologyIngestWorker`): in a CLI process their sweep
+ * failed the server's live rebuilds and terminology imports.
  */
 export function createFacilityImportWorkerIfEnabled(
   enabled: boolean, deps: FacilityImportWorkerDeps,

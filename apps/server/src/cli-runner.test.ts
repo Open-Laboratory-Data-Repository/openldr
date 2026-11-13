@@ -143,6 +143,77 @@ describe('createCliRunner', () => {
     }
   });
 
+  /** 'got', an error name, or 'waiting' when the promise has not settled by the next turn of the
+   *  event loop. setImmediate is not faked here, so this works under the fake timers too. */
+  const settledState = (p: Promise<unknown>): Promise<string> =>
+    Promise.race([p.then(() => 'got', (e: Error) => e.name), new Promise<string>((r) => setImmediate(() => r('waiting')))]);
+
+  it('with 2 slots, one account runs one command at a time while another account starts at once', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const runner = createCliRunner({ maxRunning: 2 });
+      const state = (p: Promise<unknown>) => settledState(p);
+      const a1 = await runner.acquire(undefined, 'account-a');
+      // A's second waits, though a slot is free.
+      const a2 = runner.acquire(undefined, 'account-a');
+      expect(await state(a2)).toBe('waiting');
+      // B arrives behind A's waiter and starts at once: A's waiter does not block it.
+      const b1 = await runner.acquire(undefined, 'account-b');
+      expect(await state(a2)).toBe('waiting');
+      // When A's first ends, A's second starts.
+      a1.release();
+      expect(await state(a2)).toBe('got');
+      (await a2).release();
+      b1.release();
+
+      // Over its share, A's request gets the same busy answer after the same wait.
+      const a3 = await runner.acquire(undefined, 'account-a');
+      let a4: string = 'waiting';
+      const waiting = runner.acquire(undefined, 'account-a').then(() => { a4 = 'got'; }, (e: Error) => { a4 = e.name; });
+      await vi.advanceTimersByTimeAsync(SLOT_WAIT_MS - 1);
+      expect(a4).toBe('waiting');
+      await vi.advanceTimersByTimeAsync(1);
+      await waiting;
+      expect(a4).toBe('BusyError');
+      a3.release();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('with 2 slots, a waiter held back by its share does not block a later waiter from another account', async () => {
+    const runner = createCliRunner({ maxRunning: 2 });
+    const state = (p: Promise<unknown>) => settledState(p);
+    const a1 = await runner.acquire(undefined, 'account-a');
+    const c1 = await runner.acquire(undefined, 'account-c');
+    // Both slots are held. A queues first, then B.
+    const a2 = runner.acquire(undefined, 'account-a');
+    const b1 = runner.acquire(undefined, 'account-b');
+    // C's slot frees. A is still at its share, so B, behind it, takes the slot.
+    c1.release();
+    expect(await state(b1)).toBe('got');
+    expect(await state(a2)).toBe('waiting');
+    a1.release();
+    expect(await state(a2)).toBe('got');
+    (await a2).release();
+    (await b1).release();
+  });
+
+  it('with 1 slot, the same account and other accounts wait in arrival order as before', async () => {
+    const runner = createCliRunner({ maxRunning: 1 });
+    const state = (p: Promise<unknown>) => settledState(p);
+    const a1 = await runner.acquire(undefined, 'account-a');
+    const b1 = runner.acquire(undefined, 'account-b');
+    const a2 = runner.acquire(undefined, 'account-a');
+    expect(await state(b1)).toBe('waiting');
+    a1.release();
+    expect(await state(b1)).toBe('got');
+    expect(await state(a2)).toBe('waiting');
+    (await b1).release();
+    expect(await state(a2)).toBe('got');
+    (await a2).release();
+  });
+
   it('frees nothing it did not hold when a waiting caller leaves', async () => {
     const runner = createCliRunner({ maxRunning: 1 });
     const a = await runner.acquire();
