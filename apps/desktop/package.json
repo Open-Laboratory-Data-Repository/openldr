@@ -1,0 +1,21 @@
+{
+  "name": "@openldr/desktop",
+  "version": "0.1.11",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "echo \"no lint\"",
+    "start": "electron .",
+    "dev": "electron --no-sandbox ."
+  },
+  "devDependencies": {
+    "electron": "45.3.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,51 @@
+# @openldr/desktop
+
+The OpenLDR desktop app. It is an Electron app that wraps the standalone launcher
+(`apps/standalone`). It starts the launcher as a child process, shows Studio in a window, and
+stops OpenLDR through the launcher's `stop` command when you quit.
+
+This package is private. It is never published.
+
+## Build and start from a checkout
+
+The app runs the built launcher at `apps/standalone/dist/index.js`, and the launcher serves the
+built Studio. Build all three:
+
+```bash
+pnpm install
+pnpm --filter @openldr/desktop exec install-electron   # fetches the Electron binary once
+pnpm --filter @openldr/studio build
+pnpm --filter @openldr/standalone build
+pnpm --filter @openldr/desktop build
+```
+
+Then start it:
+
+```bash
+pnpm --filter @openldr/desktop start
+```
+
+On Ubuntu 24.04 and later, Electron's sandbox needs an AppArmor profile that a checkout does not
+install. For development there, `pnpm --filter @openldr/desktop dev` starts it with
+`--no-sandbox`. A packaged app never turns the sandbox off.
+
+## Environment overrides
+
+These are for development and tests only.
+
+| Variable | What it does |
+|---|---|
+| `OPENLDR_DESKTOP_DATA_DIR` | The data folder, passed to the launcher as `--data-dir`. Without it the launcher uses its own default. |
+| `OPENLDR_DESKTOP_PORT` | Use exactly this port. The app remembers nothing. |
+| `OPENLDR_DESKTOP_USER_DIR` | The app's own folder (settings, log, browser profile). Without it, `OpenLDR Desktop` under the system's app data folder. |
+| `OPENLDR_DESKTOP_SELFCHECK` | A file path. The app writes one JSON object there about what it shows, then quits. |
+
+From a worktree, also set `OPENLDR_SKIP_ENV_FILE=true`. Otherwise the server finds the main
+checkout's `.env` and its databases.
+
+## Tests
+
+```bash
+pnpm --filter @openldr/desktop test
+pnpm --filter @openldr/desktop typecheck
+```
