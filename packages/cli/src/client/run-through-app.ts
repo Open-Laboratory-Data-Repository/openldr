@@ -12,7 +12,7 @@
 // soon as it arrives, and never follows a redirect, so a key can never be carried to another host.
 
 import { randomBytes } from 'node:crypto';
-import { createReadStream, readFileSync, statSync } from 'node:fs';
+import { constants as fsConstants, readFileSync, statSync } from 'node:fs';
 import { lstat, mkdir, open, readdir, realpath, rename, stat, unlink, type FileHandle } from 'node:fs/promises';
 import type { ClientRequest, IncomingMessage } from 'node:http';
 import { basename, dirname, join, resolve, sep } from 'node:path';
@@ -282,7 +282,13 @@ function planCall(input: {
 // The files to upload, checked before any request
 // ---------------------------------------------------------------------------------------------
 
-interface Send { ref: string; rel: string; abs: string; typed: string }
+/**
+ * One file to upload. `open` is the real path recorded at walk time, and `dev` and `ino` say which
+ * file it was. When its turn comes, the file is opened again with O_NOFOLLOW and must still be that
+ * file (Ruling 68): a file or folder swapped for a link in between is refused, not followed.
+ */
+interface Send { ref: string; rel: string; open: string; typed: string; dev: bigint; ino: bigint }
+type Pinned = Pick<Send, 'open' | 'dev' | 'ino'>;
 
 /** One part of a name the server accepts: not empty, not `.` or `..`, no `/`, `\` or control character. */
 const isPart = (v: string): boolean => v !== '' && v !== '.' && v !== '..' && !/[/\\\x00-\x1f\x7f]/.test(v);
@@ -319,18 +325,58 @@ async function linkInside(abs: string, shownAs: string, realRoot: string, folder
   let real: string;
   try {
     real = await realpath(abs);
-  } catch {
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ELOOP') throw new Refusal(`${shownAs} is a link in a loop of links.`);
     throw new Refusal(`${shownAs} is a link to something that does not exist.`);
   }
   if (!within(real, realRoot)) throw new Refusal(`${shownAs} is a link that points outside ${folder}.`);
   return real;
 }
 
+const changedWhileRead = (shownAs: string) => new Refusal(`${shownAs} changed while it was being read.`);
+
 /**
- * Regular files under a folder, sorted by name. A link, to a file or to a folder, is followed only
- * when its real target is inside the folder's real path; any other link is a Refusal. No real
- * folder is walked twice. Anything that is not a file, a folder or a link is skipped. An empty
- * folder sends nothing.
+ * Pins a regular file at a real path: its device and inode from lstat, and the real path checked
+ * again, so the name was not swapped for a link while it was looked at. Null for anything that is
+ * not a regular file.
+ */
+async function pinReal(real: string, shownAs: string, realRoot: string | null): Promise<Pinned | null> {
+  const st = await lstat(real, { bigint: true }).catch(() => null);
+  if (!st?.isFile()) return null;
+  const again = await realpath(real).catch(() => null);
+  if (again !== real || (realRoot !== null && !within(again, realRoot))) throw changedWhileRead(shownAs);
+  return { open: real, dev: st.dev, ino: st.ino };
+}
+
+/**
+ * Pins a file found inside a folder the caller named (Ruling 68). A link is followed only to a
+ * regular file whose real target is inside `realRoot`. A link to a folder is refused, wherever it
+ * leads. Null for anything that is not a regular file, or that has gone.
+ */
+async function pinInside(abs: string, shownAs: string, realRoot: string, folder: string): Promise<Pinned | null> {
+  const entry = await lstat(abs, { bigint: true }).catch(() => null);
+  if (!entry) return null;
+  if (entry.isSymbolicLink()) {
+    const real = await linkInside(abs, shownAs, realRoot, folder);
+    if ((await stat(real).catch(() => null))?.isDirectory()) {
+      throw new Refusal(`${shownAs} is a link to a folder. A link to a folder is not sent.`);
+    }
+    return pinReal(real, shownAs, realRoot);
+  }
+  if (!entry.isFile()) return null;
+  const real = await realpath(abs).catch(() => null);
+  if (real === null || !within(real, realRoot)) throw changedWhileRead(shownAs);
+  const pinned = await pinReal(real, shownAs, realRoot);
+  if (!pinned || pinned.dev !== entry.dev || pinned.ino !== entry.ino) throw changedWhileRead(shownAs);
+  return pinned;
+}
+
+/**
+ * Regular files under a folder, sorted by name, each pinned (Ruling 68). A link to a regular file
+ * inside the folder is followed; a link to a folder, or to anything outside, is a Refusal. Anything
+ * else that is not a file or a folder is skipped. An empty folder sends nothing. Every folder walked
+ * must really be inside, and none is walked twice, so a folder swapped for a link mid-walk is
+ * neither followed out nor walked in a loop.
  */
 async function walkFolder(root: string, typed: string, ref: string): Promise<Send[]> {
   const files: Send[] = [];
@@ -342,29 +388,31 @@ async function walkFolder(root: string, typed: string, ref: string): Promise<Sen
     throw new Refusal(`Cannot read ${typed}.`);
   }
   const visit = async (abs: string, rel: string): Promise<void> => {
+    const shownAs = rel === '' ? typed : join(typed, rel);
     let entries;
     try {
       const real = await realpath(abs);
+      if (!within(real, realRoot)) throw changedWhileRead(shownAs);
       if (seen.has(real)) return;
       seen.add(real);
       entries = await readdir(abs, { withFileTypes: true });
-    } catch {
-      throw new Refusal(`Cannot read ${join(typed, rel)}.`);
+    } catch (err) {
+      if (err instanceof Refusal) throw err;
+      throw new Refusal(`Cannot read ${shownAs}.`);
     }
     entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     for (const e of entries) {
       const childAbs = join(abs, e.name);
       const childRel = rel === '' ? e.name : `${rel}/${e.name}`;
-      let kind: 'file' | 'dir' | null = e.isFile() ? 'file' : e.isDirectory() ? 'dir' : null;
-      if (e.isSymbolicLink()) {
-        const real = await linkInside(childAbs, join(typed, childRel), realRoot, typed);
-        const st = await stat(real).catch(() => null);
-        kind = st?.isFile() ? 'file' : st?.isDirectory() ? 'dir' : null;
+      const childShown = join(typed, childRel);
+      if (!e.isSymbolicLink() && !e.isFile() && !e.isDirectory()) continue;
+      if (!isPart(e.name)) throw new Refusal(`Cannot send ${childShown}: its name holds a character the app does not accept.`);
+      if (e.isDirectory()) {
+        await visit(childAbs, childRel);
+        continue;
       }
-      if (kind === null) continue;
-      if (!isPart(e.name)) throw new Refusal(`Cannot send ${join(typed, childRel)}: its name holds a character the app does not accept.`);
-      if (kind === 'file') files.push({ ref, rel: childRel, abs: childAbs, typed: join(typed, childRel) });
-      else await visit(childAbs, childRel);
+      const pinned = await pinInside(childAbs, childShown, realRoot, typed);
+      if (pinned) files.push({ ref, rel: childRel, typed: childShown, ...pinned });
     }
   };
   await visit(root, '');
@@ -384,7 +432,11 @@ async function prepareUploads(plan: Plan, opts: Record<string, unknown>): Promis
     names.set(input.ref, name);
     if (input.kind === 'input-file') {
       if (!st.isFile()) throw new Refusal(`${input.typed} is not a file.`);
-      sends.push({ ref: input.ref, rel: '', abs: input.typed, typed: input.typed });
+      // The caller named this file, so it may be a link, wherever it leads. It is pinned all the same.
+      const real = await realpath(input.typed).catch(() => null);
+      const pinned = real === null ? null : await pinReal(real, input.typed, null);
+      if (!pinned) throw changedWhileRead(input.typed);
+      sends.push({ ref: input.ref, rel: '', typed: input.typed, ...pinned });
       const beside = dirname(input.typed);
       const companions = input.mark.companions?.({
         opts,
@@ -397,17 +449,14 @@ async function prepareUploads(plan: Plan, opts: Record<string, unknown>): Promis
         if (!isPart(c) || done.has(c)) continue;
         done.add(c);
         const abs = join(beside, c);
-        // The caller named the main file, not its companions: a companion that is a link must lead
-        // inside the main file's folder (Ruling 64). The main file itself may be a link.
-        const entry = await lstat(abs).catch(() => null);
-        if (entry?.isSymbolicLink()) {
-          realBeside ??= await realpath(beside).catch(() => null);
-          if (realBeside === null) throw new Refusal(`Cannot read ${beside}.`);
-          await linkInside(abs, abs, realBeside, beside);
-        }
+        // The caller named the main file, not its companions: a companion is pinned like a file
+        // in a folder, inside the main file's folder (Rulings 64 and 68).
+        realBeside ??= await realpath(beside).catch(() => null);
+        if (realBeside === null) throw new Refusal(`Cannot read ${beside}.`);
+        const pinned = await pinInside(abs, abs, realBeside, beside);
         // A companion that is missing is not sent, and the command then fails as it does today.
-        if (readText(abs) === undefined) continue;
-        sends.push({ ref: input.ref, rel: c, abs, typed: abs });
+        if (!pinned) continue;
+        sends.push({ ref: input.ref, rel: c, typed: abs, ...pinned });
       }
     } else {
       if (!st.isDirectory()) throw new Refusal(`${input.typed} is not a folder.`);
@@ -614,27 +663,73 @@ export async function runThroughApp(input: ThroughAppInput): Promise<number> {
   return exchange(input, plan, start, prepared.sends, fail);
 }
 
-class ReadFailure extends Error {
-  constructor(readonly typed: string) {
-    super('read failed');
+/** The upload stops: the message is printed and the exit code is 1. */
+class ReadFailure extends Error {}
+
+/** For tests only: runs just before each upload file is opened, so a test can change the file
+ *  between the walk and the read without a sleep. Never set outside tests. */
+export const uploadSeam: { beforeOpen?: (typed: string) => Promise<void> } = {};
+
+// Undefined on Windows (unproven there): the open then follows a last link, and the inode check
+// still refuses a file that is not the one walked.
+const OPEN_FLAGS = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0);
+
+/**
+ * Opens a pinned file again and checks it is the file the walk saw (Ruling 68). O_NOFOLLOW refuses a
+ * last part swapped for a link, the inode check refuses anything else swapped in (a link in a folder
+ * above it, another file), and O_NONBLOCK keeps a FIFO swapped in from blocking the open.
+ */
+async function openPinned(s: Send): Promise<FileHandle> {
+  const changed = () => new ReadFailure(`${s.typed} changed while it was being sent. Nothing more was sent.`);
+  let fh: FileHandle;
+  try {
+    fh = await open(s.open, OPEN_FLAGS);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ELOOP' || code === 'ENOENT' || code === 'ENOTDIR' || code === 'EMLINK') throw changed();
+    throw new ReadFailure(`Cannot read ${s.typed}.`);
+  }
+  try {
+    const st = await fh.stat({ bigint: true });
+    if (!st.isFile() || st.dev !== s.dev || st.ino !== s.ino) throw changed();
+    return fh;
+  } catch (err) {
+    await fh.close().catch(() => {});
+    throw err instanceof ReadFailure ? err : new ReadFailure(`Cannot read ${s.typed}.`);
   }
 }
 
-/** The body: start, each file, go. Never an empty line, never an empty data frame. */
-async function* bodyOf(start: ClientFrame, sends: Send[]): AsyncGenerator<string> {
+/**
+ * The body: start, each file, go. Never an empty line, never an empty data frame. `reading.now` is
+ * true while a file is being opened or read, so a forced stop can say it is waiting on one.
+ */
+async function* bodyOf(start: ClientFrame, sends: Send[], reading: { now: boolean }): AsyncGenerator<string> {
   yield encodeFrame(start);
   for (const s of sends) {
-    yield encodeFrame({ t: 'file', ref: s.ref, rel: s.rel });
+    reading.now = true;
+    await uploadSeam.beforeOpen?.(s.typed);
+    const fh = await openPinned(s);
+    reading.now = false;
     try {
-      // highWaterMark bounds every chunk at 64 KiB, so one chunk is one data frame.
-      for await (const chunk of createReadStream(s.abs, { highWaterMark: MAX_DATA_BYTES })) {
-        const buf = chunk as Buffer;
-        if (buf.length > 0) yield encodeFrame({ t: 'data', d: buf.toString('base64') });
+      yield encodeFrame({ t: 'file', ref: s.ref, rel: s.rel });
+      const buf = Buffer.alloc(MAX_DATA_BYTES);
+      for (;;) {
+        reading.now = true;
+        let bytesRead: number;
+        try {
+          ({ bytesRead } = await fh.read(buf, 0, buf.length, null));
+        } catch {
+          throw new ReadFailure(`Cannot read ${s.typed}.`);
+        }
+        reading.now = false;
+        if (bytesRead === 0) break;
+        yield encodeFrame({ t: 'data', d: buf.subarray(0, bytesRead).toString('base64') });
       }
-    } catch {
-      throw new ReadFailure(s.typed);
+      yield encodeFrame({ t: 'end' });
+    } finally {
+      reading.now = false;
+      await fh.close().catch(() => {});
     }
-    yield encodeFrame({ t: 'end' });
   }
   yield encodeFrame({ t: 'go' });
 }
@@ -703,10 +798,16 @@ async function exchange(
     req.on('close', finish);
     stopUpload.signal.addEventListener('abort', finish);
   });
-  /** Resolves with the path that could not be read, or null. */
+  const reading = { now: false };
+  /** One line on a forced stop. A file read stuck in the kernel can hold the process, so say so. */
+  const stopped = async (): Promise<number> => {
+    await writeTo(err, reading.now ? 'Stopped. Waiting for a file read to finish.\n' : 'Stopped.\n');
+    return 130;
+  };
+  /** Resolves with the message for a file that could not be sent, or null. */
   const upload = (async (): Promise<string | null> => {
     try {
-      for await (const piece of bodyOf(start, sends)) {
+      for await (const piece of bodyOf(start, sends, reading)) {
         if (stopUpload.signal.aborted || req.destroyed) return null;
         if (!req.write(piece)) await waitDrain();
       }
@@ -715,8 +816,9 @@ async function exchange(
       return null;
     } catch (e) {
       if (e instanceof ReadFailure) {
+        // Nothing more is sent: the request ends here.
         req.destroy();
-        return e.typed;
+        return e.message;
       }
       return null;
     }
@@ -728,10 +830,10 @@ async function exchange(
     } catch (e) {
       stopUpload.abort();
       // A forced end does not wait for the upload: a file read that hangs must not hold it.
-      if (forced !== null) return forced;
-      const unread = await upload;
-      if (forced !== null) return forced;
-      if (unread !== null) return await fail(`Cannot read ${unread}.`);
+      if (forced !== null) return await stopped();
+      const unsent = await upload;
+      if (forced !== null) return await stopped();
+      if (unsent !== null) return await fail(unsent);
       return await fail(connectionMessage(url, (e as NodeJS.ErrnoException).code));
     }
 
@@ -740,7 +842,7 @@ async function exchange(
       stopUpload.abort();
       const status = res.statusCode ?? 0;
       const body = status >= 300 && status < 400 ? null : await readRefusal(res);
-      if (forced !== null) return forced;
+      if (forced !== null) return await stopped();
       return await fail(refusalMessage(status, body));
     }
     return await readAnswer(res);
@@ -875,7 +977,7 @@ async function exchange(
 
     await writeTo(out, outMask.flush());
     await writeTo(err, errMask.flush());
-    if (forced !== null) return forced;
+    if (forced !== null) return stopped();
     if (problem !== null) return fail(problem);
     if (exit === null) {
       if (sawError) return 1;

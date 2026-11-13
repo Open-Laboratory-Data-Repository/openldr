@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingHttpHeaders, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -17,15 +17,6 @@ vi.mock('@openldr/config', async (orig) => ({
   loadConfig: () => { throw new Error('loadConfig must not be called in this test'); },
 }));
 const spies = vi.hoisted(() => ({ layoutsList: vi.fn(async () => 0), artifactPublish: vi.fn(async () => 0) }));
-// A read of this one path never gives any bytes, to stand for a file read that hangs.
-const hang = vi.hoisted(() => ({ path: '' }));
-vi.mock('node:fs', async (orig) => {
-  const real = await orig<typeof import('node:fs')>();
-  const { Readable } = await import('node:stream');
-  const createReadStream = ((p: unknown, o?: unknown) =>
-    (hang.path !== '' && p === hang.path ? new Readable({ read() {} }) : real.createReadStream(p as string, o as never))) as typeof real.createReadStream;
-  return { ...real, createReadStream };
-});
 vi.mock('../layouts', async (orig) => ({ ...(await orig<typeof import('../layouts')>()), runLayoutsList: spies.layoutsList }));
 vi.mock('../artifact', async (orig) => ({ ...(await orig<typeof import('../artifact')>()), runArtifactPublish: spies.artifactPublish }));
 
@@ -34,7 +25,7 @@ import { commandPath } from '../command-list';
 import type { CommandMeta } from '../command-meta';
 import { runningVersion } from '../update';
 import { decodeFrames, encodeFrame, type ClientFrame, type ServerFrame } from '../wire';
-import { runThroughApp } from './run-through-app';
+import { runThroughApp, uploadSeam } from './run-through-app';
 
 // A key-shaped value for the tests. Not a real key.
 const KEY = 'oldr_TESTKEYtestkeyTESTKEYtestkeyTESTKEYtes';
@@ -180,7 +171,9 @@ describe('the client program', () => {
     await expect(program.parseAsync(['node', 'openldr', 'layouts', 'list'])).resolves.toBe(program);
     expect(process.exitCode).toBe(5);
     process.exitCode = undefined;
-    expect(() => buildClientProgram().parse(['node', 'openldr', 'layouts', 'list'])).toThrow('The openldr client program must be run with parseAsync, not parse.');
+    // A closed port: if the override were removed, this could never reach port 3000.
+    const closedEnv = { OPENLDR_THROUGH_APP: '1', OPENLDR_URL: 'http://127.0.0.1:9' };
+    expect(() => buildClientProgram({ env: closedEnv }).parse(['node', 'openldr', 'layouts', 'list'])).toThrow('The openldr client program must be run with parseAsync, not parse.');
   });
 
   it('refuses a command with no table entry when commands go through the app (fails closed)', async () => {
@@ -559,9 +552,8 @@ describe('paths', () => {
     expect(srv.calls[1]!.frames.map((f) => f.t)).toEqual(['start', 'file', 'end', 'go']);
     expect(uploads(srv.calls[1]!).get(s.inputs[0]!.ref)!.get('')!.length).toBe(0);
 
-    // A folder: regular files, nested files, a link to a file inside, a link to a folder inside, and
-    // a link back to the folder itself. No real folder is walked twice: `link-dir` sorts before
-    // `sub`, so sub/deeper is sent once, as link-dir. A FIFO is skipped. An empty folder is not sent.
+    // A folder: regular files, nested files and a link to a file inside (Ruling 68: the only link
+    // followed). Each file goes under its own path. A FIFO is skipped. An empty folder is not sent.
     const bundle = join(dir, 'my bundle');
     await mkdir(join(bundle, 'sub', 'deeper'), { recursive: true });
     await mkdir(join(bundle, 'nothing-here'));
@@ -569,18 +561,16 @@ describe('paths', () => {
     await writeFile(join(bundle, 'sub', 'ü ä.txt'), 'umlaut');
     await writeFile(join(bundle, 'sub', 'deeper', 'zero.bin'), '');
     await symlink(join(bundle, 'sub', 'ü ä.txt'), join(bundle, 'link-in.txt'));
-    await symlink(join(bundle, 'sub', 'deeper'), join(bundle, 'link-dir'));
-    await symlink(bundle, join(bundle, 'sub', 'loop'));
     let fifo = false;
     try { execFileSync('mkfifo', [join(bundle, 'pipe')]); fifo = true; } catch { /* no mkfifo: skip that part */ }
     await cli(['market', 'install', bundle], { OPENLDR_URL: srv.url });
     s = start(srv.calls[2]!);
     expect(s.inputs).toEqual([{ ref: s.argv[2]!.slice(2), kind: 'input-dir', name: 'my bundle', keep: false }]);
     const tree = uploads(srv.calls[2]!).get(s.inputs[0]!.ref)!;
-    expect([...tree.keys()].sort()).toEqual(['link-dir/zero.bin', 'link-in.txt', 'manifest.json', 'sub/ü ä.txt']);
+    expect([...tree.keys()].sort()).toEqual(['link-in.txt', 'manifest.json', 'sub/deeper/zero.bin', 'sub/ü ä.txt']);
     expect(tree.get('link-in.txt')!.toString()).toBe('umlaut');
     expect(tree.get('sub/ü ä.txt')!.toString()).toBe('umlaut');
-    expect(tree.get('link-dir/zero.bin')!.length).toBe(0);
+    expect(tree.get('sub/deeper/zero.bin')!.length).toBe(0);
     if (fifo) expect(tree.has('pipe')).toBe(false);
   });
 
@@ -607,6 +597,104 @@ describe('paths', () => {
       expect(r.code, name).toBe(1);
     }
     expect(srv.calls).toHaveLength(0);
+  });
+
+  it('refuses a link to a folder inside, and a loop of links, before any request (Ruling 68)', async () => {
+    const srv = await startServer(answers({ t: 'exit', code: 0 }));
+    const bundle = join(dir, 'b1');
+    await mkdir(join(bundle, 'sub'), { recursive: true });
+    await writeFile(join(bundle, 'sub', 'z.txt'), 'z');
+    await symlink(join(bundle, 'sub'), join(bundle, 'link-dir'));
+    const r = await cli(['market', 'install', bundle], { OPENLDR_URL: srv.url });
+    expect(r.err).toBe(`${join(bundle, 'link-dir')} is a link to a folder. A link to a folder is not sent.\n`);
+    expect(r.code).toBe(1);
+
+    const looped = join(dir, 'b2');
+    await mkdir(looped);
+    await symlink(join(looped, 'b'), join(looped, 'a'));
+    await symlink(join(looped, 'a'), join(looped, 'b'));
+    const r2 = await cli(['market', 'install', looped], { OPENLDR_URL: srv.url });
+    expect(r2.err).toBe(`${join(looped, 'a')} is a link in a loop of links.\n`);
+    expect(r2.code).toBe(1);
+    expect(srv.calls).toHaveLength(0);
+  });
+
+  describe('a file changed between the walk and the read (Ruling 68)', () => {
+    /** Reads what the client sends, whether or not it reaches go, and answers only after go. */
+    const collect: Handler = async (call, req, res) => {
+      try { await readUntilGo(call, req); } catch { return; }
+      if (call.frames.at(-1)?.t !== 'go') return;
+      stream200(res);
+      send(res, { t: 'run', id: 'r1' }, { t: 'exit', code: 0 });
+      res.end();
+    };
+    const SECRET = 'OUTSIDE SECRET';
+    let bundle: string;
+    let outside: string;
+    beforeEach(async () => {
+      bundle = join(dir, 'bundle');
+      outside = join(dir, 'outside');
+      await mkdir(join(bundle, 'sub'), { recursive: true });
+      await mkdir(outside);
+      await writeFile(join(bundle, 'a.txt'), 'inside a');
+      await writeFile(join(bundle, 'data.txt'), 'inside data');
+      await writeFile(join(bundle, 'sub', 'x.txt'), 'inside x');
+      await writeFile(join(outside, 'data.txt'), SECRET);
+      await writeFile(join(outside, 'x.txt'), SECRET);
+    });
+    afterEach(() => { delete uploadSeam.beforeOpen; });
+
+    /** Sends the bundle, running `swap` once just before `target` is opened. */
+    async function sendWithSwap(target: string, swap: () => Promise<void>) {
+      const srv = await startServer(collect);
+      uploadSeam.beforeOpen = async (typed) => { if (typed === target) await swap(); };
+      const r = await cli(['market', 'install', bundle], { OPENLDR_URL: srv.url });
+      const call = srv.calls[0]!;
+      const sentBytes = call.frames.filter((f): f is Extract<ClientFrame, { t: 'data' }> => f.t === 'data')
+        .map((f) => Buffer.from(f.d, 'base64').toString()).join('');
+      return { r, call, sentBytes };
+    }
+
+    it('refuses a file swapped for a link to a file outside, and sends nothing of it', async () => {
+      const target = join(bundle, 'data.txt');
+      const { r, call, sentBytes } = await sendWithSwap(target, async () => {
+        await rm(target);
+        await symlink(join(outside, 'data.txt'), target);
+      });
+      expect(r.err).toBe(`${target} changed while it was being sent. Nothing more was sent.\n`);
+      expect(r.code).toBe(1);
+      expect(sentBytes).not.toContain(SECRET);
+      expect(call.frames.some((f) => f.t === 'file' && f.rel === 'data.txt')).toBe(false);
+      expect(call.frames.some((f) => f.t === 'go')).toBe(false);
+    });
+
+    it('refuses a file under a sub-folder swapped for a link to a folder outside', async () => {
+      const target = join(bundle, 'sub', 'x.txt');
+      const { r, sentBytes } = await sendWithSwap(target, async () => {
+        await rename(join(bundle, 'sub'), join(bundle, 'sub-old'));
+        await symlink(outside, join(bundle, 'sub'));
+      });
+      expect(r.err).toBe(`${target} changed while it was being sent. Nothing more was sent.\n`);
+      expect(r.code).toBe(1);
+      expect(sentBytes).not.toContain(SECRET);
+    });
+
+    it('is not blocked by a FIFO swapped in for a file', async () => {
+      const target = join(bundle, 'data.txt');
+      const { r } = await sendWithSwap(target, async () => {
+        await rm(target);
+        execFileSync('mkfifo', [target]);
+      });
+      expect(r.err).toBe(`${target} changed while it was being sent. Nothing more was sent.\n`);
+      expect(r.code).toBe(1);
+    });
+
+    it('still sends every file when nothing changed', async () => {
+      const { r, call } = await sendWithSwap('none', async () => {});
+      expect(r.code).toBe(0);
+      const s = start(call);
+      expect([...uploads(call).get(s.inputs[0]!.ref)!.keys()].sort()).toEqual(['a.txt', 'data.txt', 'sub/x.txt']);
+    });
   });
 
   it('sends a file the caller named that is a link, but not a companion that links outside', async () => {
@@ -877,6 +965,7 @@ describe('interrupts', () => {
     signals.emit('SIGINT');
     const r = await running;
     expect(r.code).toBe(130);
+    expect(r.err).toBe('Stopped.\n');
     expect(signals.listenerCount('SIGINT')).toBe(0);
   });
 
@@ -912,23 +1001,25 @@ describe('interrupts', () => {
   it('ends with 130 on a forced stop while a file read hangs', async () => {
     const file = join(dir, 'hang.bin');
     await writeFile(file, 'never read');
-    hang.path = file;
+    // The open of this file never finishes, to stand for a file read stuck in the kernel.
+    uploadSeam.beforeOpen = (typed) => (typed === file ? new Promise<void>(() => {}) : Promise.resolve());
     try {
-      let sawFile = false;
+      let sawStart = false;
       const srv = await startServer(async (call, req) => {
         const it = req[Symbol.asyncIterator]() as AsyncIterator<Buffer>;
         const shared: AsyncIterable<Buffer> = { [Symbol.asyncIterator]: () => ({ next: () => it.next(), return: async () => ({ done: true as const, value: undefined }) }) };
-        for await (const f of decodeFrames<ClientFrame>(shared)) if (f.t === 'file') sawFile = true;
+        try { for await (const f of decodeFrames<ClientFrame>(shared)) if (f.t === 'start') sawStart = true; } catch { /* the client left */ }
       });
       const signals = new EventEmitter();
       const running = cli(['ingest', file], { OPENLDR_URL: srv.url }, signals);
-      await waitFor(() => sawFile);
+      await waitFor(() => sawStart);
       signals.emit('SIGINT');
       const r = await running;
       expect(r.code).toBe(130);
+      expect(r.err).toBe('Stopped. Waiting for a file read to finish.\n');
       expect(srv.calls).toHaveLength(1);
     } finally {
-      hang.path = '';
+      delete uploadSeam.beforeOpen;
     }
   });
 
@@ -947,6 +1038,7 @@ describe('interrupts', () => {
     signals.emit('SIGINT');
     const r = await running;
     expect(r.code).toBe(130);
+    expect(r.err).toBe('Stopped.\n');
     await waitFor(() => closed);
     expect(srv.calls).toHaveLength(1);
     expect(signals.listenerCount('SIGINT')).toBe(0);
