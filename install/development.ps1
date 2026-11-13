@@ -22,11 +22,44 @@ $RepoUrl = "https://github.com/Open-Laboratory-Data-Repository/openldr.git"
 # this runs in the caller's scope, and a second run must not find the first run's process.
 $apiPort = 3000
 $apiUrl = "http://127.0.0.1:$apiPort"
+# Is the script's own API healthy yet? Used only while waiting for the API this script started.
 $apiUp = { try { Invoke-WebRequest -UseBasicParsing -Uri "$apiUrl/health" -TimeoutSec 2 *> $null; $true } catch { $false } }
 $api = $null
 $apiLog = $null
+$inUse = "An API is already running at $apiUrl. Stop it and run this script again, or seed by hand in the order given in e2e/README.md."
 
 function Die($m) { Write-Error "X $m"; exit 1 }
+
+# Is the port free? A different question from $apiUp: any listener on the port, healthy or not, on
+# any address, makes it not free. It binds the port with exclusive use on all IPv6 and IPv4
+# addresses, then on 127.0.0.1 and ::1, and lets each go at once. The IPv6 binds are skipped where
+# the machine has no IPv6; any other failure counts as not free. .NET here, not `node -e`, because
+# a quoted JS snippet passed to node from PowerShell gets its quotes mangled.
+# Unproven: written on Linux, never parsed by PowerShell, never run.
+function Test-PortFree([int]$port) {
+  $tries = @(
+    @([System.Net.IPAddress]::IPv6Any, $false), @([System.Net.IPAddress]::Any, $true),
+    @([System.Net.IPAddress]::Loopback, $true), @([System.Net.IPAddress]::IPv6Loopback, $false)
+  )
+  foreach ($t in $tries) {
+    $listener = [System.Net.Sockets.TcpListener]::new($t[0], $port)
+    $listener.ExclusiveAddressUse = $true
+    try {
+      $listener.Start()
+    } catch [System.Net.Sockets.SocketException] {
+      $code = $_.Exception.SocketErrorCode
+      if ($t[1] -or $code -eq 'AddressAlreadyInUse' -or $code -eq 'AccessDenied') { return $false }
+    } catch {
+      return $false
+    } finally {
+      $listener.Stop()
+    }
+  }
+  return $true
+}
+
+# True while the API this script started is still running.
+function Test-OwnApiAlive { return ($null -ne $api) -and -not $api.HasExited }
 
 # 1. Preflight
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Die "git is not installed." }
@@ -36,6 +69,11 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Die "Node.js >=20 i
 $nodeVer = (node -v)
 $nodeMajor = [int]($nodeVer.TrimStart('v').Split('.')[0])
 if ($nodeMajor -lt 20) { Die "Node.js >=20 required (found $nodeVer)." }
+# With -Seed, the port check comes first, before pnpm install, .env and docker compose. The sample
+# load goes through an API signed in by AUTH_DEV_BYPASS; a listener already on the port is not this
+# run's, and on a fresh checkout it is someone else's. Stopping here starts and writes nothing, so a
+# re-run after stopping it behaves as a first run.
+if ($Seed -and -not (Test-PortFree $apiPort)) { Die $inUse }
 if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
   if (Get-Command corepack -ErrorAction SilentlyContinue) { Write-Host "-> Enabling pnpm via corepack"; corepack enable *> $null }
   if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) { Die "pnpm not found. See https://pnpm.io/installation (or run: corepack enable)." }
@@ -92,13 +130,6 @@ if ($NoServices) {
 
   # 6. DB init - only on a fresh setup so a re-run never wipes data; -ResetDb forces it.
   if ($freshEnv -or $ResetDb) {
-    # The sample load (e2e:seed:load) goes through an API, signed in by AUTH_DEV_BYPASS. An API
-    # already answering on the port is not this run's: on a fresh checkout it is someone else's, and
-    # the load would land in its database. So stop before any reset, load or start.
-    # Unproven twice over: edited on Linux, never parsed by PowerShell, never run.
-    if ($Seed -and (& $apiUp)) {
-      Die "An API is already running at $apiUrl. Stop it and run this script again, or seed by hand in the order given in e2e/README.md."
-    }
     Write-Host "-> Waiting for Postgres to be ready..."
     for ($i = 0; $i -lt 30; $i++) {
       docker compose exec -T postgres pg_isready -U openldr *> $null
@@ -118,8 +149,10 @@ if ($NoServices) {
         Write-Host "-> Preparing WHONET sample data (pnpm e2e:seed:reset)"
         pnpm e2e:seed:reset
         if ($LASTEXITCODE -ne 0) { Die "seed reset failed" }
-        # 2. Then an API on the fresh schema, on the script's own port. One node process with no
-        #    watcher, so its own handle stops all of it. PORT is set for the child only, then put back.
+        # 2. Then an API on the fresh schema, on the script's own port. The steps above take
+        #    minutes, so the port is checked again first. One node process with no watcher, so its
+        #    own handle stops all of it. PORT is set for the child only, then put back.
+        if (-not (Test-PortFree $apiPort)) { Die $inUse }
         $apiLog = Join-Path ([System.IO.Path]::GetTempPath()) 'openldr-dev-api.log'
         Write-Host "-> Starting the API for the sample load (node dev.mjs in apps/server on port $apiPort, log in $apiLog)"
         $oldPort = $env:PORT
@@ -127,8 +160,15 @@ if ($NoServices) {
           $env:PORT = "$apiPort"
           $api = Start-Process -FilePath node -ArgumentList 'dev.mjs' -WorkingDirectory (Resolve-Path apps/server).Path -PassThru -NoNewWindow -RedirectStandardOutput $apiLog -RedirectStandardError "$apiLog.err"
         } finally { $env:PORT = $oldPort }
-        for ($i = 0; -not (& $apiUp); $i++) {
-          if ($api.HasExited) { Die "The API stopped while starting (see $apiLog)." }
+        # An answer on the port counts only while the script's own API is running: one that cannot
+        # bind the port exits at once, and an answer then comes from someone else's. So its process
+        # is checked on every pass before the probe, and once more after the probe answers.
+        for ($i = 0; ; $i++) {
+          if (-not (Test-OwnApiAlive)) { Die "The API stopped while starting (see $apiLog)." }
+          if (& $apiUp) {
+            if (-not (Test-OwnApiAlive)) { Die "The API stopped while starting (see $apiLog)." }
+            break
+          }
           if ($i -ge 60) { Die "The API did not answer at $apiUrl (see $apiLog)." }
           Start-Sleep 2
         }
@@ -162,8 +202,10 @@ Write-Host "Backing services: Postgres :5433, S3 storage :9010, Keycloak :8180"
 Write-Host "Auth: AUTH_DEV_BYPASS is on (loads as a dev admin). Edit .env to use real Keycloak."
 # The API started for the sample load stays up, so it is not started only to be stopped. It does
 # not restart on edits, and it holds port 3000, so step 1 above needs it stopped first.
-if ($api -and -not $api.HasExited) {
+if (Test-OwnApiAlive) {
   Write-Host "The API started for the sample data is running now as process $($api.Id) (log in $apiLog)."
   Write-Host "It does not restart on edits. Stop it before step 1, while it is still running: Stop-Process -Id $($api.Id)"
   Write-Host "A process ID is reused once its process ends, so do not use this one later."
+} elseif ($api) {
+  Write-Host "The API started for the sample data has stopped since the load (see $apiLog)."
 }

@@ -37,7 +37,30 @@ API_PORT=3000
 API_URL="http://127.0.0.1:$API_PORT"
 API_LOG="${TMPDIR:-/tmp}/openldr-dev-api.log"
 API_PID=""
+# Is the script's own API healthy yet? Used only while waiting for the API this script started.
 api_up() { API_URL="$API_URL" node -e "fetch(process.env.API_URL + '/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" >/dev/null 2>&1; }
+# Is the port free? A different question from api_up: any listener on the port, healthy or not, on
+# any address, makes it not free. It binds the port on all addresses, then on 127.0.0.1, then on
+# ::1 (skipped where the machine has no IPv6), and lets each go at once. Exit 0 free, 3 in use.
+# Any other failure of node also counts as not free.
+PORT_FREE_JS='
+const net = require("net");
+const port = Number(process.argv[1]);
+const hosts = [undefined, "127.0.0.1", "::1"];
+(function next(i) {
+  if (i === hosts.length) process.exit(0);
+  const s = net.createServer();
+  s.once("error", (e) => {
+    if (i < 2 || e.code === "EADDRINUSE" || e.code === "EACCES") process.exit(3);
+    next(i + 1);
+  });
+  s.listen({ port, host: hosts[i], exclusive: true }, () => s.close(() => next(i + 1)));
+})(0);
+'
+port_free() { node -e "$PORT_FREE_JS" "$API_PORT" >/dev/null 2>&1; }
+IN_USE="An API is already running at $API_URL. Stop it and run this script again, or seed by hand in the order given in e2e/README.md."
+# True while the API this script started is still running.
+own_api_alive() { [ -n "$API_PID" ] && kill -0 "$API_PID" 2>/dev/null; }
 # Stops only the API this script started, by its own process ID. A failed step or Ctrl+C runs it.
 stop_api() { if [ -n "$API_PID" ]; then kill "$API_PID" 2>/dev/null || true; API_PID=""; fi; }
 trap stop_api EXIT
@@ -49,6 +72,12 @@ command -v git >/dev/null 2>&1 || err "git is not installed."
 command -v node >/dev/null 2>&1 || err "Node.js >=20 is not installed. See https://nodejs.org/"
 NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]')
 [ "$NODE_MAJOR" -ge 20 ] || err "Node.js >=20 required (found $(node -v))."
+# With --seed, the port check comes first, before pnpm install, .env and docker compose. The sample
+# load goes through an API signed in by AUTH_DEV_BYPASS; a listener already on the port is not this
+# run's, and on a fresh checkout it is someone else's. Stopping here starts and writes nothing, so a
+# re-run after stopping it behaves as a first run.
+# Unproven: this part has not been run. macOS is unproven too.
+if [ "$SEED" -eq 1 ] && ! port_free; then err "$IN_USE"; fi
 if ! command -v pnpm >/dev/null 2>&1; then
   if command -v corepack >/dev/null 2>&1; then
     echo "→ Enabling pnpm via corepack"
@@ -102,13 +131,6 @@ else
 
   # 6. DB init — only on a fresh setup so a re-run never wipes data; --reset-db forces it.
   if [ "$FRESH_ENV" -eq 1 ] || [ "$RESET_DB" -eq 1 ]; then
-    # The sample load (e2e:seed:load) goes through an API, signed in by AUTH_DEV_BYPASS. An API
-    # already answering on the port is not this run's: on a fresh checkout it is someone else's,
-    # and the load would land in its database. So stop before any reset, load or start.
-    # Unproven: this part has not been run. macOS is unproven too.
-    if [ "$SEED" -eq 1 ] && api_up; then
-      err "An API is already running at $API_URL. Stop it and run this script again, or seed by hand in the order given in e2e/README.md."
-    fi
     echo "→ Waiting for Postgres to be ready…"
     i=0
     while [ "$i" -lt 30 ]; do
@@ -123,17 +145,29 @@ else
       # 1. The reset half needs no server.
       echo "→ Preparing WHONET sample data (pnpm e2e:seed:reset)"
       pnpm e2e:seed:reset || err "seed reset failed"
-      # 2. Then an API on the fresh schema, on the script's own port. One process, no watcher, so
-      #    its own process ID stops all of it.
+      # 2. Then an API on the fresh schema, on the script's own port. The steps above take minutes,
+      #    so the port is checked again first. One process, no watcher, so its own process ID stops
+      #    all of it.
+      port_free || err "$IN_USE"
       echo "→ Starting the API for the sample load (node dev.mjs in apps/server on port $API_PORT, log in $API_LOG)"
       (cd apps/server && PORT="$API_PORT" exec node dev.mjs) >"$API_LOG" 2>&1 &
       API_PID=$!
+      # An answer on the port counts only while the script's own API is running: one that cannot
+      # bind the port exits at once, and an answer then comes from someone else's. So its process is
+      # checked on every pass before the probe, and once more after the probe answers.
       i=0
-      until api_up; do
-        if ! kill -0 "$API_PID" 2>/dev/null; then
+      while :; do
+        if ! own_api_alive; then
           # Gone already: the exit trap must not signal a process ID that may be reused.
           API_PID=""
           err "The API stopped while starting (see $API_LOG)."
+        fi
+        if api_up; then
+          if ! own_api_alive; then
+            API_PID=""
+            err "The API stopped while starting (see $API_LOG)."
+          fi
+          break
         fi
         i=$((i + 1))
         [ "$i" -lt 60 ] || err "The API did not answer at $API_URL (see $API_LOG)."
@@ -161,7 +195,11 @@ EOF
 
 # The API started for the sample load stays up, so it is not started only to be stopped. It does
 # not restart on edits, and it holds port 3000, so step 1 above needs it stopped first.
-if [ -n "$API_PID" ]; then
+if [ -n "$API_PID" ] && ! own_api_alive; then
+  echo "The API started for the sample data has stopped since the load (see $API_LOG)."
+  API_PID=""
+fi
+if own_api_alive; then
   echo "The API started for the sample data is running now as process $API_PID (log in $API_LOG)."
   echo "It does not restart on edits. Stop it before step 1, while it is still running: kill $API_PID"
   echo "A process ID is reused once its process ends, so do not use this one later."
