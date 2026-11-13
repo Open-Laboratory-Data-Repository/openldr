@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenLDR</title>
+    <link rel="stylesheet" href="page.css" />
+  </head>
+  <body>
+    <main>
+      <img class="logo" src="../assets/icon.png" alt="" width="64" height="64" />
+      <h1 id="title"></h1>
+      <p id="message" hidden></p>
+      <p id="note" hidden></p>
+      <ul id="logs" hidden></ul>
+      <div id="spinner" class="spinner" hidden></div>
+      <button id="retry" type="button" hidden></button>
+    </main>
+    <script src="page.js"></script>
+  </body>
+</html>

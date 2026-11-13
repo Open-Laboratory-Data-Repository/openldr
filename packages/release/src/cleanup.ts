@@ -1,5 +1,8 @@
-/** How a release run ended, as far as cleanup cares. */
-export type ReleaseOutcome = 'released' | 'failed';
+/** How a release run ended, as far as cleanup cares.
+ *
+ *  `released-check-failed`: the release is public, but the desktop upload or the latest.json
+ *  check after it failed. */
+export type ReleaseOutcome = 'released' | 'released-check-failed' | 'failed';
 
 /** What to remove once a release run is over. */
 export interface CleanupPlan {
@@ -22,9 +25,14 @@ export interface CleanupPlan {
  *
  *  A failed run keeps everything. RELEASE.md: the stack's logs are the evidence when a release
  *  fails verification, and a live stack lets the operator inspect it. The caller prints
- *  `teardownCommand` instead, for when they are done. */
+ *  `teardownCommand` instead, for when they are done.
+ *
+ *  A check that fails after the release is public keeps the directory and removes the stack. The
+ *  directory holds latest.json, the only copy, and the printed recovery command uploads it from
+ *  there. The stack's logs say nothing about an upload, and it would hold 80 and 443. */
 export function cleanupPlan(input: { dryRun: boolean; outcome: ReleaseOutcome }): CleanupPlan {
   if (input.outcome === 'failed') return { teardownStack: false, removeDir: false };
+  if (input.outcome === 'released-check-failed') return { teardownStack: !input.dryRun, removeDir: false };
   return { teardownStack: !input.dryRun, removeDir: true };
 }
 

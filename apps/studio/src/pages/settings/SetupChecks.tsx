@@ -1,35 +1,27 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, AlertTriangle, CheckCircle2, MinusCircle, MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { LoadingState } from '@/components/ui/spinner';
-import { runSetupChecks, type SetupReport, type SetupStatus } from '@/api';
+import { SetupCheckRow } from '@/components/setup/SetupCheckRow';
+import { fetchSampleDataAllowed, loadSampleData, runSetupChecks, type SetupReport } from '@/api';
 import { SettingsHeader } from './SettingsHeader';
 
-const ICON: Record<SetupStatus, JSX.Element> = {
-  pass: <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />,
-  warn: <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />,
-  fail: <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />,
-  skip: <MinusCircle className="h-4 w-4 shrink-0 text-muted-foreground" />,
-};
-
-// The page each fix path opens, by its sub-nav or sidebar label.
-const FIX_LABEL: Record<string, string> = {
-  '/facilities': 'nav.facilities',
-  '/settings/laboratory': 'settings.subNav.laboratory',
-  '/settings/connectors': 'settings.subNav.connectors',
-  '/settings/sync': 'settings.subNav.sync',
-};
-
 /** Settings > Setup checks: what this install still needs before it is ready. Runs when it opens;
- *  the page menu runs it again. The same list as `openldr doctor`. */
+ *  the page menu runs it again. The same list as `openldr doctor`. The menu also loads sample
+ *  data while the server allows it, so a person who left the first run early can still do it. */
 export function SetupChecks(): JSX.Element {
   const { t } = useTranslation();
   const [report, setReport] = useState<SetupReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  // Shown only when the server says a load is allowed. A failure or a 403 hides it.
+  const [sampleAllowed, setSampleAllowed] = useState(false);
+  const [confirmSample, setConfirmSample] = useState(false);
+  const [sampleLoading, setSampleLoading] = useState(false);
+  const [sampleError, setSampleError] = useState<string | null>(null);
 
   const run = useCallback(async () => {
     setRunning(true);
@@ -45,6 +37,32 @@ export function SetupChecks(): JSX.Element {
   }, []);
 
   useEffect(() => { void run(); }, [run]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchSampleDataAllowed().then(
+      (a) => { if (!cancelled) setSampleAllowed(a); },
+      () => { if (!cancelled) setSampleAllowed(false); },
+    );
+    return () => { cancelled = true; };
+  }, []);
+
+  async function loadSample() {
+    setConfirmSample(false);
+    if (sampleLoading) return;
+    setSampleLoading(true);
+    setSampleError(null);
+    try {
+      await loadSampleData();
+    } catch (e) {
+      setSampleError(t('firstRun.sample.failed', { error: e instanceof Error ? e.message : String(e) }));
+      setSampleLoading(false);
+      return;
+    }
+    setSampleLoading(false);
+    setSampleAllowed(false);
+    void run();
+  }
 
   const failed = report?.checks.filter((c) => c.status === 'fail').length ?? 0;
   const warned = report?.checks.filter((c) => c.status === 'warn').length ?? 0;
@@ -64,13 +82,25 @@ export function SetupChecks(): JSX.Element {
               <DropdownMenuItem data-testid="setup-run-again" disabled={running} onSelect={() => { void run(); }}>
                 {t('settings.setup.runAgain')}
               </DropdownMenuItem>
+              {sampleAllowed && (
+                <DropdownMenuItem data-testid="setup-load-sample" disabled={sampleLoading} onSelect={() => setConfirmSample(true)}>
+                  {t('firstRun.sample.load')}
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         }
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto text-sm">
-        {running ? (
+        {sampleError && (
+          <div role="alert" className="break-words px-4 py-4 text-destructive" data-testid="setup-sample-error">
+            {sampleError}
+          </div>
+        )}
+        {sampleLoading ? (
+          <LoadingState className="min-h-[16rem] flex-1" label={t('firstRun.sample.loading')} />
+        ) : running ? (
           <LoadingState className="min-h-[16rem] flex-1" label={t('settings.setup.running')} />
         ) : error ? (
           <div className="px-4 py-4 text-destructive" data-testid="setup-error">
@@ -88,34 +118,21 @@ export function SetupChecks(): JSX.Element {
             </div>
             {/* Reset the browser's list padding so the dividers run to the pane edges. */}
             <ol className="m-0 list-none divide-y divide-border border-b border-border p-0">
-              {report.checks.map((check) => (
-                <li key={check.id} className="flex gap-3 px-4 py-3" data-testid={`setup-check-${check.id}`} data-status={check.status}>
-                  <span className="mt-0.5" aria-label={t(`settings.setup.status.${check.status}`)}>{ICON[check.status]}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium">{t(`settings.setup.check.${check.id}`)}</div>
-                    {check.detail ? <div className="break-words text-muted-foreground">{check.detail}</div> : null}
-                    {check.hint ? (
-                      <div className="mt-1 break-words" data-testid={`setup-hint-${check.id}`}>
-                        {t(`settings.setup.hint.${check.hint}`)}
-                      </div>
-                    ) : null}
-                    {check.fix ? (
-                      <Link
-                        to={check.fix}
-                        className="mt-1 inline-block font-medium text-primary underline-offset-4 hover:underline"
-                        data-testid={`setup-fix-${check.id}`}
-                      >
-                        {t('settings.setup.open', { page: t(FIX_LABEL[check.fix] ?? 'settings.title') })}
-                      </Link>
-                    ) : null}
-                  </div>
-                  <span className="shrink-0 text-muted-foreground">{t(`settings.setup.status.${check.status}`)}</span>
-                </li>
-              ))}
+              {report.checks.map((check) => <SetupCheckRow key={check.id} check={check} />)}
             </ol>
           </>
         ) : null}
       </div>
+
+      <ConfirmDialog
+        open={confirmSample}
+        onOpenChange={setConfirmSample}
+        title={t('firstRun.sample.title')}
+        description={t('firstRun.sample.intro')}
+        confirmLabel={t('firstRun.sample.load')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => { void loadSample(); }}
+      />
     </div>
   );
 }

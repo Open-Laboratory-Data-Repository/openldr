@@ -213,7 +213,23 @@ docker compose --profile dhis2 up -d
 
 ### 4. Run without Docker on one computer
 
-One command starts a bundled Postgres 16 and the server. All data stays in one folder, `~/.local/share/openldr` on Linux. Sign-in is OpenLDR's own. Only Linux has been tested. There is no installer yet, so you run it from a built checkout:
+One command starts a bundled Postgres 16 and the server. All data stays in one folder, `~/.local/share/openldr` on Linux. Sign-in is OpenLDR's own.
+
+The desktop app installs it with one line, and shows Studio in its own window:
+
+```bash
+# Linux x64 and macOS on Apple silicon
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/desktop.sh | bash
+```
+
+```powershell
+# Windows x64, in PowerShell
+irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/desktop.ps1 | iex
+```
+
+Only Linux has been tested. The Windows and macOS packages are new and built on Linux, and nobody has run them on those systems yet. The app is not signed. The web docs page [Desktop app](apps/web/src/docs/0.1.8/en/desktop-app.md) covers the first run, update, removal and what to do when it will not start.
+
+A developer runs it from a built checkout:
 
 ```bash
 pnpm install --frozen-lockfile

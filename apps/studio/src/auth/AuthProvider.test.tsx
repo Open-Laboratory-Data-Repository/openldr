@@ -1,10 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
-import { AuthProvider, useAuth, __resetAuthProviderState } from './AuthProvider';
+import { AuthProvider, useAuth, __resetAuthProviderState, FIRST_RUN_KEY } from './AuthProvider';
 
 vi.mock('@/api', () => ({ authFetch: vi.fn(), getMe: vi.fn(), getMyCapabilities: vi.fn() }));
+// The real flow calls API functions this file does not mock. A marker stands in for it. It reads
+// the auth context through a holder, because importing AuthProvider here would close a cycle.
+const holder = vi.hoisted(() => ({ useAuth: null as null | (() => { user: { username: string } | null }) }));
+vi.mock('../first-run/FirstRunPage', () => ({
+  FirstRunPage: ({ onDone }: { onDone: () => void }) => {
+    const user = holder.useAuth?.().user;
+    return <div><p>first-run</p><p>first-run as {user?.username}</p><button onClick={onDone}>finish first run</button></div>;
+  },
+}));
+holder.useAuth = useAuth;
+
+afterEach(() => { sessionStorage.clear(); });
 vi.mock('./oidc', () => ({ getOidc: vi.fn(), createOidc: vi.fn(), __resetOidc: vi.fn() }));
 vi.mock('./local', () => ({
   localRefresh: vi.fn(), localLogout: vi.fn(), localLogin: vi.fn(), keepSessionFresh: vi.fn(),
@@ -233,7 +245,7 @@ describe('AuthProvider under local sign-in', () => {
     expect(localRefresh).not.toHaveBeenCalled();
   });
 
-  it('loads the app after the first admin is created on the setup page', async () => {
+  async function createFirstAdmin() {
     mockConfig({ ...localConfig, auth: { mode: 'local', setupRequired: true } });
     vi.mocked(localSetup).mockResolvedValue({ accessToken: 'admin', expiresIn: 600, mustChangePassword: false });
     renderApp();
@@ -242,9 +254,69 @@ describe('AuthProvider under local sign-in', () => {
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct horse battery' } });
     fireEvent.change(screen.getByLabelText('Repeat password'), { target: { value: 'correct horse battery' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create the administrator' }));
-    expect(await screen.findByText('app')).toBeInTheDocument();
+  }
+
+  it('shows the first-run flow after the first admin is created, then the app', async () => {
+    await createFirstAdmin();
+    expect(await screen.findByText('first-run')).toBeInTheDocument();
+    expect(screen.queryByText('app')).toBeNull();
     expect(getAccessToken()).toBe('admin');
     expect(getMe).toHaveBeenCalled();
+    expect(sessionStorage.getItem(FIRST_RUN_KEY)).toBe('1');
+    fireEvent.click(screen.getByRole('button', { name: 'finish first run' }));
+    expect(await screen.findByText('app')).toBeInTheDocument();
+    expect(screen.queryByText('first-run')).toBeNull();
+    expect(sessionStorage.getItem(FIRST_RUN_KEY)).toBeNull();
+  });
+
+  it('gives the first-run flow the auth context', async () => {
+    await createFirstAdmin();
+    expect(await screen.findByText('first-run as ada')).toBeInTheDocument();
+  });
+
+  it('never sets the first-run flag for a sign-in on the sign-in page', async () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    try {
+      mockConfig(localConfig);
+      mockLocalRefresh(null);
+      vi.mocked(localLogin).mockResolvedValue({ accessToken: 'fresh', expiresIn: 600, mustChangePassword: false });
+      renderApp();
+      fireEvent.change(await screen.findByLabelText('Username or email'), { target: { value: 'ada' } });
+      fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct horse' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+      expect(await screen.findByText('app')).toBeInTheDocument();
+      expect(screen.queryByText('first-run')).toBeNull();
+      expect(sessionStorage.getItem(FIRST_RUN_KEY)).toBeNull();
+      expect(setItem.mock.calls.filter(([key]) => key === FIRST_RUN_KEY)).toEqual([]);
+    } finally {
+      setItem.mockRestore();
+    }
+  });
+
+  it('shows the first-run flow again after a reload in the middle of it', async () => {
+    sessionStorage.setItem(FIRST_RUN_KEY, '1');
+    mockConfig(localConfig);
+    mockLocalRefresh({ accessToken: 't', expiresIn: 600, mustChangePassword: false });
+    renderApp();
+    expect(await screen.findByText('first-run')).toBeInTheDocument();
+    expect(screen.queryByText('app')).toBeNull();
+  });
+
+  it('drops the first-run flag when a reload finds no session', async () => {
+    sessionStorage.setItem(FIRST_RUN_KEY, '1');
+    mockConfig(localConfig);
+    mockLocalRefresh(null);
+    renderApp();
+    expect(await screen.findByLabelText('Username or email')).toBeInTheDocument();
+    expect(sessionStorage.getItem(FIRST_RUN_KEY)).toBeNull();
+  });
+
+  it('drops the first-run flag when the session ends during the flow', async () => {
+    await createFirstAdmin();
+    await screen.findByText('first-run');
+    act(() => ended?.());
+    expect(await screen.findByLabelText('Username or email')).toBeInTheDocument();
+    expect(sessionStorage.getItem(FIRST_RUN_KEY)).toBeNull();
   });
 
   it('moves from the setup page to the sign-in page when an administrator already exists', async () => {

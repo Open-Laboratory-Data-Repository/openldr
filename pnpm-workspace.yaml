@@ -29,6 +29,9 @@ allowBuilds:
   core-js: true
   cpu-features: false
   ssh2: false
+  # apps/desktop: Electron has no install script. Its binary is fetched with
+  # `pnpm --filter @openldr/desktop exec install-electron`.
+  electron: true
   # apps/standalone: the Postgres binaries. Each platform package runs a postinstall script
   # that recreates the symlinks inside its tarball. Only linux-x64 is tested here.
   '@embedded-postgres/darwin-arm64': true
