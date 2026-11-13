@@ -51,8 +51,11 @@ export async function startServer(cfg: Config, logger: Logger): Promise<RunningS
   // facility-map rebuild and registry projection, and the Facilities chip reads "Updating" forever.
   // And for the terminology import queue (`runTerminologyIngestWorker`): dropping it leaves every
   // Studio terminology upload `queued` for good.
+  // And for sync (`startSyncWorkers`): dropping it leaves the push and pull workers unbuilt until
+  // someone opens the sync status, so a lab would stop syncing after a restart.
   const ctx = await createAppContext(cfg, {
     runFacilityImportWorker: true, runFacilityJobWorker: true, runTerminologyIngestWorker: true,
+    startSyncWorkers: true,
   });
 
   // What is open so far, in the order it was opened. On a failed start these close newest first.

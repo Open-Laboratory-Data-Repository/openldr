@@ -265,6 +265,88 @@ describe('createSyncHandle.triggerNow', () => {
   });
 });
 
+describe('createSyncHandle with a start that waits for first use (the CLI shape)', () => {
+  // A runtime that holds nothing until `start` runs, as SyncRuntime does before its first reconcile().
+  function lateRuntime(startFails?: Error) {
+    const push = runningWorker();
+    const retry = vi.fn(async () => ({ ok: true }));
+    let started = false;
+    const start = vi.fn(async () => {
+      if (startFails) throw startFails;
+      started = true;
+    });
+    const runtime = {
+      isEnabled: () => started,
+      mode: () => 'push' as const,
+      centralUrl: () => (started ? 'https://c' : ''),
+      siteId: () => (started ? 's' : ''),
+      pushWorker: () => (started ? push : undefined),
+      pullWorker: () => undefined,
+      retryQuarantine: () => (started ? retry : undefined),
+    };
+    return { runtime, start, push, retry };
+  }
+
+  it('status() starts sync first, so it reports what a started process reports', async () => {
+    const db = await makeMigratedDb();
+    const { runtime, start } = lateRuntime();
+    const handle = createSyncHandle({ db, runtime, ensureStarted: start });
+
+    const s = await handle.status();
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(s.enabled).toBe(true);
+    expect(s.centralUrl).toBe('https://c');
+    expect(s.siteId).toBe('s');
+    expect(s.push?.running).toBe(true);
+  });
+
+  it('retryQuarantine() starts sync first, then retries', async () => {
+    const db = await makeMigratedDb();
+    const { runtime, start, retry } = lateRuntime();
+    const handle = createSyncHandle({ db, runtime, ensureStarted: start });
+
+    expect(await handle.retryQuarantine('terminology_system', 'http://x')).toEqual({ ok: true });
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledWith('terminology_system', 'http://x');
+  });
+
+  it('triggerNow() starts sync, then triggers the workers the start built', async () => {
+    const db = await makeMigratedDb();
+    const { runtime, start, push } = lateRuntime();
+    const handle = createSyncHandle({ db, runtime, ensureStarted: start });
+
+    handle.triggerNow();
+    await vi.waitFor(() => expect(push.trigger).toHaveBeenCalledTimes(1));
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it('the calls that only read stored rows do not start sync', async () => {
+    const db = await makeMigratedDb();
+    const { runtime, start } = lateRuntime();
+    const handle = createSyncHandle({
+      db, runtime, ensureStarted: start,
+      quarantine: createSyncQuarantineStore(db), divergences: createSyncDivergenceStore(db),
+    });
+
+    await handle.listQuarantine();
+    await handle.listDivergences();
+    await handle.getDivergence('Observation', 'o1', 2);
+    await handle.clearDivergence('Observation', 'o1', 2);
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('a start that fails reaches the caller of status() and of retryQuarantine()', async () => {
+    const db = await makeMigratedDb();
+    const { runtime, start } = lateRuntime(new Error('push worker could not be built'));
+    const handle = createSyncHandle({ db, runtime, ensureStarted: start });
+
+    await expect(handle.status()).rejects.toThrow('push worker could not be built');
+    await expect(handle.retryQuarantine('terminology_system', 'http://x')).rejects.toThrow('push worker could not be built');
+    // triggerNow() has nothing to trigger after a failed start, and must not throw or leave a rejection.
+    expect(() => handle.triggerNow()).not.toThrow();
+  });
+});
+
 describe('createSyncHandle quarantine', () => {
   it('listQuarantine returns [] when no store; delegates when present', async () => {
     const db = await makeMigratedDb();

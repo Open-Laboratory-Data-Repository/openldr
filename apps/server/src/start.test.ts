@@ -102,12 +102,13 @@ describe('startServer', () => {
     listen.mockRestore();
   });
 
-  it('asks for the three queue workers only the server runs', async () => {
+  it('asks for the three queue workers and the sync start only the server runs', async () => {
     const bootstrap = await import('@openldr/bootstrap');
     const { startServer } = await import('./start');
     const server = await startServer(cfg, logger);
     expect(bootstrap.createAppContext).toHaveBeenLastCalledWith(cfg, {
       runFacilityImportWorker: true, runFacilityJobWorker: true, runTerminologyIngestWorker: true,
+      startSyncWorkers: true,
     });
     await server.close();
   });

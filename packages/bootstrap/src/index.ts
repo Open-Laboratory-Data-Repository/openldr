@@ -645,6 +645,15 @@ export interface AppContextOptions {
    *  a CLI process it failed the server's live terminology imports. See
    *  `createTerminologyIngestWorkerIfEnabled`. */
   runTerminologyIngestWorker?: boolean;
+  /** Does this process start sync while the context is built?
+   *
+   *  ⛔ Only the API server sets it. Without it nothing reads the sync settings and no push or pull
+   *  worker is built here. Sync then starts the first time `ctx.sync.status()`, `triggerNow()` or
+   *  `retryQuarantine()` is called, which is what `openldr sync status`, `sync now`,
+   *  `sync quarantine retry` and `doctor` need. Every other `openldr` command used to start the
+   *  workers for the life of the command, and their start-up log line (with the central address and
+   *  site id on a site that has sync set up) reached the caller of a command sent through the app. */
+  startSyncWorkers?: boolean;
 }
 
 export async function createAppContext(cfg: Config, opts: AppContextOptions = {}): Promise<AppContext> {
@@ -1660,7 +1669,14 @@ const reporting: ReportingApi = {
     buildPush,
     buildPull,
   });
-  await syncRuntime.reconcile(); // initial start (replaces the old inline if (syncCfg) block)
+  // The first start of sync, run at most once in this process. The server runs it here, so its
+  // workers are up before it listens. Any other process (an `openldr` command) leaves it to the sync
+  // handle, which runs it the first time something asks for what only a started sync holds. See
+  // `AppContextOptions.startSyncWorkers`. A later settings change calls `syncRuntime.reconcile()`
+  // directly and is not held back by this.
+  let syncFirstStart: Promise<void> | undefined;
+  const ensureSyncStarted = (): Promise<void> => (syncFirstStart ??= syncRuntime.reconcile());
+  if (opts.startSyncWorkers) await ensureSyncStarted();
 
   // Sync S4: expose a status/trigger handle over the runtime. Always present — a disabled node
   // reports enabled:false + null directions and triggerNow() is a no-op.
@@ -1670,6 +1686,7 @@ const reporting: ReportingApi = {
     quarantine: syncQuarantine,
     divergences: syncDivergences,
     activity: syncActivityTracker,
+    ensureStarted: opts.startSyncWorkers ? undefined : ensureSyncStarted,
   });
 
   const pluginData = createPluginDataStore(internal.db);

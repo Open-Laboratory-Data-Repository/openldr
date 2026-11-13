@@ -149,8 +149,6 @@ oldr_<the new key>
 made key 6afa1ead-1382-4cd1-a07e-d233c907fa2b (claude-test) for ai-reader. It cannot be shown again, so store it now.
 ```
 
-A saída de erro tem também uma linha de registo JSON do servidor, como em todos os comandos que passam pela aplicação. A secção "O que muda ao passar pela aplicação", mais abaixo, diz mais.
-
 Assim, um script pode guardar a chave num ficheiro sem nunca a mostrar no ecrã. O `umask` torna o ficheiro legível só por si desde o momento em que é criado:
 
 ```sh
@@ -296,7 +294,7 @@ Estes usos funcionavam antes e agora dão erro. Um script pode encontrá-los.
 - Um programa que corre o CLI e não lê nada da saída durante 5 minutos perde o comando. O servidor interrompe-o. Não corrido.
 - Ctrl+C também interrompe o comando no servidor. Um comando que não pare é terminado à força após 10 segundos. Não corrido.
 - Se o servidor parar durante um comando, o CLI mostra `OpenLDR stopped while this command was running.` na saída de erro. Na maioria dos comandos, o código de saída é 130, ou 137 quando o comando teve de ser terminado à força. `import start` devolve o seu próprio código. Uma paragem brusca mostra antes `The connection to OpenLDR was lost.` Não corrido.
-- Cada comando que passa pela aplicação mostra uma linha de registo JSON do servidor na saída de erro. Numa instalação sem sincronização, é uma linha com `"msg":"sync disabled (not configured)"`. A saída padrão fica limpa, por isso a saída `--json` continua legível. Um script que trate qualquer saída de erro como falha vai falhar.
+- `sync status`, `sync now` e `sync quarantine retry` mostram linhas de registo JSON do servidor na saída de erro, por exemplo `"msg":"sync disabled (not configured)"`. Estes comandos iniciam a sincronização para responder. Num local com a sincronização configurada, essas linhas indicam o endereço do servidor central e o identificador do local. Os outros comandos não iniciam a sincronização e não mostram essas linhas. A saída padrão fica limpa, por isso a saída `--json` continua legível. Um script que trate qualquer saída de erro destes três comandos como falha vai falhar.
 
 ## Quem pode correr o quê
 

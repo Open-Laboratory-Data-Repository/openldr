@@ -149,8 +149,6 @@ oldr_<the new key>
 made key 6afa1ead-1382-4cd1-a07e-d233c907fa2b (claude-test) for ai-reader. It cannot be shown again, so store it now.
 ```
 
-La sortie d'erreur contient aussi une ligne de journal JSON du serveur, comme pour toute commande passée par l'application. La section « Ce qui change en passant par l'application », plus bas, en dit plus.
-
 Un script peut donc garder la clé dans un fichier sans jamais l'afficher. Le `umask` rend le fichier lisible par vous seul dès sa création :
 
 ```sh
@@ -296,7 +294,7 @@ Ces usages fonctionnaient avant et donnent maintenant une erreur. Un script peut
 - Un programme qui lance le CLI et ne lit rien de sa sortie pendant 5 minutes perd la commande. Le serveur l'arrête. Non lancé.
 - Ctrl+C arrête aussi la commande sur le serveur. Une commande qui ne s'arrête pas est tuée après 10 secondes. Non lancé.
 - Si le serveur s'arrête pendant une commande, le CLI affiche `OpenLDR stopped while this command was running.` sur la sortie d'erreur. Pour la plupart des commandes, le code de sortie est 130, ou 137 quand la commande a dû être tuée. `import start` renvoie son propre code. Un arrêt brutal affiche plutôt `The connection to OpenLDR was lost.` Non lancé.
-- Chaque commande passée par l'application affiche une ligne de journal JSON du serveur sur la sortie d'erreur. Sur une installation sans synchronisation, c'est une ligne avec `"msg":"sync disabled (not configured)"`. La sortie standard reste propre, donc la sortie `--json` reste lisible. Un script qui traite toute sortie d'erreur comme un échec échouera.
+- `sync status`, `sync now` et `sync quarantine retry` affichent des lignes de journal JSON du serveur sur la sortie d'erreur, par exemple `"msg":"sync disabled (not configured)"`. Ces commandes démarrent la synchronisation pour répondre. Sur un site où la synchronisation est configurée, ces lignes nomment l'adresse du serveur central et l'identifiant du site. Les autres commandes ne démarrent pas la synchronisation et n'affichent pas ces lignes. La sortie standard reste propre, donc la sortie `--json` reste lisible. Un script qui traite toute sortie d'erreur de ces trois commandes comme un échec échouera.
 
 ## Qui peut lancer quoi
 
