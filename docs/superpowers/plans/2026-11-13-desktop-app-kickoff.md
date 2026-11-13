@@ -31,8 +31,8 @@ ruling in the ledger, with its reason and what it costs if wrong. Do not stop to
 about them.
 
 Run it with superpowers:subagent-driven-development. One implementer and one reviewer per
-task, each a fresh subagent on Opus at high effort. You do not write product code
-yourself. At the end, one whole-branch review and one fix wave.
+task, each a fresh subagent on Opus 5.5 at high effort. You, the controller, run on
+Fable 5.2. You do not write product code yourself. At the end, one whole-branch review and one fix wave.
 
 I AM AWAY. I am not at any computer while you run. I follow from my phone. Three things
 follow from that.
