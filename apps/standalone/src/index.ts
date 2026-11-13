@@ -69,7 +69,9 @@ async function start(opts: { dataDir?: string; port: number; host: string; event
       ...(emit ? { emit } : {}),
     });
   } catch (err) {
-    // runStart's errors have been through hideSecrets.
+    // An error from runStart's main try has been through hideSecrets. Its checks before that try
+    // (the studio build, the workflow folder, the data folders) have not, but they run before the
+    // control token is made, so they hold no secret.
     printError(messageOf(err));
     emit?.({ event: 'error', message: messageOf(err) });
     // A failed start leaves the server's update check running for a few seconds. Do not wait.

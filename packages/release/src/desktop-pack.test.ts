@@ -20,6 +20,7 @@ import {
   postgresPackage,
   renamePlist,
   sha256SumsText,
+  staysInside,
   type ClosurePackage,
   type DesktopSystem,
 } from './desktop-pack';
@@ -593,5 +594,17 @@ describe('packedPackageJson', () => {
 describe('LEFT_OUT', () => {
   it('names cpu-features and the two packages only it needs', () => {
     expect([...LEFT_OUT]).toEqual(['cpu-features', 'nan', 'buildcheck']);
+  });
+});
+
+describe('staysInside', () => {
+  // The pack removes each target named in a Postgres package's pg-symlinks.json. A target that
+  // leaves the package folder must be refused before anything is removed.
+  it.each(['native/lib/x', 'native/lib/libicudata.so.74', 'a/../native/x'])('%s stays inside', (rel) => {
+    expect(staysInside(rel)).toBe(true);
+  });
+
+  it.each(['../x', '/abs', 'a/../../x', '..', '.', '', 'native/../..', 'C:\\x', '..\\x', 'native\\..\\..\\x'])('%s leaves the folder', (rel) => {
+    expect(staysInside(rel)).toBe(false);
   });
 });

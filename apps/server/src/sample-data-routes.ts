@@ -42,11 +42,11 @@ export function registerSampleDataRoutes(app: FastifyInstance<any, any, any, any
         counts = await load();
       } catch (err) {
         // Not the error itself: its text could hold a host or a query. Its name and a database
-        // error code are safe and enough to start looking.
+        // error code are safe and enough to start looking. Not `name`: pino writes a key of that name itself.
         const e = err as { name?: unknown; code?: unknown } | null;
         ctx.logger.error({
-          name: typeof e?.name === 'string' ? e.name : undefined,
-          code: typeof e?.code === 'string' ? e.code : undefined,
+          errName: typeof e?.name === 'string' ? e.name : undefined,
+          errCode: typeof e?.code === 'string' ? e.code : undefined,
         }, 'sample data load failed');
         // seedDatabase writes the sample organization, location and patient first, so a load that
         // fails partway can leave sample data behind. Record who asked, with no error text.

@@ -6,6 +6,7 @@
 // not proven, waits for the operator.
 
 import { createHash } from 'node:crypto';
+import { posix, win32 } from 'node:path';
 
 export type DesktopSystem = 'linux-x64' | 'darwin-arm64' | 'win32-x64';
 
@@ -400,4 +401,15 @@ export function icnsFromPng256(png: Uint8Array): Uint8Array {
 /** The root package.json of the packed app. */
 export function packedPackageJson(version: string): { name: string; version: string; main: string; desktopName: string } {
   return { name: 'openldr-desktop', version, main: 'apps/desktop/dist/main.js', desktopName: 'openldr.desktop' };
+}
+
+/**
+ * True when a relative path, joined to a folder, names something inside that folder. An absolute
+ * path, one that climbs out with `..`, and the folder itself are not inside. A backslash counts as
+ * a separator, so a Windows path cannot slip past.
+ */
+export function staysInside(relativePath: string): boolean {
+  if (relativePath === '' || posix.isAbsolute(relativePath) || win32.isAbsolute(relativePath)) return false;
+  const normal = posix.normalize(relativePath.replace(/\\/g, '/'));
+  return normal !== '.' && normal !== '..' && !normal.startsWith('../');
 }

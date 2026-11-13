@@ -55,6 +55,7 @@ import {
   postgresPackage,
   renamePlist,
   sha256SumsText,
+  staysInside,
   type ClosurePackage,
   type DesktopSystem,
   type PackageId,
@@ -281,6 +282,10 @@ async function layPostgres(system: DesktopSystem, nodeModules: string, closure: 
   // the Linux package holds them as plain copies, which would put libicudata in the archive three times.
   const listFile = join(dest, 'native', 'pg-symlinks.json');
   const links = existsSync(listFile) ? (JSON.parse(readFileSync(listFile, 'utf8')) as { source: string; target: string }[]) : [];
+  // Every target is checked before any is removed: one that leaves the package is refused.
+  for (const { target } of links) {
+    if (!staysInside(target)) fail(`${name}: pg-symlinks.json names ${target}, which is not inside the package.`);
+  }
   for (const { target } of links) {
     const p = join(dest, target);
     if (existsSync(p) && lstatSync(p).isFile()) rmSync(p);

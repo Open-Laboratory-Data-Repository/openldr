@@ -115,7 +115,7 @@ describe('sample data routes', () => {
     })]);
     for (const part of ['seed failed', '10.0.0.5']) expect(JSON.stringify(audited)).not.toContain(part);
     // The log holds the error's name and code, never its message or the object.
-    expect(logged).toEqual([[{ name: 'Error', code: '57P01' }, 'sample data load failed']]);
+    expect(logged).toEqual([[{ errName: 'Error', errCode: '57P01' }, 'sample data load failed']]);
     const next = await app.inject({ method: 'POST', url: URL });
     expect(next.statusCode).toBe(200);
     expect(load).toHaveBeenCalledTimes(2);
