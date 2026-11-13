@@ -4,6 +4,7 @@
 
 import { join } from 'node:path';
 import type { LauncherEvent, RunningLauncher, Status } from './launcher';
+import { windowAddress } from './locality';
 import type { Settings } from './settings';
 import type { AppStrings } from './strings';
 
@@ -11,7 +12,7 @@ export type Screen =
   | { screen: 'starting'; note: 'checking' | 'postgres' | 'recovering' | 'server' }
   | { screen: 'studio'; address: string }
   | { screen: 'stopping' }
-  | { screen: 'error'; message: string; serverLog?: string; postgresLog?: string };
+  | { screen: 'error'; message: string; serverLog?: string; postgresLog?: string; desktopLog?: string };
 
 /** What main sends to the app's own page. The words are already in the person's language. */
 export interface PageState {
@@ -36,7 +37,7 @@ export function pageState(screen: Exclude<Screen, { screen: 'studio' }>, strings
     case 'stopping':
       return { title: strings.stoppingTitle, note: strings.stoppingNote };
     case 'error': {
-      const logs = [screen.serverLog, screen.postgresLog].filter((p): p is string => p !== undefined);
+      const logs = [screen.serverLog, screen.postgresLog, screen.desktopLog].filter((p): p is string => p !== undefined);
       return {
         title: strings.errorTitle,
         message: screen.message,
@@ -64,6 +65,8 @@ export interface ControllerDeps {
   show(screen: Screen): void;
   exit(code: number): void;
   log(line: string): void;
+  /** The app's own log file, named on the error screen. */
+  desktopLog: string;
   strings: AppStrings;
   /** How long a quit waits for the launcher to end. Default 90 000. */
   stopWaitMs?: number;
@@ -77,6 +80,8 @@ interface Child {
   done: Promise<void>;
   ready: boolean;
   sawStopping: boolean;
+  /** The launcher said `stopped`: something stopped it on purpose, such as `stop` from a terminal. */
+  sawStopped: boolean;
   lastError?: string;
   lastStderr?: string;
 }
@@ -85,7 +90,8 @@ interface Child {
 const STEP_MS = 1000;
 /** A line that names the setup code may hold one. It is replaced before it is kept or shown. */
 const SECRET_LINE = /setup code/i;
-const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+/** The app always starts its launcher with `--host 127.0.0.1`. */
+const OWN_HOST = '127.0.0.1';
 /** A `status` child that has not answered by then counts as no answer for that round. It is not killed. */
 const STATUS_WAIT_MS = 30_000;
 
@@ -99,7 +105,6 @@ export class DesktopController {
   private child: Child | undefined;
   private addr: string | undefined;
   private dir: string | undefined;
-  private host: string | undefined;
   private quitting: Promise<void> | undefined;
   /** A `status` child that has not answered yet. The next read waits on it instead of starting another. */
   private pendingStatus: Promise<Status> | undefined;
@@ -110,7 +115,10 @@ export class DesktopController {
     this.stopWaitMs = deps.stopWaitMs ?? 90_000;
   }
 
-  /** The launcher's address once OpenLDR is ready or attached to. */
+  /**
+   * The address the window loads once OpenLDR is ready or attached to. A `localhost` address from
+   * the launcher is turned into the IP literal it is bound to (see `windowAddress`).
+   */
   address(): string | undefined {
     return this.addr;
   }
@@ -126,16 +134,14 @@ export class DesktopController {
   }
 
   /**
-   * The address Studio's requests may be answered for, or undefined. It is address() when this app
-   * started the launcher (always on 127.0.0.1), or when the attached launcher's status names a host
-   * of 127.0.0.1, localhost or ::1. An attached launcher with another host, or with no host in its
-   * status, gives undefined: the app shows it and answers nothing.
+   * The address Studio's requests may be answered for, or undefined. It is address() only when this
+   * app started the launcher (always on 127.0.0.1). An attached launcher always gives undefined,
+   * whatever its host: after an unclean stop another account may answer on the dead launcher's
+   * control port. The app shows an attached launcher and answers nothing.
    */
   bridgeAddress(): string | undefined {
-    if (this.addr === undefined) return undefined;
-    if (this.phase === 'own') return this.addr;
-    if (this.phase === 'attached' && this.host !== undefined && LOCAL_HOSTS.has(this.host)) return this.addr;
-    return undefined;
+    if (this.addr === undefined || this.phase !== 'own') return undefined;
+    return this.addr;
   }
 
   async start(): Promise<void> {
@@ -144,7 +150,6 @@ export class DesktopController {
     this.phase = 'checking';
     this.child = undefined;
     this.addr = undefined;
-    this.host = undefined;
     this.show({ screen: 'starting', note: 'checking' });
     try {
       const status = await this.boundedStatus();
@@ -217,30 +222,34 @@ export class DesktopController {
     }
   }
 
-  /** The error screen. The log paths go with it when the data folder is known, unless `withLogs` is false. */
+  /**
+   * The error screen. Unless `withLogs` is false, the app's own log goes with it, and the
+   * launcher's two logs too when the data folder is known.
+   */
   private fail(message: string, withLogs = true): void {
     this.phase = 'error';
     this.addr = undefined;
-    const logs =
+    const dataLogs =
       withLogs && this.dir !== undefined
         ? { serverLog: join(this.dir, 'logs', 'server.log'), postgresLog: join(this.dir, 'logs', 'postgres.log') }
         : {};
+    const logs = withLogs ? { ...dataLogs, desktopLog: this.deps.desktopLog } : {};
     this.show({ screen: 'error', message, ...logs });
   }
 
   /** Another launcher holds the data folder. Wait until it answers, then show it and keep checking it. */
   private async attach(run: number, status: Extract<Status, { running: true }>): Promise<void> {
+    const address = windowAddress(status.address, status.host);
     this.phase = 'attached';
-    this.addr = status.address;
-    this.host = status.host;
+    this.addr = address;
     this.dir = status.dataDir;
-    this.deps.log(`Attached to a launcher that was already running at ${status.address}.`);
+    this.deps.log(`Attached to a launcher that was already running at ${address}.`);
     this.show({ screen: 'starting', note: 'server' });
 
     // Its lock is live before its server listens, so it may still be starting. Ask once a second,
     // and read its status every pollMs in case it ends before it ever answers.
     let waited = 0;
-    while (!(await this.deps.answers(status.address))) {
+    while (!(await this.deps.answers(address))) {
       if (this.stale(run)) return;
       await this.deps.sleep(STEP_MS);
       if (this.stale(run)) return;
@@ -251,10 +260,13 @@ export class DesktopController {
       }
     }
     if (this.stale(run)) return;
-    this.show({ screen: 'studio', address: status.address });
+    this.show({ screen: 'studio', address });
 
+    // An address that answers needs no `status` child. Only when it stops answering is the status read.
     for (;;) {
       await this.deps.sleep(this.pollMs);
+      if (this.stale(run)) return;
+      if (await this.deps.answers(address)) continue;
       if (this.stale(run)) return;
       if (!(await this.stillRunning(run))) return;
     }
@@ -297,7 +309,7 @@ export class DesktopController {
         this.deps.log(`launcher: ${kept}`);
       },
     });
-    child = { running, exited: false, done: Promise.resolve(), ready: false, sawStopping: false };
+    child = { running, exited: false, done: Promise.resolve(), ready: false, sawStopping: false, sawStopped: false };
     child.done = running.exited.then((code) => this.onExit(run, child, code));
     this.child = child;
   }
@@ -314,7 +326,10 @@ export class DesktopController {
       if (!this.stale(run)) this.show({ screen: 'stopping' });
       return;
     }
-    if (logged.event === 'stopped') return;
+    if (logged.event === 'stopped') {
+      child.sawStopped = true;
+      return;
+    }
     // A launcher on its way down may still finish its start and say so. That is stale.
     if (child.sawStopping || this.stale(run)) return;
     switch (logged.event) {
@@ -324,11 +339,13 @@ export class DesktopController {
       case 'recovering':
         this.show({ screen: 'starting', note: 'recovering' });
         return;
-      case 'ready':
+      case 'ready': {
         child.ready = true;
-        this.addr = logged.address;
-        this.show({ screen: 'studio', address: logged.address });
+        const address = windowAddress(logged.address, OWN_HOST);
+        this.addr = address;
+        this.show({ screen: 'studio', address });
         return;
+      }
     }
   }
 
@@ -336,6 +353,8 @@ export class DesktopController {
     child.exited = true;
     this.deps.log(`The launcher exited with code ${String(code)}.`);
     if (this.stale(run)) return;
+    // A launcher stopped on purpose (`stop` from a terminal) ends with `stopped`. That is not unexpected.
+    if (child.sawStopped) return this.fail(this.deps.strings.launcherGone);
     this.fail(child.lastError ?? child.lastStderr ?? this.deps.strings.launcherEnded);
   }
 

@@ -7,8 +7,13 @@ import { STRINGS } from './strings';
 
 const strings = STRINGS.en;
 const DATA = '/tmp/openldr d-é/data';
+/** What a launcher's `ready` event and its status say. */
 const OWN = 'http://localhost:3990/studio/';
 const OTHER = 'http://localhost:3991/studio/';
+/** What the window loads: the same address on the host the launcher is bound to. */
+const OWN_WINDOW = 'http://127.0.0.1:3990/studio/';
+const OTHER_WINDOW = 'http://127.0.0.1:3991/studio/';
+const DESKTOP_LOG = '/home/someone/.config/OpenLDR Desktop/desktop.log';
 
 /** A launcher the fake startLauncher made. Tests drive its events and its exit. */
 interface FakeLauncher {
@@ -116,6 +121,7 @@ function harness(o: Options = {}): Harness {
     },
     exit: (code) => exits.push(code),
     log: (line) => logs.push(line),
+    desktopLog: DESKTOP_LOG,
     strings,
     ...(o.fixedPort !== undefined ? { fixedPort: o.fixedPort } : {}),
     ...(o.pollMs !== undefined ? { pollMs: o.pollMs } : {}),
@@ -185,11 +191,16 @@ describe('pageState', () => {
   });
 
   it('gives the error title, the message, the log paths and the retry label', () => {
-    expect(pageState({ screen: 'error', message: 'It broke.', serverLog: '/d/logs/server.log', postgresLog: '/d/logs/postgres.log' }, strings)).toEqual({
+    expect(
+      pageState(
+        { screen: 'error', message: 'It broke.', serverLog: '/d/logs/server.log', postgresLog: '/d/logs/postgres.log', desktopLog: '/u/desktop.log' },
+        strings,
+      ),
+    ).toEqual({
       title: strings.errorTitle,
       message: 'It broke.',
       note: strings.logsLabel,
-      logs: ['/d/logs/server.log', '/d/logs/postgres.log'],
+      logs: ['/d/logs/server.log', '/d/logs/postgres.log', '/u/desktop.log'],
       retryLabel: strings.retryLabel,
     });
   });
@@ -235,31 +246,62 @@ describe('DesktopController', () => {
     await h.tick();
     expect(h.last()).toEqual({ screen: 'starting', note: 'server' });
     await h.tick();
-    expect(h.last()).toEqual({ screen: 'studio', address: OTHER });
-    expect(asked.every((a) => a === OTHER)).toBe(true);
-    expect(h.controller.address()).toBe(OTHER);
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every((a) => a === OTHER_WINDOW)).toBe(true);
+    expect(h.controller.address()).toBe(OTHER_WINDOW);
     expect(h.controller.dataDir()).toBe(DATA);
   });
 
   it('2a. checks an attached launcher every pollMs, shows an error when it has gone, and starts over on retry', async () => {
-    const h = harness({ statuses: [runningStatus('127.0.0.1'), runningStatus('127.0.0.1'), { running: false, dataDir: DATA }, runningStatus('127.0.0.1')] });
+    let up = true;
+    const h = harness({
+      statuses: [runningStatus('127.0.0.1'), runningStatus('127.0.0.1'), { running: false, dataDir: DATA }, runningStatus('127.0.0.1')],
+      answers: async () => up,
+    });
     void h.controller.start();
     await settle();
-    expect(h.last()).toEqual({ screen: 'studio', address: OTHER });
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
     expect(h.sleeps.filter((ms) => ms !== 30_000)).toEqual([5000]);
+    up = false;
     await h.tick();
     expect(h.statusReads()).toBe(2);
-    expect(h.last()).toEqual({ screen: 'studio', address: OTHER });
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
     await h.tick();
     expect(h.statusReads()).toBe(3);
     expect(h.last()).toMatchObject({ screen: 'error', message: strings.launcherGone });
     expect(h.controller.address()).toBeUndefined();
 
+    up = true;
     void h.controller.retry();
     await settle();
     expect(h.shown).toContainEqual({ screen: 'starting', note: 'checking' });
     expect(h.statusReads()).toBe(4);
-    expect(h.last()).toEqual({ screen: 'studio', address: OTHER });
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+  });
+
+  it('A8. the poll of an attached launcher that answers starts no status child', async () => {
+    const h = harness({ statuses: [runningStatus('127.0.0.1')] });
+    void h.controller.start();
+    await settle();
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+    expect(h.statusReads()).toBe(1);
+    for (let i = 0; i < 4; i++) await h.tick();
+    expect(h.sleeps.filter((ms) => ms === 5000).length).toBeGreaterThanOrEqual(4);
+    expect(h.statusReads()).toBe(1);
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+  });
+
+  it('A8. the poll reads the status once the address stops answering, and shows the error when it has gone', async () => {
+    let up = true;
+    const h = harness({ statuses: [runningStatus('127.0.0.1'), { running: false, dataDir: DATA }], answers: async () => up });
+    void h.controller.start();
+    await settle();
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+    up = false;
+    await h.tick();
+    expect(h.statusReads()).toBe(2);
+    expect(h.last()).toMatchObject({ screen: 'error', message: strings.launcherGone });
   });
 
   it('2a. uses the given pollMs', async () => {
@@ -300,14 +342,21 @@ describe('DesktopController', () => {
       const h = harness();
       await ready(h);
       expect(h.controller.attached()).toBe(false);
-      expect(h.controller.bridgeAddress()).toBe(OWN);
+      expect(h.controller.bridgeAddress()).toBe(OWN_WINDOW);
     });
 
-    it.each(['127.0.0.1', 'localhost', '::1'])('is the address of an attached launcher on %s', async (host) => {
+    it.each([
+      ['127.0.0.1', OTHER_WINDOW],
+      ['::1', 'http://[::1]:3991/studio/'],
+      ['localhost', OTHER],
+    ])('is undefined for an attached launcher on %s, which the app still shows', async (host, shown) => {
       const h = harness({ statuses: [runningStatus(host)] });
       void h.controller.start();
       await settle();
-      expect(h.controller.bridgeAddress()).toBe(OTHER);
+      expect(h.controller.attached()).toBe(true);
+      expect(h.last()).toEqual({ screen: 'studio', address: shown });
+      expect(h.controller.address()).toBe(shown);
+      expect(h.controller.bridgeAddress()).toBeUndefined();
     });
 
     it('is undefined for an attached launcher on 0.0.0.0', async () => {
@@ -383,8 +432,8 @@ describe('DesktopController', () => {
     expect(h.last()).toEqual({ screen: 'starting', note: 'server' });
     expect(h.controller.address()).toBeUndefined();
     l.on.event({ event: 'ready', address: OWN });
-    expect(h.last()).toEqual({ screen: 'studio', address: OWN });
-    expect(h.controller.address()).toBe(OWN);
+    expect(h.last()).toEqual({ screen: 'studio', address: OWN_WINDOW });
+    expect(h.controller.address()).toBe(OWN_WINDOW);
     expect(h.controller.attached()).toBe(false);
   });
 
@@ -418,7 +467,7 @@ describe('DesktopController', () => {
   });
 
   describe('6. the launcher ends by itself', () => {
-    const logs = { serverLog: join(DATA, 'logs', 'server.log'), postgresLog: join(DATA, 'logs', 'postgres.log') };
+    const logs = { serverLog: join(DATA, 'logs', 'server.log'), postgresLog: join(DATA, 'logs', 'postgres.log'), desktopLog: DESKTOP_LOG };
 
     it('shows the last error event, with the log paths', async () => {
       const h = harness();
@@ -451,12 +500,12 @@ describe('DesktopController', () => {
       expect(h.controller.address()).toBeUndefined();
     });
 
-    it('leaves the log paths out when the data folder is not known', async () => {
+    it('names only the app\'s own log when the data folder is not known', async () => {
       const h = harness({ statuses: [{ running: false }] });
       const l = await started(h);
       l.exit(1);
       await settle();
-      expect(h.last()).toEqual({ screen: 'error', message: strings.launcherEnded });
+      expect(h.last()).toEqual({ screen: 'error', message: strings.launcherEnded, desktopLog: DESKTOP_LOG });
       expect(h.controller.dataDir()).toBeUndefined();
     });
 
@@ -471,6 +520,28 @@ describe('DesktopController', () => {
       expect(h.last()).toEqual({ screen: 'error', message: 'Postgres did not start.', ...logs });
       expect(h.exits).toEqual([]);
       expect(h.stops()).toBe(0);
+    });
+
+    it('A7. says plainly that OpenLDR has stopped when the launcher was stopped from elsewhere, not that it stopped unexpectedly', async () => {
+      const h = harness();
+      const l = await ready(h);
+      l.on.event({ event: 'stopping' });
+      l.on.event({ event: 'stopped', result: 'clean' });
+      l.exit(0);
+      await settle();
+      expect(h.last()).toEqual({ screen: 'error', message: strings.launcherGone, ...logs });
+      expect(h.exits).toEqual([]);
+      expect(h.stops()).toBe(0);
+    });
+
+    it('A6. the error screen names the app\'s own log', async () => {
+      const h = harness();
+      const l = await started(h);
+      l.exit(1);
+      await settle();
+      expect(h.last()).toMatchObject({ screen: 'error', desktopLog: DESKTOP_LOG });
+      const state = pageState(h.last() as Exclude<Screen, { screen: 'studio' }>, strings);
+      expect(state.logs).toEqual([logs.serverLog, logs.postgresLog, DESKTOP_LOG]);
     });
 
     it('starts again from the status on retry', async () => {
@@ -707,15 +778,17 @@ describe('DesktopController', () => {
 
   it('a status that has not answered while attached shows the error screen', async () => {
     let reads = 0;
+    let asks = 0;
     const h = harness({
       readStatus: () => (++reads === 1 ? Promise.resolve(runningStatus('127.0.0.1')) : new Promise<Status>(() => {})),
+      answers: async () => ++asks === 1,
     });
     void h.controller.start();
     await settle();
-    expect(h.last()).toEqual({ screen: 'studio', address: OTHER });
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
     await h.tick();
     expect(reads).toBe(2);
-    expect(h.last()).toEqual({ screen: 'studio', address: OTHER });
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
     await h.tick();
     expect(reads).toBe(2);
     expect(h.last()).toMatchObject({ screen: 'error', message: strings.statusNoAnswer });

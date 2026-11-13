@@ -148,13 +148,18 @@ function main(): void {
       event.preventDefault();
       if (where === 'browser') void shell.openExternal(url);
     };
+    // A frame inside a page may stay on the launcher's origin or load about:blank or about:srcdoc
+    // (Studio's plugin frames). Anything else is stopped, and never opened in the browser.
+    const frameGuard = (event: { preventDefault(): void }, url: string): void => {
+      if (frameTarget(url, controller?.address()) === 'refuse') event.preventDefault();
+    };
     contents.on('will-navigate', (event) => guard(event, event.url));
-    contents.on('will-redirect', (event) => guard(event, event.url));
-    // will-navigate covers the main frame only. A frame inside a page may stay on the launcher's
-    // origin or load about:blank or about:srcdoc (Studio's plugin frames); anything else is stopped.
+    // A redirect fires for frames too. Only the main frame's may open the browser.
+    contents.on('will-redirect', (event) => (event.isMainFrame ? guard(event, event.url) : frameGuard(event, event.url)));
+    // will-navigate covers the main frame only.
     contents.on('will-frame-navigate', (event) => {
       if (event.isMainFrame) return;
-      if (frameTarget(event.url, controller?.address()) === 'refuse') event.preventDefault();
+      frameGuard(event, event.url);
     });
     contents.on('will-attach-webview', (event) => event.preventDefault());
     contents.setWindowOpenHandler(({ url }) => {
@@ -261,9 +266,11 @@ function main(): void {
       if (address !== undefined && sameOrigin(url, address)) selfcheck?.onStudioLoaded();
     });
     w.webContents.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
-      // -3 is a load another load replaced. That other load reports its own end.
-      if (!isMainFrame || code === -3) return;
+      if (!isMainFrame) return;
+      // Cleared for -3 too. Left set after a load of the app's page was replaced, every later screen is dropped.
       pageLoading = false;
+      // -3 is a load another load replaced. That other load reports its own end.
+      if (code === -3) return;
       log(`A page did not load (${code} ${description}): ${urlForLog(url)}`);
       if (renderAfterLoad(current.screen === 'studio', url, pageUrl)) render();
     });
@@ -331,6 +338,7 @@ function main(): void {
       show,
       exit,
       log,
+      desktopLog: logFile,
       strings: s,
     });
     const c = controller;

@@ -1,12 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { frameTarget, isLocalAddress, linkTarget, mayAnswerStudio, mayGrantPermission, renderAfterLoad, sameOrigin, urlForLog } from './locality';
+import {
+  frameTarget,
+  isLocalAddress,
+  linkTarget,
+  mayAnswerStudio,
+  mayGrantPermission,
+  renderAfterLoad,
+  sameOrigin,
+  urlForLog,
+  windowAddress,
+} from './locality';
 
 describe('isLocalAddress', () => {
-  it.each(['http://localhost:3000/studio/', 'http://127.0.0.1:3000/x', 'http://[::1]:3000'])('%s is local', (url) => {
+  it.each(['http://127.0.0.1:3000/x', 'http://[::1]:3000'])('%s is local', (url) => {
     expect(isLocalAddress(url)).toBe(true);
   });
 
   it.each([
+    'http://localhost:3000/studio/',
     'http://192.168.1.5:3000',
     'http://localhost.example.com',
     'http://127.0.0.1.example.com',
@@ -15,6 +26,33 @@ describe('isLocalAddress', () => {
     '',
   ])('%s is not local', (url) => {
     expect(isLocalAddress(url)).toBe(false);
+  });
+});
+
+describe('windowAddress', () => {
+  it('gives 127.0.0.1 for a localhost address when the launcher is bound to 127.0.0.1', () => {
+    expect(windowAddress('http://localhost:3990/studio/', '127.0.0.1')).toBe('http://127.0.0.1:3990/studio/');
+  });
+
+  it('gives [::1] for a localhost address when the launcher is bound to ::1', () => {
+    expect(windowAddress('http://localhost:3990/studio/', '::1')).toBe('http://[::1]:3990/studio/');
+  });
+
+  it('keeps the port, the path, the query and the hash', () => {
+    expect(windowAddress('http://localhost:4123/studio/setup?a=b#c', '127.0.0.1')).toBe('http://127.0.0.1:4123/studio/setup?a=b#c');
+  });
+
+  it('leaves the address alone for any other host, or no host', () => {
+    expect(windowAddress('http://localhost:3990/studio/', '0.0.0.0')).toBe('http://localhost:3990/studio/');
+    expect(windowAddress('http://localhost:3990/studio/', undefined)).toBe('http://localhost:3990/studio/');
+    expect(windowAddress('http://localhost:3990/studio/', 'localhost')).toBe('http://localhost:3990/studio/');
+  });
+
+  it('leaves an address that is not on localhost alone', () => {
+    expect(windowAddress('http://192.168.1.5:3990/studio/', '127.0.0.1')).toBe('http://192.168.1.5:3990/studio/');
+    expect(windowAddress('http://127.0.0.1:3990/studio/', '::1')).toBe('http://127.0.0.1:3990/studio/');
+    expect(windowAddress('http://localhost.example.com:3990/', '127.0.0.1')).toBe('http://localhost.example.com:3990/');
+    expect(windowAddress('not a url', '127.0.0.1')).toBe('not a url');
   });
 });
 
@@ -34,19 +72,26 @@ describe('sameOrigin', () => {
 });
 
 describe('mayAnswerStudio', () => {
-  const launcher = 'http://localhost:3990/studio/';
+  const launcher = 'http://127.0.0.1:3990/studio/';
 
   it('answers a page on the launcher address', () => {
-    expect(mayAnswerStudio('http://localhost:3990/studio/setup', launcher)).toBe(true);
+    expect(mayAnswerStudio('http://127.0.0.1:3990/studio/setup', launcher)).toBe(true);
+    expect(mayAnswerStudio('http://127.0.0.1:3990/studio/', 'http://127.0.0.1:3990/studio/')).toBe(true);
+    expect(mayAnswerStudio('http://[::1]:3990/studio/', 'http://[::1]:3990/studio/')).toBe(true);
+  });
+
+  it('refuses a launcher address on localhost, even from its own origin', () => {
+    expect(mayAnswerStudio('http://localhost:3990/studio/', 'http://localhost:3990/studio/')).toBe(false);
   });
 
   it('refuses another origin, even one that reaches the same computer', () => {
-    expect(mayAnswerStudio('http://127.0.0.1:3990/studio/', launcher)).toBe(false);
-    expect(mayAnswerStudio('http://localhost:3991/studio/', launcher)).toBe(false);
+    expect(mayAnswerStudio('http://localhost:3990/studio/', launcher)).toBe(false);
+    expect(mayAnswerStudio('http://[::1]:3990/studio/', launcher)).toBe(false);
+    expect(mayAnswerStudio('http://127.0.0.1:3991/studio/', launcher)).toBe(false);
   });
 
   it('refuses when there is no launcher address', () => {
-    expect(mayAnswerStudio('http://localhost:3990/studio/setup', undefined)).toBe(false);
+    expect(mayAnswerStudio('http://127.0.0.1:3990/studio/setup', undefined)).toBe(false);
   });
 
   it('refuses a file: sender', () => {
@@ -59,12 +104,12 @@ describe('mayAnswerStudio', () => {
 });
 
 describe('linkTarget', () => {
-  const launcher = 'http://localhost:3990/studio/';
+  const launcher = 'http://127.0.0.1:3990/studio/';
   const ownPages = ['file:///opt/openldr-desktop/pages/page.html'] as const;
 
   it('keeps the launcher origin inside', () => {
-    expect(linkTarget('http://localhost:3990/studio/', launcher, ownPages)).toBe('inside');
-    expect(linkTarget('http://localhost:3990/api/health', launcher, ownPages)).toBe('inside');
+    expect(linkTarget('http://127.0.0.1:3990/studio/', launcher, ownPages)).toBe('inside');
+    expect(linkTarget('http://127.0.0.1:3990/api/health', launcher, ownPages)).toBe('inside');
   });
 
   it('keeps the app pages inside, with or without a query or hash', () => {
@@ -75,10 +120,10 @@ describe('linkTarget', () => {
 
   it('sends other web and mail links to the browser', () => {
     expect(linkTarget('https://openldr.org/docs', launcher, ownPages)).toBe('browser');
-    expect(linkTarget('http://localhost:3991/studio/', launcher, ownPages)).toBe('browser');
-    expect(linkTarget('http://127.0.0.1:3990/studio/', launcher, ownPages)).toBe('browser');
+    expect(linkTarget('http://127.0.0.1:3991/studio/', launcher, ownPages)).toBe('browser');
+    expect(linkTarget('http://localhost:3990/studio/', launcher, ownPages)).toBe('browser');
     expect(linkTarget('mailto:someone@example.com', launcher, ownPages)).toBe('browser');
-    expect(linkTarget('http://localhost:3990/studio/', undefined, ownPages)).toBe('browser');
+    expect(linkTarget('http://127.0.0.1:3990/studio/', undefined, ownPages)).toBe('browser');
   });
 
   it('refuses everything else', () => {
@@ -93,31 +138,39 @@ describe('linkTarget', () => {
 });
 
 describe('mayGrantPermission', () => {
-  const launcher = 'http://localhost:3990/studio/';
+  const launcher = 'http://127.0.0.1:3990/studio/';
 
-  it('allows a sanitized clipboard write from the launcher\'s origin', () => {
-    expect(mayGrantPermission('clipboard-sanitized-write', 'http://localhost:3990/studio/users', launcher)).toBe(true);
-    expect(mayGrantPermission('clipboard-sanitized-write', 'http://localhost:3990', launcher)).toBe(true);
+  it('allows a sanitized clipboard write from the window\'s own address on this computer', () => {
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://127.0.0.1:3990/studio/users', launcher)).toBe(true);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://127.0.0.1:3990', launcher)).toBe(true);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://[::1]:3990/studio/', 'http://[::1]:3990/studio/')).toBe(true);
+  });
+
+  it('refuses the clipboard write when the window\'s address is not this computer, even from that address', () => {
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://192.168.1.5:3990/studio/', 'http://192.168.1.5:3990/studio/')).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'https://example.com/studio/', 'https://example.com/studio/')).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://localhost:3990/studio/', 'http://localhost:3990/studio/')).toBe(false);
   });
 
   it('refuses the clipboard write from any other origin or with no launcher', () => {
-    expect(mayGrantPermission('clipboard-sanitized-write', 'http://localhost:3991/studio/', launcher)).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://127.0.0.1:3991/studio/', launcher)).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://localhost:3990/studio/', launcher)).toBe(false);
     expect(mayGrantPermission('clipboard-sanitized-write', 'https://example.com/', launcher)).toBe(false);
     expect(mayGrantPermission('clipboard-sanitized-write', 'file:///opt/openldr-desktop/pages/page.html', launcher)).toBe(false);
-    expect(mayGrantPermission('clipboard-sanitized-write', 'http://localhost:3990/studio/', undefined)).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://127.0.0.1:3990/studio/', undefined)).toBe(false);
     expect(mayGrantPermission('clipboard-sanitized-write', '', launcher)).toBe(false);
   });
 
   it.each(['clipboard-read', 'media', 'geolocation', 'notifications', 'openExternal', 'fullscreen'])('refuses %s, even from the launcher', (permission) => {
-    expect(mayGrantPermission(permission, 'http://localhost:3990/studio/', launcher)).toBe(false);
+    expect(mayGrantPermission(permission, 'http://127.0.0.1:3990/studio/', launcher)).toBe(false);
   });
 });
 
 describe('frameTarget', () => {
-  const launcher = 'http://localhost:3990/studio/';
+  const launcher = 'http://127.0.0.1:3990/studio/';
 
   it('allows a frame on the launcher\'s origin', () => {
-    expect(frameTarget('http://localhost:3990/studio/plugins/x', launcher)).toBe('allow');
+    expect(frameTarget('http://127.0.0.1:3990/studio/plugins/x', launcher)).toBe('allow');
   });
 
   it('allows about:blank and about:srcdoc, which Studio\'s plugin frames load', () => {
@@ -127,18 +180,18 @@ describe('frameTarget', () => {
   });
 
   it('allows a blob: URL of the launcher\'s origin', () => {
-    expect(frameTarget('blob:http://localhost:3990/0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f', launcher)).toBe('allow');
+    expect(frameTarget('blob:http://127.0.0.1:3990/0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f', launcher)).toBe('allow');
   });
 
   it('refuses any other site, scheme or origin', () => {
     expect(frameTarget('https://example.com/', launcher)).toBe('refuse');
-    expect(frameTarget('http://localhost:3991/studio/', launcher)).toBe('refuse');
+    expect(frameTarget('http://127.0.0.1:3991/studio/', launcher)).toBe('refuse');
     expect(frameTarget('blob:https://example.com/0f1c2d3e', launcher)).toBe('refuse');
     expect(frameTarget('data:text/html,hi', launcher)).toBe('refuse');
     expect(frameTarget('file:///etc/passwd', launcher)).toBe('refuse');
     expect(frameTarget('javascript:alert(1)', launcher)).toBe('refuse');
     expect(frameTarget('about:config', launcher)).toBe('refuse');
-    expect(frameTarget('http://localhost:3990/studio/', undefined)).toBe('refuse');
+    expect(frameTarget('http://127.0.0.1:3990/studio/', undefined)).toBe('refuse');
     expect(frameTarget('not a url', launcher)).toBe('refuse');
   });
 });
@@ -147,12 +200,12 @@ describe('renderAfterLoad', () => {
   const own = 'file:///opt/openldr-desktop/pages/page.html';
 
   it('is true when a load ends on another page while the screen is not Studio', () => {
-    expect(renderAfterLoad(false, 'http://localhost:3990/studio/', own)).toBe(true);
+    expect(renderAfterLoad(false, 'http://127.0.0.1:3990/studio/', own)).toBe(true);
     expect(renderAfterLoad(false, 'chrome-error://chromewebdata/', own)).toBe(true);
   });
 
   it('is false while the screen is Studio', () => {
-    expect(renderAfterLoad(true, 'http://localhost:3990/studio/', own)).toBe(false);
+    expect(renderAfterLoad(true, 'http://127.0.0.1:3990/studio/', own)).toBe(false);
   });
 
   it('is false when the load was the app\'s own page, so a page that fails is not loaded again and again', () => {

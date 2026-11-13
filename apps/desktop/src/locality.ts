@@ -1,8 +1,12 @@
 // Which addresses the app trusts. Studio gets an answer only from a page on the launcher's own
 // origin, and only when that origin is this computer. Links decide where they open.
 
-/** URL host names that reach only this computer. The URL parser writes the IPv6 loopback in brackets. */
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+/**
+ * URL host names that reach only this computer. The URL parser writes the IPv6 loopback in
+ * brackets. `localhost` is not one: Chromium tries ::1 first for it, and another program may
+ * listen there while the launcher listens on 127.0.0.1.
+ */
+const LOCAL_HOSTS = new Set(['127.0.0.1', '[::1]']);
 
 function parse(url: string): URL | undefined {
   try {
@@ -12,10 +16,23 @@ function parse(url: string): URL | undefined {
   }
 }
 
-/** True for an http address on 127.0.0.1, localhost or [::1]. */
+/** True for an http address on 127.0.0.1 or [::1]. */
 export function isLocalAddress(url: string): boolean {
   const u = parse(url);
   return u !== undefined && u.protocol === 'http:' && LOCAL_HOSTS.has(u.hostname);
+}
+
+/**
+ * The address the window loads. The launcher prints `localhost`, but it listens only on the host
+ * it was given. A `localhost` address becomes that host: 127.0.0.1, or [::1] for ::1. Any other
+ * host, no host, or an address not on `localhost` gives the address unchanged.
+ */
+export function windowAddress(address: string, host: string | undefined): string {
+  const literal = host === '127.0.0.1' ? '127.0.0.1' : host === '::1' ? '[::1]' : undefined;
+  const u = parse(address);
+  if (literal === undefined || u === undefined || u.hostname !== 'localhost') return address;
+  u.hostname = literal;
+  return u.href;
 }
 
 /** True when both are URLs with the same scheme, host and port. A URL with no origin, such as file:, matches nothing. */
@@ -59,11 +76,12 @@ export function linkTarget(
 
 /**
  * Whether the window may grant a permission. Every request is refused, with one exception: a
- * sanitized clipboard write from a page on the launcher's origin, for Studio's copy buttons.
+ * sanitized clipboard write from a page on the window's own address, for Studio's copy buttons,
+ * and only while that address is this computer.
  */
-export function mayGrantPermission(permission: string, requestingUrl: string, launcherAddress: string | undefined): boolean {
-  if (permission !== 'clipboard-sanitized-write' || launcherAddress === undefined) return false;
-  return sameOrigin(requestingUrl, launcherAddress);
+export function mayGrantPermission(permission: string, requestingUrl: string, shownAddress: string | undefined): boolean {
+  if (permission !== 'clipboard-sanitized-write' || shownAddress === undefined) return false;
+  return isLocalAddress(shownAddress) && sameOrigin(requestingUrl, shownAddress);
 }
 
 /** The two about: pages a frame may load. Studio's plugin frames load `about:srcdoc`. */

@@ -11,8 +11,11 @@ import { INFO_CHANNEL, SETUP_CODE_CHANNEL } from './bridge';
 import { RETRY_CHANNEL, SCREEN_CHANNEL } from './channels';
 import type { PageState } from './controller';
 
-/** Host names that reach only this computer, as `location.hostname` writes them. */
-const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
+/**
+ * Host names that reach only this computer, as `location.hostname` writes them. Not `localhost`:
+ * the app loads the launcher on its IP literal, and `localhost` may reach another program on ::1.
+ */
+const LOCAL_HOSTS = ['127.0.0.1', '[::1]'];
 
 /** Electron wraps an error from the main process as "Error invoking remote method '<channel>': Error: <message>". */
 function mainError(err: unknown): Error {
