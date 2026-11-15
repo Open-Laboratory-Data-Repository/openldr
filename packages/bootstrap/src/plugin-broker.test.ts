@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { currentInFlight } from '@openldr/core';
+import { createImportCopyStore, createPluginDataStore } from '@openldr/db';
+import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
 import { createPluginBroker, buildBrokerOpSchema } from './plugin-broker';
+import { CopySetChangedError, createImportCopyService } from './import-copy';
 
 function memData() {
   const m = new Map<string, unknown>();
@@ -34,6 +37,7 @@ function broker(opts: {
   requiredRoles?: string[];
   maxDocBytes?: number;
   imports?: any;
+  copies?: any;
   diagnoseConnector?: any;
 }) {
   const data = memData();
@@ -55,6 +59,7 @@ function broker(opts: {
     facilities: opts.facilities,
     schedules: opts.schedules,
     imports: opts.imports,
+    copies: opts.copies,
     diagnoseConnector: opts.diagnoseConnector,
     maxDocBytes: opts.maxDocBytes,
     logger: { warn: (obj: unknown, msg: string) => { logged.push({ obj, msg }); } },
@@ -605,6 +610,172 @@ describe('plugin broker: imports', () => {
     imports.api.start = async () => { throw new Error('connector c9 is not allowed for plugin p1'); };
     const { b } = broker({ caps: IMPORT_CAPS, imports: imports.api });
     expect(await b.handle('p1', admin, { kind: 'import.start', connectorId: 'c9', options: {} })).toEqual({ ok: false, error: 'connector c9 is not allowed for plugin p1' });
+  });
+});
+
+// Layer under test: the broker's copy ops over a faked copy service, and in one test the real copy
+// service over the real plugin_data store on pg-mem. Not covered: a copy being driven, the CLI, or
+// the route that hands the broker its principal.
+describe('plugin broker: copies', () => {
+  const admin = { id: 'u1', roles: ['lab_admin'], username: 'amina' };
+  const IMPORT_CAPS = [{ kind: 'host:import' }];
+  const actor = { type: 'user', id: 'u1', name: 'amina' };
+  // A source key. It sits in every set's cursor and must never reach the page.
+  const SECRET_KEY = 'REQ-SECRET-0042';
+  const DRIVER = 'proc-7f3a';
+  const copyRun = (over: Record<string, unknown> = {}) => ({
+    id: 'cp1', kind: 'copy', rev: 4, pluginId: 'p1', pluginVersion: '1.0.0', connectorId: 'c1', status: 'running',
+    options: { tz: '+02:00' }, pageSize: 500,
+    sets: {
+      requests: { cursor: SECRET_KEY, keys: 500, rows: 1200, bytes: 34000, skipped: 1, done: false },
+      facilities: { cursor: SECRET_KEY, keys: 12, rows: 12, bytes: 900, skipped: 0, done: true },
+    },
+    setOrder: ['requests', 'facilities'], setSql: { requests: 'a1', facilities: 'b2' }, waiting: null, driver: DRIVER,
+    startedAt: '2026-11-15T08:00:00.000Z', updatedAt: '2026-11-15T08:01:00.000Z', finishedAt: null, lastError: null, startedBy: 'amina',
+    ...over,
+  });
+  function fakeCopies() {
+    const calls: Array<[string, unknown[]]> = [];
+    const rec = (name: string, result: () => unknown) => async (...args: unknown[]) => { calls.push([name, args]); return result(); };
+    return {
+      calls,
+      api: {
+        start: rec('start', () => copyRun({ status: 'queued', driver: null })),
+        get: rec('get', () => copyRun()),
+        list: rec('list', () => [copyRun(), copyRun({ id: 'cp2', status: 'completed' })]),
+        stop: rec('stop', () => copyRun({ status: 'stopping' })),
+        remove: rec('remove', () => copyRun({ status: 'deleting', driver: null })),
+      } as Record<string, (...args: unknown[]) => Promise<unknown>>,
+    };
+  }
+  const ALL_OPS = [
+    { kind: 'import.copy.start', connectorId: 'c1', options: {} },
+    { kind: 'import.copy.list' },
+    { kind: 'import.copy.status', copyId: 'cp1' },
+    { kind: 'import.copy.stop', copyId: 'cp1' },
+    { kind: 'import.copy.delete', copyId: 'cp1', confirm: true },
+  ];
+
+  it('import.copy.start passes the caller as the actor and the calling plugin as the plugin', async () => {
+    const copies = fakeCopies();
+    const { b } = broker({ caps: IMPORT_CAPS, copies: copies.api });
+    const res = await b.handle('p1', admin, {
+      kind: 'import.copy.start', connectorId: 'c1', options: { tz: '+02:00' }, pageSize: 200, reread: true,
+      pluginId: 'p2', sql: 'SELECT * FROM secrets',
+    });
+    expect(res).toMatchObject({ ok: true, data: { run: { id: 'cp1', status: 'queued' } } });
+    expect(copies.calls).toEqual([['start', [{
+      pluginId: 'p1', connectorId: 'c1', options: { tz: '+02:00' }, pageSize: 200, reread: true, actor,
+    }]]]);
+  });
+
+  it('a plugin without host:import is denied every copy op', async () => {
+    const copies = fakeCopies();
+    const noCap = broker({ caps: [], copies: copies.api });
+    for (const op of ALL_OPS) {
+      expect(await noCap.b.handle('p1', admin, op)).toEqual({ ok: false, error: expect.stringMatching(/host:import/) });
+    }
+    // The caller's role is the second gate, as for the import ops.
+    const withCap = broker({ caps: IMPORT_CAPS, copies: copies.api });
+    for (const op of ALL_OPS) {
+      expect(await withCap.b.handle('p1', { id: 'u2', roles: ['lab_tech'] }, op)).toEqual({ ok: false, error: expect.stringMatching(/lab_admin/) });
+    }
+    expect(copies.calls).toEqual([]);
+    expect(noCap.audited.map((e) => e.outcome)).toEqual(ALL_OPS.map(() => 'denied'));
+  });
+
+  it('import.copy.delete without confirm: true is refused by the schema', async () => {
+    const copies = fakeCopies();
+    const { b } = broker({ caps: IMPORT_CAPS, copies: copies.api });
+    for (const confirm of [undefined, false, 'true', 1]) {
+      const op = { kind: 'import.copy.delete', copyId: 'cp1', ...(confirm === undefined ? {} : { confirm }) };
+      expect(await b.handle('p1', admin, op)).toEqual({ ok: false, error: expect.stringMatching(/^invalid operation: confirm/) });
+    }
+    expect(copies.calls).toEqual([]);
+    expect(await b.handle('p1', admin, { kind: 'import.copy.delete', copyId: 'cp1', confirm: true })).toMatchObject({ ok: true, data: { status: 'deleting' } });
+    expect(copies.calls).toEqual([['remove', ['p1', 'cp1', actor]]]);
+  });
+
+  it('a changed set comes back as data that names the sets, so the page can ask', async () => {
+    const copies = fakeCopies();
+    copies.api.start = async () => { throw new CopySetChangedError(['requests', 'results']); };
+    const { b } = broker({ caps: IMPORT_CAPS, copies: copies.api });
+    expect(await b.handle('p1', admin, { kind: 'import.copy.start', connectorId: 'c1', options: {} }))
+      .toEqual({ ok: true, data: { changedSets: ['requests', 'results'] } });
+    // Any other refusal is still a failure with its reason.
+    copies.api.start = async () => { throw new Error('copy cp1 is being deleted'); };
+    expect(await b.handle('p1', admin, { kind: 'import.copy.start', connectorId: 'c1', options: {} }))
+      .toEqual({ ok: false, error: 'copy cp1 is being deleted' });
+  });
+
+  it('passes status, list and stop through for the calling plugin', async () => {
+    const copies = fakeCopies();
+    const { b } = broker({ caps: IMPORT_CAPS, copies: copies.api });
+    await b.handle('p1', admin, { kind: 'import.copy.status', copyId: 'cp1', pluginId: 'p2' });
+    await b.handle('p1', admin, { kind: 'import.copy.list', pluginId: 'p2' });
+    await b.handle('p1', admin, { kind: 'import.copy.stop', copyId: 'cp1', pluginId: 'p2' });
+    expect(copies.calls).toEqual([['get', ['p1', 'cp1']], ['list', ['p1']], ['stop', ['p1', 'cp1', actor]]]);
+  });
+
+  it('no answer carries a set cursor or the driver', async () => {
+    const copies = fakeCopies();
+    const { b } = broker({ caps: IMPORT_CAPS, copies: copies.api });
+    const answers = [];
+    for (const op of ALL_OPS) answers.push(await b.handle('p1', admin, op));
+    expect(answers.every((a) => a.ok)).toBe(true);
+    for (const a of answers) {
+      const text = JSON.stringify(a);
+      expect(text).not.toContain(SECRET_KEY);
+      expect(text).not.toContain(DRIVER);
+      expect(text).not.toMatch(/"cursor"|"driver"/);
+    }
+    // Everything else the page needs is still there, sets in the plugin's order.
+    const status = answers[2] as { ok: true; data: Record<string, unknown> };
+    expect(status.data).toEqual({
+      id: 'cp1', kind: 'copy', rev: 4, pluginId: 'p1', pluginVersion: '1.0.0', connectorId: 'c1', status: 'running',
+      options: { tz: '+02:00' }, pageSize: 500,
+      sets: {
+        requests: { keys: 500, rows: 1200, bytes: 34000, skipped: 1, done: false },
+        facilities: { keys: 12, rows: 12, bytes: 900, skipped: 0, done: true },
+      },
+      setOrder: ['requests', 'facilities'], setSql: { requests: 'a1', facilities: 'b2' }, waiting: null,
+      startedAt: '2026-11-15T08:00:00.000Z', updatedAt: '2026-11-15T08:01:00.000Z', finishedAt: null, lastError: null, startedBy: 'amina',
+    });
+    expect(Object.keys((status.data.sets as object))).toEqual(['requests', 'facilities']);
+    // A missing copy is null, not an error.
+    copies.api.get = async () => null;
+    expect(await b.handle('p1', admin, { kind: 'import.copy.status', copyId: 'nope' })).toEqual({ ok: true, data: null });
+  });
+
+  it('says so when copies are not wired', async () => {
+    const { b } = broker({ caps: IMPORT_CAPS });
+    expect(await b.handle('p1', admin, { kind: 'import.copy.list' })).toEqual({ ok: false, error: 'copies are unavailable' });
+  });
+
+  it('a plugin can only see and stop its own copies', async () => {
+    // The real copy service over the real plugin_data store, with one copy for p1 and one for p2.
+    const db = await makeMigratedDb();
+    const pluginData = createPluginDataStore(db);
+    const copies = createImportCopyService({
+      plugins: { list: async () => [], loadSink: async () => undefined } as any,
+      connectors: { get: async () => null, getDecryptedConfig: async () => ({}) } as any,
+      secretsKey: 'k', pluginData, store: createImportCopyStore(db),
+      audit: async () => {}, allowed: async () => [], driverId: 'test',
+    });
+    await pluginData.put('p1', '__import-copies', 'mine', copyRun({ id: 'mine', pluginId: 'p1' }));
+    await pluginData.put('p2', '__import-copies', 'theirs', copyRun({ id: 'theirs', pluginId: 'p2' }));
+    const { b } = broker({ caps: IMPORT_CAPS, copies });
+
+    const list = await b.handle('p1', admin, { kind: 'import.copy.list' });
+    expect(list.ok && (list.data as Array<{ id: string }>).map((r) => r.id)).toEqual(['mine']);
+    expect(await b.handle('p1', admin, { kind: 'import.copy.status', copyId: 'theirs' })).toEqual({ ok: true, data: null });
+    expect(await b.handle('p1', admin, { kind: 'import.copy.stop', copyId: 'theirs' })).toEqual({ ok: false, error: 'copy theirs not found' });
+    expect(await b.handle('p1', admin, { kind: 'import.copy.delete', copyId: 'theirs', confirm: true })).toEqual({ ok: false, error: 'copy theirs not found' });
+    expect(await pluginData.get('p2', '__import-copies', 'theirs')).toMatchObject({ status: 'running', rev: 4 });
+
+    // Its own copy it can stop.
+    expect(await b.handle('p1', admin, { kind: 'import.copy.stop', copyId: 'mine' })).toMatchObject({ ok: true, data: { id: 'mine', status: 'stopping' } });
+    await db.destroy();
   });
 });
 

@@ -50,20 +50,40 @@ export const uiContributionSchema = z.object({
 export type UiContribution = z.infer<typeof uiContributionSchema>;
 
 /** Declares that a plugin can drive an import: CE pages through a host database connector with
- *  SQL from these entrypoints and saves what `map` returns. See packages/bootstrap import-run.ts. */
+ *  SQL from these entrypoints and saves what `map` returns. See packages/bootstrap import-run.ts.
+ *  `copy` names the entrypoint that lists what to copy to CE's own disk. A plugin gives
+ *  `queries` and `map` together, or `copy`, or all three. No field has a default, so a manifest
+ *  without `copy` parses to the same object as before and its signature still verifies. */
 export const importSourceSchema = z.object({
   // Host connector types the plugin's SQL is written for. Only SQL Server so far: literal quoting
   // and date handling in import-sql.ts are written and tested for it alone. Widen with those.
   connectorTypes: z.array(z.enum(['microsoft-sql'])).min(1),
   entrypoints: z.object({
-    queries: z.string().min(1),
+    queries: z.string().min(1).optional(),
     checks: z.string().min(1).optional(),
-    map: z.string().min(1),
+    map: z.string().min(1).optional(),
+    copy: z.string().min(1).optional(),
+  }).superRefine((e, ctx) => {
+    if ((e.queries === undefined) !== (e.map === undefined)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'importSource.entrypoints needs both queries and map, or neither' });
+    } else if (e.queries === undefined && e.copy === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'importSource.entrypoints needs queries and map, or copy' });
+    }
   }),
   // Stamped on every saved record as its source system. Defaults to the plugin id.
   sourceSystem: z.string().min(1).max(64).optional(),
 });
 export type ImportSource = z.infer<typeof importSourceSchema>;
+
+/** True when the plugin can run a one-pass import: it names both `queries` and `map`. */
+export function canImportOnePass(source: ImportSource): boolean {
+  return source.entrypoints.queries !== undefined && source.entrypoints.map !== undefined;
+}
+
+/** True when the plugin can be copied from: it names a `copy` entrypoint. */
+export function canCopy(source: ImportSource): boolean {
+  return source.entrypoints.copy !== undefined;
+}
 
 const pluginPayload = z.object({
   kind: z.literal('plugin'),
@@ -126,7 +146,7 @@ export function parseArtifactManifest(raw: unknown): ArtifactManifest {
       throw new Error(`artifact ${manifest.id}: payload.importSource requires the host:import capability`);
     }
     const exported = new Set(manifest.payload.entrypoints);
-    for (const name of [entrypoints.queries, entrypoints.checks, entrypoints.map]) {
+    for (const name of [entrypoints.queries, entrypoints.checks, entrypoints.map, entrypoints.copy]) {
       if (name !== undefined && !exported.has(name)) {
         throw new Error(`artifact ${manifest.id}: import entrypoint '${name}' is not in payload.entrypoints`);
       }

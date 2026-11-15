@@ -40,7 +40,53 @@ export type PluginBrokerOp =
   | { kind: 'import.list' }
   | { kind: 'import.failures'; runId: string }
   | { kind: 'import.stop'; runId: string }
-  | { kind: 'import.resume'; runId: string };
+  | { kind: 'import.resume'; runId: string }
+  | { kind: 'import.copy.start'; connectorId: string; options: Record<string, string>; pageSize?: number; reread?: boolean }
+  | { kind: 'import.copy.list' }
+  | { kind: 'import.copy.status'; copyId: string }
+  | { kind: 'import.copy.stop'; copyId: string }
+  | { kind: 'import.copy.delete'; copyId: string; confirm: true };
+
+export type PluginCopyStatus = 'queued' | 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed' | 'deleting';
+
+/** One set of a copy, as the host shows it to a page. */
+export interface PluginCopySetProgress {
+  /** Keys stored. A skipped key is counted in `skipped` instead. */
+  keys: number;
+  rows: number;
+  /** The UTF-8 length of each stored row's JSON, added up. */
+  bytes: number;
+  /** Keys the host could not store and listed as skipped. */
+  skipped: number;
+  done: boolean;
+  /** Set when a start with `reread` asked for this set to be emptied and read again. */
+  empty?: boolean;
+}
+
+/** A copy as the host shows it to a page (mirror of the broker's PageCopyRun). The host never
+ *  sends a set's position in the source, nor which server process drives the copy. */
+export interface PluginCopyRun {
+  id: string;
+  kind: 'copy';
+  rev: number;
+  pluginId: string;
+  pluginVersion: string;
+  connectorId: string;
+  status: PluginCopyStatus;
+  options: Record<string, string>;
+  pageSize: number;
+  /** Set name to progress. */
+  sets: Record<string, PluginCopySetProgress>;
+  /** The sets in the order the plugin named them. */
+  setOrder: string[];
+  setSql: Record<string, string>;
+  waiting: { since: string; attempt: number; error: string } | null;
+  startedAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+  lastError: string | null;
+  startedBy: string;
+}
 
 export type PluginRpcResult = { ok: true; data: unknown } | { ok: false; error: string };
 
@@ -91,6 +137,17 @@ export interface OpenLdrPluginApi {
     failures(runId: string): Promise<unknown>;
     stop(runId: string): Promise<unknown>;
     resume(runId: string): Promise<unknown>;
+    /** A copy of the source's rows to CE's own disk. One per plugin and connector. */
+    copy: {
+      /** Records the request and returns. `changedSets` instead of `run` means a set's SQL
+       *  changed: ask the person, then call again with `reread: true` to read those sets again. */
+      start(input: { connectorId: string; options: Record<string, string>; pageSize?: number; reread?: boolean }): Promise<{ run?: PluginCopyRun; changedSets?: string[] }>;
+      list(): Promise<PluginCopyRun[]>;
+      status(copyId: string): Promise<PluginCopyRun | null>;
+      stop(copyId: string): Promise<PluginCopyRun>;
+      /** Deletes the copy and every row it holds. */
+      remove(copyId: string): Promise<PluginCopyRun>;
+    };
   };
 }
 

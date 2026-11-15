@@ -5,12 +5,70 @@ import { browserOffset, fromOptions, problems, toOptions, type OptionsForm } fro
 import { t } from './i18n';
 import { ChecksStep, OptionsStep, SourceStep } from './steps';
 import { DryRunStep, ImportStep } from './runSteps';
+import { CopyPanel } from './CopyPanel';
 
 const STEPS = ['source', 'options', 'checks', 'dryRun', 'import'] as const;
 const LAST = STEPS.length - 1;
+const TABS = ['import', 'copy'] as const;
+type Tab = typeof TABS[number];
 
-/** The import page: five steps, in order. `pollMs` is how often a running import is re-read. */
+/** The plugin page: an Import tab and a Copy tab. `pollMs` is how often a running import or copy
+ *  is re-read. A tab stays mounted once opened, so switching tabs keeps each one's place. */
 export function App({ pollMs = 2000 }: { pollMs?: number }) {
+  const [tab, setTab] = useState<Tab>('import');
+  const [copyOpened, setCopyOpened] = useState(false);
+
+  function open(next: Tab) {
+    setTab(next);
+    if (next === 'copy') setCopyOpened(true);
+  }
+
+  return (
+    <div class="v1i-shell">
+      <div class="v1i-tabs" role="tablist" aria-label={t('tabs.label')}>
+        {TABS.map((name, i) => (
+          <button
+            key={name}
+            type="button"
+            role="tab"
+            id={`tab-${name}`}
+            // The Copy panel is not in the page until its tab is first opened.
+            aria-controls={name === 'copy' && !copyOpened ? undefined : `panel-${name}`}
+            aria-selected={tab === name}
+            tabIndex={tab === name ? 0 : -1}
+            class={`v1i-tab${tab === name ? ' v1i-tab-on' : ''}`}
+            data-testid={`tab-${name}`}
+            onClick={() => open(name)}
+            onKeyDown={(e) => {
+              const at = e.key === 'ArrowRight' ? (i + 1) % TABS.length
+                : e.key === 'ArrowLeft' ? (i + TABS.length - 1) % TABS.length
+                  : e.key === 'Home' ? 0
+                    : e.key === 'End' ? TABS.length - 1 : null;
+              if (at === null) return;
+              e.preventDefault();
+              const next = TABS[at]!;
+              open(next);
+              document.getElementById(`tab-${next}`)?.focus();
+            }}
+          >
+            {t(`tab.${name}`)}
+          </button>
+        ))}
+      </div>
+      <div class="v1i-pane" role="tabpanel" id="panel-import" aria-labelledby="tab-import" hidden={tab !== 'import'}>
+        <ImportWizard pollMs={pollMs} />
+      </div>
+      {copyOpened ? (
+        <div class="v1i-pane" role="tabpanel" id="panel-copy" aria-labelledby="tab-copy" hidden={tab !== 'copy'}>
+          <div class="v1i-body"><CopyPanel pollMs={pollMs} shown={tab === 'copy'} /></div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** The import wizard: five steps, in order. */
+function ImportWizard({ pollMs }: { pollMs: number }) {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [connectors, setConnectors] = useState<AllowedConnector[]>([]);
@@ -81,10 +139,10 @@ export function App({ pollMs = 2000 }: { pollMs?: number }) {
     setReached((r) => Math.max(r, to));
   }
 
-  if (!loaded) return <div class="v1i-shell"><p class="v1i-status" data-testid="loading">{t('loading')}</p></div>;
+  if (!loaded) return <p class="v1i-status" data-testid="loading">{t('loading')}</p>;
 
   return (
-    <div class="v1i-shell">
+    <>
       <ol class="v1i-steps" data-testid="steps">
         {STEPS.map((name, i) => (
           <li key={name}>
@@ -131,6 +189,6 @@ export function App({ pollMs = 2000 }: { pollMs?: number }) {
           <button type="button" class="v1i-btn" data-testid="next" disabled={!canNext} onClick={() => go(step + 1)}>{t('nav.next')}</button>
         ) : null}
       </div>
-    </div>
+    </>
   );
 }

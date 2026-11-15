@@ -43,9 +43,14 @@ it('offers show and set for a user\'s studio preferences', () => {
 
 it('offers the import commands', () => {
   const imports = buildProgram().commands.find((command) => command.name() === 'import')!;
-  expect(imports.commands.map((command) => command.name())).toEqual(['allow', 'revoke', 'allowed', 'start', 'resume', 'status', 'stop', 'failures']);
+  expect(imports.commands.map((command) => command.name())).toEqual(['allow', 'revoke', 'allowed', 'start', 'resume', 'status', 'stop', 'failures', 'copy']);
   const start = imports.commands.find((command) => command.name() === 'start')!;
   expect(start.options.filter((option) => option.mandatory).map((option) => option.long)).toEqual(['--plugin', '--connector']);
+  const copy = imports.commands.find((command) => command.name() === 'copy')!;
+  expect(copy.commands.map((command) => command.name())).toEqual(['start', 'status', 'stop', 'delete']);
+  const copyStart = copy.commands.find((command) => command.name() === 'start')!;
+  expect(copyStart.options.filter((option) => option.mandatory).map((option) => option.long)).toEqual(['--plugin', '--connector']);
+  expect(copyStart.options.some((option) => option.long === '--follow')).toBe(false);
 });
 
 it('adds a connector from a JSON file, and removes one only with --force', () => {

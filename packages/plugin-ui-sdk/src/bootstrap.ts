@@ -106,6 +106,14 @@ function pluginBootstrapV1(): void {
       failures: (runId: string) => call({ kind: 'import.failures', runId }),
       stop: (runId: string) => call({ kind: 'import.stop', runId }),
       resume: (runId: string) => call({ kind: 'import.resume', runId }),
+      copy: {
+        start: (input: { connectorId: string; options: Record<string, string>; pageSize?: number; reread?: boolean }) =>
+          call({ kind: 'import.copy.start', connectorId: input.connectorId, options: input.options, pageSize: input.pageSize, reread: input.reread }),
+        list: () => call({ kind: 'import.copy.list' }),
+        status: (copyId: string) => call({ kind: 'import.copy.status', copyId }),
+        stop: (copyId: string) => call({ kind: 'import.copy.stop', copyId }),
+        remove: (copyId: string) => call({ kind: 'import.copy.delete', copyId, confirm: true }),
+      },
     },
   };
   (window as unknown as { openldr: unknown }).openldr = api;

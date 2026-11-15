@@ -49,6 +49,38 @@ beforeEach(() => {
   document.body.removeAttribute('data-openldr-ready');
 });
 
+describe('tabs', () => {
+  it('opens on the Import tab and keeps the wizard where it was after a visit to Copy', async () => {
+    setup();
+    render(<App />);
+    fireEvent.click(await screen.findByTestId('connector-ms'));
+    click('next');
+    expect(screen.getByTestId('tab-import').getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByTestId('copy-panel')).toBeNull();
+    click('tab-copy');
+    expect(screen.getByTestId('tab-copy').getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByTestId('copy-panel')).toBeTruthy();
+    expect((screen.getByTestId('steps').closest('[role="tabpanel"]') as HTMLElement).hidden).toBe(true);
+    click('tab-import');
+    expect(screen.getByTestId('step-1').getAttribute('aria-current')).toBe('step');
+    expect((screen.getByTestId('copy-panel').closest('[role="tabpanel"]') as HTMLElement).hidden).toBe(true);
+  });
+
+  it('points a tab at its panel only once the panel exists, and moves with Home and End', async () => {
+    setup();
+    render(<App />);
+    await screen.findByTestId('connector-ms');
+    expect(screen.getByTestId('tab-copy').hasAttribute('aria-controls')).toBe(false);
+    screen.getByTestId('tab-import').focus();
+    fireEvent.keyDown(screen.getByTestId('tab-import'), { key: 'End' });
+    expect(screen.getByTestId('tab-copy').getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(screen.getByTestId('tab-copy'));
+    expect(screen.getByTestId('tab-copy').getAttribute('aria-controls')).toBe('panel-copy');
+    fireEvent.keyDown(screen.getByTestId('tab-copy'), { key: 'Home' });
+    expect(screen.getByTestId('tab-import').getAttribute('aria-selected')).toBe('true');
+  });
+});
+
 describe('source step', () => {
   it('says how to allow a connector when none is allowed', async () => {
     setup({ allowed: async () => [] });
@@ -191,6 +223,18 @@ describe('import step', () => {
     expect(screen.getByTestId('step-4').getAttribute('aria-current')).toBe('step');
     expect(screen.getByTestId('run-keys').textContent).toContain('500');
     expect(screen.getByTestId('run-imported').textContent).toMatch(/Requests saved/);
+    click('run-stop');
+    await waitFor(() => expect(screen.getByTestId('run-status').textContent).toMatch(/Stopping/));
+    expect(stop).toHaveBeenCalledWith('r1');
+  });
+
+  it('offers Stop for a run that is waiting for its source, and stops it', async () => {
+    const waiting = run({ status: 'waiting', counts: { keys: 500, imported: 500, failed: 0, resources: 7000 } });
+    let current = waiting;
+    const stop = vi.fn(async () => (current = { ...waiting, status: 'stopping' }));
+    setup({ list: async () => [waiting], status: async () => current, stop });
+    render(<App pollMs={5} />);
+    expect((await screen.findByTestId('run-status')).textContent).toMatch(/Waiting for the source/);
     click('run-stop');
     await waitFor(() => expect(screen.getByTestId('run-status').textContent).toMatch(/Stopping/));
     expect(stop).toHaveBeenCalledWith('r1');

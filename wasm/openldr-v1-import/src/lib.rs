@@ -7,6 +7,11 @@
 //!   import_checks   { options }                 -> { checks: [{ id, sql }] }
 //!   import_map      { keys, rows, options }     -> { groups: [{ key, resources, error? }] }
 //!
+//! CE's copy service (packages/bootstrap/src/import-copy.ts) calls one more, to copy the source's
+//! rows to CE as they are:
+//!
+//!   import_copy     { options }                 -> { sets: [{ name, keyQuery: { sql }, detailQueries: [{ name, sql }] }] }
+//!
 //! This plugin never opens a database connection. It supplies SELECT statements; the host runs
 //! them on a connector an admin allowed, and hands the rows back to `import_map`.
 
@@ -27,6 +32,11 @@ pub fn import_queries(input: &Value) -> Result<Value, String> {
 
 pub fn import_checks(input: &Value) -> Result<Value, String> {
     Ok(queries::checks(&options(input)?))
+}
+
+/// The copy reads rows as they are and never uses the time zone, so `tz` is optional here.
+pub fn import_copy(input: &Value) -> Result<Value, String> {
+    Ok(queries::copy(&queries::parse_copy_options(input.get("options").unwrap_or(&Value::Null))?))
 }
 
 pub fn import_map(input: &Value) -> Result<Value, String> {
@@ -71,5 +81,10 @@ mod plugin {
     #[plugin_fn]
     pub fn import_map(input: Vec<u8>) -> FnResult<String> {
         run(input, crate::import_map)
+    }
+
+    #[plugin_fn]
+    pub fn import_copy(input: Vec<u8>) -> FnResult<String> {
+        run(input, crate::import_copy)
     }
 }

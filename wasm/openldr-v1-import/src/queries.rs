@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 #[derive(Debug, Clone, PartialEq)]
 pub struct Options {
     /// UTC offset of the v1 site: "+02:00", "-05:00" or "Z". v1 stores local time with no zone.
+    /// Empty only for a copy that was given none.
     pub tz: String,
     /// Database that holds the v1 tables. None means the connector's own database.
     pub database: Option<String>,
@@ -43,7 +44,18 @@ fn date(options: &Value, key: &str) -> Result<Option<String>, String> {
     }
 }
 
+/// The import's options. `tz` is required: the import maps v1's local times with it.
 pub fn parse_options(options: &Value) -> Result<Options, String> {
+    parse(options, true)
+}
+
+/// The copy's options. The copy's SQL never uses `tz`, so it may be left out, and then `tz` is
+/// empty. A `tz` that is given is checked as for the import. Every other option is checked the same.
+pub fn parse_copy_options(options: &Value) -> Result<Options, String> {
+    parse(options, false)
+}
+
+fn parse(options: &Value, tz_required: bool) -> Result<Options, String> {
     let empty = serde_json::Map::new();
     let map = match options {
         Value::Null => &empty,
@@ -59,7 +71,7 @@ pub fn parse_options(options: &Value) -> Result<Options, String> {
         }
     }
     let tz = options.get("tz").and_then(Value::as_str).map(js_trim).unwrap_or("");
-    if !is_tz_offset(tz) {
+    if (tz_required || !tz.is_empty()) && !is_tz_offset(tz) {
         return Err("option tz is required: the site's UTC offset, like +02:00, or Z".to_string());
     }
     let database = match options.get("database").and_then(Value::as_str).map(js_trim).filter(|s| !s.is_empty()) {
@@ -156,6 +168,21 @@ fn detail(o: &Options, name: &str, cols: &[&str], order_by: &str) -> String {
     format!("SELECT {} FROM {} WHERE [RequestID] IN ({{{{keys}}}}) ORDER BY {}", columns(cols), table(o, name), order_by)
 }
 
+/// The ORDER BY of each table, shared by the import and the copy so the two read rows in one order.
+const REQUEST_ORDER: &str = "[RequestID], [OBRSetID]";
+const RESULT_ORDER: &str = "[RequestID], [OBRSetID], [OBXSetID], [OBXSubID]";
+const PATIENT_ORDER: &str = "[RequestID]";
+const AST_ORDER: &str = "[RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode]";
+
+/// A copy reads every column of its table, with the key first, so CE can file each row by it.
+fn copy_detail(o: &Options, name: &str, order_by: &str) -> String {
+    format!(
+        "SELECT [RequestID] AS [__key], * FROM {} WHERE [RequestID] IN ({{{{keys}}}}) ORDER BY {}",
+        table(o, name),
+        order_by
+    )
+}
+
 /// What `import_queries` returns: the key query and the four detail queries.
 pub fn queries(o: &Options) -> Value {
     // One key per request. A request can have several Requests rows (one per panel), so DISTINCT.
@@ -180,11 +207,29 @@ pub fn queries(o: &Options) -> Value {
     json!({
         "keyQuery": { "sql": key },
         "detailQueries": [
-            { "name": "requests", "sql": detail(o, "Requests", REQUEST_COLUMNS, "[RequestID], [OBRSetID]") },
-            { "name": "results", "sql": detail(o, "LabResults", RESULT_COLUMNS, "[RequestID], [OBRSetID], [OBXSetID], [OBXSubID]") },
-            { "name": "patients", "sql": detail(o, "Patients", PATIENT_COLUMNS, "[RequestID]") },
-            { "name": "ast", "sql": detail(o, "ASTResults", AST_COLUMNS, "[RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode]") },
+            { "name": "requests", "sql": detail(o, "Requests", REQUEST_COLUMNS, REQUEST_ORDER) },
+            { "name": "results", "sql": detail(o, "LabResults", RESULT_COLUMNS, RESULT_ORDER) },
+            { "name": "patients", "sql": detail(o, "Patients", PATIENT_COLUMNS, PATIENT_ORDER) },
+            { "name": "ast", "sql": detail(o, "ASTResults", AST_COLUMNS, AST_ORDER) },
         ],
+    })
+}
+
+/// What `import_copy` returns: one set, `requests`, paged by the import's own key query, with one
+/// detail query per table. The import's column lists skip ten Requests columns that later parts
+/// need, so a copy reads every column instead.
+pub fn copy(o: &Options) -> Value {
+    json!({
+        "sets": [{
+            "name": "requests",
+            "keyQuery": queries(o)["keyQuery"].clone(),
+            "detailQueries": [
+                { "name": "requests", "sql": copy_detail(o, "Requests", REQUEST_ORDER) },
+                { "name": "results", "sql": copy_detail(o, "LabResults", RESULT_ORDER) },
+                { "name": "patients", "sql": copy_detail(o, "Patients", PATIENT_ORDER) },
+                { "name": "ast", "sql": copy_detail(o, "ASTResults", AST_ORDER) },
+            ],
+        }],
     })
 }
 
@@ -288,6 +333,148 @@ mod tests {
         assert!(details[3]["sql"].as_str().unwrap().ends_with("ORDER BY [RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode]"));
         // The same 53 Requests columns v1-push reads.
         assert_eq!(REQUEST_COLUMNS.len(), 53);
+    }
+
+    /// The import's four statements, written out in full. The ORDER BY strings are shared with the
+    /// copy, so a change made for the copy would move the import's order with no other test failing.
+    #[test]
+    fn the_import_detail_queries_are_these_exact_statements() {
+        let q = queries(&opts(json!({ "tz": "Z" })).unwrap());
+        let sql = |i: usize| q["detailQueries"][i]["sql"].as_str().unwrap().to_string();
+        assert_eq!(
+            sql(0),
+            "SELECT [RequestID], [OBRSetID], [LIMSPanelCode], [LIMSPanelDesc], [LIMSSpecimenSourceCode], \
+             [LIMSSpecimenSourceDesc], [RequestingFacilityCode], [TestingFacilityCode], [SpecimenDateTime], \
+             [ReceivedDateTime], [RegisteredDateTime], [AnalysisDateTime], [AuthorisedDateTime], [ClinicalInfo], \
+             [ICD10ClinicalInfoCodes], [Therapy], [HL7PriorityCode], [AgeInYears], [AgeInDays], [HL7SexCode], \
+             [HL7PatientClassCode], [HL7SectionCode], [HL7ResultStatusCode], [AttendingDoctor], [TestedBy], \
+             [AuthorisedBy], [RegisteredBy], [RequestTypeCode], [LIMSAnalyzerCode], [LIMSRejectionCode], \
+             [LIMSRejectionDesc], [LIMSPointOfCareDesc], [LIMSPreReg_RegistrationDateTime], \
+             [LIMSPreReg_ReceivedDateTime], [LIMSPreReg_RegistrationFacilityCode], [LOINCPanelCode], \
+             [AdmitAttendDateTime], [CollectionVolume], [HL7SpecimenSourceCode], [HL7SpecimenSiteCode], \
+             [LIMSSpecimenSiteCode], [LIMSSpecimenSiteDesc], [WorkUnits], [CostUnits], [OrderingNotes], \
+             [EncryptedPatientID], [HL7EthnicGroupCode], [Deceased], [Newborn], [ReferringRequestID], \
+             [TargetTimeDays], [TargetTimeMins], [Repeated] FROM [dbo].[Requests] \
+             WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID], [OBRSetID]"
+        );
+        assert_eq!(
+            sql(1),
+            "SELECT [RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [HL7ResultTypeCode], [SIValue], [SIUnits], \
+             [SILoRange], [SIHiRange], [HL7AbnormalFlagCodes], [CodedValue], [LIMSObservationCode], \
+             [LIMSObservationDesc], [LIMSRptResult], [LIMSRptUnits], [LIMSRptFlag], [LIMSRptRange], \
+             [LIMSCodedValue] FROM [dbo].[LabResults] \
+             WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID], [OBRSetID], [OBXSetID], [OBXSubID]"
+        );
+        assert_eq!(
+            sql(2),
+            "SELECT [RequestID], [SURNAME], [FIRSTNAME], [DOB], [NATIONALID], [MOBILE], [TELHOME], [EMAIL], \
+             [HOSPID] FROM [dbo].[Patients] WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID]"
+        );
+        assert_eq!(
+            sql(3),
+            "SELECT [RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode], [LIMSSubstanceName], \
+             [ORGANISM], [LIMSOrganismCode], [BreakpointType], [Methodology], [Units], [ASTValue], [ASTResult] \
+             FROM [dbo].[ASTResults] WHERE [RequestID] IN ({{keys}}) \
+             ORDER BY [RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode]"
+        );
+    }
+
+    #[test]
+    fn copy_is_one_set_with_the_import_queries() {
+        let o = opts(json!({ "tz": "Z" })).unwrap();
+        let c = copy(&o);
+        let sets = c["sets"].as_array().unwrap();
+        assert_eq!(sets.len(), 1);
+        assert_eq!(sets[0]["name"], "requests");
+        assert_eq!(sets[0]["keyQuery"], queries(&o)["keyQuery"]);
+        let details = sets[0]["detailQueries"].as_array().unwrap();
+        let names: Vec<&str> = details.iter().map(|d| d["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["requests", "results", "patients", "ast"]);
+        for d in details {
+            let sql = d["sql"].as_str().unwrap();
+            assert!(sql.starts_with("SELECT [RequestID] AS [__key], * FROM "), "{sql}");
+            assert!(sql.contains(" WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID]"), "{sql}");
+        }
+        // Each reads its own table, in the order the import reads it.
+        assert_eq!(
+            details[0]["sql"],
+            "SELECT [RequestID] AS [__key], * FROM [dbo].[Requests] WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID], [OBRSetID]"
+        );
+        assert_eq!(
+            details[1]["sql"],
+            "SELECT [RequestID] AS [__key], * FROM [dbo].[LabResults] WHERE [RequestID] IN ({{keys}}) \
+             ORDER BY [RequestID], [OBRSetID], [OBXSetID], [OBXSubID]"
+        );
+        assert_eq!(
+            details[2]["sql"],
+            "SELECT [RequestID] AS [__key], * FROM [dbo].[Patients] WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID]"
+        );
+        assert_eq!(
+            details[3]["sql"],
+            "SELECT [RequestID] AS [__key], * FROM [dbo].[ASTResults] WHERE [RequestID] IN ({{keys}}) \
+             ORDER BY [RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode]"
+        );
+        // The copy orders each table as the import does.
+        let import = queries(&o);
+        for (c, i) in details.iter().zip(import["detailQueries"].as_array().unwrap()) {
+            let order = |s: &Value| s["sql"].as_str().unwrap().split(" ORDER BY ").nth(1).unwrap().to_string();
+            assert_eq!(order(c), order(i), "{}", c["name"]);
+        }
+    }
+
+    #[test]
+    fn copy_reads_the_database_the_option_names() {
+        let o = opts(json!({ "tz": "Z", "database": "OpenLDRData" })).unwrap();
+        let c = copy(&o);
+        let set = &c["sets"][0];
+        assert!(set["keyQuery"]["sql"].as_str().unwrap().contains("FROM [OpenLDRData].[dbo].[Requests] "));
+        let tables = ["Requests", "LabResults", "Patients", "ASTResults"];
+        for (d, t) in set["detailQueries"].as_array().unwrap().iter().zip(tables) {
+            let sql = d["sql"].as_str().unwrap();
+            assert!(sql.contains(&format!("FROM [OpenLDRData].[dbo].[{t}] WHERE ")), "{sql}");
+            assert!(!sql.contains("FROM [dbo]."), "{sql}");
+        }
+    }
+
+    #[test]
+    fn copy_takes_the_same_options_and_refuses_the_same_bad_ones() {
+        let o = opts(json!({ "tz": "+02:00", "database": "OpenLDRData", "panels": "HIVVL,VIRAL", "from": "2024-01-01", "to": "2024-12-31" })).unwrap();
+        let c = copy(&o);
+        // The filters reach the copy's key query exactly as they reach the import's.
+        assert_eq!(c["sets"][0]["keyQuery"], queries(&o)["keyQuery"]);
+        let key = c["sets"][0]["keyQuery"]["sql"].as_str().unwrap();
+        assert!(key.contains("AND [LIMSPanelCode] IN ('HIVVL', 'VIRAL')"), "{key}");
+        assert!(key.contains("AND [RegisteredDateTime] >= '2024-01-01'"), "{key}");
+        assert!(key.contains("AND [RegisteredDateTime] < DATEADD(day, 1, '2024-12-31')"), "{key}");
+        // The detail queries take no filter: the key query already chose the requests.
+        for d in c["sets"][0]["detailQueries"].as_array().unwrap() {
+            let sql = d["sql"].as_str().unwrap();
+            assert!(!sql.contains("LIMSPanelCode") && !sql.contains("RegisteredDateTime"), "{sql}");
+        }
+        // The entrypoint parses options the same way, so a bad one fails before any SQL is made.
+        let err = |options: Value| crate::import_copy(&json!({ "options": options })).unwrap_err();
+        assert!(err(json!({ "tz": "Z", "where": "1=1" })).contains("unknown option where"));
+        assert!(err(json!({ "tz": "Z", "database": "x]; DROP" })).contains("database"));
+        assert!(err(json!({ "tz": "Z", "panels": "HIVVL, a'b" })).contains("panels"));
+        assert!(err(json!({ "tz": "Z", "from": "2024-02-30" })).contains("from"));
+        assert!(err(json!({ "tz": "Z", "from": "2024-03-01", "to": "2024-02-01" })).contains("from"));
+        // A time zone is not needed for a copy (R42b), but one that is given is still checked.
+        assert!(err(json!({ "tz": "CAT" })).contains("tz"));
+        let ok = crate::import_copy(&json!({ "options": { "tz": "+02:00", "database": "OpenLDRData", "panels": "HIVVL,VIRAL", "from": "2024-01-01", "to": "2024-12-31" } })).unwrap();
+        assert_eq!(ok, c);
+    }
+
+    #[test]
+    fn copy_starts_without_tz_and_the_import_still_needs_it() {
+        // The copy's SQL never uses the time zone, so a copy may leave it out.
+        let with = copy(&opts(json!({ "tz": "Z", "database": "OpenLDRData" })).unwrap());
+        assert_eq!(crate::import_copy(&json!({ "options": { "database": "OpenLDRData" } })).unwrap(), with);
+        assert_eq!(crate::import_copy(&json!({ "options": { "database": "OpenLDRData", "tz": "  " } })).unwrap(), with);
+        assert!(crate::import_copy(&json!({ "options": {} })).is_ok());
+        assert!(crate::import_copy(&json!({})).is_ok());
+        // The import maps times with it, so its entrypoints still refuse to start without it.
+        assert!(crate::import_queries(&json!({ "options": {} })).unwrap_err().contains("tz"));
+        assert!(crate::import_map(&json!({ "options": {}, "keys": [], "rows": {} })).unwrap_err().contains("tz"));
     }
 
     #[test]

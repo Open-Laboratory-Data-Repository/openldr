@@ -213,12 +213,13 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
   });
 
   // Which import plugins may read this connector. Only plugins whose import source names this
-  // connector's type are listed. Allowing is what lets a plugin's import run SELECTs here, so it
-  // sits behind connectors.manage. The import service writes the audit rows (import.allow / revoke).
+  // connector's type are listed, including one that can only be copied from. Allowing is what
+  // lets a plugin run SELECTs here, so it sits behind connectors.manage. The import service writes
+  // the audit rows (import.allow / revoke).
   async function importPluginsFor(connectorId: string, type: string | null | undefined): Promise<Array<{ id: string; version: string; allowed: boolean }>> {
     if (!type) return [];
     const out: Array<{ id: string; version: string; allowed: boolean }> = [];
-    for (const p of await ctx.imports.importers()) {
+    for (const p of await ctx.imports.readers()) {
       if (!p.connectorTypes.includes(type)) continue;
       out.push({ id: p.id, version: p.version, allowed: (await ctx.imports.allowed(p.id)).includes(connectorId) });
     }

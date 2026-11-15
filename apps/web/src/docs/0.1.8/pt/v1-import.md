@@ -10,11 +10,13 @@ Use a sua base v1 através de um conector Microsoft SQL só de leitura. Diagnost
 
 Precisa de **Manage connectors** para conceder acesso à origem. A página do plugin destina-se ao papel de administrador do laboratório. Conheça o desfasamento UTC do laboratório de origem.
 
+A página do plugin tem dois separadores. **Importação** lê a origem e guarda registos em CE. **Cópia** guarda uma cópia das linhas de origem no servidor CE. A cópia contém os dados dos pacientes por inteiro. Nesta versão pode fazer uma cópia e mantê-la, e nada a lê ainda. A importação continua a ler a própria origem.
+
 As capturas usam um pedido, um paciente e um resultado de texto fictícios num SQL Server isolado. Demonstram uma simulação e uma importação reais desse pequeno conjunto. Não comprovam compatibilidade com todas as bases históricas v1. Os dados opcionais de prática encontram-se no fim.
 
 ## Autorizar o plugin a ler um conector
 
-Instale o plugin através de Marketplace ou do ficheiro aprovado. Crie um conector Microsoft SQL com acesso SELECT às tabelas v1. A conta não deve alterar os registos de origem.
+Instale o plugin através de Marketplace ou do ficheiro aprovado. Crie um conector Microsoft SQL cujo início de sessão tenha SELECT nas tabelas v1 e nada mais. Assim lê a origem e nunca a altera.
 
 ### 1. Abrir Connectors
 
@@ -162,6 +164,76 @@ Um pedido já importado é substituído, sem duplicação. Repetir uma importaç
 
 As falhas de um pedido não param os restantes. A página mostra os primeiros 100 motivos. Guarda códigos de motivo sem conteúdo das linhas de origem. A importação não emite data.persisted para cada pedido. Os workflows que escutam esse evento não executam para esses registos.
 
+## Copiar primeiro a origem
+
+Uma cópia lê as linhas da base v1 e guarda-as no disco do próprio servidor CE. Use-a quando a ligação à origem for lenta ou cair. O servidor lê página a página, tenta de novo depois de uma ligação perdida e continua depois de um reinício. Ninguém precisa de vigiar a página.
+
+Nada lê a cópia ainda. A importação das secções anteriores continua a ler a própria origem, por isso uma cópia não muda o que uma importação guarda.
+
+A cópia contém os dados dos pacientes por inteiro. Guarda todas as colunas das linhas Requests, LabResults, Patients e ASTResults de cada pedido lido. Proteja o servidor CE e as suas cópias de segurança como protege a origem. Há uma cópia por conector. O plugin tem de estar autorizado a ler o conector primeiro.
+
+### 1. Abrir o separador Cópia
+
+Abra **OpenLDR v1 import** no menu principal e selecione o separador **Cópia** no topo da página.
+
+![O separador Cópia fica ao lado do separador Importação.](/docs-images/operator/v1-import-guide-copy-tab.png)
+
+### 2. Escolher a origem e as opções
+
+Selecione o conector. Em **Opções da cópia**, preencha os mesmos valores que numa importação. **Base de dados**, **Data inicial**, **Data final** e **Códigos de painel** decidem que pedidos a cópia lê. A cópia não precisa de **Fuso horário do local**, porque guarda as datas tal como a origem as escreveu. A página pede mesmo assim um valor como `+02:00` ou `Z`. Qualquer valor válido dá a mesma cópia.
+
+![Escolher o conector e as opções da cópia.](/docs-images/operator/v1-import-guide-copy-options.png)
+
+### 3. Iniciar a cópia
+
+Selecione **Iniciar cópia**. O estado mostra **Na fila. O servidor inicia-a dentro de alguns segundos.** Depois mostra **A copiar**. Pode sair da página. Enquanto uma cópia está a decorrer, as suas opções ficam bloqueadas. Pode mesmo assim escolher outro conector para ver ou iniciar a sua cópia.
+
+![Iniciar cópia entrega a cópia ao servidor.](/docs-images/operator/v1-import-guide-copy-start.png)
+
+### 4. Ler a tabela de conjuntos
+
+Cada linha da tabela é um conjunto. O plugin v1 copia um só conjunto, `requests`, que contém as linhas das quatro tabelas de cada pedido. **Estado** mostra Não iniciado, A copiar, À espera, Copiado em parte, Concluído, Por ler de novo ou A eliminar. **Pedidos lidos** é o número de pedidos guardados até agora. **Linhas** é o número de linhas de origem guardadas, das quatro tabelas. **Tamanho** é o tamanho dessas linhas tal como o CE as guarda.
+
+A linha por baixo do estado conta os pedidos "de um total ainda desconhecido", porque a cópia não conta a origem antes de começar. Uma cópia terminada mostra **Concluída** e dá **Pedidos copiados:** com o número.
+
+![A tabela dá o estado, os pedidos, as linhas e o tamanho.](/docs-images/operator/v1-import-guide-copy-sets.png)
+
+Quando o CE não conseguiu copiar alguns pedidos, uma linha cor de âmbar dá **Pedidos deixados de fora:** e o número, e o estado mostra **Concluída, com pedidos deixados de fora**. A resolução de problemas explica porquê.
+
+![Uma cópia com pedidos deixados de fora não está completa.](/docs-images/operator/v1-import-guide-copy-skipped.png)
+
+### 5. Não mexer numa cópia à espera
+
+Quando a origem ou a ligação a ela está em baixo, o estado mostra **À espera da origem. Voltará a tentar automaticamente.** A página mostra **Tentativas até agora:**, quando começou a espera e o último erro. Não precisa de fazer nada. A primeira espera dura 5 segundos. Cada espera duplica, até 5 minutos, até a origem responder ou alguém parar a cópia. Se a origem responder mas a mesma página se perder duas vezes seguidas, a cópia lê essa página de novo com metade do tamanho, e as esperas voltam a começar em 5 segundos. A página volta a crescer depois de 5 páginas boas seguidas.
+
+O último erro de uma ligação perdida começa com palavras simples e depois dá as palavras do controlador. Quando a própria origem reinicia, pode recusar o início de sessão ou dizer que a base de dados falta durante algum tempo. Uma cópia que já leu esta origem espera então até cerca de uma hora. O mesmo acontece com uma palavra-passe errada escrita no conector antes de continuar uma cópia. Essa cópia espera até cerca de uma hora e depois falha. Uma cópia nova com uma palavra-passe errada falha logo.
+
+Depois de mudar as definições do conector, pare a cópia e continue-a. Uma cópia à espera continua a tentar as definições antigas.
+
+Uma cópia também continua sozinha depois de o servidor CE reiniciar. Não precisa de fazer nada. As contagens podem ficar paradas até cerca de dois minutos depois do reinício antes de voltarem a avançar.
+
+![Uma cópia à espera volta a tentar sozinha.](/docs-images/operator/v1-import-guide-copy-waiting.png)
+
+### 6. Parar e continuar
+
+Abra o menu de pontos ao lado do estado e selecione **Parar**. O estado mostra **A parar depois desta página** e depois **Parada**. Uma cópia na fila para logo. As linhas já copiadas ficam. Para continuar, selecione **Continuar cópia**. Cada conjunto continua de onde parou. Numa cópia concluída, **Continuar cópia** só tenta de novo os pedidos deixados de fora. Não lê pedidos novos da origem. Se a cópia foi iniciada pela CLI sem fuso, **Fuso horário do local** fica vazio, à parte uma dica cinzenta, e a página pede um desfasamento válido, como `Z`, antes de **Continuar cópia** funcionar. Esse desfasamento não muda nada na cópia.
+
+![Parar está no menu de pontos ao lado do estado.](/docs-images/operator/v1-import-guide-copy-stop.png)
+
+Se mudou **Base de dados**, **Data inicial**, **Data final** ou **Códigos de painel**, Continuar cópia pergunta **Ler de novo desde o início?** e nomeia os conjuntos. **Ler de novo** elimina as linhas já copiadas para esses conjuntos e depois lê-os de novo desde o início. Numa ligação lenta isso pode levar dias. Para manter a cópia, selecione **Cancelar**, reponha as opções e selecione **Continuar cópia**.
+
+![Ler de novo elimina o que foi copiado para os conjuntos nomeados.](/docs-images/operator/v1-import-guide-copy-reread.png)
+
+### 7. Eliminar uma cópia
+
+Pare primeiro a cópia. Abra o menu de pontos e selecione **Eliminar cópia**. O passo nomeia o conector e dá as linhas e o tamanho. Escreva `openldr-v1-import` e selecione **Eliminar cópia**.
+
+O estado mostra **A eliminar as linhas copiadas**. O servidor elimina as linhas em lotes, em segundo plano. Continua quando sai da página e depois de um reinício do servidor. No fim, a página mostra **A cópia foi eliminada.**
+
+![Escrever o identificador do plugin para eliminar a cópia.](/docs-images/operator/v1-import-guide-copy-delete.png)
+
+**Resultado esperado:** a cópia guarda as linhas de origem no servidor CE, e a base de origem fica inalterada. Nada no CE lê a cópia ainda.
+
 ## Importar pela linha de comandos
 
 Leia [Começar aqui](/docs/cli) para configurar a CLI. A partir de `openldr_ce`, autorize apenas o conector pretendido. Faça uma simulação antes da importação real. Substitua o identificador e o desfasamento de origem.
@@ -222,6 +294,46 @@ Leia [Começar aqui](/docs/cli) para configurar a CLI. A partir de `openldr_ce`,
 
 ![Ler códigos de erro antes de outra tentativa.](guide:operator-v1-failures)
 
+### 8. Iniciar uma cópia sem esperar
+
+```sh
+{{operator:v1-copy-start}}
+```
+
+`start` regista o pedido e o comando termina logo. O servidor faz a cópia. Numa cópia que já está na fila, a copiar ou à espera com as mesmas opções, devolve essa cópia sem a mudar. Numa cópia parada ou com falha, continua de onde cada conjunto parou. Numa cópia concluída, só tenta de novo os pedidos deixados de fora e não lê pedidos novos. Quando uma opção mudou o que um conjunto lê, nomeia os conjuntos e não muda nada. Execute-o de novo com `--reread` para ler esses conjuntos de novo desde o início. Uma cópia a copiar ou à espera tem de ser parada primeiro. Uma cópia não precisa da opção `tz`. Sem ela, a página pede um fuso como `Z` antes de **Continuar cópia** funcionar. Qualquer fuso válido dá a mesma cópia. O exemplo mostra onde fica uma opção.
+
+![Iniciar uma cópia sem esperar.](guide:operator-v1-copy-start)
+
+### 9. Ler o estado da cópia
+
+```sh
+{{operator:v1-copy-status}}
+```
+
+Mostra uma linha por cópia: o identificador da cópia, o estado e depois `keys`, `rows`, `bytes` e `skipped` de cada conjunto. Uma cópia concluída com pedidos deixados de fora mostra `completed with skipped keys`. Uma cópia à espera ou com falha termina a linha com o erro. O identificador da cópia é o primeiro valor da linha.
+
+![Ler o estado da cópia.](guide:operator-v1-copy-status)
+
+### 10. Parar uma cópia depois da página em curso
+
+```sh
+{{operator:v1-copy-stop}}
+```
+
+As linhas já copiadas ficam. Execute `start` de novo para continuar.
+
+![Parar uma cópia depois da página em curso.](guide:operator-v1-copy-stop)
+
+### 11. Eliminar uma cópia parada, com falha ou concluída
+
+```sh
+{{operator:v1-copy-delete}}
+```
+
+`delete` recusa sem `--force`. Termina antes de as linhas desaparecerem. O servidor continua a eliminar em segundo plano.
+
+![Eliminar uma cópia parada, com falha ou concluída.](guide:operator-v1-copy-delete)
+
 
 
 ## Prática opcional com dados de origem fictícios
@@ -247,6 +359,16 @@ No código-fonte, `pnpm build:v1-import` prepara o importador de referência. Ex
 **Start ou Resume é recusado.** Leia o erro e o registo da API. O serviço exige uma entrada de auditoria antes de iniciar.
 
 **As contagens ficam imóveis.** Aguarde a página atual. Cada página pode conter 500 pedidos. Verifique os erros antes de concluir que uma importação grande ficou parada.
+
+**A cópia mostra À espera da origem.** O CE não consegue ligar-se à origem, ou a ligação a ela está em baixo. A cópia volta a tentar sozinha, com no máximo 5 minutos entre tentativas. Leia o último erro. Se a espera continuar, execute Diagnose no conector. Depois de corrigir o conector, pare a cópia e continue-a, para que use as definições novas. Pare a cópia só se quiser que deixe de tentar.
+
+**Alguns pedidos ficaram de fora.** A linha cor de âmbar **Pedidos deixados de fora:** dá quantos são. O CE deixa um pedido de fora por uma de duas razões. Lido sozinho, excedeu o tempo limite três vezes. O CE regista isto como `SOURCE_TIMEOUT`. Ou uma das suas linhas tem texto que a base de dados do CE não consegue guardar, como um carácter NUL. O CE regista isto como `ROW_NOT_STORABLE`. A cópia tenta-os de novo no fim de cada passagem e no início seguinte. A página e a CLI mostram só o número. Na CLI, o estado lê-se `completed with skipped keys`. Uma cópia com pedidos deixados de fora não está completa.
+
+**Continuar cópia pede para ler um conjunto de novo.** Na CLI, `start` nomeia os conjuntos em vez disso. Mudou uma opção que decide que pedidos são lidos, ou o plugin foi atualizado. Ler de novo elimina as linhas copiadas para os conjuntos nomeados. Selecione **Cancelar** e reponha as opções para as manter.
+
+**A cópia falhou.** Leia o último erro. Um início de sessão recusado, uma base ou tabela em falta, uma falha do plugin, ou uma escrita recusada pela base de dados do próprio CE, por exemplo com o disco cheio, termina a cópia. Tentar de novo não resolve isso. Há uma exceção. Uma cópia que já leu esta origem espera até cerca de uma hora por um início de sessão recusado ou uma base em falta, caso a origem esteja a reiniciar. Corrija a causa e selecione **Continuar cópia**. As linhas já copiadas ficam.
+
+**Eliminar cópia está a cinzento.** Só se pode eliminar uma cópia parada, com falha ou concluída. Pare-a primeiro.
 
 ## Guias relacionados
 

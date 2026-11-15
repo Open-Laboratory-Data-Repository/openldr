@@ -251,6 +251,47 @@ groups as CSV with names and identifiers, to stdout or to `--out`. It always wri
 event that records the group count only. CE does not merge patients. The source system fixes
 duplicates.
 
+## Copying a source database
+
+Copies the rows of a source database to OpenLDR's own disk, with a plugin that names the rows to
+copy. There is one copy per plugin and connector. The plugin must be allowed to read the
+connector first (`openldr import allow <plugin> <connector>`).
+
+    openldr import copy start --plugin <id> --connector <id> [--option name=value]... [--page-size <n>] [--reread] [--json]
+    openldr import copy status <plugin> [copy] [--json]
+    openldr import copy stop <plugin> <copy>
+    openldr import copy delete <plugin> <copy> --force
+
+`start` records the request and returns. The server does the copying, so the command never
+waits for it. Run `status` to follow it. `start` on a stopped or failed copy carries it on from
+where each set stopped. `start` on a finished copy reads no set again. It only tries the skipped
+keys again, so it reads no new source rows. `start` on a queued, running or waiting copy whose
+SQL has not changed returns it unchanged. `--page-size` is the number of source keys per page,
+1 to 2000, default 500. The v1 import plugin's copy does not need the `tz` option.
+
+When the plugin's SQL for a set changed since the copy began, `start` prints
+`these sets would be read again from the start: <names>. Run again with --reread to do that.`
+and exits 1 with nothing changed. With `--reread` it empties those sets and reads them again
+from the start. A running or waiting copy must be stopped first.
+
+`status` prints one line per copy: the copy's id, its status, then for each set
+`<name> keys=N rows=N bytes=N skipped=N`. A waiting or failed copy ends its line with the error.
+The status is one of `queued`, `running`, `waiting`, `stopping`, `stopped`, `completed`, `failed`
+or `deleting`. `waiting` means the source cannot be reached, and the copy tries again by itself.
+A completed copy that still has skipped keys shows `completed with skipped keys` in place of
+`completed`. `--json` keeps the status `completed` and gives each set's `skipped` count.
+No source key is ever printed, and `--json` leaves out each set's position.
+
+`stop` stops the copy at its next page. The rows copied so far stay. `delete` removes a stopped,
+failed or finished copy and every row it holds. It refuses without `--force` and changes nothing.
+With `--force` it returns while the copy is still being deleted, and prints its status as
+`deleting`. The server deletes the rows in batches, and carries on after a restart. Run `status`
+to see when the copy is gone: it prints `(no copies)` once the last one is deleted.
+
+All four go through the app and need `connectors.manage`. `start` and `delete` are marked
+destructive. Exit code 0 when the request was recorded or the answer was printed, and 1 on a
+refusal.
+
 ## The standalone launcher
 
 `openldr-standalone` runs OpenLDR on one computer with no Docker: a bundled Postgres 16 and the server, with all data in one folder. Source: `apps/standalone/src/commands.ts`. In a built checkout it is `pnpm openldr-standalone`. The desktop app installs it as a command of its own: `~/.local/share/openldr-desktop/openldr-standalone` on Linux, `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone` on macOS, `%LOCALAPPDATA%\Programs\OpenLDR\openldr-standalone.cmd` on Windows. The full account is in two web docs pages, `apps/web/src/docs/0.1.8/en/standalone.md` and `apps/web/src/docs/0.1.8/en/desktop-app.md`. Only Linux has been tested.

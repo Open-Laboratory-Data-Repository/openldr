@@ -6,11 +6,13 @@ Utilisez votre base v1 avec un connecteur Microsoft SQL en lecture seule. Diagno
 
 Vous avez besoin de **Manage connectors** pour autoriser la source. La page du plugin exige le rôle administrateur du laboratoire. Connaissez le décalage UTC du laboratoire source.
 
+La page du plugin a deux onglets. **Import** lit la source et enregistre des fiches dans CE. **Copie** garde une copie des lignes sources sur le serveur CE. La copie contient les données des patients en entier. Dans cette version, vous pouvez faire une copie et la garder, et rien ne la lit encore. L'import lit toujours la source elle-même.
+
 Les captures utilisent une demande, un patient et un résultat texte fictifs sur un SQL Server isolé. Elles vérifient une simulation et un import réels de ce petit jeu. Elles ne prouvent pas la compatibilité avec toutes les anciennes bases v1. La pratique facultative se trouve à la fin.
 
 ## Autoriser le plugin à lire un connecteur
 
-Installez le plugin dans Marketplace ou depuis son fichier approuvé. Créez un connecteur Microsoft SQL avec accès SELECT aux tables v1. Le compte ne doit pas modifier la source.
+Installez le plugin dans Marketplace ou depuis son fichier approuvé. Créez un connecteur Microsoft SQL dont l'identifiant a SELECT sur les tables v1, et rien de plus. Il peut ainsi lire la source sans jamais la modifier.
 
 ### 1. Ouvrir Connectors
 
@@ -158,6 +160,76 @@ Une demande déjà importée est remplacée, pas dupliquée. Répéter un import
 
 Les échecs d'une demande n'arrêtent pas les autres. La page montre les 100 premières raisons. Elle conserve les codes de raison sans contenu des lignes sources. L'import n'émet pas data.persisted pour chaque demande. Les workflows écoutant cet événement ne s'exécutent donc pas pour ces fiches.
 
+## Copier d'abord la source
+
+Une copie lit les lignes de la base v1 et les garde sur le disque du serveur CE. Utilisez-la quand la connexion à la source est lente ou se coupe. Le serveur lit page par page, réessaie après une coupure et continue après un redémarrage. Personne n'a besoin de surveiller la page.
+
+Rien ne lit encore la copie. L'import des sections précédentes lit toujours la source elle-même. Une copie ne change donc pas ce qu'un import enregistre.
+
+La copie contient les données des patients en entier. Elle garde toutes les colonnes des lignes Requests, LabResults, Patients et ASTResults de chaque demande lue. Protégez le serveur CE et ses sauvegardes comme vous protégez la source. Il y a une copie par connecteur. Le plugin doit d'abord être autorisé à lire le connecteur.
+
+### 1. Ouvrir l'onglet Copie
+
+Ouvrez **OpenLDR v1 import** dans le menu principal, puis choisissez l'onglet **Copie** en haut de la page.
+
+![L'onglet Copie se trouve à côté de l'onglet Import.](v1-import-guide-copy-tab.png)
+
+### 2. Choisir la source et les options
+
+Choisissez le connecteur. Sous **Options de copie**, saisissez les mêmes valeurs que pour un import. **Base de données**, **Date de début**, **Date de fin** et **Codes de panel** décident des demandes que la copie lit. La copie n'a pas besoin de **Fuseau horaire du site**, car elle garde les dates telles que la source les a écrites. La page demande quand même une valeur comme `+02:00` ou `Z`. Toute valeur valide donne la même copie.
+
+![Choisir le connecteur et les options de copie.](v1-import-guide-copy-options.png)
+
+### 3. Lancer la copie
+
+Choisissez **Lancer la copie**. L'état affiche **En file d’attente. Le serveur la lance dans quelques secondes.** Ensuite il affiche **Copie en cours**. Vous pouvez quitter la page. Pendant une copie, ses options sont verrouillées. Vous pouvez quand même choisir un autre connecteur pour voir ou lancer sa copie.
+
+![Lancer la copie confie la copie au serveur.](v1-import-guide-copy-start.png)
+
+### 4. Lire le tableau des ensembles
+
+Chaque ligne du tableau est un ensemble. Le plugin v1 copie un seul ensemble, `requests`, qui contient les lignes des quatre tables pour chaque demande. **État** affiche Pas commencé, Copie en cours, En attente, Copié en partie, Terminé, À relire ou Suppression. **Demandes lues** est le nombre de demandes enregistrées jusqu'ici. **Lignes** est le nombre de lignes sources enregistrées, dans les quatre tables. **Taille** est la taille de ces lignes telles que CE les stocke.
+
+La ligne sous l'état compte les demandes "sur un total encore inconnu", car la copie ne compte pas la source avant de commencer. Une copie finie affiche **Terminée** et donne **Demandes copiées :** avec le nombre.
+
+![Le tableau donne l'état, les demandes, les lignes et la taille.](v1-import-guide-copy-sets.png)
+
+Quand CE n'a pas pu copier certaines demandes, une ligne orange donne **Demandes laissées de côté :** et le nombre, et l'état affiche **Terminée, avec des demandes laissées de côté**. La résolution de problèmes explique pourquoi.
+
+![Une copie avec des demandes laissées de côté n'est pas complète.](v1-import-guide-copy-skipped.png)
+
+### 5. Ne pas toucher à une copie en attente
+
+Quand la source ne répond pas ou que la connexion est coupée, l'état affiche **En attente de la source. OpenLDR réessaiera de lui-même.** La page montre **Essais jusqu’ici :**, le début de l'attente et la dernière erreur. Vous n'avez rien à faire. La première attente dure 5 secondes. Chaque attente double, sans dépasser 5 minutes, jusqu'à ce que la source réponde ou qu'une personne arrête la copie. Si la source répond mais que la même page est perdue deux fois de suite, la copie relit cette page à la moitié de sa taille, et les attentes repartent de 5 secondes. La page reprend sa taille après 5 bonnes pages de suite.
+
+La dernière erreur d'une connexion perdue commence par des mots simples, puis donne les mots du pilote. Quand la source elle-même redémarre, elle peut refuser l'authentification ou dire que sa base manque pendant un moment. Une copie qui a déjà lu cette source attend alors jusqu'à une heure environ. C'est aussi le cas d'un mauvais mot de passe saisi dans le connecteur avant de reprendre une copie. Cette copie attend jusqu'à une heure environ, puis échoue. Une nouvelle copie avec un mauvais mot de passe échoue tout de suite.
+
+Après avoir changé les paramètres du connecteur, arrêtez la copie puis reprenez-la. Une copie en attente continue d'essayer les anciens paramètres.
+
+Une copie continue aussi d'elle-même après un redémarrage du serveur CE. Vous n'avez rien à faire. Les compteurs peuvent rester immobiles jusqu'à deux minutes environ après le redémarrage avant de bouger à nouveau.
+
+![Une copie en attente réessaie d'elle-même.](v1-import-guide-copy-waiting.png)
+
+### 6. Arrêter et reprendre
+
+Ouvrez le menu à points à côté de l'état et choisissez **Arrêter**. L'état affiche **Arrêt après cette page**, puis **Arrêtée**. Une copie en file d'attente s'arrête tout de suite. Les lignes déjà copiées restent. Pour continuer, choisissez **Reprendre la copie**. Chaque ensemble reprend là où il s'était arrêté. Sur une copie terminée, **Reprendre la copie** ne fait que réessayer les demandes laissées de côté. Elle ne lit aucune nouvelle demande de la source. Si la copie a été lancée depuis la CLI sans fuseau, **Fuseau horaire du site** est vide, à part un indice gris, et la page demande un décalage valide, comme `Z`, avant que **Reprendre la copie** fonctionne. Ce décalage ne change rien à la copie.
+
+![Arrêter se trouve dans le menu à points à côté de l'état.](v1-import-guide-copy-stop.png)
+
+Si vous avez changé **Base de données**, **Date de début**, **Date de fin** ou **Codes de panel**, Reprendre la copie demande **Relire depuis le début ?** et nomme les ensembles. **Relire** supprime les lignes déjà copiées pour ces ensembles, puis les relit depuis le début. Sur une connexion lente, cela peut prendre des jours. Pour garder la copie, choisissez **Annuler**, remettez les options d'avant, puis choisissez **Reprendre la copie**.
+
+![Relire supprime ce qui a été copié pour les ensembles nommés.](v1-import-guide-copy-reread.png)
+
+### 7. Supprimer une copie
+
+Arrêtez d'abord la copie. Ouvrez le menu à points et choisissez **Supprimer la copie**. L'étape nomme le connecteur et donne les lignes et la taille. Saisissez `openldr-v1-import`, puis choisissez **Supprimer la copie**.
+
+L'état affiche **Suppression des lignes copiées**. Le serveur supprime les lignes par lots, en arrière-plan. Il continue quand vous quittez la page, et après un redémarrage du serveur. À la fin, la page affiche **La copie a été supprimée.**
+
+![Saisir l'identifiant du plugin pour supprimer la copie.](v1-import-guide-copy-delete.png)
+
+**Résultat attendu :** la copie garde les lignes sources sur le serveur CE, et la base source reste inchangée. Rien dans CE ne lit encore la copie.
+
 ## Importer en ligne de commande
 
 Consultez [Commencer ici](/docs/start-here) pour configurer la CLI. Depuis `openldr_ce`, autorisez seulement le connecteur voulu. Faites une simulation avant l'import réel. Remplacez l'identifiant et le décalage source.
@@ -169,6 +241,21 @@ pnpm openldr import start --plugin openldr-v1-import --connector <connector-id> 
 pnpm openldr import status openldr-v1-import
 pnpm openldr import allowed openldr-v1-import
 ```
+
+Quatre commandes agissent sur la copie. Remplacez les identifiants. Une copie n'a pas besoin de l'option `tz`. Sans elle, la page demande un fuseau comme `Z` avant que **Reprendre la copie** fonctionne. Tout fuseau valide donne la même copie.
+
+```shell
+pnpm openldr import copy start --plugin openldr-v1-import --connector <connector-id>
+pnpm openldr import copy status openldr-v1-import
+pnpm openldr import copy stop openldr-v1-import <copy-id>
+pnpm openldr import copy delete openldr-v1-import <copy-id> --force
+```
+
+`start` enregistre la demande et rend la main tout de suite. Le serveur fait la copie. Sur une copie déjà en file d'attente, en cours ou en attente avec les mêmes options, `start` renvoie cette copie sans la changer. Sur une copie arrêtée ou en échec, elle reprend là où chaque ensemble s'était arrêté. Sur une copie terminée, elle ne fait que réessayer les demandes laissées de côté, et ne lit aucune nouvelle demande.
+
+Suivez la progression avec `status`. Il affiche une ligne par copie : l'identifiant de la copie, l'état, puis `keys`, `rows`, `bytes` et `skipped` pour chaque ensemble. Une copie terminée avec des demandes laissées de côté affiche `completed with skipped keys`. Une copie en attente ou en échec finit sa ligne par l'erreur. L'identifiant de la copie est la première valeur de la ligne.
+
+Quand une option a changé ce que lit un ensemble, `start` nomme les ensembles et ne change rien. Relancez-le avec `--reread` pour relire ces ensembles depuis le début. Une copie en cours ou en attente doit d'abord être arrêtée. `stop` arrête la copie après sa page en cours. `delete` refuse sans `--force`. Comme le bouton, il rend la main avant que les lignes soient supprimées, et le serveur continue la suppression en arrière-plan.
 
 ## Pratique facultative avec une source fictive
 
@@ -193,6 +280,16 @@ Depuis les sources, `pnpm build:v1-import` prépare l'importeur de référence. 
 **Start ou Resume est refusé.** Lisez l'erreur et le journal API. Le service d'import exige une trace d'audit avant de démarrer.
 
 **Les compteurs restent immobiles.** Attendez la page en cours. Une page peut contenir 500 demandes. Vérifiez les erreurs avant de conclure qu'un grand import est bloqué.
+
+**La copie affiche En attente de la source.** CE ne joint pas la source, ou la connexion est coupée. La copie réessaie d'elle-même, avec au plus 5 minutes entre deux essais. Lisez la dernière erreur. Si l'attente dure, lancez Diagnose sur le connecteur. Après avoir corrigé le connecteur, arrêtez la copie puis reprenez-la, pour qu'elle prenne les nouveaux paramètres. N'arrêtez la copie que si vous voulez qu'elle cesse d'essayer.
+
+**Des demandes ont été laissées de côté.** La ligne orange **Demandes laissées de côté :** donne leur nombre. CE laisse une demande de côté pour l'une de deux raisons. Lue seule, elle a dépassé le délai trois fois. CE la note alors `SOURCE_TIMEOUT`. Ou l'une de ses lignes contient un texte que la base de CE ne peut pas stocker, comme un caractère NUL. CE la note alors `ROW_NOT_STORABLE`. La copie les réessaie à la fin de chaque passage et au lancement suivant. La page et la CLI ne montrent que le nombre. Dans la CLI, l'état se lit `completed with skipped keys`. Une copie avec des demandes laissées de côté n'est pas complète.
+
+**Reprendre la copie demande de relire un ensemble.** Dans la CLI, `start` nomme les ensembles à la place. Une option qui décide des demandes lues a changé, ou le plugin a été mis à jour. Relire supprime les lignes copiées pour les ensembles nommés. Choisissez **Annuler** et remettez les options d'avant pour les garder.
+
+**La copie est en échec.** Lisez la dernière erreur. Une authentification refusée, une base ou une table absente, une erreur du plugin, ou une écriture refusée par la base de CE, par exemple sur un disque plein, met fin à la copie. Réessayer ne peut pas corriger cela. Il y a une exception. Une copie qui a déjà lu cette source attend jusqu'à une heure environ sur une authentification refusée ou une base absente, au cas où la source redémarre. Corrigez la cause, puis choisissez **Reprendre la copie**. Les lignes déjà copiées restent.
+
+**Supprimer la copie est grisé.** On ne peut supprimer qu'une copie arrêtée, en échec ou terminée. Arrêtez-la d'abord.
 
 ## Guides associés
 

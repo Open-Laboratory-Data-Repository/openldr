@@ -76,7 +76,7 @@ export function RunPanel({ run, onChange, pollMs }: { run: ImportRun; onChange: 
       <div class="v1i-run-head">
         <span class={`v1i-dot v1i-dot-${run.status === 'completed' ? 'pass' : run.status === 'failed' || run.status === 'interrupted' ? 'fail' : 'warn'}`} aria-hidden="true" />
         <span class="v1i-row-main" data-testid="run-status">{t(`run.status.${run.status}`)}</span>
-        {run.status === 'running' ? (
+        {run.status === 'running' || run.status === 'waiting' ? (
           <button type="button" class="v1i-btn v1i-btn-danger" data-testid="run-stop" disabled={busy} onClick={() => { void act(api.stop); }}>{t('run.stop')}</button>
         ) : null}
         {canResume(run.status) ? (

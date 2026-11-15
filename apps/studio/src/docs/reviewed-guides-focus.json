@@ -20074,5 +20074,247 @@
     },
     "markerPlacement": "after",
     "step": 2
+  },
+  "v1-import-guide-copy-tab.png": {
+    "crop": {
+      "x": 119.35199999999998,
+      "y": 0,
+      "width": 480,
+      "height": 300
+    },
+    "targets": [
+      {
+        "x": 328.766,
+        "y": 48,
+        "width": 61.172,
+        "height": 42.297
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "v1-import-guide-copy-options.png": {
+    "crop": {
+      "x": 224.36239999999998,
+      "y": 233.57799999999997,
+      "width": 831.2752,
+      "height": 519.547
+    },
+    "targets": [
+      {
+        "x": 260,
+        "y": 258.578,
+        "width": 760,
+        "height": 46.297
+      },
+      {
+        "x": 372,
+        "y": 407.266,
+        "width": 320,
+        "height": 36.297
+      },
+      {
+        "x": 372,
+        "y": 691.828,
+        "width": 320,
+        "height": 36.297
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "markerPlacements": [
+      "inside",
+      "after",
+      "after"
+    ],
+    "step": 2
+  },
+  "v1-import-guide-copy-start.png": {
+    "crop": {
+      "x": 729.3905,
+      "y": 500,
+      "width": 480,
+      "height": 300
+    },
+    "targets": [
+      {
+        "x": 918.781,
+        "y": 763.969,
+        "width": 101.219,
+        "height": 36.297
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "v1-import-guide-copy-waiting.png": {
+    "crop": {
+      "x": 252,
+      "y": 315,
+      "width": 776,
+      "height": 485
+    },
+    "targets": [
+      {
+        "x": 295,
+        "y": 531.109,
+        "width": 662,
+        "height": 20.297
+      },
+      {
+        "x": 277,
+        "y": 585.25,
+        "width": 726,
+        "height": 18.844
+      },
+      {
+        "x": 277,
+        "y": 617.094,
+        "width": 726,
+        "height": 18.844
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "inside",
+    "markerPlacements": [
+      "after",
+      "inside",
+      "inside"
+    ],
+    "step": 5
+  },
+  "v1-import-guide-copy-stop.png": {
+    "crop": {
+      "x": 678,
+      "y": 446.82050000000004,
+      "width": 480,
+      "height": 300
+    },
+    "targets": [
+      {
+        "x": 838,
+        "y": 578.672,
+        "width": 160,
+        "height": 36.297
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 6
+  },
+  "v1-import-guide-copy-sets.png": {
+    "crop": {
+      "x": 235,
+      "y": 293.75,
+      "width": 810,
+      "height": 506.25
+    },
+    "targets": [
+      {
+        "x": 260,
+        "y": 580.266,
+        "width": 760,
+        "height": 199.578
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "inside",
+    "step": 4
+  },
+  "v1-import-guide-copy-reread.png": {
+    "crop": {
+      "x": 515,
+      "y": 270.8755,
+      "width": 490,
+      "height": 306.25
+    },
+    "targets": [
+      {
+        "x": 540,
+        "y": 328.266,
+        "width": 440,
+        "height": 191.469
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 6
+  },
+  "v1-import-guide-copy-delete.png": {
+    "crop": {
+      "x": 514.4248,
+      "y": 270.51599999999996,
+      "width": 491.1504,
+      "height": 306.969
+    },
+    "targets": [
+      {
+        "x": 540,
+        "y": 295.516,
+        "width": 440,
+        "height": 256.969
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 7
+  },
+  "v1-import-guide-copy-skipped.png": {
+    "crop": {
+      "x": 252,
+      "y": 315,
+      "width": 776,
+      "height": 485
+    },
+    "targets": [
+      {
+        "x": 295,
+        "y": 525.266,
+        "width": 662,
+        "height": 20.297
+      },
+      {
+        "x": 277,
+        "y": 662,
+        "width": 726,
+        "height": 58.594
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "inside",
+    "markerPlacements": [
+      "after",
+      "inside"
+    ],
+    "step": 4
   }
 }
