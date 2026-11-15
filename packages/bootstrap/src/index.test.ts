@@ -4,7 +4,7 @@ import { createAppSettingsStore, createReportStore, createRoleStore, referenceCa
 import { createDashboardStore, createColumnPolicyStore, joinableTablesForClient } from '@openldr/dashboards';
 import { createFormStore } from '@openldr/forms';
 import type { Config } from '@openldr/config';
-import { createAppContext, capabilityBackfillEvents, buildReportingForTest, type AppContext } from './index';
+import { createAppContext, capabilityBackfillEvents, buildReportingForTest, widgetSqlToRun, type AppContext } from './index';
 import { truncateTables } from './danger';
 
 const cfg: Config = Object.freeze({
@@ -298,6 +298,22 @@ describe('boot-time capability reconciliation audit', () => {
   // An ordinary restart changes nothing; it must not write an event, or the signal is worthless.
   it('emits no events when nothing was granted', () => {
     expect(capabilityBackfillEvents([])).toEqual([]);
+  });
+});
+
+describe('widgetSqlToRun: the SQL a dashboard SQL widget runs', () => {
+  it('a widget sent without values and holding an optional clause runs with the clause dropped', () => {
+    expect(widgetSqlToRun({ sql: 'SELECT 1 AS n [[ WHERE ward = {{ward}} ]]' }, 'postgres')).toBe('SELECT 1 AS n ');
+  });
+  it('fills the values it is sent', () => {
+    expect(widgetSqlToRun({ sql: 'SELECT 1 AS n [[ WHERE ward = {{ward}} ]]', values: { ward: "O'K" } }, 'postgres'))
+      .toBe("SELECT 1 AS n  WHERE ward = 'O''K' ");
+  });
+  it('fills for the target store engine', () => {
+    const backslash = String.fromCharCode(92);
+    expect(widgetSqlToRun({ sql: 'SELECT {{a}} AS a', values: { a: `x${backslash}` } }, 'mysql')).toBe(`SELECT 'x${backslash}${backslash}' AS a`);
+    expect(widgetSqlToRun({ sql: 'SELECT {{a}} AS a', values: { a: `x${backslash}` } }, 'postgres')).toBe(`SELECT 'x${backslash}' AS a`);
+    expect(() => widgetSqlToRun({ sql: 'SELECT [{{a}}]', values: { a: 'x' } }, 'mssql')).toThrow(/remove the quotes/);
   });
 });
 

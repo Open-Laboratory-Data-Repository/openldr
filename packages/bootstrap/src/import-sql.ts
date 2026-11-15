@@ -2,6 +2,8 @@
 // this file fills in the paging tokens. Everything here is written for SQL Server, the only
 // connector type an import source may declare today (marketplace importSourceSchema).
 
+import { assertTokensInPlainSql } from '@openldr/dashboards';
+
 /** Longest source key the run will page on. */
 export const KEY_MAX = 200;
 export const PAGE_SIZE_MIN = 1;
@@ -26,10 +28,18 @@ export function quoteLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+/** Fills the tokens of a SQL Server template. Every token must sit in plain SQL, outside any
+ *  string, comment or quoted name, before a value goes in. A template the reader cannot read to
+ *  the end throws the reader's own sentence. */
 function fill(sql: string, values: Record<string, string>): string {
   for (const name of Object.keys(values)) {
     if (!new RegExp(`\\{\\{\\s*${name}\\s*\\}\\}`).test(sql)) throw new Error(`import SQL is missing the {{${name}}} token`);
   }
+  assertTokensInPlainSql(
+    sql, TOKEN,
+    (name) => `import SQL has a token inside quotes, a comment or a quoted name: remove the quotes around {{${name}}}`,
+    'mssql',
+  );
   return sql.replace(TOKEN, (_m, name: string) => {
     const v = values[name];
     if (v === undefined) throw new Error(`import SQL has an unknown token: {{${name}}}`);

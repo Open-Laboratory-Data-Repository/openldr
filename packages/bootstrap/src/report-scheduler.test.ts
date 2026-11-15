@@ -141,6 +141,7 @@ it.each(['csv', 'xlsx', 'pdf'])('stores no %s artifact when a stored report quer
   d.reporting.run.mockImplementation(async () => {
     await runStoredQuery({
       customQueries: { get: async () => ({ connectorId: 'c', sql: 'select a from rows', params: [] }) as any },
+      connectorDialect: async () => 'postgres' as const,
       runConnectorSql: async ({ rowCap }) => ({ columns: [], rows: Array.from({ length: rowCap! }, (_, a) => ({ a })) }),
     }, 'q', {});
     return { columns: [], rows: [], chart: { type: 'bar' }, meta: { generatedAt: '', rowCount: 0 } };

@@ -154,6 +154,42 @@ describe('POST /api/query/run', () => {
     expect(seen).toContain("f = 'Ndola'");
   });
 
+  it('fills params for the connector dialect: a MySQL value ending in a backslash stays one literal', async () => {
+    const backslash = String.fromCharCode(92);
+    const params = [{ id: 'a', label: 'A', type: 'text', required: false }, { id: 'b', label: 'B', type: 'text', required: false }];
+    const sql = 'select * from t where a = {{param.a}} and b = {{param.b}}';
+    for (const [type, filled] of [
+      ['mysql', `select * from t where a = 'x${backslash}${backslash}' and b = 'y'`],
+      ['postgres', `select * from t where a = 'x${backslash}' and b = 'y'`],
+    ] as const) {
+      const deps = makeDeps();
+      deps.connectors.get = (async (id: string) => (id === 'c1' ? { id, name: 'DB', type, enabled: true } : null)) as any;
+      let seen = '';
+      deps.runConnectorSql = async ({ sql: s }) => { seen = s; return { columns: [], rows: [] }; };
+      const app = await build(deps);
+      const res = await app.inject({ method: 'POST', url: '/api/query/run', payload: {
+        connectorId: 'c1', sql, params, values: { a: `x${backslash}`, b: 'y' },
+      } });
+      expect(res.statusCode).toBe(200);
+      expect(seen).toBe(filled);
+    }
+  });
+
+  it('refuses a param token inside quotes with a 400 that says how to fix it', async () => {
+    const deps = makeDeps();
+    let ran = false;
+    deps.runConnectorSql = async () => { ran = true; return { columns: [], rows: [] }; };
+    const app = await build(deps);
+    const res = await app.inject({ method: 'POST', url: '/api/query/run', payload: {
+      connectorId: 'c1', sql: "select * from t where f = '{{param.facility}}'",
+      params: [{ id: 'facility', label: 'Facility', type: 'text', required: false }],
+      values: { facility: 'SECRETVALUE' },
+    } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('a {{param.facility}} sits inside quotes, a comment or a quoted name: remove the quotes; the value is quoted for you');
+    expect(ran).toBe(false);
+  });
+
   it('returns 200 when an optional date range is left out, binding from and to to empty strings', async () => {
     const deps = makeDeps();
     let seen = '';

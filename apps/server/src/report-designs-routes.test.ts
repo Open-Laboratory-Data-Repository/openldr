@@ -67,7 +67,7 @@ const fakeCq = {
 };
 const fakeRun = async () => ({ columns: [{ key: 'n', label: 'n' }], rows: [{ n: 1 }] });
 function fakeDeps(runConnectorSql: any = fakeRun): any {
-  return { customQueries: fakeCq, runConnectorSql };
+  return { customQueries: fakeCq, connectorDialect: async () => 'postgres' as const, runConnectorSql };
 }
 
 function appWith(ctx: any, roles: string[] = ['lab_admin'], deps: any = fakeDeps(), capabilities: string[] = ['reports.edit_templates', 'reports.run', 'reports.view']) {
@@ -194,7 +194,7 @@ describe('report-design routes', () => {
       calls.push(input);
       return { columns: [{ key: 'f', label: 'f' }], rows: [{ f: 'HQ' }] };
     };
-    const app = appWith(fakeCtx(), ['lab_admin'], { customQueries: cqWithParam, runConnectorSql: spyRun });
+    const app = appWith(fakeCtx(), ['lab_admin'], { customQueries: cqWithParam, connectorDialect: async () => 'postgres' as const, runConnectorSql: spyRun });
     const design = { id: 'd', name: 'N', paper: 'A4', orientation: 'portrait',
       parameters: [{ key: 'facility', label: 'F', type: 'text', value: 'HQ' }],
       pages: [{ id: 'p', elements: [{ id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 200, h: 80 }, dataSource: { kind: 'custom-query', queryId: 'cq_1' } }] }] };
@@ -225,7 +225,7 @@ describe('report-design routes', () => {
       calls.push(input);
       return { columns: [{ key: 'd', label: 'd' }], rows: [{ d: '2026-01-01' }] };
     };
-    const app = appWith(fakeCtx(), ['lab_admin'], { customQueries: cqWithRange, runConnectorSql: spyRun });
+    const app = appWith(fakeCtx(), ['lab_admin'], { customQueries: cqWithRange, connectorDialect: async () => 'postgres' as const, runConnectorSql: spyRun });
     const design = { id: 'd', name: 'N', paper: 'A4', orientation: 'portrait',
       parameters: [{ key: 'dateRange', label: 'Date range', type: 'daterange', required: true, value: { from: '2020-01-01', to: '2030-01-01' } }],
       pages: [{ id: 'p', elements: [{ id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 200, h: 80 }, dataSource: { kind: 'custom-query', queryId: 'cq_1' } }] }] };
@@ -249,7 +249,7 @@ describe('report-design routes', () => {
       calls.push(input);
       return { columns: [{ key: 'd', label: 'd' }], rows: [] };
     };
-    const app = appWith(fakeCtx(), ['lab_admin'], { customQueries: cqFrom, runConnectorSql: spyRun });
+    const app = appWith(fakeCtx(), ['lab_admin'], { customQueries: cqFrom, connectorDialect: async () => 'postgres' as const, runConnectorSql: spyRun });
     const design = { id: 'd', name: 'N', paper: 'A4', orientation: 'portrait',
       parameters: [
         { key: 'from', label: 'From', type: 'text', value: '1999-09-09' },

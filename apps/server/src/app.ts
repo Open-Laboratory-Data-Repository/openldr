@@ -9,7 +9,7 @@ import fastifyStatic from '@fastify/static';
 import compress from '@fastify/compress';
 import { requireOidcIssuer, resolveAuthCapabilities, type AuthSelectionConfig } from '@openldr/config';
 import { appError } from '@openldr/core';
-import type { AppContext } from '@openldr/bootstrap';
+import { createConnectorDialectLookup, type AppContext } from '@openldr/bootstrap';
 import { registerReportRoutes } from './reports-routes';
 import { registerTerminologyRoutes } from './terminology-routes';
 import { registerTerminologyAdminRoutes } from './terminology-admin-routes';
@@ -187,6 +187,7 @@ export async function buildApp(ctx: AppContext) {
     // referenceCapture: an operator-authored query on CENTRAL is reference config that must
     // reach labs alongside the report that points at it (reports.primary_query_id).
     customQueries: createCustomQueryStore(ctx.internalDb, referenceCapture),
+    connectorDialect: createConnectorDialectLookup(ctx.connectors),
     runConnectorSql: (input) => {
       const run = ctx.workflows.services.runConnectorSql;
       if (!run) throw new Error('connector SQL runner unavailable');

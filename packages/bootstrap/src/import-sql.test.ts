@@ -68,6 +68,29 @@ describe('fillDetailQuery', () => {
   });
 });
 
+describe('a token sits in plain SQL', () => {
+  it('refuses a template with a token inside quotes or a comment', () => {
+    expect(() => fillDetailQuery("SELECT * FROM t WHERE id IN ('{{keys}}')", ['A'])).toThrow(/\{\{keys\}\}/);
+    expect(() => fillKeyQuery('SELECT TOP ({{limit}}) id FROM t WHERE id > {{after}} /* {{after}} */ ORDER BY id', null, 1))
+      .toThrow('import SQL has a token inside quotes, a comment or a quoted name: remove the quotes around {{after}}');
+    expect(() => fillKeyQuery('SELECT k FROM t WHERE k > {{after}} -- {{limit}}', null, 1))
+      .toThrow('import SQL has a token inside quotes, a comment or a quoted name: remove the quotes around {{limit}}');
+  });
+  it('refuses a token inside a bracketed name', () => {
+    expect(() => fillDetailQuery('SELECT [{{keys}}] FROM t', ['A'])).toThrow(/remove the quotes around \{\{keys\}\}/);
+  });
+  it('the refusal names the token and holds no key', () => {
+    let message = '';
+    try { fillDetailQuery("SELECT * FROM t WHERE id IN ('{{keys}}')", ['SECRETKEY1']); } catch (e) { message = String(e); }
+    expect(message).toBe('Error: import SQL has a token inside quotes, a comment or a quoted name: remove the quotes around {{keys}}');
+    expect(message).not.toContain('SECRETKEY1');
+  });
+  it('a string that is never closed is refused with the reader sentence', () => {
+    expect(() => fillKeyQuery("SELECT TOP ({{limit}}) k FROM t WHERE k > {{after}} AND x = 'open", null, 1))
+      .toThrow('the SQL has a string, comment or quoted name that is never closed');
+  });
+});
+
 describe('toPluginRow', () => {
   it('turns a SQL Server date into wall-clock text with no zone', () => {
     // tedious returns a datetime as a Date whose UTC fields are the stored wall-clock.

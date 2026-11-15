@@ -7,7 +7,8 @@ import { createConnectorDb, type ConnectorDb } from './connector-db';
 // into memory. Callers that need pagination pass their own rowCap.
 const DEFAULT_ROW_CAP = 10_000;
 
-function dialectFor(type: string): SqlDialect | null {
+/** The SQL dialect of a connector type, or null when the type has none. */
+export function dialectFor(type: string): SqlDialect | null {
   if (type === 'postgres') return 'postgres';
   if (type === 'microsoft-sql') return 'mssql';
   // mysql has its own SqlDialect; planPagination's mysql arm internally reuses the
@@ -26,6 +27,22 @@ export interface ConnectorSqlDeps {
   createDb?: (type: string, config: Record<string, string>) => ConnectorDb;
 }
 
+/** The type of a connector the runner may use. Throws for a missing or disabled connector and
+ *  for one with no type. */
+function usableType(c: { type: string | null; enabled: boolean } | null, connectorId: string): string {
+  if (!c || !c.enabled) throw new Error(`connector ${connectorId} not found or disabled`);
+  if (!c.type) throw new Error(`connector ${connectorId} is not a database connector`);
+  return c.type;
+}
+
+/** Builds the `connectorDialect` dependency of `runStoredQuery`: the dialect of one connector,
+ *  read the way the runner reads it. It throws the runner's sentences for a missing, disabled or
+ *  typeless connector, and returns null for a type with no SQL dialect. */
+export function createConnectorDialectLookup(connectors: Pick<ConnectorSqlDeps['connectors'], 'get'>) {
+  return async (connectorId: string): Promise<SqlDialect | null> =>
+    dialectFor(usableType(await connectors.get(connectorId), connectorId));
+}
+
 /** Build the runConnectorSql implementation: resolve a host connector, decrypt its config,
  *  open an ephemeral connection, run a validated SELECT, and always close.
  *
@@ -38,17 +55,15 @@ export interface ConnectorSqlDeps {
 export function createConnectorSqlRunner(deps: ConnectorSqlDeps) {
   const make = deps.createDb ?? createConnectorDb;
   return async ({ connectorId, sql: userSql, rowCap, offset }: { connectorId: string; sql: string; rowCap?: number; offset?: number }): Promise<SqlResult> => {
-    const c = await deps.connectors.get(connectorId);
-    if (!c || !c.enabled) throw new Error(`connector ${connectorId} not found or disabled`);
-    if (!c.type) throw new Error(`connector ${connectorId} is not a database connector`);
+    const type = usableType(await deps.connectors.get(connectorId), connectorId);
     // The check reads the SQL as this connector's engine does, so the dialect comes first. A type
     // with no dialect is refused here, with the sentence createConnectorDb would throw for it.
-    const dialect = dialectFor(c.type);
-    if (!dialect) throw new Error(`unsupported connector type: ${c.type}`);
+    const dialect = dialectFor(type);
+    if (!dialect) throw new Error(`unsupported connector type: ${type}`);
     // SELECT-only guard before any connection is opened or credentials decrypted.
     validateSelectSql(userSql, dialect);
     const config = await deps.connectors.getDecryptedConfig(connectorId, deps.secretsKey);
-    const conn = make(c.type, config);
+    const conn = make(type, config);
     try {
       const cap = rowCap ?? DEFAULT_ROW_CAP;
       const plan = planPagination(userSql.replace(/;\s*$/, ''), dialect, { limit: cap, offset });

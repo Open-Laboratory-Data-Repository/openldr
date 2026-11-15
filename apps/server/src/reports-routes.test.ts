@@ -441,6 +441,7 @@ it.each(['', '.csv', '.pdf'])('refuses oversized stored query output on /api/rep
     reportDesigns: { get: async () => ({ id: 'd', parameters: [], pages: [{ elements: [{ id: 't', dataSource: { queryId: 'q' } }] }] }) as any },
     runStoredQuery: (id, values) => runStoredQuery({
       customQueries: { get: async () => ({ connectorId: 'c', sql: 'select a from rows', params: [] }) as any },
+      connectorDialect: async () => 'postgres' as const,
       runConnectorSql: async ({ rowCap }) => ({ columns: [], rows: Array.from({ length: rowCap! }, (_, a) => ({ a })) }),
     }, id, values),
     resolveDesignTables, renderReportDesignPdf: render,

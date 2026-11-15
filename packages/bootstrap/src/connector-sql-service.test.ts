@@ -1,9 +1,35 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createConnectorSqlRunner } from './connector-sql-service';
+import { createConnectorDialectLookup, createConnectorSqlRunner, dialectFor } from './connector-sql-service';
 
 const connectorsFake = (rec: unknown) => ({
   get: vi.fn(async () => rec as never),
   getDecryptedConfig: vi.fn(async () => ({ host: 'h', port: '5432', database: 'd', user: 'u', password: 'p' })),
+});
+
+describe('dialectFor', () => {
+  it('maps each SQL connector type to its dialect, and any other type to null', () => {
+    expect(dialectFor('postgres')).toBe('postgres');
+    expect(dialectFor('microsoft-sql')).toBe('mssql');
+    expect(dialectFor('mysql')).toBe('mysql');
+    expect(dialectFor('mongodb')).toBeNull();
+  });
+});
+
+describe('createConnectorDialectLookup', () => {
+  it('reads the dialect of the named connector', async () => {
+    const connectors = connectorsFake({ type: 'mysql', enabled: true });
+    const lookup = createConnectorDialectLookup(connectors);
+    expect(await lookup('m1')).toBe('mysql');
+    expect(connectors.get).toHaveBeenCalledWith('m1');
+  });
+  it('returns null for a connector type with no SQL dialect', async () => {
+    expect(await createConnectorDialectLookup(connectorsFake({ type: 'mongodb', enabled: true }))('x')).toBeNull();
+  });
+  it('throws the runner sentences for a missing, disabled or typeless connector', async () => {
+    await expect(createConnectorDialectLookup(connectorsFake(null))('x')).rejects.toThrow('connector x not found or disabled');
+    await expect(createConnectorDialectLookup(connectorsFake({ type: 'mysql', enabled: false }))('x')).rejects.toThrow('connector x not found or disabled');
+    await expect(createConnectorDialectLookup(connectorsFake({ type: null, enabled: true }))('x')).rejects.toThrow('connector x is not a database connector');
+  });
 });
 
 describe('createConnectorSqlRunner', () => {

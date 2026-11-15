@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { exportCustomQueries, importCustomQueries, CustomQueryTransferError, type AppContext } from '@openldr/bootstrap';
+import { dialectFor, exportCustomQueries, importCustomQueries, CustomQueryTransferError, type AppContext } from '@openldr/bootstrap';
 import { CustomQueryInputSchema, validateSelectSqlForSave } from '@openldr/dashboards';
 import type { CustomQueryGroupStore, CustomQueryStore } from '@openldr/db';
 import { requireCapability } from './rbac';
@@ -205,7 +205,10 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found or disabled' }; }
     let inner: string;
     try {
-      inner = prepareSelect(parsed.data.sql, (parsed.data.params ?? []) as never, parsed.data.values ?? {});
+      // Filled for the connector's engine. A type with no dialect is filled with none, and the
+      // connector runner then refuses it.
+      const dialect = (c.type ? dialectFor(c.type) : null) ?? undefined;
+      inner = prepareSelect(parsed.data.sql, (parsed.data.params ?? []) as never, parsed.data.values ?? {}, dialect);
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
     // Always wrap with a LIMIT so an unbounded `select * from big_table` never streams every row
     // into memory; the requested limit is clamped to ROW_CAP. Pagination is delegated to

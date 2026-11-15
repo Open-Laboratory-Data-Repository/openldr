@@ -20,6 +20,7 @@ describe('runStoredQuery', () => {
   const rec = { id: 'cq_1', name: 'Q', connectorId: 'c1', sql: 'select * from t where f = {{param.facility}}', params: PARAMS };
   const deps = () => ({
     customQueries: { get: vi.fn(async (id: string) => (id === 'cq_1' ? rec : undefined)) } as never,
+    connectorDialect: vi.fn(async () => 'postgres' as const),
     runConnectorSql: vi.fn(async () => ({ columns: [{ key: 'f', label: 'f' }], rows: [{ f: 'HQ' }] })),
   });
 

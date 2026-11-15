@@ -17,7 +17,7 @@ import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, createStarterPackStore, seededStarterPacks, type FormStore, type StarterPackStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
-import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, StoredQueryRowLimitError, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
+import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, StoredQueryRowLimitError, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type SqlDialect, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
 import { runReportStoredQuery } from './report-query';
 import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
 import {
@@ -92,7 +92,7 @@ import { createPluginTarget } from './connector-target';
 import { createPluginNodeService } from './plugin-node-service';
 import { createFormValidateService } from './form-validate-service';
 import { createPersistStoreService } from './persist-store-service';
-import { createConnectorSqlRunner } from './connector-sql-service';
+import { createConnectorDialectLookup, createConnectorSqlRunner } from './connector-sql-service';
 import { createConnectorMongoRunner } from './connector-mongo-service';
 import { createConnectorRedisRunner } from './connector-redis-service';
 import { createConnectorEmailRunner } from './connector-email-service';
@@ -607,6 +607,13 @@ export interface AppContext {
   close(): Promise<void>;
 }
 
+/** The SQL a dashboard SQL widget runs: its stored template with the optional clauses resolved
+ *  and the filter values filled for the target store's engine. The template is always applied,
+ *  with no values when the widget sends none, so a raw `[[ ... ]]` never reaches the engine. */
+export function widgetSqlToRun(q: { sql: string; values?: Record<string, unknown> }, engine: SqlDialect): string {
+  return applyTemplate(q.sql, resolveValues(q.values ?? {}), engine);
+}
+
 /** Group a reconciliation's grants into one audit event per role. Pure, so the grouping is
  *  testable without a live context. Empty in → empty out: a boot that changed nothing writes
  *  no events, which is what keeps the signal meaningful across ordinary restarts. */
@@ -825,6 +832,8 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const syncSites = createSyncSiteStore(internal.db);
   const reportRenderDeps: RunStoredQueryDeps = {
     customQueries: createCustomQueryStore(internal.db),
+    // LAZY like runConnectorSql below: `connectorStore` is declared further down this function.
+    connectorDialect: (connectorId) => createConnectorDialectLookup(connectorStore)(connectorId),
     runConnectorSql: (input) => {
       const run = workflowServices.runConnectorSql;
       if (!run) throw new Error('connector SQL runner unavailable');
@@ -920,12 +929,12 @@ const reporting: ReportingApi = {
       if (!isSqlExecutionAllowed(sqlEnabled, q.sql, vetted)) {
         throw new DashboardQueryError('raw SQL widgets are disabled');
       }
-      const finalSql = q.values ? applyTemplate(q.sql, resolveValues(q.values)) : q.sql;
-      data = await runSqlQuery(reportingDb, finalSql, {
+      const engine: SqlDialect = cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : cfg.TARGET_STORE_ADAPTER === 'mysql' ? 'mysql' : 'postgres';
+      data = await runSqlQuery(reportingDb, widgetSqlToRun(q, engine), {
         timeoutMs: await numberSettings.get('dashboard.sql_timeout_ms'),
         rowCap: await numberSettings.get('dashboard.sql_row_cap'),
         withDeadline: selectedTarget.withQueryTimeout,
-      }, cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : cfg.TARGET_STORE_ADAPTER === 'mysql' ? 'mysql' : 'postgres');
+      }, engine);
     }
     return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
   };
@@ -2011,6 +2020,7 @@ const reporting: ReportingApi = {
 }
 
 export { createFeatureFlags } from './feature-flags';
+export { createConnectorDialectLookup, dialectFor } from './connector-sql-service';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';
 export { createLabIdentity, type LabIdentityService } from './lab-identity';
 export { createNumberSettings } from './number-settings';
