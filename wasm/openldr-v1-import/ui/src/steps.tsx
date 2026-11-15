@@ -103,29 +103,38 @@ const FIELDS: Array<{ key: keyof OptionsForm; type: 'text' | 'date'; help?: stri
   { key: 'panels', type: 'text', help: 'options.panelsHelp' },
 ];
 
-/** Step 2. The options the plugin accepts. There is no free SQL. */
-export function OptionsStep({ form, onChange }: { form: OptionsForm; onChange: (next: OptionsForm) => void }) {
-  const wrong = problems(form);
+/** Step 2. The options the plugin accepts. There is no free SQL. The Copy tab uses it too, with
+ *  its own heading, and read-only while a copy is under way. */
+export function OptionsStep({ form, onChange, heading = t('options.heading'), readOnly = false, idPrefix = 'opt' }: {
+  form: OptionsForm;
+  onChange: (next: OptionsForm) => void;
+  heading?: string;
+  readOnly?: boolean;
+  /** Both tabs can be in the page at once, so each needs its own element ids. */
+  idPrefix?: string;
+}) {
+  const wrong = readOnly ? [] : problems(form);
   return (
     <section class="v1i-section">
-      <h1>{t('options.heading')}</h1>
+      <h1>{heading}</h1>
       <div class="v1i-form">
         {FIELDS.map((f) => {
           // A date range problem belongs under the to date.
           const fieldProblems = wrong.filter((p) => p === f.key || (p === 'range' && f.key === 'to'));
           return (
             <Fragment key={f.key}>
-              <label for={`opt-${f.key}`}>{t(`options.${f.key}`)}</label>
+              <label for={`${idPrefix}-${f.key}`}>{t(`options.${f.key}`)}</label>
               <div class="v1i-field">
                 <input
-                  id={`opt-${f.key}`}
+                  id={`${idPrefix}-${f.key}`}
                   class="v1i-input"
                   type={f.type}
                   value={form[f.key]}
                   placeholder={f.placeholder}
                   data-testid={`opt-${f.key}`}
                   aria-invalid={fieldProblems.length > 0}
-                  onInput={(e) => onChange({ ...form, [f.key]: (e.currentTarget as HTMLInputElement).value })}
+                  readOnly={readOnly}
+                  onInput={(e) => { if (!readOnly) onChange({ ...form, [f.key]: (e.currentTarget as HTMLInputElement).value }); }}
                 />
                 {fieldProblems.map((p) => <span key={p} class="v1i-problem" data-testid={`problem-${p}`}>{t(`problem.${p}`)}</span>)}
                 {f.help ? <span class="v1i-muted">{t(f.help)}</span> : null}

@@ -19,6 +19,7 @@
   --danger-soft-border: #fecaca;
   --ok: #15803d;
   --warn: #b45309;
+  --warn-soft-bg: #fffbeb;
   --ring: rgba(37, 99, 235, 0.35);
   color-scheme: light;
 }
@@ -40,6 +41,7 @@
   --danger-soft-border: rgba(248, 113, 113, 0.32);
   --ok: #4ade80;
   --warn: #fbbf24;
+  --warn-soft-bg: rgba(251, 191, 36, 0.12);
   --ring: rgba(91, 155, 255, 0.45);
   color-scheme: dark;
 }
@@ -265,6 +267,116 @@ body {
 .v1i-counts dt, .v1i-summary dt { margin: 0; color: var(--text-muted); }
 .v1i-counts dd, .v1i-summary dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 
+/* The Import and Copy tabs. A pane fills the space under the tabs; the hidden one takes none.
+   `display: flex` out-ranks the browser's own [hidden] rule, so it is restated here. */
+[hidden] { display: none !important; }
+.v1i-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 2px;
+  padding: 0 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.v1i-tab {
+  font: inherit;
+  font-weight: 500;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.v1i-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.v1i-tab-on { color: var(--text); border-bottom-color: var(--accent); }
+.v1i-pane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
+/* The Copy tab. */
+.v1i-copy { max-width: 760px; min-width: 0; }
+.v1i-copy > .v1i-help { margin-bottom: 20px; }
+.v1i-end { display: flex; justify-content: flex-end; }
+.v1i-warning {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  background: var(--warn-soft-bg);
+  color: var(--warn);
+  font-weight: 600;
+}
+.v1i-run-head .v1i-row-main { gap: 2px; }
+.v1i-run-head .v1i-muted { font-weight: 400; }
+
+/* The set table scrolls inside its own box, so a narrow screen never scrolls the page sideways. */
+.v1i-table-wrap { margin-top: 12px; max-width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+.v1i-table { width: 100%; border-collapse: collapse; }
+.v1i-table th, .v1i-table td { padding: 7px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.v1i-table th { font-weight: 500; color: var(--text-muted); background: var(--surface-2); }
+.v1i-table tbody tr:last-child td { border-bottom: none; }
+.v1i-table .v1i-num { text-align: right; }
+
+/* The dots menu. */
+.v1i-menu { position: relative; flex: 0 0 auto; }
+.v1i-btn-icon { min-width: 36px; padding: 4px 8px; font-size: 18px; line-height: 1; }
+.v1i-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  min-width: 170px;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+}
+.v1i-menu-item {
+  font: inherit;
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+}
+.v1i-menu-item:hover:not(:disabled) { background: var(--surface-2); }
+.v1i-menu-item:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.v1i-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }
+.v1i-menu-danger { color: var(--danger); }
+
+/* A confirm step. */
+.v1i-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.45);
+}
+.v1i-dialog {
+  width: 100%;
+  max-width: 440px;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.v1i-dialog h2 { font-size: 16px; margin: 0 0 10px; }
+.v1i-dialog p { margin: 0 0 10px; }
+.v1i-dialog label { display: block; margin: 4px 0 6px; font-weight: 500; }
+.v1i-dialog .v1i-input { max-width: none; }
+.v1i-dialog-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
 /* On a phone five named steps do not fit. Keep the numbers and name only the current step,
    so the row never scrolls sideways and the current step is always in view. */
 @media (max-width: 560px) {
@@ -273,5 +385,7 @@ body {
   .v1i-step-label { display: none; }
   .v1i-step-on .v1i-step-label { display: inline; }
   .v1i-body { padding: 16px; }
+  .v1i-tabs { padding: 0 8px; }
+  .v1i-table th, .v1i-table td { padding: 7px 10px; }
   .v1i-foot { padding: 12px 16px; }
 }

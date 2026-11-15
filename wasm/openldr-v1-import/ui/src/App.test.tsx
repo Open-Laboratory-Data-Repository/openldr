@@ -49,6 +49,24 @@ beforeEach(() => {
   document.body.removeAttribute('data-openldr-ready');
 });
 
+describe('tabs', () => {
+  it('opens on the Import tab and keeps the wizard where it was after a visit to Copy', async () => {
+    setup();
+    render(<App />);
+    fireEvent.click(await screen.findByTestId('connector-ms'));
+    click('next');
+    expect(screen.getByTestId('tab-import').getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByTestId('copy-panel')).toBeNull();
+    click('tab-copy');
+    expect(screen.getByTestId('tab-copy').getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByTestId('copy-panel')).toBeTruthy();
+    expect((screen.getByTestId('steps').closest('[role="tabpanel"]') as HTMLElement).hidden).toBe(true);
+    click('tab-import');
+    expect(screen.getByTestId('step-1').getAttribute('aria-current')).toBe('step');
+    expect((screen.getByTestId('copy-panel').closest('[role="tabpanel"]') as HTMLElement).hidden).toBe(true);
+  });
+});
+
 describe('source step', () => {
   it('says how to allow a connector when none is allowed', async () => {
     setup({ allowed: async () => [] });
