@@ -115,7 +115,7 @@ type SetMenu = (next: (open: MenuName | null) => MenuName | null) => void;
  * A dots menu: focus moves to its first usable item, the arrow keys move between items, and a
  * click outside or Escape closes it. Escape gives focus back to the menu's button. Tab closes it
  * and lets focus move on. Arrows and Escape count only while focus is in the menu or on its
- * button, so a field below keeps its own keys.
+ * button, so a field below keeps its own keys. Escape also counts while focus is on the page body.
  */
 function useMenu(name: MenuName, open: boolean, setOpen: SetMenu, box: { current: HTMLElement | null }, button: { current: HTMLElement | null }) {
   useEffect(() => {
@@ -130,7 +130,10 @@ function useMenu(name: MenuName, open: boolean, setOpen: SetMenu, box: { current
         close();
         return;
       }
-      if (!box.current?.contains(document.activeElement)) return;
+      // Focus on the page body counts as in the menu for Escape only, so a menu whose focus was
+      // lost still closes from the keyboard.
+      const onBody = document.activeElement === null || document.activeElement === document.body;
+      if (!box.current?.contains(document.activeElement) && !(e.key === 'Escape' && onBody)) return;
       if (e.key === 'Escape') {
         close();
         button.current?.focus();
@@ -283,6 +286,21 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
     setOpenMenu((o) => (o === 'start' ? null : o));
     if (hadFocus) statusLine.current?.focus();
   }, [startMenuOpen, canStart]);
+
+  // R33: the Start menu button is off while a start call is out, so a browser drops its focus to
+  // the page body. When the call ends, focus that is on the body or on that button goes to the
+  // button if it is on, else to the copy card's status line. Focus a step took is left alone.
+  const wasStarting = useRef(starting);
+  useEffect(() => {
+    const ended = wasStarting.current && !starting;
+    wasStarting.current = starting;
+    if (!ended) return;
+    const at = document.activeElement;
+    const button = startMenuButton.current;
+    if (at !== null && at !== document.body && at !== button) return;
+    if (button && !button.disabled) button.focus();
+    else statusLine.current?.focus();
+  }, [starting]);
 
   /** Where focus goes when a step closes: its opener, or the status line when the opener is disabled. */
   const focusBack = (opener: HTMLElement | null) => () => (opener && !(opener as HTMLButtonElement).disabled ? opener : statusLine.current);

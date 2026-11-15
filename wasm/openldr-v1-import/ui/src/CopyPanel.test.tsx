@@ -352,6 +352,15 @@ describe('reading the copy', () => {
 const other = { id: 'ms2', name: 'Second v1 server', type: 'microsoft-sql' };
 const active = () => document.activeElement as HTMLElement | null;
 const key = (k: string, shift = false) => fireEvent.keyDown(active() ?? document.body, { key: k, shiftKey: shift });
+/** Puts focus on the page body. jsdom will not blur a disabled button, so focus moves to a
+ *  field of the test's own first, and that field is then blurred and removed. */
+function focusBody() {
+  const spot = document.createElement('input');
+  document.body.appendChild(spot);
+  spot.focus();
+  spot.blur();
+  spot.remove();
+}
 
 describe('R35: a yes to read again sends exactly what was asked', () => {
   it('locks the picker and the form while the start call is out and the step is open, and the yes resends the first values', async () => {
@@ -701,5 +710,60 @@ describe('spec 4.6: Start copy sits in a dots menu', () => {
     expect(menuNamed(CARD_MENU)).toBeTruthy();
     // The card menu still holds Stop and Delete, and nothing else.
     expect(within(menuNamed(CARD_MENU)!).getAllByRole('menuitem').map((i) => i.getAttribute('data-testid'))).toEqual(['copy-stop', 'copy-delete']);
+  });
+
+  it('Escape closes an open menu while focus is on the page body, for both menus', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    focusBody();
+    expect(active()).toBe(document.body);
+    key('Escape');
+    expect(menuNamed(START_MENU)).toBeNull();
+    expect(active()).toBe(byId('copy-actions'));
+    click('copy-menu');
+    focusBody();
+    expect(active()).toBe(document.body);
+    key('Escape');
+    expect(menuNamed(CARD_MENU)).toBeNull();
+    expect(active()).toBe(byId('copy-menu'));
+  });
+});
+
+describe('R33: focus after a start call', () => {
+  // A real browser drops focus from a button that turns disabled; jsdom keeps it. Each test moves
+  // focus to the page body while the call is out, as the browser does.
+  type Answer = { run?: PluginCopyRun; changedSets?: string[] };
+  function pendingStart() {
+    let settle = { resolve: (_v: Answer) => {}, reject: (_e: unknown) => {} };
+    const start = vi.fn(() => new Promise<Answer>((resolve, reject) => { settle = { resolve, reject }; }));
+    return { start, settle: () => settle };
+  }
+
+  it('a start that works: focus goes to the status line, because the Start menu button is off for the live copy', async () => {
+    const stopped = copy({ status: 'stopped' });
+    const call = pendingStart();
+    setup({ list: async () => [stopped], status: async () => copy({ status: 'queued' }), start: call.start });
+    await openCopy();
+    chooseStart();
+    focusBody();
+    expect(active()).toBe(document.body);
+    call.settle().resolve({ run: copy({ status: 'queued' }) });
+    await waitFor(() => expect(active()).toBe(byId('copy-status')));
+    expect(disabled('copy-actions')).toBe(true);
+  });
+
+  it('a start that fails: focus goes back to the Start menu button', async () => {
+    const stopped = copy({ status: 'stopped' });
+    const call = pendingStart();
+    setup({ list: async () => [stopped], status: async () => stopped, start: call.start });
+    await openCopy();
+    chooseStart();
+    focusBody();
+    expect(active()).toBe(document.body);
+    call.settle().reject(new Error('no room on the disk'));
+    await pane().findByTestId('copy-start-error');
+    await waitFor(() => expect(active()).toBe(byId('copy-actions')));
   });
 });
