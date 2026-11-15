@@ -161,34 +161,86 @@ describe('validateSelectSql on SQL Server', () => {
   });
 });
 
+describe('a statement word right after a number, on mssql', () => {
+  it.each([
+    'SELECT 1KILL 55', "SELECT 1WAITFOR DELAY '00:00:05'", 'SELECT 1EEXEC p', 'SELECT 10EXEC p',
+    'SELECT 1DELETE FROM t', 'SELECT 1INTO x FROM t', 'SELECT 1UPDATE t SET a = 1', 'SELECT $1EXEC p',
+    'SELECT 1DISABLE TRIGGER trg ON t', 'SELECT 1USE other',
+  ])('refuses %s', (q) => { expect(() => validateSelectSql(q, 'mssql')).toThrow(); });
+  it.each([
+    'SELECT 1FROM t', 'SELECT 1KILLS FROM t', 'SELECT a1exec FROM t', 'SELECT _1exec FROM t',
+    'SELECT #1exec FROM t', 'SELECT 1e5 AS x', 'SELECT 0x1F AS x',
+  ])('allows %s', (q) => { expect(() => validateSelectSql(q, 'mssql')).not.toThrow(); });
+  it('the save form refuses it too, in every reading that would run it as a statement', () => {
+    expect(() => validateSelectSqlForSave('SELECT 1DELETE FROM t')).not.toThrow(); // mysql reads 1DELETE as a name
+    expect(() => validateSelectSql('SELECT 1DELETE FROM t', 'postgres')).toThrow();
+  });
+});
+
+describe('use, on mssql', () => {
+  it.each([
+    "SELECT a FROM t OPTION (USE HINT('X'))", "SELECT a FROM t OPTION (USE HINT ('X', 'Y'))",
+    "SELECT a FROM t OPTION (RECOMPILE, USE HINT('X'))", "SELECT a FROM t OPTION (USE PLAN N'<p/>')",
+    "SELECT a FROM t OPTION (USE PLAN '<p/>')",
+  ])('allows %s', (q) => { expect(() => validateSelectSql(q, 'mssql')).not.toThrow(); });
+  it.each([
+    'SELECT 1 USE hint', 'SELECT 1 USE plan', 'SELECT 1 USE hints', 'SELECT 1 USE', 'SELECT 1 USE other',
+  ])('refuses %s', (q) => { expect(() => validateSelectSql(q, 'mssql')).toThrow(); });
+});
+
+describe('the base word list after a number', () => {
+  it('postgres refuses a base word right after a number, as SQL Server does', () => {
+    expect(() => validateSelectSql('SELECT 1INTO x FROM t', 'postgres')).toThrow(/read-only/);
+    expect(() => validateSelectSql('SELECT a1into, _into FROM t', 'postgres')).not.toThrow();
+  });
+  it('mysql keeps reading a digit and a word as one name', () => {
+    expect(() => validateSelectSql('SELECT 1DELETE FROM t', 'mysql')).not.toThrow();
+    expect(() => validateSelectSql('SELECT 1 DELETE FROM t', 'mysql')).toThrow(/read-only/);
+  });
+});
+
+describe('runSqlQuery reads the SQL as its engine does', () => {
+  it('on mssql refuses a statement word before anything reaches the database', async () => {
+    const transaction = vi.fn(() => { throw new Error('should not reach db'); });
+    await expect(runSqlQuery({ transaction } as any, 'SELECT backup FROM t', { timeoutMs: 5000, rowCap: 10 }, 'mssql'))
+      .rejects.toThrow(MSSQL_REFUSAL);
+    expect(transaction).not.toHaveBeenCalled();
+  });
+  it('on postgres sends the same word as a name to the database', async () => {
+    const { db, executed } = makeFakeDb([{ backup: 1 }]);
+    await runSqlQuery(db, 'SELECT backup FROM t', { timeoutMs: 5000, rowCap: 10 }, 'postgres');
+    expect(executed).toContain('select * from (SELECT backup FROM t) as _q limit 10 offset 0');
+  });
+});
+
 describe('runSqlQuery numeric guards', () => {
   const db = { transaction: () => { throw new Error('should not reach db'); } } as any;
 
   it('rejects NaN timeoutMs before reaching the db', async () => {
-    await expect(runSqlQuery(db, 'select 1', { timeoutMs: NaN, rowCap: 10 }))
+    await expect(runSqlQuery(db, 'select 1', { timeoutMs: NaN, rowCap: 10 }, 'postgres'))
       .rejects.toThrow(/finite positive/);
   });
 
   it('rejects Infinity rowCap before reaching the db', async () => {
-    await expect(runSqlQuery(db, 'select 1', { timeoutMs: 5000, rowCap: Infinity }))
+    await expect(runSqlQuery(db, 'select 1', { timeoutMs: 5000, rowCap: Infinity }, 'postgres'))
       .rejects.toThrow(/finite positive/);
   });
 
   it('rejects zero timeoutMs before reaching the db', async () => {
-    await expect(runSqlQuery(db, 'select 1', { timeoutMs: 0, rowCap: 10 }))
+    await expect(runSqlQuery(db, 'select 1', { timeoutMs: 0, rowCap: 10 }, 'postgres'))
       .rejects.toThrow(/finite positive/);
   });
 
   it('rejects negative rowCap before reaching the db', async () => {
-    await expect(runSqlQuery(db, 'select 1', { timeoutMs: 5000, rowCap: -1 }))
+    await expect(runSqlQuery(db, 'select 1', { timeoutMs: 5000, rowCap: -1 }, 'postgres'))
       .rejects.toThrow(/finite positive/);
   });
 });
 
 describe('runSqlQuery dialect-aware session setup + capped query', () => {
-  it('postgres (default engine): read-only txn + statement_timeout + LIMIT/OFFSET capped query', async () => {
+  it('postgres: read-only txn + statement_timeout + LIMIT/OFFSET capped query', async () => {
     const { db, executed } = makeFakeDb([{ a: 1 }]);
-    const result = await runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 });
+    const result = await runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 }, 'postgres');
     expect(executed).toContain('set transaction read only');
     expect(executed).toContain('set local statement_timeout = 5000');
     expect(executed).toContain('select * from (select 1 as a) as _q limit 100 offset 0');
@@ -196,7 +248,7 @@ describe('runSqlQuery dialect-aware session setup + capped query', () => {
     expect(result.columns).toEqual([{ key: 'a', label: 'a', kind: 'number' }]);
   });
 
-  it('postgres (explicit engine): same shape as the default', async () => {
+  it('postgres: same shape with another timeout and cap', async () => {
     const { db, executed } = makeFakeDb([{ a: 1 }]);
     await runSqlQuery(db, 'select 1 as a', { timeoutMs: 2500, rowCap: 10 }, 'postgres');
     expect(executed).toContain('set transaction read only');

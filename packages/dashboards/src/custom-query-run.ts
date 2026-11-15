@@ -18,7 +18,8 @@ function assertDate(v: unknown): string {
  *  - daterange param `p` provides {{param.from}} and {{param.to}} (value: { from, to }); a blank
  *    side of an optional range is ''.
  *  - text/select provide {{param.<id>}} as a quoted string literal; an unset optional one is ''.
- *  Read-only substitution only; caller has already run validateSelectSql. */
+ *  Read-only substitution only. It does not check the SQL; the caller checks the result
+ *  (`prepareSelect`). */
 export function substituteParams(
   sql: string, params: DashboardCustomQueryParam[], values: Record<string, unknown>,
 ): string {

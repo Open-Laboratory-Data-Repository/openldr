@@ -12,16 +12,20 @@ const DIALECTS_IN_ORDER: readonly SqlDialect[] = ['postgres', 'mssql', 'mysql'];
  *  - the text is empty once comments are blanked;
  *  - it holds more than one statement;
  *  - it does not start with SELECT or WITH;
- *  - it holds a refused word (INTO, DDL or DML);
+ *  - it holds a refused word (INTO, DDL or DML; see `hasBaseWord` for what counts as a word);
  *  - on mssql only, it holds a SQL Server statement word or pass-through function (see
  *    `refuseSqlServerStatementWords`);
- *  - every case in which `blankSql` throws (see `sql-text.ts`): a string, comment, quoted name or
- *    dollar-quoted string that is never closed; a lone carriage return in a line comment on mysql
- *    or mssql; a versioned `/*!` comment or a `/*M!` comment on mysql; a `/*!` comment inside
- *    another one on mysql. */
+ *  - every case in which `blankSql` throws (see `sql-text.ts`):
+ *    - a string, block comment, quoted name or dollar-quoted string is never closed (any dialect);
+ *    - a carriage return inside a line comment is followed by a character other than a line feed
+ *      (mysql, mssql);
+ *    - a vertical tab, a form feed, U+0085, U+2028 or U+2029 sits inside a `--` comment (mssql);
+ *    - a `/*!` comment is directly followed by a digit or by `!`, or a `/*M!` or `/*m!` comment
+ *      opens (mysql);
+ *    - a `/*!` comment is never closed, or opens inside another one (mysql). */
 export function validateSelectSql(rawSql: string, dialect: SqlDialect): void {
   const blanked = blankSql(rawSql, dialect);
-  checkBlankedSelect(blanked);
+  checkBlankedSelect(blanked, dialect);
   if (dialect === 'mssql') refuseSqlServerStatementWords(blanked);
 }
 
@@ -59,29 +63,108 @@ const MSSQL_STATEMENT_WORDS = [
 /** Functions that send SQL held in a string to another server or read another source. */
 const MSSQL_PASS_THROUGH = ['openquery', 'openrowset', 'opendatasource', 'openxml'];
 
-/** A character that is part of a T-SQL word: a letter, a digit, `_`, `#`, `@` or `$`. `\b` is not
- *  used, because it treats `#`, `@` and `$` as word ends, so `##open` and `@set` would match. */
-const WORD_CHAR = String.raw`[\p{L}\p{Nd}_#@$]`;
+/** Words that write or change the schema, refused on every engine. */
+const BASE_WORDS = ['insert', 'update', 'delete', 'drop', 'alter', 'create', 'truncate', 'grant', 'revoke',
+  'merge', 'call', 'copy', 'into'];
 
-function wholeWords(alternatives: string): RegExp {
-  return new RegExp(`(?<!${WORD_CHAR})(?:${alternatives})(?!${WORD_CHAR})`, 'iu');
+/** How one engine splits code into words.
+ *
+ *  A run is the longest stretch of name characters. A run that starts with a name-start character
+ *  is one name, so a word counts only when it is the whole run. Any other run starts with a digit
+ *  or `$`, so it is a number (or a `$` money literal) and what follows it. The engine ends the
+ *  number at a letter that cannot continue it, so a word at the end of such a run is a word of its
+ *  own: SQL Server reads `1KILL` as `1` then `KILL`. A word counts there when it ends the run.
+ *
+ *  `\b` is not used: it treats `#`, `@` and `$` as word ends, so `##open` and `@set` would match,
+ *  and it treats a digit as part of a word, so `1KILL` would not. */
+interface WordReading {
+  /** One run of name characters, global. */
+  run: RegExp;
+  /** The first character of a run that is one name. */
+  nameStart: RegExp;
 }
 
-const MSSQL_REFUSED = [
-  wholeWords([...MSSQL_STATEMENT_WORDS, ...MSSQL_PASS_THROUGH].join('|')),
-  // `use` is a statement, except in a query hint: `OPTION (USE HINT(...))` or `OPTION (USE PLAN ...)`.
-  wholeWords(String.raw`use(?!${WORD_CHAR})(?!\s*(?:hint|plan)(?!${WORD_CHAR}))`),
-  wholeWords(String.raw`enable\s+trigger|disable\s+trigger|next\s+value\s+for`),
-];
+/** T-SQL: a name starts with a letter, `_`, `#` or `@`, and goes on with those, digits and `$`. */
+const MSSQL_READING: WordReading = {
+  run: /[\p{L}\p{Nd}_#@$]+/gu,
+  nameStart: /^[\p{L}_#@]/u,
+};
+
+/** Postgres: a name starts with a letter or `_`, and goes on with those, digits and `$`. `#` and `@`
+ *  are operators there, so they end a word as `\b` did. */
+const POSTGRES_READING: WordReading = {
+  run: /[\p{L}\p{Nd}_$]+/gu,
+  nameStart: /^[\p{L}_]/u,
+};
+
+/** A word list as two tests on one run: the whole run, or the end of the run. */
+interface WordList { whole: RegExp; end: RegExp }
+
+function wordList(words: readonly string[]): WordList {
+  const alternatives = words.join('|');
+  return { whole: new RegExp(`^(?:${alternatives})$`, 'iu'), end: new RegExp(`(?:${alternatives})$`, 'iu') };
+}
+
+/** The longest word in any list below, with room to spare. The end test reads only this much of a
+ *  run, so a long run costs no more than a short one. */
+const LONGEST_WORD = 32;
+
+/** True when `run` holds a word of `list` that counts, read as `reading` says. */
+function runHasWord(run: string, reading: WordReading, list: WordList): boolean {
+  if (reading.nameStart.test(run)) return list.whole.test(run);
+  return list.end.test(run.slice(-LONGEST_WORD));
+}
+
+/** Each run of name characters in `text`, with the index just after it. */
+function* runsOf(text: string, reading: WordReading): Generator<{ run: string; after: number }> {
+  for (const m of text.matchAll(reading.run)) yield { run: m[0], after: (m.index ?? 0) + m[0].length };
+}
+
+const BASE_LIST = wordList(BASE_WORDS);
+const BASE_PATTERN_MYSQL = new RegExp(String.raw`\b(?:${BASE_WORDS.join('|')})\b`, 'i');
+
+/** True when the blanked text holds a base word that counts. MySQL keeps `\b`: a bare MySQL name may
+ *  start with a digit, so `1delete` is one name there. SQL Server and Postgres follow `WordReading`. */
+function hasBaseWord(blanked: string, dialect: SqlDialect): boolean {
+  if (dialect === 'mysql') return BASE_PATTERN_MYSQL.test(blanked);
+  const reading = dialect === 'mssql' ? MSSQL_READING : POSTGRES_READING;
+  for (const { run } of runsOf(blanked, reading)) if (runHasWord(run, reading, BASE_LIST)) return true;
+  return false;
+}
+
+const MSSQL_REFUSED_WORDS = wordList([...MSSQL_STATEMENT_WORDS, ...MSSQL_PASS_THROUGH]);
+const MSSQL_USE = wordList(['use']);
+const MSSQL_TRIGGER_PAIR = wordList(['enable', 'disable']);
+const MSSQL_NEXT = wordList(['next']);
+
+/** What may follow `use` in a query hint: `HINT (` or `PLAN` and a string, with an optional `N`. */
+const MSSQL_USE_HINT = /\s+(?:hint\s*\(|plan(?:\s*|\s+N)'')/iuy;
+const MSSQL_TRIGGER_AFTER = /\s+trigger(?![\p{L}\p{Nd}_#@$])/iuy;
+const MSSQL_NEXT_AFTER = /\s+value\s+for(?![\p{L}\p{Nd}_#@$])/iuy;
+
+/** True when the sticky pattern matches `text` at `at`. */
+function followedBy(text: string, at: number, sticky: RegExp): boolean {
+  sticky.lastIndex = at;
+  return sticky.test(text);
+}
 
 /** On SQL Server a SELECT with no semicolon can be followed by a second statement. The words that
- *  can start one are reserved, so a bare one in code is refused. A name that is such a word must be
- *  in brackets, which `blankSql` has already blanked. Reads the blanked text only. */
+ *  can start one are reserved, so one that counts in code is refused (see `WordReading`). A name
+ *  that is such a word must be in brackets, which `blankSql` has already blanked. Reads the blanked
+ *  text only.
+ *  - `use` is refused unless `HINT (` or `PLAN '...'` follows, as in `OPTION (USE HINT('X'))`.
+ *  - `enable` and `disable` are refused when `trigger` follows, and `next` when `value for` does. */
 function refuseSqlServerStatementWords(blanked: string): void {
-  if (MSSQL_REFUSED.some((re) => re.test(blanked))) throw new Error(MSSQL_REFUSAL);
+  for (const { run, after } of runsOf(blanked, MSSQL_READING)) {
+    const refused = runHasWord(run, MSSQL_READING, MSSQL_REFUSED_WORDS)
+      || (runHasWord(run, MSSQL_READING, MSSQL_USE) && !followedBy(blanked, after, MSSQL_USE_HINT))
+      || (runHasWord(run, MSSQL_READING, MSSQL_TRIGGER_PAIR) && followedBy(blanked, after, MSSQL_TRIGGER_AFTER))
+      || (runHasWord(run, MSSQL_READING, MSSQL_NEXT) && followedBy(blanked, after, MSSQL_NEXT_AFTER));
+    if (refused) throw new Error(MSSQL_REFUSAL);
+  }
 }
 
-function checkBlankedSelect(blanked: string): void {
+function checkBlankedSelect(blanked: string, dialect: SqlDialect): void {
   // Strings, comments and quoted names are blanked before the structural and keyword checks, so
   // quoted text (e.g. 'convert this into that') can't trigger a false positive or hide a
   // statement. Only the validation copy is blanked, never the SQL that runs.
@@ -94,7 +177,7 @@ function checkBlankedSelect(blanked: string): void {
   // `into` is banned too: `SELECT … INTO <table>` creates a table and writes rows (a write
   // masquerading as a SELECT). On Postgres a read-only txn caught this; on MSSQL there is no
   // read-only txn, so this shared validator is the only guard for both Path A and Path B.
-  if (/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|merge|call|copy|into)\b/i.test(noTrailing)) {
+  if (hasBaseWord(noTrailing, dialect)) {
     throw new Error('only read-only SELECT queries are allowed (INTO/DDL/DML rejected)');
   }
 }
@@ -156,7 +239,7 @@ async function isMariaDb(db: object, trx: Kysely<ExternalSchema>): Promise<boole
  *  `SET STATEMENT … FOR`; MariaDB ignores the hint), so the engine variant is detected once (cached)
  *  from `version()`. */
 export async function runSqlQuery(
-  db: Kysely<ExternalSchema>, rawSql: string, opts: SqlRunOpts, engine: SqlDialect = 'postgres',
+  db: Kysely<ExternalSchema>, rawSql: string, opts: SqlRunOpts, engine: SqlDialect,
 ): Promise<ReportResultData> {
   validateSelectSql(rawSql, engine);
   const rows = await runReadQuery(db, CompiledQuery.raw(rawSql.replace(/;\s*$/, '')), opts, engine);
@@ -170,7 +253,7 @@ export async function runSqlQuery(
 
 /** Execute a trusted, parameterized SELECT with the same bounds as SQL widgets. */
 export async function runReadQuery(
-  db: Kysely<ExternalSchema>, query: CompiledQuery<unknown>, opts: SqlRunOpts, engine: SqlDialect = 'postgres',
+  db: Kysely<ExternalSchema>, query: CompiledQuery<unknown>, opts: SqlRunOpts, engine: SqlDialect,
 ): Promise<Record<string, unknown>[]> {
   if (!Number.isFinite(opts.timeoutMs) || opts.timeoutMs < 1) throw new Error('timeoutMs must be a finite positive number');
   if (!Number.isFinite(opts.rowCap) || opts.rowCap < 1) throw new Error('rowCap must be a finite positive number');

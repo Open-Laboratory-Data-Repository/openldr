@@ -369,6 +369,25 @@ describe('createSourceReader', () => {
     }
   });
 
+  it('reads the key query as SQL Server does, so a statement word in it is refused before it runs', async () => {
+    // Postgres and MySQL read EXEC as a name here. Only the mssql reading refuses it.
+    const source = fakeSource();
+    const { reader } = harness(source);
+    const keySql = `${KEY_SQL} EXEC [dbo].[Wipe]`;
+    await expect(reader.readPage({ ...first, keySql })).rejects.toThrow(/on SQL Server/);
+    expect(source.log.queries).toEqual([]);
+    expect(source.open).not.toHaveBeenCalled();
+  });
+
+  it('reads the detail queries as SQL Server does before the key query runs', async () => {
+    const source = fakeSource();
+    const { reader } = harness(source);
+    const details = [{ name: 'results', sql: `${DETAIL_SQL} EXEC [dbo].[Wipe]` }];
+    await expect(reader.readPage({ ...first, details })).rejects.toThrow(/on SQL Server/);
+    expect(source.log.queries).toEqual([]);
+    expect(source.open).not.toHaveBeenCalled();
+  });
+
   it('a key that is not safe is thrown as it is, not retried', async () => {
     const source = fakeSource((kind) => (kind === 'keys' ? [{ RequestID: 'Ré' }] : undefined));
     const { reader, waiting } = harness(source);

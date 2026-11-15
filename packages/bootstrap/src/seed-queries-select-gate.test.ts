@@ -15,10 +15,12 @@ import { prepareSelect, substituteParams, validateSelectSql, type SqlDialect } f
  * inside `created`, and `_` is a word character. Measured below, because the opposite is the
  * natural assumption and it changes how careful a future alias has to be.
  *
- * ⛔ Substituted the way the runner substitutes, not run raw. `prepareSelect` is exactly what
- * `runStoredQuery` calls (packages/dashboards/src/custom-query-run.ts:52) — substitute first, then
- * validate. Validating the raw text would test a string that never reaches a database, and would
- * also miss a banned word arriving through a parameter's quoted literal.
+ * ⛔ Substituted the way the runner substitutes, not run raw. `runStoredQuery` substitutes with
+ * `prepareSelect`, and the connector runner then checks the result with the connector's dialect.
+ * This gate does both in one place: `prepareSelect(..., dialect)` substitutes and checks with that
+ * dialect, and `validateSelectSql(prepared, dialect)` repeats the connector runner's check.
+ * Validating the raw text would test a string that never reaches a database, and would also miss a
+ * banned word arriving through a parameter's quoted literal.
  *
  * ⛔ Lives in `@openldr/bootstrap`, not in `report-seeds.test.ts` where the other seed tests are.
  * `@openldr/dashboards` already depends on `@openldr/reporting`, so importing the gate into
