@@ -38,6 +38,7 @@ const MAX_STORED_FAILURES = 1000;
 export const STALE_MS = 2 * 60_000;
 /** How often a driver writes its run, even in the middle of a page or a wait. */
 const HEARTBEAT_MS = 30_000;
+const SYSTEM: ImportActor = { type: 'system', id: null, name: 'system' };
 
 /** `waiting`: the source cannot be reached, and the run will try again by itself. */
 export type ImportStatus = 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed' | 'interrupted';
@@ -138,6 +139,11 @@ export interface ImportService {
   failures(pluginId: string, runId: string): Promise<Array<{ key: string; error: string }>>;
   stop(pluginId: string, runId: string, actor: ImportActor): Promise<ImportRun>;
   resume(pluginId: string, runId: string, actor: ImportActor): Promise<ImportRun>;
+  /** Server only: in a service whose origin is not `server` it does nothing. Resume every run a
+   *  server started that has had no write for 2 minutes and that this process is not driving, as
+   *  the system. A run that was stopping is stopped instead, so a restart never sets running what a
+   *  person asked to stop. Returns the runs it acted on. */
+  adopt(): Promise<ImportRun[]>;
   /** Resolves when this process finishes driving the run. For the CLI and tests. */
   wait(runId: string): Promise<ImportRun>;
 }
@@ -537,7 +543,23 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     }
   }
 
-  return {
+  /** A server-started run whose driver has gone: a stored status a driver holds, no write for
+   *  2 minutes, and not driven here. A run with no `origin` predates it and reads as `cli`. */
+  const needsAdopting = (stored: ImportRun): boolean =>
+    (stored.origin ?? 'cli') === 'server' && isActive(stored.status) && view(stored).status === 'interrupted';
+
+  /** A run that was stopping when its driver went: finish the stop, as the driver would have. */
+  async function finishStop(stored: ImportRun): Promise<ImportRun> {
+    const run: ImportRun = { ...stored, status: 'stopped', waiting: null, finishedAt: now().toISOString(), origin: stored.origin ?? 'cli' };
+    await save(run);
+    await audit({
+      action: 'import.finish', pluginId: run.pluginId, connectorId: run.connectorId, runId: run.id, actor: SYSTEM,
+      metadata: { status: 'stopped', dryRun: run.dryRun, ...run.counts },
+    });
+    return view(run);
+  }
+
+  const service: ImportService = {
     importers: () => listPlugins('import'),
 
     readers: () => listPlugins('read'),
@@ -677,6 +699,26 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       return { ...run };
     },
 
+    async adopt() {
+      // A run adopted here would be recorded as this process's. From a CLI process that would be
+      // `cli`, and no server would adopt it again.
+      if (origin !== 'server') return [];
+      const out: ImportRun[] = [];
+      for (const row of await deps.plugins.list()) {
+        for (const stored of await allRuns(row.id)) {
+          if (!needsAdopting(stored)) continue;
+          try {
+            out.push(stored.status === 'stopping' ? await finishStop(stored) : await service.resume(stored.pluginId, stored.id, SYSTEM));
+          } catch {
+            // A plugin that is now disabled, a connector no longer allowed, or the audit log down.
+            // The run stays as it is and reads as interrupted, so a person can see it and resume
+            // it by hand. The next turn tries again.
+          }
+        }
+      }
+      return out;
+    },
+
     async wait(runId) {
       const entry = local.get(runId);
       if (entry) return view(await entry.promise);
@@ -685,4 +727,5 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       throw new Error(`import run ${runId} is not being driven by this process`);
     },
   };
+  return service;
 }

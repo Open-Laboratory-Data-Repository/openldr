@@ -708,3 +708,165 @@ describe('import run: who may read what', () => {
   });
 });
 
+// Layer: the same as above. A "restart" here is a second service over the same pg-mem database,
+// with the first one's drive left hanging, as a killed process leaves its last save. Not covered:
+// a real process kill, real Postgres, the server's own start (import-driver.test.ts has the wiring).
+describe('import run: adopt', () => {
+  const SYSTEM: ImportActor = { type: 'system', id: null, name: 'system' };
+
+  /** A run record as a server left it, written straight to the store. */
+  async function storeRun(h: Harness, over: Record<string, unknown>): Promise<void> {
+    const at = new Date(h.clock.now).toISOString();
+    const run: Record<string, unknown> = {
+      id: 'dead', pluginId: 'v1-import', pluginVersion: '1.2.0', connectorId: 'c1', status: 'running', dryRun: false,
+      options: { tz: '+02:00' }, pageSize: 2, limit: null, cursor: 'REQ0002',
+      counts: { keys: 2, imported: 2, failed: 0, resources: 4 }, failuresStored: 0,
+      startedAt: at, updatedAt: at, finishedAt: null, lastError: null, startedBy: 'admin', waiting: null, origin: 'server',
+      ...over,
+    };
+    for (const k of Object.keys(run)) if (run[k] === undefined) delete run[k];
+    await createPluginDataStore(internalDb).put('v1-import', '__import-runs', run.id as string, run);
+  }
+  const rawRun = async (id: string) => (await createPluginDataStore(internalDb).get('v1-import', '__import-runs', id)) as ImportRun;
+
+  it('adopt resumes a server run that has been silent for 2 minutes', async () => {
+    const h = await harness(keysOf(4), { origin: 'server' });
+    await storeRun(h, { status: 'waiting', waiting: { since: new Date(h.clock.now).toISOString(), attempt: 2, error: 'Connection lost' } });
+    // Exactly 2 minutes is not yet silent.
+    h.clock.now += STALE_MS;
+    expect(await h.svc.adopt()).toEqual([]);
+    h.clock.now += 1;
+    const adopted = await h.svc.adopt();
+    expect(adopted.map((r) => [r.id, r.status, r.origin])).toEqual([['dead', 'running', 'server']]);
+    expect(await h.svc.wait('dead')).toMatchObject({ status: 'completed', cursor: 'REQ0004', counts: { keys: 4, imported: 4 } });
+    // Nothing before the saved position is read or saved again.
+    expect(h.mapInputs.map((m) => m.keys)).toEqual([['REQ0003', 'REQ0004']]);
+  });
+
+  it('adopt leaves a run that a CLI process started', async () => {
+    const h = await harness(keysOf(4), { origin: 'server' });
+    await storeRun(h, { origin: 'cli' });
+    h.clock.now += 10 * 60_000;
+    expect(await h.svc.adopt()).toEqual([]);
+    expect(await rawRun('dead')).toMatchObject({ status: 'running', origin: 'cli', cursor: 'REQ0002' });
+    expect(h.mapInputs).toEqual([]);
+    expect(h.audited.filter((e) => e.action !== 'import.allow')).toEqual([]);
+  });
+
+  it('adopt leaves a run recorded before origin existed, which reads as cli', async () => {
+    // An upgrade must not restart old imports that nobody resumed.
+    const h = await harness(keysOf(4), { origin: 'server' });
+    await storeRun(h, { origin: undefined, waiting: undefined });
+    h.clock.now += 10 * 60_000;
+    expect(await h.svc.adopt()).toEqual([]);
+    const stored = await rawRun('dead');
+    expect(stored.status).toBe('running');
+    expect('origin' in stored).toBe(false);
+    expect((await h.svc.get('v1-import', 'dead'))?.status).toBe('interrupted');
+    expect(h.mapInputs).toEqual([]);
+  });
+
+  it('adopt does nothing in a CLI process, even for a server run with no driver', async () => {
+    const h = await harness(keysOf(4));
+    await storeRun(h, {});
+    h.clock.now += 10 * 60_000;
+    expect(await h.svc.adopt()).toEqual([]);
+    expect(await rawRun('dead')).toMatchObject({ status: 'running', origin: 'server' });
+    expect(h.mapInputs).toEqual([]);
+  });
+
+  it('adopt leaves a run that wrote 1 minute ago', async () => {
+    const h = await harness(keysOf(4), { origin: 'server' });
+    await storeRun(h, {});
+    h.clock.now += 60_000;
+    expect(await h.svc.adopt()).toEqual([]);
+    expect(await rawRun('dead')).toMatchObject({ status: 'running', updatedAt: new Date(h.clock.now - 60_000).toISOString() });
+    expect(h.mapInputs).toEqual([]);
+  });
+
+  it('adopt leaves a stopped, failed or completed run', async () => {
+    const h = await harness(keysOf(4), { origin: 'server' });
+    await storeRun(h, { id: 'a', status: 'stopped' });
+    await storeRun(h, { id: 'b', status: 'failed' });
+    await storeRun(h, { id: 'c', status: 'completed' });
+    h.clock.now += 10 * 60_000;
+    expect(await h.svc.adopt()).toEqual([]);
+    expect(h.mapInputs).toEqual([]);
+  });
+
+  it('adopt leaves a run this process is driving, however long since its last write', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      const h = await harness(keysOf(4), { origin: 'server' });
+      h.persist.mockImplementation(async () => { await new Promise(() => {}); });
+      const started = await h.svc.start(START);
+      await vi.waitFor(() => expect(h.persist).toHaveBeenCalled());
+      h.clock.now += 10 * 60_000;
+      expect(await h.svc.adopt()).toEqual([]);
+      expect(h.audited.filter((e) => e.action === 'import.resume')).toEqual([]);
+      expect((await h.svc.get('v1-import', started.id))?.status).toBe('running');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('adopt finishes the stop of a server run that was stopping when its server died', async () => {
+    // The person asked it to stop. A restart must not set it running again.
+    const h = await harness(keysOf(4), { origin: 'server' });
+    await storeRun(h, { status: 'stopping' });
+    h.clock.now += STALE_MS + 1;
+    const adopted = await h.svc.adopt();
+    expect(adopted.map((r) => [r.id, r.status])).toEqual([['dead', 'stopped']]);
+    expect(await rawRun('dead')).toMatchObject({
+      status: 'stopped', cursor: 'REQ0002', counts: { keys: 2, imported: 2 }, finishedAt: new Date(h.clock.now).toISOString(),
+    });
+    expect(h.mapInputs).toEqual([]);
+    expect(h.persist).not.toHaveBeenCalled();
+    const events = h.audited.filter((e) => e.action !== 'import.allow');
+    expect(events).toEqual([{
+      action: 'import.finish', pluginId: 'v1-import', connectorId: 'c1', runId: 'dead', actor: SYSTEM,
+      metadata: { status: 'stopped', dryRun: false, keys: 2, imported: 2, failed: 0, resources: 4 },
+    }]);
+    // A second turn finds nothing more to do.
+    h.clock.now += STALE_MS + 1;
+    expect(await h.svc.adopt()).toEqual([]);
+  });
+
+  it('a run adopted after a restart finishes from its saved position, audited as system', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      // The server process: the first page of 4 is saved, then it is killed while saving REQ0007.
+      const first = await harness(keysOf(8), { origin: 'server' });
+      first.persist.mockImplementation(async (resources: Array<{ id: string }>) => {
+        if (resources[0].id === 'p-REQ0007') await new Promise(() => {});
+        return [];
+      });
+      const started = await first.svc.start({ ...START, pageSize: 4 });
+      await vi.waitFor(() => expect(first.persist.mock.calls.some((c) => (c[0] as Array<{ id: string }>)[0].id === 'p-REQ0007')).toBe(true));
+      expect(await rawRun(started.id)).toMatchObject({ status: 'running', cursor: 'REQ0004', origin: 'server' });
+
+      // The server starts again 2 minutes later. A CLI process at the same moment does not adopt.
+      const cli = await harness(keysOf(8));
+      cli.clock.now = first.clock.now + STALE_MS + 1;
+      expect(await cli.svc.adopt()).toEqual([]);
+      expect(cli.mapInputs).toEqual([]);
+
+      const second = await harness(keysOf(8), { origin: 'server' });
+      second.clock.now = first.clock.now + STALE_MS + 1;
+      expect((await second.svc.adopt()).map((r) => r.id)).toEqual([started.id]);
+      const done = await second.svc.wait(started.id);
+      expect(done).toMatchObject({
+        status: 'completed', cursor: 'REQ0008', origin: 'server', counts: { keys: 8, imported: 8, failed: 0, resources: 16 },
+      });
+      // The second page is read again in full, and the first is not read again.
+      expect(second.mapInputs.map((m) => m.keys)).toEqual([['REQ0005', 'REQ0006', 'REQ0007', 'REQ0008']]);
+      expect(second.persist.mock.calls.map((c) => (c[0] as Array<{ id: string }>)[0].id)).toEqual(['p-REQ0005', 'p-REQ0006', 'p-REQ0007', 'p-REQ0008']);
+      const events = second.audited.filter((e) => e.action !== 'import.allow');
+      expect(events.map((e) => [e.action, e.actor])).toEqual([['import.resume', SYSTEM], ['import.finish', SYSTEM]]);
+      // The resume row keeps the cursor, as a resume by hand does. That is older behaviour.
+      expect(events[0].metadata).toEqual({ cursor: 'REQ0004' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

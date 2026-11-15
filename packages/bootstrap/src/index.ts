@@ -47,7 +47,7 @@ import { checkCustomQueryFile, importCustomQueries } from './custom-query-transf
 import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createFacilityImportRunStore, type FacilityImportRunStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -83,7 +83,9 @@ import { createPatientIdentifierSystems, type PatientIdentifierSystems } from '.
 import { createPatientIndex, type PatientIndex } from './patient-index';
 import { createPatientDuplicates, type PatientDuplicates } from './patient-duplicates';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
-import { createImportService, type ImportRun, type ImportService } from './import-run';
+import { createImportService, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
+import { createImportCopyService, type ImportCopyService } from './import-copy';
+import { startImportDriver } from './import-driver';
 import { diagnoseConnector } from './connector-diagnose';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -545,6 +547,9 @@ export interface AppContext {
   pluginBroker: PluginBroker;
   /** Plugin-driven imports from a host database connector (import-run.ts). */
   imports: ImportService;
+  /** Copies of a source database's rows to CE's own disk (import-copy.ts). Only a context built
+   *  with `runImportDriver` drives them. Any context may start, stop or delete one. */
+  importCopies: ImportCopyService;
   connectors: ConnectorStore;
   appSettings: AppSettingStore;
   featureFlags: FeatureFlags;
@@ -655,6 +660,14 @@ export interface AppContextOptions {
    *  workers for the life of the command, and their start-up log line (with the central address and
    *  site id on a site that has sync set up) reached the caller of a command sent through the app. */
   startSyncWorkers?: boolean;
+  /** Does this process drive imports and copies of a source database?
+   *
+   *  Only the API server sets it. It starts the loop that takes every copy needing a driver and
+   *  resumes every import a server started whose driver has gone (import-driver.ts). An `openldr`
+   *  command builds a context too, in a child process of the server. If it drove, it would take a
+   *  copy, then drop it when the command exits, and nobody would drive it for the next 2 minutes.
+   *  It also records the services' runs as started by the server rather than by the CLI. */
+  runImportDriver?: boolean;
 }
 
 export async function createAppContext(cfg: Config, opts: AppContextOptions = {}): Promise<AppContext> {
@@ -1774,28 +1787,44 @@ const reporting: ReportingApi = {
   workflowServices.hostFileWrite = hostFiles.hostFileWrite;
   workflowServices.hostFileList = hostFiles.hostFileList;
   workflowServices.hostFileDelete = hostFiles.hostFileDelete;
+  // Not safeRecord: this one must throw. The import and copy services refuse to allow, start or
+  // resume when the row cannot be written. The failure is logged here, as safeRecord would.
+  const importAudit = async (e: ImportAuditEvent): Promise<void> => {
+    try {
+      await audit.record({
+        actorType: e.actor.type, actorId: e.actor.id, actorName: e.actor.name,
+        action: e.action, entityType: 'plugin', entityId: e.pluginId,
+        metadata: { ...(e.connectorId ? { connectorId: e.connectorId } : {}), ...(e.runId ? { runId: e.runId } : {}), ...(e.metadata ?? {}) },
+      });
+    } catch (err) {
+      logger.error({ action: e.action, error: err instanceof Error ? err.message : String(err) }, 'audit record failed');
+      throw err;
+    }
+  };
   // Imports driven by a plugin that declares an import source (import-run.ts). Shared by the
   // broker (studio) and the CLI. Saves through the same path as the workflow Persist Store node.
+  // A run records whether a server or a CLI process started it. The server adopts only its own.
+  const importOrigin = opts.runImportDriver === true ? 'server' : 'cli';
   const imports = createImportService({
     plugins,
     connectors: connectorStore,
     secretsKey: cfg.SECRETS_ENCRYPTION_KEY,
     pluginData,
     persist: workflowPersist,
-    // Not safeRecord: this one must throw. The import service refuses to allow, start or resume
-    // when the row cannot be written. The failure is logged here, as safeRecord would.
-    audit: async (e) => {
-      try {
-        await audit.record({
-          actorType: e.actor.type, actorId: e.actor.id, actorName: e.actor.name,
-          action: e.action, entityType: 'plugin', entityId: e.pluginId,
-          metadata: { ...(e.connectorId ? { connectorId: e.connectorId } : {}), ...(e.runId ? { runId: e.runId } : {}), ...(e.metadata ?? {}) },
-        });
-      } catch (err) {
-        logger.error({ action: e.action, error: err instanceof Error ? err.message : String(err) }, 'audit record failed');
-        throw err;
-      }
-    },
+    audit: importAudit,
+    origin: importOrigin,
+  });
+  // Copies of a source's rows (import-copy.ts). Every context can start, stop and delete one. Only
+  // the driver below drives them, and the id here is what each drive writes on the copy it holds.
+  const importCopies = createImportCopyService({
+    plugins,
+    connectors: connectorStore,
+    secretsKey: cfg.SECRETS_ENCRYPTION_KEY,
+    pluginData,
+    store: createImportCopyStore(internal.db),
+    audit: importAudit,
+    allowed: (pluginId) => imports.allowed(pluginId),
+    driverId: randomUUID(),
   });
   const pluginBroker = createPluginBroker({
     plugins,
@@ -1870,6 +1899,20 @@ const reporting: ReportingApi = {
     }),
   });
 
+  // Only a process that opted in drives. See `AppContextOptions.runImportDriver`. Started last,
+  // so nothing after it can fail the build and leave it running. Only an error's code is logged: a
+  // message from CE's own database can quote what it was asked to store.
+  const importDriver = opts.runImportDriver === true
+    ? startImportDriver({
+      copies: importCopies,
+      imports,
+      onError: (err) => {
+        const code = (err as { code?: unknown } | null)?.code;
+        logger.warn({ code: typeof code === 'string' ? code.slice(0, 40) : null }, 'the import driver could not finish a turn; it tries again in 5 seconds');
+      },
+    })
+    : null;
+
   let closePromise: Promise<void> | undefined;
   return {
     logger,
@@ -1908,6 +1951,7 @@ const reporting: ReportingApi = {
     pluginData,
     pluginBroker,
     imports,
+    importCopies,
     connectors: connectorStore,
     appSettings,
     labIdentity,
@@ -1942,6 +1986,8 @@ const reporting: ReportingApi = {
         await terminologyIngestWorker?.stop();
         await facilityJobWorker?.stop();
         await facilityImportWorker?.stop();
+        // Before the databases close, so each copy drive here saves its position first.
+        await importDriver?.stop();
         if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
         await eventing.close();
         // Last step before the databases close. The sync runtime and the workers are stopped by now, so
@@ -2097,6 +2143,7 @@ export {
   createImportService,
   type ImportService, type ImportRun, type ImportStatus, type ImportActor, type ImportAuditEvent, type ImportStartInput,
 } from './import-run';
+export type { ImportCopyService, CopyRun, CopyStatus, CopySetProgress } from './import-copy';
 export {
   runSetupChecks, setupCheckDeps, SETUP_CHECK_TITLE, SETUP_HINT_TEXT,
   type SetupCheck, type SetupCheckDeps, type SetupCheckId, type SetupHint, type SetupReport, type SetupStatus,
