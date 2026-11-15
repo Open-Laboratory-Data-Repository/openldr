@@ -41,6 +41,11 @@ const type = (id: string, value: string) => fireEvent.input(byId(id), { target: 
 const disabled = (id: string) => (byId(id) as HTMLButtonElement).disabled;
 // A menu item is marked aria-disabled, not disabled, so the keyboard can still reach it.
 const itemOff = (id: string) => byId(id).getAttribute('aria-disabled') === 'true';
+/** Start copy sits in the Copy tab's own dots menu (spec 4.6): open the menu, then choose the item. */
+function chooseStart() {
+  click('copy-actions');
+  click('copy-start');
+}
 
 /** Render the page and open the Copy tab. */
 async function openCopy() {
@@ -61,13 +66,14 @@ describe('copy tab', () => {
     setup({ start, status: async () => started });
     await openCopy();
     expect(screen.getByTestId('tab-copy').getAttribute('aria-selected')).toBe('true');
-    expect(byId('copy-start').textContent).toMatch(/Start copy/);
-    expect(disabled('copy-start')).toBe(true);
+    expect(disabled('copy-actions')).toBe(true);
     fireEvent.click(await pane().findByTestId('connector-ms'));
     type('opt-tz', '+03:00');
     type('opt-database', 'OpenLDRData');
     type('opt-panels', ' HIVVL ');
-    expect(disabled('copy-start')).toBe(false);
+    expect(disabled('copy-actions')).toBe(false);
+    click('copy-actions');
+    expect(byId('copy-start').textContent).toMatch(/Start copy/);
     click('copy-start');
     await waitFor(() => expect(byId('copy-status').textContent).toMatch(/Queued/));
     expect(start).toHaveBeenCalledTimes(1);
@@ -202,13 +208,13 @@ describe('copy tab', () => {
     expect((byId('opt-database') as HTMLInputElement).value).toBe('LabDB');
     expect((byId('opt-from') as HTMLInputElement).value).toBe('2024-01-01');
     expect((byId('opt-database') as HTMLInputElement).readOnly).toBe(true);
-    expect(disabled('copy-start')).toBe(true);
+    expect(disabled('copy-actions')).toBe(true);
     click('copy-menu');
     click('copy-stop');
     // Once stopped, the form opens again with the options the copy had, and Start copy sends it.
     await waitFor(() => expect((byId('opt-tz') as HTMLInputElement).readOnly).toBe(false));
     expect((byId('opt-tz') as HTMLInputElement).value).toBe('+01:00');
-    expect(disabled('copy-start')).toBe(false);
+    expect(disabled('copy-actions')).toBe(false);
   });
 
   it('asks before reading a changed set again, and sends reread only on yes', async () => {
@@ -221,7 +227,7 @@ describe('copy tab', () => {
     setup({ list: async () => [stopped], status: async () => current, start });
     await openCopy();
     type('opt-from', '2025-01-01');
-    click('copy-start');
+    chooseStart();
     const dialog = await pane().findByTestId('copy-reread-dialog');
     expect(dialog.textContent).toContain('These will be read again from the start: requests');
     // No: nothing is sent again, and the copy is left as it was.
@@ -231,7 +237,7 @@ describe('copy tab', () => {
     expect(start).toHaveBeenLastCalledWith({ connectorId: 'ms', options: { tz: '+02:00', from: '2025-01-01' } });
     expect(byId('copy-status').textContent).toMatch(/Stopped/);
     // Ask again, and say yes this time.
-    click('copy-start');
+    chooseStart();
     await pane().findByTestId('copy-reread-dialog');
     click('copy-reread-yes');
     await waitFor(() => expect(byId('copy-status').textContent).toMatch(/Queued/));
@@ -281,7 +287,7 @@ describe('copy tab', () => {
     await openCopy();
     fireEvent.click(await pane().findByTestId('connector-ms'));
     type('opt-tz', '+02:00');
-    click('copy-start');
+    chooseStart();
     expect((await pane().findByTestId('copy-start-error')).textContent).toContain('copy cp1 is being deleted');
   });
 });
@@ -358,7 +364,7 @@ describe('R35: a yes to read again sends exactly what was asked', () => {
     Object.assign(o.imports, { allowed: async () => [ms, other] });
     await openCopy();
     type('opt-from', '2025-01-01');
-    click('copy-start');
+    chooseStart();
     // The call is out: the form and the picker do not take input.
     expect((byId('opt-from') as HTMLInputElement).readOnly).toBe(true);
     type('opt-from', '2030-12-31');
@@ -396,8 +402,8 @@ describe('two connectors', () => {
     await waitFor(() => expect(byId('copy-status').textContent).toMatch(/Stopped/));
     expect((byId('opt-database') as HTMLInputElement).value).toBe('Other');
     expect((byId('opt-tz') as HTMLInputElement).readOnly).toBe(false);
-    expect(disabled('copy-start')).toBe(false);
-    click('copy-start');
+    expect(disabled('copy-actions')).toBe(false);
+    chooseStart();
     await waitFor(() => expect(start).toHaveBeenCalledWith({ connectorId: 'ms2', options: { tz: '+01:00', database: 'Other' } }));
     // And back to the live one, still read-only.
     await waitFor(() => expect(disabled('connector-ms')).toBe(false));
@@ -436,16 +442,16 @@ describe('the dots menu and the sets table', () => {
 });
 
 describe('R36: a confirm step is modal', () => {
-  it('the read-again step takes focus, keeps Tab inside, closes on Escape and gives focus back to Start', async () => {
+  it('the read-again step takes focus, keeps Tab inside, closes on Escape and gives focus back to the Start menu button', async () => {
     const stopped = copy({ status: 'stopped' });
     setup({ list: async () => [stopped], status: async () => stopped, start: async () => ({ changedSets: ['requests'] }) });
     await openCopy();
-    byId('copy-start').focus();
-    click('copy-start');
+    chooseStart();
     const dialog = await pane().findByTestId('copy-reread-dialog');
     await waitFor(() => expect(dialog.contains(active())).toBe(true));
-    // Everything behind the step is out of reach.
+    // Everything behind the step is out of reach, the Start menu with it.
     expect(byId('copy-main').hasAttribute('inert')).toBe(true);
+    expect(byId('copy-main').contains(byId('copy-actions'))).toBe(true);
     const no = byId('copy-reread-no');
     const yes = byId('copy-reread-yes');
     yes.focus();
@@ -456,7 +462,7 @@ describe('R36: a confirm step is modal', () => {
     key('Escape');
     await waitFor(() => expect(pane().queryByTestId('copy-reread-dialog')).toBeNull());
     expect(byId('copy-main').hasAttribute('inert')).toBe(false);
-    await waitFor(() => expect(active()).toBe(byId('copy-start')));
+    await waitFor(() => expect(active()).toBe(byId('copy-actions')));
   });
 
   it('the delete step takes focus, keeps Tab inside, locks the picker, and gives focus back to the dots button', async () => {
@@ -485,5 +491,124 @@ describe('R36: a confirm step is modal', () => {
     await waitFor(() => expect(pane().queryByTestId('copy-delete-dialog')).toBeNull());
     await waitFor(() => expect(active()).toBe(byId('copy-menu')));
     expect(remove).not.toHaveBeenCalled();
+  });
+});
+
+// The two dots menus are told apart by their names.
+const START_MENU = 'Copy tab actions';
+const CARD_MENU = 'Copy actions';
+const menuNamed = (name: string) => pane().queryByRole('menu', { name });
+
+describe('spec 4.6: Start copy sits in a dots menu', () => {
+  it('has no plain Start button; the menu button sits in the picker row and is off until a connector is picked', async () => {
+    setup();
+    await openCopy();
+    expect(pane().queryByTestId('copy-start')).toBeNull();
+    const button = byId('copy-actions');
+    expect(button.getAttribute('aria-label')).toBe(START_MENU);
+    expect(button.getAttribute('aria-haspopup')).toBe('menu');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    // R3: no menu that opens with nothing usable in it.
+    expect(disabled('copy-actions')).toBe(true);
+    const row = byId('copy-source-row');
+    expect(row.contains(byId('connector-ms'))).toBe(true);
+    expect(row.contains(button)).toBe(true);
+    click('connector-ms');
+    expect(disabled('copy-actions')).toBe(false);
+    click('copy-actions');
+    const menu = menuNamed(START_MENU)!;
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.getAttribute('data-testid'))).toEqual(['copy-start']);
+    expect(byId('copy-start').textContent).toBe('Start copy');
+    expect(itemOff('copy-start')).toBe(false);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    // Focus moves to the item.
+    expect(active()).toBe(byId('copy-start'));
+  });
+
+  it('names the item Continue copy when a copy exists and is not live', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    expect(byId('copy-start').textContent).toBe('Continue copy');
+  });
+
+  it('is off while the copy shown is live', async () => {
+    setup({ list: async () => [copy()], status: async () => copy() });
+    await openCopy();
+    expect(disabled('copy-actions')).toBe(true);
+    click('copy-actions');
+    expect(menuNamed(START_MENU)).toBeNull();
+  });
+
+  it('R3: an open menu closes, and its button is off, once the item cannot be used', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    expect(menuNamed(START_MENU)).toBeTruthy();
+    // A form that is not right: Start cannot be used now.
+    type('opt-tz', 'not an offset');
+    await waitFor(() => expect(menuNamed(START_MENU)).toBeNull());
+    expect(byId('copy-actions').getAttribute('aria-expanded')).toBe('false');
+    expect(disabled('copy-actions')).toBe(true);
+  });
+
+  it('choosing the item calls start with the form, closes the menu and gives focus to its button', async () => {
+    const stopped = copy({ status: 'stopped' });
+    const start = vi.fn(async () => { throw new Error('no room on the disk'); });
+    setup({ list: async () => [stopped], status: async () => stopped, start });
+    await openCopy();
+    chooseStart();
+    expect(menuNamed(START_MENU)).toBeNull();
+    expect(byId('copy-actions').getAttribute('aria-expanded')).toBe('false');
+    expect(active()).toBe(byId('copy-actions'));
+    await pane().findByTestId('copy-start-error');
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledWith({ connectorId: 'ms', options: { tz: '+02:00' } });
+    expect(active()).toBe(byId('copy-actions'));
+  });
+
+  it('Escape closes the menu and gives focus back to its button; the arrow keys stay on the one item', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    expect(active()).toBe(byId('copy-start'));
+    key('ArrowDown');
+    expect(active()).toBe(byId('copy-start'));
+    key('ArrowUp');
+    expect(active()).toBe(byId('copy-start'));
+    key('Escape');
+    expect(menuNamed(START_MENU)).toBeNull();
+    expect(active()).toBe(byId('copy-actions'));
+  });
+
+  it('a click outside closes the menu', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    expect(menuNamed(START_MENU)).toBeTruthy();
+    click('copy-status');
+    expect(menuNamed(START_MENU)).toBeNull();
+  });
+
+  it('never has both menus open: opening one closes the other', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-menu');
+    expect(menuNamed(CARD_MENU)).toBeTruthy();
+    click('copy-actions');
+    expect(menuNamed(CARD_MENU)).toBeNull();
+    expect(byId('copy-menu').getAttribute('aria-expanded')).toBe('false');
+    expect(menuNamed(START_MENU)).toBeTruthy();
+    click('copy-menu');
+    expect(menuNamed(START_MENU)).toBeNull();
+    expect(byId('copy-actions').getAttribute('aria-expanded')).toBe('false');
+    expect(menuNamed(CARD_MENU)).toBeTruthy();
+    // The card menu still holds Stop and Delete, and nothing else.
+    expect(within(menuNamed(CARD_MENU)!).getAllByRole('menuitem').map((i) => i.getAttribute('data-testid'))).toEqual(['copy-stop', 'copy-delete']);
   });
 });

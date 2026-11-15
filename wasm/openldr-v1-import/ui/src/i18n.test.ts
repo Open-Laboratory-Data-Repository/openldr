@@ -26,6 +26,14 @@ describe('v1 import page strings', () => {
     }
   });
 
+  // Spec 4.6. The Copy tab has two dots menus, so a screen reader must hear two names.
+  it('names the Start menu and the copy card menu apart in every language', () => {
+    for (const locale of ['en', 'fr', 'pt'] as const) {
+      expect(bundles[locale]['copy.actions']).toBeTruthy();
+      expect(bundles[locale]['copy.actions']).not.toBe(bundles[locale]['copy.menu']);
+    }
+  });
+
   it('follows the host language, with a region tag, and falls back to English', () => {
     setLocale('fr-FR');
     expect(t('nav.next')).toBe('Suivant');
