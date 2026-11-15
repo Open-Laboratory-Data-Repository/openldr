@@ -102,11 +102,37 @@ async function world(requests: string[], facilities: string[] = []) {
   const source = fakeSource(requests, facilities);
   const raw = createPluginDataStore(internalDb);
   const runSaves: CopyRun[] = [];
+  /** Writes of a copy record held between the caller's read and its write, until released. */
+  const pauses: Array<{ match: (doc: CopyRun) => boolean; reached: () => void; gate: Promise<void> }> = [];
+  /** Another writer that changes the record just before a matching write. */
+  const rivals: Array<{ match: (doc: CopyRun) => boolean; left: number }> = [];
+  const plainCopyPuts: string[] = [];
   const pluginData: PluginDataStore = {
     ...raw,
     async put(pluginId, collection, key, doc) {
-      if (collection === '__import-copies') runSaves.push(structuredClone(doc) as CopyRun);
+      // R28: a copy record is written only by compare-and-swap.
+      if (collection === '__import-copies') plainCopyPuts.push(key);
       return raw.put(pluginId, collection, key, doc);
+    },
+    async putIfRev(pluginId, collection, key, doc, expectedRev) {
+      if (collection === '__import-copies') {
+        const run = doc as CopyRun;
+        const pause = pauses.find((p) => p.match(run));
+        if (pause) {
+          pauses.splice(pauses.indexOf(pause), 1);
+          pause.reached();
+          await pause.gate;
+        }
+        const rival = rivals.find((r) => r.left > 0 && r.match(run));
+        if (rival) {
+          rival.left -= 1;
+          const stored = (await raw.get(pluginId, collection, key)) as CopyRun | null;
+          if (stored) await raw.put(pluginId, collection, key, { ...stored, rev: stored.rev + 1 });
+        }
+      }
+      const wrote = await raw.putIfRev(pluginId, collection, key, doc, expectedRev);
+      if (wrote && collection === '__import-copies') runSaves.push(structuredClone(doc) as CopyRun);
+      return wrote;
     },
   };
   const realStore = createImportCopyStore(internalDb);
@@ -172,9 +198,21 @@ async function world(requests: string[], facilities: string[] = []) {
     },
   });
   await imports.allow(PLUGIN, 'c1', ADMIN);
+  worlds.push({ plainCopyPuts });
   const svc = service();
   return {
-    svc, service, imports, source, store, calls, audited, runSaves, sleeps, clock, plugins, invoke, raw,
+    svc, service, imports, source, store, calls, audited, runSaves, sleeps, clock, plugins, invoke, raw, plainCopyPuts,
+    /** Hold the next write of a copy record that matches, after its caller read the record. */
+    pauseWrite: (match: (doc: CopyRun) => boolean) => {
+      let reached: () => void = () => {};
+      let release: () => void = () => {};
+      const at = new Promise<void>((resolve) => { reached = resolve; });
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      pauses.push({ match, reached, gate });
+      return { reached: at, release };
+    },
+    /** Let another writer change the record just before the next `times` matching writes. */
+    rivalWrites: (match: (doc: CopyRun) => boolean, times: number) => { rivals.push({ match, left: times }); },
     setCopy: (fn: (options: Record<string, string>) => unknown) => { copyFn = fn; },
     failCopy: (on: boolean) => { copyFails = on; },
     failAuditOn: (action: ImportAuditEvent['action'] | null) => { auditFails = action; },
@@ -210,8 +248,14 @@ async function drive(svc: ImportCopyService) {
 }
 const actions = (w: World) => w.audited.map((e) => e.action);
 
-beforeEach(async () => { internalDb = await makeMigratedDb(); });
-afterEach(async () => { await internalDb.destroy(); });
+/** Every world this test built, so afterEach can check no copy record was written with a plain put. */
+let worlds: Array<{ plainCopyPuts: string[] }> = [];
+
+beforeEach(async () => { internalDb = await makeMigratedDb(); worlds = []; });
+afterEach(async () => {
+  await internalDb.destroy();
+  for (const w of worlds) expect(w.plainCopyPuts).toEqual([]);
+});
 
 describe('copy: reading a source to CE', () => {
   it('copies every key of a set, in pages, and reports rows and bytes', async () => {
@@ -1041,5 +1085,246 @@ describe('copy: what may be shown', () => {
     expect(shown).not.toContain('K-SECRET');
     expect(shown).not.toContain('Maria');
     expect(shown).not.toContain('secret-pw');
+  });
+});
+
+// R28 and R29. Each race is built by holding a write after its caller has read the record, never by
+// timing. pg-mem runs one statement at a time, so these show the service's handling of a refused
+// write. That Postgres runs putIfRev as one statement is Postgres's guarantee, not shown here.
+describe('copy: two callers at the same moment', () => {
+  async function completedCopy(n = 4) {
+    const w = await world(keysOf(n));
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    expect((await w.stored())!.status).toBe('completed');
+    return w;
+  }
+
+  it('every write adds 1 to rev, starting at 1', async () => {
+    const w = await world(keysOf(2));
+    expect((await w.svc.start(START)).rev).toBe(1);
+    await drive(w.svc);
+    const revs = w.runSaves.map((r) => r.rev);
+    expect(revs).toEqual(revs.map((_, i) => i + 1));
+    expect((await w.stored())!.rev).toBe(revs.length);
+  });
+
+  it('a start and a remove racing on a completed copy: the remove wins, and the copy is deleted whole', async () => {
+    const w = await completedCopy();
+    // The start has read `completed` and is about to write `queued`.
+    const held = w.pauseWrite((d) => d.status === 'queued');
+    const starting = w.svc.start(START).then(() => 'started', (e: Error) => e.message);
+    await held.reached;
+    expect((await w.svc.remove(PLUGIN, COPY, ADMIN)).status).toBe('deleting');
+    held.release();
+    expect(await starting).toMatch(/being deleted/);
+    expect((await w.stored())!.status).toBe('deleting');
+    await drive(w.svc);
+    expect(await w.stored()).toBeNull();
+    expect(await w.rows()).toEqual([]);
+  });
+
+  it('a start and a remove racing on a completed copy: the start wins, and the copy keeps every row', async () => {
+    const w = await completedCopy();
+    const rows = await w.rows();
+    // The remove has read `completed` and is about to write `deleting`.
+    const held = w.pauseWrite((d) => d.status === 'deleting');
+    const removing = w.svc.remove(PLUGIN, COPY, ADMIN).then(() => 'removed', (e: Error) => e.message);
+    await held.reached;
+    expect((await w.svc.start(START)).status).toBe('queued');
+    held.release();
+    expect(await removing).toMatch(/queued; stop it before deleting it/);
+    await drive(w.svc);
+    expect((await w.stored())!).toMatchObject({ status: 'completed', sets: { requests: { keys: 4, rows: 12 } } });
+    expect(await w.rows()).toEqual(rows);
+    expect(w.calls.deletes).toEqual([]);
+  });
+
+  it('a stop of a queued copy and a claim racing: the person is never told stopped while it runs', async () => {
+    const w = await world(keysOf(4));
+    await w.svc.start(START);
+    const held = w.pauseWrite((d) => d.status === 'running');
+    const ticking = w.svc.tick();
+    await held.reached;
+    expect((await w.svc.stop(PLUGIN, COPY, ADMIN)).status).toBe('stopped');
+    held.release();
+    await ticking;
+    await w.svc.idle();
+    expect((await w.stored())!.status).toBe('stopped');
+    expect(w.source.statements).toEqual([]);
+  });
+
+  it('two claims on one queued run give one driver', async () => {
+    const w = await world(keysOf(6));
+    await w.svc.start({ ...START, pageSize: 2 });
+    const a = w.service('server-a');
+    const b = w.service('server-b');
+    const held = w.pauseWrite((d) => d.driver === 'server-a');
+    const aTick = a.tick();
+    await held.reached;
+    // B claims while A's claim waits, and B is in the middle of its first page when A's lands.
+    const bHold = w.source.holdNext(/\[Requests\].*> ''/);
+    await b.tick();
+    held.release();
+    await aTick;
+    await a.idle();
+    bHold();
+    await b.idle();
+    expect((await w.stored())!).toMatchObject({ status: 'completed', driver: null, sets: { requests: { keys: 6, rows: 18 } } });
+    expect(keyAfters(w)).toEqual(['', 'REQ0002', 'REQ0004', 'REQ0006']);
+    expect(w.calls.replace.map((c) => c.keys[0])).toEqual(['REQ0001', 'REQ0003', 'REQ0005']);
+    expect(w.runSaves.some((r) => r.driver === 'server-a')).toBe(false);
+  });
+
+  it('a drive whose record was taken by another process writes no further row and no further progress', async () => {
+    const w = await world(keysOf(6));
+    const a = w.service('server-a');
+    await a.start({ ...START, pageSize: 2 });
+    // A has written page 1's rows and is about to save its position.
+    const held = w.pauseWrite((d) => d.driver === 'server-a' && d.sets.requests.cursor === 'REQ0002');
+    await a.tick();
+    await held.reached;
+    expect(w.calls.replace).toHaveLength(1);
+    // A looks dead for 2 minutes. B takes the run, and is held on its first key query.
+    w.clock.now += STALE_MS + 1;
+    const b = w.service('server-b');
+    const bHold = w.source.holdNext(/\[Requests\].*> ''/);
+    await b.tick();
+    expect((await w.stored())!.driver).toBe('server-b');
+    const statements = w.source.statements.length;
+    const aSaves = w.runSaves.filter((r) => r.driver === 'server-a').length;
+    held.release();
+    await a.idle();
+    // A's save was refused. It read the record, saw B, and stopped: no row, no query, no write.
+    expect(w.calls.replace).toHaveLength(1);
+    expect(w.source.statements.length).toBe(statements);
+    expect(w.runSaves.filter((r) => r.driver === 'server-a').length).toBe(aSaves);
+    expect((await w.stored())!.driver).toBe('server-b');
+    bHold();
+    await b.idle();
+    expect((await w.stored())!).toMatchObject({ status: 'completed', sets: { requests: { cursor: 'REQ0006', keys: 6, rows: 18 } } });
+    expect((await w.rows())).toHaveLength(18);
+  });
+
+  it('a stop that lands while the drive saves is obeyed: the drive puts its progress on the stopped record', async () => {
+    const w = await world(keysOf(6));
+    await w.svc.start({ ...START, pageSize: 2 });
+    const held = w.pauseWrite((d) => d.driver === 'server-1' && d.sets.requests.cursor === 'REQ0002');
+    await w.svc.tick();
+    await held.reached;
+    // Another process asks for the stop. This one has no local drive for it to flag.
+    expect((await w.service('cli-1').stop(PLUGIN, COPY, ADMIN)).status).toBe('stopping');
+    held.release();
+    await w.svc.idle();
+    expect((await w.stored())!).toMatchObject({ status: 'stopped', sets: { requests: { cursor: 'REQ0002', keys: 2, rows: 6 } } });
+    expect(keyAfters(w)).toEqual(['']);
+  });
+
+  it('start, stop and remove read again and decide again on a refused write, and give up after 3', async () => {
+    const w = await completedCopy();
+    // Another writer changes the record before each of start's writes, 3 times.
+    w.rivalWrites((d) => d.status === 'queued', 3);
+    await expect(w.svc.start(START)).rejects.toThrow('the copy changed at the same moment; try again');
+    expect((await w.stored())!.status).toBe('completed');
+    // Twice is still within 3 tries.
+    w.rivalWrites((d) => d.status === 'deleting', 2);
+    expect((await w.svc.remove(PLUGIN, COPY, ADMIN)).status).toBe('deleting');
+    expect(actions(w).filter((a) => a === 'import.copy.delete')).toHaveLength(1);
+  });
+
+  it('a second tick while one runs returns the first one, and launches nothing twice', async () => {
+    const w = await world(keysOf(4));
+    await w.svc.start({ ...START, pageSize: 2 });
+    const held = w.pauseWrite((d) => d.status === 'running');
+    const first = w.svc.tick();
+    await held.reached;
+    const second = w.svc.tick();
+    expect(second).toBe(first);
+    held.release();
+    await first;
+    await w.svc.idle();
+    expect((await w.stored())!).toMatchObject({ status: 'completed', sets: { requests: { keys: 4 } } });
+    expect(keyAfters(w)).toEqual(['', 'REQ0002', 'REQ0004']);
+    // A tick after the first ended runs again.
+    const third = w.svc.tick();
+    expect(third).not.toBe(first);
+    await third;
+  });
+
+  it('release does not wait on a tick, and a tick that was running when release came drives nothing', async () => {
+    const w = await world(keysOf(4));
+    await w.svc.start(START);
+    const held = w.pauseWrite((d) => d.status === 'running');
+    let ticked = false;
+    const ticking = w.svc.tick().then(() => { ticked = true; });
+    await held.reached;
+    await w.svc.release();
+    expect(ticked).toBe(false);
+    held.release();
+    await ticking;
+    await w.svc.idle();
+    expect(w.source.statements).toEqual([]);
+    expect(w.invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('a crash after a skipped key is listed and before the position is saved counts the key once', async () => {
+    const w = await world(keysOf(4));
+    // REQ0002 is skipped in A's pass. A dies before it saves the position past it.
+    w.source.failNext(/IN \(.*'REQ0002'/, timedOut, 1000);
+    const a = w.service('server-a');
+    await a.start({ ...START, pageSize: 4 });
+    const held = w.pauseWrite((d) => d.driver === 'server-a' && d.sets.requests.skipped === 1);
+    await a.tick();
+    await held.reached;
+    expect(await w.skipped()).toHaveLength(1);
+    expect((await w.stored())!.sets.requests).toMatchObject({ cursor: 'REQ0001', skipped: 0 });
+
+    // The source is quick again. B reads REQ0002 in its pass, then meets its listing at the end.
+    w.source.clearRules();
+    w.clock.now += STALE_MS + 1;
+    const b = w.service('server-b');
+    await drive(b);
+    expect((await w.stored())!.sets.requests).toEqual({
+      cursor: 'REQ0004', keys: 4, rows: 12, bytes: requestBytes(keysOf(4)), skipped: 0, done: true,
+    });
+    expect(await w.skipped()).toEqual([]);
+    held.release();
+    await a.idle();
+  });
+
+  it('a stop in the middle of emptying a set keeps the mark, and the next drive finishes emptying it', async () => {
+    const w = await world(keysOf(4));
+    await w.svc.start({ ...START, options: { from: '2024-01-01' } });
+    await drive(w.svc);
+    await w.svc.start({ ...START, options: { from: '2023-01-01' }, reread: true });
+    w.capDeletes(5);
+    // The save after the first batch: 5 of 12 rows gone. The claim is the write before it.
+    let marked = 0;
+    const held = w.pauseWrite((d) => d.status === 'running' && d.sets.requests.empty === true && ++marked === 2);
+    await w.svc.tick();
+    await held.reached;
+    expect(await w.rows()).toHaveLength(7);
+    expect((await w.service('cli-1').stop(PLUGIN, COPY, ADMIN)).status).toBe('stopping');
+    held.release();
+    await w.svc.idle();
+    const stopped = (await w.stored())!;
+    expect(stopped.status).toBe('stopped');
+    expect(stopped.sets.requests.empty).toBe(true);
+
+    expect((await w.svc.start({ ...START, options: { from: '2023-01-01' } })).status).toBe('queued');
+    await drive(w.svc);
+    expect((await w.stored())!).toMatchObject({ status: 'completed', sets: { requests: { keys: 4, rows: 12, done: true } } });
+    expect((await w.stored())!.sets.requests.empty).toBeUndefined();
+    expect(await w.rows()).toHaveLength(12);
+  });
+
+  it('get puts the sets back in the plugin order, whatever order the store gives them in', async () => {
+    const w = await world(keysOf(1), ['F01']);
+    w.setCopy((o) => ({ sets: [requestsSet(o.from), facilitiesSet] }));
+    const started = await w.svc.start(START);
+    // As Postgres jsonb would hand them back: keys sorted, not in the plugin's order.
+    await w.raw.put(PLUGIN, '__import-copies', COPY, { ...started, sets: { facilities: started.sets.facilities, requests: started.sets.requests } });
+    expect(Object.keys((await w.svc.get(PLUGIN, COPY))!.sets)).toEqual(['requests', 'facilities']);
+    expect(Object.keys((await w.svc.list(PLUGIN))[0].sets)).toEqual(['requests', 'facilities']);
   });
 });

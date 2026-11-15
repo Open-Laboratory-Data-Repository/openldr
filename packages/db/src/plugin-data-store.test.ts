@@ -59,6 +59,52 @@ describe('plugin-data store', () => {
     await expect(s.list('p1', 'c', { where: { field: '', eq: 'x' } })).rejects.toThrow();
   });
 
+  // Layer: the SQL of putIfRev on pg-mem. Not shown here: that Postgres runs each form as one
+  // statement under concurrent callers. That is Postgres's own guarantee for one statement.
+  describe('putIfRev', () => {
+    it('with null, writes only when no document exists', async () => {
+      const s = createPluginDataStore(db);
+      expect(await s.putIfRev('p1', 'c', 'k', { rev: 1, v: 'a' }, null)).toBe(true);
+      expect(await s.putIfRev('p1', 'c', 'k', { rev: 1, v: 'b' }, null)).toBe(false);
+      expect(await s.get('p1', 'c', 'k')).toEqual({ rev: 1, v: 'a' });
+    });
+
+    it('with a number, writes only when the stored rev equals it', async () => {
+      const s = createPluginDataStore(db);
+      await s.putIfRev('p1', 'c', 'k', { rev: 1, v: 'a' }, null);
+      expect(await s.putIfRev('p1', 'c', 'k', { rev: 2, v: 'b' }, 1)).toBe(true);
+      expect(await s.get('p1', 'c', 'k')).toEqual({ rev: 2, v: 'b' });
+      // A caller that read rev 1 lost the race: its write is refused and changes nothing.
+      expect(await s.putIfRev('p1', 'c', 'k', { rev: 2, v: 'c' }, 1)).toBe(false);
+      expect(await s.get('p1', 'c', 'k')).toEqual({ rev: 2, v: 'b' });
+    });
+
+    it('with a number, writes nothing when no document exists', async () => {
+      const s = createPluginDataStore(db);
+      expect(await s.putIfRev('p1', 'c', 'k', { rev: 1 }, 0)).toBe(false);
+      expect(await s.get('p1', 'c', 'k')).toBeNull();
+    });
+
+    it('touches only its own plugin, collection and key', async () => {
+      const s = createPluginDataStore(db);
+      await s.put('p1', 'c', 'other', { rev: 1, v: 'x' });
+      await s.put('p2', 'c', 'k', { rev: 1, v: 'x' });
+      await s.put('p1', 'd', 'k', { rev: 1, v: 'x' });
+      await s.putIfRev('p1', 'c', 'k', { rev: 1, v: 'a' }, null);
+      expect(await s.putIfRev('p1', 'c', 'k', { rev: 2, v: 'b' }, 1)).toBe(true);
+      expect(await s.get('p1', 'c', 'other')).toEqual({ rev: 1, v: 'x' });
+      expect(await s.get('p2', 'c', 'k')).toEqual({ rev: 1, v: 'x' });
+      expect(await s.get('p1', 'd', 'k')).toEqual({ rev: 1, v: 'x' });
+    });
+
+    it('compares a stored rev of 10 and 1 as numbers, not as text prefixes', async () => {
+      const s = createPluginDataStore(db);
+      await s.put('p1', 'c', 'k', { rev: 10 });
+      expect(await s.putIfRev('p1', 'c', 'k', { rev: 2 }, 1)).toBe(false);
+      expect(await s.putIfRev('p1', 'c', 'k', { rev: 11 }, 10)).toBe(true);
+    });
+  });
+
   it('rejects a non-ascii filter field name', async () => {
     const s = createPluginDataStore(db);
     await s.put('p1', 'c', 'a', { type: 'x' });

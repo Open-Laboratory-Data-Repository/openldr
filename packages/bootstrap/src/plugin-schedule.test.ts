@@ -9,6 +9,12 @@ function fakePluginData(): PluginDataStore & { dump(): Map<string, PluginDataEnt
   return {
     async get(p, c, key) { return m.get(k(p, c, key))?.doc ?? null; },
     async put(p, c, key, doc) { m.set(k(p, c, key), { pluginId: p, collection: c, key, doc, updatedAt: new Date() }); },
+    async putIfRev(p, c, key, doc, expectedRev) {
+      const stored = m.get(k(p, c, key));
+      const ok = expectedRev === null ? !stored : (stored?.doc as { rev?: unknown } | undefined)?.rev === expectedRev;
+      if (ok) m.set(k(p, c, key), { pluginId: p, collection: c, key, doc, updatedAt: new Date() });
+      return ok;
+    },
     async delete(p, c, key) { m.delete(k(p, c, key)); },
     async list(p, c, opts) {
       let out = [...m.values()].filter((e) => e.pluginId === p && e.collection === c);

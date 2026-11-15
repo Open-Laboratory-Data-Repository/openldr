@@ -18,6 +18,13 @@ export interface PluginDataListOptions {
 export interface PluginDataStore {
   get(pluginId: string, collection: string, key: string): Promise<unknown | null>;
   put(pluginId: string, collection: string, key: string, doc: unknown): Promise<void>;
+  /**
+   * Write `doc` only if the stored document is as the caller last saw it. With `null`: only when
+   * no document exists. With a number: only when the stored document's `rev` field equals it.
+   * Returns whether it wrote. Each case is one statement, so no other write can land between the
+   * check and the write.
+   */
+  putIfRev(pluginId: string, collection: string, key: string, doc: unknown, expectedRev: number | null): Promise<boolean>;
   delete(pluginId: string, collection: string, key: string): Promise<void>;
   list(pluginId: string, collection: string, opts?: PluginDataListOptions): Promise<PluginDataEntry[]>;
   /** Remove an entire plugin namespace (uninstall). */
@@ -38,6 +45,32 @@ export function createPluginDataStore(db: Kysely<InternalSchema>): PluginDataSto
         .values({ plugin_id: pluginId, collection, key, doc: doc as never, updated_at: sql`now()` as never })
         .onConflict((oc) => oc.columns(['plugin_id', 'collection', 'key']).doUpdateSet({ doc: doc as never, updated_at: sql`now()` as never }))
         .execute();
+    },
+
+    async putIfRev(pluginId, collection, key, doc, expectedRev) {
+      if (expectedRev === null) {
+        // One statement with two guards. On Postgres, ON CONFLICT DO NOTHING turns a racing insert
+        // into no row, and RETURNING then reports nothing. pg-mem keeps the old row on a conflict
+        // but still reports one back, so the NOT EXISTS is what makes its answer true.
+        const inserted = await sql<{ key: string }>`
+          INSERT INTO plugin_data (plugin_id, collection, key, doc, updated_at)
+          SELECT ${pluginId}, ${collection}, ${key}, ${JSON.stringify(doc)}::jsonb, now()
+          WHERE NOT EXISTS (
+            SELECT 1 FROM plugin_data WHERE plugin_id = ${pluginId} AND collection = ${collection} AND key = ${key}
+          )
+          ON CONFLICT (plugin_id, collection, key) DO NOTHING
+          RETURNING key`.execute(db);
+        return inserted.rows.length === 1;
+      }
+      if (!Number.isSafeInteger(expectedRev)) throw new Error('putIfRev: expectedRev must be a whole number or null');
+      // `->>` gives the stored rev as text, so it is compared with the expected rev as text.
+      const updated = await db.updateTable('plugin_data')
+        .set({ doc: doc as never, updated_at: sql`now()` as never })
+        .where('plugin_id', '=', pluginId).where('collection', '=', collection).where('key', '=', key)
+        .where(sql`doc ->> 'rev'`, '=', String(expectedRev))
+        .returning('key')
+        .execute();
+      return updated.length === 1;
     },
 
     async delete(pluginId, collection, key) {

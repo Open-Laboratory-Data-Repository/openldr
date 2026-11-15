@@ -57,6 +57,9 @@ export interface CopySetProgress {
 export interface CopyRun {
   id: string;
   kind: 'copy';
+  /** 1 when the record is made. Every write adds 1, and is refused when the stored rev is not the
+   *  one its writer last read or wrote, so two writers at the same moment cannot undo each other. */
+  rev: number;
   pluginId: string;
   pluginVersion: string;
   connectorId: string;
@@ -90,7 +93,7 @@ export class CopySetChangedError extends Error {
   readonly sets: string[];
   constructor(sets: string[]) {
     super(`the SQL of ${sets.length === 1 ? 'set' : 'sets'} ${sets.join(', ')} changed; `
-      + 'start again with reread to empty them and read them from the start');
+      + 'start again with reread to empty any rows they hold and read them from the start');
     this.name = 'CopySetChangedError';
     this.sets = sets;
   }
@@ -217,19 +220,45 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
   /** Runs this process is driving right now. */
   const local = new Map<string, Drive>();
   let released = false;
+  /** The tick in flight, so a second call while it runs gets the same one. */
+  let ticking: Promise<void> | null = null;
 
   const isAllowed = async (pluginId: string, connectorId: string): Promise<boolean> =>
     (await deps.allowed(pluginId)).includes(connectorId);
 
-  // Every call to CE's own database goes through ownDb, so its text never reaches a caller.
+  // Every call to the copy row store and to plugin_data goes through ownDb, so a Postgres error's
+  // text never reaches a caller. The plugin, connector and allow-list lookups do not. Their text
+  // can reach `lastError` through `clean`, and none of them reads a copied row.
   const readRun = async (pluginId: string, copyId: string): Promise<CopyRun | null> =>
     (await ownDb('read', () => deps.pluginData.get(pluginId, COPIES, copyId))) as CopyRun | null;
   const listRuns = async (pluginId: string): Promise<CopyRun[]> =>
     (await ownDb('read', () => deps.pluginData.list(pluginId, COPIES))).map((e) => e.doc as CopyRun);
-  const writeRun = (run: CopyRun): Promise<void> => ownDb('write', () => deps.pluginData.put(run.pluginId, COPIES, run.id, run));
-  async function save(run: CopyRun): Promise<void> {
-    run.updatedAt = now().toISOString();
-    await writeRun(run);
+  /** The only way a copy record is written (R28): only when the stored rev is `expected`, or when
+   *  there is no record and `expected` is null. Sets `rev` and `updatedAt` on success. */
+  async function writeIfRev(run: CopyRun, expected: number | null): Promise<boolean> {
+    const doc: CopyRun = { ...run, rev: (expected ?? 0) + 1, updatedAt: now().toISOString() };
+    const wrote = await ownDb('write', () => deps.pluginData.putIfRev(run.pluginId, COPIES, run.id, doc, expected));
+    if (wrote) { run.rev = doc.rev; run.updatedAt = doc.updatedAt; }
+    return wrote;
+  }
+  /** `start`, `stop` and `remove`: read, decide, write by compare-and-swap. A refused write reads
+   *  and decides again, up to 3 times. `decide` returns the record to write, or throws, or returns
+   *  `{ answer }` to give back with nothing written. `before` runs once, before the first write. */
+  async function changeRun(
+    pluginId: string,
+    copyId: string,
+    decide: (stored: CopyRun | null) => Promise<CopyRun | { answer: CopyRun }>,
+    before?: (next: CopyRun, stored: CopyRun | null) => Promise<void>,
+  ): Promise<CopyRun> {
+    let beforeDone = false;
+    for (let tries = 0; tries < 3; tries++) {
+      const stored = await readRun(pluginId, copyId);
+      const next = await decide(stored);
+      if ('answer' in next) return view(next.answer);
+      if (before && !beforeDone) { await before(next, stored); beforeDone = true; }
+      if (await writeIfRev(next, stored ? stored.rev : null)) return view(next);
+    }
+    throw new Error('the copy changed at the same moment; try again');
   }
   const listSkipped = async (pluginId: string, copyId: string): Promise<SkippedEntry[]> =>
     (await ownDb('read', () => deps.pluginData.list(pluginId, SKIPPED, { where: { field: 'copyId', eq: copyId } })))
@@ -334,23 +363,49 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
       return entry.halt;
     }
 
+    /**
+     * Write the run as it stood at the last page end, by compare-and-swap on the rev this drive last
+     * wrote (R28). When the write is refused, read the record. Another driver, or no record, or a
+     * delete: this drive is lost and writes nothing more. A stop: obey it. Otherwise put this drive's
+     * progress onto the record just read and try again. False, and nothing written, once lost.
+     */
+    const casSave = async (): Promise<boolean> => {
+      for (let tries = 0; tries < 5; tries++) {
+        if (entry.halt === 'lost') return false;
+        const doc: CopyRun = { ...run, sets: structuredClone(pageEnd.sets), setOrder: [...pageEnd.setOrder] };
+        if (await writeIfRev(doc, run.rev)) {
+          run.rev = doc.rev;
+          run.updatedAt = doc.updatedAt;
+          return true;
+        }
+        const stored = await readRun(run.pluginId, run.id);
+        const deletedUnderUs = stored?.status === 'deleting' && run.status !== 'deleting';
+        if (!stored || stored.driver !== deps.driverId || deletedUnderUs) {
+          entry.halt = 'lost';
+          return false;
+        }
+        if (stored.status === 'stopping') {
+          entry.halt ??= 'stop';
+          if (run.status === 'running' || run.status === 'waiting') run.status = 'stopping';
+        }
+        run.rev = stored.rev;
+      }
+      // Five refusals in a row while this process is still the driver: something keeps writing the
+      // record. Stop writing; the 2-minute rule hands the run on.
+      entry.halt = 'lost';
+      return false;
+    };
     // Saves go one after another, so a heartbeat that started first never lands last.
-    let saving: Promise<void> = Promise.resolve();
-    const saveInTurn = (): Promise<void> => {
-      const next = saving.then(async () => {
-        run.updatedAt = now().toISOString();
-        await writeRun({ ...run, sets: structuredClone(pageEnd.sets), setOrder: [...pageEnd.setOrder] });
-      });
+    let saving: Promise<unknown> = Promise.resolve();
+    const saveInTurn = (): Promise<boolean> => {
+      const next = saving.then(casSave);
       saving = next.catch(() => {});
       return next;
     };
-    /** Save, keeping a stop asked for elsewhere. False, and nothing written, once the run is lost. */
+    /** Save, keeping a stop asked for here. False, and nothing written, once the run is lost. */
     const saveKeepingStop = async (): Promise<boolean> => {
-      const halt = await haltWanted();
-      if (halt === 'lost') return false;
-      if (halt === 'stop' && run.status !== 'deleting') run.status = 'stopping';
-      await saveInTurn();
-      return true;
+      if (entry.halt === 'stop' && (run.status === 'running' || run.status === 'waiting')) run.status = 'stopping';
+      return saveInTurn();
     };
     // Written every 30 seconds while this drives, even in the middle of a page or a wait, so
     // another process can tell a live run from one whose driver has gone. A failed write here is
@@ -378,6 +433,8 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
 
     /** Empty a set in batches, with its skipped keys. A halt between batches is returned. */
     const emptySet = async (name: string): Promise<CopyOutcome | null> => {
+      // The first batch has no save before it, so ask the stored record first.
+      if (await d.haltWanted()) return haltOutcome(entry.halt);
       for (;;) {
         if (entry.halt) return haltOutcome(entry.halt);
         const gone = await ownDb('write', () => deps.store.deleteSome(run.id, DELETE_BATCH, name));
@@ -398,7 +455,7 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
       // not add rows of other SQL to them. A start asks the person, so the run stops here.
       const changed = changedSets(run.setSql, spec.hashes);
       if (changed.length > 0) {
-        throw new Error(`set ${changed.join(', ')} changed since the copy was started; start the copy again`);
+        throw new Error(`set ${changed.join(', ')} changed since the copy was started; start it again with reread`);
       }
 
       const access = await openSourceAccess(deps, makeDb, run.connectorId, type);
@@ -514,6 +571,12 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
         const set = sets.get(e.setName);
         const progress = run.sets[e.setName];
         if (!set || !progress) { await dropSkipped(run.pluginId, e); continue; }
+        // Listed, but already stored and counted: a crash between listing it and saving the
+        // position past it, then a pass that read it. Drop the listing and count nothing.
+        if ((await ownDb('read', () => deps.store.read(run.id, e.setName, [e.key]))).length > 0) {
+          await dropSkipped(run.pluginId, e);
+          continue;
+        }
         const page = await reader.readPage({ keySql: set.keyQuery.sql, details: set.detailQueries, after: e.after, size: 1, checkRowKeys: true });
         if (page.kind === 'stopped') return haltOutcome(entry.halt);
         if ((await d.haltWanted()) === 'lost') return 'lost';
@@ -526,15 +589,16 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
           continue;
         }
         await ownDb('write', () => deps.store.replaceKeys(run.id, set.name, filed.keys, filed.rows));
-        await dropSkipped(run.pluginId, e);
         progress.keys += filed.stored;
         progress.rows += filed.rows.length;
         progress.bytes += filed.bytes;
         d.markPageEnd();
         if (!(await d.saveKeepingStop())) return 'lost';
+        // Dropped after the counts are saved. A crash between the two leaves the listing, and the
+        // check above drops it next time without counting the key again.
+        await dropSkipped(run.pluginId, e);
       }
-      // The skipped counts are the entries left. Counting them again also mends a count that a
-      // crash between dropping an entry and saving the run left one too high.
+      // The skipped counts are the entries left.
       const left = await listSkipped(run.pluginId, run.id);
       for (const name of Object.keys(run.sets)) run.sets[name].skipped = left.filter((e) => e.setName === name).length;
       d.markPageEnd();
@@ -565,16 +629,17 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     if (outcome === 'release') {
       // The stored status stays, with this process as its driver, so the next server takes it
       // by the 2-minute rule.
-      await d.saveInTurn().catch(() => {});
+      await d.saveInTurn().catch(() => false);
       return;
     }
-    // A run another process took meanwhile is not written over.
-    if ((await d.haltWanted().catch(() => null)) === 'lost') return;
     run.status = outcome;
     run.waiting = null;
     run.driver = null;
     run.finishedAt = now().toISOString();
-    await d.saveInTurn().catch(() => {});
+    // A run another process took meanwhile is refused by the compare-and-swap and not written
+    // over. Then this drive did not finish it, so it audits nothing. A write that fails outright
+    // still audits: the drive did end.
+    if (!(await d.saveInTurn().catch(() => true))) return;
     const totals = { keys: 0, rows: 0, bytes: 0, skipped: 0 };
     for (const p of Object.values(run.sets)) {
       totals.keys += p.keys; totals.rows += p.rows; totals.bytes += p.bytes; totals.skipped += p.skipped;
@@ -589,6 +654,8 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     const d = driving(run, entry);
     let outcome: 'done' | 'release' | 'lost' | 'failed' = 'failed';
     try {
+      // The first batch has no save before it, so ask the stored record first.
+      await d.haltWanted();
       for (;;) {
         if (entry.halt) { outcome = entry.halt === 'lost' ? 'lost' : 'release'; break; }
         const gone = await ownDb('write', () => deps.store.deleteSome(run.id, DELETE_BATCH));
@@ -597,6 +664,11 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
       }
       if (outcome === 'done') {
         for (const e of await listSkipped(run.pluginId, run.id)) await dropSkipped(run.pluginId, e);
+        // One more compare-and-swap before the record goes, so a drive that lost the run never
+        // deletes a record another process now holds. After it, no other caller changes a
+        // `deleting` record with a live driver: start, stop and remove refuse it, and a claim waits
+        // 2 minutes.
+        if (!(await d.saveInTurn())) outcome = 'lost';
       }
     } catch (err) {
       outcome = 'failed';
@@ -612,11 +684,45 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     }
     // Released, or failed. The run stays `deleting` with this driver, so a later tick (here or in
     // another process) takes it again once it is 2 minutes old and finishes the delete.
-    await d.saveInTurn().catch(() => {});
+    await d.saveInTurn().catch(() => false);
+  }
+
+  /** One tick: claim every run that needs a driver and launch it. Only one runs at a time (`tick`). */
+  async function takeWork(): Promise<void> {
+    for (const row of await deps.plugins.list()) {
+      for (const stored of await listRuns(row.id)) {
+        // Checked before each claim: after a release this process takes nothing more.
+        if (released) return;
+        if (local.has(stored.id)) continue;
+        // Waiting for a first driver: a queued copy, or a delete nobody has begun.
+        const unclaimed = stored.status === 'queued' || (stored.status === 'deleting' && (stored.driver ?? null) === null);
+        // Its driver has gone: no write for 2 minutes, and not driven here.
+        const orphaned = isDriven(stored.status) && now().getTime() - Date.parse(stored.updatedAt) > STALE_MS;
+        if (!unclaimed && !orphaned) continue;
+        const previous = stored.driver ?? null;
+        const run: CopyRun = {
+          ...stored, driver: deps.driverId, waiting: null,
+          status: stored.status === 'queued' || stored.status === 'waiting' ? 'running' : stored.status,
+        };
+        // A claim is a compare-and-swap too. The one that loses does not drive.
+        if (!(await writeIfRev(run, stored.rev))) continue;
+        // A release that came while the claim was written: the claim stands, nobody here drives it,
+        // and the next server takes it by the 2-minute rule.
+        if (released) return;
+        if (!unclaimed && previous !== null && previous !== deps.driverId) {
+          await auditQuietly(deps.audit, {
+            action: 'import.copy.takeover', pluginId: run.pluginId, connectorId: run.connectorId, runId: run.id, actor: SYSTEM,
+            metadata: { status: stored.status },
+          });
+        }
+        launch(run);
+      }
+    }
   }
 
   /** Start driving a run in the background and remember it until it ends. */
   function launch(run: CopyRun): void {
+    if (local.has(run.id)) return;
     const entry: Drive = { halt: null, promise: Promise.resolve() };
     local.set(run.id, entry);
     const work = run.status === 'deleting' ? driveDelete(run, entry) : driveCopy(run, entry);
@@ -651,58 +757,56 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
       const spec = await readSpec(plugin, options);
       const names = spec.sets.map((s) => s.name);
       const id = copyIdOf(plugin.id, input.connectorId);
-      const existing = await readRun(plugin.id, id);
-      const audit = (sets: number, reread: number, size: number): Promise<void> => auditOrRefuse(deps.audit, {
-        action: 'import.copy.start', pluginId: plugin.id, connectorId: input.connectorId, runId: id, actor: input.actor,
-        metadata: { pageSize: size, sets, reread },
-      });
+      /** How many sets this start empties, for the audit row. */
+      let rereading = 0;
 
-      if (!existing) {
-        const at = now().toISOString();
-        const run: CopyRun = {
-          id, kind: 'copy', pluginId: plugin.id, pluginVersion: plugin.version, connectorId: input.connectorId,
-          status: 'queued', options, pageSize: pageSize ?? DEFAULT_PAGE_SIZE,
-          sets: Object.fromEntries(names.map((n) => [n, freshProgress()])), setOrder: names, setSql: spec.hashes,
-          waiting: null, driver: null, startedAt: at, updatedAt: at, finishedAt: null, lastError: null, startedBy: input.actor.name,
+      return changeRun(plugin.id, id, async (existing) => {
+        if (!existing) {
+          rereading = 0;
+          const at = now().toISOString();
+          return {
+            id, kind: 'copy', rev: 0, pluginId: plugin.id, pluginVersion: plugin.version, connectorId: input.connectorId,
+            status: 'queued', options, pageSize: pageSize ?? DEFAULT_PAGE_SIZE,
+            sets: Object.fromEntries(names.map((n) => [n, freshProgress()])), setOrder: names, setSql: spec.hashes,
+            waiting: null, driver: null, startedAt: at, updatedAt: at, finishedAt: null, lastError: null, startedBy: input.actor.name,
+          };
+        }
+
+        if (existing.status === 'deleting') throw new Error(`copy ${id} is being deleted`);
+        if (existing.status === 'stopping') throw new Error(`copy ${id} is stopping; start it again once it has stopped`);
+        const changed = changedSets(existing.setSql, spec.hashes);
+        const active = existing.status === 'running' || existing.status === 'waiting';
+        if (changed.length > 0) {
+          if (!input.reread) throw new CopySetChangedError(changed);
+          // Emptying a set under a live drive would mix its rows with the new SQL's.
+          if (active) throw new Error(`copy ${id} is ${existing.status}; stop it before reading a set again`);
+        } else if (!isTerminal(existing.status)) {
+          // Queued, running or waiting, with the same SQL: it is already under way.
+          return { answer: existing };
+        }
+
+        const sets: Record<string, CopySetProgress> = {};
+        const setOrder = [...names];
+        for (const name of names) {
+          const old = existing.sets[name];
+          sets[name] = !old ? freshProgress() : changed.includes(name) ? { ...old, empty: true } : old;
+        }
+        // A set no longer named is emptied by the driver and then dropped.
+        for (const name of existing.setOrder ?? Object.keys(existing.sets)) {
+          if (name in spec.hashes || !existing.sets[name]) continue;
+          sets[name] = { ...existing.sets[name], empty: true };
+          setOrder.push(name);
+        }
+        rereading = changed.length;
+        return {
+          ...existing, pluginVersion: plugin.version, options, pageSize: pageSize ?? existing.pageSize,
+          sets, setOrder, setSql: spec.hashes,
+          status: 'queued', waiting: null, driver: null, finishedAt: null, lastError: null,
         };
-        await audit(names.length, 0, run.pageSize);
-        await writeRun(run);
-        return view(run);
-      }
-
-      if (existing.status === 'deleting') throw new Error(`copy ${id} is being deleted`);
-      if (existing.status === 'stopping') throw new Error(`copy ${id} is stopping; start it again once it has stopped`);
-      const changed = changedSets(existing.setSql, spec.hashes);
-      const active = existing.status === 'running' || existing.status === 'waiting';
-      if (changed.length > 0) {
-        if (!input.reread) throw new CopySetChangedError(changed);
-        // The driver holds the run in memory and would write the old SQL back over the new.
-        if (active) throw new Error(`copy ${id} is ${existing.status}; stop it before reading a set again`);
-      } else if (!isTerminal(existing.status)) {
-        // Queued, running or waiting, with the same SQL: it is already under way.
-        return view(existing);
-      }
-
-      const sets: Record<string, CopySetProgress> = {};
-      const setOrder = [...names];
-      for (const name of names) {
-        const old = existing.sets[name];
-        sets[name] = !old ? freshProgress() : changed.includes(name) ? { ...old, empty: true } : old;
-      }
-      // A set no longer named is emptied by the driver and then dropped.
-      for (const name of existing.setOrder ?? Object.keys(existing.sets)) {
-        if (name in spec.hashes || !existing.sets[name]) continue;
-        sets[name] = { ...existing.sets[name], empty: true };
-        setOrder.push(name);
-      }
-      const run: CopyRun = {
-        ...existing, pluginVersion: plugin.version, options, pageSize: pageSize ?? existing.pageSize,
-        sets, setOrder, setSql: spec.hashes,
-        status: 'queued', waiting: null, driver: null, finishedAt: null, lastError: null,
-      };
-      await audit(names.length, changed.length, run.pageSize);
-      await save(run);
-      return view(run);
+      }, (next) => auditOrRefuse(deps.audit, {
+        action: 'import.copy.start', pluginId: plugin.id, connectorId: input.connectorId, runId: id, actor: input.actor,
+        metadata: { pageSize: next.pageSize, sets: names.length, reread: rereading },
+      }));
     },
 
     async get(pluginId, copyId) {
@@ -715,66 +819,36 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     },
 
     async stop(pluginId, copyId, actor) {
-      const run = await readRun(pluginId, copyId);
-      if (!run) throw new Error(`copy ${copyId} not found`);
-      if (run.status === 'queued') {
-        // Nobody drives it yet, so it stops here.
-        run.status = 'stopped';
-        run.driver = null;
-        run.finishedAt = now().toISOString();
-      } else if (run.status === 'running' || run.status === 'waiting') {
+      const run = await changeRun(pluginId, copyId, async (stored) => {
+        if (!stored) throw new Error(`copy ${copyId} not found`);
+        // Nobody drives a queued copy yet, so it stops here.
+        if (stored.status === 'queued') return { ...stored, status: 'stopped', driver: null, finishedAt: now().toISOString() };
+        // Written, so a drive in any process sees it: its next save is refused, it reads this
+        // record, and it obeys. The driver holds the true counts and puts them onto this record.
+        if (stored.status === 'running' || stored.status === 'waiting') return { ...stored, status: 'stopping' };
+        throw new Error(`copy ${copyId} is not running`);
+      });
+      if (run.status === 'stopping') {
         const entry = local.get(copyId);
         if (entry) entry.halt ??= 'stop';
-        // Written too, so a run driven by another process sees it. The driver holds the true
-        // counts and writes them over this record on its next save.
-        run.status = 'stopping';
-      } else {
-        throw new Error(`copy ${copyId} is not running`);
       }
-      await save(run);
       await auditQuietly(deps.audit, { action: 'import.copy.stop', pluginId, connectorId: run.connectorId, runId: copyId, actor });
-      return view(run);
+      return run;
     },
 
     async remove(pluginId, copyId, actor) {
-      const run = await readRun(pluginId, copyId);
-      if (!run) throw new Error(`copy ${copyId} not found`);
-      if (!isTerminal(run.status)) throw new Error(`copy ${copyId} is ${run.status}; stop it before deleting it`);
-      await auditOrRefuse(deps.audit, {
-        action: 'import.copy.delete', pluginId, connectorId: run.connectorId, runId: copyId, actor, metadata: { status: run.status },
-      });
-      run.status = 'deleting';
-      run.driver = null;
-      run.waiting = null;
-      await save(run);
-      return view(run);
+      return changeRun(pluginId, copyId, async (stored) => {
+        if (!stored) throw new Error(`copy ${copyId} not found`);
+        if (!isTerminal(stored.status)) throw new Error(`copy ${copyId} is ${stored.status}; stop it before deleting it`);
+        return { ...stored, status: 'deleting', driver: null, waiting: null };
+      }, (next, stored) => auditOrRefuse(deps.audit, {
+        action: 'import.copy.delete', pluginId, connectorId: next.connectorId, runId: copyId, actor, metadata: { status: stored?.status ?? null },
+      }));
     },
 
-    async tick() {
-      if (released) return;
-      for (const row of await deps.plugins.list()) {
-        for (const stored of await listRuns(row.id)) {
-          if (local.has(stored.id)) continue;
-          // Waiting for a first driver: a queued copy, or a delete nobody has begun.
-          const unclaimed = stored.status === 'queued' || (stored.status === 'deleting' && (stored.driver ?? null) === null);
-          // Its driver has gone: no write for 2 minutes, and not driven here.
-          const orphaned = isDriven(stored.status) && now().getTime() - Date.parse(stored.updatedAt) > STALE_MS;
-          if (!unclaimed && !orphaned) continue;
-          const previous = stored.driver ?? null;
-          const run: CopyRun = {
-            ...stored, driver: deps.driverId, waiting: null,
-            status: stored.status === 'queued' || stored.status === 'waiting' ? 'running' : stored.status,
-          };
-          await save(run);
-          if (!unclaimed && previous !== null && previous !== deps.driverId) {
-            await auditQuietly(deps.audit, {
-              action: 'import.copy.takeover', pluginId: run.pluginId, connectorId: run.connectorId, runId: run.id, actor: SYSTEM,
-              metadata: { status: stored.status },
-            });
-          }
-          launch(run);
-        }
-      }
+    tick() {
+      ticking ??= takeWork().finally(() => { ticking = null; });
+      return ticking;
     },
 
     async idle() {
