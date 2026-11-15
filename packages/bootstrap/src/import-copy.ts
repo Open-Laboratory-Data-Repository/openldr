@@ -499,6 +499,9 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
         clean,
         ...sleep,
       });
+      /** A set with a position or done: this copy has read the source before, so a refused login
+       *  or database may be a source that is starting up (R45). */
+      const readBefore = (): boolean => Object.values(run.sets).some((p) => p.cursor !== null || p.done);
 
       // Sets the plugin no longer names: empty them, then drop them.
       for (const name of [...run.setOrder]) {
@@ -532,7 +535,7 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
         for (;;) {
           if (entry.halt) return haltOutcome(entry.halt);
           const page = await reader.readPage({
-            keySql: set.keyQuery.sql, details: set.detailQueries, after: progress.cursor, size, checkRowKeys: true,
+            keySql: set.keyQuery.sql, details: set.detailQueries, after: progress.cursor, size, checkRowKeys: true, readBefore: readBefore(),
           });
           if (page.kind === 'stopped') return haltOutcome(entry.halt);
           if (page.kind === 'end') {
@@ -596,7 +599,9 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
           await dropSkipped(run.pluginId, e);
           continue;
         }
-        const page = await reader.readPage({ keySql: set.keyQuery.sql, details: set.detailQueries, after: e.after, size: 1, checkRowKeys: true });
+        const page = await reader.readPage({
+          keySql: set.keyQuery.sql, details: set.detailQueries, after: e.after, size: 1, checkRowKeys: true, readBefore: readBefore(),
+        });
         if (page.kind === 'stopped') return haltOutcome(entry.halt);
         if ((await d.haltWanted()) === 'lost') return 'lost';
         // Still too slow, or the source no longer has the key right after `after`: it stays listed.

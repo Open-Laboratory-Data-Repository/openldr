@@ -20,7 +20,15 @@ const GROW_AFTER = 5;
 const DEADLOCK_VICTIM = 1205;
 /** SQL Server errors whose message names a column, a table, a database or a login, never a row. */
 const NAMES_NO_ROW = new Set([207, 208, 229, 230, 262, 911, 916, 4060, 18452, 18456]);
+/** SQL Server errors seen while a server that has just started recovers its databases: the login
+ *  or the database is refused until recovery ends (R45). */
+const STARTING_UP_NUMBERS = new Set([4060, 18456, 921, 922, 945, 6005, 17142, 17187, 18401]);
+/** Driver codes for a link that failed on the network. */
+const NETWORK_CODES = new Set(['ESOCKET', 'ECONNRESET', 'ECONNREFUSED', 'ECONNCLOSED', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE']);
 const UNRECOGNISED = 'the source failed in a way OpenLDR does not recognise';
+const UNREACHABLE = 'the source could not be reached';
+const UNREADABLE = 'the source could not be read';
+const DEADLOCK_TEXT = `the source stopped this read to end a deadlock (SQL Server error ${DEADLOCK_VICTIM}); it is tried again`;
 
 /**
  * The member errors of a statement that failed with more than one SQL Server error, or null.
@@ -56,7 +64,9 @@ export function classifySourceError(err: unknown): SourceErrorKind {
     return 'lost';
   }
   const { code, number, message } = fields(err);
-  if (code === 'ETIMEOUT' || code === 'ETIMEDOUT' || /timeout|timed out/i.test(message)) return 'timeout';
+  // A SQL Server error's words can name a column or a table, so they are read for a timeout only
+  // when the error has no number.
+  if (code === 'ETIMEOUT' || code === 'ETIMEDOUT' || (number === null && /timeout|timed out/i.test(message))) return 'timeout';
   if (code === 'ELOGIN') return 'refused';
   const hint = classifyConnectError(message);
   if (hint === 'loginFailed' || hint === 'databaseMissing') return 'refused';
@@ -70,10 +80,15 @@ export function classifySourceError(err: unknown): SourceErrorKind {
  * message is kept only when it cannot. Rules, in order:
  *  1. a login error: the driver's message;
  *  2. a SQL Server error that names a column, table, database or login: the driver's message;
- *  3. any other SQL Server error: its number only;
- *  4. no number, and a lost link or a timeout: the driver's message (network and timer text);
+ *  3. a deadlock (1205): a fixed sentence that says it is tried again. Any other SQL Server
+ *     error: its number only;
+ *  4. no number, and a timeout: the driver's message (timer text). No number, and a lost link:
+ *     for `EINVALIDSTATE`, the fixed sentence "the source could not be reached"; for a network
+ *     code, "the source could not be reached: " and the driver's message; for anything else,
+ *     "the source could not be read: " and the driver's message;
  *  5. anything else: a fixed sentence.
- * The driver's message always goes through `clean`. A statement that failed with several errors
+ * The driver's message always goes through `clean`. A lead goes through `clean` with it, so the
+ * cap cuts the driver's words and never the lead. A statement that failed with several errors
  * is described by its first refused member, or by its first member when none is refused. An
  * empty list gets the fixed sentence.
  */
@@ -86,14 +101,36 @@ export function describeSourceError(err: unknown, clean: (text: string) => strin
   const { code, number, message } = fields(err);
   if (code === 'ELOGIN') return clean(message);
   if (number !== null) {
-    return NAMES_NO_ROW.has(number) ? clean(message) : `the source refused the query (SQL Server error ${number})`;
+    if (NAMES_NO_ROW.has(number)) return clean(message);
+    return number === DEADLOCK_VICTIM ? DEADLOCK_TEXT : `the source refused the query (SQL Server error ${number})`;
   }
   const kind = classifySourceError(err);
-  if (kind === 'lost' || kind === 'timeout') return clean(message);
+  if (kind === 'timeout') return clean(message);
+  if (kind === 'lost') {
+    // tedious's words for a request on a connection that has closed name its inner state only.
+    if (code === 'EINVALIDSTATE') return UNREACHABLE;
+    return clean(`${NETWORK_CODES.has(code) ? UNREACHABLE : UNREADABLE}: ${message}`);
+  }
   return UNRECOGNISED;
 }
 
-/** The wait before try number `attempt` (1 for the first retry): 5 s, doubling, at most 300 s. */
+/**
+ * True when the error may come from a source that has just started and is still recovering its
+ * databases: a login error, a message that reads as a failed login or a database that cannot be
+ * opened, or one of the SQL Server numbers above. For a list, true when any member is. The reader
+ * waits on these only for a run that has read the source before, so a wrong password on a new run
+ * still fails at once.
+ */
+export function isSourceStartingUp(err: unknown): boolean {
+  const list = members(err);
+  if (list) return list.some(isSourceStartingUp);
+  const { code, number, message } = fields(err);
+  if (code === 'ELOGIN') return true;
+  const hint = classifyConnectError(message);
+  if (hint === 'loginFailed' || hint === 'databaseMissing') return true;
+  return number !== null && STARTING_UP_NUMBERS.has(number);
+}
+
 /** Socket codes that mean the storage could not be reached. The same eight the AWS SDK retries
  *  (@smithy/core 3.29, retry, NODEJS_TIMEOUT_ERROR_CODES and NODEJS_NETWORK_ERROR_CODES). */
 const STORAGE_DOWN_CODES = new Set(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE']);
@@ -125,6 +162,7 @@ export function isStorageDown(err: unknown): boolean {
   return storageDownAt(err, 0);
 }
 
+/** The wait before try number `attempt` (1 for the first retry): 5 s, doubling, at most 300 s. */
 export function retryWaitMs(attempt: number): number {
   const n = Math.max(1, Math.floor(attempt));
   return Math.min(MAX_WAIT_MS, FIRST_WAIT_MS * 2 ** (n - 1));

@@ -477,6 +477,37 @@ describe('copy: a source that goes away', () => {
     expect(w.sleeps.every((ms) => ms <= 1000)).toBe(true);
   });
 
+  // R45. A copy whose set has a position has read the source before. A fresh drive's reader has
+  // had no good query yet, so only the flag the copy passes makes it wait.
+  const startingUp = () => Object.assign(new Error('Cannot open database "LabData" requested by the login.'), { code: 'EREQUEST', number: 4060 });
+
+  it('a continued copy waits on a source that is starting up', async () => {
+    const w = await world(keysOf(4));
+    w.source.failWhen(/LabResults.*'REQ0003'/);
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, COPY))!).toMatchObject({ status: 'failed', sets: { requests: { cursor: 'REQ0002' } } });
+    w.source.failWhen(null);
+    w.source.failNext(/\[Requests\].*> 'REQ0002'/, startingUp, 2);
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, COPY))!).toMatchObject({ status: 'completed', sets: { requests: { keys: 4, done: true } } });
+    const waits = w.runSaves.filter((r) => r.status === 'waiting').map((r) => r.waiting!.error);
+    expect(waits.length).toBeGreaterThan(0);
+    expect(waits.every((e) => e.startsWith('the source may still be starting up: '))).toBe(true);
+  });
+
+  it('a new copy whose first query is refused as if starting up fails at once', async () => {
+    const fresh = await world(keysOf(4));
+    fresh.source.failNext(/\[Requests\].*> ''/, startingUp);
+    await fresh.svc.start({ ...START, pageSize: 2 });
+    await drive(fresh.svc);
+    const failed = (await fresh.svc.get(PLUGIN, COPY))!;
+    expect(failed.status).toBe('failed');
+    expect(failed.lastError).toContain('Cannot open database');
+    expect(fresh.runSaves.some((r) => r.status === 'waiting')).toBe(false);
+  });
+
   it('a missing table at the source ends the run as failed', async () => {
     const w = await world(keysOf(4));
     w.source.failWhen(/LabResults.*'REQ0003'/);

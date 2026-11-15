@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifySourceError, describeSourceError, growPage, isStorageDown, retryWaitMs, shrinkPage } from './import-retry';
+import { classifySourceError, describeSourceError, growPage, isSourceStartingUp, isStorageDown, retryWaitMs, shrinkPage } from './import-retry';
 
 // Layer: pure functions only. No driver, no connection, no database. Whether a real tedious,
 // pg or mysql2 error carries these codes and messages is not tested here.
@@ -25,8 +25,15 @@ describe('classifySourceError', () => {
     expect(classifySourceError(new Error('Cannot open database "LabData" requested by the login.'))).toBe('refused');
   });
 
-  it('puts a timeout ahead of the request rule', () => {
-    expect(classifySourceError({ code: 'EREQUEST', number: -2, message: 'Timeout expired' })).toBe('timeout');
+  it('reads a timeout code ahead of the request rule', () => {
+    expect(classifySourceError({ code: 'ETIMEOUT', number: -2, message: 'Timeout expired' })).toBe('timeout');
+  });
+
+  // M3. A SQL Server error carries a number. Its words may name a column or a table called
+  // "timeout", so the message is read for a timeout only when there is no number.
+  it('an EREQUEST with number 207 and the word timeout in its message is refused', () => {
+    expect(classifySourceError({ code: 'EREQUEST', number: 207, message: "Invalid column name 'timeout_at'." })).toBe('refused');
+    expect(classifySourceError({ code: 'EREQUEST', number: -2, message: 'Timeout expired' })).toBe('refused');
   });
 
   it('treats a value that is not an object as lost', () => {
@@ -62,18 +69,48 @@ describe('describeSourceError', () => {
     const text = describeSourceError(sqlError(245, message), clean);
     expect(text).toBe('the source refused the query (SQL Server error 245)');
     expect(text).not.toContain(ROW_VALUE);
-    expect(describeSourceError(sqlError(1205, `deadlock victim ${ROW_VALUE}`), clean))
-      .toBe('the source refused the query (SQL Server error 1205)');
     // A number with no code still counts.
     expect(describeSourceError({ number: 245, message }, clean)).toBe('the source refused the query (SQL Server error 245)');
   });
 
-  it('rule 4: a network or timer error with no number keeps the driver message, through clean', () => {
-    expect(describeSourceError(Object.assign(new Error('Connection lost - read ECONNRESET'), { code: 'ESOCKET' }), clean))
-      .toBe('[Connection lost - read ECONNRESET]');
+  it('rule 3: a deadlock (1205) has its own fixed text, since it is tried again', () => {
+    const text = describeSourceError(sqlError(1205, `deadlock victim ${ROW_VALUE}`), clean);
+    expect(text).toBe('the source stopped this read to end a deadlock (SQL Server error 1205); it is tried again');
+    expect(text).not.toContain(ROW_VALUE);
+  });
+
+  it('rule 4: a timeout with no number keeps the driver message, through clean', () => {
     expect(describeSourceError(Object.assign(new Error('Timeout: Request failed to complete in 30000ms'), { code: 'ETIMEOUT' }), clean))
       .toBe('[Timeout: Request failed to complete in 30000ms]');
-    expect(describeSourceError(new Error('something nobody has seen'), clean)).toBe('[something nobody has seen]');
+  });
+
+  it('rule 4: a lost link in the LoggedIn-state error is a fixed sentence, with no driver words', () => {
+    const e = Object.assign(new Error('Requests can only be made in the LoggedIn state, not the Final state'), { code: 'EINVALIDSTATE' });
+    expect(describeSourceError(e, clean)).toBe('the source could not be reached');
+  });
+
+  it.each(['ESOCKET', 'ECONNRESET', 'ECONNREFUSED', 'ECONNCLOSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE'])(
+    'rule 4: network code %s leads with "the source could not be reached"',
+    (code) => {
+      expect(describeSourceError(Object.assign(new Error('Connection lost - read ECONNRESET hunter2'), { code }), clean))
+        .toBe('[the source could not be reached: Connection lost - read ECONNRESET ***]');
+    },
+  );
+
+  it('rule 4: any other lost error leads with "the source could not be read"', () => {
+    expect(describeSourceError(new Error('something nobody has seen'), clean)).toBe('[the source could not be read: something nobody has seen]');
+    expect(describeSourceError({ code: 'EWHATEVER', message: 'odd' }, clean)).toBe('[the source could not be read: odd]');
+  });
+
+  it('rule 4: the lead is kept when the text is cut to the cap', () => {
+    const cap = (text: string) => text.slice(0, 300);
+    const long = `Connection lost ${'x'.repeat(400)}`;
+    const text = describeSourceError(Object.assign(new Error(long), { code: 'ESOCKET' }), cap);
+    expect(text.length).toBe(300);
+    expect(text.startsWith('the source could not be reached: Connection lost x')).toBe(true);
+    const other = describeSourceError(new Error(long), cap);
+    expect(other.length).toBe(300);
+    expect(other.startsWith('the source could not be read: Connection lost x')).toBe(true);
   });
 
   it('rule 5: anything else is a fixed sentence', () => {
@@ -140,7 +177,7 @@ describe('a statement that fails with several errors', () => {
       Object.assign(new Error('Timeout: Request failed'), { code: 'ETIMEOUT' }),
     ];
     expect(classifySourceError(errors)).toBe('timeout');
-    expect(describeSourceError(errors, clean)).toBe('[Connection lost - read ECONNRESET]');
+    expect(describeSourceError(errors, clean)).toBe('[the source could not be reached: Connection lost - read ECONNRESET]');
   });
 
   it('an AggregateError and an object with an errors array are judged by their members', () => {
@@ -148,6 +185,35 @@ describe('a statement that fails with several errors', () => {
     expect(describeSourceError(new AggregateError(missingColumn()), clean)).toBe("[Invalid column name 'Resultt'.]");
     expect(classifySourceError({ errors: missingColumn() })).toBe('refused');
     expect(describeSourceError({ errors: [] }, clean)).toBe('the source failed in a way OpenLDR does not recognise');
+  });
+});
+
+// R45. After a restart SQL Server takes logins before its databases have recovered.
+describe('isSourceStartingUp', () => {
+  const sqlError = (number: number, code = 'EREQUEST') => Object.assign(new Error('text'), { code, number });
+
+  it.each([4060, 18456, 921, 922, 945, 6005, 17142, 17187, 18401])('is true for SQL Server error %i', (number) => {
+    expect(isSourceStartingUp(sqlError(number))).toBe(true);
+  });
+
+  it('is true for a login error and for a login or database message with no code', () => {
+    expect(isSourceStartingUp({ code: 'ELOGIN', message: "Login failed for user 'x'." })).toBe(true);
+    expect(isSourceStartingUp(new Error("Login failed for user 'x'."))).toBe(true);
+    expect(isSourceStartingUp(new Error('Cannot open database "LabData" requested by the login.'))).toBe(true);
+  });
+
+  it('is false for a missing table, a missing column, a row error and a lost link', () => {
+    expect(isSourceStartingUp(sqlError(208))).toBe(false);
+    expect(isSourceStartingUp(sqlError(207))).toBe(false);
+    expect(isSourceStartingUp(sqlError(245))).toBe(false);
+    expect(isSourceStartingUp({ code: 'ESOCKET', message: 'Connection lost' })).toBe(false);
+    expect(isSourceStartingUp(null)).toBe(false);
+  });
+
+  it('is true for a list when any member is', () => {
+    expect(isSourceStartingUp([sqlError(8180), sqlError(921)])).toBe(true);
+    expect(isSourceStartingUp(new AggregateError([sqlError(208), sqlError(8180)]))).toBe(false);
+    expect(isSourceStartingUp([])).toBe(false);
   });
 });
 

@@ -490,7 +490,11 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
         const ask = run.limit === null ? size : Math.min(size, run.limit - run.counts.keys);
         if (ask <= 0) { outcome = 'completed'; break; }
 
-        const page = await reader.readPage({ keySql: spec.keyQuery.sql, details: spec.detailQueries, after: run.cursor, size: ask });
+        // A run with a position has read this source before, so a refused login or database may
+        // be a source that is starting up (R45).
+        const page = await reader.readPage({
+          keySql: spec.keyQuery.sql, details: spec.detailQueries, after: run.cursor, size: ask, readBefore: run.cursor !== null,
+        });
         if (page.kind === 'stopped') { outcome = 'stopped'; break; }
         if (page.kind === 'end') { outcome = 'completed'; break; }
         if (page.kind === 'skipped') {

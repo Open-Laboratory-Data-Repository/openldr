@@ -315,6 +315,30 @@ describe('import run', () => {
     expect(await h.svc.wait(started.id)).toMatchObject({ status: 'completed', counts: { keys: 4, imported: 4 } });
   });
 
+  // R45. A run with a cursor has read the source before. A resumed drive's reader has had no good
+  // query yet, so only the flag the run passes makes it wait.
+  it('a resumed run with a position waits on a source that is starting up; a new run fails at once', async () => {
+    const startingUp = () => Object.assign(new Error("Login failed for user 'reader'."), { code: 'EREQUEST', number: 18456 });
+    const h = await harness(keysOf(4));
+    h.source.failWhen(/> 'REQ0002'/);
+    const started = await h.svc.start({ ...START, pageSize: 2 });
+    expect(await h.svc.wait(started.id)).toMatchObject({ status: 'failed', cursor: 'REQ0002' });
+    h.source.failWhen(null);
+    h.source.failNext(/> 'REQ0002'/, startingUp, 2);
+    await h.svc.resume('v1-import', started.id, ADMIN);
+    expect(await h.svc.wait(started.id)).toMatchObject({ status: 'completed', counts: { keys: 4, imported: 4 } });
+    const waits = h.runSaves.filter((r) => r.status === 'waiting').map((r) => r.waiting!.error);
+    expect(waits.length).toBeGreaterThan(0);
+    expect(waits.every((e) => e.startsWith('the source may still be starting up: '))).toBe(true);
+
+    const fresh = await harness(keysOf(4));
+    fresh.source.failNext(/> ''/, startingUp);
+    const failed = await fresh.svc.wait((await fresh.svc.start({ ...START, pageSize: 2 })).id);
+    expect(failed).toMatchObject({ status: 'failed', cursor: null });
+    expect(failed.lastError).toContain('Login failed');
+    expect(fresh.runSaves.some((r) => r.status === 'waiting')).toBe(false);
+  });
+
   it('refuses SQL from the plugin that is not a SELECT, before running anything', async () => {
     const h = await harness(keysOf(2));
     h.setQueries({ keyQuery: { sql: 'DELETE FROM [dbo].[Requests] WHERE [RequestID] > {{after}} -- {{limit}}' }, detailQueries: [] });
@@ -525,8 +549,9 @@ describe('import run: a source that goes away', () => {
     expect(run).toMatchObject({ status: 'completed', cursor: 'REQ0004', counts: { keys: 4, imported: 4, failed: 0 } });
     expect(savedIds(h)).toEqual(['p-REQ0001', 'p-REQ0002', 'p-REQ0003', 'p-REQ0004']);
     expect(h.mapInputs.map((m) => m.keys)).toEqual([['REQ0001', 'REQ0002'], ['REQ0003', 'REQ0004']]);
-    // The cut connection was closed, and so was the one that replaced it.
-    expect(h.source.closed()).toBe(2);
+    // The cut connection was closed, and so was the one that replaced it. The SELECT 1 probe that
+    // follows a loss (R40) opens and closes a third.
+    expect(h.source.closed()).toBe(3);
   });
 
   it('records where the run was started', async () => {

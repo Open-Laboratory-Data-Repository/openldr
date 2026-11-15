@@ -1,16 +1,21 @@
 import { validateSelectSql } from '@openldr/dashboards';
 import type { ConnectorDb } from './connector-db';
-import { classifySourceError, describeSourceError, retryWaitMs, shrinkPage } from './import-retry';
+import { classifySourceError, describeSourceError, isSourceStartingUp, retryWaitMs, shrinkPage } from './import-retry';
 import { assertSafeKey, fillDetailQuery, fillKeyQuery, toPluginRow } from './import-sql';
 
 // Reads one page of a source database: the key query, then every detail query for those keys.
 // It is used by the one-pass import and by the copy, and it decides what a failed query means:
-//  - a lost link: close the connection, wait, open a new one and read the same page again;
-//  - a timeout: send the source `SELECT 1` with a 5-second limit. No answer means the link is
-//    down, so it is a lost link and the page size stays. An answer means the page was too big,
-//    so the page is halved and read again, down to 1;
+//  - a lost link: close the connection and send the source `SELECT 1` with a 5-second limit.
+//    Then wait, open a new connection and read the same page again. A loss whose `SELECT 1`
+//    answered is counted. At the second counted loss in a row the page is halved, down to 1, and
+//    the wait starts again at 5 s. A loss whose `SELECT 1` did not answer is an outage: the count
+//    goes back to 0 and the page size stays. At a page of 1 a loss never skips a key;
+//  - a timeout: send the source `SELECT 1` as above. No answer means the link is down, so it is
+//    an outage. An answer means the page was too big, so the page is halved and read again, down to 1;
 //  - a key whose details time out 3 times at a page of 1 is handed back as skipped;
-//  - an error the source returned, such as a missing table, is thrown to the caller.
+//  - a login or database error from a source that may be starting up, on a run that has read it
+//    before: waited on like a lost link, up to 12 tries in one call, then thrown;
+//  - any other error the source returned, such as a missing table, is thrown to the caller.
 // A stop is asked for before every retry. Source error text comes only from describeSourceError,
 // so it cannot quote a row. The reader keeps no position. The caller passes `after` and `size` on every call.
 
@@ -22,7 +27,7 @@ export type PageResult =
     keyRows: Array<Record<string, unknown>>;
     /** Keyed by detail query name, as the plugin's `map` expects. */
     rows: Record<string, Array<Record<string, unknown>>>;
-    /** The page size this page was read at. Smaller than asked when a timeout halved it. */
+    /** The page size this page was read at. Smaller than asked when a timeout or two losses halved it. */
     size: number;
   }
   | { kind: 'end' }
@@ -36,6 +41,9 @@ export interface ReadPageInput {
   size: number;
   /** Refuse a detail row whose first column is not one of the page's keys. Default false. */
   checkRowKeys?: boolean;
+  /** The run has read this source before, so a refused login or database may be a source that
+   *  is starting up. Default false. The reader also counts it true after its own first good query. */
+  readBefore?: boolean;
 }
 
 export interface SourceReader {
@@ -60,6 +68,11 @@ const PROBE_TIMEOUT_MS = 5000;
 const SLICE_MS = 1000;
 /** Timeouts of one key at a page of 1 before it is skipped. */
 const SKIP_AFTER = 3;
+/** Counted losses in a row (the probe answered each) before the page is halved. */
+const HALVE_AFTER_LOSSES = 2;
+/** Waits on a source that may be starting up, in one readPage call. About 35 minutes. */
+const STARTING_UP_TRIES = 12;
+const STARTING_UP_LEAD = 'the source may still be starting up: ';
 
 /** An error from `open` or `db.query`. Only these are classified and may be retried. Every other
  *  error (a statement that is not one SELECT, an unsafe key, a row filed under a wrong key) is a
@@ -125,6 +138,8 @@ export function matchPageKey(pageKeys: string[], value: string): string | null {
 export function createSourceReader(deps: SourceReaderDeps): SourceReader {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   let db: ConnectorDb | null = null;
+  /** True once a query on this reader has answered. */
+  let readOnce = false;
 
   /** Forget the current connection. A close on a cut link can hang, so it is not awaited. */
   function drop(): void {
@@ -137,7 +152,9 @@ export function createSourceReader(deps: SourceReaderDeps): SourceReader {
     validateSelectSql(sql);
     try {
       if (!db) db = await deps.open();
-      return (await db.query(sql)).rows;
+      const { rows } = await db.query(sql);
+      readOnce = true;
+      return rows;
     } catch (err) {
       throw new SourceFailure(err);
     }
@@ -181,15 +198,20 @@ export function createSourceReader(deps: SourceReaderDeps): SourceReader {
 
   return {
     async readPage(input) {
-      const { keySql, details, after, checkRowKeys = false } = input;
+      const { keySql, details, after, checkRowKeys = false, readBefore = false } = input;
       let size = input.size;
       // Check every statement before opening a connection or running any of them.
       validateSelectSql(fillKeyQuery(keySql, after, size));
       for (const d of details) validateSelectSql(fillDetailQuery(d.sql, ['A']));
 
+      /** The try number of the next wait. */
       let attempt = 0;
       let slowKey: string | null = null;
       let slowCount = 0;
+      /** Losses in a row whose probe answered. Anything else between two losses sets it to 0. */
+      let losses = 0;
+      /** Waits on a source that may be starting up. */
+      let startingTries = 0;
       for (;;) {
         let keys: string[] = [];
         let readingDetails = false;
@@ -214,11 +236,26 @@ export function createSourceReader(deps: SourceReaderDeps): SourceReader {
           if (!(err instanceof SourceFailure)) throw err;
           const error = describeSourceError(err.cause, deps.clean);
           let kind = classifySourceError(err.cause);
-          if (kind === 'refused') throw new Error(error);
+          if (kind === 'refused') {
+            // After a restart SQL Server takes logins before its databases have recovered (R45).
+            // A run that has read this source before waits on that, like a lost link.
+            const mayBeStarting = (readBefore || readOnce) && isSourceStartingUp(err.cause);
+            if (!mayBeStarting || startingTries >= STARTING_UP_TRIES) throw new Error(error);
+            startingTries += 1;
+            losses = 0;
+            drop();
+            attempt += 1;
+            if (await wait(attempt, deps.clean(`${STARTING_UP_LEAD}${error}`))) return { kind: 'stopped' };
+            continue;
+          }
           // A timed-out connection may be dead even when a fresh one answers (a half-open
           // socket), so it is dropped on a timeout as well as on a lost link.
           drop();
-          if (kind === 'timeout' && !(await probe())) kind = 'lost';
+          // The probe tells an outage from a page that is too big or a link that keeps dropping.
+          const answered = await probe();
+          if (kind === 'timeout' && !answered) kind = 'lost';
+          // Counted only when the source still answers. A loss whose probe failed is an outage.
+          losses = kind === 'lost' && answered ? losses + 1 : 0;
 
           if (kind === 'timeout' && size > 1) {
             if (await deps.stopWanted()) return { kind: 'stopped' };
@@ -233,6 +270,14 @@ export function createSourceReader(deps: SourceReaderDeps): SourceReader {
             if (slowCount >= SKIP_AFTER) return { kind: 'skipped', key };
             if (await deps.stopWanted()) return { kind: 'stopped' };
             continue;
+          }
+          // R40. A page lost twice in a row while the source answers is halved, so a link that drops
+          // more often than one page takes can still finish a page. The wait starts again at 5 s.
+          // At a page of 1 nothing is halved and no key is skipped: the wait keeps growing.
+          if (losses >= HALVE_AFTER_LOSSES && size > 1) {
+            size = shrinkPage(size);
+            losses = 0;
+            attempt = 0;
           }
           // A lost link, or a key query that times out at a page of 1. No key is known to skip,
           // so it is waited on and retried. The wait asks for a stop before each slice.
