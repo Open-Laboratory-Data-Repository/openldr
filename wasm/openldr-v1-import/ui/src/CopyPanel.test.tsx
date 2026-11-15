@@ -533,12 +533,20 @@ describe('spec 4.6: Start copy sits in a dots menu', () => {
     expect(byId('copy-start').textContent).toBe('Continue copy');
   });
 
-  it('is off while the copy shown is live', async () => {
+  it('is off while the copy shown is live, and its menu is never drawn', async () => {
     setup({ list: async () => [copy()], status: async () => copy() });
     await openCopy();
     expect(disabled('copy-actions')).toBe(true);
-    click('copy-actions');
     expect(menuNamed(START_MENU)).toBeNull();
+    // jsdom delivers a click to a disabled button and a real browser does not. So this checks the
+    // button's own guard: the list is not drawn even for a moment.
+    const seen = new MutationObserver(() => {});
+    seen.observe(screen.getByTestId('copy-panel'), { childList: true, subtree: true });
+    click('copy-actions');
+    const added = seen.takeRecords().flatMap((r) => [...r.addedNodes]);
+    seen.disconnect();
+    expect(added.some((n) => n instanceof Element && (n.matches('[role="menu"]') || n.querySelector('[role="menu"]') !== null))).toBe(false);
+    expect(byId('copy-actions').getAttribute('aria-expanded')).toBe('false');
   });
 
   it('R3: an open menu closes, and its button is off, once the item cannot be used', async () => {
@@ -547,11 +555,26 @@ describe('spec 4.6: Start copy sits in a dots menu', () => {
     await openCopy();
     click('copy-actions');
     expect(menuNamed(START_MENU)).toBeTruthy();
+    expect(active()).toBe(byId('copy-start'));
     // A form that is not right: Start cannot be used now.
     type('opt-tz', 'not an offset');
     await waitFor(() => expect(menuNamed(START_MENU)).toBeNull());
     expect(byId('copy-actions').getAttribute('aria-expanded')).toBe('false');
     expect(disabled('copy-actions')).toBe(true);
+    // Focus was in the menu, which is gone, so it goes to the status line.
+    expect(active()).toBe(byId('copy-status'));
+  });
+
+  it('R3: when focus is in a field as the menu closes, it stays in the field', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    const tz = byId('opt-tz');
+    tz.focus();
+    type('opt-tz', 'not an offset');
+    await waitFor(() => expect(menuNamed(START_MENU)).toBeNull());
+    expect(active()).toBe(tz);
   });
 
   it('choosing the item calls start with the form, closes the menu and gives focus to its button', async () => {
@@ -559,14 +582,82 @@ describe('spec 4.6: Start copy sits in a dots menu', () => {
     const start = vi.fn(async () => { throw new Error('no room on the disk'); });
     setup({ list: async () => [stopped], status: async () => stopped, start });
     await openCopy();
+    const focus = vi.spyOn(byId('copy-actions'), 'focus');
     chooseStart();
     expect(menuNamed(START_MENU)).toBeNull();
     expect(byId('copy-actions').getAttribute('aria-expanded')).toBe('false');
-    expect(active()).toBe(byId('copy-actions'));
+    expect(focus).toHaveBeenCalled();
+    // Not asserted: whether focus stays on the button while the call makes it disabled. jsdom keeps it; a real browser may not.
     await pane().findByTestId('copy-start-error');
     expect(start).toHaveBeenCalledTimes(1);
     expect(start).toHaveBeenCalledWith({ connectorId: 'ms', options: { tz: '+02:00' } });
-    expect(active()).toBe(byId('copy-actions'));
+  });
+
+  it('says Starting… in a status line while the start call is out, and nothing once it settles', async () => {
+    const stopped = copy({ status: 'stopped' });
+    // Each call waits until the test answers it.
+    type Answer = { run?: PluginCopyRun; changedSets?: string[] };
+    let settle = { resolve: (_v: Answer) => {}, reject: (_e: unknown) => {} };
+    const start = vi.fn(() => new Promise<Answer>((resolve, reject) => { settle = { resolve, reject }; }));
+    setup({ list: async () => [stopped], status: async () => stopped, start });
+    await openCopy();
+    const line = () => byId('copy-starting');
+    expect(line().getAttribute('role')).toBe('status');
+    expect(line().textContent).toBe('');
+    // A call that fails.
+    chooseStart();
+    expect(line().textContent).toBe('Starting…');
+    settle.reject(new Error('no room on the disk'));
+    await pane().findByTestId('copy-start-error');
+    expect(line().textContent).toBe('');
+    // A call that works.
+    chooseStart();
+    expect(line().textContent).toBe('Starting…');
+    settle.resolve({ run: copy({ status: 'queued' }) });
+    await waitFor(() => expect(line().textContent).toBe(''));
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+
+  it('Tab closes an open Start menu', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    expect(active()).toBe(byId('copy-start'));
+    // Not asserted: where Tab then moves focus. jsdom has no Tab default action; the browser moves it.
+    key('Tab');
+    expect(menuNamed(START_MENU)).toBeNull();
+    expect(byId('copy-actions').getAttribute('aria-expanded')).toBe('false');
+    click('copy-actions');
+    key('Tab', true);
+    expect(menuNamed(START_MENU)).toBeNull();
+  });
+
+  it('Tab closes an open card menu', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-menu');
+    expect(menuNamed(CARD_MENU)).toBeTruthy();
+    key('Tab');
+    expect(menuNamed(CARD_MENU)).toBeNull();
+    expect(byId('copy-menu').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('an open menu does not take the arrow keys or Escape from a field', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    const from = byId('opt-from');
+    from.focus();
+    // fireEvent returns false when a listener called preventDefault.
+    expect(fireEvent.keyDown(from, { key: 'ArrowDown' })).toBe(true);
+    expect(active()).toBe(from);
+    expect(fireEvent.keyDown(from, { key: 'ArrowUp' })).toBe(true);
+    expect(active()).toBe(from);
+    expect(fireEvent.keyDown(from, { key: 'Escape' })).toBe(true);
+    expect(active()).toBe(from);
   });
 
   it('Escape closes the menu and gives focus back to its button; the arrow keys stay on the one item', async () => {

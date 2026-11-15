@@ -113,7 +113,9 @@ type SetMenu = (next: (open: MenuName | null) => MenuName | null) => void;
 
 /**
  * A dots menu: focus moves to its first usable item, the arrow keys move between items, and a
- * click outside or Escape closes it. Escape gives focus back to the menu's button.
+ * click outside or Escape closes it. Escape gives focus back to the menu's button. Tab closes it
+ * and lets focus move on. Arrows and Escape count only while focus is in the menu or on its
+ * button, so a field below keeps its own keys.
  */
 function useMenu(name: MenuName, open: boolean, setOpen: SetMenu, box: { current: HTMLElement | null }, button: { current: HTMLElement | null }) {
   useEffect(() => {
@@ -124,6 +126,11 @@ function useMenu(name: MenuName, open: boolean, setOpen: SetMenu, box: { current
     (items().find((i) => i.getAttribute('aria-disabled') !== 'true') ?? items()[0])?.focus();
     const onClick = (e: Event) => { if (!box.current?.contains(e.target as Node)) close(); };
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') {
+        close();
+        return;
+      }
+      if (!box.current?.contains(document.activeElement)) return;
       if (e.key === 'Escape') {
         close();
         button.current?.focus();
@@ -372,7 +379,8 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
               aria-expanded={startMenuOpen}
               // R3: no menu that opens with nothing usable in it, as the copy card's menu.
               disabled={!canStart}
-              onClick={() => setOpenMenu((o) => (o === 'start' ? null : 'start'))}
+              // Checked here too: a test DOM delivers clicks to a disabled button.
+              onClick={() => { if (canStart) setOpenMenu((o) => (o === 'start' ? null : 'start')); }}
             >
               <span aria-hidden="true">⋯</span>
             </button>
@@ -391,12 +399,15 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
                     void start({ connectorId, options: toOptions(form) }, false);
                   }}
                 >
-                  {starting ? t('copy.starting') : run && !live ? t('copy.continue') : t('copy.start')}
+                  {run && !live ? t('copy.continue') : t('copy.start')}
                 </button>
               </div>
             ) : null}
           </div>
         </div>
+        {/* The menu cannot open while a start call is out, so this line says it is under way. It is
+            always in the page, so a screen reader hears the text arrive. Empty, it takes no room. */}
+        <div class="v1i-muted v1i-start-status" role="status" data-testid="copy-starting">{starting ? t('copy.starting') : null}</div>
 
         {connectorId ? (
           <div class="v1i-block">

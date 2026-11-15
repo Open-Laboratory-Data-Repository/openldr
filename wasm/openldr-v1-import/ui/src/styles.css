@@ -299,6 +299,7 @@ body {
    right end. The picker may shrink, so the button stays on screen at phone width. */
 .v1i-source-row { display: flex; align-items: flex-start; gap: 10px; }
 .v1i-source-main { flex: 1 1 auto; min-width: 0; }
+.v1i-start-status:not(:empty) { margin-top: 12px; }
 .v1i-warning {
   margin: 12px 0 0;
   padding: 8px 12px;
