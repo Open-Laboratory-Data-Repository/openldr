@@ -395,17 +395,21 @@ describe('connector diagnosis route', () => {
 
 describe('connector plugin access routes', () => {
   type Call = { op: 'allow' | 'revoke'; pluginId: string; connectorId: string; actor: unknown };
-  function accessApp(over: { capabilities?: string[]; allowed?: Record<string, string[]>; calls?: Call[] } = {}) {
+  function accessApp(over: { capabilities?: string[]; allowed?: Record<string, string[]>; calls?: Call[]; copyOnly?: boolean } = {}) {
     const store = fakeStore();
     const allowed = over.allowed ?? { 'v1-import': [] };
     const calls = over.calls ?? [];
+    const importers = [
+      { id: 'v1-import', version: '0.1.0', connectorTypes: ['microsoft-sql'] },
+      { id: 'pg-import', version: '0.2.0', connectorTypes: ['postgres'] },
+    ];
+    // A plugin that can only be copied from is a reader and not an importer.
+    const readers = over.copyOnly ? [...importers, { id: 'disa-copy', version: '0.3.0', connectorTypes: ['microsoft-sql'] }] : importers;
     const ctx = {
       ...fakeCtx(),
       imports: {
-        importers: async () => [
-          { id: 'v1-import', version: '0.1.0', connectorTypes: ['microsoft-sql'] },
-          { id: 'pg-import', version: '0.2.0', connectorTypes: ['postgres'] },
-        ],
+        importers: async () => importers,
+        readers: async () => readers,
         allowed: async (pluginId: string) => allowed[pluginId] ?? [],
         allow: async (pluginId: string, connectorId: string, actor: unknown) => {
           calls.push({ op: 'allow', pluginId, connectorId, actor });
@@ -436,6 +440,21 @@ describe('connector plugin access routes', () => {
     // A sink connector has no type, so no plugin can import from it.
     expect((await app.inject({ method: 'GET', url: '/api/connectors/sink/import-plugins' })).json()).toEqual([]);
     expect((await app.inject({ method: 'GET', url: '/api/connectors/missing/import-plugins' })).statusCode).toBe(404);
+  });
+
+  it('lists a plugin that can only be copied from, and lets it be allowed', async () => {
+    const { app, store, calls } = accessApp({ copyOnly: true, allowed: { 'v1-import': ['ms'] } });
+    await seed(store);
+    const res = await app.inject({ method: 'GET', url: '/api/connectors/ms/import-plugins' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([
+      { id: 'v1-import', version: '0.1.0', allowed: true },
+      { id: 'disa-copy', version: '0.3.0', allowed: false },
+    ]);
+    const on = await app.inject({ method: 'PUT', url: '/api/connectors/ms/import-plugins/disa-copy', payload: { allowed: true } });
+    expect(on.statusCode).toBe(200);
+    expect(on.json()).toContainEqual({ id: 'disa-copy', version: '0.3.0', allowed: true });
+    expect(calls).toEqual([{ op: 'allow', pluginId: 'disa-copy', connectorId: 'ms', actor: { type: 'user', id: 'u1', name: 'admin' } }]);
   });
 
   it('allows and then revokes a plugin, naming the signed-in user as the actor', async () => {

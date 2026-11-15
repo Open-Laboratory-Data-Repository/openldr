@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { makeRedactor, redact } from '@openldr/core';
 import { validateSelectSql } from '@openldr/dashboards';
 import type { PluginDataStore, Provenance } from '@openldr/db';
-import { allowedResourceTypes, importSourceSchema, readGrant, type Capability, type ImportSource } from '@openldr/marketplace';
+import { allowedResourceTypes, canImportOnePass, importSourceSchema, readGrant, type Capability, type ImportSource } from '@openldr/marketplace';
 import { createConnectorDb, type ConnectorDb } from './connector-db';
 import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, assertSafeKey, fillDetailQuery, fillKeyQuery, toPluginRow } from './import-sql';
 
@@ -104,8 +104,11 @@ export interface ImportStartInput {
 }
 
 export interface ImportService {
-  /** Installed, enabled plugins that can import, with the connector types each reads. */
+  /** Installed, enabled plugins that can run a one-pass import, with the connector types each reads. */
   importers(): Promise<Array<{ id: string; version: string; connectorTypes: string[] }>>;
+  /** Installed, enabled plugins that may be allowed a connector: every importer, and every plugin
+   *  that can only be copied from. */
+  readers(): Promise<Array<{ id: string; version: string; connectorTypes: string[] }>>;
   /** Let a plugin read one connector. Without this, start and checks refuse. */
   allow(pluginId: string, connectorId: string, actor: ImportActor): Promise<void>;
   revoke(pluginId: string, connectorId: string, actor: ImportActor): Promise<void>;
@@ -155,6 +158,13 @@ function checkResources(resources: unknown[], allowedTypes: Set<string>): string
 }
 
 interface ResolvedPlugin { id: string; version: string; source: ImportSource; capabilities: Capability[] }
+/** A plugin that can run a one-pass import, so `queries` and `map` are both present. */
+interface ImportingPlugin extends ResolvedPlugin {
+  source: ImportSource & { entrypoints: { queries: string; map: string } };
+}
+/** What a caller needs from a plugin. `read`: it may be allowed a connector. `import`: it can
+ *  also run a one-pass import. A plugin with only a copy entrypoint passes `read` alone. */
+type PluginNeed = 'read' | 'import';
 
 export function createImportService(deps: ImportServiceDeps): ImportService {
   const now = deps.now ?? (() => new Date());
@@ -182,7 +192,9 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     }
   };
 
-  async function resolvePlugin(pluginId: string): Promise<ResolvedPlugin> {
+  function resolvePlugin(pluginId: string, need: 'import'): Promise<ImportingPlugin>;
+  function resolvePlugin(pluginId: string, need: PluginNeed): Promise<ResolvedPlugin>;
+  async function resolvePlugin(pluginId: string, need: PluginNeed): Promise<ResolvedPlugin> {
     const row = (await deps.plugins.list()).find((r) => r.id === pluginId && r.enabled);
     if (!row) throw new Error(`plugin ${pluginId} is not installed or disabled`);
     const raw = (row.manifest as { payload?: { importSource?: unknown } }).payload?.importSource;
@@ -193,7 +205,25 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     if (grant.legacy || !grant.capabilities.some((c) => c.kind === 'host:import')) {
       throw new Error(`plugin ${pluginId} was not granted the host:import capability`);
     }
+    if (need === 'import' && !canImportOnePass(source)) {
+      throw new Error(`plugin ${pluginId} can be copied from but cannot import`);
+    }
     return { id: row.id, version: row.version, source, capabilities: grant.capabilities };
+  }
+
+  /** Every enabled plugin that passes `need`, with the connector types each reads. */
+  async function listPlugins(need: PluginNeed): Promise<Array<{ id: string; version: string; connectorTypes: string[] }>> {
+    const out: Array<{ id: string; version: string; connectorTypes: string[] }> = [];
+    for (const row of await deps.plugins.list()) {
+      if (!row.enabled) continue;
+      try {
+        const plugin = await resolvePlugin(row.id, need);
+        out.push({ id: plugin.id, version: plugin.version, connectorTypes: [...plugin.source.connectorTypes] });
+      } catch {
+        // Fails the check: no import source, no host:import capability, or (for import) copy only.
+      }
+    }
+    return out;
   }
 
   async function resolveConnector(plugin: ResolvedPlugin, connectorId: string): Promise<{ type: string }> {
@@ -257,7 +287,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     let clean = (text: string) => redact(text).slice(0, 300);
     let outcome: ImportStatus = 'failed';
     try {
-      const plugin = await resolvePlugin(run.pluginId);
+      const plugin = await resolvePlugin(run.pluginId, 'import');
       const { type } = await resolveConnector(plugin, run.connectorId);
       const sink = await loadSink(plugin);
       const spec = querySpecSchema.parse(await sink.invoke(plugin.source.entrypoints.queries, { options: run.options }));
@@ -372,22 +402,12 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
   }
 
   return {
-    async importers() {
-      const out: Array<{ id: string; version: string; connectorTypes: string[] }> = [];
-      for (const row of await deps.plugins.list()) {
-        if (!row.enabled) continue;
-        try {
-          const plugin = await resolvePlugin(row.id);
-          out.push({ id: plugin.id, version: plugin.version, connectorTypes: [...plugin.source.connectorTypes] });
-        } catch {
-          // Not an importer: no import source, or no host:import capability.
-        }
-      }
-      return out;
-    },
+    importers: () => listPlugins('import'),
+
+    readers: () => listPlugins('read'),
 
     async allow(pluginId, connectorId, actor) {
-      const plugin = await resolvePlugin(pluginId);
+      const plugin = await resolvePlugin(pluginId, 'read');
       const c = await deps.connectors.get(connectorId);
       if (!c) throw new Error(`connector ${connectorId} not found`);
       // Refuse a connector the plugin cannot read now, not at its first run. A disabled connector of
@@ -409,7 +429,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     },
 
     async checks({ pluginId, connectorId, options }) {
-      const plugin = await resolvePlugin(pluginId);
+      const plugin = await resolvePlugin(pluginId, 'import');
       const { type } = await resolveConnector(plugin, connectorId);
       if (!plugin.source.entrypoints.checks) return [];
       const parsedOptions = optionsSchema.parse(options);
@@ -440,7 +460,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     },
 
     async start(input) {
-      const plugin = await resolvePlugin(input.pluginId);
+      const plugin = await resolvePlugin(input.pluginId, 'import');
       const pageSize = input.pageSize ?? DEFAULT_PAGE_SIZE;
       if (!Number.isInteger(pageSize) || pageSize < PAGE_SIZE_MIN || pageSize > PAGE_SIZE_MAX) {
         throw new Error(`page size must be a whole number from ${PAGE_SIZE_MIN} to ${PAGE_SIZE_MAX}`);
@@ -506,7 +526,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       if (status !== 'stopped' && status !== 'failed' && status !== 'interrupted') {
         throw new Error(`import run ${runId} is ${status}; only a stopped, failed or interrupted run can resume`);
       }
-      const plugin = await resolvePlugin(pluginId);
+      const plugin = await resolvePlugin(pluginId, 'import');
       await resolveConnector(plugin, stored.connectorId);
       await assertNoActiveRun(pluginId, stored.connectorId, runId);
       const run: ImportRun = { ...stored, status: 'running', finishedAt: null, lastError: null, pluginVersion: plugin.version };

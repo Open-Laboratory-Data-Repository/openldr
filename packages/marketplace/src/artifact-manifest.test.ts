@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseArtifactManifest, pluginManifestToArtifact } from './artifact-manifest';
+import { canCopy, canImportOnePass, importSourceSchema, parseArtifactManifest, pluginManifestToArtifact, type ImportSource } from './artifact-manifest';
 
 const fp = 'a'.repeat(64);
 const base = {
@@ -272,6 +272,43 @@ describe('content-pack artifact manifest', () => {
       expect(() => parseArtifactManifest(bad(['mysql']))).toThrow();
       expect(() => parseArtifactManifest(bad([]))).toThrow();
     });
+    it('refuses a copy entrypoint the plugin does not export', () => {
+      const copying = { ...importing, payload: { ...importing.payload, importSource: { connectorTypes: ['microsoft-sql'], entrypoints: { copy: 'import_copy' } } } };
+      expect(() => parseArtifactManifest(copying)).toThrow(/import_copy/);
+      const exported = { ...copying, payload: { ...copying.payload, entrypoints: ['import_copy'] } };
+      const m = parseArtifactManifest(exported);
+      expect(m.payload.kind === 'plugin' && m.payload.importSource?.entrypoints).toEqual({ copy: 'import_copy' });
+    });
+  });
+});
+
+// Layer: the zod schema and two pure helpers. No database, no plugin.
+describe('import source entrypoints', () => {
+  const base: ImportSource = { connectorTypes: ['microsoft-sql'], entrypoints: { queries: 'q', map: 'm' } };
+
+  it('an import source with no new field parses to the same object', () => {
+    expect(importSourceSchema.parse(base)).toEqual(base);
+  });
+  it('takes a copy entrypoint beside queries and map', () => {
+    const src: ImportSource = { ...base, entrypoints: { ...base.entrypoints, copy: 'import_copy' } };
+    expect(importSourceSchema.parse(src)).toEqual(src);
+    expect([canImportOnePass(src), canCopy(src)]).toEqual([true, true]);
+  });
+  it('takes a copy entrypoint alone', () => {
+    const src: ImportSource = { connectorTypes: ['microsoft-sql'], entrypoints: { copy: 'import_copy' } };
+    expect(importSourceSchema.parse(src)).toEqual(src);
+    expect([canImportOnePass(src), canCopy(src)]).toEqual([false, true]);
+  });
+  it('a source with queries and map and no copy cannot be copied from', () => {
+    expect([canImportOnePass(base), canCopy(base)]).toEqual([true, false]);
+  });
+  it('refuses queries without map, map without queries, and no entrypoint at all', () => {
+    const types = ['microsoft-sql'];
+    expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: { queries: 'q' } })).toThrow(/queries and map/);
+    expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: { map: 'm' } })).toThrow(/queries and map/);
+    expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: { queries: 'q', copy: 'c' } })).toThrow(/queries and map/);
+    expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: {} })).toThrow(/queries and map, or copy/);
+    expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: { checks: 'k' } })).toThrow(/queries and map, or copy/);
   });
 });
 

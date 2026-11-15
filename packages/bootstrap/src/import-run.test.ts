@@ -370,6 +370,58 @@ describe('import run: who may read what', () => {
     expect(await h.svc.importers()).toEqual([]);
   });
 
+  describe('a plugin that can be copied from but cannot import', () => {
+    const copyOnly = () => manifest({ importSource: { connectorTypes: ['microsoft-sql'], entrypoints: { copy: 'import_copy' } } });
+    const REFUSAL = /plugin v1-import can be copied from but cannot import/;
+
+    it('can be allowed a connector, and is listed as a reader but not as an importer', async () => {
+      const h = await harness(keysOf(1));
+      h.setManifest(copyOnly());
+      await h.svc.revoke('v1-import', 'c1', ADMIN);
+      await h.svc.allow('v1-import', 'c1', ADMIN);
+      expect(await h.svc.allowed('v1-import')).toEqual(['c1']);
+      expect(await h.svc.readers()).toEqual([{ id: 'v1-import', version: '1.2.0', connectorTypes: ['microsoft-sql'] }]);
+      expect(await h.svc.importers()).toEqual([]);
+      // A wrong-type connector is still refused for a reader.
+      await expect(h.svc.allow('v1-import', 'pg', ADMIN)).rejects.toThrow(/microsoft-sql/);
+    });
+
+    it('refuses start and checks, and calls no entrypoint', async () => {
+      const h = await harness(keysOf(1));
+      h.setManifest(copyOnly());
+      await expect(h.svc.start(START)).rejects.toThrow(REFUSAL);
+      await expect(h.svc.checks(START)).rejects.toThrow(REFUSAL);
+      expect(await h.svc.list('v1-import')).toEqual([]);
+      expect(h.invoke).not.toHaveBeenCalled();
+    });
+
+    it('refuses to resume a run, and a run being driven ends failed with the same message', async () => {
+      const h = await harness(keysOf(3));
+      const stopped = await h.svc.start({ ...START, pageSize: 1 });
+      await h.svc.stop('v1-import', stopped.id, ADMIN);
+      expect((await h.svc.wait(stopped.id)).status).toBe('stopped');
+      h.setManifest(copyOnly());
+      await expect(h.svc.resume('v1-import', stopped.id, ADMIN)).rejects.toThrow(REFUSAL);
+
+      h.setManifest(manifest());
+      const driven = await h.svc.start(START);
+      // The drive starts on the next turn, so it reads the copy-only manifest.
+      h.setManifest(copyOnly());
+      const done = await h.svc.wait(driven.id);
+      expect(done.status).toBe('failed');
+      expect(done.lastError).toMatch(REFUSAL);
+    });
+
+    it('lists both kinds of plugin as readers, and a plugin with neither import source nor capability as neither', async () => {
+      const h = await harness(keysOf(1));
+      expect(await h.svc.readers()).toEqual([{ id: 'v1-import', version: '1.2.0', connectorTypes: ['microsoft-sql'] }]);
+      h.setManifest(manifest({ importSource: undefined }));
+      expect(await h.svc.readers()).toEqual([]);
+      h.setManifest({ ...copyOnly(), capabilities: [] });
+      expect(await h.svc.readers()).toEqual([]);
+    });
+  });
+
   // The operator's rule: a plugin may not write records unless the audit log shows it.
   describe('audit is required before anything is written', () => {
     it('refuses to start when the start cannot be audited, and saves nothing', async () => {
