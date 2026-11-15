@@ -315,6 +315,7 @@ are confirmed.
 |---|---|
 | Groups 9 to 12 read as blank, so 64 parameters lose their coded answers | Confirmed in code and on 329 real results |
 | A request with two birth rows gets whichever the database returns first | Confirmed on real data: 2 of 3 sampled cases differed between two reads. The plugin takes the earliest date. Which date is right needs v1, in part 3 |
+| A request with two taken-date rows has the same unordered read as two birth rows | Claim, from the whole-branch review of the first build. The plugin takes the earliest |
 | Middle name is never set | Claim, from reading `specimenrecpt.ts` |
 | Two age decoders read different bytes | Claim |
 | The date of birth index is a `datetime` and may be lost as the taken date once was | Claim. The column type is confirmed |
@@ -335,6 +336,23 @@ change records the new count.
 5. Audit rules and the hold-back decision.
 6. `source_decode`, the real-data check at all four stages, and a measured decode speed.
 7. The faults of section 6.8.
+
+### 6.10 Carried from the first build into the next plan
+
+The first plan (steps 1 and 2 above) was built and reviewed on 2026-11-15. Its whole-branch
+review left two things for the next plan to do first.
+
+- **Group a page's rows by key once.** The decode finds a request's rows by scanning every
+  row of the page, once per request and per table. For a page of 500 requests that is millions
+  of row visits. It costs nothing today, because no entrypoint reaches the decode. Fix it
+  before `source_decode` is built.
+- **Decode rows that CE itself copied.** The fixtures and the real-data check both build rows
+  with a hand copy of CE's own row conversion. The two agree on everything seen so far, but no
+  row read back out of a CE copy has been decoded. When `source_decode` exists, run the
+  real-data check once on rows read out of a copy.
+
+Also not proven: the copy statements on a real SQL Server 2008 R2. They ran on SQL Server
+2025 against databases at compatibility level 100.
 
 ## 7. What is left to the builder
 
