@@ -78,17 +78,38 @@ export async function checkDataVersion(paths: VersionPaths, appVersion: string):
   }
 }
 
+/** What recordDataVersion replaced. null means it wrote nothing. */
+export interface ReplacedRecord {
+  /** The version the file held before, or null: no file, or a file with nothing to go by. */
+  previous: string | null;
+}
+
 /**
  * Records the current version as the one that last started the folder. runStart calls it just
  * before the server starts, because the server may migrate the database even when it then fails.
+ * When the server then fails and no migration ran, runStart puts the old record back with
+ * restoreDataVersion, using what this returns.
  */
-export async function recordDataVersion(paths: VersionPaths, appVersion: string): Promise<void> {
-  if (!knownVersion(appVersion)) return;
+export async function recordDataVersion(paths: VersionPaths, appVersion: string): Promise<ReplacedRecord | null> {
+  if (!knownVersion(appVersion)) return null;
   const recorded = await readRecorded(paths);
-  if (recorded === appVersion) return;
+  if (recorded === appVersion) return null;
   // A newer record is never lowered. runStart checks first, so it does not get here with one.
-  if (recorded !== null && compareVersions(recorded, appVersion) === 1) return;
+  if (recorded !== null && compareVersions(recorded, appVersion) === 1) return null;
+  await writeVersionFile(paths, appVersion);
+  return { previous: recorded };
+}
 
+/** Puts back what a record replaced: writes `previous`, or removes the file when it is null. */
+export async function restoreDataVersion(paths: VersionPaths, previous: string | null): Promise<void> {
+  if (previous === null) {
+    await rm(paths.versionFile, { force: true });
+    return;
+  }
+  await writeVersionFile(paths, previous);
+}
+
+async function writeVersionFile(paths: VersionPaths, version: string): Promise<void> {
   // A finished, flushed file is renamed over the old one, so a power cut leaves one or the other.
   const tmp = join(
     dirname(paths.versionFile),
@@ -97,7 +118,7 @@ export async function recordDataVersion(paths: VersionPaths, appVersion: string)
   try {
     const handle = await open(tmp, 'wx', 0o600);
     try {
-      await handle.writeFile(`${JSON.stringify({ version: appVersion })}\n`, 'utf8');
+      await handle.writeFile(`${JSON.stringify({ version })}\n`, 'utf8');
       await handle.sync();
     } finally {
       await handle.close();

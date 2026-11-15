@@ -16,7 +16,7 @@ import { loadConfig, type Config } from '@openldr/config';
 import { createLogger, makeCrashHandler, type Logger } from '@openldr/core';
 import type { RunningServer } from '@openldr/server/start';
 import { newControlToken, requestStop, startControl } from './control.js';
-import { checkDataVersion, recordDataVersion } from './data-version.js';
+import { checkDataVersion, recordDataVersion, restoreDataVersion } from './data-version.js';
 import { buildEnvironment } from './environment.js';
 import type { LauncherEvent } from './events.js';
 import {
@@ -61,6 +61,11 @@ export interface LauncherDeps {
    * no setup code: that program asks for one itself, and none is printed where it reads.
    */
   emit?: (e: LauncherEvent) => void;
+  /**
+   * Every migration not yet run, as one list: `internal:<name>` then `external:<name>`.
+   * Optional: without it a failed start leaves the record, as before.
+   */
+  pendingMigrations?: (cfg: Config) => Promise<string[]>;
 }
 
 export interface Launcher {
@@ -240,6 +245,21 @@ export class StopError extends Error {
 
 function portTakenMessage(port: number): string {
   return `Port ${port} is already in use. Choose another with --port.`;
+}
+
+/** The migrations not yet run, or null when there is no way to read them or the read failed. */
+async function readPending(deps: LauncherDeps, cfg: Config): Promise<string[] | null> {
+  if (!deps.pendingMigrations) return null;
+  try {
+    return await deps.pendingMigrations(cfg);
+  } catch {
+    return null;
+  }
+}
+
+/** The same names in the same order. */
+function sameNames(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((name, i) => name === b[i]);
 }
 
 /** Binds the HTTP port for a moment, to fail with a clear message before Postgres starts. */
@@ -594,14 +614,25 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
     }
 
     // 10. The server. A start that reaches the server may migrate the database, even when the
-    //     server then fails to start. So the folder is marked with this version first. A record
-    //     without a migration refuses an older launcher safely; a migration without a record lets
-    //     it through to a migration error that tells the person nothing.
-    await recordDataVersion(paths, deps.appVersion);
+    //     server then fails to start. So the folder is marked with this version first. A migration
+    //     without a record lets an older launcher through to a migration error that tells the
+    //     person nothing. A record without a migration would lock that launcher out for no reason,
+    //     so when the server fails, the list of migrations not yet run is read again. When it has
+    //     not changed, no migration ran and the old record goes back. When the list cannot be
+    //     read, the record stays.
+    const pendingBefore = await readPending(deps, cfg);
+    const replaced = await recordDataVersion(paths, deps.appVersion);
     deps.emit?.({ event: 'starting', step: 'server' });
     try {
       server = await deps.startServer(cfg, log);
     } catch (err) {
+      // Postgres is still up here. The teardown below stops it.
+      if (replaced && pendingBefore) {
+        const pendingAfter = await readPending(deps, cfg);
+        if (pendingAfter && sameNames(pendingBefore, pendingAfter)) {
+          await restoreDataVersion(paths, replaced.previous).catch(() => {});
+        }
+      }
       if (errorCode(err) === 'EADDRINUSE') throw new Error(portTakenMessage(opts.port));
       throw err;
     }

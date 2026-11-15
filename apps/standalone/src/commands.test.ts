@@ -773,6 +773,161 @@ describe('runStart and the version that last used the data folder', () => {
     await expectNothingLeft(f);
   });
 
+  /**
+   * A fake pendingMigrations. Each read gives the next entry: a list, or an error to throw. Each
+   * read also goes into f.order, so a test can see where it happened.
+   */
+  function pendingReads(f: Fakes, lists: Array<string[] | Error>): { count: number; cfgs: Config[] } {
+    const reads = { count: 0, cfgs: [] as Config[] };
+    f.deps.pendingMigrations = async (cfg) => {
+      const next = lists[Math.min(reads.count, lists.length - 1)]!;
+      reads.count += 1;
+      reads.cfgs.push(cfg);
+      f.order.push('migrations.read');
+      if (next instanceof Error) throw next;
+      return [...next];
+    };
+    return reads;
+  }
+
+  function serverFails(f: Fakes, err: Error = new Error('boom')): void {
+    f.deps.startServer = async () => {
+      f.order.push('server.start');
+      throw err;
+    };
+  }
+
+  const PENDING = ['internal:001_a', 'internal:002_b', 'external:001_c'];
+
+  describe('a start whose server fails and migrated nothing', () => {
+    it('puts the older record back', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      const reads = pendingReads(f, [PENDING, PENDING]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(await readFile(paths.versionFile, 'utf8')).toBe('{"version":"0.1.0"}\n');
+      expect(reads.count).toBe(2);
+      await expectNothingLeft(f);
+    });
+
+    it('removes the record when there was none before', async () => {
+      const f = fakes();
+      pendingReads(f, [PENDING, PENDING]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      await expect(readFile(paths.versionFile, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+      await expectNothingLeft(f);
+    });
+
+    it('reads the list again before Postgres is stopped', async () => {
+      const f = fakes();
+      pendingReads(f, [PENDING, PENDING]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(f.order).toEqual(['pg.leftover', 'pg.start', 'migrations.read', 'server.start', 'migrations.read', 'pg.stop']);
+    });
+
+    it('still says the port is taken, and puts the record back', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      pendingReads(f, [PENDING, PENDING]);
+      serverFails(
+        f,
+        Object.assign(new Error(`listen EADDRINUSE: address already in use 127.0.0.1:${PORT}`), { code: 'EADDRINUSE' }),
+      );
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(
+        `Port ${PORT} is already in use. Choose another with --port.`,
+      );
+      expect(await readFile(paths.versionFile, 'utf8')).toBe('{"version":"0.1.0"}\n');
+      await expectNothingLeft(f);
+    });
+  });
+
+  describe('a start whose server fails keeps the new record', () => {
+    it('when a migration ran: the lists differ', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      pendingReads(f, [PENDING, PENDING.slice(1)]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+      await expectNothingLeft(f);
+    });
+
+    it('when the same names come back in another order', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      pendingReads(f, [PENDING, [...PENDING].reverse()]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+    });
+
+    it('when the second read throws, and the start error is the one thrown', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      const reads = pendingReads(f, [PENDING, new Error('second read boom')]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+      expect(reads.count).toBe(2);
+      await expectNothingLeft(f);
+    });
+
+    it('when the first read threw: the start went on, and nothing is read again', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      const reads = pendingReads(f, [new Error('first read boom'), PENDING]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(f.order).toContain('server.start');
+      expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+      expect(reads.count).toBe(1);
+      await expectNothingLeft(f);
+    });
+
+    it('when there is no pendingMigrations', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      expect(f.deps.pendingMigrations).toBeUndefined();
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+      await expectNothingLeft(f);
+    });
+  });
+
+  it('a start whose first read throws still starts', async () => {
+    const f = fakes();
+    pendingReads(f, [new Error('first read boom')]);
+    await start(f.deps);
+    expect(f.server.started).toBe(true);
+    expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+  });
+
+  it('a start that works reads the list once, with the config the server gets', async () => {
+    await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+    const f = fakes();
+    const reads = pendingReads(f, [PENDING, PENDING]);
+    await start(f.deps);
+    expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+    expect(reads.count).toBe(1);
+    expect(reads.cfgs[0]).toBe(f.server.cfg);
+  });
+
+  it('a failed start on a folder that already holds this version leaves the file and reads the list once', async () => {
+    await writeFile(paths.versionFile, '{"version":"0.1.11"}\n');
+    const f = fakes();
+    expect(f.deps.appVersion).toBe('0.1.11');
+    const reads = pendingReads(f, [PENDING, PENDING]);
+    serverFails(f);
+    await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+    expect(await readFile(paths.versionFile, 'utf8')).toBe('{"version":"0.1.11"}\n');
+    expect(reads.count).toBe(1);
+    await expectNothingLeft(f);
+  });
+
   it('a version record that cannot be written fails the start, stops Postgres and releases the lock', async () => {
     // A folder where the file should be: the read gives nothing to go by, and the rename over it fails.
     await mkdir(paths.versionFile);

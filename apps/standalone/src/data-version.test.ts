@@ -2,7 +2,13 @@ import { chmod, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { checkDataVersion, compareVersions, newerDataMessage, recordDataVersion } from './data-version.js';
+import {
+  checkDataVersion,
+  compareVersions,
+  newerDataMessage,
+  recordDataVersion,
+  restoreDataVersion,
+} from './data-version.js';
 
 const WINDOWS = process.platform === 'win32';
 /** A file mode 000 is still readable by root, so that case is skipped there. */
@@ -176,5 +182,46 @@ describe('recordDataVersion', () => {
     await writeFile(paths.versionFile, '{"version":"0.2.0"}\n');
     await recordDataVersion(paths, '0.1.11');
     expect(await recorded()).toEqual({ version: '0.2.0' });
+  });
+
+  it('says what it replaced: the older version, or null when there was no file', async () => {
+    await expect(recordDataVersion(paths, '0.1.9')).resolves.toEqual({ previous: null });
+    await expect(recordDataVersion(paths, '0.1.11')).resolves.toEqual({ previous: '0.1.9' });
+  });
+
+  it('says it replaced null when the file had nothing to go by', async () => {
+    await writeFile(paths.versionFile, 'not json');
+    await expect(recordDataVersion(paths, '0.1.11')).resolves.toEqual({ previous: null });
+  });
+
+  it.each([
+    ['the file already holds this version', '{"version":"0.1.11"}\n', '0.1.11'],
+    ['the file holds a newer version', '{"version":"0.2.0"}\n', '0.1.11'],
+    ['the current version is unknown', '{"version":"0.1.9"}\n', '0.0.0'],
+  ])('returns null when it writes nothing: %s', async (_what, text, current) => {
+    await writeFile(paths.versionFile, text);
+    await expect(recordDataVersion(paths, current)).resolves.toBeNull();
+    expect(await readFile(paths.versionFile, 'utf8')).toBe(text);
+  });
+});
+
+describe('restoreDataVersion', () => {
+  it.skipIf(WINDOWS)('writes the given version back, owner-only, and leaves no temp file', async () => {
+    await writeFile(paths.versionFile, '{"version":"0.1.11"}\n', { mode: 0o644 });
+    await restoreDataVersion(paths, '0.1.0');
+    expect(await readFile(paths.versionFile, 'utf8')).toBe('{"version":"0.1.0"}\n');
+    expect((await stat(paths.versionFile)).mode & 0o777).toBe(0o600);
+    expect(await readdir(dir)).toEqual(['last-version.json']);
+  });
+
+  it('removes the file when there was no record before', async () => {
+    await writeFile(paths.versionFile, '{"version":"0.1.11"}\n');
+    await restoreDataVersion(paths, null);
+    expect(await readdir(dir)).toEqual([]);
+  });
+
+  it('does not fail when there is no file to remove', async () => {
+    await expect(restoreDataVersion(paths, null)).resolves.toBeUndefined();
+    expect(await readdir(dir)).toEqual([]);
   });
 });
