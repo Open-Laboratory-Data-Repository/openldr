@@ -14,6 +14,8 @@ import { sha256Hex } from './hash';
 // Layer proven here: the BUILT WASM, run through the real Extism runner and the sink wrapper the
 // import service uses. The same golden files the Rust tests use are the oracle, so this shows the
 // wasm build maps exactly as the native build does. Not proven here: a database, or saving into CE.
+// This package cannot import the copy service, so the copy service's own checks on `import_copy`'s
+// answer run in packages/bootstrap/src/import-copy.v1-wasm.integration.test.ts.
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..', '..');
 const pluginDir = join(repo, 'reference-plugins', 'openldr-v1-import');
@@ -21,7 +23,7 @@ const wasmPath = join(pluginDir, 'plugin.wasm');
 const fixturesDir = join(repo, 'wasm', 'openldr-v1-import', 'tests', 'fixtures');
 const present = existsSync(wasmPath);
 const logger = { info() {}, error() {}, warn() {}, debug() {} } as never;
-const ENTRYPOINTS = ['import_queries', 'import_checks', 'import_map'];
+const ENTRYPOINTS = ['import_queries', 'import_checks', 'import_map', 'import_copy'];
 
 function sink() {
   const wasm = new Uint8Array(readFileSync(wasmPath));
@@ -47,8 +49,9 @@ describe.skipIf(!present)('openldr-v1-import wasm', () => {
     const manifest = parseArtifactManifest(JSON.parse(readFileSync(join(pluginDir, 'manifest.json'), 'utf8')));
     expect(manifest.payload.kind === 'plugin' && manifest.payload.importSource).toEqual({
       connectorTypes: ['microsoft-sql'], sourceSystem: 'openldr-v1',
-      entrypoints: { queries: 'import_queries', checks: 'import_checks', map: 'import_map' },
+      entrypoints: { queries: 'import_queries', checks: 'import_checks', map: 'import_map', copy: 'import_copy' },
     });
+    expect(manifest.payload.kind === 'plugin' && manifest.payload.entrypoints).toEqual(ENTRYPOINTS);
     expect(manifest.capabilities.map((c) => c.kind)).toEqual(['host:import', 'emit-fhir']);
     expect(manifest.payload.kind === 'plugin' && manifest.payload.wasmSha256).toBe(sha256Hex(new Uint8Array(readFileSync(wasmPath))));
     // The page ships beside the wasm, is admin-only, and matches the hash the manifest pins.
@@ -63,6 +66,26 @@ describe.skipIf(!present)('openldr-v1-import wasm', () => {
       "SELECT DISTINCT TOP ({{limit}}) [RequestID] FROM [dbo].[Requests] WHERE [RequestID] > {{after}} AND [LIMSPanelCode] IN ('HIVVL', 'VIRAL') ORDER BY [RequestID]",
     );
     expect(out.detailQueries.map((d: { name: string }) => d.name)).toEqual(['requests', 'results', 'patients', 'ast']);
+  });
+
+  it('names one set to copy: the import key query, and every column of each table with the key first', async () => {
+    const options = { tz: '+02:00', database: 'OpenLDRData', panels: 'HIVVL' };
+    const s = sink();
+    const out = (await s.invoke('import_copy', { options })) as any;
+    const imp = (await s.invoke('import_queries', { options })) as any;
+    expect(Object.keys(out)).toEqual(['sets']);
+    expect(out.sets).toHaveLength(1);
+    expect(out.sets[0].name).toBe('requests');
+    expect(out.sets[0].keyQuery).toEqual(imp.keyQuery);
+    expect(out.sets[0].detailQueries).toEqual([
+      { name: 'requests', sql: 'SELECT [RequestID] AS [__key], * FROM [OpenLDRData].[dbo].[Requests] WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID], [OBRSetID]' },
+      { name: 'results', sql: 'SELECT [RequestID] AS [__key], * FROM [OpenLDRData].[dbo].[LabResults] WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID], [OBRSetID], [OBXSetID], [OBXSubID]' },
+      { name: 'patients', sql: 'SELECT [RequestID] AS [__key], * FROM [OpenLDRData].[dbo].[Patients] WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID]' },
+      { name: 'ast', sql: 'SELECT [RequestID] AS [__key], * FROM [OpenLDRData].[dbo].[ASTResults] WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode]' },
+    ]);
+    // The copy takes the import's options, and refuses the bad ones the same way.
+    await expect(s.invoke('import_copy', { options: {} })).rejects.toThrow(/tz/);
+    await expect(s.invoke('import_copy', { options: { tz: 'Z', where: '1=1' } })).rejects.toThrow(/unknown option where/);
   });
 
   it('returns checks, and fails clearly without a time zone', async () => {

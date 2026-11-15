@@ -51,7 +51,7 @@ const uiHtml = `<style>${css}</style><div id="app"></div><script>${js}</script>`
 writeFileSync(join(outDir, 'ui.html'), uiHtml);
 const uiSha = createHash('sha256').update(uiHtml).digest('hex');
 
-const ENTRYPOINTS = ['import_queries', 'import_checks', 'import_map'];
+const ENTRYPOINTS = ['import_queries', 'import_checks', 'import_map', 'import_copy'];
 // A full artifact manifest, not the flat legacy shape: `importSource` only exists on the
 // artifact payload, and the import service reads it from there.
 const manifest = {
@@ -81,7 +81,8 @@ const manifest = {
     importSource: {
       connectorTypes: ['microsoft-sql'],
       sourceSystem: 'openldr-v1',
-      entrypoints: { queries: 'import_queries', checks: 'import_checks', map: 'import_map' },
+      // `copy` names the rows CE copies to its own disk, as they are in the source.
+      entrypoints: { queries: 'import_queries', checks: 'import_checks', map: 'import_map', copy: 'import_copy' },
     },
     // The plugin's page in studio. Every import op is admin-only, so the page is too.
     ui: { entry: 'ui.html', sha256: uiSha, nav: { label: 'OpenLDR v1 import', icon: 'database', section: 'apps' }, uiSdkVersion: '1', requiredRoles: ['lab_admin'] },

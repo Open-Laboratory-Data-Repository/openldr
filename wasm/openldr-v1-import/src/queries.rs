@@ -156,6 +156,21 @@ fn detail(o: &Options, name: &str, cols: &[&str], order_by: &str) -> String {
     format!("SELECT {} FROM {} WHERE [RequestID] IN ({{{{keys}}}}) ORDER BY {}", columns(cols), table(o, name), order_by)
 }
 
+/// The ORDER BY of each table, shared by the import and the copy so the two read rows in one order.
+const REQUEST_ORDER: &str = "[RequestID], [OBRSetID]";
+const RESULT_ORDER: &str = "[RequestID], [OBRSetID], [OBXSetID], [OBXSubID]";
+const PATIENT_ORDER: &str = "[RequestID]";
+const AST_ORDER: &str = "[RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode]";
+
+/// A copy reads every column of its table, with the key first, so CE can file each row by it.
+fn copy_detail(o: &Options, name: &str, order_by: &str) -> String {
+    format!(
+        "SELECT [RequestID] AS [__key], * FROM {} WHERE [RequestID] IN ({{{{keys}}}}) ORDER BY {}",
+        table(o, name),
+        order_by
+    )
+}
+
 /// What `import_queries` returns: the key query and the four detail queries.
 pub fn queries(o: &Options) -> Value {
     // One key per request. A request can have several Requests rows (one per panel), so DISTINCT.
@@ -180,11 +195,29 @@ pub fn queries(o: &Options) -> Value {
     json!({
         "keyQuery": { "sql": key },
         "detailQueries": [
-            { "name": "requests", "sql": detail(o, "Requests", REQUEST_COLUMNS, "[RequestID], [OBRSetID]") },
-            { "name": "results", "sql": detail(o, "LabResults", RESULT_COLUMNS, "[RequestID], [OBRSetID], [OBXSetID], [OBXSubID]") },
-            { "name": "patients", "sql": detail(o, "Patients", PATIENT_COLUMNS, "[RequestID]") },
-            { "name": "ast", "sql": detail(o, "ASTResults", AST_COLUMNS, "[RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode]") },
+            { "name": "requests", "sql": detail(o, "Requests", REQUEST_COLUMNS, REQUEST_ORDER) },
+            { "name": "results", "sql": detail(o, "LabResults", RESULT_COLUMNS, RESULT_ORDER) },
+            { "name": "patients", "sql": detail(o, "Patients", PATIENT_COLUMNS, PATIENT_ORDER) },
+            { "name": "ast", "sql": detail(o, "ASTResults", AST_COLUMNS, AST_ORDER) },
         ],
+    })
+}
+
+/// What `import_copy` returns: one set, `requests`, paged by the import's own key query, with one
+/// detail query per table. The import's column lists skip ten Requests columns that later parts
+/// need, so a copy reads every column instead.
+pub fn copy(o: &Options) -> Value {
+    json!({
+        "sets": [{
+            "name": "requests",
+            "keyQuery": queries(o)["keyQuery"].clone(),
+            "detailQueries": [
+                { "name": "requests", "sql": copy_detail(o, "Requests", REQUEST_ORDER) },
+                { "name": "results", "sql": copy_detail(o, "LabResults", RESULT_ORDER) },
+                { "name": "patients", "sql": copy_detail(o, "Patients", PATIENT_ORDER) },
+                { "name": "ast", "sql": copy_detail(o, "ASTResults", AST_ORDER) },
+            ],
+        }],
     })
 }
 
@@ -288,6 +321,90 @@ mod tests {
         assert!(details[3]["sql"].as_str().unwrap().ends_with("ORDER BY [RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode]"));
         // The same 53 Requests columns v1-push reads.
         assert_eq!(REQUEST_COLUMNS.len(), 53);
+    }
+
+    #[test]
+    fn copy_is_one_set_with_the_import_queries() {
+        let o = opts(json!({ "tz": "Z" })).unwrap();
+        let c = copy(&o);
+        let sets = c["sets"].as_array().unwrap();
+        assert_eq!(sets.len(), 1);
+        assert_eq!(sets[0]["name"], "requests");
+        assert_eq!(sets[0]["keyQuery"], queries(&o)["keyQuery"]);
+        let details = sets[0]["detailQueries"].as_array().unwrap();
+        let names: Vec<&str> = details.iter().map(|d| d["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["requests", "results", "patients", "ast"]);
+        for d in details {
+            let sql = d["sql"].as_str().unwrap();
+            assert!(sql.starts_with("SELECT [RequestID] AS [__key], * FROM "), "{sql}");
+            assert!(sql.contains(" WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID]"), "{sql}");
+        }
+        // Each reads its own table, in the order the import reads it.
+        assert_eq!(
+            details[0]["sql"],
+            "SELECT [RequestID] AS [__key], * FROM [dbo].[Requests] WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID], [OBRSetID]"
+        );
+        assert_eq!(
+            details[1]["sql"],
+            "SELECT [RequestID] AS [__key], * FROM [dbo].[LabResults] WHERE [RequestID] IN ({{keys}}) \
+             ORDER BY [RequestID], [OBRSetID], [OBXSetID], [OBXSubID]"
+        );
+        assert_eq!(
+            details[2]["sql"],
+            "SELECT [RequestID] AS [__key], * FROM [dbo].[Patients] WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID]"
+        );
+        assert_eq!(
+            details[3]["sql"],
+            "SELECT [RequestID] AS [__key], * FROM [dbo].[ASTResults] WHERE [RequestID] IN ({{keys}}) \
+             ORDER BY [RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode]"
+        );
+        // The copy orders each table as the import does.
+        let import = queries(&o);
+        for (c, i) in details.iter().zip(import["detailQueries"].as_array().unwrap()) {
+            let order = |s: &Value| s["sql"].as_str().unwrap().split(" ORDER BY ").nth(1).unwrap().to_string();
+            assert_eq!(order(c), order(i), "{}", c["name"]);
+        }
+    }
+
+    #[test]
+    fn copy_reads_the_database_the_option_names() {
+        let o = opts(json!({ "tz": "Z", "database": "OpenLDRData" })).unwrap();
+        let c = copy(&o);
+        let set = &c["sets"][0];
+        assert!(set["keyQuery"]["sql"].as_str().unwrap().contains("FROM [OpenLDRData].[dbo].[Requests] "));
+        let tables = ["Requests", "LabResults", "Patients", "ASTResults"];
+        for (d, t) in set["detailQueries"].as_array().unwrap().iter().zip(tables) {
+            let sql = d["sql"].as_str().unwrap();
+            assert!(sql.contains(&format!("FROM [OpenLDRData].[dbo].[{t}] WHERE ")), "{sql}");
+            assert!(!sql.contains("FROM [dbo]."), "{sql}");
+        }
+    }
+
+    #[test]
+    fn copy_takes_the_same_options_and_refuses_the_same_bad_ones() {
+        let o = opts(json!({ "tz": "+02:00", "database": "OpenLDRData", "panels": "HIVVL,VIRAL", "from": "2024-01-01", "to": "2024-12-31" })).unwrap();
+        let c = copy(&o);
+        // The filters reach the copy's key query exactly as they reach the import's.
+        assert_eq!(c["sets"][0]["keyQuery"], queries(&o)["keyQuery"]);
+        let key = c["sets"][0]["keyQuery"]["sql"].as_str().unwrap();
+        assert!(key.contains("AND [LIMSPanelCode] IN ('HIVVL', 'VIRAL')"), "{key}");
+        assert!(key.contains("AND [RegisteredDateTime] >= '2024-01-01'"), "{key}");
+        assert!(key.contains("AND [RegisteredDateTime] < DATEADD(day, 1, '2024-12-31')"), "{key}");
+        // The detail queries take no filter: the key query already chose the requests.
+        for d in c["sets"][0]["detailQueries"].as_array().unwrap() {
+            let sql = d["sql"].as_str().unwrap();
+            assert!(!sql.contains("LIMSPanelCode") && !sql.contains("RegisteredDateTime"), "{sql}");
+        }
+        // The entrypoint parses options the same way, so a bad one fails before any SQL is made.
+        let err = |options: Value| crate::import_copy(&json!({ "options": options })).unwrap_err();
+        assert!(err(json!({ "tz": "Z", "where": "1=1" })).contains("unknown option where"));
+        assert!(err(json!({ "tz": "Z", "database": "x]; DROP" })).contains("database"));
+        assert!(err(json!({ "tz": "Z", "panels": "HIVVL, a'b" })).contains("panels"));
+        assert!(err(json!({ "tz": "Z", "from": "2024-02-30" })).contains("from"));
+        assert!(err(json!({ "tz": "Z", "from": "2024-03-01", "to": "2024-02-01" })).contains("from"));
+        assert!(err(json!({})).contains("tz"));
+        let ok = crate::import_copy(&json!({ "options": { "tz": "+02:00", "database": "OpenLDRData", "panels": "HIVVL,VIRAL", "from": "2024-01-01", "to": "2024-12-31" } })).unwrap();
+        assert_eq!(ok, c);
     }
 
     #[test]
