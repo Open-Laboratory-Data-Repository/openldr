@@ -30,7 +30,7 @@ Before the last try I made a trigger that does nothing, `dbo.proof_noop`, so the
 - `SELECT 1 AS x ENABLE TRIGGER ALL ON dbo.proof` failed with error 102 near `ENABLE`.
 - `SELECT 1 AS x; DISABLE TRIGGER ALL ON dbo.proof` ran and turned the trigger off.
 
-So on this server, in the three positions I tried, `ENABLE TRIGGER` and `DISABLE TRIGGER` could not follow a SELECT without a semicolon. Once 4.1 stops a semicolon hiding behind a string, the semicolon rule already catches them. The pair rule in 4.2 then catches nothing more. It refuses no working query either, because `trigger` is reserved. Keeping it costs nothing.
+So on this server `DISABLE TRIGGER` could not follow a SELECT without a semicolon in the three positions I tried: after a table alias, after a table name, and after `AS x`. `ENABLE TRIGGER` could not either, in the one position I tried, after `AS x`. Once 4.1 stops a semicolon hiding behind a string, the semicolon rule already catches them. The pair rule in 4.2 then catches nothing more. It refuses no working query either, because `trigger` is reserved. Keeping it costs nothing.
 
 ## The words of spec 4.2
 
@@ -126,7 +126,7 @@ A temp table lives only in the session that made it, and the runner opens a new 
 
 With `-- exec later` at the end, the runner sent `set rowcount 10000; SELECT id FROM dbo.rf -- exec later; set rowcount 0`. The line comment swallows the runner's own `; set rowcount 0`.
 
-I tried whether the row cap then stays on the session. A fresh scratch server held a table `dbo.cap (id int)` with exactly 3 rows. A script sent five requests in order on one `ConnectorDb` from `createConnectorDb`, the real driver path. Each printed `@@SPID`, and all five ran on the same session, 59. I ran the five twice and got the same output both times.
+I tried whether the row cap then stays on the session. A fresh scratch server held a table `dbo.cap (id int)` with exactly 3 rows. A script sent five requests in order on one `ConnectorDb` from `createConnectorDb`, the real driver path. The four that return rows each printed `@@SPID` 59. Request d returns no rows, so it printed no session id. I ran the five twice and got the same output both times.
 
 | Request | Rows returned |
 |---------|---------------|
@@ -136,9 +136,24 @@ I tried whether the row cap then stays on the session. A fresh scratch server he
 | d. `set lock_timeout 1234` | 0 |
 | e. `SELECT @@LOCK_TIMEOUT AS t, @@SPID AS spid` | 1, with `t` = -1 |
 
-Request b returned 1 row, so its cap was in force for its own query. Request c returned all 3 rows on the same session. So the row cap did not outlive its request, even with its reset swallowed. A `set lock_timeout 1234` sent as its own request was not in force for the next request on the same session. Request e read `@@LOCK_TIMEOUT` as -1, the server's default.
+Request b returned 1 row, so its cap was in force for its own query. Request c returned all 3 rows on the same session. So the row cap was not in force on the next request, even with its reset swallowed. A `set lock_timeout 1234` sent as its own request was not in force on the next request either. Request e read `@@LOCK_TIMEOUT` as -1.
 
-The driver shows how each request is sent. Kysely runs every query with `execSql` (`kysely@0.28.17`, `dist/cjs/dialect/mssql/mssql-driver.js:130`). Tedious sends that text as the `statement` parameter of `sp_executesql` (`tedious@18.6.2`, `lib/connection.js:1638-1660`). Requests c and e fit that. The `SET` in requests b and d ended with its own request.
+That try alone has two possible causes. Each `db.query` takes a connection from the pool and gives it back after the request. This store resets a connection when it is given back (`resetConnectionsOnRelease: true`, `packages/adapter-mssql-store/src/index.ts:44`, run by Kysely at `mssql-driver.js:57-62`). The other cause is the way each request is sent. Kysely runs every query with `execSql` (`kysely@0.28.17`, `dist/cjs/dialect/mssql/mssql-driver.js:130`). Tedious sends that text as the `statement` parameter of `sp_executesql` (`tedious@18.6.2`, `lib/connection.js:1638-1660`).
+
+So I tried again inside one transaction, where the connection is not given back between requests. A fresh scratch server held `dbo.cap` with 3 rows. A script built the store with `createMssqlStore` and the settings `createConnectorDb` uses, then sent six separate requests inside one `store.db.transaction()`. I ran it three times. Requests a to e printed the same output each time. Request f was added in the third run only. The requests that return rows each printed session 57. Requests a and c return no rows, so they printed no session id.
+
+| Request | Rows returned |
+|---------|---------------|
+| a. `set lock_timeout 1234` | 0 |
+| b. `SELECT @@LOCK_TIMEOUT AS t, @@SPID AS spid` | 1, with `t` = -1 |
+| c. `set rowcount 1` | 0 |
+| d. `SELECT id, @@SPID AS spid FROM dbo.cap` | 3 |
+| e. `SELECT @@TRANCOUNT AS trancount, @@SPID AS spid` | 1, with `trancount` = 1 |
+| f. `set lock_timeout 1234; SELECT @@LOCK_TIMEOUT AS t, @@SPID AS spid` | 1, with `t` = 1234 |
+
+Request e shows the transaction was still open. Request f shows the `SET` works inside its own request. Yet b read -1 and d returned all 3 rows. No connection went back to the pool between them, so no reset ran. So the request's own scope ended each setting. That points to `sp_executesql` as the cause, both outside a transaction and inside one.
+
+One result for Task 5 follows from this. `runReadQuery` sends `set lock_timeout` as its own request and the query after it, inside one transaction (`packages/dashboards/src/sql-runner.ts:113-126`). By this try, that lock timeout is not in force when the query runs. I did not run `runReadQuery` itself.
 
 Any text that 4.4 adds after the person's SQL in the same request can be swallowed by a trailing line comment, a roll-back included. A roll-back sent as its own request is not.
 
