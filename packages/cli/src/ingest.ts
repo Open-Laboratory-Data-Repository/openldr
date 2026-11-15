@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { createIngestContext } from '@openldr/bootstrap';
+import { createIngestContext, ingestAndWait, type IngestWait } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 
 interface JsonOpt {
@@ -19,35 +19,24 @@ function loadPluginConfig(path?: string): Record<string, string> | undefined {
   return out;
 }
 
-const FINISHED = new Set(['done', 'failed']);
-
 export async function runIngest(
   file: string,
   opts: JsonOpt & { source: string; converter: string; config?: string },
-  wait: { intervalMs: number; timeoutMs: number } = { intervalMs: 500, timeoutMs: 60_000 },
+  wait: IngestWait = { intervalMs: 500, timeoutMs: 60_000 },
 ): Promise<number> {
   const ctx = await createIngestContext(loadConfig());
   try {
     const data = readFileSync(file);
     const config = loadPluginConfig(opts.config);
-    const { batchId } = await ctx.accept({ data: new Uint8Array(data), source: opts.source, converter: opts.converter, filename: basename(file), config });
-    await ctx.drain();
-    // A running API server's worker may claim the batch before this drain does, and then the drain
-    // finds nothing. Wait for whichever process has it to finish, rather than reading it mid-run.
-    let batch = await ctx.batches.get(batchId);
-    const deadline = Date.now() + wait.timeoutMs;
-    while (batch && !FINISHED.has(batch.status) && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, wait.intervalMs));
-      batch = await ctx.batches.get(batchId);
-    }
-    const finished = !!batch && FINISHED.has(batch.status);
+    // ingestAndWait also waits when a running API server's worker claims the batch first.
+    const out = await ingestAndWait(ctx, { data: new Uint8Array(data), source: opts.source, converter: opts.converter, filename: basename(file), config }, wait);
     emit(
       opts.json,
-      { batchId, status: batch?.status, resourceCount: batch?.resource_count, error: batch?.last_error, finished },
-      `batch ${batchId}: ${batch?.status} (${batch?.resource_count ?? 0} resources)${batch?.last_error ? ' — ' + batch.last_error : ''}` +
-        (finished ? '' : `\nstill ${batch?.status ?? 'unknown'} after ${Math.round(wait.timeoutMs / 1000)}s; another process may be working on it. Check with: openldr pipeline status`),
+      out,
+      `batch ${out.batchId}: ${out.status} (${out.resourceCount ?? 0} resources)${out.error ? ' — ' + out.error : ''}` +
+        (out.finished ? '' : `\nstill ${out.status ?? 'unknown'} after ${Math.round(wait.timeoutMs / 1000)}s; another process may be working on it. Check with: openldr pipeline status`),
     );
-    return batch?.status === 'done' ? 0 : 1;
+    return out.status === 'done' ? 0 : 1;
   } finally {
     await ctx.close();
   }

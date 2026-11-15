@@ -124,7 +124,7 @@ Ces exercices facultatifs utilisent des dossiers fictifs et des résultats connu
 
 ### Charger les données d'exemple
 
-Le fichier contient **60 demandes fictives** de septembre et octobre 2026. Utilisez une installation de test vide. Importer le fichier écrit des dossiers dans cette installation.
+Le fichier contient **60 demandes fictives** de septembre et octobre 2026. Utilisez une installation de test vide. Importer le fichier écrit des dossiers dans cette installation. Si vous avez choisi **Charger les données d'exemple** au premier démarrage ou dans Paramètres → Vérifications d’installation, ces 60 demandes sont déjà chargées, et vous pouvez passer directement à l'[Exemple 1](#exemple-1-creer-un-widget-de-demandes-par-examen).
 
 Pour ouvrir un terminal et exécuter les commandes, consultez [Commencer ici](/docs/start-here#utiliser-la-ligne-de-commande) ou ses [instructions de développement](/docs/start-here#exemple-1-utiliser-la-cli-dans-un-environnement-de-developpement). Remplacez le dossier d'exemple par le vôtre.
 
@@ -568,7 +568,7 @@ PostgreSQL, MySQL, MariaDB et SQL Server arrêtent tous le travail de la base au
 
 **Mes totaux sont différents.** Les résultats supposent que seules les données d'exemple sont chargées. Les autres données changent les totaux.
 
-- **Chaque chiffre vaut 0 et chaque graphique affiche No data.** L'entrepôt est vide. [Chargez les données d'exemple](#charger-les-donnees-d-exemple), ou chargez les vôtres.
+- **Chaque chiffre vaut 0 et chaque graphique affiche No data.** L'entrepôt est vide. [Chargez les données d'exemple](#charger-les-donnees-d-exemple), ou chargez les vôtres. Tant que l'installation ne contient aucune donnée de laboratoire, vous pouvez aussi charger les données d'exemple depuis le menu à trois points de Paramètres → Vérifications d’installation.
 - **Aucun tableau de bord n'apparaît.** Il n'en existe encore aucun. La page vide propose **Nouveau tableau de bord** et **Importer**.
 - **Edit n'apparaît pas dans le menu.** Votre rôle n'a pas **Edit dashboards**.
 - **Le SQL n'est pas modifiable, ou l'enregistrement affiche `raw SQL widgets are disabled`.** Activez **SQL brut pour les tableaux de bord**. Voir [Activer les widgets SQL](#activer-les-widgets-sql).

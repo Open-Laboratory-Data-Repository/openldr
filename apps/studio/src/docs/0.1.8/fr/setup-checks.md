@@ -106,7 +106,7 @@ Sélectionnez **Run again**. Attendez la fin des vérifications.
 
 ## Charger les données d'exemple
 
-Utilisez cette action pour essayer OpenLDR sur une nouvelle installation. Elle charge les mêmes données d'exemple que l'étape des données d'exemple du [Premier démarrage](/docs/first-run). Le menu ne la propose que tant que l'installation ne contient aucune donnée de laboratoire. Vous avez besoin de la permission Zone de danger. Administrator l'a.
+Utilisez cette action pour essayer OpenLDR sur une nouvelle installation. Elle charge les mêmes données d'exemple que l'étape des données d'exemple du [Premier démarrage](/docs/first-run) : 60 demandes fictives, dont 39 avec leurs résultats, et un tableau de bord d'exemple. Une fois chargées, les demandes d'exemple restent en place. Aucune action ne supprime uniquement ces demandes, et **Réinitialisation usine** les laisse en place. Le menu ne la propose que tant que l'installation ne contient aucune donnée de laboratoire. Vous avez besoin de la permission Zone de danger. Administrator l'a.
 
 ### 1. Ouvrir les actions de la page
 
@@ -160,7 +160,7 @@ Le rapport décrit les vérifications au moment de leur exécution. All checks p
 
 **Charger les données d'exemple n'est pas dans le menu.** L'installation contient déjà des données de laboratoire, ou votre rôle n'a pas la permission Zone de danger. Un patient, une demande d'analyse, un échantillon, un résultat, une réponse de formulaire enregistrée, une organisation ou un site comptent comme données de laboratoire.
 
-**Les données d'exemple n'ont pas pu être chargées :** suivi d'une raison. Le chargement ne s'est pas terminé. Une partie des données d'exemple peut déjà être en place. Un second essai est alors refusé, et l'élément disparaît du menu la prochaine fois que vous ouvrez la page. Le journal du serveur nomme l'erreur.
+**Impossible de charger les données d'exemple :** suivi d'une raison. Le chargement ne s'est pas terminé. Une partie des données d'exemple peut déjà être en place. Un second essai est alors refusé, et l'élément disparaît du menu la prochaine fois que vous ouvrez la page. Le journal du serveur nomme l'erreur.
 
 ## Guides associés
 

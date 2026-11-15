@@ -1,6 +1,60 @@
 {
-  "generatedAt": "2026-11-13",
+  "generatedAt": "2026-11-15",
   "days": [
+    {
+      "date": "2026-11-15",
+      "version": null,
+      "entries": [
+        {
+          "hash": "435071ce",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The sample data sentence says what loads and what cannot be undone"
+        },
+        {
+          "hash": "475d7928",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "The check after a failed start gives up after 10 seconds"
+        },
+        {
+          "hash": "d054e3f9",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Sample orders carry their own source label"
+        },
+        {
+          "hash": "73d9a9ae",
+          "type": "fix",
+          "scope": "desktop",
+          "title": "Plain wording for three of the app's own messages"
+        },
+        {
+          "hash": "2aed9375",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Plain wording for the first run, and the right setup hint inside the desktop app"
+        },
+        {
+          "hash": "90411fff",
+          "type": "fix",
+          "scope": "install",
+          "title": "The stop hint ends with the command, so a copied line runs"
+        },
+        {
+          "hash": "6a37e349",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "A failed start that migrated nothing puts the old version record back"
+        },
+        {
+          "hash": "f204548e",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Load sample data also loads the 60 sample orders, so the sample dashboard shows numbers"
+        }
+      ]
+    },
     {
       "date": "2026-11-13",
       "version": null,

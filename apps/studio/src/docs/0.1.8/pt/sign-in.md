@@ -95,7 +95,7 @@ Uma instalação nova não tem contas. Enquanto ninguém criar o primeiro admini
 
 Executar o comando de novo substitui o código anterior. Enquanto o primeiro administrador não existir, o `openldr doctor` mostra um aviso na sua linha Sign-in. Veja [Verificações de instalação](/docs/setup-checks).
 
-Na aplicação OpenLDR, salta os passos 1 e 3. A aplicação preenche **Código de configuração**, e a indicação por baixo do campo diz **Preenchido pela aplicação OpenLDR.**
+Na aplicação OpenLDR, salta os passos 1 e 3. A aplicação introduz o código em **Código de configuração**, e a indicação por baixo do campo diz **A aplicação OpenLDR introduziu este código por si.**
 
 ## Juntar uma pessoa com uma palavra-passe temporária
 
@@ -176,7 +176,7 @@ openldr user end-sessions <username>
 - **O Studio mandou-me de volta para a página de início de sessão.** A sessão terminou. Isso acontece após 12 horas sem uso, após 7 dias, quando um administrador a termina, ou quando altera a palavra-passe noutro dispositivo. Inicie sessão de novo.
 - **Não foi possível contactar o servidor. Tente novamente.** O Studio não consegue contactar o servidor. Verifique a sua ligação e tente novamente.
 - **A página de configuração diz que o código está errado ou expirou.** Um código dura 30 minutos, e cada código novo substitui o anterior. Execute `openldr auth setup-code` de novo e escreva o código mais recente.
-- **Na aplicação OpenLDR, o campo do código de configuração está vazio.** A aplicação só o preenche para um OpenLDR que ela própria iniciou. Selecione **Sair** no menu do ícone de notificação da aplicação e abra a aplicação de novo. A aplicação preenche então o código. Também pode executar o comando `openldr-standalone` da aplicação com `cli -- auth setup-code`, e escrever o código. No Linux, o comando é `~/.local/share/openldr-desktop/openldr-standalone`. No macOS, é `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone`. No Windows, no PowerShell, execute `& "$env:LOCALAPPDATA\Programs\OpenLDR\openldr-standalone.cmd" cli -- auth setup-code`. Uma instalação de computador não tem o comando `openldr`, por isso a indicação por baixo do campo não se aplica aí.
+- **Na aplicação OpenLDR, o campo do código de configuração está vazio.** A aplicação só introduz o código para um OpenLDR que ela própria iniciou. A indicação por baixo do campo diz então **Selecione Sair no menu da área de notificação e volte a abrir o OpenLDR. Depois, a aplicação introduz o código por si.** Selecione **Sair** no menu do ícone de notificação da aplicação e volte a abrir a aplicação. Uma instalação de computador não tem o comando `openldr`. Também pode executar o comando `openldr-standalone` da aplicação com `cli -- auth setup-code`, e escrever o código. No Linux, o comando é `~/.local/share/openldr-desktop/openldr-standalone`. No macOS, é `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone`. No Windows, no PowerShell, execute `& "$env:LOCALAPPDATA\Programs\OpenLDR\openldr-standalone.cmd" cli -- auth setup-code`.
 - **A página de configuração diz que o nome de utilizador já está em uso.** Escolha outro nome de utilizador.
 - **A página de configuração diz que já existe um administrador.** Outra pessoa terminou a configuração primeiro. Selecione **Iniciar sessão**.
 - **O último administrador esqueceu-se da palavra-passe.** Alguém com acesso ao servidor executa `openldr user reset-password <username> --force`. O comando mostra uma palavra-passe temporária.

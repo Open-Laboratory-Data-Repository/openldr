@@ -3,6 +3,11 @@ import type { Config } from '@openldr/config';
 import type { ExternalSchema, TargetEngine } from '@openldr/db';
 import { createDbContext } from './db-context';
 import { seedDatabase, type FormSeedTarget } from './seed';
+import { createIngestContext } from './ingest-context';
+import { ingestAndWait, type IngestOutcome } from './ingest-and-wait';
+// A copy of apps/web/public/docs-samples/openldr-sample-lab-data.json. A package may not import
+// from an app. sample-data.test.ts checks the two copies are byte-identical.
+import sampleLabData from './samples/sample-lab-data.json';
 
 // Sample data from Studio. The same seed `openldr db seed` runs, but only into an install that
 // holds no lab data. This file must not import from './index': index.ts re-exports it, and
@@ -30,6 +35,8 @@ export interface SampleDataDeps {
   listByType(resourceType: string, limit: number): Promise<unknown[]>;
   /** What seedDatabase writes forms, workflows, connectors and dashboards through. */
   seedTarget: FormSeedTarget;
+  /** Loads the sample orders and waits. Injectable for tests. Defaults to the real one. */
+  ingestSampleOrders?: (cfg: Config) => Promise<IngestOutcome>;
 }
 
 export interface SampleDataCounts {
@@ -38,6 +45,8 @@ export interface SampleDataCounts {
   connectorsSeeded: number;
   dashboardsSeeded: number;
   settingsSeeded: number;
+  /** Resources in the sample orders batch. 226 for the file as shipped. */
+  sampleResources: number;
 }
 
 async function tableHasRow(deps: SampleDataDeps, table: (typeof LAB_DATA_TABLES)[number]): Promise<boolean> {
@@ -58,19 +67,47 @@ export async function installHoldsLabData(deps: SampleDataDeps): Promise<boolean
   return false;
 }
 
-/** Loads what `openldr db seed` loads, by calling the same seedDatabase. */
+/** The source label on the sample orders batch. It differs from `openldr ingest`'s default `cli`, so
+ *  pipeline status, the warehouse `source_system` columns and a workflow source filter can tell the
+ *  sample batch apart from a real import. The seed labels its own rows `seed` the same way. */
+export const SAMPLE_ORDERS_SOURCE = 'sample-data';
+
+/** Loads the 60 sample orders through the same ingest path as `openldr ingest`, and waits. It makes
+ *  its own ingest context, because the server's app context does not carry one. */
+async function ingestSampleOrders(cfg: Config): Promise<IngestOutcome> {
+  const ctx = await createIngestContext(cfg);
+  try {
+    return await ingestAndWait(ctx, {
+      data: new TextEncoder().encode(JSON.stringify(sampleLabData)),
+      source: SAMPLE_ORDERS_SOURCE,
+      converter: 'fhir-bundle',
+      filename: 'openldr-sample-lab-data.json',
+    });
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** Loads what `openldr db seed` loads, by calling the same seedDatabase, then the sample orders. */
 export async function loadSampleData(deps: SampleDataDeps): Promise<SampleDataCounts> {
   const dbCtx = await createDbContext(deps.cfg);
+  let r: Awaited<ReturnType<typeof seedDatabase>>;
   try {
-    const r = await seedDatabase(dbCtx, deps.seedTarget);
-    return {
-      formsSeeded: r.formsSeeded,
-      workflowsSeeded: r.workflowsSeeded,
-      connectorsSeeded: r.connectorsSeeded,
-      dashboardsSeeded: r.dashboardsSeeded,
-      settingsSeeded: r.settingsSeeded,
-    };
+    r = await seedDatabase(dbCtx, deps.seedTarget);
   } finally {
     await dbCtx.close();
   }
+  const orders = await (deps.ingestSampleOrders ?? ingestSampleOrders)(deps.cfg);
+  if (!orders.finished || orders.status !== 'done') {
+    // The status only. The batch's error text could hold a host or a path.
+    throw new Error(`The sample orders did not load. The batch status is ${orders.status ?? 'missing'}.`);
+  }
+  return {
+    formsSeeded: r.formsSeeded,
+    workflowsSeeded: r.workflowsSeeded,
+    connectorsSeeded: r.connectorsSeeded,
+    dashboardsSeeded: r.dashboardsSeeded,
+    settingsSeeded: r.settingsSeeded,
+    sampleResources: orders.resourceCount ?? 0,
+  };
 }

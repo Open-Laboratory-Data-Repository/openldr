@@ -60,17 +60,17 @@ On macOS the installer signs the app on your Mac with `codesign`, using a signat
 ## The first run
 
 1. Start the app. The window shows **Starting OpenLDR** while the database and the server start.
-2. Studio shows **Create the administrator**. The app fills in **Setup code**, and the hint under it says **Filled in by the OpenLDR app.**
+2. Studio shows **Create the administrator**. The app enters the code in **Setup code**, and the hint under it says **The OpenLDR app entered this code for you.**
 3. Choose a username and a password, then select **Create the administrator**.
-4. Three steps follow. Name the laboratory, load sample data, then see which setup checks still need you. You can skip the first two.
+4. Three steps follow. You name your laboratory, load sample data, then review the setup checks that need attention. You can skip the first two.
 
-Studio's own guide, **First run**, covers the three steps. Sample data is offered only while the install holds no lab data. If you skip it, Settings, Setup checks can load it later, from its dots menu.
+Studio's own guide, **First run**, covers the three steps. Sample data adds 60 fictional lab orders, 39 of them with results, and an example dashboard. No action removes only the sample orders later, and Factory reset leaves them in place. Only erasing all your data removes them, for example by deleting the data folder. Sample data is offered only while the install holds no lab data. If you skip it, you can load it later from the dots menu under Settings → Setup checks.
 
 The app loads Studio at `http://127.0.0.1:3000/studio/`. It takes port 3000 when that port is free. If not, it picks another free port and remembers it. The address then stays the same while that port stays free.
 
-The app fills in the setup code only for an OpenLDR it started itself. OpenLDR may already run when the app starts. You may have started it from a terminal. Or an app that was killed left it running. The app then shows that OpenLDR, and the setup code field stays empty.
+The app enters the setup code only for an OpenLDR it started itself. OpenLDR may already run when the app starts. You may have started it from a terminal. Or an app that was killed left it running. The app then shows that OpenLDR, and the setup code field stays empty. The hint under it says **Select Quit in the tray menu, then open OpenLDR again. The app will enter the code for you.**
 
-The simple way out is to select **Quit** in the tray menu and start the app again. The app then starts OpenLDR itself and fills in the code. Or run the app's `openldr-standalone` command, and type the code it prints:
+The simple way out is to select **Quit** in the tray menu and start the app again. The app then starts OpenLDR itself and enters the code. Or run the app's `openldr-standalone` command, and type the code it prints:
 
 | System | Command |
 | --- | --- |
@@ -106,13 +106,13 @@ Quit OpenLDR, then run the install line again. It replaces the app and leaves th
 The installer refuses while OpenLDR runs, before it downloads anything. On Linux and macOS it says:
 
 ```text
-✗ OpenLDR is running. Quit it from its tray icon, or run: "/home/you/.local/share/openldr-desktop/openldr-standalone" stop. Then run this again.
+✗ OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: "/home/you/.local/share/openldr-desktop/openldr-standalone" stop
 ```
 
 On Windows it says:
 
 ```text
-X OpenLDR is running. Quit it from its tray icon, or run: & "C:\Users\you\AppData\Local\Programs\OpenLDR\openldr-standalone.cmd" stop. Then run this again.
+X OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: & "C:\Users\you\AppData\Local\Programs\OpenLDR\openldr-standalone.cmd" stop
 ```
 
 The path in the message is the `openldr-standalone` command of your install. Quit OpenLDR from its tray icon, or run that `stop` line. Then run the install line again.
@@ -181,7 +181,7 @@ Read the message first, then the logs. `desktop.log` is the app's own log. It sh
 | --- | --- |
 | `This data folder was last used by OpenLDR <newer>. This is OpenLDR <older>, which is older and cannot open it. Install OpenLDR <newer> or newer.` | Install that version or a newer one. See below. |
 | `OpenLDR is not running. A recovery command is using the database (process <n>). Try again when it has finished.` | A command such as `openldr-standalone cli -- doctor` holds the data folder. Wait for it to end, then select **Try again**. |
-| `OpenLDR did not answer when the app asked whether it is running.` | Select **Try again**. If it comes back, read `desktop.log`. |
+| `OpenLDR did not respond to a status check.` | Select **Try again**. If it comes back, read `desktop.log`. |
 | `OpenLDR stopped unexpectedly.` | Read `server.log` and `postgres.log`, then select **Try again**. |
 | `OpenLDR is no longer running.` | Something stopped OpenLDR outside the app, such as `openldr-standalone stop` in a terminal. Select **Try again**. |
 | `OpenLDR is not built. Build it, then start the app again.` | In an installed app this means its files are missing. Run the install line again. |

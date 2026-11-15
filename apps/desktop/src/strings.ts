@@ -61,15 +61,15 @@ const en: AppStrings = {
   trayQuit: 'Quit',
   launcherEnded: 'OpenLDR stopped unexpectedly.',
   launcherGone: 'OpenLDR is no longer running.',
-  statusNoAnswer: 'OpenLDR did not answer when the app asked whether it is running.',
+  statusNoAnswer: 'OpenLDR did not respond to a status check.',
   notBuilt: 'OpenLDR is not built. Build it, then start the app again.',
-  lineHidden: 'A line from OpenLDR was hidden because it held a secret.',
+  lineHidden: 'A log line was hidden because it contained a secret.',
 };
 
 const fr: AppStrings = {
   windowTitle: 'OpenLDR',
   startingTitle: "Démarrage d'OpenLDR",
-  checkingNote: "Vérification : OpenLDR est-il déjà en cours d'exécution ?",
+  checkingNote: "Vérification si OpenLDR est déjà en cours d'exécution.",
   postgresNote: 'Démarrage de la base de données.',
   recoveringNote: 'La base de données est en cours de récupération après un arrêt brutal. Cela peut prendre quelques minutes.',
   serverNote: 'Démarrage du serveur.',
@@ -85,9 +85,9 @@ const fr: AppStrings = {
   trayQuit: 'Quitter',
   launcherEnded: "OpenLDR s'est arrêté de façon inattendue.",
   launcherGone: "OpenLDR n'est plus en cours d'exécution.",
-  statusNoAnswer: "OpenLDR n'a pas répondu quand l'application a vérifié s'il est en cours d'exécution.",
+  statusNoAnswer: "OpenLDR n'a pas répondu à une vérification d'état.",
   notBuilt: "OpenLDR n'est pas compilé. Compilez-le, puis relancez l'application.",
-  lineHidden: "Une ligne d'OpenLDR a été masquée, car elle contenait un secret.",
+  lineHidden: "Une ligne du journal a été masquée, car elle contenait un secret.",
 };
 
 const pt: AppStrings = {
@@ -109,9 +109,9 @@ const pt: AppStrings = {
   trayQuit: 'Sair',
   launcherEnded: 'O OpenLDR parou inesperadamente.',
   launcherGone: 'O OpenLDR já não está em execução.',
-  statusNoAnswer: 'O OpenLDR não respondeu quando a aplicação verificou se está em execução.',
+  statusNoAnswer: 'O OpenLDR não respondeu a uma verificação de estado.',
   notBuilt: 'O OpenLDR não está compilado. Compile-o e volte a abrir a aplicação.',
-  lineHidden: 'Uma linha do OpenLDR foi ocultada porque continha um segredo.',
+  lineHidden: 'Uma linha do registo foi ocultada porque continha um segredo.',
 };
 
 export const STRINGS: Record<Lang, AppStrings> = { en, fr, pt };

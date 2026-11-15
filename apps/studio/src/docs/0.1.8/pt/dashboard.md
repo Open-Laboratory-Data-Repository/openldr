@@ -124,7 +124,7 @@ Estes exercícios opcionais usam registos fictícios e resultados conhecidos. Ig
 
 ### Carregar os dados de exemplo
 
-O ficheiro contém **60 pedidos fictícios** de setembro e outubro de 2026. Use uma instalação de teste vazia. Importar o ficheiro escreve registos nessa instalação.
+O ficheiro contém **60 pedidos fictícios** de setembro e outubro de 2026. Use uma instalação de teste vazia. Importar o ficheiro escreve registos nessa instalação. Se escolheu **Carregar dados de exemplo** no primeiro arranque ou em Definições → Verificações de instalação, estes 60 pedidos já estão carregados, e pode passar diretamente para o [Exemplo 1](#exemplo-1-criar-um-widget-de-pedidos-por-exame).
 
 Para abrir um terminal e executar os comandos, consulte [Comece aqui](/docs/start-here#usar-a-linha-de-comandos) ou os [passos de desenvolvimento](/docs/start-here#exemplo-1-usar-a-cli-num-ambiente-de-desenvolvimento). Substitua a pasta de exemplo pela sua pasta real.
 
@@ -568,7 +568,7 @@ O PostgreSQL, o MySQL, o MariaDB e o SQL Server param todos o trabalho da base n
 
 **Os meus totais são diferentes.** Os resultados pressupõem apenas os registos de exemplo. Outros dados mudam os totais.
 
-- **Cada número é 0 e cada gráfico mostra No data.** O armazém está vazio. [Carregue os dados de exemplo](#carregar-os-dados-de-exemplo), ou carregue os seus.
+- **Cada número é 0 e cada gráfico mostra No data.** O armazém está vazio. [Carregue os dados de exemplo](#carregar-os-dados-de-exemplo), ou carregue os seus. Enquanto a instalação não tiver dados de laboratório, também pode carregar os dados de exemplo a partir do menu de três pontos em Definições → Verificações de instalação.
 - **Não aparece nenhum painel.** Ainda não existe nenhum. A página vazia oferece **Novo painel** e **Importar**.
 - **Edit não aparece no menu.** A sua função não tem **Edit dashboards**.
 - **O SQL não se pode editar, ou guardar mostra `raw SQL widgets are disabled`.** Ative **SQL bruto no painel**. Veja [Ativar os widgets SQL](#ativar-os-widgets-sql).

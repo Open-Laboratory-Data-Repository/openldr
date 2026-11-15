@@ -2175,6 +2175,7 @@ export {
   type PluginSitesState, type PluginSitesDeps,
 } from './plugin-sites';
 export * from './ingest-context';
+export { ingestAndWait, type IngestWait, type IngestOutcome } from './ingest-and-wait';
 export * from './target-store';
 export * from './terminology-context';
 export * from './s3-config';
