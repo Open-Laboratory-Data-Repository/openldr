@@ -134,6 +134,12 @@ describe('substituteParams: a token sits in plain SQL', () => {
     expect(substituteParams('SELECT [{{param.name}}]', [name], { name: 'x' })).toBe("SELECT ['x']");
   });
 
+  it('on postgres a token right after a lone E is refused', () => {
+    expect(() => substituteParams('SELECT E{{param.name}}', [name], { name: 'x' }, 'postgres'))
+      .toThrow('a {{param.name}} follows a lone E, which Postgres reads as the start of an escape string: put a space before it');
+    expect(substituteParams('SELECT E{{param.name}}', [name], { name: 'x' }, 'mssql')).toBe("SELECT E'x'");
+  });
+
   it('a string that is never closed is refused with the reader sentence', () => {
     expect(() => substituteParams("SELECT {{param.name}}, 'open", [name], { name: 'x' }, 'mssql'))
       .toThrow('the SQL has a string, comment or quoted name that is never closed');

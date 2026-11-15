@@ -256,6 +256,39 @@ describe('WidgetEditorDialog', () => {
     expect(calls[0]).toHaveProperty('values');
   });
 
+  // The server fills the template once, for its own engine. The preview sends what a live widget
+  // sends: the template with its tokens, plus the values.
+  it('previews the template with its tokens plus the test values when sqlEnabled is true', async () => {
+    const calls: any[] = [];
+    const result = { columns: [{ key: 'value' }], rows: [{ value: 42 }], chart: { type: 'stat', value: '42', label: 'K' }, meta: { generatedAt: 'now', rowCount: 1 } };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any, init?: any) => {
+      if (String(url).includes('/api/dashboards/query')) {
+        calls.push(JSON.parse(init.body));
+        return new Response(JSON.stringify(result), { status: 200 });
+      }
+      return new Response('[]', { status: 200 });
+    });
+    const sql = 'select 42 as value [[ where panel = {{test}} ]]';
+    const widget = {
+      ...sqlWidget,
+      query: { mode: 'sql', sql, variables: { test: { type: 'text', label: 'Test' } }, variableBindings: {} },
+    } as unknown as WidgetConfig;
+    render(<WidgetEditorDialog open sqlEnabled initial={widget} dashboardFilters={[]} onClose={() => {}} onSave={() => {}} />);
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0].sql).toBe(sql);
+    expect(calls[0].values).toEqual({});
+
+    // A test value that holds token text reaches the server as a value, not as SQL.
+    fireEvent.click(screen.getByLabelText('Variable test'));
+    await screen.findByLabelText('Dashboard filter');
+    fireEvent.change(screen.getByLabelText('Test value'), { target: { value: '{{word}} [[x]]' } });
+    // The open Variables sheet hides the editor from the accessibility tree; the button is there.
+    fireEvent.click(screen.getByRole('button', { name: 'Run query', hidden: true }));
+    await waitFor(() => expect(calls.length).toBe(2));
+    expect(calls[1].sql).toBe(sql);
+    expect(calls[1].values).toEqual({ test: '{{word}} [[x]]' });
+  });
+
   // SQL -> Builder import guard: unrecognizable SQL (a UNION here) must not silently drop into
   // the builder pane with a wrong/partial query — the toggle disables and the refusal reason
   // (from @openldr/dashboards' recognizeSql) is shown inline so the test can assert it without

@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { applyTemplate } from './template';
+import { applyTemplate, filterTokens, resolveValues } from './template';
 
 const BACKSLASH = String.fromCharCode(92);
 const NEVER_CLOSED = 'the SQL has a string, comment or quoted name that is never closed';
 const QUOTED_TOKEN = 'a {{n}} sits inside quotes, a comment or a quoted name: remove the quotes; the value is quoted for you';
+
+// Moved from the studio, whose copy of `resolveValues` is gone: the server splits the values.
+describe('filterTokens agrees with resolveValues', () => {
+  it('names the keys resolveValues produces', () => {
+    const resolved = resolveValues({ period: { from: '2024-01-01', to: '2024-02-01' }, ward: 'ICU' });
+    expect(filterTokens({ id: 'period', type: 'date-range' }).every((t) => t in resolved)).toBe(true);
+    expect(filterTokens({ id: 'ward', type: 'text' }).every((t) => t in resolved)).toBe(true);
+  });
+});
 
 describe('applyTemplate: a value stays one literal', () => {
   it('a viewer value with a quote, two dashes or a comment opener stays one literal', () => {
@@ -80,6 +89,21 @@ describe('applyTemplate: a token sits in plain SQL', () => {
   it('a string that is never closed is refused with the reader sentence', () => {
     expect(() => applyTemplate("SELECT {{n}} AS a, 'open", { n: 'x' }, 'postgres')).toThrow(NEVER_CLOSED);
     expect(() => applyTemplate("SELECT {{n}} AS a, 'open", { n: 'x' })).toThrow(NEVER_CLOSED);
+  });
+
+  it('on postgres and with no dialect, a token right after a lone E is refused', () => {
+    // E'...' is a Postgres escape string: a backslash in the value would escape the closing quote.
+    const sentence = 'a {{a}} follows a lone E, which Postgres reads as the start of an escape string: put a space before it';
+    for (const sql of ['SELECT E{{a}}', 'SELECT 1 WHERE x = e{{a}}']) {
+      expect(() => applyTemplate(sql, { a: 'SECRETVALUE' }, 'postgres')).toThrow(sentence);
+      expect(() => applyTemplate(sql, { a: 'SECRETVALUE' })).toThrow(sentence);
+    }
+    // Not a lone E: the end of a longer name, or a space between.
+    expect(applyTemplate('SELECT NE{{a}}', { a: 'x' }, 'postgres')).toBe("SELECT NE'x'");
+    expect(applyTemplate('SELECT E {{a}}', { a: 'x' }, 'postgres')).toBe("SELECT E 'x'");
+    // SQL Server and MySQL have no escape string of that form.
+    expect(applyTemplate('SELECT E{{a}}', { a: 'x' }, 'mssql')).toBe("SELECT E'x'");
+    expect(applyTemplate('SELECT E{{a}}', { a: 'x' }, 'mysql')).toBe("SELECT E'x'");
   });
 
   it('a token with no value still has to sit in plain SQL', () => {

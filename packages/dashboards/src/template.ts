@@ -1,8 +1,7 @@
-// Shared SQL-variable template logic, used by BOTH the client (widget editor preview + live
-// widget) and the server (vetted stored-SQL execution), so a saved `{{var}}` / `[[ ... ]]`
-// widget resolves identically everywhere. Keeping this on the server lets the query route
-// receive the STORED template string (stable, vettable) plus opaque filter values, and apply
-// the substitution itself — the client never bakes arbitrary SQL into the submitted string.
+// SQL-variable template logic for the server. The widget preview and the live widget both send
+// the STORED template (stable, vettable) plus opaque filter values, and the server fills it
+// once, for its own engine. The client never fills SQL. The studio keeps only its own copy of
+// `filterTokens`, kept in step with the one here by hand.
 
 import { tokensInPlainSql, type SqlDialect } from './sql-text';
 
@@ -35,8 +34,9 @@ const DIALECTS: readonly SqlDialect[] = ['postgres', 'mssql', 'mysql'];
 /** Whether every match of `token` in `template` sits in plain SQL.
  *  With a dialect, the template is read by that engine's rules. This is the guard for a run.
  *  With none, it is true when at least one of postgres, mssql and mysql reads it as plain SQL.
- *  That form is for the client-side preview, where the engine is not known. It is not the guard
- *  for a run. When no reading is true and one of them threw, the first throw is thrown again.
+ *  That form is for when the engine is not known. Today that is `/api/query/run` on a connector
+ *  type with no dialect, which the connector runner then refuses. It is not the guard for a run.
+ *  When no reading is true and one of them threw, the first throw is thrown again.
  *  Throws what `tokensInPlainSql` throws, with the same sentence. */
 export function tokenSitsInPlainSql(template: string, token: RegExp, dialect?: SqlDialect): boolean {
   if (dialect) return tokensInPlainSql(template, token, dialect);
@@ -61,14 +61,33 @@ function escapeRegExp(text: string): string {
  *  `refusal(name)` writes the sentence; it must be fixed text that names the token and holds
  *  nothing else. The sentence names the first token whose own text is not plain. With no
  *  dialect, each token can be plain under a different engine while no one engine reads them all
- *  as plain; the template is refused then too, and the sentence names its first token. */
+ *  as plain; the template is refused then too, and the sentence names its first token.
+ *
+ *  On postgres, and with no dialect, a token right after a lone `E` or `e` is refused too. The
+ *  filled text would be `E'...'`, an escape string, where a backslash in the value escapes the
+ *  closing quote. That sentence names the token as the template writes it. */
 export function assertTokensInPlainSql(
   template: string, pattern: RegExp, refusal: (name: string) => string, dialect?: SqlDialect,
 ): void {
-  if (tokenSitsInPlainSql(template, pattern, dialect)) return;
   const matches = [...template.matchAll(new RegExp(pattern.source, `${pattern.flags.replace(/[gy]/g, '')}g`))];
-  const first = matches.find((m) => !tokenSitsInPlainSql(template, new RegExp(escapeRegExp(m[0]), 'g'), dialect)) ?? matches[0];
-  throw new Error(refusal(first?.[1] ?? ''));
+  if (!tokenSitsInPlainSql(template, pattern, dialect)) {
+    const first = matches.find((m) => !tokenSitsInPlainSql(template, new RegExp(escapeRegExp(m[0]), 'g'), dialect)) ?? matches[0];
+    throw new Error(refusal(first?.[1] ?? ''));
+  }
+  if (dialect === undefined || dialect === 'postgres') {
+    const afterE = matches.find((m) => followsLoneE(template, m.index ?? 0));
+    if (afterE) throw new Error(`a ${afterE[0]} follows a lone E, which Postgres reads as the start of an escape string: put a space before it`);
+  }
+}
+
+/** Whether the text just before `index` is an `E` or `e` that is not the end of a longer
+ *  Postgres name (a letter, digit, `_`, `$` or any character at or above U+0080). */
+function followsLoneE(template: string, index: number): boolean {
+  const prev = template[index - 1];
+  if (prev !== 'E' && prev !== 'e') return false;
+  const before = template[index - 2];
+  if (before === undefined) return true;
+  return !/[A-Za-z0-9_$]/.test(before) && before.charCodeAt(0) < 0x80;
 }
 
 /** The refusal for a `{{token}}` of a dashboard filter or a saved query's parameter. */
@@ -96,8 +115,8 @@ const FILTER_TOKEN = /\{\{(\w+)\}\}/g;
  *  set) then substitute `{{var}}` with a literal (or `NULL`).
  *  Between the two steps, every `{{var}}` left must sit in plain SQL, read by `dialect`. A token
  *  inside a dropped clause is gone by then and is not checked. A server path that runs the result
- *  passes the engine. With no dialect (the client-side preview), the token check passes when one
- *  engine reads the token as plain SQL, and a backslash in a value is left as it is. */
+ *  passes the engine. With no dialect (no engine known), the token check passes when one engine
+ *  reads the token as plain SQL, and a backslash in a value is left as it is. */
 export function applyTemplate(
   sql: string, resolved: Record<string, string | number | null>, dialect?: SqlDialect,
 ): string {

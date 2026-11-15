@@ -36,7 +36,7 @@ import {
   type ClientJoinableTable,
 } from '../../api';
 import { renderWidget } from '../widgets';
-import { resolveValues, applyTemplate, filterTokens } from '../template';
+import { filterTokens } from '../template';
 import { extractVariables, extractLogicalVariables, compatibleFilters, hasBareDateRangeToken, setVariableType } from './variables.model';
 import { BuilderForm } from './BuilderForm';
 import { buildSaveQuery, shouldRestoreEjected, measuresOf, type BuilderQuery } from './builderForm.model';
@@ -348,22 +348,17 @@ export function WidgetEditorDialog({
       runQuery(builderQuery);
       return;
     }
-    let q: WidgetQuery;
-    if (sqlReadOnlyRef.current && storedTemplate != null) {
-      // Flag off: SQL is read-only, so `sqlText` equals the persisted template. Send the STORED
-      // template verbatim plus resolved test `values` and let the server substitute + vet it —
-      // the exact same path the live widget uses — so an unchanged widget previews successfully.
-      const values: Record<string, string | number | null | { from: string; to: string }> = {};
-      for (const [name, val] of Object.entries(testValuesRef.current)) {
-        values[name] = (val ?? null) as string | number | null | { from: string; to: string };
-      }
-      q = { mode: 'sql', sql: storedTemplate, variableBindings: bindings, values };
-    } else {
-      // Flag on (authoring): substitute client-side; raw SQL execution is permitted.
-      const resolved = resolveValues(testValuesRef.current);
-      q = { mode: 'sql', sql: applyTemplate(sqlRef.current, resolved), variableBindings: bindings };
+    // The server fills the template once, for its own engine, the way it fills a live widget. So
+    // the preview sends a template with its tokens plus the test `values`, never filled SQL.
+    const values: Record<string, string | number | null | { from: string; to: string }> = {};
+    for (const [name, val] of Object.entries(testValuesRef.current)) {
+      values[name] = (val ?? null) as string | number | null | { from: string; to: string };
     }
-    runQuery(q);
+    // Flag off: SQL is read-only, so `sqlText` equals the persisted template. Send the STORED
+    // template verbatim so the server can vet it. Flag on (authoring): send the editor's text;
+    // raw SQL execution is permitted.
+    const sql = sqlReadOnlyRef.current && storedTemplate != null ? storedTemplate : sqlRef.current;
+    runQuery({ mode: 'sql', sql, variableBindings: bindings, values });
   };
 
   useEffect(() => {
@@ -443,9 +438,9 @@ export function WidgetEditorDialog({
   const yKey = String(visual.yAxisKey ?? columns[1] ?? 'value');
   const errorMsg = error;
   const detectedVars = extractLogicalVariables(sqlText, varDefs);
-  // Dashboard filter tokens this SQL does not mention yet. `filterTokens` is the same rule
-  // `resolveValues` applies, so a date-range offers `_from`/`_to` and never the bare id — the
-  // guess that silently resolves to NULL. Builder mode binds filters through its own picker,
+  // Dashboard filter tokens this SQL does not mention yet. `filterTokens` is the same rule the
+  // server's `resolveValues` applies, so a date-range offers `_from`/`_to` and never the bare id,
+  // the guess that silently resolves to NULL. Builder mode binds filters through its own picker,
   // and a read-only (flag-off) editor cannot accept an insert, so neither shows these.
   const usedVars = new Set(extractVariables(sqlText));
   const availableFilterTokens =
