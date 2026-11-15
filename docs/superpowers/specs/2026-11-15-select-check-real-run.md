@@ -185,7 +185,7 @@ Counts: 55 rows in the tables below. 53 PROVEN, 2 DISPROVEN (D7 and the second F
 - A scratch OpenLDR on 127.0.0.1:3992, started from this worktree under `env -i` with `OPENLDR_SKIP_ENV_FILE=true`, its own database settings, `AUTH_DEV_BYPASS=true` and file blob storage in a temp folder. **Its target store was SQL Server**, a second database in my own SQL Server container. So builder dashboards, SQL widgets and the workflow SQL Query node ran through `runReadQuery` on SQL Server.
 - Every CLI call carried `--server-url http://127.0.0.1:3992` and had `OPENLDR_URL` set to the same. The first, `plugin list`, showed up in my server's log as `POST /api/cli/run` on host 127.0.0.1:3992 before any changing call.
 - Query page tries went to `POST /api/query/run`, the call the page makes. The Copy tab tries used the Browser pane on 127.0.0.1:3992.
-- No request went to port 3000. The dev Postgres on 5433 and the operator's two SQL Server containers were not used. My log shows port 3000, 5433 and 8180 listening before the run, at 14:58. It has no check from after the run. The controller checked after the run and saw all three listening.
+- No request went to port 3000. The dev Postgres on 5433 and the operator's two SQL Server containers were not used. My log shows port 3000, 5433 and 8180 listening before the run, at 14:58. The after-run check, at 15:25:20, was written into the log after the run, from my report. The controller also checked after the run and saw ports 3000, 5433 and 8180 listening.
 
 In the tables a code point is written `<XXXX>`.
 
@@ -313,11 +313,11 @@ The page sits in an iframe with `sandbox="allow-scripts"`. Neither page script n
 
 - On a SQL Server target store the server's projection failed at boot: `projection failed; durable retry scheduled`, `Incorrect syntax near the keyword 'use'.`, from `mergeBatchMssql` (`packages/db/src/batch-upsert.ts:55`). My log shows it 4 times by 15:21. The final count was not recorded. The warehouse had no rows until I put three in.
 - `POST /api/dashboards/query` answers a refused template, and the older single-statement refusal, with HTTP 500 rather than 400 (`mapError`, `apps/server/src/dashboards-routes.ts:198-201`). The sentence is right, and the log holds no SQL.
-- A dashboard SQL widget whose string literal holds token text, such as `SELECT '{{word}}' AS v`, is refused even when it is sent with no values. So a widget that ran before this branch can be refused after it.
+- A dashboard SQL widget whose string literal holds token text is refused even when it is sent with no values: `SELECT 'it''s a \ {{word}}' AS v`, sent with no values, got the token sentence. `SELECT '{{word}}' AS v`, sent with the value `x`, got it too. So a widget that ran before this branch can be refused after it.
 
 ### How far this evidence goes
 
-Every result above rests on my own log, `task-9-log.md` in the plan's notes folder. It is my copy of the output, and some blocks are shortened. The raw outputs, the wrapper script for the CLI and the scratch server's log were in the scratch folder, and were deleted with it. Some `docker exec` lines in the log say "in my container" without the container's name; only the database names tie them to my containers. The list of what I removed, with its checks, is in my task report, and was added to the log after the run.
+Every result above rests on my own log, `task-9-log.md` in the plan's notes folder. It is my copy of the output, and some blocks are shortened. The raw outputs, the wrapper script for the CLI and the scratch server's log were in the scratch folder, and were deleted with it. Some `docker exec` lines in the log say "in my container" without the container's name; only the database names tie them to my containers. The list of what I removed, with its checks, and the after-run check of the dev stack were written into the log after the run, from my report. The controller also checked after the run and saw ports 3000, 5433 and 8180 listening.
 
 ### What was not tried
 
