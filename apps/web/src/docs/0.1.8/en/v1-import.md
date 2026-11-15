@@ -186,9 +186,9 @@ Select the connector. Under **Copy options**, fill in the same values as for an 
 
 ### 3. Start the copy
 
-Select **Start copy**. The status reads **Queued. The server starts it within a few seconds.** Then it reads **Copying**. You can leave the page. While a copy runs, its options are locked. You can still pick another connector to see or start its copy.
+Open the dots menu at the top right of the Copy tab and select **Start copy**. The status reads **Queued. The server starts it within a few seconds.** Then it reads **Copying**. You can leave the page. While a copy runs, its options are locked. You can still pick another connector to see or start its copy.
 
-![Start copy hands the copy to the server.](/docs-images/operator/v1-import-guide-copy-start.png)
+![Start copy is in the dots menu at the top right of the tab.](/docs-images/operator/v1-import-guide-copy-start.png)
 
 ### 4. Read the set table
 
@@ -204,9 +204,9 @@ When CE could not copy some requests, an amber line gives **Requests left out:**
 
 ### 5. Leave a waiting copy alone
 
-When the source or the link to it is down, the status reads **Waiting for the source. It will try again by itself.** The page shows **Tries so far:**, when the wait began, and the last error. You do nothing. The first wait is 5 seconds. Each wait doubles, up to 5 minutes, until the source answers or someone stops the copy. If the source answers but the same page is lost twice in a row, the copy reads that page again at half the size, and the waits start again at 5 seconds. The page grows back after 5 good pages in a row.
+When the source or the link to it is down, the status reads **Waiting for the source. It will try again by itself.** The page shows **Tries so far:**, when the wait began, and the last error. You do nothing. The first wait is 5 seconds. Each wait doubles, up to 5 minutes, until the source answers or someone stops the copy. If the source answers but the same page is lost twice in a row, the copy reads that page again at half the size. The waits then start again at 5 seconds. The page grows back after 5 good pages in a row.
 
-The last error of a lost link starts with plain words, then gives the driver's own words. When the source itself restarts, it can refuse the login or say its database is missing for a while. A copy that has read from this source before waits on that for up to about an hour. The same goes for a wrong password typed into the connector before you continue a copy. That copy waits up to about an hour, then fails. A new copy with a wrong password fails at once.
+The last error of a lost link usually starts with plain words, then gives the driver's own words. When the source itself restarts, it can refuse the login or say its database is missing for a while. A copy that has read from this source before waits on that for up to about an hour. The same goes for a wrong password typed into the connector before you continue a copy. That copy waits up to about an hour, then fails. A new copy with a wrong password fails at once.
 
 After you change the connector's settings, stop the copy and continue it. A waiting copy keeps trying the old settings.
 
@@ -216,11 +216,11 @@ A copy also carries on by itself after the CE server restarts. Nobody presses an
 
 ### 6. Stop and continue
 
-Open the dots menu beside the status and select **Stop**. The status reads **Stopping after this page**, then **Stopped**. A queued copy stops at once. The rows copied so far stay. To carry on, select **Continue copy**. Each set carries on from where it stopped. On a finished copy, **Continue copy** only tries the left-out requests again. It reads no new requests from the source. If the copy was started from the CLI without a time zone, **Site time zone** is empty apart from a grey hint, and the page asks for any valid offset, such as `Z`, before **Continue copy** works. That offset changes nothing in the copy.
+Open the dots menu beside the status and select **Stop**. The status reads **Stopping after this page**, then **Stopped**. A queued copy stops at once. The rows copied so far stay. To carry on, open the dots menu at the top right of the tab and select **Continue copy**. Each set carries on from where it stopped. On a finished copy, **Continue copy** only tries the left-out requests again. It reads no new requests from the source. If the copy was started from the CLI without a time zone, **Site time zone** is empty apart from a grey hint. The page then asks for any valid offset, such as `Z`, before **Continue copy** works. That offset changes nothing in the copy.
 
 ![Stop is in the dots menu beside the status.](/docs-images/operator/v1-import-guide-copy-stop.png)
 
-If you changed **Database**, **From date**, **To date** or **Panel codes**, Continue copy asks **Read again from the start?** and names the sets. **Read again** deletes the rows copied so far for those sets, then reads them again from the start. On a slow link that can take days. To keep the copy, select **Cancel**, put the options back, then select **Continue copy**.
+If you changed **Database**, **From date**, **To date** or **Panel codes**, Continue copy asks **Read again from the start?** and names the sets. **Read again** deletes the rows copied so far for those sets, then reads them again from the start. On a slow link that can take days. To keep the copy, select **Cancel** and put the options back. Then open the dots menu at the top right of the tab and select **Continue copy**.
 
 ![Read again deletes what was copied for the named sets.](/docs-images/operator/v1-import-guide-copy-reread.png)
 
@@ -366,7 +366,7 @@ In a source checkout, `pnpm build:v1-import` stages the reference importer. It n
 
 **Continue copy asks to read a set again.** In the CLI, `start` names the sets instead. An option that decides which requests are read has changed, or the plugin was upgraded. Read again deletes the rows copied for the named sets. Select **Cancel** and put the options back to keep them.
 
-**The copy failed.** Read the last error. A refused login, a missing database or table, a fault in the plugin, or a write that CE's own database refused, such as on a full disk, ends the copy. Trying again cannot fix those. There is one exception. A copy that has read this source before waits up to about an hour on a refused login or a missing database, in case the source is restarting. Fix the cause, then select **Continue copy**. The rows copied so far stay.
+**The copy failed.** Read the last error. A refused login, a missing database or table, a fault in the plugin, or a write that CE's own database refused, such as on a full disk, ends the copy. Trying again cannot fix those. There is one exception. A copy that has read this source before waits up to about an hour on a refused login or a missing database, in case the source is restarting. Fix the cause, then open the dots menu at the top right of the Copy tab and select **Continue copy**. The rows copied so far stay.
 
 **Delete copy is greyed.** A copy can be deleted only when it is stopped, failed or finished. Stop it first.
 

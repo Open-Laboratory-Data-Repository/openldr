@@ -432,6 +432,15 @@ Read the confirmation, then choose Delete query only for the definition you inte
 
 **Expected result:** The saved definition disappears from the Explorer.
 
+## What the Query page refuses
+
+A query that breaks one of these rules is refused before it reaches the database.
+
+- On a SQL Server connector, a query that holds a statement word such as `EXEC` is refused. A word inside a string, a comment or a bracketed name does not count. The message is `only read-only SELECT queries are allowed on SQL Server (statement words such as EXEC are refused; put a name that is such a word in [brackets])`.
+- On SQL Server, write a column or table whose name is such a word in brackets, such as `[open]`.
+- Write a parameter such as `{{ param.from }}` without quotes around it. OpenLDR quotes the value. A parameter inside quotes is refused when the query runs, and the message says to remove the quotes.
+- On a MySQL or MariaDB connector, a comment that carries a version number, such as `/*!50000 ... */`, is refused.
+
 ## Choose parameter types
 
 Text accepts a value read as `{{ param.variableId }}`. Select asks for one value from Options SQL. Its first returned column supplies the choices. Date range supplies `{{ param.from }}` and `{{ param.to }}`.

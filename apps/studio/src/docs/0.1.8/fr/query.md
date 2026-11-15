@@ -432,6 +432,15 @@ Lisez la confirmation, puis choisissez Delete query uniquement pour la définiti
 
 **Résultat attendu :** la définition enregistrée disparaît d'Explorer.
 
+## Ce que la page Query refuse
+
+Une requête qui ne respecte pas l'une de ces règles est refusée avant d'atteindre la base.
+
+- Sur un connecteur SQL Server, une requête qui contient un mot d'instruction comme `EXEC` est refusée. Un mot placé dans une chaîne, un commentaire ou un nom entre crochets ne compte pas. Le message, en anglais, est `only read-only SELECT queries are allowed on SQL Server (statement words such as EXEC are refused; put a name that is such a word in [brackets])`. Il signifie que seules les requêtes SELECT en lecture seule sont permises sur SQL Server, que les mots d'instruction comme EXEC sont refusés, et qu'un nom qui est un tel mot doit être mis entre crochets.
+- Sur SQL Server, écrivez entre crochets une colonne ou une table dont le nom est un tel mot, comme `[open]`.
+- Écrivez un paramètre comme `{{ param.from }}` sans guillemets autour. OpenLDR met lui-même la valeur entre guillemets. Un paramètre entre guillemets est refusé à l'exécution, et le message demande d'enlever les guillemets.
+- Sur un connecteur MySQL ou MariaDB, un commentaire qui porte un numéro de version, comme `/*!50000 ... */`, est refusé.
+
 ## Choisir les types de paramètres
 
 Text accepte une valeur lue avec `{{ param.variableId }}`. Select demande une valeur issue d'Options SQL. Sa première colonne fournit les choix. Date range fournit `{{ param.from }}` et `{{ param.to }}`.
