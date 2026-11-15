@@ -64,6 +64,17 @@ decoder to Rust, about 500 lines, and ran it beside the toolchain on real reques
 - Time: the toolchain took 386 seconds, with its lookups going to the database. The Rust
   decode took 0.8 seconds, reading the same rows from a file.
 
+A second run the same evening took every 116th request: 20,053 requests, 32,733 test rows
+and 453,595 results.
+
+- 20,051 requests identical. 4,526,506 fields compared, 2 different.
+- Both differences are the date of birth, in requests that have two rows in the birth index.
+  The toolchain reads those rows with no order and took the later date. The trial took the
+  earlier. In a third such request both took the same row. So the toolchain's own answer is
+  not fixed for these requests. 378 requests in the whole database have two or more birth
+  rows.
+- Time: the toolchain took 4,887 seconds on a busy machine. The Rust decode took 2.9 seconds.
+
 The trial covers decoding only: the registration record, test records, text rows, audit rows
 and three dictionaries. It does not cover the request payload, FHIR, or the audit rules. The
 code is discarded. Its method is kept, in section 6.7.
@@ -297,12 +308,13 @@ scratch server gets `--memory 3g` and `MSSQL_MEMORY_LIMIT_MB=2048`.
 
 ### 6.8 Faults to fix after the port matches
 
-Each is a claim until it is checked against the code and the real data. Only the first is
-confirmed.
+Each is a claim until it is checked against the code and the real data. Only the first two
+are confirmed.
 
 | Fault | State |
 |---|---|
 | Groups 9 to 12 read as blank, so 64 parameters lose their coded answers | Confirmed in code and on 329 real results |
+| A request with two birth rows gets whichever the database returns first | Confirmed on real data: 2 of 3 sampled cases differed between two reads. The plugin takes the earliest date. Which date is right needs v1, in part 3 |
 | Middle name is never set | Claim, from reading `specimenrecpt.ts` |
 | Two age decoders read different bytes | Claim |
 | The date of birth index is a `datetime` and may be lost as the taken date once was | Claim. The column type is confirmed |
