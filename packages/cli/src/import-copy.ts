@@ -41,9 +41,12 @@ export function copyRunForJson(run: CopyRun): Omit<CopyRun, 'sets'> & { sets: Re
 }
 
 /** One line per copy: the id, the status, the counts of each set, then the error when waiting or
- *  failed. The error is the text the run holds, already safe to show, kept on one line. */
+ *  failed. The error is the text the run holds, already safe to show, kept on one line. A
+ *  completed copy with a skipped key left reads `completed with skipped keys`, never a bare
+ *  `completed` (spec 9.3). */
 export function formatCopyRun(run: CopyRun): string {
-  const parts = [run.id, run.status];
+  const skipped = Object.values(run.sets).some((p) => p.skipped > 0);
+  const parts = [run.id, run.status === 'completed' && skipped ? 'completed with skipped keys' : run.status];
   for (const [name, p] of Object.entries(run.sets)) {
     parts.push(`${name} keys=${p.keys} rows=${p.rows} bytes=${p.bytes} skipped=${p.skipped}`);
   }

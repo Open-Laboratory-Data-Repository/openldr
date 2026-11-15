@@ -343,6 +343,21 @@ describe('copy: reading a source to CE', () => {
     expect(w.source.statements.every((s) => s.includes('TOP ('))).toBe(true);
   });
 
+  // R46. Such a set moves past the last key of a page. A key on two rows of one page would lose the
+  // rows past the page end, so the plugin's key query is at fault. Known limit: a key that repeats
+  // only across a page boundary is not seen.
+  it('a set with no detail queries fails the copy when a key repeats in one page, naming the set only', async () => {
+    const w = await world([], ['F-SECRET-01', 'F-SECRET-01', 'F-SECRET-02']);
+    w.setCopy(() => ({ sets: [facilitiesSet] }));
+    await w.svc.start({ ...START, pageSize: 3 });
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, COPY))!;
+    expect(run.status).toBe('failed');
+    expect(run.lastError).toBe('set facilities has no detail queries, and its key query gave one key on more than one row of a page; each row of such a set needs its own key');
+    expect(JSON.stringify([run, w.audited])).not.toContain('F-SECRET');
+    expect(w.calls.replace).toEqual([]);
+  });
+
   it('copies two sets one after the other, each with its own position', async () => {
     const w = await world(keysOf(3), ['F01', 'F02']);
     w.setCopy((o) => ({ sets: [facilitiesSet, requestsSet(o.from)] }));
@@ -1033,6 +1048,21 @@ describe('copy: stop, release and delete', () => {
     expect(await w.svc.list(PLUGIN)).toEqual([]);
   });
 
+  it('a finished delete writes one audit row, by the system, with the copy id and the row count', async () => {
+    const w = await world(keysOf(2));
+    await w.svc.start(START);
+    await drive(w.svc);
+    await w.svc.remove(PLUGIN, COPY, ADMIN);
+    const before = w.audited.length;
+    await drive(w.svc);
+    expect(await w.svc.get(PLUGIN, COPY)).toBeNull();
+    expect(w.audited.slice(before)).toEqual([{
+      action: 'import.copy.finish', pluginId: PLUGIN, connectorId: 'c1', runId: COPY,
+      actor: { type: 'system', id: null, name: 'system' }, metadata: { status: 'deleted', rows: 6 },
+    }]);
+    expect(JSON.stringify(w.audited.slice(before))).not.toContain('REQ000');
+  });
+
   it('remove is refused when the audit row cannot be written, and leaves the copy as it was', async () => {
     const w = await world(keysOf(2));
     await w.svc.start(START);
@@ -1071,7 +1101,11 @@ describe('copy: stop, release and delete', () => {
     await drive(next);
     expect(await w.rows()).toEqual([]);
     expect(await w.stored()).toBeNull();
-    expect(w.audited.at(-1)).toMatchObject({ action: 'import.copy.takeover', actor: { type: 'system', id: null, name: 'system' } });
+    // The takeover, then the row the finished delete writes (ledger line 189).
+    expect(w.audited.slice(-2)).toMatchObject([
+      { action: 'import.copy.takeover', actor: { type: 'system', id: null, name: 'system' } },
+      { action: 'import.copy.finish', actor: { type: 'system', id: null, name: 'system' }, metadata: { status: 'deleted', rows: 30 } },
+    ]);
   });
 });
 

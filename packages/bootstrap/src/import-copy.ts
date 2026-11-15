@@ -335,6 +335,11 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
       list.push({ detail, key, seq, row });
     };
     if (set.detailQueries.length === 0) {
+      // The next page starts after this page's last key, so the rows of a repeated key past the
+      // page end would never be read (R46). A key that repeats only across a page end is not seen.
+      if (keys.length !== page.keys.length) {
+        throw new Error(`set ${set.name} has no detail queries, and its key query gave one key on more than one row of a page; each row of such a set needs its own key`);
+      }
       const seqs = new Map<string, number>();
       page.keyRows.forEach((row, i) => add(set.name, page.keys[i], row, seqs));
     } else {
@@ -708,7 +713,16 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     if (outcome === 'lost') return;
     await d.settled();
     if (outcome === 'done') {
-      await ownDb('write', () => deps.pluginData.delete(run.pluginId, COPIES, run.id)).catch(() => {});
+      const gone = await ownDb('write', () => deps.pluginData.delete(run.pluginId, COPIES, run.id)).then(() => true, () => false);
+      // One row when the record is gone, so the log tells a finished delete from one still running.
+      // A record that could not be deleted is taken again later, and that drive writes the row.
+      if (gone) {
+        const rows = Object.values(run.sets).reduce((n, p) => n + p.rows, 0);
+        await auditQuietly(deps.audit, {
+          action: 'import.copy.finish', pluginId: run.pluginId, connectorId: run.connectorId, runId: run.id, actor: SYSTEM,
+          metadata: { status: 'deleted', rows },
+        });
+      }
       return;
     }
     // Released, or failed. The run stays `deleting` with this driver, so a later tick (here or in

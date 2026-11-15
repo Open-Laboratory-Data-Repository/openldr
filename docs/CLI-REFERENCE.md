@@ -276,6 +276,8 @@ from the start. A running or waiting copy must be stopped first.
 `<name> keys=N rows=N bytes=N skipped=N`. A waiting or failed copy ends its line with the error.
 The status is one of `queued`, `running`, `waiting`, `stopping`, `stopped`, `completed`, `failed`
 or `deleting`. `waiting` means the source cannot be reached, and the copy tries again by itself.
+A completed copy that still has skipped keys shows `completed with skipped keys` in place of
+`completed`. `--json` keeps the status `completed` and gives each set's `skipped` count.
 No source key is ever printed, and `--json` leaves out each set's position.
 
 `stop` stops the copy at its next page. The rows copied so far stay. `delete` removes a stopped,

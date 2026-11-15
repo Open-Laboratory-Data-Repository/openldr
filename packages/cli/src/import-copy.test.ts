@@ -122,6 +122,15 @@ describe('import copy CLI', () => {
     for (const run of [copy(), waiting, failed]) expect(formatCopyRun(run as never)).not.toContain(SECRET_KEY);
   });
 
+  // Spec 9.3: a copy with a skipped key left is shown as complete with a warning, never as clean.
+  it('a completed copy with skipped keys says so in its status', () => {
+    expect(formatCopyRun(copy({ status: 'completed' }) as never)).toBe(
+      'c0ffee  completed with skipped keys  requests keys=500 rows=1200 bytes=34000 skipped=0  results keys=10 rows=40 bytes=900 skipped=2',
+    );
+    const clean = copy({ status: 'completed', sets: { requests: { cursor: SECRET_KEY, keys: 5, rows: 9, bytes: 10, skipped: 0, done: true } } });
+    expect(formatCopyRun(clean as never)).toBe('c0ffee  completed  requests keys=5 rows=9 bytes=10 skipped=0');
+  });
+
   it('status shows one copy or every copy of a plugin, and never a key, with or without --json', async () => {
     expect(await runImportCopyStatus('v1-import', 'c0ffee', { json: false })).toBe(0);
     expect(copies.get).toHaveBeenCalledWith('v1-import', 'c0ffee');
