@@ -23,6 +23,8 @@ const lost = () => err('ESOCKET', 'Connection lost - read ECONNRESET');
 /** How `lost()` reads in the waiting state (R41). */
 const LOST_TEXT = 'the source could not be reached: Connection lost - read ECONNRESET';
 const STARTING_UP = 'the source may still be starting up: ';
+/** What the connection pool really throws on a failed connect: the driver's words, no code, no number. */
+const poolError = (message: string) => Object.assign(new Error(message), { name: 'TimeoutError' });
 
 type Kind = 'keys' | 'details' | 'probe';
 /** `{ throws }` throws a value that is not an Error, such as the array Kysely rejects with. */
@@ -513,11 +515,20 @@ describe('a source that may be starting up', () => {
     expect(waiting).toEqual([{ attempt: 1, error: `${STARTING_UP}Login failed for user 'x'.` }, null]);
   });
 
+  it('a login the pool refuses on open is waited on with the fixed sentence after the lead', async () => {
+    const source = fakeSource();
+    const realOpen = source.open.getMockImplementation()!;
+    source.open.mockImplementationOnce(async () => { throw poolError("Login failed for user 'x'."); }).mockImplementation(realOpen);
+    const { reader, waiting } = harness(source);
+    expect((await reader.readPage(readBefore)).kind).toBe('page');
+    expect(waiting).toEqual([{ attempt: 1, error: 'the source may still be starting up: the source refused the login' }, null]);
+  });
+
   it('a new run with a wrong password fails at once', async () => {
     const source = fakeSource();
-    source.open.mockImplementation(async () => { throw err('ELOGIN', "Login failed for user 'x'."); });
+    source.open.mockImplementation(async () => { throw poolError("Login failed for user 'x'."); });
     const { reader, waiting, sleeps } = harness(source);
-    await expect(reader.readPage({ ...first, readBefore: false })).rejects.toThrow("Login failed for user 'x'.");
+    await expect(reader.readPage({ ...first, readBefore: false })).rejects.toThrow(/^the source refused the login$/);
     expect(waiting).toEqual([]);
     expect(sleeps).toEqual([]);
     expect(source.open).toHaveBeenCalledTimes(1);

@@ -28,6 +28,8 @@ const NETWORK_CODES = new Set(['ESOCKET', 'ECONNRESET', 'ECONNREFUSED', 'ECONNCL
 const UNRECOGNISED = 'the source failed in a way OpenLDR does not recognise';
 const UNREACHABLE = 'the source could not be reached';
 const UNREADABLE = 'the source could not be read';
+const LOGIN_REFUSED = 'the source refused the login';
+const DATABASE_UNOPENED = 'the source could not open the database';
 const DEADLOCK_TEXT = `the source stopped this read to end a deadlock (SQL Server error ${DEADLOCK_VICTIM}); it is tried again`;
 
 /**
@@ -82,11 +84,15 @@ export function classifySourceError(err: unknown): SourceErrorKind {
  *  2. a SQL Server error that names a column, table, database or login: the driver's message;
  *  3. a deadlock (1205): a fixed sentence that says it is tried again. Any other SQL Server
  *     error: its number only;
- *  4. no number, and a timeout: the driver's message (timer text). No number, and a lost link:
+ *  4. no number, and a message that reads as a failed login or a database that cannot be
+ *     opened: the fixed sentence "the source refused the login" or "the source could not open
+ *     the database". The connection pool drops the driver's code and number on a failed
+ *     connect, so this is how a wrong password reads;
+ *  5. no number, and a timeout: the driver's message (timer text). No number, and a lost link:
  *     for `EINVALIDSTATE`, the fixed sentence "the source could not be reached"; for a network
  *     code, "the source could not be reached: " and the driver's message; for anything else,
  *     "the source could not be read: " and the driver's message;
- *  5. anything else: a fixed sentence.
+ *  6. anything else: a fixed sentence.
  * The driver's message always goes through `clean`. A lead goes through `clean` with it, so the
  * cap cuts the driver's words and never the lead. A statement that failed with several errors
  * is described by its first refused member, or by its first member when none is refused. An
@@ -104,6 +110,9 @@ export function describeSourceError(err: unknown, clean: (text: string) => strin
     if (NAMES_NO_ROW.has(number)) return clean(message);
     return number === DEADLOCK_VICTIM ? DEADLOCK_TEXT : `the source refused the query (SQL Server error ${number})`;
   }
+  const hint = classifyConnectError(message);
+  if (hint === 'loginFailed') return LOGIN_REFUSED;
+  if (hint === 'databaseMissing') return DATABASE_UNOPENED;
   const kind = classifySourceError(err);
   if (kind === 'timeout') return clean(message);
   if (kind === 'lost') {
