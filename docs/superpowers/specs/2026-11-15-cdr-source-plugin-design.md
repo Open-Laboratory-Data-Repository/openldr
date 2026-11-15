@@ -144,7 +144,7 @@ does not depend on `openldr_ce`.
 | Entrypoint | Input | Output | Used by |
 |---|---|---|---|
 | `import_copy` | `{ options }` | `{ sets }` | The copy, today |
-| `import_checks` | `{ options }` | `{ checks }` | The page's connection test, today |
+| `import_checks` | `{ options }` | `{ checks }` | Nothing yet. Left out of the first plan, because the copy never calls it and the Copy tab has no step for it |
 | `source_decode` | `{ options, now, dictionaries, keys, rows }` | `{ groups }` | The check run of part 4 |
 
 `source_decode` is new. `dictionaries` holds the copied rows of the six dictionary sets, by
