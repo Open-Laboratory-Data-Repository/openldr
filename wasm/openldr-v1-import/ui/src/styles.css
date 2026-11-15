@@ -315,6 +315,13 @@ body {
 .v1i-table th { font-weight: 500; color: var(--text-muted); background: var(--surface-2); }
 .v1i-table tbody tr:last-child td { border-bottom: none; }
 .v1i-table .v1i-num { text-align: right; }
+.v1i-table td.v1i-set-name { white-space: normal; overflow-wrap: anywhere; min-width: 6em; }
+/* Read-only fields: the Copy tab shows a live copy's options but does not take input. */
+.v1i-input[readonly] { background: var(--surface-2); color: var(--text-muted); border-style: dashed; }
+/* Focus lands on the status line after a confirm step whose opener is now disabled. */
+.v1i-status-line:focus { outline: none; }
+.v1i-menu-item[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+.v1i-choice:disabled { cursor: not-allowed; opacity: 0.7; }
 
 /* The dots menu. */
 .v1i-menu { position: relative; flex: 0 0 auto; }
@@ -343,9 +350,8 @@ body {
   color: var(--text);
   cursor: pointer;
 }
-.v1i-menu-item:hover:not(:disabled) { background: var(--surface-2); }
+.v1i-menu-item:hover:not([aria-disabled="true"]) { background: var(--surface-2); }
 .v1i-menu-item:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
-.v1i-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }
 .v1i-menu-danger { color: var(--danger); }
 
 /* A confirm step. */

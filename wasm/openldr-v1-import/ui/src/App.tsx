@@ -32,15 +32,21 @@ export function App({ pollMs = 2000 }: { pollMs?: number }) {
             type="button"
             role="tab"
             id={`tab-${name}`}
-            aria-controls={`panel-${name}`}
+            // The Copy panel is not in the page until its tab is first opened.
+            aria-controls={name === 'copy' && !copyOpened ? undefined : `panel-${name}`}
             aria-selected={tab === name}
             tabIndex={tab === name ? 0 : -1}
             class={`v1i-tab${tab === name ? ' v1i-tab-on' : ''}`}
             data-testid={`tab-${name}`}
             onClick={() => open(name)}
             onKeyDown={(e) => {
-              if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-              const next = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length]!;
+              const at = e.key === 'ArrowRight' ? (i + 1) % TABS.length
+                : e.key === 'ArrowLeft' ? (i + TABS.length - 1) % TABS.length
+                  : e.key === 'Home' ? 0
+                    : e.key === 'End' ? TABS.length - 1 : null;
+              if (at === null) return;
+              e.preventDefault();
+              const next = TABS[at]!;
               open(next);
               document.getElementById(`tab-${next}`)?.focus();
             }}
@@ -54,7 +60,7 @@ export function App({ pollMs = 2000 }: { pollMs?: number }) {
       </div>
       {copyOpened ? (
         <div class="v1i-pane" role="tabpanel" id="panel-copy" aria-labelledby="tab-copy" hidden={tab !== 'copy'}>
-          <div class="v1i-body"><CopyPanel pollMs={pollMs} /></div>
+          <div class="v1i-body"><CopyPanel pollMs={pollMs} shown={tab === 'copy'} /></div>
         </div>
       ) : null}
     </div>

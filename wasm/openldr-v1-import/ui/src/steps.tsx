@@ -7,10 +7,12 @@ import { formatNumber, has, t } from './i18n';
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 /** Step 1. Pick one of the connectors an admin allowed, and optionally test it. */
-export function SourceStep({ connectors, connectorId, onPick }: {
+export function SourceStep({ connectors, connectorId, onPick, disabled = false }: {
   connectors: AllowedConnector[];
   connectorId: string | null;
   onPick: (id: string) => void;
+  /** The Copy tab locks the choice while a start call is out or a confirm step is open. */
+  disabled?: boolean;
 }) {
   const [diag, setDiag] = useState<DiagnoseResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -56,7 +58,8 @@ export function SourceStep({ connectors, connectorId, onPick }: {
             aria-checked={c.id === connectorId}
             class={`v1i-choice${c.id === connectorId ? ' v1i-choice-on' : ''}`}
             data-testid={`connector-${c.id}`}
-            onClick={() => onPick(c.id)}
+            disabled={disabled}
+            onClick={() => { if (!disabled) onPick(c.id); }}
           >
             <span class="v1i-choice-name">{c.name}</span>
             {c.type ? <span class="v1i-muted">{c.type}</span> : null}
@@ -105,13 +108,15 @@ const FIELDS: Array<{ key: keyof OptionsForm; type: 'text' | 'date'; help?: stri
 
 /** Step 2. The options the plugin accepts. There is no free SQL. The Copy tab uses it too, with
  *  its own heading, and read-only while a copy is under way. */
-export function OptionsStep({ form, onChange, heading = t('options.heading'), readOnly = false, idPrefix = 'opt' }: {
+export function OptionsStep({ form, onChange, heading = t('options.heading'), readOnly = false, idPrefix = 'opt', help = {} }: {
   form: OptionsForm;
   onChange: (next: OptionsForm) => void;
   heading?: string;
   readOnly?: boolean;
   /** Both tabs can be in the page at once, so each needs its own element ids. */
   idPrefix?: string;
+  /** Help string keys that replace a field's own, so the Copy tab does not talk about importing. */
+  help?: Partial<Record<keyof OptionsForm, string>>;
 }) {
   const wrong = readOnly ? [] : problems(form);
   return (
@@ -121,6 +126,7 @@ export function OptionsStep({ form, onChange, heading = t('options.heading'), re
         {FIELDS.map((f) => {
           // A date range problem belongs under the to date.
           const fieldProblems = wrong.filter((p) => p === f.key || (p === 'range' && f.key === 'to'));
+          const helpKey = help[f.key] ?? f.help;
           return (
             <Fragment key={f.key}>
               <label for={`${idPrefix}-${f.key}`}>{t(`options.${f.key}`)}</label>
@@ -137,7 +143,7 @@ export function OptionsStep({ form, onChange, heading = t('options.heading'), re
                   onInput={(e) => { if (!readOnly) onChange({ ...form, [f.key]: (e.currentTarget as HTMLInputElement).value }); }}
                 />
                 {fieldProblems.map((p) => <span key={p} class="v1i-problem" data-testid={`problem-${p}`}>{t(`problem.${p}`)}</span>)}
-                {f.help ? <span class="v1i-muted">{t(f.help)}</span> : null}
+                {helpKey ? <span class="v1i-muted">{t(helpKey)}</span> : null}
               </div>
             </Fragment>
           );

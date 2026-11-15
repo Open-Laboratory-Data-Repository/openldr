@@ -65,6 +65,20 @@ describe('tabs', () => {
     expect(screen.getByTestId('step-1').getAttribute('aria-current')).toBe('step');
     expect((screen.getByTestId('copy-panel').closest('[role="tabpanel"]') as HTMLElement).hidden).toBe(true);
   });
+
+  it('points a tab at its panel only once the panel exists, and moves with Home and End', async () => {
+    setup();
+    render(<App />);
+    await screen.findByTestId('connector-ms');
+    expect(screen.getByTestId('tab-copy').hasAttribute('aria-controls')).toBe(false);
+    screen.getByTestId('tab-import').focus();
+    fireEvent.keyDown(screen.getByTestId('tab-import'), { key: 'End' });
+    expect(screen.getByTestId('tab-copy').getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(screen.getByTestId('tab-copy'));
+    expect(screen.getByTestId('tab-copy').getAttribute('aria-controls')).toBe('panel-copy');
+    fireEvent.keyDown(screen.getByTestId('tab-copy'), { key: 'Home' });
+    expect(screen.getByTestId('tab-import').getAttribute('aria-selected')).toBe('true');
+  });
 });
 
 describe('source step', () => {
