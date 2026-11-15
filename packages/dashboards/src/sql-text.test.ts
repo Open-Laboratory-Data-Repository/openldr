@@ -281,3 +281,51 @@ describe('tokensInPlainSql, round 2', () => {
     expect(T.lastIndex).toBe(5);
   });
 });
+
+describe('blankSql, postgres, a string after an escape string', () => {
+  it.each([
+    "SELECT E'a'\n'b' AS x", "SELECT e'a'\n\n   'b' AS x", "SELECT E'a' -- note\n'b' AS x",
+    "SELECT E'a'   'b' AS x", "SELECT E'a'\n-- one\n-- two\n'b' AS x",
+  ])('refuses %j', (input) => { expect(() => blankSql(input, 'postgres')).toThrow(); });
+  it.each([
+    ["SELECT E'a' AS x, 'b' AS y", "SELECT E'' AS x, '' AS y"],
+    ["SELECT E'a' || 'b' AS x", "SELECT E'' || '' AS x"],
+    ["SELECT 'a'\n'b' AS x", "SELECT ''\n'' AS x"],
+    ["SELECT E'a'\n, 'b' AS y", "SELECT E''\n, '' AS y"],
+    ["SELECT E'a' /* c */ 'b' AS x", "SELECT E''   '' AS x"],
+  ])('blanks %j', (input, want) => { expect(blankSql(input, 'postgres')).toBe(want); });
+  it('other engines are not touched', () => {
+    expect(blankSql("SELECT N'a'\n'b' AS x", 'mssql')).toBe("SELECT N''\n'' AS x");
+    expect(blankSql("SELECT 'a'\n'b' AS x", 'mysql')).toBe("SELECT ''\n'' AS x");
+  });
+  it('the refusal holds none of the SQL', () => {
+    try { blankSql("SELECT E'SECRETVALUE'\n'b' AS x", 'postgres'); throw new Error('did not throw'); }
+    catch (e) { expect(String(e)).not.toContain('SECRETVALUE'); expect(String(e)).not.toContain('did not throw'); }
+  });
+});
+
+describe('blankSql, postgres, a digit just before a string opener', () => {
+  it.each(["SELECT 1E'a'", 'SELECT 1$$a$$', "SELECT 1e'a' AS x", 'SELECT 1$q$a$q$ AS x'])(
+    'refuses %j', (input) => { expect(() => blankSql(input, 'postgres')).toThrow(); },
+  );
+  it.each([
+    ['SELECT a1 FROM t', 'SELECT a1 FROM t'],
+    ['SELECT $1::int', 'SELECT $1::int'],
+  ])('reads %j as before', (input, want) => { expect(blankSql(input, 'postgres')).toBe(want); });
+  it('other engines are not touched', () => {
+    expect(blankSql("SELECT 1E'a'", 'mssql')).toBe("SELECT 1E''");
+    expect(blankSql("SELECT 1E'a'", 'mysql')).toBe("SELECT 1E''");
+  });
+});
+
+describe('blankSql, round 5', () => {
+  it.each(['SELECT 1 -- a\u001db\u000aFROM t', 'SELECT 1 -- a\u0090b\u000aFROM t'])(
+    'mssql refuses %j', (input) => { expect(() => blankSql(input, 'mssql')).toThrow(); },
+  );
+  it('postgres reads nameE followed by a quote as the name nameE and a plain string', () => {
+    expect(blankSql("SELECT nameE'a' AS x", 'postgres')).toBe("SELECT nameE'' AS x");
+    // A backslash before the closing quote shows the string is plain: as an escape string it
+    // would never close.
+    expect(blankSql("SELECT nameE'a\\' AS x", 'postgres')).toBe("SELECT nameE'' AS x");
+  });
+});

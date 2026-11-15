@@ -5,7 +5,7 @@
  *  The reader follows the engine exactly. When the engine's reading turns on its version or its
  *  settings, or is not known for certain, the reader does not guess. It throws.
  *
- *  Two settings are not checked; the reader takes the server's default for them. On MySQL, a
+ *  Three settings are not checked; the reader takes the server's default for them. On MySQL, a
  *  backslash inside a string makes the next character ordinary. In a plain Postgres string, a
  *  backslash is an ordinary character. On MySQL, `"..."` is read with the same backslash rule as
  *  `'...'`, which is the server's reading while its ANSI_QUOTES setting is off.
@@ -26,6 +26,8 @@ const VERSIONED_COMMENT = 'the SQL has a /*! comment with a version number, or a
 const LONE_CARRIAGE_RETURN = 'the SQL has a carriage return inside a line comment that is not followed by a line feed';
 const MSSQL_COMMENT_CHAR = 'the SQL has a control character or a line separator inside a SQL Server line comment';
 const NUL_CHARACTER = 'the SQL holds a NUL character';
+const STRING_AFTER_ESCAPE_STRING = "the SQL has a string directly after an E'...' escape string, which Postgres may read as part of it";
+const DIGIT_BEFORE_STRING = "the SQL has a digit directly before an E'...' string or a dollar-quoted string, which Postgres may read as a number and then a string";
 const EMPTY_TOKEN_MATCH = 'the token pattern must not match empty text';
 
 type State = 'code' | 'quoted' | 'line' | 'block' | 'dollar';
@@ -80,6 +82,20 @@ function dollarTagAt(sql: string, i: number): string {
 function isEStringQuote(sql: string, i: number): boolean {
   const prev = sql[i - 1];
   return (prev === 'E' || prev === 'e') && !isPostgresNameChar(sql[i - 2]);
+}
+
+/** The index of the first character at or after `j` that is not Postgres white space and not part
+ *  of a `--` comment. A `--` comment ends at a line feed or a carriage return. */
+function skipSpaceAndLineComments(sql: string, j: number): number {
+  while (j < sql.length) {
+    const c = sql[j];
+    if (c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v') j++;
+    else if (c === '-' && sql[j + 1] === '-') {
+      j += 2;
+      while (j < sql.length && sql[j] !== '\n' && sql[j] !== '\r') j++;
+    } else break;
+  }
+  return j;
 }
 
 /** Whether `--` at `i` starts a line comment. On MySQL the next character must be missing, at or
@@ -137,6 +153,11 @@ function scan(sql: string, dialect: SqlDialect): Scan {
 
     if (state === 'code') {
       if (c === "'") {
+        // Postgres reads `1E'a'` as the number 1 and then `E'a'`, where this reader would see the
+        // name `1E` and a plain string.
+        if (dialect === 'postgres' && (sql[i - 1] === 'E' || sql[i - 1] === 'e') && isDigit(sql[i - 2])) {
+          throw new Error(DIGIT_BEFORE_STRING);
+        }
         state = 'quoted'; close = "'";
         escapes = dialect === 'mysql' || (dialect === 'postgres' && isEStringQuote(sql, i));
         out += "''"; i++;
@@ -163,6 +184,9 @@ function scan(sql: string, dialect: SqlDialect): Scan {
         } else {
           state = 'block'; depth = 1; out += ' '; i += 2;
         }
+      } else if (c === '$' && dialect === 'postgres' && isDigit(sql[i - 1]) && dollarTagAt(sql, i) !== '') {
+        // Postgres reads `1$$a$$` as the number 1 and then a dollar-quoted string.
+        throw new Error(DIGIT_BEFORE_STRING);
       } else if (c === '$' && dialect === 'postgres' && !isPostgresNameChar(sql[i - 1]) && dollarTagAt(sql, i) !== '') {
         tag = dollarTagAt(sql, i);
         state = 'dollar'; out += "''"; i += tag.length;
@@ -171,7 +195,15 @@ function scan(sql: string, dialect: SqlDialect): Scan {
       }
     } else if (state === 'quoted') {
       if (c === close) {
-        if (d === close) { i += 2; } else { state = 'code'; i++; }
+        if (d === close) { i += 2; } else {
+          // Postgres joins two strings that only white space with a line break, and `--` comments,
+          // keep apart. After an `E'...'` string it reads the second one with backslash escapes
+          // too. This reader would read it as plain, so a quote there throws, line break or not.
+          if (dialect === 'postgres' && escapes && sql[skipSpaceAndLineComments(sql, i + 1)] === "'") {
+            throw new Error(STRING_AFTER_ESCAPE_STRING);
+          }
+          state = 'code'; i++;
+        }
       } else if (c === '\\' && escapes) {
         i += 2;
       } else {
@@ -219,7 +251,11 @@ function scan(sql: string, dialect: SqlDialect): Scan {
  *    (mssql);
  *  - a `/*!` comment is directly followed by a digit or by `!`, or a `/*M!` or `/*m!` comment
  *    opens (mysql);
- *  - a `/*!` comment is never closed, or opens inside another one (mysql). */
+ *  - a `/*!` comment is never closed, or opens inside another one (mysql);
+ *  - a `'` follows an `E'...'` string with only white space and `--` comments between them,
+ *    or none (postgres);
+ *  - a digit sits directly before `E'` or before the opener of a dollar-quoted string
+ *    (postgres). */
 export function blankSql(sql: string, dialect: SqlDialect): string {
   return scan(sql, dialect).text;
 }

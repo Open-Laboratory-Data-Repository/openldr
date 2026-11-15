@@ -15,14 +15,8 @@ const DIALECTS_IN_ORDER: readonly SqlDialect[] = ['postgres', 'mssql', 'mysql'];
  *  - it holds a refused word (INTO, DDL or DML; see `hasBaseWord` for what counts as a word);
  *  - on mssql only, it holds a SQL Server statement word or pass-through function (see
  *    `refuseSqlServerStatementWords`);
- *  - every case in which `blankSql` throws (see `sql-text.ts`):
- *    - a string, block comment, quoted name or dollar-quoted string is never closed (any dialect);
- *    - a carriage return inside a line comment is followed by a character other than a line feed
- *      (mysql, mssql);
- *    - a vertical tab, a form feed, U+0085, U+2028 or U+2029 sits inside a `--` comment (mssql);
- *    - a `/*!` comment is directly followed by a digit or by `!`, or a `/*M!` or `/*m!` comment
- *      opens (mysql);
- *    - a `/*!` comment is never closed, or opens inside another one (mysql). */
+ *  - every case in which `blankSql` throws. The full list is on `blankSql` in `sql-text.ts`; one
+ *    of them is a string directly after an `E'...'` escape string, on postgres. */
 export function validateSelectSql(rawSql: string, dialect: SqlDialect): void {
   const blanked = blankSql(rawSql, dialect);
   checkBlankedSelect(blanked, dialect);
@@ -76,9 +70,9 @@ const BASE_WORDS = ['insert', 'update', 'delete', 'drop', 'alter', 'create', 'tr
  *  own: SQL Server reads `1KILL` as `1` then `KILL`. A word counts there when it ends the run.
  *
  *  A binary literal is the exception, on SQL Server only. A run that starts with `0x` or `0X` is
- *  `0x` and every hex digit after it, then the rest of the run as a new token. A word counts only
- *  when it is the whole of that rest. So `0xADD` is one literal, `0x1DELETE` is `0x1DE` then the
- *  name `LETE`, and `0x1KILL` is `0x1` then the word `KILL`.
+ *  `0x` and every hex digit after it, then the rest of the run as a new run, read by the same rule.
+ *  So `0xADD` is one literal, `0x1DELETE` is `0x1DE` then the name `LETE`, `0x1KILL` is `0x1`
+ *  then the word `KILL`, and `0x1$KILL` is `0x1` then `$KILL`, which ends with `KILL`.
  *
  *  `\b` is not used: it treats `#`, `@` and `$` as word ends, so `##open` and `@set` would match,
  *  and it treats a digit as part of a word, so `1KILL` would not. */
@@ -128,7 +122,7 @@ function runHasWord(run: string, reading: WordReading, list: WordList): boolean 
   const literal = reading.binaryLiterals ? BINARY_LITERAL.exec(run) : null;
   if (literal) {
     const rest = run.slice(literal[0].length);
-    return rest !== '' && list.whole.test(rest);
+    return rest !== '' && runHasWord(rest, reading, list);
   }
   return list.end.test(run.slice(-LONGEST_WORD));
 }

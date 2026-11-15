@@ -4,6 +4,8 @@ import {
   PostgresIntrospector, PostgresQueryCompiler, type DatabaseConnection, type Driver, type QueryResult,
 } from 'kysely';
 import { validateSelectSql, validateSelectSqlForSave, runSqlQuery, runReadQuery, planPagination, SQL_CHECK_WORDS_FOR_TESTS } from './sql-runner';
+import { prepareSelect } from './custom-query-run';
+import { applyTemplate } from './template';
 
 // --- Fake Kysely db/executor for driving runSqlQuery's `sql`/`sql.raw` calls through the
 // transaction. Mirrors just enough of kysely's RawBuilder.execute() contract (getExecutor() →
@@ -269,19 +271,40 @@ describe('a binary literal on mssql', () => {
     'SELECT 0x1DELETE FROM t', 'SELECT 0x1EXEC p', 'SELECT 0X0ADD AS b',
   ])('allows %s', (q) => { expect(() => validateSelectSql(q, 'mssql')).not.toThrow(); });
   it.each([
-    'SELECT 0x1KILL 55', 'SELECT 0xFFWAITFOR DELAY \'00:00:01\'', 'SELECT 0xGO_SET', 'SELECT 0x1 EXEC p',
-  ])('handles %s by the rule', (q) => {
-    const refused = !['SELECT 0xGO_SET'].includes(q);
-    if (refused) expect(() => validateSelectSql(q, 'mssql')).toThrow();
-    else expect(() => validateSelectSql(q, 'mssql')).not.toThrow();
+    'SELECT 0x1KILL 55', 'SELECT 0xFFWAITFOR DELAY \'00:00:01\'', 'SELECT 0x1 EXEC p',
+  ])('refuses %s', (q) => { expect(() => validateSelectSql(q, 'mssql')).toThrow(); });
+  it.each(['SELECT 0xGO_SET'])('accepts %s, where what is left after 0x is one name', (q) => {
+    expect(() => validateSelectSql(q, 'mssql')).not.toThrow();
+  });
+  it.each(['SELECT 0x1$KILL 55', 'SELECT 0x$KILL 55'])(
+    'refuses %s: what is left after the literal is read by the digit-run rule',
+    (q) => { expect(() => validateSelectSql(q, 'mssql')).toThrow(MSSQL_REFUSAL); },
+  );
+  it.each(['SELECT 0xADD AS b', 'SELECT 0x1F AS b', 'SELECT 0xGO_SET'])(
+    'still accepts %s', (q) => { expect(() => validateSelectSql(q, 'mssql')).not.toThrow(); },
+  );
+});
+
+describe('postgres, a string after an escape string', () => {
+  it('postgres: a string that continues an escape string is refused before it runs', () => {
+    expect(() => validateSelectSql("SELECT E'a'\n'b' AS x", 'postgres')).toThrow();
+  });
+  it('postgres: a filled value directly after an escape string is refused', () => {
+    const p = [{ id: 'x', type: 'text', label: 'X', required: false }];
+    expect(() => prepareSelect("SELECT E'a'\n{{param.x}} AS v", p as never, { x: 'y' }, 'postgres')).toThrow();
+  });
+  it('postgres: a widget template with an escape string above a token is refused before the database', async () => {
+    const filled = applyTemplate("SELECT E'a'\n{{x}} AS v", { x: 'y' }, 'postgres');
+    const untouched = new Proxy({}, { get: () => { throw new Error('the database was reached'); } });
+    await expect(runSqlQuery(untouched as never, filled, RUN, 'postgres')).rejects.toThrow(/escape string/);
   });
 });
 
 describe('pair words and the characters between them, on mssql', () => {
   it.each([
     'SELECT * FROM t x DISABLE\u001fTRIGGER trg ON t',
-    'SELECT NEXT\u0085VALUE FOR dbo.seq',
-    'SELECT * FROM t x ENABLE ​TRIGGER trg ON t',
+    'SELECT NEXT\u0085VALUE\u2028FOR dbo.seq',
+    'SELECT * FROM t x ENABLE\u00a0\u200bTRIGGER trg ON t',
   ])('refuses %j with the SQL Server sentence', (q) => { expect(() => validateSelectSql(q, 'mssql')).toThrow(MSSQL_REFUSAL); });
   it('keeps the words as names when printable punctuation sits between them', () => {
     expect(() => validateSelectSql('SELECT next.value, disable.trigger FROM t', 'mssql')).not.toThrow();
