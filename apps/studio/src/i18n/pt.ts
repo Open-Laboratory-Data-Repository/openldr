@@ -19,7 +19,8 @@ export const pt: EnShape = {
     setupCode: 'Código de configuração',
     setupCodeHint: 'Execute "openldr auth setup-code" no servidor para obter um.',
     setupCodeFromApp: 'A aplicação OpenLDR introduziu este código por si.',
-    setupCodeHintDesktop: 'Saia do OpenLDR e volte a abri-lo. A aplicação introduz então o código por si.',
+    setupCodeHintDesktop: 'Selecione Sair no menu da área de notificação e volte a abrir o OpenLDR. Depois, a aplicação introduz o código por si.',
+    setupCodeAsking: 'A obter o código da aplicação OpenLDR…',
     newPassword: 'Nova palavra-passe',
     repeatPassword: 'Repetir a palavra-passe',
     currentPassword: 'Palavra-passe atual',
@@ -42,7 +43,7 @@ export const pt: EnShape = {
     skip: 'Saltar',
     lab: {
       title: 'Dê um nome ao seu laboratório',
-      intro: 'O nome do laboratório aparece nos relatórios como laboratório emissor. Os relatórios contam cada dia no fuso horário que selecionar.',
+      intro: 'O nome do laboratório aparece nos relatórios como laboratório emissor. Os relatórios usam este fuso horário para saber a que dia pertence cada registo.',
       name: 'Nome do laboratório',
       timeZone: 'Fuso horário',
       timeZonePick: 'Selecione um fuso horário',
@@ -53,7 +54,7 @@ export const pt: EnShape = {
     },
     sample: {
       title: 'Dados de exemplo',
-      intro: 'Os dados de exemplo acrescentam 60 pedidos fictícios, 39 deles com resultados, além de formulários, fluxos de trabalho e um painel de exemplo, para que possa experimentar o OpenLDR antes de chegarem os seus próprios dados. O OpenLDR não consegue remover os registos de exemplo mais tarde, por isso salte este passo numa instalação destinada a dados reais de pacientes.',
+      intro: 'Os dados de exemplo acrescentam 60 pedidos fictícios, 39 deles com resultados, e um painel de exemplo, para que possa experimentar o OpenLDR antes de chegarem os seus próprios dados. Não é possível remover mais tarde apenas os registos de exemplo. Não os carregue numa instalação destinada a dados reais de pacientes.',
       load: 'Carregar dados de exemplo',
       loading: 'A carregar os dados de exemplo…',
       failed: 'Não foi possível carregar os dados de exemplo: {{error}}',

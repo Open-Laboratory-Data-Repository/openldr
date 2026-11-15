@@ -130,6 +130,6 @@ describe('sample data routes', () => {
     });
     const res = await app.inject({ method: 'POST', url: URL });
     expect(res.statusCode).toBe(500);
-    expect(res.json()).toEqual({ error: 'Sample data could not be loaded.' });
+    expect(res.json()).toEqual({ error: 'The load stopped partway. The server log names the error.' });
   });
 });

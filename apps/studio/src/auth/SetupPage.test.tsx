@@ -108,7 +108,7 @@ describe('SetupPage', () => {
   it('without the desktop app, names the server command and not the app', () => {
     render(<SetupPage onSignedIn={vi.fn()} onSignInInstead={vi.fn()} />);
     expect(screen.getByText('Run "openldr auth setup-code" on the server to get one.')).toBeInTheDocument();
-    expect(screen.queryByText('Quit OpenLDR and open it again. The app then enters the code for you.')).toBeNull();
+    expect(screen.queryByText('Select Quit in the tray menu, then open OpenLDR again. The app will enter the code for you.')).toBeNull();
     expect(screen.queryByText('The OpenLDR app entered this code for you.')).toBeNull();
   });
 
@@ -126,7 +126,8 @@ describe('SetupPage in the desktop app', () => {
   const FROM_APP = 'The OpenLDR app entered this code for you.';
   const SERVER_HINT = 'Run "openldr auth setup-code" on the server to get one.';
   // A desktop install has no openldr command, so the app's own hint replaces the server one.
-  const DESKTOP_HINT = 'Quit OpenLDR and open it again. The app then enters the code for you.';
+  const DESKTOP_HINT = 'Select Quit in the tray menu, then open OpenLDR again. The app will enter the code for you.';
+  const ASKING = 'Getting the code from the OpenLDR app…';
   const session = { accessToken: 't', expiresIn: 600, mustChangePassword: false };
 
   function stub(setupCode: () => Promise<string>) {
@@ -167,6 +168,8 @@ describe('SetupPage in the desktop app', () => {
     stub(() => new Promise<string>(() => {}));
     render(<SetupPage onSignedIn={vi.fn()} onSignInInstead={vi.fn()} />);
     expect(screen.getByLabelText('Setup code')).toBeDisabled();
+    expect(screen.getByText(ASKING)).toBeInTheDocument();
+    expect(screen.queryByText(SERVER_HINT)).toBeNull();
   });
 
   it("sends the app's code", async () => {

@@ -45,7 +45,7 @@ export interface AppStrings {
 const en: AppStrings = {
   windowTitle: 'OpenLDR',
   startingTitle: 'Starting OpenLDR',
-  checkingNote: 'Checking whether OpenLDR is already running…',
+  checkingNote: 'Checking whether OpenLDR is already running.',
   postgresNote: 'Starting the database.',
   recoveringNote: 'The database is recovering after an unexpected stop. This can take a few minutes.',
   serverNote: 'Starting the server.',
@@ -69,7 +69,7 @@ const en: AppStrings = {
 const fr: AppStrings = {
   windowTitle: 'OpenLDR',
   startingTitle: "Démarrage d'OpenLDR",
-  checkingNote: "Vérification si OpenLDR est déjà en cours d'exécution…",
+  checkingNote: "Vérification si OpenLDR est déjà en cours d'exécution.",
   postgresNote: 'Démarrage de la base de données.',
   recoveringNote: 'La base de données est en cours de récupération après un arrêt brutal. Cela peut prendre quelques minutes.',
   serverNote: 'Démarrage du serveur.',
@@ -93,7 +93,7 @@ const fr: AppStrings = {
 const pt: AppStrings = {
   windowTitle: 'OpenLDR',
   startingTitle: 'A iniciar o OpenLDR',
-  checkingNote: 'A verificar se o OpenLDR já está em execução…',
+  checkingNote: 'A verificar se o OpenLDR já está em execução.',
   postgresNote: 'A iniciar a base de dados.',
   recoveringNote: 'A base de dados está a recuperar de uma paragem inesperada. Isto pode demorar alguns minutos.',
   serverNote: 'A iniciar o servidor.',

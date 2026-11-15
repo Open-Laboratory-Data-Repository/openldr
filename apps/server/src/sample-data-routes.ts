@@ -57,7 +57,7 @@ export function registerSampleDataRoutes(app: FastifyInstance<any, any, any, any
             metadata: { ok: false },
           });
         } catch { /* the 500 still goes out */ }
-        return reply.code(500).send({ error: 'Sample data could not be loaded.' });
+        return reply.code(500).send({ error: 'The load stopped partway. The server log names the error.' });
       }
       await recordAudit(ctx, req, {
         action: 'settings.sample_data.load', entityType: 'system', entityId: 'sample-data',

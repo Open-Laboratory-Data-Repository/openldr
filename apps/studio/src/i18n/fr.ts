@@ -19,7 +19,8 @@ export const fr: EnShape = {
     setupCode: 'Code de configuration',
     setupCodeHint: 'Exécutez « openldr auth setup-code » sur le serveur pour en obtenir un.',
     setupCodeFromApp: "L'application OpenLDR a saisi ce code pour vous.",
-    setupCodeHintDesktop: "Quittez OpenLDR et ouvrez-le à nouveau. L'application saisit alors le code pour vous.",
+    setupCodeHintDesktop: "Sélectionnez Quitter dans le menu de la zone de notification, puis rouvrez OpenLDR. L'application saisira alors le code pour vous.",
+    setupCodeAsking: "Récupération du code auprès de l'application OpenLDR…",
     newPassword: 'Nouveau mot de passe',
     repeatPassword: 'Répéter le mot de passe',
     currentPassword: 'Mot de passe actuel',
@@ -42,7 +43,7 @@ export const fr: EnShape = {
     skip: 'Passer',
     lab: {
       title: 'Nommez votre laboratoire',
-      intro: "Le nom du laboratoire figure sur les rapports comme laboratoire émetteur. Les rapports comptent chaque jour selon le fuseau horaire que vous sélectionnez.",
+      intro: "Le nom du laboratoire figure sur les rapports comme laboratoire émetteur. Les rapports utilisent ce fuseau horaire pour savoir à quel jour appartient chaque dossier.",
       name: 'Nom du laboratoire',
       timeZone: 'Fuseau horaire',
       timeZonePick: 'Sélectionnez un fuseau horaire',
@@ -53,7 +54,7 @@ export const fr: EnShape = {
     },
     sample: {
       title: "Données d'exemple",
-      intro: "Les données d'exemple ajoutent 60 demandes fictives, dont 39 avec leurs résultats, ainsi que des exemples de formulaires, de flux de travail et un tableau de bord, pour que vous puissiez essayer OpenLDR avant l'arrivée de vos propres données. OpenLDR ne peut pas supprimer ces données d'exemple par la suite, donc passez cette étape sur une installation destinée à de vraies données de patients.",
+      intro: "Les données d'exemple ajoutent 60 demandes fictives, dont 39 avec leurs résultats, et un tableau de bord d'exemple, pour que vous puissiez essayer OpenLDR avant l'arrivée de vos propres données. Il est impossible de supprimer plus tard uniquement les données d'exemple. Ne les chargez pas sur une installation destinée à de vraies données de patients.",
       load: "Charger les données d'exemple",
       loading: "Chargement des données d'exemple…",
       failed: "Impossible de charger les données d'exemple : {{error}}",

@@ -17,7 +17,8 @@ export const en = {
     setupCode: 'Setup code',
     setupCodeHint: 'Run "openldr auth setup-code" on the server to get one.',
     setupCodeFromApp: 'The OpenLDR app entered this code for you.',
-    setupCodeHintDesktop: 'Quit OpenLDR and open it again. The app then enters the code for you.',
+    setupCodeHintDesktop: 'Select Quit in the tray menu, then open OpenLDR again. The app will enter the code for you.',
+    setupCodeAsking: 'Getting the code from the OpenLDR app…',
     newPassword: 'New password',
     repeatPassword: 'Repeat password',
     currentPassword: 'Current password',
@@ -40,7 +41,7 @@ export const en = {
     skip: 'Skip',
     lab: {
       title: 'Name your laboratory',
-      intro: 'The laboratory name appears on reports as the issuing laboratory. Reports count each day in the time zone you select.',
+      intro: 'The laboratory name appears on reports as the issuing laboratory. Reports use this time zone to decide which day each record belongs to.',
       name: 'Laboratory name',
       timeZone: 'Time zone',
       timeZonePick: 'Select a time zone',
@@ -51,7 +52,7 @@ export const en = {
     },
     sample: {
       title: 'Sample data',
-      intro: 'Sample data adds 60 fictional lab orders, 39 of them with results, plus example forms, workflows and a dashboard, so you can try OpenLDR before your own data arrives. OpenLDR cannot remove the sample records afterwards, so skip this step on an installation meant for real patient data.',
+      intro: 'Sample data adds 60 fictional lab orders, 39 of them with results, and an example dashboard, so you can try OpenLDR before your own data arrives. There is no way to remove only the sample records later. Do not load sample data on an installation meant for real patient data.',
       load: 'Load sample data',
       loading: 'Loading sample data…',
       failed: 'Could not load sample data: {{error}}',

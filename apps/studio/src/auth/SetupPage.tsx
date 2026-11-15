@@ -49,9 +49,11 @@ type CodeSource = 'typed' | 'asking' | 'app';
 
 /**
  * The line under the setup code field. A desktop install has no `openldr` command, so when the
- * app gives no code the line tells the person to open the app again instead.
+ * app gives no code the line tells the person to open the app again instead. While the app is
+ * asked, the line says so. `asking` happens only with the desktop app.
  */
 function hintKey(codeSource: CodeSource): string {
+  if (codeSource === 'asking') return 'auth.setupCodeAsking';
   if (codeSource === 'app') return 'auth.setupCodeFromApp';
   if (codeSource === 'typed' && desktopApp()) return 'auth.setupCodeHintDesktop';
   return 'auth.setupCodeHint';
