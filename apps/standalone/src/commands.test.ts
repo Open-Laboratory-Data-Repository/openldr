@@ -9,6 +9,7 @@ import type { Config } from '@openldr/config';
 import type { RunningServer } from '@openldr/server/start';
 import {
   FORCED_STOP_ERROR,
+  PENDING_RECHECK_MS,
   RECOVERY_DONE,
   RECOVERY_NOTICE,
   STOP_WAIT_MS,
@@ -799,6 +800,26 @@ describe('runStart and the version that last used the data folder', () => {
 
   const PENDING = ['internal:001_a', 'internal:002_b', 'external:001_c'];
 
+  /**
+   * A fake pendingMigrations whose first read gives PENDING. The second read turns on fake timers
+   * before it answers, so the launcher's limit on that read runs on them, and the test can move
+   * the clock and count the timers left. The first read stays on real timers.
+   */
+  function secondReadUnderFakeTimers(f: Fakes, answer: () => Promise<string[]>): { reached: Promise<void> } {
+    let reads = 0;
+    let markReached!: () => void;
+    const reached = new Promise<void>((r) => (markReached = r));
+    f.deps.pendingMigrations = () => {
+      reads += 1;
+      f.order.push('migrations.read');
+      if (reads === 1) return Promise.resolve([...PENDING]);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      markReached();
+      return answer();
+    };
+    return { reached };
+  }
+
   describe('a start whose server fails and migrated nothing', () => {
     it('puts the older record back', async () => {
       await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
@@ -826,6 +847,18 @@ describe('runStart and the version that last used the data folder', () => {
       serverFails(f);
       await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
       expect(f.order).toEqual(['pg.leftover', 'pg.start', 'migrations.read', 'server.start', 'migrations.read', 'pg.stop']);
+    });
+
+    it('puts the record back when the second read answers within the limit, and leaves no timer running', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      secondReadUnderFakeTimers(f, async () => [...PENDING]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(vi.getTimerCount()).toBe(0);
+      vi.useRealTimers();
+      expect(await readFile(paths.versionFile, 'utf8')).toBe('{"version":"0.1.0"}\n');
+      await expectNothingLeft(f);
     });
 
     it('still says the port is taken, and puts the record back', async () => {
@@ -884,6 +917,31 @@ describe('runStart and the version that last used the data folder', () => {
       expect(f.order).toContain('server.start');
       expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
       expect(reads.count).toBe(1);
+      await expectNothingLeft(f);
+    });
+
+    it('when the second read never answers: it gives up after 10 seconds, and the start error is the one thrown', async () => {
+      expect(PENDING_RECHECK_MS).toBe(10_000);
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      const second = secondReadUnderFakeTimers(f, () => new Promise<string[]>(() => {}));
+      serverFails(f);
+      let settled = false;
+      const result = runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+      void result.then(() => (settled = true));
+      await second.reached;
+      await vi.advanceTimersByTimeAsync(PENDING_RECHECK_MS - 1);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      const err = await result;
+      expect(vi.getTimerCount()).toBe(0);
+      vi.useRealTimers();
+      expect(err?.message).toBe('boom');
+      expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+      expect(f.pg.stopped).toBe(true);
       await expectNothingLeft(f);
     });
 

@@ -85,6 +85,12 @@ export interface Launcher {
 }
 
 export const STOP_WAIT_MS = 60_000;
+/**
+ * How long the read of pending migrations after a failed start may take. Past it the version
+ * record stays as it is. The first read has no limit: it pays the cold import of the bootstrap
+ * module, which can pass 10 seconds on a slow machine.
+ */
+export const PENDING_RECHECK_MS = 10_000;
 /** How long `stop` waits for a running launcher to answer its stop request. */
 const STOP_REQUEST_MS = 90_000;
 const DEFAULT_PORT = 3000;
@@ -254,6 +260,22 @@ async function readPending(deps: LauncherDeps, cfg: Config): Promise<string[] | 
     return await deps.pendingMigrations(cfg);
   } catch {
     return null;
+  }
+}
+
+/**
+ * readPending with a time limit. Past the limit it gives null, as a failed read does, and the
+ * read goes on with nobody waiting for it. The timer is cleared either way, so a quick read does
+ * not hold the process open.
+ */
+async function readPendingWithin(deps: LauncherDeps, cfg: Config, ms: number): Promise<string[] | null> {
+  const read = readPending(deps, cfg);
+  let timer: NodeJS.Timeout | undefined;
+  const limit = new Promise<null>((r) => (timer = setTimeout(() => r(null), ms)));
+  try {
+    return await Promise.race([read, limit]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -616,10 +638,14 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
     // 10. The server. A start that reaches the server may migrate the database, even when the
     //     server then fails to start. So the folder is marked with this version first. A migration
     //     without a record lets an older launcher through to a migration error that tells the
-    //     person nothing. A record without a migration would lock that launcher out for no reason,
-    //     so when the server fails, the list of migrations not yet run is read again. When it has
-    //     not changed, no migration ran and the old record goes back. When the list cannot be
-    //     read, the record stays.
+    //     person nothing. So when the server fails, the list of migrations not yet run is read
+    //     again. When it has not changed, no migration ran, so the schema did not change, and the
+    //     old record goes back. Equal lists prove only that. By the time the server fails to
+    //     listen, its boot writes have run (apps/server/src/start.ts, app.listen comes last), such
+    //     as seeded roles, forms and workflows. This assumes a newer version writes nothing at
+    //     boot that an older one cannot read. A future boot-time change of data an older version
+    //     cannot read needs its own guard. When the list cannot be read, or the second read takes
+    //     longer than PENDING_RECHECK_MS, the record stays.
     const pendingBefore = await readPending(deps, cfg);
     const replaced = await recordDataVersion(paths, deps.appVersion);
     deps.emit?.({ event: 'starting', step: 'server' });
@@ -628,7 +654,9 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
     } catch (err) {
       // Postgres is still up here. The teardown below stops it.
       if (replaced && pendingBefore) {
-        const pendingAfter = await readPending(deps, cfg);
+        // A limit here only: a Postgres that never answers would hold the failed start, and a stop
+        // from the desktop app waits for the start to end.
+        const pendingAfter = await readPendingWithin(deps, cfg, PENDING_RECHECK_MS);
         if (pendingAfter && sameNames(pendingBefore, pendingAfter)) {
           await restoreDataVersion(paths, replaced.previous).catch(() => {});
         }
