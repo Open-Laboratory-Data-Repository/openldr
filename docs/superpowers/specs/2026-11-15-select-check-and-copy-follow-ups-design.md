@@ -173,8 +173,8 @@ The build's reviews found that parts of sections 4.1 to 4.4 were wrong or left t
 A reader with no engine cannot be right for three engines at once. So the reader always takes a dialect, and it follows that engine exactly. Where an engine's reading depends on its version or its settings, or is not known for certain, the reader refuses the text with a fixed sentence.
 
 - A string is `'...'` with `''` inside, on every engine. A quoted name is `"..."` on every engine, `[...]` on SQL Server only, and a backtick name on MySQL only. Square brackets are array subscripts on Postgres.
-- Postgres also has dollar-quoted strings (`$tag$ ... $tag$`) and `E'...'` strings, where a backslash makes the next character ordinary.
-- A line comment is `--` to the end of the line. On MySQL `--` opens a comment only before a space or a control character, and `#` also opens one. On Postgres a line comment ends at a line feed or a carriage return. On SQL Server and MySQL it ends at a line feed.
+- Postgres also has dollar-quoted strings (`$tag$ ... $tag$`) and `E'...'` strings, where a backslash makes the next character ordinary. Postgres joins two strings that are separated only by white space with a line break, and reads the second with escapes when the first is an `E'...'` string. The reader refuses a string that directly follows an escape string, so it never has to follow that rule. It also refuses a digit directly before `E'` or before a dollar quote, where Postgres reads a number and then a string.
+- A line comment is `--` to the end of the line. On MySQL `--` opens a comment only before a space or a control character, and `#` also opens one. On Postgres a line comment ends at a line feed or a carriage return. On MySQL it ends at a line feed. On SQL Server 2025 it ends at a line feed or a lone carriage return, as Task 9's real run showed; the reader ends it at a line feed and refuses a lone carriage return inside it.
 - A block comment nests on SQL Server and Postgres. On MySQL it ends at the first `*/`.
 - On MySQL, `/*! ... */` keeps its inside as SQL, because MySQL runs it.
 
@@ -182,12 +182,12 @@ Refused, because the engine's reading is not certain:
 
 - a NUL character anywhere, on every engine;
 - on MySQL, a comment that carries a version number (`/*!50000 ... */`, `/*!!50000 ... */`) and a MariaDB comment (`/*M! ... */`): the server's version decides whether it runs;
-- on SQL Server, inside a `--` comment, any control character other than a tab, and the two Unicode line separators: nobody had shown how SQL Server ends a line comment. Task 9's real run tries each one, and its result may loosen this;
+- on SQL Server, inside a `--` comment, any control character other than a tab, and the two Unicode line separators. Task 9's real run tried each one on SQL Server 2025: a lone carriage return ends the comment, so refusing it is needed; the others stay inside the comment, so refusing them is stricter than that server needs. The rule stays as it is, because it is right whichever way another SQL Server version reads them, and no query a person types holds them. One cost: a file with doubled carriage returns before each line feed is refused when a comment line has them;
 - on MySQL and SQL Server, a carriage return inside a line comment that is not followed by a line feed and is not the last character.
 
 Three engine defaults the reader assumes, where refusing would break working queries:
 
-- on MySQL, a backslash inside `'...'` and `"..."` makes the next character ordinary. That is the server's default. On a MySQL server set to `NO_BACKSLASH_ESCAPES` or `ANSI_QUOTES`, text after such a string can be hidden from the check. MySQL runs one statement per request, and the run paths wrap the SQL in a derived table, so what could hide is a read or a row lock;
+- on MySQL, a backslash inside `'...'` and `"..."` makes the next character ordinary. That is the server's default. On a MySQL server set to `NO_BACKSLASH_ESCAPES` or `ANSI_QUOTES`, text after such a string can be hidden from the check. MySQL runs one statement per request, and the run paths wrap the SQL in a derived table, so what could hide is a read or a row lock. On a server set to `NO_BACKSLASH_ESCAPES`, a string that ends in a backslash is also a working query that the reader refuses as never closed;
 - on Postgres, a backslash in a plain string is an ordinary character. Both Postgres paths now run `SET LOCAL standard_conforming_strings = on` at the start of their transaction, which makes this true whatever the server or the session says;
 - on SQL Server, `"..."` is read the same whether it is a name or a string.
 
@@ -199,7 +199,7 @@ Three engine defaults the reader assumes, where refusing would break working que
 ### 10.3 The SQL Server word rule
 
 - `load` and `dump` are not on the list (section 4.2).
-- In a run of name characters that starts with a letter, `_`, `#` or `@`, a listed word counts only when it is the whole run. In a run that starts with a digit or `$`, it counts when the run ends with it, because SQL Server reads a number and a word with no space as two things. A run that starts with `0x` is a binary number: `0x` and as many hex digits as follow; a listed word counts only as the whole of what is left after them.
+- In a run of name characters that starts with a letter, `_`, `#` or `@`, a listed word counts only when it is the whole run. In a run that starts with a digit or `$`, it counts when the run ends with it, because SQL Server reads a number and a word with no space as two things. A run that starts with `0x` is a binary number: `0x` and as many hex digits as follow; what is left after them is checked again by the same rule.
 - The same rule applies to the older word list (`insert`, `update`, `delete` and the rest) on SQL Server and Postgres. MySQL keeps the older word boundary, because a MySQL name may start with a digit.
 - Between the words of a pair (`enable trigger`, `disable trigger`, `next value for`), spaces, control characters and Unicode separators all count as a gap.
 - `use` is allowed only in the shape of a query hint.
@@ -207,10 +207,11 @@ Three engine defaults the reader assumes, where refusing would break working que
 ### 10.4 Tokens and the values that fill them
 
 - A token is found by position: every character of it must be plain SQL in the engine's reading. Counting tokens before and after blanking was wrong.
-- The fill takes the dialect. The dashboard query passes the target store's engine, and a saved query asks for its connector's dialect. With no dialect, which only the client-side preview has, the token check passes when one engine's reading passes.
+- The fill takes the dialect. The dashboard query passes the target store's engine, and a saved query asks for its connector's dialect. With no dialect the token check passes when one engine's reading passes. The one caller with no dialect is the Query page's run route on a connector type that has no dialect, and the connector runner then refuses that type.
 - A number goes in only when it is finite. A negative number goes in inside parentheses, so it cannot make `--` after a minus sign. On MySQL a string value doubles its backslashes as well as its quotes.
 - The studio's widget editor no longer fills a template in the browser. It sends the template and the values, and the server fills once. The studio's own copy of the fill is deleted.
 - A token directly after a lone `E` is refused on Postgres, because the filled value would then be read as an `E'...'` string.
+- A refused template or statement on the dashboards query route answers 400 with its fixed sentence. It answered 500 before. An error from the database is unchanged.
 
 ### 10.5 Transactions
 
@@ -218,9 +219,12 @@ Three engine defaults the reader assumes, where refusing would break working que
 - The roll-back is always its own request, never text added to the person's SQL.
 - On the Postgres connector path a client is taken from the pool by hand. It carries an error listener for as long as it is out, so a dropped connection ends the query with an error and cannot stop the server.
 - A connection is never handed back to a pool with an open transaction. Kysely does not release a connection when its own roll-back fails, so the roll-back is wrapped so that the connection is released either way.
+- On the Postgres connector path the person's statement is sent in the driver's extended mode, where Postgres itself refuses a second statement in one request. The fix round's real run showed the refusal (error 42601). The path that dashboards, reports on the target store and the workflow SQL Query node use goes through Kysely, which has no such switch: there one request can still hold several statements, and the text check and the read-only transaction are the guards.
 
 ### 10.6 Found during the build and not fixed, for the operator
 
 - **A dropped Postgres connection can stop the server.** Kysely's Postgres driver adds no error listener to a client it takes from a pool. This affects every query on OpenLDR's own two Postgres databases. It is older than this work. The fix sits in `packages/adapter-db-store/src/index.ts` and `packages/db/src/internal-db.ts`.
-- **The lock-wait limit on a SQL Server target store has no effect.** `runReadQuery` sends `set lock_timeout` as its own request, and the driver ends a session setting with the request that made it.
+- **The lock-wait limit on a SQL Server target store has no effect.** `runReadQuery` sends `set lock_timeout` as its own request, and the driver ends a session setting with the request that made it. Task 9 measured it: asked for 2000 ms, it waited 15057 ms, until the driver's own timeout.
+- **A wrong password on a SQL Server source is retried for about 30 seconds.** Task 9 counted 122 failed logins before the copy failed. The connection pool does this. A source with a lockout policy could lock the login.
+- **On a SQL Server target store the warehouse projection fails** with a syntax error near the word `use`, from `packages/db/src/batch-upsert.ts`, which writes column names without brackets.
 - **A count for a query that ends in `; -- note` still fails**, as it did before.
