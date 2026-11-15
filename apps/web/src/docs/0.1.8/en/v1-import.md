@@ -10,6 +10,8 @@ Use your own v1 database through a read-only Microsoft SQL connector. Diagnose i
 
 You need **Manage connectors** to grant source access. The plugin page is for the lab administrator role. Know the UTC offset used by the source lab.
 
+The plugin page has two tabs. **Import** reads the source and saves records in CE. **Copy** keeps a copy of the source rows on the CE server. In this release you can make a copy and keep it, and nothing reads it yet. The import still reads the source itself.
+
 The pictures use one fictional request, patient and text result on an isolated SQL Server. They establish an actual dry run and import of that small fixture. They do not establish compatibility with every historical v1 database. Optional practice data is at the end.
 
 ## Allow the plugin to read a connector
@@ -162,6 +164,72 @@ A request already imported is replaced rather than duplicated. Repeating an impo
 
 Failed requests do not stop other requests. The page shows the first 100 reasons. It stores reason codes without source row content. An import does not emit data.persisted for each imported request, so workflows listening for that event do not run for those records.
 
+## Copy the source first
+
+A copy reads the rows of the v1 database and keeps them on the CE server's own disk. Use it when the link to the source is slow or drops. The server reads page by page, tries again after a lost link, and carries on after a restart. Nobody needs to watch the page.
+
+Nothing reads the copy yet. The import in the sections above still reads the source itself, so a copy does not change what an import saves.
+
+The copy holds patient data in full. It keeps every column of the Requests, LabResults, Patients and ASTResults rows of each request it reads. Protect the CE server and its backups as you protect the source. There is one copy for each connector. The plugin must be allowed to read the connector first.
+
+### 1. Open the Copy tab
+
+Open **OpenLDR v1 import** in the main menu, then select the **Copy** tab at the top of the page.
+
+![The Copy tab sits beside the Import tab.](/docs-images/operator/v1-import-guide-copy-tab.png)
+
+### 2. Choose the source and options
+
+Select the connector. Under **Copy options**, fill in the same values as for an import. **Database**, **From date**, **To date** and **Panel codes** decide which requests the copy reads. **Site time zone** changes nothing in the copy, because the copy keeps the dates as the source wrote them.
+
+![Choose the connector and the copy options.](/docs-images/operator/v1-import-guide-copy-options.png)
+
+### 3. Start the copy
+
+Select **Start copy**. The status reads **Queued. The server starts it within a few seconds.**, then **Copying**. You can leave the page. While a copy runs, its options are locked.
+
+![Start copy hands the copy to the server.](/docs-images/operator/v1-import-guide-copy-start.png)
+
+### 4. Read the set table
+
+Each row of the table is one set. The v1 plugin copies one set, `requests`, which holds the rows of all four tables for each request. **Requests read** is the number of requests stored so far. **Rows** is the number of source rows stored, from all four tables. **Size** is the size of those rows as CE stores them. **State** reads Not started, Copying, Waiting, Partly copied, Done, To be read again or Deleting.
+
+The line under the status counts requests "of an unknown number of requests", because the copy does not count the source first. A finished copy reads **Finished** and gives **Requests copied:** with the count.
+
+![The set table gives requests, rows, size and state.](/docs-images/operator/v1-import-guide-copy-sets.png)
+
+When CE could not copy some requests, an amber line gives **Requests left out:** and the count, and the status reads **Finished, with requests left out**. Troubleshooting says why.
+
+![A copy with requests left out is not complete.](/docs-images/operator/v1-import-guide-copy-skipped.png)
+
+### 5. Leave a waiting copy alone
+
+When the source or the link to it is down, the status reads **Waiting for the source. It will try again by itself.** The page shows **Tries so far:**, when the wait began, and the last error. You do nothing. The first wait is 5 seconds. Each wait doubles, up to 5 minutes, until the source answers or someone stops the copy.
+
+A copy also carries on by itself after the CE server restarts. Nobody presses anything. The counts can stand still for up to about two minutes after the restart before they move again.
+
+![A waiting copy tries again by itself.](/docs-images/operator/v1-import-guide-copy-waiting.png)
+
+### 6. Stop and continue
+
+Open the dots menu beside the status and select **Stop**. The status reads **Stopping after this page**, then **Stopped**. The rows copied so far stay. To carry on, select **Continue copy**. Each set carries on from where it stopped.
+
+![Stop is in the dots menu beside the status.](/docs-images/operator/v1-import-guide-copy-stop.png)
+
+If you changed **Database**, **From date**, **To date** or **Panel codes**, Continue copy asks **Read again from the start?** and names the sets. **Read again** deletes the rows copied so far for those sets, then reads them again from the start. On a slow link that can take days. To keep the copy, select **Cancel**, put the options back, then select **Continue copy**.
+
+![Read again deletes what was copied for the named sets.](/docs-images/operator/v1-import-guide-copy-reread.png)
+
+### 7. Delete a copy
+
+Stop the copy first. Open the dots menu and select **Delete copy**. The step names the connector and gives the rows and the size. Type `openldr-v1-import`, then select **Delete copy**.
+
+The status reads **Deleting the copied rows**. The server deletes the rows in batches, in the background. It carries on when you leave the page, and after a server restart. When it ends, the page reads **The copy was deleted.**
+
+![Type the plugin id to delete the copy.](/docs-images/operator/v1-import-guide-copy-delete.png)
+
+**Expected result:** The copy holds the source rows on the CE server, and the source database is unchanged. Nothing in CE reads the copy yet.
+
 ## Run the import from the CLI
 
 Follow [Start here](/docs/cli) for CLI setup. From `openldr_ce`, allow only the intended connector. Use a dry run before the actual import. Replace the id and source offset.
@@ -222,6 +290,46 @@ Follow [Start here](/docs/cli) for CLI setup. From `openldr_ce`, allow only the 
 
 ![Read failure codes before another attempt.](guide:operator-v1-failures)
 
+### 8. Start a copy and return at once
+
+```sh
+{{operator:v1-copy-start}}
+```
+
+`start` records the request and returns at once. The server does the copying. On a copy that is already queued, copying or waiting, it returns that copy as it is. On a stopped, failed or finished copy, it carries on from where each set stopped. When an option changed what a set reads, it names the sets and changes nothing. Run it again with `--reread` to read those sets again from the start.
+
+![Start a copy and return at once.](guide:operator-v1-copy-start)
+
+### 9. Read the copy status
+
+```sh
+{{operator:v1-copy-status}}
+```
+
+It prints one line per copy: the copy id, the status, then `keys`, `rows`, `bytes` and `skipped` for each set. A waiting or failed copy ends its line with the error. The copy id is the first value on the line.
+
+![Read the copy status.](guide:operator-v1-copy-status)
+
+### 10. Stop a copy after its current page
+
+```sh
+{{operator:v1-copy-stop}}
+```
+
+The rows copied so far stay. Run `start` again to carry on.
+
+![Stop a copy after its current page.](guide:operator-v1-copy-stop)
+
+### 11. Delete a stopped or finished copy
+
+```sh
+{{operator:v1-copy-delete}}
+```
+
+`delete` refuses without `--force`. It returns before the rows are gone. The server carries on deleting in the background.
+
+![Delete a stopped or finished copy.](guide:operator-v1-copy-delete)
+
 
 
 ## Optional practice with fictional source data
@@ -247,6 +355,16 @@ In a source checkout, `pnpm build:v1-import` stages the reference importer. It n
 **Start or Resume is refused.** Read its error and the API log. The import service requires an audit entry before starting.
 
 **Counts stand still.** Wait for the current page. Each page can contain 500 requests. Check errors before deciding a large import has stalled.
+
+**The copy says Waiting for the source.** CE cannot reach the source, or the link to it is down. The copy tries again by itself, with up to 5 minutes between tries. Read the last error. If the wait goes on, run connector Diagnose. Stop the copy only if you want it to stop trying.
+
+**Some requests were skipped.** The amber line **Requests left out:** gives how many. CE leaves a request out for one of two reasons. Reading it on its own timed out three times (`SOURCE_TIMEOUT`). Or one of its rows holds text that CE's database cannot store, such as a NUL character (`ROW_NOT_STORABLE`). The copy tries them again at the end of each pass and at the next start. The page and the CLI show the count only. A copy with requests left out is not complete.
+
+**Start copy asks to read a set again.** On the page the question comes from **Continue copy**. In the CLI, `start` names the sets instead. An option that decides which requests are read has changed, or the plugin was upgraded. Read again deletes the rows copied for the named sets. Select **Cancel** and put the options back to keep them.
+
+**The copy failed.** Read the last error. A refused login, a missing database or table, a fault in the plugin, or a write that CE's own database refused, such as on a full disk, ends the copy. Trying again cannot fix those. Fix the cause, then select **Continue copy**. The rows copied so far stay.
+
+**Delete copy is greyed.** A copy can be deleted only when it is stopped, failed or finished. Stop it first.
 
 ## Related guides
 
