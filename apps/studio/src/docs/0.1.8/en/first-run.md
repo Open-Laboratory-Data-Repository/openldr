@@ -1,64 +1,65 @@
 # First run
 
-First run is three short steps that Studio shows straight after you create the first administrator. You name the laboratory, load sample data if you want it, and see which setup checks still need you. It is for the person who sets up a new install.
+First run is three short steps that Studio shows straight after you create the first administrator. You name your laboratory, load sample data if you want it, and review the setup checks that need attention. It is for the person who sets up a new install.
 
-First run appears once, only on an install that uses OpenLDR's own sign-in. Only the person who created the first administrator sees it, in the window or browser tab where they did so. You can skip the first two steps. Settings, Setup checks keeps the same list afterwards, and can load sample data later.
+First run appears once, only on an install that uses OpenLDR's own sign-in. Only the person who created the first administrator sees it, in the window or browser tab where they did so. You can skip the first two steps. Later, you can review the same checks and load sample data under Settings → Setup checks.
 
-## Name the laboratory
+## Name your laboratory
 
-Reports print this name as the issuing laboratory. Days are counted in this time zone. The page shows **Step 1 of 3** and **Name the laboratory**.
+The laboratory name appears on reports as the issuing laboratory. Reports count each day in the time zone you select. The page shows **Step 1 of 3** and **Name your laboratory**.
 
-1. In **Name**, type your laboratory's name, such as `Central Hospital Laboratory`.
-2. Select **Time zone**. Your computer's time zone is chosen at first.
+1. In **Laboratory name**, type your laboratory's name, such as `Central Hospital Laboratory`.
+2. Select **Time zone**. Studio starts with your computer's time zone.
 3. In **Search time zones**, type part of the zone's name, such as `Dar`.
 4. Choose the zone, such as `Africa/Dar_es_Salaam`.
 5. Select **Save**.
 
-**Expected result:** the next step opens. It is **Sample data**, or **You are ready** when Studio does not offer sample data.
+**Expected result:** the next step opens. It is **Sample data**, or **OpenLDR is ready** when Studio does not offer sample data.
 
 To leave the name and time zone as they are, select **Skip** instead of **Save**. You can set both later. See [Laboratory](/docs/laboratory).
 
 ## Load sample data
 
-The page says what sample data is: **Sample data is a made-up patient and laboratory with example forms, workflows and dashboards, so you can try OpenLDR before real data arrives.**
+The page says what sample data holds: **Sample data adds 60 fictional lab orders, 39 of them with results, plus example forms, workflows and a dashboard, so you can try OpenLDR before your own data arrives. OpenLDR cannot remove the sample records afterwards, so skip this step on an installation meant for real patient data.**
 
 1. On **Sample data**, select **Load sample data**.
 2. Wait while the page shows **Loading sample data…**.
 
-**Expected result:** **You are ready** opens.
+**Expected result:** **OpenLDR is ready** opens.
 
 To go on without it, select **Skip**.
 
 Studio offers sample data only while the install holds no lab data. A patient, a lab request, a specimen, a result or a saved form response counts as lab data. So does an organization or a location. Once one exists, this step does not appear, and a second load is refused.
 
-If you skip it, you can load it later from the dots menu in Settings, Setup checks, while the install still holds no lab data. See [Setup checks](/docs/setup-checks).
+If you skip it, you can load it later from the dots menu under Settings → Setup checks, while the install still holds no lab data. See [Setup checks](/docs/setup-checks).
 
-## See what still needs you
+## Review the setup checks
 
 The last step lists the setup checks that show a warning or a failure. Passed and skipped checks are left out.
 
-1. Wait while the page shows **Running the setup checks…**.
+1. Wait while the page shows **Running setup checks…**.
 2. Read each check, its status and its advice.
 3. To fix one now, select its link, such as **Open Laboratory**.
-4. Otherwise, select **Open OpenLDR**.
+4. Otherwise, select **Continue to OpenLDR**.
 
 **Expected result:** Studio opens. A link opens that page instead. Either way, first run ends and does not appear again.
 
-When nothing needs you, the page says **Nothing needs you now. Settings, Setup checks keeps the full list.**
+When no check shows a warning or a failure, the page says **All setup checks passed. You can review them at any time under Settings → Setup checks.**
 
 ## Limits
 
 - First run appears only with OpenLDR's own sign-in. An install that signs in through Keycloak or another provider never shows it. Use [Setup checks](/docs/setup-checks) there.
-- It appears once. After **Open OpenLDR**, a link, or signing out, it does not come back.
+- It appears once. After **Continue to OpenLDR**, a link, or signing out, it does not come back.
 - A reload of the page in the middle starts first run again from step 1. A name you saved stays saved. Closing that tab in the middle ends first run for good.
 - Sample data is offered only while the install holds no lab data.
+- The 60 sample orders and their results stay once loaded. OpenLDR has no way to remove them. **Factory reset**, in **Danger Zone**, does not remove them either.
 
 ## Troubleshooting
 
-- **The sample data step did not appear.** The install already holds lab data, or Studio could not ask the server. Open Settings, Setup checks, and look for **Load sample data** in its dots menu.
-- **The laboratory could not be saved:** followed by a reason. Select **Save** again. Or select **Skip** and set the name later in Settings, Laboratory.
-- **Sample data could not be loaded:** followed by a reason. The load did not finish. Some sample data may already be in place. A second try is then refused, so select **Skip**. The server log names the error.
-- **The setup checks could not run:** followed by a reason. Select **Open OpenLDR**. Then open Settings, Setup checks and select **Run again** from its dots menu.
+- **The sample data step did not appear.** The install already holds lab data, or Studio could not ask the server. Open Settings → Setup checks, and look for **Load sample data** in its dots menu.
+- **Could not save the laboratory details:** followed by a reason. Select **Save** again. Or select **Skip** and set the name later under Settings → Laboratory.
+- **Could not load sample data:** followed by a reason. The load did not finish. Some sample data may already be in place. A second try is then refused, so select **Skip**. The server log names the error.
+- **Could not run the setup checks:** followed by a reason. Select **Continue to OpenLDR**. Then open Settings → Setup checks and select **Run again** from its dots menu.
 
 ## Related guides
 

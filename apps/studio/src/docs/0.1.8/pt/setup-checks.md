@@ -106,7 +106,7 @@ Selecione **Run again**. Aguarde o fim das verificações.
 
 ## Carregar dados de exemplo
 
-Use esta ação para experimentar o OpenLDR numa instalação nova. Carrega os mesmos dados de exemplo que o passo dos dados de exemplo do [Primeiro arranque](/docs/first-run). O menu só a oferece enquanto a instalação não tiver dados de laboratório. Precisa da permissão Zona de perigo. Administrator tem-na.
+Use esta ação para experimentar o OpenLDR numa instalação nova. Carrega os mesmos dados de exemplo que o passo dos dados de exemplo do [Primeiro arranque](/docs/first-run): 60 pedidos fictícios, 39 deles com resultados, além de formulários, fluxos de trabalho e um painel de exemplo. Depois de carregados, os pedidos de exemplo ficam. O OpenLDR não os consegue remover, e a **Redefinição de fábrica** também não os remove. O menu só a oferece enquanto a instalação não tiver dados de laboratório. Precisa da permissão Zona de perigo. Administrator tem-na.
 
 ### 1. Abrir as ações da página
 

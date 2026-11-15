@@ -124,7 +124,7 @@ Use these optional exercises with fictional records and known results. Skip them
 
 ### Load the sample data
 
-The practice file contains **60 fictional orders** from September and October 2026. Use an empty test installation. Loading the file writes records into that installation.
+The practice file contains **60 fictional orders** from September and October 2026. Use an empty test installation. Loading the file writes records into that installation. If you chose **Load sample data** in the first run or under Settings → Setup checks, these 60 orders are already loaded, and you can skip to [Example 1](#example-1-make-an-orders-by-test-widget).
 
 For opening a terminal and running commands, see [Start here](/docs/start-here#use-the-command-line), or its [development walkthrough](/docs/start-here#example-1-use-the-cli-in-a-development-checkout). Replace the example folder with your actual installation folder.
 
@@ -568,7 +568,7 @@ PostgreSQL, MySQL, MariaDB and SQL Server all stop the database work at the time
 
 **My practice totals differ.** The quoted totals assume only the practice records are loaded. Other data changes the totals.
 
-- **Every number is 0 and every chart says No data.** The warehouse is empty. [Load the sample data](#load-the-sample-data), or load your own.
+- **Every number is 0 and every chart says No data.** The warehouse is empty. [Load the sample data](#load-the-sample-data), or load your own. On an install that offers it, you can load the sample data from the dots menu under Settings → Setup checks.
 - **No dashboard appears.** None exists yet. The empty page offers **New dashboard** and **Import dashboard**.
 - **Edit is missing from the menu.** Your role lacks **Edit dashboards**.
 - **The SQL cannot be edited, or saving says `raw SQL widgets are disabled`.** Turn on **Dashboard raw SQL**. See [Turn on SQL widgets](#turn-on-sql-widgets).
