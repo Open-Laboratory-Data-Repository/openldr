@@ -8,7 +8,9 @@ import { type Kysely, sql } from 'kysely';
 // `row` is the row as the reader returned it.
 //
 // The primary key is all five names, so a page written twice cannot store a row twice, and a
-// copy can be emptied in primary key order.
+// copy can be emptied in primary key order. `key` comes before `detail_name` because a page is
+// deleted and read by copy, set and key. With that order Postgres seeks to each key instead of
+// scanning every stored row of the set.
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema.createTable('import_copy_rows').ifNotExists()
     .addColumn('copy_id', 'text', (c) => c.notNull())
@@ -18,7 +20,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('seq', 'integer', (c) => c.notNull())
     .addColumn('row', 'jsonb', (c) => c.notNull())
     .addColumn('read_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`))
-    .addPrimaryKeyConstraint('import_copy_rows_pk', ['copy_id', 'set_name', 'detail_name', 'key', 'seq'])
+    .addPrimaryKeyConstraint('import_copy_rows_pk', ['copy_id', 'set_name', 'key', 'detail_name', 'seq'])
     .execute();
 }
 

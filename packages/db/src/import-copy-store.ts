@@ -67,7 +67,7 @@ export function createImportCopyStore(db: Kysely<InternalSchema>): ImportCopySto
         .where('copy_id', '=', copyId);
       if (setName !== undefined) pick = pick.where('set_name', '=', setName);
       const picked = await pick
-        .orderBy('set_name').orderBy('detail_name').orderBy('key').orderBy('seq')
+        .orderBy('set_name').orderBy('key').orderBy('detail_name').orderBy('seq')
         .limit(limit)
         .execute();
       let gone = 0;

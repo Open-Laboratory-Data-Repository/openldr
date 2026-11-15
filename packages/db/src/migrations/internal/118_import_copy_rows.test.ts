@@ -6,7 +6,7 @@ import { up, down } from './118_import_copy_rows';
 
 // Layer: the migration's DDL on pg-mem. Not covered: real Postgres.
 describe('118_import_copy_rows', () => {
-  it('keys a row by copy, set, detail, key and seq, and drops cleanly', async () => {
+  it('keys a row by copy, set, key, detail and seq, and drops cleanly', async () => {
     const db = newDb().adapters.createKysely() as Kysely<InternalSchema>;
     try {
       await up(db as unknown as Kysely<unknown>);
@@ -21,7 +21,7 @@ describe('118_import_copy_rows', () => {
       expect(got).toHaveLength(3);
       expect(got[0]!.row).toEqual({ v: 1 });
       expect(got[0]!.read_at).toBeInstanceOf(Date);
-      // Every column is required.
+      // A null row is refused. The other columns' not null is not tried here.
       await expect(db.insertInto('import_copy_rows').values({ ...one, seq: 9, row: null as never }).execute()).rejects.toThrow();
       await down(db as unknown as Kysely<unknown>);
       await expect(db.selectFrom('import_copy_rows').selectAll().execute()).rejects.toThrow();

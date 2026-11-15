@@ -7,7 +7,9 @@ import { createImportCopyStore, type CopyRow, type ImportCopyStore } from './imp
 // Layer: the store's SQL against pg-mem, on a database built by every internal migration.
 // Not covered: real Postgres. pg-mem has a stable scan order and byte-order text sorting, so it
 // cannot show ORDER BY ties or collation differences. The orders here use the full primary key,
-// so no tie is possible, but collation on a real server is unproven by this file.
+// so no tie is possible, but collation on a real server is unproven by this file. pg-mem also does
+// not roll back on a thrown error, so this file cannot show that a failed write keeps the old rows.
+// It cannot show which index Postgres uses either.
 describe('import copy store', () => {
   let db: Kysely<InternalSchema>;
   let store: ImportCopyStore;
@@ -145,6 +147,17 @@ describe('import copy store', () => {
     await expect(store.deleteSome('c1', 0)).rejects.toThrow('limit');
     await expect(store.deleteSome('c1', 1.5)).rejects.toThrow('limit');
     expect(await store.read('c1', 's', ['A'])).toHaveLength(1);
+  });
+
+  it('deleteSome picks rows in key order: key before detail', async () => {
+    // Key order is (copy, set, key, detail, seq). Key A sorts first even though its detail sorts last.
+    await store.replaceKeys('c1', 's', ['A', 'B'], [
+      { detail: 'z', key: 'A', seq: 0, row: {} },
+      { detail: 'a', key: 'B', seq: 0, row: {} },
+    ]);
+    expect(await store.deleteSome('c1', 1)).toBe(1);
+    expect(await store.read('c1', 's', ['A'])).toEqual([]);
+    expect((await store.read('c1', 's', ['B'])).map((r) => r.detail)).toEqual(['a']);
   });
 
   it('deleteSome with a set name removes only that set', async () => {
