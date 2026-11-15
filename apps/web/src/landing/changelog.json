@@ -6,6 +6,102 @@
       "version": null,
       "entries": [
         {
+          "hash": "30b3b29f",
+          "type": "fix",
+          "scope": "v1-import",
+          "title": "A copy starts without a time zone, the Copy tab shows another connector's copy while one runs, and its wording is right"
+        },
+        {
+          "hash": "619a550f",
+          "type": "fix",
+          "scope": "import",
+          "title": "A repeated key in a set with no detail queries fails the copy, a finished delete is audited, and the CLI names skipped keys"
+        },
+        {
+          "hash": "fc5df1af",
+          "type": "fix",
+          "scope": "import",
+          "title": "The server's own resume keeps the request id out of the audit log, and a redone page lists no stale failure"
+        },
+        {
+          "hash": "eba5212d",
+          "type": "fix",
+          "scope": "import",
+          "title": "A source that is starting up is waited on, a page lost twice is halved, and a cut link says so"
+        },
+        {
+          "hash": "dfac1b72",
+          "type": "fix",
+          "scope": "v1-import",
+          "title": "A confirm step holds the keyboard and sends what was asked, and the Copy tab reads right at 1 and on a phone"
+        },
+        {
+          "hash": "c38af4a4",
+          "type": "feat",
+          "scope": "v1-import",
+          "title": "A Copy tab on the plugin page"
+        },
+        {
+          "hash": "f0bb092c",
+          "type": "feat",
+          "scope": "import",
+          "title": "A plugin page can start, watch, stop and delete a copy"
+        },
+        {
+          "hash": "65650a51",
+          "type": "fix",
+          "scope": "import",
+          "title": "A run waits for plugin storage only when storage is down, and fails on a bad plugin"
+        },
+        {
+          "hash": "8edbd397",
+          "type": "fix",
+          "scope": "import",
+          "title": "A restart waits for the plugin's code, and adopt says when it cannot resume"
+        },
+        {
+          "hash": "22090f97",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr import copy start, status, stop and delete"
+        },
+        {
+          "hash": "ba48708c",
+          "type": "feat",
+          "scope": "import",
+          "title": "The server picks up imports and copies that lost their driver"
+        },
+        {
+          "hash": "5f88dc80",
+          "type": "fix",
+          "scope": "import",
+          "title": "Nothing is launched after a release, and key matching tries spaces before case"
+        },
+        {
+          "hash": "3e123279",
+          "type": "fix",
+          "scope": "import",
+          "title": "A row is matched to its page key the way the source matched it"
+        },
+        {
+          "hash": "e9ca1144",
+          "type": "fix",
+          "scope": "import",
+          "title": "A copy's record changes only by compare-and-swap, and tick never overlaps itself"
+        },
+        {
+          "hash": "9f68b19b",
+          "type": "feat",
+          "scope": "v1-import",
+          "title": "The plugin names the rows to copy"
+        },
+        {
+          "hash": "a66763ce",
+          "type": "feat",
+          "scope": "import",
+          "title": "Copy the rows of a source to CE, set by set"
+        },
+        {
           "hash": "435071ce",
           "type": "fix",
           "scope": "studio",
@@ -18,10 +114,28 @@
           "title": "The check after a failed start gives up after 10 seconds"
         },
         {
+          "hash": "8229f96a",
+          "type": "fix",
+          "scope": "import",
+          "title": "The heartbeat never saves half a page, and a waiting import can be stopped from the page"
+        },
+        {
           "hash": "d054e3f9",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Sample orders carry their own source label"
+        },
+        {
+          "hash": "b57cd790",
+          "type": "fix",
+          "scope": "import",
+          "title": "A statement that fails with several errors is judged by them, not retried forever"
+        },
+        {
+          "hash": "7c2f8c21",
+          "type": "feat",
+          "scope": "import",
+          "title": "An import waits out a cut link and carries on"
         },
         {
           "hash": "73d9a9ae",
@@ -36,10 +150,34 @@
           "title": "Plain wording for the first run, and the right setup hint inside the desktop app"
         },
         {
+          "hash": "576e4a62",
+          "type": "fix",
+          "scope": "import",
+          "title": "A stop is seen before every retry, and source error text cannot quote a row"
+        },
+        {
+          "hash": "70818853",
+          "type": "fix",
+          "scope": "db",
+          "title": "Key copied rows by copy, set and key, so a page is a seek"
+        },
+        {
+          "hash": "cd5f90b2",
+          "type": "feat",
+          "scope": "import",
+          "title": "A page reader that retries a cut link and halves a slow page"
+        },
+        {
           "hash": "90411fff",
           "type": "fix",
           "scope": "install",
           "title": "The stop hint ends with the command, so a copied line runs"
+        },
+        {
+          "hash": "c2c5d5ec",
+          "type": "fix",
+          "scope": "import",
+          "title": "Neutral plugin name in a test, and a test title that says what it checks"
         },
         {
           "hash": "6a37e349",
@@ -48,10 +186,22 @@
           "title": "A failed start that migrated nothing puts the old version record back"
         },
         {
+          "hash": "d2aaa572",
+          "type": "feat",
+          "scope": "db",
+          "title": "A table and store for copied source rows"
+        },
+        {
           "hash": "f204548e",
           "type": "fix",
           "scope": "studio",
           "title": "Load sample data also loads the 60 sample orders, so the sample dashboard shows numbers"
+        },
+        {
+          "hash": "044616b2",
+          "type": "feat",
+          "scope": "marketplace",
+          "title": "An import source can name a copy entrypoint"
         }
       ]
     },
