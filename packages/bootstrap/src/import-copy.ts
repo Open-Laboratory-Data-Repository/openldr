@@ -10,7 +10,7 @@ import {
   type ImportActor, type ImportServiceDeps, type ResolvedPlugin,
 } from './import-run';
 import { growPage } from './import-retry';
-import { createSourceReader, type SourceReader } from './import-source-reader';
+import { createSourceReader, matchPageKey, type SourceReader } from './import-source-reader';
 import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, fillDetailQuery, fillKeyQuery } from './import-sql';
 
 // Copies the rows of a source database to CE's own disk (spec 9.2 and 9.3).
@@ -191,12 +191,17 @@ function changedSets(stored: Record<string, string>, next: Record<string, string
   return [...names].filter((n) => stored[n] !== next[n]);
 }
 
-/** Postgres jsonb refuses a string that holds a NUL character. */
-function holdsNul(value: unknown): boolean {
-  if (typeof value === 'string') return value.includes('\u0000');
-  if (Array.isArray(value)) return value.some(holdsNul);
+/** Postgres jsonb refuses a string that holds a NUL character, and one that is not well formed
+ *  UTF-16: a lone surrogate, as in a name cut in the middle of a pair (R21, R21b). Node has
+ *  `isWellFormed`; the ES2022 types this repo builds with do not name it. */
+function unstorableText(s: string): boolean {
+  return s.includes('\u0000') || !(s as string & { isWellFormed(): boolean }).isWellFormed();
+}
+function cannotStore(value: unknown): boolean {
+  if (typeof value === 'string') return unstorableText(value);
+  if (Array.isArray(value)) return value.some(cannotStore);
   if (value !== null && typeof value === 'object') {
-    return Object.entries(value).some(([k, v]) => k.includes('\u0000') || holdsNul(v));
+    return Object.entries(value).some(([k, v]) => unstorableText(k) || cannotStore(v));
   }
   return false;
 }
@@ -309,16 +314,16 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
   /**
    * File a page's rows under their keys. A detail row's key is its first column; `seq` counts from
    * 0 within each detail and key, in arrival order. A set with no detail queries files the key
-   * query's own rows under the set's name. A key with a NUL character in any of its rows cannot be
+   * query's own rows under the set's name. A key with a NUL character or a lone surrogate in any of its rows cannot be
    * stored, and is handed back in `unstorable` with no rows.
    */
   function filePage(set: CopySet, page: { keys: string[]; keyRows: Array<Record<string, unknown>>; rows: Record<string, Array<Record<string, unknown>>> }) {
     const keys = [...new Set(page.keys)];
     const byKey = new Map<string, CopyRow[]>(keys.map((k) => [k, []]));
-    const add = (detail: string, key: string, row: Record<string, unknown>, seqs: Map<string, number>) => {
-      const list = byKey.get(key);
+    const add = (detail: string, key: string | null, row: Record<string, unknown>, seqs: Map<string, number>) => {
+      const list = key === null ? undefined : byKey.get(key);
       // The reader checks this with checkRowKeys; this keeps replaceKeys from ever seeing a stray row.
-      if (!list) throw new Error(`a row of ${detail} has a first column that is not a key of the page`);
+      if (!list || key === null) throw new Error(`a row of ${detail} has a first column that is not a key of the page`);
       const seq = seqs.get(key) ?? 0;
       seqs.set(key, seq + 1);
       list.push({ detail, key, seq, row });
@@ -329,7 +334,9 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     } else {
       for (const d of set.detailQueries) {
         const seqs = new Map<string, number>();
-        for (const row of page.rows[d.name] ?? []) add(d.name, String(Object.values(row)[0] ?? ''), row, seqs);
+        // Filed under the page key the source matched, never under the row's own spelling, so
+        // replaceKeys sees only keys of the page (R30). The row keeps its own value untouched.
+        for (const row of page.rows[d.name] ?? []) add(d.name, matchPageKey(page.keys, String(Object.values(row)[0] ?? '')), row, seqs);
       }
     }
     const rows: CopyRow[] = [];
@@ -337,7 +344,7 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     let bytes = 0;
     for (const key of keys) {
       const list = byKey.get(key)!;
-      if (list.some((r) => holdsNul(r.row))) { unstorable.push(key); continue; }
+      if (list.some((r) => cannotStore(r.row))) { unstorable.push(key); continue; }
       for (const r of list) bytes += Buffer.byteLength(JSON.stringify(r.row), 'utf8');
       rows.push(...list);
     }

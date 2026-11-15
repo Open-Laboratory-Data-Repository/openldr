@@ -336,6 +336,51 @@ describe('copy: reading a source to CE', () => {
     ]);
   });
 
+  it('files rows the source matched another way under the page key, and a second read of the page leaves one copy of each', async () => {
+    const w = await world(['ABC', 'DEF']);
+    // SQL Server's usual collation: IN ('ABC') also returns abc and ABC with trailing spaces.
+    w.source.rowsFrom((table, keys) => (table === 'Requests'
+      ? keys.flatMap((k) => (k === 'ABC'
+        ? [{ __key: 'abc', Note: 1 }, { __key: 'ABC ', Note: 2 }, { __key: 'ABC', Note: 3 }]
+        : [{ __key: k, Note: 4 }]))
+      : undefined));
+    const a = w.service('server-a');
+    await a.start({ ...START, pageSize: 2 });
+    // A writes the page, then dies before it saves its position. B takes over and reads it again.
+    const held = w.pauseWrite((d) => d.driver === 'server-a' && d.sets.requests.cursor === 'DEF');
+    await a.tick();
+    await held.reached;
+    w.clock.now += STALE_MS + 1;
+    const b = w.service('server-b');
+    await drive(b);
+    held.release();
+    await a.idle();
+
+    expect((await w.stored())!).toMatchObject({ status: 'completed', sets: { requests: { cursor: 'DEF', keys: 2, rows: 8, done: true } } });
+    expect(w.calls.replace.map((c) => c.keys)).toEqual([['ABC', 'DEF'], ['ABC', 'DEF']]);
+    const abc = (await w.rows()).filter((r) => r.detail_name === 'requests' && r.key === 'ABC');
+    // Filed under the page key, in arrival order. Each row keeps its own spelling in __key.
+    expect(abc).toEqual([
+      { set_name: 'requests', detail_name: 'requests', key: 'ABC', seq: 0, row: { __key: 'abc', Note: 1 } },
+      { set_name: 'requests', detail_name: 'requests', key: 'ABC', seq: 1, row: { __key: 'ABC ', Note: 2 } },
+      { set_name: 'requests', detail_name: 'requests', key: 'ABC', seq: 2, row: { __key: 'ABC', Note: 3 } },
+    ]);
+    expect(await w.rows()).toHaveLength(8);
+    expect(new Set((await w.rows()).map((r) => r.key))).toEqual(new Set(['ABC', 'DEF']));
+  });
+
+  it('a row that matches two page keys once case is ignored ends the run as failed', async () => {
+    const w = await world(['ABC', 'abc']);
+    w.source.rowsFrom((table) => (table === 'Requests' ? [{ __key: 'Abc', Note: 1 }] : undefined));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, COPY))!;
+    expect(run.status).toBe('failed');
+    expect(run.lastError).toMatch(/first column that is not a key of the page/);
+    expect(run.lastError).not.toContain('Abc');
+    expect(w.calls.replace).toEqual([]);
+  });
+
   it('a detail row whose first column is not a key of the page ends the run as failed', async () => {
     const w = await world(keysOf(2));
     w.source.rowsFrom((table) => (table === 'LabResults' ? [{ __key: 'NOT-ON-PAGE', SIValue: 1 }] : undefined));
@@ -445,6 +490,25 @@ describe('copy: a source that goes away', () => {
       doc: { copyId: COPY, setName: 'requests', key: 'REQ0002', code: 'ROW_NOT_STORABLE', after: 'REQ0001' },
     }]);
     expect(JSON.stringify([w.runSaves, w.audited])).not.toContain('bad');
+  });
+
+  it('a key with a lone surrogate in a string is skipped with ROW_NOT_STORABLE, and the rest of the page is stored', async () => {
+    const w = await world(keysOf(3));
+    w.source.rowsFrom((table, keys) => (table === 'Requests'
+      ? keys.map((k) => ({ __key: k, RequestID: k, Note: k === 'REQ0002' ? 'cut\uD800name' : 'ok', Pair: '😀' }))
+      : undefined));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, COPY))!;
+    // A whole surrogate pair is well formed and stored. Only the lone half is refused.
+    expect(run).toMatchObject({ status: 'completed', sets: { requests: { keys: 2, rows: 6, skipped: 1, done: true } } });
+    expect([...new Set((await w.rows()).map((r) => r.key))]).toEqual(['REQ0001', 'REQ0003']);
+    expect((await w.rows()).find((r) => r.detail_name === 'requests')!.row.Pair).toBe('😀');
+    expect(await w.skipped()).toEqual([{
+      key: `${COPY}:requests:REQ0002`,
+      doc: { copyId: COPY, setName: 'requests', key: 'REQ0002', code: 'ROW_NOT_STORABLE', after: 'REQ0001' },
+    }]);
+    expect(JSON.stringify([w.runSaves, w.audited])).not.toContain('cut');
   });
 
   it('a skipped key read at the end of the pass that cannot be stored stays listed as ROW_NOT_STORABLE', async () => {

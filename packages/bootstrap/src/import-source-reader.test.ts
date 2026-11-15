@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ConnectorDb } from './connector-db';
-import { createSourceReader, type PageResult } from './import-source-reader';
+import { createSourceReader, matchPageKey, type PageResult } from './import-source-reader';
 
 // Layer: the reader's own rules, over a fake ConnectorDb and a fake sleep. It proves which
 // statements run, in what order, at what page size, and when the reader waits, halves, skips
@@ -316,6 +316,27 @@ describe('createSourceReader', () => {
     expect(waiting).toEqual([]);
   });
 
+  it('with checkRowKeys, a row keyed as SQL Server matched it passes: another letter case, trailing spaces', async () => {
+    const source = fakeSource((kind) => (kind === 'details'
+      ? [{ RequestID: 'r001', Result: 'a' }, { RequestID: 'R002   ', Result: 'b' }, { RequestID: 'R003', Result: 'c' }]
+      : undefined));
+    const { reader } = harness(source);
+    const page = await reader.readPage({ ...first, checkRowKeys: true });
+    // The rows are handed back as the source spelled them. Filing is the caller's job.
+    expect(page).toMatchObject({ kind: 'page', keys: ['R001', 'R002', 'R003'], rows: { results: [{ RequestID: 'r001' }, { RequestID: 'R002   ' }, { RequestID: 'R003' }] } });
+  });
+
+  it('with checkRowKeys, a row that matches two page keys once case is ignored is a refused error', async () => {
+    const source = fakeSource((kind) => (kind === 'keys'
+      ? [{ RequestID: 'ABC' }, { RequestID: 'abc' }]
+      : [{ RequestID: 'Abc', Result: 'x' }]));
+    const { reader } = harness(source);
+    const failure = await reader.readPage({ ...first, checkRowKeys: true }).catch((e: Error) => e);
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toMatch(/first column that is not a key of the page/);
+    expect((failure as Error).message).not.toContain('Abc');
+  });
+
   it('with checkRowKeys off, a row whose first column is not a key passes through', async () => {
     const source = fakeSource((kind) => (kind === 'details' ? [{ Other: 'R999', Result: 'x' }] : undefined));
     const { reader } = harness(source);
@@ -450,5 +471,41 @@ describe('createSourceReader', () => {
     expect(state.error).not.toContain('hunter2');
     expect(state.error).toContain('sa:***@db');
     expect(state.error.length).toBe(300);
+  });
+});
+
+// R30. SQL Server's usual collation ignores letter case and trailing spaces, so a detail query's
+// IN list also returns rows spelled another way. Those rows belong to the page key they matched.
+describe('matchPageKey', () => {
+  it('files rows keyed abc, ABC with trailing spaces and ABC under the page key ABC', () => {
+    expect(['abc', 'ABC ', 'ABC', 'ABC   '].map((v) => matchPageKey(['ABC'], v))).toEqual(['ABC', 'ABC', 'ABC', 'ABC']);
+  });
+
+  it('prefers an exact match, so page keys abc and ABC each keep their own rows', () => {
+    expect(matchPageKey(['abc', 'ABC'], 'abc')).toBe('abc');
+    expect(matchPageKey(['abc', 'ABC'], 'ABC')).toBe('ABC');
+  });
+
+  it('returns null for a row that matches two page keys once case is ignored', () => {
+    expect(matchPageKey(['abc', 'ABC'], 'Abc')).toBeNull();
+  });
+
+  it('returns null for a row that matches no page key', () => {
+    expect(matchPageKey(['ABC'], 'ABD')).toBeNull();
+    // Leading spaces count, as they do in SQL Server.
+    expect(matchPageKey(['ABC'], ' ABC')).toBeNull();
+    expect(matchPageKey([], 'ABC')).toBeNull();
+  });
+
+  it('folds ASCII letters only', () => {
+    expect(matchPageKey(['STRASSE'], 'straße')).toBeNull();
+    expect(matchPageKey(['É1'], 'é1')).toBeNull();
+  });
+
+  it('answers the same after the page keys array is reused', () => {
+    const keys = ['K1', 'K2'];
+    expect(matchPageKey(keys, 'k1')).toBe('K1');
+    expect(matchPageKey(keys, 'k2 ')).toBe('K2');
+    expect(matchPageKey(keys, 'k3')).toBeNull();
   });
 });

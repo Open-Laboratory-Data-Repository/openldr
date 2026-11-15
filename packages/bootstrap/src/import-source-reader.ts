@@ -72,6 +72,35 @@ function firstColumn(row: Record<string, unknown>): string {
   return String(Object.values(row)[0] ?? '');
 }
 
+/** A key as SQL Server's usual collation compares it: trailing spaces gone, ASCII letters one case. */
+const foldKey = (s: string): string => s.replace(/ +$/, '').replace(/[a-z]/g, (c) => c.toUpperCase());
+/** Each page's keys are indexed once, however many rows ask. Pages are short-lived arrays. */
+const keyIndexes = new WeakMap<readonly string[], { exact: Set<string>; folded: Map<string, string | null> }>();
+
+/**
+ * The page key a detail row belongs to, by the string form of its first column (R30). SQL
+ * Server's usual collation ignores letter case and trailing spaces, so `IN ('ABC')` also returns
+ * rows keyed `abc` or `ABC `. Rules: a page key that equals `value` exactly; else the one page key
+ * that equals it with trailing spaces removed and ASCII letters folded to one case. When none, or
+ * more than one, matches that way: null, a fault of the plugin or the data.
+ * `pageKeys` is indexed on first use and must not change afterwards.
+ */
+export function matchPageKey(pageKeys: string[], value: string): string | null {
+  let index = keyIndexes.get(pageKeys);
+  if (!index) {
+    const folded = new Map<string, string | null>();
+    for (const key of pageKeys) {
+      const f = foldKey(key);
+      // Two different page keys that fold alike: a row that folds to them matches neither.
+      folded.set(f, folded.has(f) && folded.get(f) !== key ? null : key);
+    }
+    index = { exact: new Set(pageKeys), folded };
+    keyIndexes.set(pageKeys, index);
+  }
+  if (index.exact.has(value)) return value;
+  return index.folded.get(foldKey(value)) ?? null;
+}
+
 export function createSourceReader(deps: SourceReaderDeps): SourceReader {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   let db: ConnectorDb | null = null;
@@ -151,11 +180,10 @@ export function createSourceReader(deps: SourceReaderDeps): SourceReader {
           if (keys[keys.length - 1] === after) throw new Error('the key query made no progress past the last key');
 
           readingDetails = true;
-          const pageKeys = new Set(keys);
           const rows: Record<string, Array<Record<string, unknown>>> = {};
           for (const d of details) {
             const got = (await sourceRows(fillDetailQuery(d.sql, keys))).map(toPluginRow);
-            if (checkRowKeys && got.some((row) => !pageKeys.has(firstColumn(row)))) {
+            if (checkRowKeys && got.some((row) => matchPageKey(keys, firstColumn(row)) === null)) {
               throw new Error(`a row of detail query ${d.name} has a first column that is not a key of the page`);
             }
             rows[d.name] = got;
