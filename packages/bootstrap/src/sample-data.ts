@@ -67,8 +67,10 @@ export async function installHoldsLabData(deps: SampleDataDeps): Promise<boolean
   return false;
 }
 
-/** The source the `openldr ingest` command uses by default (packages/cli/src/program.ts). */
-const SAMPLE_ORDERS_SOURCE = 'cli';
+/** The source label on the sample orders batch. It differs from `openldr ingest`'s default `cli`, so
+ *  pipeline status, the warehouse `source_system` columns and a workflow source filter can tell the
+ *  sample batch apart from a real import. The seed labels its own rows `seed` the same way. */
+export const SAMPLE_ORDERS_SOURCE = 'sample-data';
 
 /** Loads the 60 sample orders through the same ingest path as `openldr ingest`, and waits. It makes
  *  its own ingest context, because the server's app context does not carry one. */

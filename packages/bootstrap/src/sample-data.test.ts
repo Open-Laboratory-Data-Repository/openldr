@@ -7,7 +7,7 @@ import { makeMigratedDb } from '@openldr/db/testing';
 import { makeMigratedExternalDb } from '@openldr/db/testing-external';
 import { createFhirStore } from '@openldr/db';
 import type { Config } from '@openldr/config';
-import { installHoldsLabData, loadSampleData, LAB_DATA_RESOURCE_TYPES, type SampleDataDeps } from './sample-data';
+import { installHoldsLabData, loadSampleData, LAB_DATA_RESOURCE_TYPES, SAMPLE_ORDERS_SOURCE, type SampleDataDeps } from './sample-data';
 import type { IngestOutcome } from './ingest-and-wait';
 
 // Layer under test: installHoldsLabData against the migrated internal FHIR store and the migrated
@@ -84,7 +84,7 @@ describe('loadSampleData', () => {
     dashboardsSeeded: 1, reportDesignsSeeded: 3, demoDesignsRemoved: 0, dataDrivenReportsSeeded: {}, settingsSeeded: 5,
   };
   const outcome = (o: Partial<IngestOutcome> = {}): IngestOutcome =>
-    ({ batchId: 'b1', status: 'done', resourceCount: 226, error: null, finished: true, ...o });
+    ({ batchId: 'b1', status: 'done', resourceCount: 7, error: null, finished: true, ...o });
   const withOrders = (ingestSampleOrders: SampleDataDeps['ingestSampleOrders']) =>
     ({ cfg: { marker: 'cfg' } as unknown as Config, seedTarget: { marker: true }, ingestSampleOrders }) as unknown as SampleDataDeps;
 
@@ -93,7 +93,7 @@ describe('loadSampleData', () => {
     const ingest = vi.fn(async () => outcome());
     const deps = withOrders(ingest);
     expect(await loadSampleData(deps)).toEqual({
-      formsSeeded: 4, workflowsSeeded: 2, connectorsSeeded: 1, dashboardsSeeded: 1, settingsSeeded: 5, sampleResources: 226,
+      formsSeeded: 4, workflowsSeeded: 2, connectorsSeeded: 1, dashboardsSeeded: 1, settingsSeeded: 5, sampleResources: 7,
     });
     expect(seedDatabase).toHaveBeenCalledOnce();
     expect(seedDatabase.mock.calls[0][1]).toBe(deps.seedTarget);
@@ -124,6 +124,10 @@ describe('loadSampleData', () => {
     seedDatabase.mockResolvedValue(seeded);
     const ingest = vi.fn(async () => outcome({ status: 'processing', finished: false, resourceCount: 0 }));
     await expect(loadSampleData(withOrders(ingest))).rejects.toThrow('processing');
+  });
+
+  it('labels the sample orders batch as sample data, not as a CLI import', () => {
+    expect(SAMPLE_ORDERS_SOURCE).toBe('sample-data');
   });
 
   it('throws when the orders batch is gone', async () => {
