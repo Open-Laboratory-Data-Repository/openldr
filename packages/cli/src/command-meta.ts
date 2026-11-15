@@ -240,7 +240,7 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
 
   // Import from a database connector. allow, revoke and allowed are connectors-routes.ts:228 and
   // :235 (connectors.manage). The rest have no route: Studio runs them through the plugin broker,
-  // which lets only lab_admin call any import op, "like the connector routes" (plugin-broker.ts:170).
+  // which lets only lab_admin call any import op, "like the connector routes" (plugin-broker.ts:198).
   // start and resume also save FHIR records (packages/bootstrap/src/import-run.ts header), so they
   // need ingest.run too: connectors.manage alone must not write clinical records.
   'import allow': { kind: 'app', capability: 'connectors.manage' },
@@ -252,8 +252,8 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'import status': { kind: 'app', capability: 'connectors.manage' },
   'import stop': { kind: 'app', capability: 'connectors.manage' },
   // Copy a source's rows to CE's own disk. No route does it. The plugin page reaches the copy
-  // service through the plugin broker, whose copy ops are gated as the import ops are
-  // (plugin-broker.ts:170), so these take the import key. A copy saves no FHIR record, so none
+  // service through the plugin broker, whose copy ops need host:import and lab_admin as the import
+  // ops do (plugin-broker.ts:162 and :202), so these take the import key. A copy saves no FHIR record, so none
   // needs ingest.run. start is destructive because --reread empties a set.
   'import copy delete': { kind: 'app', capability: 'connectors.manage', destructive: true },
   'import copy start': { kind: 'app', capability: 'connectors.manage', destructive: true },

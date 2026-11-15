@@ -18,6 +18,36 @@ describe('SDK_BOOTSTRAP_V1', () => {
     expect(imports).not.toMatch(/sql/i);
   });
 
+  it('the SDK sends each copy call as its op', async () => {
+    let handler: ((ev: unknown) => void) | undefined;
+    const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('window', SDK_BOOTSTRAP_V1)(win);
+    const api = (win as unknown as { openldr: { imports: { copy: Record<string, (...a: unknown[]) => Promise<unknown>> } } }).openldr;
+    const sent: Array<{ id: number; op: unknown }> = [];
+    const port = {
+      start: () => {},
+      onmessage: null as null | ((e: { data: unknown }) => void),
+      // Answer every call at once, so each promise settles.
+      postMessage(m: { id: number; op: unknown }) { sent.push(m); queueMicrotask(() => port.onmessage?.({ data: { id: m.id, result: { ok: true, data: m.op } } })); },
+    };
+    handler!({ data: { type: 'openldr:init', context: { pluginId: 'p' } }, ports: [port] });
+
+    const copy = api.imports.copy;
+    await copy.start({ connectorId: 'c1', options: { tz: '+02:00' }, pageSize: 200, reread: true });
+    await copy.list();
+    await copy.status('cp1');
+    await copy.stop('cp1');
+    await copy.remove('cp1');
+    expect(sent.map((m) => m.op)).toEqual([
+      { kind: 'import.copy.start', connectorId: 'c1', options: { tz: '+02:00' }, pageSize: 200, reread: true },
+      { kind: 'import.copy.list' },
+      { kind: 'import.copy.status', copyId: 'cp1' },
+      { kind: 'import.copy.stop', copyId: 'cp1' },
+      { kind: 'import.copy.delete', copyId: 'cp1', confirm: true },
+    ]);
+  });
+
   it('defines window.openldr SYNCHRONOUSLY (before any openldr:init) so screens never race the injection', () => {
     // Run the bootstrap IIFE against a controlled fake window, capturing the message handler.
     let handler: ((ev: unknown) => void) | undefined;

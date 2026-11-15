@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createActivityService } from './activity-service';
+import { copyForActivity, createActivityService } from './activity-service';
 
 const runs = [
   { id: 'r1', workflowId: 'w', triggerSource: 'webhook', status: 'completed', startedAt: '2026-07-03T10:00:00Z',
@@ -109,6 +109,78 @@ it('still lists payloads when the import runs cannot be read', async () => {
   expect((await svc.listRecent({ limit: 10, offset: 0 })).map((p) => p.correlationId)).toEqual(['A']);
 });
 
+// A copy (import-copy.ts) stores source rows on CE's own disk and starts no workflow run.
+// Layer proven: the mapping of a copy run to Activity's shape, and the merge, with fake sources.
+// Not proven: the real copy service or the context wiring in index.ts.
+const SECRET_KEY = 'REQ-SECRET-0042';
+const copyRun = (over: Record<string, unknown> = {}) => ({
+  id: 'cp-1', kind: 'copy', rev: 9, pluginId: 'openldr-v1-import', pluginVersion: '0.2.0', connectorId: 'c1', status: 'completed',
+  options: {}, pageSize: 500,
+  sets: {
+    requests: { cursor: SECRET_KEY, keys: 900, rows: 2500, bytes: 99000, skipped: 2, done: true },
+    facilities: { cursor: SECRET_KEY, keys: 40, rows: 40, bytes: 1200, skipped: 1, done: true },
+  },
+  setOrder: ['requests', 'facilities'], setSql: {}, waiting: null, driver: 'proc-1',
+  startedAt: '2026-07-03T12:30:00Z', updatedAt: '2026-07-03T13:00:00Z', finishedAt: '2026-07-03T13:00:00Z', lastError: null, startedBy: 'amina',
+  ...over,
+});
+
+describe('copies', () => {
+  const withCopies = (runs: ReturnType<typeof copyRun>[]) =>
+    createActivityService({ ...deps, importCopies: async () => runs.map((r) => copyForActivity(r as any)) } as any);
+
+  it('Activity lists a copy run with its rows and its state', async () => {
+    const svc = withCopies([copyRun()]);
+    const list = await svc.listRecent({ limit: 10, offset: 0 });
+    expect(list.map((p) => p.correlationId)).toEqual(['cp-1', 'A']);
+    expect(list[0]).toEqual({
+      correlationId: 'cp-1', workflowId: 'copy:openldr-v1-import', source: 'copy: openldr-v1-import',
+      startedAt: '2026-07-03T12:30:00Z', currentStage: 'persisted', status: 'complete',
+    });
+    expect(await svc.getLifecycle('cp-1')).toEqual({
+      correlationId: 'cp-1', status: 'complete', runIds: [],
+      stages: [
+        { stage: 'received', status: 'ok', at: '2026-07-03T12:30:00Z', detail: 'copy: openldr-v1-import 0.2.0, started by amina' },
+        { stage: 'persisted', status: 'ok', at: '2026-07-03T13:00:00Z', detail: '2540 rows copied, 3 keys skipped' },
+      ],
+    });
+  });
+
+  it('names each copy status as complete, failed, stopped or running', async () => {
+    const status = async (s: string) => (await withCopies([copyRun({ status: s, finishedAt: null })]).getLifecycle('cp-1'))?.status;
+    expect(await status('completed')).toBe('complete');
+    expect(await status('failed')).toBe('failed');
+    expect(await status('stopped')).toBe('stopped');
+    for (const s of ['queued', 'running', 'waiting', 'stopping', 'deleting']) expect(await status(s)).toBe('running');
+    // A failed copy marks its rows stage failed, dated by its last save.
+    const failed = await withCopies([copyRun({ status: 'failed', finishedAt: null })]).getLifecycle('cp-1');
+    expect(failed?.stages[1]).toMatchObject({ stage: 'persisted', status: 'failed', at: '2026-07-03T13:00:00Z' });
+    // A queued copy has copied nothing yet.
+    const zero = { cursor: null, keys: 0, rows: 0, bytes: 0, skipped: 0, done: false };
+    const queued = await withCopies([copyRun({ status: 'queued', finishedAt: null, sets: { requests: zero } })]).getLifecycle('cp-1');
+    expect(queued?.stages.map((s) => s.stage)).toEqual(['received']);
+  });
+
+  it('keeps counts and states only, never a cursor', async () => {
+    const shown = copyForActivity(copyRun() as any);
+    expect(shown).toEqual({
+      id: 'cp-1', pluginId: 'openldr-v1-import', pluginVersion: '0.2.0', status: 'completed', rows: 2540, skipped: 3,
+      startedAt: '2026-07-03T12:30:00Z', updatedAt: '2026-07-03T13:00:00Z', finishedAt: '2026-07-03T13:00:00Z', startedBy: 'amina',
+    });
+    const svc = withCopies([copyRun()]);
+    const text = JSON.stringify([await svc.listRecent({ limit: 10, offset: 0 }), await svc.getLifecycle('cp-1')]);
+    expect(text).not.toContain(SECRET_KEY);
+  });
+
+  it('pages over payloads, import runs and copies together, and lists payloads when copies cannot be read', async () => {
+    const svc = createActivityService({ ...deps, importRuns: async () => [importRun()], importCopies: async () => [copyForActivity(copyRun() as any)] } as any);
+    // cp-1 (12:30), imp-1 (12:00), A (10:00).
+    expect((await svc.listRecent({ limit: 2, offset: 0 })).map((p) => p.correlationId)).toEqual(['cp-1', 'imp-1']);
+    expect((await svc.listRecent({ limit: 2, offset: 2 })).map((p) => p.correlationId)).toEqual(['A']);
+    const broken = createActivityService({ ...deps, importCopies: async () => { throw new Error('gone'); } } as any);
+    expect((await broken.listRecent({ limit: 10, offset: 0 })).map((p) => p.correlationId)).toEqual(['A']);
+  });
+});
 
 // Bug 14: `openldr ingest` saves a batch directly (ingest-context.ts handleIngestEvent) and starts no
 // workflow run, so a lab that loads from the CLI saw nothing in Activity. Layer proven: the merge

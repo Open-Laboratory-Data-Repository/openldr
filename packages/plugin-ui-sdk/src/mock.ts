@@ -1,4 +1,12 @@
-import type { OpenLdrPluginApi, PluginSiteName } from './types';
+import type { OpenLdrPluginApi, PluginCopyRun, PluginCopyStatus, PluginSiteName } from './types';
+
+function mockCopy(pluginId: string, connectorId: string, status: PluginCopyStatus): PluginCopyRun {
+  const at = new Date(0).toISOString();
+  return {
+    id: 'mock-copy', kind: 'copy', rev: 1, pluginId, pluginVersion: '0.0.0', connectorId, status, options: {}, pageSize: 500,
+    sets: {}, setOrder: [], setSql: {}, waiting: null, startedAt: at, updatedAt: at, finishedAt: null, lastError: null, startedBy: 'mock',
+  };
+}
 
 export interface MockOptions {
   pluginId: string;
@@ -60,6 +68,13 @@ export function createMockOpenldr(opts: MockOptions): OpenLdrPluginApi {
       async failures() { return []; },
       async stop() { return { id: 'mock-run', status: 'stopping' }; },
       async resume() { return { id: 'mock-run', status: 'running' }; },
+      copy: {
+        async start(input) { return { run: mockCopy(opts.pluginId, input.connectorId, 'queued') }; },
+        async list() { return []; },
+        async status() { return null; },
+        async stop() { return mockCopy(opts.pluginId, 'mock-connector', 'stopping'); },
+        async remove() { return mockCopy(opts.pluginId, 'mock-connector', 'deleting'); },
+      },
     },
   };
 }

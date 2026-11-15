@@ -3,13 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Layer under test: the CLI's argument handling, output and exit codes over a faked copy service,
 // and the four rows in command-meta. It does not cover the copy service itself, which is
 // packages/bootstrap/src/import-copy.test.ts, nor a run through the server.
-const mocks = vi.hoisted(() => ({ createAppContext: vi.fn() }));
+const mocks = vi.hoisted(() => {
+  /** Stands in for the service's CopySetChangedError. The CLI tests for it with instanceof. */
+  class CopySetChangedError extends Error {
+    readonly sets: string[];
+    constructor(sets: string[]) { super('changed'); this.name = 'CopySetChangedError'; this.sets = sets; }
+  }
+  return { createAppContext: vi.fn(), CopySetChangedError };
+});
 
 vi.mock('@openldr/config', async (importOriginal) => ({
   ...await importOriginal<typeof import('@openldr/config')>(),
   loadConfig: vi.fn(() => ({ config: true })),
 }));
-vi.mock('@openldr/bootstrap', () => ({ createAppContext: mocks.createAppContext }));
+vi.mock('@openldr/bootstrap', () => ({ createAppContext: mocks.createAppContext, CopySetChangedError: mocks.CopySetChangedError }));
 
 import { COMMAND_META } from './command-meta';
 import {
@@ -32,10 +39,7 @@ const copy = (over: Record<string, unknown> = {}) => ({
 });
 
 /** The service throws this when a set's SQL changed and reread was not given. */
-class FakeSetChanged extends Error {
-  readonly sets: string[];
-  constructor(sets: string[]) { super('changed'); this.name = 'CopySetChangedError'; this.sets = sets; }
-}
+const FakeSetChanged = mocks.CopySetChangedError;
 
 describe('import copy CLI', () => {
   let out: string[];

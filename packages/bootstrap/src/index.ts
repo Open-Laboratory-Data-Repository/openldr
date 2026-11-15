@@ -62,7 +62,7 @@ import { encodePushBody, advertisesGzip } from './sync-gzip';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
 import { createResultParametersLoader } from './reexpand-value-sets';
 
-import { createActivityService, type ActivityService } from './activity-service';
+import { copyForActivity, createActivityService, type ActivityCopyRun, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
 import { createValidationStrictness, type ValidationStrictness } from './validation-settings';
@@ -978,6 +978,13 @@ const reporting: ReportingApi = {
       for (const p of await imports.importers()) out.push(...await imports.list(p.id));
       return out;
     },
+    // A copy stores source rows and starts no workflow run either. Counts and states only: a set's
+    // cursor is a source key, and copyForActivity leaves it out.
+    importCopies: async () => {
+      const out: ActivityCopyRun[] = [];
+      for (const p of await importCopies.copiers()) out.push(...(await importCopies.list(p.id)).map(copyForActivity));
+      return out;
+    },
     // `openldr ingest` saves a batch with no workflow run (bug 14). The newest 100, newest first.
     ingestBatches: () => ingestBatches.list(),
   });
@@ -1831,6 +1838,7 @@ const reporting: ReportingApi = {
     plugins,
     pluginData,
     imports,
+    copies: importCopies,
     // Step-by-step connection check for the import page. The broker only calls this for a
     // connector the admin allowed for the calling plugin.
     diagnoseConnector: async (id: string) => {
@@ -2010,7 +2018,7 @@ export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
 export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
 export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
-export type { ActivityService, ActivityImportRun, ActivityLifecycle, RecentPayload } from './activity-service';
+export type { ActivityService, ActivityImportRun, ActivityCopyRun, ActivityLifecycle, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig, readSigningKeys } from './sync-settings';
 export {
   servePull,
@@ -2145,6 +2153,7 @@ export {
   type ImportService, type ImportRun, type ImportStatus, type ImportActor, type ImportAuditEvent, type ImportStartInput,
 } from './import-run';
 export type { ImportCopyService, CopyRun, CopyStatus, CopySetProgress } from './import-copy';
+export { CopySetChangedError } from './import-copy';
 export {
   runSetupChecks, setupCheckDeps, SETUP_CHECK_TITLE, SETUP_HINT_TEXT,
   type SetupCheck, type SetupCheckDeps, type SetupCheckId, type SetupHint, type SetupReport, type SetupStatus,

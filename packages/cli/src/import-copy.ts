@@ -1,4 +1,4 @@
-import { createAppContext, type CopyRun, type ImportActor } from '@openldr/bootstrap';
+import { CopySetChangedError, createAppContext, type CopyRun, type ImportActor } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { cliActor } from './cli-actor';
 import { parseImportOptions } from './import';
@@ -52,12 +52,9 @@ export function formatCopyRun(run: CopyRun): string {
   return parts.join('  ');
 }
 
-/** The service's refusal when a set's SQL changed and reread was not given. Matched by name, as
- *  @openldr/bootstrap exports the copy types but not the error class. */
+/** The service's refusal when a set's SQL changed and reread was not given. */
 function changedSetsOf(err: unknown): string[] | null {
-  if (!(err instanceof Error) || err.name !== 'CopySetChangedError') return null;
-  const sets = (err as Error & { sets?: unknown }).sets;
-  return Array.isArray(sets) && sets.every((s) => typeof s === 'string') ? sets : null;
+  return err instanceof CopySetChangedError ? [...err.sets] : null;
 }
 
 export interface ImportCopyStartOpts extends JsonOpt {

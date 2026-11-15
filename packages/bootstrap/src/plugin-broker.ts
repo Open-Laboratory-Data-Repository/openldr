@@ -6,6 +6,7 @@ import type { PluginDataStore } from '@openldr/db';
 import type { PluginPolicy } from './policy';
 import { policyAllows } from './policy';
 import { HOST_COLLECTION_PREFIX, type ImportActor, type ImportService } from './import-run';
+import { CopySetChangedError, type CopyRun, type CopySetProgress, type ImportCopyService } from './import-copy';
 
 /** The caller principal (the authenticated host user forwarding on the plugin's behalf). */
 export interface BrokerPrincipal {
@@ -57,7 +58,25 @@ export type BrokerOp =
   | { kind: 'import.list' }
   | { kind: 'import.failures'; runId: string }
   | { kind: 'import.stop'; runId: string }
-  | { kind: 'import.resume'; runId: string };
+  | { kind: 'import.resume'; runId: string }
+  // Copies (host:import too). The page names a connector and options; the plugin's wasm names the sets.
+  | { kind: 'import.copy.start'; connectorId: string; options: Record<string, string>; pageSize?: number; reread?: boolean }
+  | { kind: 'import.copy.list' }
+  | { kind: 'import.copy.status'; copyId: string }
+  | { kind: 'import.copy.stop'; copyId: string }
+  | { kind: 'import.copy.delete'; copyId: string; confirm: true };
+
+/** A copy as a plugin page sees it: no set's `cursor`, which is a source key, and no `driver`,
+ *  which names a server process. */
+export type PageCopyRun = Omit<CopyRun, 'driver' | 'sets'> & { sets: Record<string, Omit<CopySetProgress, 'cursor'>> };
+
+/** The one place a copy is cut down for a plugin page. Every copy op's answer goes through it. */
+export function copyForPage(run: CopyRun): PageCopyRun {
+  const { driver: _driver, sets, ...rest } = run;
+  const shown: PageCopyRun['sets'] = {};
+  for (const [name, { cursor: _cursor, ...progress }] of Object.entries(sets)) shown[name] = progress;
+  return { ...rest, sets: shown };
+}
 
 export type BrokerResult = { ok: true; data: unknown } | { ok: false; error: string };
 
@@ -119,6 +138,15 @@ export function buildBrokerOpSchema(maxDocBytes: number) {
     z.object({ kind: z.literal('import.failures'), runId: ID }),
     z.object({ kind: z.literal('import.stop'), runId: ID }),
     z.object({ kind: z.literal('import.resume'), runId: ID }),
+    z.object({
+      kind: z.literal('import.copy.start'), connectorId: ID, options: IMPORT_OPTIONS,
+      pageSize: z.number().int().positive().optional(), reread: z.boolean().optional(),
+    }),
+    z.object({ kind: z.literal('import.copy.list') }),
+    z.object({ kind: z.literal('import.copy.status'), copyId: ID }),
+    z.object({ kind: z.literal('import.copy.stop'), copyId: ID }),
+    // Deleting a copy throws away every row it holds, so the page must say so in the op itself.
+    z.object({ kind: z.literal('import.copy.delete'), copyId: ID, confirm: z.literal(true) }),
   ]);
 }
 
@@ -131,6 +159,7 @@ function gateFor(op: BrokerOp): string | undefined {
     case 'schedule.register': case 'schedule.list': case 'schedule.remove': return 'host:schedule';
     case 'import.allowed': case 'import.diagnose': case 'import.checks': case 'import.start': case 'import.status':
     case 'import.list': case 'import.failures': case 'import.stop': case 'import.resume':
+    case 'import.copy.start': case 'import.copy.list': case 'import.copy.status': case 'import.copy.stop': case 'import.copy.delete':
       return 'host:import';
     default: return undefined; // storage.*, invoke
   }
@@ -169,6 +198,8 @@ function rolesFor(op: BrokerOp): string[] {
     // Imports read a database connector and write records: admin only, like the connector routes.
     case 'import.allowed': case 'import.diagnose': case 'import.checks': case 'import.start': case 'import.status':
     case 'import.list': case 'import.failures': case 'import.stop': case 'import.resume':
+    // Copies read a database connector the same way, so the same rule holds.
+    case 'import.copy.start': case 'import.copy.list': case 'import.copy.status': case 'import.copy.stop': case 'import.copy.delete':
       return ['lab_admin'];
     // storage.*, invoke, reports.*, fhir.* — reports/fhir reads are broadly readable (native routes have no role gate).
     default: return [];
@@ -201,6 +232,8 @@ export interface PluginBrokerDeps {
   schedules?: { register(pluginId: string, schedule: unknown): Promise<unknown>; list(pluginId: string): Promise<unknown>; remove(pluginId: string, id: string): Promise<unknown> };
   /** The import service (import-run.ts). When absent, import ops return a structured error. */
   imports?: Pick<ImportService, 'allowed' | 'checks' | 'start' | 'get' | 'list' | 'failures' | 'stop' | 'resume'>;
+  /** The copy service (import-copy.ts). When absent, copy ops return a structured error. */
+  copies?: Pick<ImportCopyService, 'start' | 'get' | 'list' | 'stop' | 'remove'>;
   /** Step-by-step check of a host connector (connector-diagnose.ts), by connector id. */
   diagnoseConnector?: (id: string) => Promise<unknown>;
   policy: () => PluginPolicy;
@@ -396,6 +429,37 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
               case 'import.failures': return { ok: true, data: await imports.failures(pluginId, op.runId) };
               case 'import.stop': return { ok: true, data: await imports.stop(pluginId, op.runId, actor) };
               case 'import.resume': return { ok: true, data: await imports.resume(pluginId, op.runId, actor) };
+            }
+            return { ok: false, error: 'unknown operation' };
+          }
+          case 'import.copy.start': case 'import.copy.list': case 'import.copy.status': case 'import.copy.stop': case 'import.copy.delete': {
+            const copies = deps.copies;
+            if (!copies) return { ok: false, error: 'copies are unavailable' };
+            const actor: ImportActor = { type: 'user', id: principal.id, name: principal.username ?? principal.id };
+            switch (op.kind) {
+              case 'import.copy.start': {
+                try {
+                  const run = await copies.start({
+                    pluginId, connectorId: op.connectorId, options: op.options,
+                    ...(op.pageSize !== undefined ? { pageSize: op.pageSize } : {}),
+                    ...(op.reread !== undefined ? { reread: op.reread } : {}),
+                    actor,
+                  });
+                  return { ok: true, data: { run: copyForPage(run) } };
+                } catch (err) {
+                  // A changed set is a question for the person, not a failure: the page asks
+                  // whether to read those sets again, then starts with reread.
+                  if (err instanceof CopySetChangedError) return { ok: true, data: { changedSets: [...err.sets] } };
+                  throw err;
+                }
+              }
+              case 'import.copy.list': return { ok: true, data: (await copies.list(pluginId)).map(copyForPage) };
+              case 'import.copy.status': {
+                const run = await copies.get(pluginId, op.copyId);
+                return { ok: true, data: run ? copyForPage(run) : null };
+              }
+              case 'import.copy.stop': return { ok: true, data: copyForPage(await copies.stop(pluginId, op.copyId, actor)) };
+              case 'import.copy.delete': return { ok: true, data: copyForPage(await copies.remove(pluginId, op.copyId, actor)) };
             }
             return { ok: false, error: 'unknown operation' };
           }

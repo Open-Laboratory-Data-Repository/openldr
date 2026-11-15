@@ -1,4 +1,5 @@
 import { buildLifecycle, type Lifecycle, type LifecycleRun } from '@openldr/workflows';
+import type { CopyRun } from './import-copy';
 
 /** Structural view of a workflow run; `result` is widened to `unknown` so the store's
  *  own WorkflowRun type (which has `result?: unknown`) is assignable here. `buildLifecycle`
@@ -19,6 +20,35 @@ export interface ActivityImportRun {
   updatedAt: string;
   finishedAt: string | null;
   startedBy: string;
+}
+
+/** A copy (import-copy.ts), cut down to the counts and states Activity shows. A copy stores source
+ *  rows on CE's own disk and starts no workflow run. A set's cursor is a source key, so it is left
+ *  out here, before Activity ever holds it. */
+export interface ActivityCopyRun {
+  id: string;
+  pluginId: string;
+  pluginVersion: string;
+  status: string;
+  /** Rows stored, over every set. */
+  rows: number;
+  /** Keys skipped, over every set. */
+  skipped: number;
+  startedAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+  startedBy: string;
+}
+
+/** The only way a copy reaches Activity: its counts added up over the sets, and its states. */
+export function copyForActivity(run: CopyRun): ActivityCopyRun {
+  let rows = 0;
+  let skipped = 0;
+  for (const s of Object.values(run.sets)) { rows += s.rows; skipped += s.skipped; }
+  return {
+    id: run.id, pluginId: run.pluginId, pluginVersion: run.pluginVersion, status: run.status, rows, skipped,
+    startedAt: run.startedAt, updatedAt: run.updatedAt, finishedAt: run.finishedAt, startedBy: run.startedBy,
+  };
 }
 
 /** An ingest batch (packages/ingest batch-store.ts), as much of it as Activity shows. `openldr
@@ -44,6 +74,8 @@ export interface ActivityDeps {
   persistedEvent(correlationId: string): Promise<{ at: string; count: number; resourceTypes: string[] } | null>;
   /** Every import run. Optional so older callers and tests need not supply it. */
   importRuns?: () => Promise<ActivityImportRun[]>;
+  /** Every copy, through `copyForActivity`. Optional so older callers and tests need not supply it. */
+  importCopies?: () => Promise<ActivityCopyRun[]>;
   /** The newest ingest batches. Optional so older callers and tests need not supply it. */
   ingestBatches?: () => Promise<ActivityBatch[]>;
 }
@@ -80,6 +112,30 @@ function importLifecycle(run: ActivityImportRun): ActivityLifecycle {
     });
   }
   return { correlationId: run.id, status: importStatus(run.status), stages, runIds: [] };
+}
+
+function copyStatus(status: string): ActivityLifecycle['status'] {
+  if (status === 'completed') return 'complete';
+  if (status === 'failed') return 'failed';
+  if (status === 'stopped') return 'stopped';
+  // Queued, running, waiting, stopping and deleting all carry on by themselves.
+  return 'running';
+}
+
+/** One copy as a lifecycle: who started it, then how many rows it holds so far. */
+function copyLifecycle(run: ActivityCopyRun): ActivityLifecycle {
+  const stages: ActivityLifecycle['stages'] = [
+    { stage: 'received', status: 'ok', at: run.startedAt, detail: `copy: ${run.pluginId} ${run.pluginVersion}, started by ${run.startedBy}` },
+  ];
+  if (run.rows > 0 || run.skipped > 0 || run.status === 'failed') {
+    stages.push({
+      stage: 'persisted', status: run.status === 'failed' ? 'failed' : 'ok',
+      // A copy that has not finished is dated by its last save.
+      at: run.finishedAt ?? run.updatedAt,
+      detail: `${run.rows} rows copied, ${run.skipped} keys skipped`,
+    });
+  }
+  return { correlationId: run.id, status: copyStatus(run.status), stages, runIds: [] };
 }
 
 function batchStatus(status: string): ActivityLifecycle['status'] {
@@ -125,6 +181,16 @@ export function createActivityService(deps: ActivityDeps): ActivityService {
     }
   }
 
+  /** Every copy. Activity must keep working when they cannot be read, so a failure reads as none. */
+  async function importCopies(): Promise<ActivityCopyRun[]> {
+    if (!deps.importCopies) return [];
+    try {
+      return await deps.importCopies();
+    } catch {
+      return [];
+    }
+  }
+
   /** The newest ingest batches. Activity must keep working when they cannot be read. */
   async function ingestBatches(): Promise<ActivityBatch[]> {
     if (!deps.ingestBatches) return [];
@@ -158,39 +224,58 @@ export function createActivityService(deps: ActivityDeps): ActivityService {
       startedAt: run.startedAt, currentStage: lc.stages[lc.stages.length - 1].stage, status: lc.status };
   }
 
+  function copyPayload(run: ActivityCopyRun): RecentPayload {
+    const lc = copyLifecycle(run);
+    return { correlationId: run.id, workflowId: `copy:${run.pluginId}`, source: `copy: ${run.pluginId}`,
+      startedAt: run.startedAt, currentStage: lc.stages[lc.stages.length - 1].stage, status: lc.status };
+  }
+
   return {
     async getLifecycle(correlationId) {
       const payload = await assemble(correlationId);
       if (payload) return payload;
       const run = (await importRuns()).find((r) => r.id === correlationId);
-      return run ? importLifecycle(run) : null;
+      if (run) return importLifecycle(run);
+      const copy = (await importCopies()).find((c) => c.id === correlationId);
+      return copy ? copyLifecycle(copy) : null;
     },
     async listRecent(opts) {
       const imports = await importRuns();
+      const copies = await importCopies();
       const batches = await ingestBatches();
-      if (imports.length === 0 && batches.length === 0) {
+      if (imports.length === 0 && copies.length === 0 && batches.length === 0) {
         const out: RecentPayload[] = [];
         for (const h of await deps.runs.listCorrelations(opts)) out.push(await workflowPayload(h));
         return out;
       }
-      // Three sources, one page. Ask the store for enough rows to cover the page once the import
-      // runs and batches are merged in, order all by time, then cut the page. Only the rows on the
-      // page are assembled, which is the costly part. A batch that also has a workflow run is shown
-      // once, as the payload.
+      // Four sources, one page. Ask the store for enough rows to cover the page once the import
+      // runs, copies and batches are merged in, order all by time, then cut the page. Only the rows
+      // on the page are assembled, which is the costly part. A batch that also has a workflow run is
+      // shown once, as the payload.
       const offset = opts?.offset ?? 0;
       const limit = opts?.limit;
       const heads = await deps.runs.listCorrelations(limit === undefined ? opts : { limit: offset + limit, offset: 0 });
-      const merged = [
-        ...heads.map((h) => ({ at: h.latestAt, head: h, run: undefined as ActivityImportRun | undefined, batch: undefined as ActivityBatch | undefined })),
-        ...imports.map((run) => ({ at: run.startedAt, head: undefined, run })),
+      type Entry = {
+        at: string;
+        head?: { correlationId: string; latestAt: string; workflowId: string };
+        run?: ActivityImportRun;
+        copy?: ActivityCopyRun;
+        batch?: ActivityBatch;
+      };
+      const merged: Entry[] = [
+        ...heads.map((h): Entry => ({ at: h.latestAt, head: h })),
+        ...imports.map((run): Entry => ({ at: run.startedAt, run })),
+        ...copies.map((copy): Entry => ({ at: copy.startedAt, copy })),
         ...batches
           .filter((b) => !heads.some((h) => h.correlationId === b.batch_id))
-          .map((b) => ({ at: isoOf(b.created_at), head: undefined, run: undefined, batch: b })),
-      // Compare as times, not text: the two sources need not format a timestamp the same way.
+          .map((b): Entry => ({ at: isoOf(b.created_at), batch: b })),
+      // Compare as times, not text: the sources need not format a timestamp the same way.
       ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
       const page = limit === undefined ? merged : merged.slice(offset, offset + limit);
       const out: RecentPayload[] = [];
-      for (const e of page) out.push(e.run ? importPayload(e.run) : e.batch ? batchPayload(e.batch) : await workflowPayload(e.head!));
+      for (const e of page) {
+        out.push(e.run ? importPayload(e.run) : e.copy ? copyPayload(e.copy) : e.batch ? batchPayload(e.batch) : await workflowPayload(e.head!));
+      }
       return out;
     },
   };
