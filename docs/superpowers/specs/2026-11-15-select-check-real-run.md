@@ -6,7 +6,7 @@ The holes are real; build as planned. H1 and H2 both wrote to the database throu
 
 ## How I ran it
 
-- A container of my own from `mcr.microsoft.com/mssql/server:2025-latest`, already on this machine, with no volume. Its port was bound to 127.0.0.1 only. The server reported Microsoft SQL Server 2025 (RTM-CU10), 17.0.5035.5, Developer Edition on Linux.
+- A container of my own from `mcr.microsoft.com/mssql/server:2025-latest`, already on this machine, with no volume. Its port was bound to 127.0.0.1 only. The server reported Microsoft SQL Server 2025 (RTM-CU10), 17.0.5035.5, Enterprise Developer Edition (64-bit) on Linux.
 - A database `sa_scratch_sel` with a table `dbo.proof (i int)` holding one row. Before each try I put the table back to one row.
 - A throwaway script ran `createConnectorSqlRunner` from source with `tsx` (ruling R5). It gave the runner a fake `connectors` object of type `microsoft-sql` that pointed at the scratch server. So the real `validateSelectSql`, `planPagination` and `createConnectorDb` code ran against a real server.
 - After each try I counted the rows of `dbo.proof` with `sqlcmd` inside the same container.
@@ -30,7 +30,7 @@ Before the last try I made a trigger that does nothing, `dbo.proof_noop`, so the
 - `SELECT 1 AS x ENABLE TRIGGER ALL ON dbo.proof` failed with error 102 near `ENABLE`.
 - `SELECT 1 AS x; DISABLE TRIGGER ALL ON dbo.proof` ran and turned the trigger off.
 
-So on this server `ENABLE TRIGGER` and `DISABLE TRIGGER` cannot follow a SELECT without a semicolon. Once 4.1 stops a semicolon hiding behind a string, the semicolon rule already catches them. The pair rule in 4.2 then catches nothing more. It refuses no working query either, because `trigger` is reserved. Keeping it costs nothing.
+So on this server, in the three positions I tried, `ENABLE TRIGGER` and `DISABLE TRIGGER` could not follow a SELECT without a semicolon. Once 4.1 stops a semicolon hiding behind a string, the semicolon rule already catches them. The pair rule in 4.2 then catches nothing more. It refuses no working query either, because `trigger` is reserved. Keeping it costs nothing.
 
 ## The words of spec 4.2
 
@@ -100,13 +100,13 @@ Every refusal below was error 156 with that sentence and the word. For `set`, `s
 | `throw` | no | accepted |
 | `go` | no | accepted |
 
-More on `load` and `dump`. A table `dbo.load (load int, dump int)` was created, and `select load, dump from dbo.load` returned its row. Neither word starts a statement on this server any more. `dump database sa_scratch_sel to disk = ...` and `load database sa_scratch_sel from disk = ...` both failed with error 156 near `database`. So refusing them would block a working query and stop nothing.
+More on `load` and `dump`. A table `dbo.load (load int, dump int)` was created, and `select load, dump from dbo.load` returned its row. I tried one statement form of each. `dump database sa_scratch_sel to disk = ...` and `load database sa_scratch_sel from disk = ...` both failed with error 156 near `database`. Other forms may exist. An accepted alias does not prove a word cannot start a statement, as `throw` and `send` show. The plan needs only "not reserved", and that part is direct. So refusing them would block a working query.
 
 `fetch` and `end` are reserved, but 4.2 keeps them allowed on purpose. That is right, because the next section shows `OFFSET ... FETCH` and `CASE ... END` working.
 
 ## What 4.2 must keep allowing
 
-I ran each Review Focus 1 line as a real query. The table `dbo.rf (id int, [open] int, open_date date)` held two rows. All nine returned rows with `sqlcmd`. The seven that need no session state also went through the runner, which passed them and returned the same rows.
+I ran each Review Focus 1 line as a real query. The table `dbo.rf (id int, [open] int, open_date date)` held two rows. All nine returned rows with `sqlcmd`. Seven also went through the runner, which passed them and returned the same rows. The runner ran today's check, which has no 4.2 rule. So the Runner column shows only that the server returns rows. Task 3's tests are what show the 4.2 rule lets these through.
 
 | Line | Query | sqlcmd | Runner |
 |------|-------|--------|--------|
@@ -124,14 +124,32 @@ A temp table lives only in the session that made it, and the runner opens a new 
 
 ## Something the next tasks should know
 
-With `-- exec later` at the end, the runner sent `set rowcount 10000; SELECT id FROM dbo.rf -- exec later; set rowcount 0`. The line comment swallows the runner's own `; set rowcount 0`. I ran the same text inside `sp_executesql` with `set rowcount 1`. The query returned 1 row, and a query after it in the same session saw all 3 rows. So the setting ended with the request, and nothing stayed behind. Any text that 4.4 adds after the person's SQL in the same request can be swallowed the same way, a roll-back included. A roll-back sent as its own request is not.
+With `-- exec later` at the end, the runner sent `set rowcount 10000; SELECT id FROM dbo.rf -- exec later; set rowcount 0`. The line comment swallows the runner's own `; set rowcount 0`.
+
+I tried whether the row cap then stays on the session. A fresh scratch server held a table `dbo.cap (id int)` with exactly 3 rows. A script sent five requests in order on one `ConnectorDb` from `createConnectorDb`, the real driver path. Each printed `@@SPID`, and all five ran on the same session, 59. I ran the five twice and got the same output both times.
+
+| Request | Rows returned |
+|---------|---------------|
+| a. `SELECT id, @@SPID AS spid FROM dbo.cap` | 3 |
+| b. `set rowcount 1; SELECT id, @@SPID AS spid FROM dbo.cap -- a note; set rowcount 0` | 1 |
+| c. `SELECT id, @@SPID AS spid FROM dbo.cap` | 3 |
+| d. `set lock_timeout 1234` | 0 |
+| e. `SELECT @@LOCK_TIMEOUT AS t, @@SPID AS spid` | 1, with `t` = -1 |
+
+Request b returned 1 row, so its cap was in force for its own query. Request c returned all 3 rows on the same session. So the row cap did not outlive its request, even with its reset swallowed. A `set lock_timeout 1234` sent as its own request was not in force for the next request on the same session. Request e read `@@LOCK_TIMEOUT` as -1, the server's default.
+
+The driver shows how each request is sent. Kysely runs every query with `execSql` (`kysely@0.28.17`, `dist/cjs/dialect/mssql/mssql-driver.js:130`). Tedious sends that text as the `statement` parameter of `sp_executesql` (`tedious@18.6.2`, `lib/connection.js:1638-1660`). Requests c and e fit that. The `SET` in requests b and d ended with its own request.
+
+Any text that 4.4 adds after the person's SQL in the same request can be swallowed by a trailing line comment, a roll-back included. A roll-back sent as its own request is not.
 
 ## What I did not try
 
 - The two holes on the dashboards runner (`runReadQuery`). It uses the same check and the same wrapper, but I did not send anything through it.
 - H3 (`OPENQUERY` and the like) and H4 (a token inside quotes). The brief did not ask.
 - `SELECT NEXT VALUE FOR dbo.seq` and whether it moves a sequence on.
-- Whether `THROW`, `SEND`, `RECEIVE` or `MOVE` can follow a SELECT without a semicolon.
+- Whether `THROW`, `SEND`, `RECEIVE`, `MOVE`, `GET CONVERSATION GROUP` or `END CONVERSATION` can follow a SELECT without a semicolon. I did not test `get` or `conversation` as bare names either.
+- `ENABLE TRIGGER` or `DISABLE TRIGGER` after a closing parenthesis, a string, a `WHERE` expression or an `ORDER BY`. I also did not run `ENABLE TRIGGER` after a semicolon.
+- Any other statement word as a second statement without a semicolon. Only `EXEC` was shown running that way. `WAITFOR`, `BACKUP`, `SHUTDOWN` and the other H1 words were not tried. The plan does not need it, because 4.2 refuses the reserved words anyway.
+- `OPTION (USE PLAN ...)` as a working query. Only `USE HINT` was run.
 - Microsoft's published reserved keyword list. I checked the words on the server only.
-- That the driver itself sends a query through `sp_executesql`. I tried that wrapping with `sqlcmd`. I did not trace what the driver sends.
-- Any Postgres or MySQL connector.
+- A trailing line comment on the Postgres or MySQL arm of the wrapper, or any Postgres or MySQL connector.
