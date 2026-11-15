@@ -74,6 +74,25 @@ describe('validateSelectSql', () => {
   });
 });
 
+describe('validateSelectSql and the dialect', () => {
+  it('reads the text by the engine it is given', () => {
+    expect(() => validateSelectSql("SELECT [it's] FROM t", 'mssql')).not.toThrow();
+    expect(() => validateSelectSql("SELECT $$it's$$ AS a", 'postgres')).not.toThrow();
+    expect(() => validateSelectSql("SELECT 'it\\'s' AS a", 'mysql')).not.toThrow();
+    expect(() => validateSelectSql('SELECT ["]; SELECT 2; SELECT ["]', 'mssql')).toThrow();
+  });
+  it('with no dialect, passes when one engine would accept the text', () => {
+    expect(() => validateSelectSql("SELECT [it's] FROM t")).not.toThrow();
+    expect(() => validateSelectSql("SELECT $$it's$$ AS a")).not.toThrow();
+    expect(() => validateSelectSql("SELECT 1 # don't\n")).not.toThrow();
+  });
+  it('with no dialect, still refuses what every engine refuses', () => {
+    expect(() => validateSelectSql("SELECT 'abc")).toThrow();
+    expect(() => validateSelectSql("SELECT '--', 1; SELECT 2")).toThrow();
+    expect(() => validateSelectSql('DROP TABLE t')).toThrow();
+  });
+});
+
 describe('runSqlQuery numeric guards', () => {
   const db = { transaction: () => { throw new Error('should not reach db'); } } as any;
 

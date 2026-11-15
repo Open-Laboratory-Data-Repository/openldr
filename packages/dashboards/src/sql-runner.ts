@@ -5,12 +5,39 @@ import { blankSql, type SqlDialect } from './sql-text';
 
 export type { SqlDialect } from './sql-text';
 
-export function validateSelectSql(rawSql: string): void {
-  // Blank strings, comments and quoted names in one pass before the structural and keyword checks,
-  // so quoted text (e.g. 'convert this into that') can't trigger a false positive or hide a
-  // statement. Only the validation copy is blanked, never the SQL that runs. A throw from the
-  // reader (text that is never closed, for one) is a refusal.
-  const stripped = blankSql(rawSql).trim();
+const DIALECTS_IN_ORDER: readonly SqlDialect[] = ['postgres', 'mssql', 'mysql'];
+
+/** Returns when `rawSql` is one read-only SELECT or WITH statement. Throws a fixed sentence
+ *  otherwise, and throws what `blankSql` throws when a string, comment or quoted name never closes.
+ *
+ *  With a dialect, the text is read by that engine's rules. This is the form that guards a run.
+ *
+ *  Without a dialect, the text passes when it passes under at least one of postgres, mssql and
+ *  mysql, tried in that order. When it fails under all three, the postgres error is thrown. This
+ *  form is for a check made when a query is saved and the engine is not known. It is not the check
+ *  that guards a run. */
+export function validateSelectSql(rawSql: string, dialect?: SqlDialect): void {
+  if (dialect) {
+    checkBlankedSelect(blankSql(rawSql, dialect));
+    return;
+  }
+  let firstError: unknown = null;
+  for (const each of DIALECTS_IN_ORDER) {
+    try {
+      checkBlankedSelect(blankSql(rawSql, each));
+      return;
+    } catch (e) {
+      if (each === DIALECTS_IN_ORDER[0]) firstError = e;
+    }
+  }
+  throw firstError;
+}
+
+function checkBlankedSelect(blanked: string): void {
+  // Strings, comments and quoted names are blanked before the structural and keyword checks, so
+  // quoted text (e.g. 'convert this into that') can't trigger a false positive or hide a
+  // statement. Only the validation copy is blanked, never the SQL that runs.
+  const stripped = blanked.trim();
   if (!stripped) throw new Error('empty query');
   // Reject multiple statements: any semicolon that is not the final char.
   const noTrailing = stripped.replace(/;\s*$/, '');

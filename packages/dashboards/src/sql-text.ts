@@ -1,73 +1,102 @@
 /** One reader of SQL text. It walks the text once, left to right, and sorts each character into
- *  code, string, comment or quoted name. It returns the text with the last three replaced by fixed
- *  placeholders, so a check that reads the result sees only the code.
- *
- *  Engines disagree on what is a string, a comment or a name, so the reader takes the dialect of the
- *  engine that will run the text. With no dialect it follows its own strict rules. Where engines
- *  differ, it keeps the text as code, so the check reads it.
+ *  code, string, comment or quoted name, by the rules of one engine. Engines disagree on what is a
+ *  string, a comment or a name, so the dialect is always given. Where an engine's reading is in
+ *  doubt, the reader keeps the text as code, so a check reads it.
  *
  *  Placeholders: a string becomes `''`, a comment one space, `[name]` becomes `[]`, `"name"` becomes
- *  `""`, a backtick name two backticks, and a dollar-quoted string `''`.
+ *  `""`, a backtick name two backticks, and a dollar-quoted string `''`. On MySQL the opener and the
+ *  closer of a `/*! ... *\/` comment each become one space, and its inside stays code.
  *
  *  Every throw is a fixed sentence. It never holds any part of the SQL. */
 
 export type SqlDialect = 'postgres' | 'mssql' | 'mysql';
 
 const NEVER_CLOSED = 'the SQL has a string, comment or quoted name that is never closed';
-const NESTED_COMMENT = 'the SQL opens a comment inside another comment';
-const RUNNABLE_COMMENT = 'the SQL has a /*! or /*M! comment, which MySQL and MariaDB run as code';
-const BACKSLASH_QUOTE = 'the SQL has a backslash before a quote inside a string, which MySQL can read two ways';
+const NESTED_RUNNABLE = 'the SQL opens a /*! comment inside another one';
 
 type State = 'code' | 'quoted' | 'line' | 'block' | 'dollar';
 
-/** How a backslash reads inside a quoted run.
- *  plain: an ordinary character.
- *  escape: it makes the next character ordinary (a Postgres E'...' string).
- *  mysql: two in a row are one pair; one before the opening quote throws; any other is ordinary. */
-type Backslash = 'plain' | 'escape' | 'mysql';
+interface Scan {
+  /** The text with strings, comments and quoted names replaced by placeholders. */
+  text: string;
+  /** 1 for each character of the input that is code, 0 for every other character. */
+  code: Uint8Array;
+}
 
 function isAsciiLetter(c: string): boolean {
   const n = c.charCodeAt(0);
   return (n >= 65 && n <= 90) || (n >= 97 && n <= 122);
 }
 
-function isDigit(c: string): boolean {
+function isDigit(c: string | undefined): boolean {
+  if (c === undefined || c === '') return false;
   const n = c.charCodeAt(0);
   return n >= 48 && n <= 57;
 }
 
-/** A character that can continue a Postgres name: a letter, a digit, `_`, `$`, or any non-ASCII one. */
-function isPostgresNameChar(c: string | undefined): boolean {
-  if (c === undefined || c === '') return false;
-  return isAsciiLetter(c) || isDigit(c) || c === '_' || c === '$' || c.charCodeAt(0) >= 0x80;
+function isAtOrAbove0x80(c: string): boolean {
+  return c.charCodeAt(0) >= 0x80;
 }
 
-/** The `$tag$` that opens a dollar-quoted string at `i`, or '' when there is none. The tag is empty
- *  or ASCII letters, digits and `_`, not starting with a digit. */
+/** A character that can continue a Postgres name: a letter, a digit, `_`, `$`, or any character at
+ *  or above U+0080. */
+function isPostgresNameChar(c: string | undefined): boolean {
+  if (c === undefined || c === '') return false;
+  return isAsciiLetter(c) || isDigit(c) || c === '_' || c === '$' || isAtOrAbove0x80(c);
+}
+
+/** A character that can start a dollar tag: a letter, `_`, or any character at or above U+0080. */
+function isTagStart(c: string | undefined): boolean {
+  if (c === undefined || c === '') return false;
+  return isAsciiLetter(c) || c === '_' || isAtOrAbove0x80(c);
+}
+
+/** The `$tag$` that opens a dollar-quoted string at `i`, or '' when there is none. */
 function dollarTagAt(sql: string, i: number): string {
   let j = i + 1;
-  if (j < sql.length && (isAsciiLetter(sql[j]) || sql[j] === '_')) {
+  if (isTagStart(sql[j])) {
     j++;
-    while (j < sql.length && (isAsciiLetter(sql[j]) || isDigit(sql[j]) || sql[j] === '_')) j++;
+    while (j < sql.length && (isTagStart(sql[j]) || isDigit(sql[j]))) j++;
   }
   return sql[j] === '$' ? sql.slice(i, j + 1) : '';
 }
 
+/** A Postgres `E'...'` string: the `'` follows `E` or `e`, and that letter is not part of a
+ *  longer name. */
+function isEStringQuote(sql: string, i: number): boolean {
+  const prev = sql[i - 1];
+  return (prev === 'E' || prev === 'e') && !isPostgresNameChar(sql[i - 2]);
+}
+
 /** Whether `--` at `i` starts a line comment. MySQL needs a space, a tab, a line break or the end
- *  of the text after it; every other engine does not. */
-function opensLineComment(sql: string, i: number, dialect: SqlDialect | undefined): boolean {
+ *  of the text after it. SQL Server and Postgres do not. */
+function opensLineComment(sql: string, i: number, dialect: SqlDialect): boolean {
   if (dialect !== 'mysql') return true;
   const after = sql[i + 2];
   return after === undefined || after === ' ' || after === '\t' || after === '\n' || after === '\r';
 }
 
-export function blankSql(sql: string, dialect?: SqlDialect): string {
+/** The length of a MySQL `/*!` or `/*M!` opener at `i`, with the digits that follow it, or 0. */
+function runnableOpenerLength(sql: string, i: number): number {
+  let j: number;
+  if (sql[i + 2] === '!') j = i + 3;
+  else if (sql[i + 2] === 'M' && sql[i + 3] === '!') j = i + 4;
+  else return 0;
+  while (isDigit(sql[j])) j++;
+  return j - i;
+}
+
+function scan(sql: string, dialect: SqlDialect): Scan {
+  const code = new Uint8Array(sql.length);
   let out = '';
   let state: State = 'code';
   let close = '';
-  let backslash: Backslash = 'plain';
+  /** In a quoted run: a backslash makes the next character ordinary. */
+  let escapes = false;
   let depth = 0;
   let tag = '';
+  /** Inside a MySQL `/*! ... *\/`, whose inside is code. */
+  let runnable = false;
   let i = 0;
 
   while (i < sql.length) {
@@ -76,43 +105,43 @@ export function blankSql(sql: string, dialect?: SqlDialect): string {
 
     if (state === 'code') {
       if (c === "'") {
-        const prev = sql[i - 1];
-        const eString = dialect === 'postgres' && (prev === 'E' || prev === 'e') && !isPostgresNameChar(sql[i - 2]);
         state = 'quoted'; close = "'";
-        backslash = dialect === 'mysql' ? 'mysql' : eString ? 'escape' : 'plain';
+        escapes = dialect === 'mysql' || (dialect === 'postgres' && isEStringQuote(sql, i));
         out += "''"; i++;
       } else if (c === '"') {
-        state = 'quoted'; close = '"'; backslash = dialect === 'mysql' ? 'mysql' : 'plain';
+        state = 'quoted'; close = '"'; escapes = dialect === 'mysql';
         out += '""'; i++;
-      } else if (c === '`' && (dialect === 'mysql' || dialect === undefined)) {
-        state = 'quoted'; close = '`'; backslash = 'plain';
+      } else if (c === '`' && dialect === 'mysql') {
+        state = 'quoted'; close = '`'; escapes = false;
         out += '``'; i++;
       } else if (c === '[' && dialect === 'mssql') {
-        state = 'quoted'; close = ']'; backslash = 'plain';
+        state = 'quoted'; close = ']'; escapes = false;
         out += '[]'; i++;
       } else if (c === '-' && d === '-' && opensLineComment(sql, i, dialect)) {
         state = 'line'; out += ' '; i += 2;
       } else if (c === '#' && dialect === 'mysql') {
         state = 'line'; out += ' '; i++;
+      } else if (runnable && c === '*' && d === '/') {
+        runnable = false; out += ' '; i += 2;
       } else if (c === '/' && d === '*') {
-        const runnable = sql[i + 2] === '!' || (sql[i + 2] === 'M' && sql[i + 3] === '!');
-        if (runnable && dialect !== 'mssql' && dialect !== 'postgres') throw new Error(RUNNABLE_COMMENT);
-        state = 'block'; depth = 1; out += ' '; i += 2;
+        const opener = dialect === 'mysql' ? runnableOpenerLength(sql, i) : 0;
+        if (opener > 0) {
+          if (runnable) throw new Error(NESTED_RUNNABLE);
+          runnable = true; out += ' '; i += opener;
+        } else {
+          state = 'block'; depth = 1; out += ' '; i += 2;
+        }
       } else if (c === '$' && dialect === 'postgres' && !isPostgresNameChar(sql[i - 1]) && dollarTagAt(sql, i) !== '') {
         tag = dollarTagAt(sql, i);
         state = 'dollar'; out += "''"; i += tag.length;
       } else {
-        out += c; i++;
+        out += c; code[i] = 1; i++;
       }
     } else if (state === 'quoted') {
       if (c === close) {
         if (d === close) { i += 2; } else { state = 'code'; i++; }
-      } else if (c === '\\' && backslash === 'escape') {
+      } else if (c === '\\' && escapes) {
         i += 2;
-      } else if (c === '\\' && backslash === 'mysql') {
-        if (d === '\\') i += 2;
-        else if (d === close) throw new Error(BACKSLASH_QUOTE);
-        else i++;
       } else {
         i++;
       }
@@ -124,10 +153,9 @@ export function blankSql(sql: string, dialect?: SqlDialect): string {
       if (c === '*' && d === '/') {
         depth--; i += 2;
         if (depth === 0) state = 'code';
-      } else if (c === '/' && d === '*') {
-        if (dialect === 'mssql' || dialect === 'postgres') { depth++; i += 2; }
-        else if (dialect === 'mysql') i++;
-        else throw new Error(NESTED_COMMENT);
+      } else if (c === '/' && d === '*' && dialect !== 'mysql') {
+        // SQL Server and Postgres nest block comments. MySQL ends one at the first closer.
+        depth++; i += 2;
       } else {
         i++;
       }
@@ -137,20 +165,29 @@ export function blankSql(sql: string, dialect?: SqlDialect): string {
     }
   }
 
-  if (state !== 'code' && state !== 'line') throw new Error(NEVER_CLOSED);
-  return out;
+  if ((state !== 'code' && state !== 'line') || runnable) throw new Error(NEVER_CLOSED);
+  return { text: out, code };
 }
 
-/** True when every match of `token` in `template` sits in code, not in a string, a comment or a
- *  quoted name. It counts the matches in the template and in the blanked template. A throw from
- *  `blankSql` goes through to the caller. */
-export function tokensInPlainSql(template: string, token: RegExp, dialect?: SqlDialect): boolean {
-  const blanked = blankSql(template, dialect);
-  return countMatches(template, token) === countMatches(blanked, token);
+/** Returns `sql` with every string, comment and quoted name replaced by its placeholder, read by
+ *  the rules of `dialect`. Throws a fixed sentence, holding none of the SQL, when a string, comment,
+ *  quoted name or dollar-quoted string is never closed, or when a MySQL `/*!` comment opens inside
+ *  another one. */
+export function blankSql(sql: string, dialect: SqlDialect): string {
+  return scan(sql, dialect).text;
 }
 
-/** Counts on a fresh copy of the pattern, so a global pattern's `lastIndex` never carries over. */
-function countMatches(text: string, token: RegExp): number {
+/** Returns true when every match of `token` in `template` lies wholly in code, read by the rules of
+ *  `dialect`, and true when there is no match. Returns false when any character of any match is in
+ *  a string, a comment or a quoted name. It matches on a global copy of `token`, so the caller's
+ *  pattern and its `lastIndex` are never changed. Throws what `blankSql` throws. */
+export function tokensInPlainSql(template: string, token: RegExp, dialect: SqlDialect): boolean {
+  const { code } = scan(template, dialect);
   const flags = token.flags.includes('g') ? token.flags : `${token.flags}g`;
-  return Array.from(text.matchAll(new RegExp(token.source, flags))).length;
+  for (const match of template.matchAll(new RegExp(token.source, flags))) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    for (let k = start; k < end; k++) if (code[k] !== 1) return false;
+  }
+  return true;
 }
