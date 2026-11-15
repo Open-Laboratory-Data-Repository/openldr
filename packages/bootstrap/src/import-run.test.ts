@@ -412,7 +412,7 @@ describe('import run: who may read what', () => {
       expect(done.lastError).toMatch(REFUSAL);
     });
 
-    it('lists both kinds of plugin as readers, and a plugin with neither import source nor capability as neither', async () => {
+    it('lists a one-pass importer as a reader, but not a plugin with no import source or a copy-only plugin without host:import', async () => {
       const h = await harness(keysOf(1));
       expect(await h.svc.readers()).toEqual([{ id: 'v1-import', version: '1.2.0', connectorTypes: ['microsoft-sql'] }]);
       h.setManifest(manifest({ importSource: undefined }));

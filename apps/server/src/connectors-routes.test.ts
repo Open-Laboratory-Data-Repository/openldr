@@ -404,7 +404,7 @@ describe('connector plugin access routes', () => {
       { id: 'pg-import', version: '0.2.0', connectorTypes: ['postgres'] },
     ];
     // A plugin that can only be copied from is a reader and not an importer.
-    const readers = over.copyOnly ? [...importers, { id: 'disa-copy', version: '0.3.0', connectorTypes: ['microsoft-sql'] }] : importers;
+    const readers = over.copyOnly ? [...importers, { id: 'rows-copy', version: '0.3.0', connectorTypes: ['microsoft-sql'] }] : importers;
     const ctx = {
       ...fakeCtx(),
       imports: {
@@ -449,12 +449,12 @@ describe('connector plugin access routes', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual([
       { id: 'v1-import', version: '0.1.0', allowed: true },
-      { id: 'disa-copy', version: '0.3.0', allowed: false },
+      { id: 'rows-copy', version: '0.3.0', allowed: false },
     ]);
-    const on = await app.inject({ method: 'PUT', url: '/api/connectors/ms/import-plugins/disa-copy', payload: { allowed: true } });
+    const on = await app.inject({ method: 'PUT', url: '/api/connectors/ms/import-plugins/rows-copy', payload: { allowed: true } });
     expect(on.statusCode).toBe(200);
-    expect(on.json()).toContainEqual({ id: 'disa-copy', version: '0.3.0', allowed: true });
-    expect(calls).toEqual([{ op: 'allow', pluginId: 'disa-copy', connectorId: 'ms', actor: { type: 'user', id: 'u1', name: 'admin' } }]);
+    expect(on.json()).toContainEqual({ id: 'rows-copy', version: '0.3.0', allowed: true });
+    expect(calls).toEqual([{ op: 'allow', pluginId: 'rows-copy', connectorId: 'ms', actor: { type: 'user', id: 'u1', name: 'admin' } }]);
   });
 
   it('allows and then revokes a plugin, naming the signed-in user as the actor', async () => {
