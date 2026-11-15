@@ -74,8 +74,6 @@ describe('blankSql, mysql, round 1', () => {
     ["SELECT 'a\\\\' AS a, 1", "SELECT '' AS a, 1"],
     ["SELECT 'a\\'b' AS x, 'c\\'d' AS y", "SELECT '' AS x, '' AS y"],
     ["SELECT /*! STRAIGHT_JOIN */ a FROM t", "SELECT   STRAIGHT_JOIN   a FROM t"],
-    ["SELECT /*!50000 a */ FROM t", "SELECT   a   FROM t"],
-    ["SELECT /*M!100000 a */ FROM t", "SELECT   a   FROM t"],
     ["SELECT /*! 'x' */ 1", "SELECT   ''   1"],
   ])('blanks %s', (input, want) => { expect(blankSql(input, 'mysql')).toBe(want); });
   it.each(["SELECT 'a\\", "SELECT /*! a", "SELECT /*! 'a */"])('refuses %s', (input) => {
@@ -90,6 +88,48 @@ describe('blankSql, postgres, round 1', () => {
     ["SELECT é$x$ FROM t", "SELECT é$x$ FROM t"],
     ["SELECT 1 /*! x */", "SELECT 1  "],
   ])('blanks %s', (input, want) => { expect(blankSql(input, 'postgres')).toBe(want); });
+});
+
+describe('blankSql, mysql, round 2', () => {
+  it.each([
+    ["SELECT /*! STRAIGHT_JOIN */ a FROM t", "SELECT   STRAIGHT_JOIN   a FROM t"],
+    ["SELECT 1 --\u0001x\nFROM t", "SELECT 1  \nFROM t"],
+    ["SELECT 1 --\fx\nFROM t", "SELECT 1  \nFROM t"],
+    ["SELECT 1 --\u007fx\nFROM t", "SELECT 1  \nFROM t"],
+    ["SELECT 1 -- a\r\nFROM t", "SELECT 1  \nFROM t"],
+    ["SELECT 1 # a\r\nFROM t", "SELECT 1  \nFROM t"],
+    ["SELECT 1 --x", "SELECT 1 --x"],
+    ["SELECT 1 -- a", "SELECT 1  "],
+  ])('blanks %j', (input, want) => { expect(blankSql(input, 'mysql')).toBe(want); });
+  it.each([
+    "SELECT /*!50000 a */ FROM t", "SELECT /*!5 a */ FROM t", "SELECT /*M! a */ FROM t",
+    "SELECT /*M!100000 a */ FROM t", "SELECT /*m! a */ FROM t",
+    "SELECT 1 -- a\rFROM t", "SELECT 1 # a\rFROM t",
+  ])('refuses %j', (input) => { expect(() => blankSql(input, 'mysql')).toThrow(); });
+});
+
+describe('blankSql, mssql, round 2', () => {
+  it.each([
+    ["SELECT 1 -- a\r\nFROM t", "SELECT 1  \nFROM t"],
+    ['SELECT "a""b" FROM t', 'SELECT "" FROM t'],
+    ["SELECT 1 /*M! x */", "SELECT 1  "],
+    ["SELECT 1 /*!50000 x */", "SELECT 1  "],
+  ])('blanks %j', (input, want) => { expect(blankSql(input, 'mssql')).toBe(want); });
+  it('refuses a lone carriage return inside a line comment', () => {
+    expect(() => blankSql("SELECT 1 -- a\rFROM t", 'mssql')).toThrow();
+  });
+  it('a carriage return outside a comment is ordinary', () => {
+    expect(blankSql("SELECT 1\rFROM t", 'mssql')).toBe("SELECT 1\rFROM t");
+  });
+});
+
+describe('blankSql, postgres, round 2', () => {
+  it.each([
+    ["SELECT 1 -- a\rFROM t", "SELECT 1  \rFROM t"],
+    ["SELECT 1 -- a\r\nFROM t", "SELECT 1  \r\nFROM t"],
+    ["SELECT 1 /*M! x */", "SELECT 1  "],
+    ["SELECT 1 /*!50000 x */", "SELECT 1  "],
+  ])('blanks %j', (input, want) => { expect(blankSql(input, 'postgres')).toBe(want); });
 });
 
 describe('blankSql stays linear in the input length', () => {
@@ -149,5 +189,21 @@ describe('tokensInPlainSql, round 1', () => {
   });
   it('works with a pattern that has no global flag', () => {
     expect(tokensInPlainSql("WHERE a = '{{keys}}'", /\{\{\s*keys\s*\}\}/, 'mssql')).toBe(false);
+  });
+});
+
+describe('tokensInPlainSql, round 2', () => {
+  it('ignores a sticky flag on the pattern', () => {
+    expect(tokensInPlainSql("WHERE a = '{{keys}}'", /\{\{\s*keys\s*\}\}/gy, 'mssql')).toBe(false);
+    expect(tokensInPlainSql("WHERE a = '{{keys}}'", /\{\{\s*keys\s*\}\}/y, 'mssql')).toBe(false);
+  });
+  it('refuses a pattern that matches empty text', () => {
+    expect(() => tokensInPlainSql("WHERE a = '{{keys}}'", /(?=\{\{keys\}\})/g, 'mssql')).toThrow();
+  });
+  it('one global pattern can be used again after a call', () => {
+    const T = /\{\{\s*keys\s*\}\}/g;
+    T.lastIndex = 5;
+    expect(tokensInPlainSql('WHERE id IN ({{keys}})', T, 'mssql')).toBe(true);
+    expect(T.lastIndex).toBe(5);
   });
 });

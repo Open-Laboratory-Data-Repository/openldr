@@ -7,8 +7,16 @@ export type { SqlDialect } from './sql-text';
 
 const DIALECTS_IN_ORDER: readonly SqlDialect[] = ['postgres', 'mssql', 'mysql'];
 
-/** Returns when `rawSql` is one read-only SELECT or WITH statement. Throws a fixed sentence
- *  otherwise, and throws what `blankSql` throws when a string, comment or quoted name never closes.
+/** Returns when `rawSql` is one read-only SELECT or WITH statement. Throws a fixed sentence in
+ *  these cases:
+ *  - the text is empty once comments are blanked;
+ *  - it holds more than one statement;
+ *  - it does not start with SELECT or WITH;
+ *  - it holds a refused word (INTO, DDL or DML);
+ *  - every case in which `blankSql` throws (see `sql-text.ts`): a string, comment, quoted name or
+ *    dollar-quoted string that is never closed; a lone carriage return in a line comment on mysql
+ *    or mssql; a versioned `/*!` comment or a `/*M!` comment on mysql; a `/*!` comment inside
+ *    another one on mysql.
  *
  *  With a dialect, the text is read by that engine's rules. This is the form that guards a run.
  *

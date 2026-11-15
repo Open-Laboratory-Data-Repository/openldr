@@ -86,6 +86,11 @@ describe('validateSelectSql and the dialect', () => {
     expect(() => validateSelectSql("SELECT $$it's$$ AS a")).not.toThrow();
     expect(() => validateSelectSql("SELECT 1 # don't\n")).not.toThrow();
   });
+  it('with no dialect, the error thrown is the one from the postgres reading', () => {
+    const message = (fn: () => void) => { try { fn(); return ''; } catch (e) { return String(e); } };
+    expect(message(() => validateSelectSql("SELECT 'abc"))).toBe(message(() => validateSelectSql("SELECT 'abc", 'postgres')));
+    expect(message(() => validateSelectSql("SELECT 'abc"))).not.toBe('');
+  });
   it('with no dialect, still refuses what every engine refuses', () => {
     expect(() => validateSelectSql("SELECT 'abc")).toThrow();
     expect(() => validateSelectSql("SELECT '--', 1; SELECT 2")).toThrow();
