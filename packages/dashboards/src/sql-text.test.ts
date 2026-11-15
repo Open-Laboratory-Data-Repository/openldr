@@ -132,6 +132,39 @@ describe('blankSql, postgres, round 2', () => {
   ])('blanks %j', (input, want) => { expect(blankSql(input, 'postgres')).toBe(want); });
 });
 
+describe('blankSql, mysql, round 3', () => {
+  it.each([
+    "SELECT /*!!99999 a */ FROM t", "SELECT /*!! a */ FROM t",
+  ])('refuses %j', (input) => { expect(() => blankSql(input, 'mysql')).toThrow(); });
+  it.each([
+    ["SELECT 1 -- a\r", "SELECT 1  "],
+    ["SELECT 1 # a\r", "SELECT 1  "],
+    ["SELECT 1 -- a b\nFROM t", "SELECT 1  \nFROM t"],
+  ])('blanks %j', (input, want) => { expect(blankSql(input, 'mysql')).toBe(want); });
+});
+
+describe('blankSql, mssql, round 3', () => {
+  it.each([
+    "SELECT 1 -- a\u000bFROM t", "SELECT 1 -- a\fFROM t", "SELECT 1 -- a\u0085FROM t",
+    "SELECT 1 -- a FROM t", "SELECT 1 -- a FROM t", "SELECT 1 -- a\rFROM t",
+  ])('refuses %j', (input) => { expect(() => blankSql(input, 'mssql')).toThrow(); });
+  it.each([
+    ["SELECT 1 -- a\r", "SELECT 1  "],
+    ["SELECT 'a b' AS x", "SELECT '' AS x"],
+    ["SELECT 1 /* a b */", "SELECT 1  "],
+    ["SELECT [a b] FROM t", "SELECT [] FROM t"],
+    ["SELECT 1 FROM t", "SELECT 1 FROM t"],
+    ["SELECT 1 -- a\r\nFROM t", "SELECT 1  \nFROM t"],
+  ])('blanks %j', (input, want) => { expect(blankSql(input, 'mssql')).toBe(want); });
+});
+
+describe('blankSql, postgres, round 3', () => {
+  it.each([
+    ["SELECT 1 -- a b\nFROM t", "SELECT 1  \nFROM t"],
+    ["SELECT 1 /*!!99999 x */", "SELECT 1  "],
+  ])('blanks %j', (input, want) => { expect(blankSql(input, 'postgres')).toBe(want); });
+});
+
 describe('blankSql stays linear in the input length', () => {
   const n = 200_000;
   const a = 'a'.repeat(n);

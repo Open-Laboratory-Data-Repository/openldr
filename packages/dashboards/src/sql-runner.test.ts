@@ -91,6 +91,14 @@ describe('validateSelectSql and the dialect', () => {
     expect(message(() => validateSelectSqlForSave("SELECT 'abc"))).toBe(message(() => validateSelectSql("SELECT 'abc", 'postgres')));
     expect(message(() => validateSelectSqlForSave("SELECT 'abc"))).not.toBe('');
   });
+  it('the save form throws the postgres reading\'s error when the readings fail differently', () => {
+    const message = (fn: () => void) => { try { fn(); return ''; } catch (e) { return String(e); } };
+    const text = "SELECT 1; SELECT 'a\\'";
+    const save = message(() => validateSelectSqlForSave(text));
+    expect(save).not.toBe('');
+    expect(save).toBe(message(() => validateSelectSql(text, 'postgres')));
+    expect(save).not.toBe(message(() => validateSelectSql(text, 'mysql')));
+  });
   it('the save form still refuses what every engine refuses', () => {
     expect(() => validateSelectSqlForSave("SELECT 'abc")).toThrow();
     expect(() => validateSelectSqlForSave("SELECT '--', 1; SELECT 2")).toThrow();

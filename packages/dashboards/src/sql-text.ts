@@ -5,6 +5,10 @@
  *  The reader follows the engine exactly. When the engine's reading turns on its version or its
  *  settings, or is not known for certain, the reader does not guess. It throws.
  *
+ *  Two settings are not checked; the reader takes the server's default for them. On MySQL, a
+ *  backslash inside a string makes the next character ordinary. In a plain Postgres string, a
+ *  backslash is an ordinary character.
+ *
  *  Placeholders: a string becomes `''`, a comment one space, `[name]` becomes `[]`, `"name"` becomes
  *  `""`, a backtick name two backticks, and a dollar-quoted string `''`. On MySQL the opener and the
  *  closer of a `/*! ... *\/` comment each become one space, and its inside stays code.
@@ -17,6 +21,7 @@ const NEVER_CLOSED = 'the SQL has a string, comment or quoted name that is never
 const NESTED_RUNNABLE = 'the SQL opens a /*! comment inside another one';
 const VERSIONED_COMMENT = 'the SQL has a /*! comment with a version number, or a /*M! comment, which a MySQL or MariaDB server may or may not run';
 const LONE_CARRIAGE_RETURN = 'the SQL has a carriage return inside a line comment that is not followed by a line feed';
+const ODD_LINE_BREAK = 'the SQL has a line break other than a line feed inside a SQL Server line comment';
 const EMPTY_TOKEN_MATCH = 'the token pattern must not match empty text';
 
 type State = 'code' | 'quoted' | 'line' | 'block' | 'dollar';
@@ -83,13 +88,19 @@ function opensLineComment(sql: string, i: number, dialect: SqlDialect): boolean 
   return n <= 0x20 || n === 0x7f;
 }
 
+/** Whether SQL Server's reading of `c` inside a `--` comment is not known for certain: a vertical
+ *  tab, a form feed, U+0085, U+2028 or U+2029. A lone `\r` is handled beside the other line rules. */
+function isOddMssqlLineBreak(c: string): boolean {
+  return c === '\u000b' || c === '\f' || c === '\u0085' || c === ' ' || c === ' ';
+}
+
 /** The length of a MySQL `/*!` opener at `i`, or 0 when `/*` at `i` opens an ordinary comment.
- *  Throws on `/*!` directly followed by a digit and on `/*M!` or `/*m!`: whether the server runs
- *  their inside turns on its version or on whether it is MariaDB. */
+ *  Throws on `/*!` directly followed by a digit or by `!`, and on `/*M!` or `/*m!`: whether the
+ *  server runs their inside turns on its version or on whether it is MariaDB. */
 function runnableOpenerLength(sql: string, i: number): number {
   const third = sql[i + 2];
   if (third === '!') {
-    if (isDigit(sql[i + 3])) throw new Error(VERSIONED_COMMENT);
+    if (isDigit(sql[i + 3]) || sql[i + 3] === '!') throw new Error(VERSIONED_COMMENT);
     return 3;
   }
   if ((third === 'M' || third === 'm') && sql[i + 3] === '!') throw new Error(VERSIONED_COMMENT);
@@ -158,9 +169,11 @@ function scan(sql: string, dialect: SqlDialect): Scan {
     } else if (state === 'line') {
       // The line break that ends the comment stays in the text as code. Postgres ends a line
       // comment at `\n` or `\r`. MySQL and SQL Server end it at `\n` only; a `\r` just before that
-      // `\n` is part of the comment, and any other `\r` throws.
+      // `\n`, or at the very end of the text, is part of the comment, and any other `\r` throws.
+      // On SQL Server the other odd line breaks throw too.
       if (c === '\n' || (c === '\r' && dialect === 'postgres')) state = 'code';
-      else if (c === '\r' && d !== '\n') throw new Error(LONE_CARRIAGE_RETURN);
+      else if (c === '\r' && d !== '\n' && d !== undefined) throw new Error(LONE_CARRIAGE_RETURN);
+      else if (dialect === 'mssql' && isOddMssqlLineBreak(c)) throw new Error(ODD_LINE_BREAK);
       else i++;
     } else if (state === 'block') {
       if (c === '*' && d === '/') {
@@ -185,8 +198,11 @@ function scan(sql: string, dialect: SqlDialect): Scan {
 /** Returns `sql` with every string, comment and quoted name replaced by its placeholder, read by
  *  the rules of `dialect`. Throws a fixed sentence, holding none of the SQL, in these cases:
  *  - a string, block comment, quoted name or dollar-quoted string is never closed (any dialect);
- *  - a carriage return inside a line comment is not directly followed by a line feed (mysql, mssql);
- *  - a `/*!` comment is directly followed by a digit, or a `/*M!` or `/*m!` comment opens (mysql);
+ *  - a carriage return inside a line comment is followed by a character other than a line feed
+ *    (mysql, mssql); a carriage return that ends the text does not throw;
+ *  - a vertical tab, a form feed, U+0085, U+2028 or U+2029 sits inside a `--` comment (mssql);
+ *  - a `/*!` comment is directly followed by a digit or by `!`, or a `/*M!` or `/*m!` comment
+ *    opens (mysql);
  *  - a `/*!` comment is never closed, or opens inside another one (mysql). */
 export function blankSql(sql: string, dialect: SqlDialect): string {
   return scan(sql, dialect).text;
