@@ -173,7 +173,7 @@ Any text that 4.4 adds after the person's SQL in the same request can be swallow
 
 Date: 2026-11-15. Task 9 of the same plan, at `b8f2d10d`.
 
-The holes are closed on a real SQL Server 2025 and a real Postgres 16, through the product. Every hole statement was refused with its fixed sentence and `dbo.proof` never changed. A write sent below the check was rolled back on SQL Server and refused on Postgres, and a person sees their own conversion error. Three things did not go as expected. A wrong password fails with the right sentence, but after 30 s and about 120 failed logins, not at once. The lock timeout that `runReadQuery` asks for is not in force. A lone carriage return ends a SQL Server `--` comment, so the reader's refusal of it is needed.
+The holes are closed on a real SQL Server 2025, through the product. Every hole statement was refused with its fixed sentence and `dbo.proof` never changed. A write sent below the check was rolled back on SQL Server and refused on a real Postgres 16, and a person sees their own conversion error. On Postgres no hole statement went through the product. There the write was tried below the check (E1 to E3), and the product was used only for E4 and E5. Three things did not go as expected. A wrong password fails with the right sentence, but after 30 s and about 120 failed logins, not at once. The lock timeout that `runReadQuery` asks for is not in force. A lone carriage return ends a SQL Server `--` comment, so the reader's refusal of it is needed.
 
 Counts: 55 rows in the tables below. 53 PROVEN, 2 DISPROVEN (D7 and the second F3 row), 0 NOT TESTED. What I did not try is listed at the end.
 
@@ -185,7 +185,7 @@ Counts: 55 rows in the tables below. 53 PROVEN, 2 DISPROVEN (D7 and the second F
 - A scratch OpenLDR on 127.0.0.1:3992, started from this worktree under `env -i` with `OPENLDR_SKIP_ENV_FILE=true`, its own database settings, `AUTH_DEV_BYPASS=true` and file blob storage in a temp folder. **Its target store was SQL Server**, a second database in my own SQL Server container. So builder dashboards, SQL widgets and the workflow SQL Query node ran through `runReadQuery` on SQL Server.
 - Every CLI call carried `--server-url http://127.0.0.1:3992` and had `OPENLDR_URL` set to the same. The first, `plugin list`, showed up in my server's log as `POST /api/cli/run` on host 127.0.0.1:3992 before any changing call.
 - Query page tries went to `POST /api/query/run`, the call the page makes. The Copy tab tries used the Browser pane on 127.0.0.1:3992.
-- No request went to port 3000. The dev Postgres on 5433 and the operator's two SQL Server containers were not used. Port 3000, 5433 and 8180 listened before and after.
+- No request went to port 3000. The dev Postgres on 5433 and the operator's two SQL Server containers were not used. My log shows port 3000, 5433 and 8180 listening before the run, at 14:58. It has no check from after the run. The controller checked after the run and saw all three listening.
 
 In the tables a code point is written `<XXXX>`.
 
@@ -211,7 +211,7 @@ Sent through `createConnectorDb(...).query`: `SELECT 1 AS a --x<ch>, 2 AS b`. On
 | B8 | `<001C>`, `<001D>`, `<001E>` | 1 each | refuses | PROVEN: part of the comment |
 | B9 | `<000A>` | 2 | passes | PROVEN: the control |
 
-Three more sends settle B1 and B7. `SELECT 1 AS a --x<0000><000A>, 2 AS b` gave 2 columns, so a NUL does not cut the text. `SELECT 1 AS a<0000>, 2 AS b` gave 2 columns, so a NUL in code reads as a space. `SELECT 1 AS a --x<000D>` at the very end gave 1 column, and `--x<000D><000A>` then `, 2 AS b` gave 2.
+Four more sends settle B1 and B7. `SELECT 1 AS a --x<0000><000A>, 2 AS b` gave 2 columns, so a NUL does not cut the text. `SELECT 1 AS a<0000>, 2 AS b` gave 2 columns, so a NUL in code is skipped or read as a space; this send does not tell which. `SELECT 1 AS a --x<000D>` at the very end gave 1 column, and `--x<000D><000A>` then `, 2 AS b` gave 2.
 
 What this decides. SQL Server ends a `--` comment at a lone carriage return, the way Postgres does. The reader refuses a lone carriage return in a SQL Server line comment. That refusal keeps the check honest: without it the reader would blank text that SQL Server runs. The refusal of B2 to B8 is stricter than needed, because SQL Server keeps each of those inside the comment. Keeping it refuses only a query with such a character in a comment.
 
@@ -268,7 +268,7 @@ All on the scratch server's Query page call unless the row says otherwise. After
 | F2 | `SELECT id FROM dbo.rf WHERE id = @set` | passed the check; SQL Server answered `Must declare the scalar variable "@set".` Nothing on this page binds a variable. | PROVEN: not refused by the check |
 | F2 | `SELECT 0xADD AS b` | 200, bytes 0x0ADD | PROVEN |
 | F3 | a second connector to my SQL Server with a wrong password, plugin allowed, `import copy start` | the copy failed with `the source refused the login`, and the Copy tab showed `Last error: the source refused the login` | PROVEN |
-| F3 | the same copy: does it fail at once? | no. Started 12:11:40.373 UTC, failed 12:12:12.976 UTC, 32.6 s. My SQL Server logged 122 failed logins for it. The error the reader got: constructor `TimeoutError`, name `Error`, no code, no number, no cause, after 30002 ms. | DISPROVEN |
+| F3 | the same copy: does it fail at once? | no. Started 12:11:40.373 UTC, failed 12:12:12.976 UTC, 32.6 s. My SQL Server logged 122 failed logins in that window. The copy's own error shape was not recorded. A separate script that called `createConnectorDb` with the same settings got: constructor `TimeoutError`, name `Error`, no code, no number, no cause, after 30002 ms. | DISPROVEN |
 | F4 | widget preview, raw SQL on, `SELECT {{word}} AS v` with `word` = `it's a \ {{word}}` | 200, `v` = `it's a \ {{word}}`, as the plain literal `SELECT 'it''s a \ x' AS v` gave `it's a \ x` | PROVEN |
 | F4 | `SELECT '{{word}}' AS v` | refused with the token sentence | PROVEN |
 | F5 | typed SQL `SELECT * FROM dbo.proof` | 200, 1 row | PROVEN |
@@ -278,7 +278,7 @@ All on the scratch server's Query page call unless the row says otherwise. After
 | F5 | the sample dashboard's first SQL widget, its stored template, with a period filter | 200, value 3. With `from` = `2027-01-01' OR 1=1 --` or `2027-01-01' /*` it gave 0, the same as a plain `2027-01-01`. | PROVEN |
 | F5 | workflow: manual trigger, then a SQL Query node (`SELECT COUNT(*) AS n FROM lab_requests`) and a Microsoft SQL Database node (`SELECT i FROM dbo.proof`) | both nodes succeeded, `n` 3 and `i` 1 | PROVEN |
 
-On F3: the pool tries the login about four times a second until its 30 s wait for a connection runs out. Only then does the reader get an error, a `TimeoutError` with no code, which `describeSourceError` turns into the right sentence. The person waits 30 s. A server that locks a login after some failed tries would lock it. The spec said "fails at once". This is the connection pool's behaviour, not the code this plan wrote.
+On F3: in the separate script, the pool tried the login about four times a second until its 30 s wait for a connection ran out. Only then did the script get an error, a `TimeoutError` with no code. I read the copy's 32.6 s and 122 failed logins as the same thing, and `describeSourceError` turned the copy's error into the right sentence. The copy's own error object was not recorded. The person waits 30 s. A server that locks a login after some failed tries would lock it. The spec said "fails at once". This is the connection pool's behaviour, not the code this plan wrote.
 
 On F5: the warehouse was empty at first. The server's own projection into a SQL Server warehouse failed (see below), so I put three rows into the warehouse's `lab_requests` table with `sqlcmd`. The first run, on the empty warehouse, also succeeded on every path, with 0 rows.
 
@@ -303,7 +303,7 @@ The page sits in an iframe with `sandbox="allow-scripts"`. Neither page script n
 - D6, 100 runs each of `SELECT TOP 1 * FROM dbo.proof` on one `ConnectorDb`, after 5 warm-up runs of each:
   - `query` first: `query` median 1.51 ms, worst 2.33 ms. `queryReadOnly` median 2.06 ms, worst 4.24 ms.
   - `queryReadOnly` first: `queryReadOnly` median 1.92 ms, worst 4.24 ms. `query` median 1.24 ms, worst 6.22 ms.
-  - So the transaction adds about 0.6 ms a run. A Query page run took about 55 ms end to end.
+  - So the transaction adds about 0.6 ms a run. The time of a whole Query page run was not recorded.
 - D7: the lock wait lasted 15057 ms against 2000 ms asked. The control stopped at 2008 ms.
 - F3: 32.6 s from start to failed, 122 failed logins. My own `createConnectorDb` try: 30002 ms, 118 failed logins.
 - E4: the person's error came 4094 ms after the request.
@@ -311,8 +311,13 @@ The page sits in an iframe with `sandbox="allow-scripts"`. Neither page script n
 
 ### Seen, and not part of this plan
 
-- On a SQL Server target store the server's projection failed at boot: `projection failed; durable retry scheduled`, `Incorrect syntax near the keyword 'use'.`, from `mergeBatchMssql` (`packages/db/src/batch-upsert.ts:55`). It repeated 11 times during the run. So a fresh server with a SQL Server warehouse showed no sample rows.
+- On a SQL Server target store the server's projection failed at boot: `projection failed; durable retry scheduled`, `Incorrect syntax near the keyword 'use'.`, from `mergeBatchMssql` (`packages/db/src/batch-upsert.ts:55`). My log shows it 4 times by 15:21. The final count was not recorded. The warehouse had no rows until I put three in.
 - `POST /api/dashboards/query` answers a refused template, and the older single-statement refusal, with HTTP 500 rather than 400 (`mapError`, `apps/server/src/dashboards-routes.ts:198-201`). The sentence is right, and the log holds no SQL.
+- A dashboard SQL widget whose string literal holds token text, such as `SELECT '{{word}}' AS v`, is refused even when it is sent with no values. So a widget that ran before this branch can be refused after it.
+
+### How far this evidence goes
+
+Every result above rests on my own log, `task-9-log.md` in the plan's notes folder. It is my copy of the output, and some blocks are shortened. The raw outputs, the wrapper script for the CLI and the scratch server's log were in the scratch folder, and were deleted with it. Some `docker exec` lines in the log say "in my container" without the container's name; only the database names tie them to my containers. The list of what I removed, with its checks, is in my task report, and was added to the log after the run.
 
 ### What was not tried
 
