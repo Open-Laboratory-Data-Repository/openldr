@@ -20,6 +20,20 @@ const GROW_AFTER = 5;
 const DEADLOCK_VICTIM = 1205;
 /** SQL Server errors whose message names a column, a table, a database or a login, never a row. */
 const NAMES_NO_ROW = new Set([207, 208, 229, 230, 262, 911, 916, 4060, 18452, 18456]);
+const UNRECOGNISED = 'the source failed in a way OpenLDR does not recognise';
+
+/**
+ * The member errors of a statement that failed with more than one SQL Server error, or null.
+ * tedious raises an AggregateError when one request gets several error tokens
+ * (tedious 18 lib/token/handler.js:295), and Kysely's MSSQL driver rejects with its `errors`,
+ * a plain array (kysely 0.28 dialect/mssql/mssql-driver.js:281). An AggregateError, or any
+ * object with an `errors` array, is read the same way.
+ */
+function members(err: unknown): unknown[] | null {
+  if (Array.isArray(err)) return err;
+  const errors = typeof err === 'object' && err !== null ? (err as { errors?: unknown }).errors : undefined;
+  return Array.isArray(errors) ? errors : null;
+}
 
 function fields(err: unknown): { code: string; number: number | null; message: string } {
   const e = (typeof err === 'object' && err !== null ? err : {}) as { code?: unknown; number?: unknown; message?: unknown };
@@ -33,6 +47,14 @@ function fields(err: unknown): { code: string; number: number | null; message: s
 /** Order matters. An unknown error is `lost`, so it is retried and shown rather than ending the
  *  run: the complaint this answers is a run that stops and waits for a person. */
 export function classifySourceError(err: unknown): SourceErrorKind {
+  const list = members(err);
+  if (list) {
+    // Several errors: refused if any is, else timeout if any is, else lost. Empty is lost.
+    const kinds = list.map(classifySourceError);
+    if (kinds.includes('refused')) return 'refused';
+    if (kinds.includes('timeout')) return 'timeout';
+    return 'lost';
+  }
   const { code, number, message } = fields(err);
   if (code === 'ETIMEOUT' || code === 'ETIMEDOUT' || /timeout|timed out/i.test(message)) return 'timeout';
   if (code === 'ELOGIN') return 'refused';
@@ -51,9 +73,16 @@ export function classifySourceError(err: unknown): SourceErrorKind {
  *  3. any other SQL Server error: its number only;
  *  4. no number, and a lost link or a timeout: the driver's message (network and timer text);
  *  5. anything else: a fixed sentence.
- * The driver's message always goes through `clean`.
+ * The driver's message always goes through `clean`. A statement that failed with several errors
+ * is described by its first refused member, or by its first member when none is refused. An
+ * empty list gets the fixed sentence.
  */
 export function describeSourceError(err: unknown, clean: (text: string) => string): string {
+  const list = members(err);
+  if (list) {
+    if (list.length === 0) return UNRECOGNISED;
+    return describeSourceError(list.find((m) => classifySourceError(m) === 'refused') ?? list[0], clean);
+  }
   const { code, number, message } = fields(err);
   if (code === 'ELOGIN') return clean(message);
   if (number !== null) {
@@ -61,7 +90,7 @@ export function describeSourceError(err: unknown, clean: (text: string) => strin
   }
   const kind = classifySourceError(err);
   if (kind === 'lost' || kind === 'timeout') return clean(message);
-  return 'the source failed in a way OpenLDR does not recognise';
+  return UNRECOGNISED;
 }
 
 /** The wait before try number `attempt` (1 for the first retry): 5 s, doubling, at most 300 s. */

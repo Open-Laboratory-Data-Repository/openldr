@@ -22,7 +22,8 @@ const timeout = () => err('ETIMEOUT', 'Timeout: Request failed to complete in 30
 const lost = () => err('ESOCKET', 'Connection lost - read ECONNRESET');
 
 type Kind = 'keys' | 'details' | 'probe';
-type Answer = Array<Record<string, unknown>> | Error | 'hang';
+/** `{ throws }` throws a value that is not an Error, such as the array Kysely rejects with. */
+type Answer = Array<Record<string, unknown>> | Error | { throws: unknown } | 'hang';
 
 /** What the source holds, read the way the SQL above asks for it. */
 function realKeys(sql: string): Array<Record<string, unknown>> {
@@ -62,6 +63,7 @@ function fakeSource(answer: (kind: Kind, sql: string, n: number) => Answer | und
         const a = answer(kind, sql, counts[kind]);
         if (a === 'hang') return new Promise<never>(() => undefined);
         if (a instanceof Error) throw a;
+        if (a && !Array.isArray(a)) throw a.throws;
         if (a) return { rows: a };
         if (kind === 'probe') return { rows: [{ '': 1 }] };
         return { rows: kind === 'keys' ? realKeys(sql) : realDetails(sql) };
@@ -398,6 +400,32 @@ describe('createSourceReader', () => {
       : undefined));
     const { reader } = harness(source);
     await expect(reader.readPage(first)).rejects.toThrow("Invalid object name 'dbo.Requests'.");
+  });
+
+  it('a query that fails with several SQL Server errors is a thrown refused error, not a wait', async () => {
+    // The shape Kysely's MSSQL driver rejects with: a plain array of tedious RequestErrors.
+    const errors = [
+      err('EREQUEST', "Invalid column name 'Resultt'.", { number: 207 }),
+      err('EREQUEST', 'Statement(s) could not be prepared.', { number: 8180 }),
+    ];
+    const source = fakeSource((kind) => (kind === 'details' ? { throws: errors } : undefined));
+    const { reader, waiting, sleeps } = harness(source);
+    await expect(reader.readPage(first)).rejects.toThrow("Invalid column name 'Resultt'.");
+    expect(waiting).toEqual([]);
+    expect(sleeps).toEqual([]);
+    expect(source.counts.details).toBe(1);
+  });
+
+  it('a query that fails with 245 and 8180 throws no row value', async () => {
+    const errors = [
+      err('EREQUEST', "Conversion failed when converting the varchar value 'ZX-ROW-VALUE-4417' to data type int.", { number: 245 }),
+      err('EREQUEST', 'Statement(s) could not be prepared.', { number: 8180 }),
+    ];
+    const source = fakeSource((kind) => (kind === 'keys' ? { throws: errors } : undefined));
+    const { reader, waiting } = harness(source);
+    const failure = await reader.readPage(first).catch((e: Error) => e);
+    expect((failure as Error).message).toBe('the source refused the query (SQL Server error 245)');
+    expect(waiting).toEqual([]);
   });
 
   it('close does not wait for a connection that never finishes closing', async () => {

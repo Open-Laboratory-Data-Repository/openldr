@@ -84,6 +84,73 @@ describe('describeSourceError', () => {
   });
 });
 
+describe('a statement that fails with several errors', () => {
+  // tedious 18 raises an AggregateError when one request gets more than one error token
+  // (lib/token/handler.js:295). Kysely 0.28 rejects with its `errors`, a plain array
+  // (dialect/mssql/mssql-driver.js:281). So the reader sees an array with no code or number.
+  const clean = (text: string) => `[${text}]`;
+  const ROW_VALUE = 'ZX-ROW-VALUE-4417';
+  const sqlError = (number: number, message: string) => Object.assign(new Error(message), { code: 'EREQUEST', number });
+  const missingColumn = () => [
+    sqlError(207, "Invalid column name 'Resultt'."),
+    sqlError(8180, 'Statement(s) could not be prepared.'),
+  ];
+
+  it('an array of 207 and 8180 is refused, and its text names the column', () => {
+    expect(classifySourceError(missingColumn())).toBe('refused');
+    const text = describeSourceError(missingColumn(), clean);
+    expect(text).toBe("[Invalid column name 'Resultt'.]");
+  });
+
+  it('an array of 245 and 8180 with a row value leaks nothing', () => {
+    const errors = [
+      sqlError(245, `Conversion failed when converting the varchar value '${ROW_VALUE}' to data type int.`),
+      sqlError(8180, 'Statement(s) could not be prepared.'),
+    ];
+    expect(classifySourceError(errors)).toBe('refused');
+    const text = describeSourceError(errors, clean);
+    expect(text).toBe('the source refused the query (SQL Server error 245)');
+    expect(text).not.toContain(ROW_VALUE);
+  });
+
+  it('an array holding only a timeout is a timeout', () => {
+    const errors = [Object.assign(new Error('Timeout: Request failed to complete in 30000ms'), { code: 'ETIMEOUT' })];
+    expect(classifySourceError(errors)).toBe('timeout');
+    expect(describeSourceError(errors, clean)).toBe('[Timeout: Request failed to complete in 30000ms]');
+  });
+
+  it('an empty array is lost, with the fixed sentence', () => {
+    expect(classifySourceError([])).toBe('lost');
+    expect(describeSourceError([], clean)).toBe('the source failed in a way OpenLDR does not recognise');
+  });
+
+  it('a refused member wins over a timeout or a lost link, and is the one described', () => {
+    const errors = [
+      Object.assign(new Error('Connection lost - read ECONNRESET'), { code: 'ESOCKET' }),
+      Object.assign(new Error('Timeout: Request failed'), { code: 'ETIMEOUT' }),
+      sqlError(208, "Invalid object name 'dbo.Results'."),
+    ];
+    expect(classifySourceError(errors)).toBe('refused');
+    expect(describeSourceError(errors, clean)).toBe("[Invalid object name 'dbo.Results'.]");
+  });
+
+  it('a timeout member wins over a lost one, and the first member is described', () => {
+    const errors = [
+      Object.assign(new Error('Connection lost - read ECONNRESET'), { code: 'ESOCKET' }),
+      Object.assign(new Error('Timeout: Request failed'), { code: 'ETIMEOUT' }),
+    ];
+    expect(classifySourceError(errors)).toBe('timeout');
+    expect(describeSourceError(errors, clean)).toBe('[Connection lost - read ECONNRESET]');
+  });
+
+  it('an AggregateError and an object with an errors array are judged by their members', () => {
+    expect(classifySourceError(new AggregateError(missingColumn()))).toBe('refused');
+    expect(describeSourceError(new AggregateError(missingColumn()), clean)).toBe("[Invalid column name 'Resultt'.]");
+    expect(classifySourceError({ errors: missingColumn() })).toBe('refused');
+    expect(describeSourceError({ errors: [] }, clean)).toBe('the source failed in a way OpenLDR does not recognise');
+  });
+});
+
 describe('retryWaitMs', () => {
   it('waits 5 s first and doubles to a ceiling of 300 s', () => {
     expect([1, 2, 3, 4, 5, 6, 7, 8, 40].map(retryWaitMs)).toEqual([5000, 10000, 20000, 40000, 80000, 160000, 300000, 300000, 300000]);
