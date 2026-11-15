@@ -441,6 +441,67 @@ describe('import run: a source that goes away', () => {
     }
   });
 
+  it('a heartbeat in the middle of a page saves the run as it stood at the last page end, so a resume counts nothing twice', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      const mapper = ({ keys }: { keys: string[] }) => ({
+        groups: keys.map((key) => (key === 'REQ0005'
+          ? { key, resources: [], error: 'NO_REQUEST_ROWS' }
+          : { key, resources: [{ resourceType: 'Patient', id: `p-${key}` }] })),
+      });
+      // The run the crashed one must end up equal to: the same keys, read with no interruption.
+      const whole = await harness(keysOf(8));
+      whole.setMapper(mapper);
+      const clean = await whole.svc.wait((await whole.svc.start({ ...START, pageSize: 4 })).id);
+      const cleanFailures = await whole.svc.failures('v1-import', clean.id);
+      expect(clean.counts).toEqual({ keys: 8, imported: 7, failed: 1, resources: 7 });
+
+      // First process: the second page records the failure for REQ0005, then hangs saving REQ0007.
+      const first = await harness(keysOf(8));
+      first.setMapper(mapper);
+      first.persist.mockImplementation(async (resources: Array<{ id: string }>) => {
+        if (resources[0].id === 'p-REQ0007') await new Promise(() => {});
+        return [];
+      });
+      const started = await first.svc.start({ ...START, pageSize: 4 });
+      await vi.waitFor(() => expect(first.persist.mock.calls.some((c) => (c[0] as Array<{ id: string }>)[0].id === 'p-REQ0007')).toBe(true));
+      const before = first.runSaves.length;
+      first.clock.now += 30_000;
+      vi.advanceTimersByTime(30_000);
+      await vi.waitFor(() => expect(first.runSaves.length).toBe(before + 1));
+      // The beat has a fresh updatedAt, and the counts, failures and cursor of the first page end.
+      expect(first.runSaves[before]).toMatchObject({
+        status: 'running', cursor: 'REQ0004', failuresStored: 0,
+        counts: { keys: 4, imported: 4, failed: 0, resources: 4 },
+        updatedAt: new Date(first.clock.now).toISOString(),
+      });
+
+      // The first process dies there. A second one finds the run with no driver and resumes it.
+      const second = await harness(keysOf(8));
+      second.setMapper(mapper);
+      second.clock.now = first.clock.now + STALE_MS + 1;
+      expect((await second.svc.get('v1-import', started.id))?.status).toBe('interrupted');
+      await second.svc.resume('v1-import', started.id, ADMIN);
+      const resumed = await second.svc.wait(started.id);
+      expect(resumed).toMatchObject({ status: 'completed', cursor: 'REQ0008', counts: clean.counts, failuresStored: clean.failuresStored });
+      expect(await second.svc.failures('v1-import', started.id)).toEqual(cleanFailures);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a link cut on a detail query in the middle of a page reads the whole page again, once', async () => {
+    const h = await harness(keysOf(4));
+    // The results query of the second page: the key query and the requests query have answered.
+    h.source.failNext(/LabResults.*'REQ0003'/, cutLink);
+    const run = await h.svc.wait((await h.svc.start({ ...START, pageSize: 2 })).id);
+    expect(run).toMatchObject({ status: 'completed', cursor: 'REQ0004', counts: { keys: 4, imported: 4, failed: 0 } });
+    expect(savedIds(h)).toEqual(['p-REQ0001', 'p-REQ0002', 'p-REQ0003', 'p-REQ0004']);
+    expect(h.mapInputs.map((m) => m.keys)).toEqual([['REQ0001', 'REQ0002'], ['REQ0003', 'REQ0004']]);
+    // The cut connection was closed, and so was the one that replaced it.
+    expect(h.source.closed()).toBe(2);
+  });
+
   it('records where the run was started', async () => {
     const h = await harness(keysOf(1), { origin: 'server' });
     const started = await h.svc.start(START);

@@ -317,10 +317,21 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     let clean = (text: string) => redact(text).slice(0, 300);
     let outcome: ImportStatus = 'failed';
 
+    // The counts, the stored failures and the cursor as they stood at the last page end. Only these
+    // are ever saved. A save in the middle of a page (a heartbeat, a change of wait state) keeps
+    // them, so the stored record says the page is not done. A resume then does it again in full,
+    // nothing is counted twice, and its failures land on the same sequence numbers.
+    const progressOf = (r: ImportRun) => ({ counts: { ...r.counts }, failuresStored: r.failuresStored, cursor: r.cursor });
+    let pageEnd = progressOf(run);
+    const markPageEnd = (): void => { pageEnd = progressOf(run); };
+
     // Saves go one after another, so a heartbeat that started first never lands last.
     let saving: Promise<void> = Promise.resolve();
     const saveInTurn = (): Promise<void> => {
-      const next = saving.then(() => save(run));
+      const next = saving.then(async () => {
+        run.updatedAt = now().toISOString();
+        await deps.pluginData.put(run.pluginId, RUNS, run.id, { ...run, ...pageEnd, counts: { ...pageEnd.counts } });
+      });
       saving = next.catch(() => {});
       return next;
     };
@@ -391,7 +402,12 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
           await recordFailure(run, page.key, 'SOURCE_TIMEOUT');
           run.counts.keys += 1;
           run.cursor = page.key;
+          markPageEnd();
           await saveKeepingStop();
+          // The key was found at a page of 1. Start there and grow back after 5 good pages, rather
+          // than pay the whole halving again if the source is still slow.
+          size = 1;
+          goodInRow = 0;
           continue;
         }
         if (page.size < ask) {
@@ -429,6 +445,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
 
         run.counts.keys += keys.length;
         run.cursor = keys[keys.length - 1];
+        markPageEnd();
         // Keep a stop that arrived during this page; the next loop turn acts on it.
         await saveKeepingStop();
       }
@@ -443,6 +460,9 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       await beating;
       await reader?.close();
     }
+    // Every way out of the loop but a throw is at a page end. After a throw in the middle of a
+    // page, the run reports what it stores: the progress at the last page end.
+    Object.assign(run, { ...pageEnd, counts: { ...pageEnd.counts } });
     run.status = outcome;
     run.waiting = null;
     run.finishedAt = now().toISOString();

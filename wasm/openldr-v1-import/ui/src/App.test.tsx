@@ -196,6 +196,18 @@ describe('import step', () => {
     expect(stop).toHaveBeenCalledWith('r1');
   });
 
+  it('offers Stop for a run that is waiting for its source, and stops it', async () => {
+    const waiting = run({ status: 'waiting', counts: { keys: 500, imported: 500, failed: 0, resources: 7000 } });
+    let current = waiting;
+    const stop = vi.fn(async () => (current = { ...waiting, status: 'stopping' }));
+    setup({ list: async () => [waiting], status: async () => current, stop });
+    render(<App pollMs={5} />);
+    expect((await screen.findByTestId('run-status')).textContent).toMatch(/Waiting for the source/);
+    click('run-stop');
+    await waitFor(() => expect(screen.getByTestId('run-status').textContent).toMatch(/Stopping/));
+    expect(stop).toHaveBeenCalledWith('r1');
+  });
+
   it('ignores a progress answer that was asked for before Stop was pressed', async () => {
     const live = run({ counts: { keys: 500, imported: 500, failed: 0, resources: 7000 } });
     // The first progress read hangs until the test lets it go, after Stop has answered.
