@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { CustomQueryInputSchema, validateSelectSql } from '@openldr/dashboards';
+import { CustomQueryInputSchema, validateSelectSqlForSave } from '@openldr/dashboards';
 import type { CustomQueryGroupStore, CustomQueryParam, CustomQueryStore } from '@openldr/db';
 import { DEFAULT_CONNECTOR_NAME } from './seed';
 
@@ -96,7 +96,7 @@ function validateFile(file: unknown): {
     }
     checked.push({ name: query.name, sql: query.sql, params: shape.data.params, group: query.group });
     try {
-      validateSelectSql(query.sql);
+      validateSelectSqlForSave(query.sql);
     } catch (e) {
       throw new CustomQueryTransferError(`query "${query.name}": ${e instanceof Error ? e.message : String(e)}`);
     }

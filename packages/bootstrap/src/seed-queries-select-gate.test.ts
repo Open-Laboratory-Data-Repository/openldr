@@ -43,28 +43,32 @@ describe('every seeded query passes the SELECT-only gate, in every dialect', () 
     for (const dialect of DIALECTS) {
       it(`${q.id} — ${dialect}`, () => {
         const params = (q.params ?? []) as { id: string; type: string; required?: boolean }[];
-        expect(() => prepareSelect(q.sql[dialect], q.params ?? [], valuesFor(params))).not.toThrow();
+        let prepared = '';
+        expect(() => { prepared = prepareSelect(q.sql[dialect], q.params ?? [], valuesFor(params), dialect); }).not.toThrow();
+        expect(() => validateSelectSql(prepared, dialect)).not.toThrow();
       });
     }
   }
 
-  it('the gate is not vacuous — it rejects a banned BARE word used as an alias or CTE name', () => {
-    // The mutation this suite exists to catch, made explicit. Proves the loop above would fail
-    // rather than pass on anything.
-    expect(() => validateSelectSql('select 1 as call')).toThrow(/read-only/i);
-    expect(() => validateSelectSql('with merge as (select 1 as a) select a from merge'))
-      .toThrow(/read-only/i);
-    expect(() => validateSelectSql('select 1 as ok')).not.toThrow();
-  });
+  for (const dialect of DIALECTS) {
+    it(`the gate is not vacuous — it rejects a banned BARE word used as an alias or CTE name — ${dialect}`, () => {
+      // The mutation this suite exists to catch, made explicit. Proves the loop above would fail
+      // rather than pass on anything.
+      expect(() => validateSelectSql('select 1 as call', dialect)).toThrow(/read-only/i);
+      expect(() => validateSelectSql('with merge as (select 1 as a) select a from merge', dialect))
+        .toThrow(/read-only/i);
+      expect(() => validateSelectSql('select 1 as ok', dialect)).not.toThrow();
+    });
 
-  it('the ban is on the WHOLE word — an alias that merely contains one is fine', () => {
-    // Worth pinning, because it is the natural wrong assumption about this gate and it decides
-    // how careful a future alias has to be. `\bcreate\b` does not match inside `created`, and `_`
-    // is a word character so it does not match inside `call_log` either. Only the bare word bites.
-    expect(() => validateSelectSql('select 1 as created')).not.toThrow();
-    expect(() => validateSelectSql('with call_log as (select 1 as a) select a from call_log'))
-      .not.toThrow();
-  });
+    it(`the ban is on the WHOLE word — an alias that merely contains one is fine — ${dialect}`, () => {
+      // Worth pinning, because it is the natural wrong assumption about this gate and it decides
+      // how careful a future alias has to be. `\bcreate\b` does not match inside `created`, and `_`
+      // is a word character so it does not match inside `call_log` either. Only the bare word bites.
+      expect(() => validateSelectSql('select 1 as created', dialect)).not.toThrow();
+      expect(() => validateSelectSql('with call_log as (select 1 as a) select a from call_log', dialect))
+        .not.toThrow();
+    });
+  }
 });
 
 /**

@@ -50,12 +50,14 @@ Everything else in the check reads that blanked text, as today.
 
 `validateSelectSql(sql, dialect?)` gains an optional dialect. When it is `mssql`, the blanked text is also refused if it holds:
 
-- a reserved word that can start a statement: `exec`, `execute`, `waitfor`, `dbcc`, `backup`, `restore`, `shutdown`, `kill`, `deny`, `declare`, `set`, `reconfigure`, `begin`, `commit`, `rollback`, `save`, `if`, `while`, `print`, `raiserror`, `goto`, `return`, `open`, `close`, `deallocate`, `checkpoint`, `bulk`, `writetext`, `updatetext`, `readtext`, `load`, `dump`, `setuser`, `revert`, `add`;
+- a reserved word that can start a statement: `exec`, `execute`, `waitfor`, `dbcc`, `backup`, `restore`, `shutdown`, `kill`, `deny`, `declare`, `set`, `reconfigure`, `begin`, `commit`, `rollback`, `save`, `if`, `while`, `print`, `raiserror`, `goto`, `return`, `open`, `close`, `deallocate`, `checkpoint`, `bulk`, `writetext`, `updatetext`, `readtext`, `setuser`, `revert`, `add`;
 - `use`, unless the next word is `hint` or `plan` (a query hint);
 - `openquery`, `openrowset`, `opendatasource`, `openxml`;
 - the pairs `enable trigger`, `disable trigger`, and `next value for`.
 
 `fetch` and `end` stay allowed, because `OFFSET ... FETCH` and `CASE ... END` use them.
+
+`load` and `dump` are not on the list: Task 1's real run found both are not reserved on SQL Server 2025, although Microsoft's published list still has them.
 
 A word is matched whole. The characters `#`, `@`, `$` and `_` count as part of a word, so a temp table `##open` or a variable-like name `@set` is not the word `open` or `set`.
 

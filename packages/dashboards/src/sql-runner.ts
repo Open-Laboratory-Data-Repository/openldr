@@ -7,38 +7,78 @@ export type { SqlDialect } from './sql-text';
 
 const DIALECTS_IN_ORDER: readonly SqlDialect[] = ['postgres', 'mssql', 'mysql'];
 
-/** Returns when `rawSql` is one read-only SELECT or WITH statement. Throws a fixed sentence in
- *  these cases:
+/** Returns when `rawSql` is one read-only SELECT or WITH statement, read by the rules of the engine
+ *  that will run it. This is the check that guards a run. Throws a fixed sentence in these cases:
  *  - the text is empty once comments are blanked;
  *  - it holds more than one statement;
  *  - it does not start with SELECT or WITH;
  *  - it holds a refused word (INTO, DDL or DML);
+ *  - on mssql only, it holds a SQL Server statement word or pass-through function (see
+ *    `refuseSqlServerStatementWords`);
  *  - every case in which `blankSql` throws (see `sql-text.ts`): a string, comment, quoted name or
  *    dollar-quoted string that is never closed; a lone carriage return in a line comment on mysql
  *    or mssql; a versioned `/*!` comment or a `/*M!` comment on mysql; a `/*!` comment inside
- *    another one on mysql.
+ *    another one on mysql. */
+export function validateSelectSql(rawSql: string, dialect: SqlDialect): void {
+  const blanked = blankSql(rawSql, dialect);
+  checkBlankedSelect(blanked);
+  if (dialect === 'mssql') refuseSqlServerStatementWords(blanked);
+}
+
+/** The check made when a query is saved or imported and the engine that will run it is not known.
+ *  It is not the check that guards a run.
  *
- *  With a dialect, the text is read by that engine's rules. This is the form that guards a run.
- *
- *  Without a dialect, the text passes when it passes under at least one of postgres, mssql and
- *  mysql, tried in that order. When it fails under all three, the postgres error is thrown. This
- *  form is for a check made when a query is saved and the engine is not known. It is not the check
- *  that guards a run. */
-export function validateSelectSql(rawSql: string, dialect?: SqlDialect): void {
-  if (dialect) {
-    checkBlankedSelect(blankSql(rawSql, dialect));
-    return;
-  }
+ *  The text passes when `validateSelectSql` passes it under at least one of postgres, mssql and
+ *  mysql, tried in that order, so the mssql attempt applies the SQL Server rule. When it fails
+ *  under all three, the postgres error is thrown. */
+export function validateSelectSqlForSave(rawSql: string): void {
   let firstError: unknown = null;
   for (const each of DIALECTS_IN_ORDER) {
     try {
-      checkBlankedSelect(blankSql(rawSql, each));
+      validateSelectSql(rawSql, each);
       return;
     } catch (e) {
       if (each === DIALECTS_IN_ORDER[0]) firstError = e;
     }
   }
   throw firstError;
+}
+
+const MSSQL_REFUSAL = 'only read-only SELECT queries are allowed on SQL Server (statement words such as EXEC are refused; put a name that is such a word in [brackets])';
+
+/** Reserved T-SQL words that can start a statement. `load` and `dump` are left out: Task 1's run
+ *  on SQL Server 2025 found both work as bare names. `fetch` and `end` are left out because
+ *  `OFFSET ... FETCH` and `CASE ... END` use them. */
+const MSSQL_STATEMENT_WORDS = [
+  'exec', 'execute', 'waitfor', 'dbcc', 'backup', 'restore', 'shutdown', 'kill', 'deny', 'declare', 'set',
+  'reconfigure', 'begin', 'commit', 'rollback', 'save', 'if', 'while', 'print', 'raiserror', 'goto', 'return',
+  'open', 'close', 'deallocate', 'checkpoint', 'bulk', 'writetext', 'updatetext', 'readtext', 'setuser',
+  'revert', 'add',
+];
+
+/** Functions that send SQL held in a string to another server or read another source. */
+const MSSQL_PASS_THROUGH = ['openquery', 'openrowset', 'opendatasource', 'openxml'];
+
+/** A character that is part of a T-SQL word: a letter, a digit, `_`, `#`, `@` or `$`. `\b` is not
+ *  used, because it treats `#`, `@` and `$` as word ends, so `##open` and `@set` would match. */
+const WORD_CHAR = String.raw`[\p{L}\p{Nd}_#@$]`;
+
+function wholeWords(alternatives: string): RegExp {
+  return new RegExp(`(?<!${WORD_CHAR})(?:${alternatives})(?!${WORD_CHAR})`, 'iu');
+}
+
+const MSSQL_REFUSED = [
+  wholeWords([...MSSQL_STATEMENT_WORDS, ...MSSQL_PASS_THROUGH].join('|')),
+  // `use` is a statement, except in a query hint: `OPTION (USE HINT(...))` or `OPTION (USE PLAN ...)`.
+  wholeWords(String.raw`use(?!${WORD_CHAR})(?!\s*(?:hint|plan)(?!${WORD_CHAR}))`),
+  wholeWords(String.raw`enable\s+trigger|disable\s+trigger|next\s+value\s+for`),
+];
+
+/** On SQL Server a SELECT with no semicolon can be followed by a second statement. The words that
+ *  can start one are reserved, so a bare one in code is refused. A name that is such a word must be
+ *  in brackets, which `blankSql` has already blanked. Reads the blanked text only. */
+function refuseSqlServerStatementWords(blanked: string): void {
+  if (MSSQL_REFUSED.some((re) => re.test(blanked))) throw new Error(MSSQL_REFUSAL);
 }
 
 function checkBlankedSelect(blanked: string): void {
@@ -118,7 +158,7 @@ async function isMariaDb(db: object, trx: Kysely<ExternalSchema>): Promise<boole
 export async function runSqlQuery(
   db: Kysely<ExternalSchema>, rawSql: string, opts: SqlRunOpts, engine: SqlDialect = 'postgres',
 ): Promise<ReportResultData> {
-  validateSelectSql(rawSql);
+  validateSelectSql(rawSql, engine);
   const rows = await runReadQuery(db, CompiledQuery.raw(rawSql.replace(/;\s*$/, '')), opts, engine);
   const keys = rows.length ? Object.keys(rows[0]) : [];
   const columns: ReportColumn[] = keys.map((k) => ({

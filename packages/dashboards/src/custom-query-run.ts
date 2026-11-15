@@ -1,6 +1,6 @@
 import type { CustomQueryParam, CustomQueryStore } from '@openldr/db';
 import type { CustomQueryParam as DashboardCustomQueryParam } from './custom-query';
-import { validateSelectSql } from './sql-runner';
+import { validateSelectSql, validateSelectSqlForSave, type SqlDialect } from './sql-runner';
 
 // Shape check for injection-safety only (YYYY-MM-DD); the DB enforces calendar validity.
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -62,10 +62,16 @@ export interface RunStoredQueryDeps {
   runConnectorSql(input: { connectorId: string; sql: string; rowCap?: number; offset?: number }): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
 }
 
-/** Substitute {{param.*}} then enforce SELECT-only. Returns the safe inner SQL. Throws on bad param/SQL. */
-export function prepareSelect(sql: string, params: CustomQueryParam[], values: Record<string, unknown>): string {
+/** Substitute {{param.*}} then enforce SELECT-only. Returns the safe inner SQL. Throws on bad param/SQL.
+ *  With a dialect the check reads the SQL as that engine does. Without one it is the save-time
+ *  check, which is only right when the SQL then goes to the connector runner, which checks again
+ *  with the connector's dialect. */
+export function prepareSelect(
+  sql: string, params: CustomQueryParam[], values: Record<string, unknown>, dialect?: SqlDialect,
+): string {
   const inner = params.length ? substituteParams(sql, params, values) : sql;
-  validateSelectSql(inner);
+  if (dialect) validateSelectSql(inner, dialect);
+  else validateSelectSqlForSave(inner);
   return inner;
 }
 
@@ -75,6 +81,7 @@ export async function runStoredQuery(
 ): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }> {
   const rec = await deps.customQueries.get(queryId);
   if (!rec) throw new Error(`custom query not found: ${queryId}`);
+  // No dialect here: runConnectorSql checks the SQL again with the connector's dialect.
   const inner = prepareSelect(rec.sql, rec.params, values).replace(/;\s*$/, '');
   // Read one extra row to distinguish a complete boundary result from truncation.
   const result = await deps.runConnectorSql({ connectorId: rec.connectorId, sql: inner, rowCap: ROW_CAP + 1 });

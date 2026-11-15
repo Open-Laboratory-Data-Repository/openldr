@@ -80,9 +80,9 @@ describe.skipIf(!present)('copy service with the built v1 plugin', () => {
     };
     const set = out.sets[0];
     const key = fillKeyQuery(set.keyQuery.sql, 'REQ0001', 500);
-    expect(() => validateSelectSql(key)).not.toThrow();
+    expect(() => validateSelectSql(key, 'mssql')).not.toThrow();
     const filled = set.detailQueries.map((d) => fillDetailQuery(d.sql, ['REQ0002', "O'Brien"]));
-    for (const sql of filled) expect(() => validateSelectSql(sql)).not.toThrow();
+    for (const sql of filled) expect(() => validateSelectSql(sql, 'mssql')).not.toThrow();
     expect(filled[0]).toBe(
       "SELECT [RequestID] AS [__key], * FROM [OpenLDRData].[dbo].[Requests] WHERE [RequestID] IN ('REQ0002', 'O''Brien') ORDER BY [RequestID], [OBRSetID]",
     );

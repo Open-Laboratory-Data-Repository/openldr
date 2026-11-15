@@ -126,4 +126,29 @@ describe('createConnectorSqlRunner', () => {
     // Rejected before any connection is opened — credentials are never decrypted for a write attempt.
     expect(createDb).not.toHaveBeenCalled();
   });
+
+  it('on a SQL Server connector refuses a second statement word before opening a connection', async () => {
+    const createDb = vi.fn();
+    const connectors = connectorsFake({ type: 'microsoft-sql', enabled: true });
+    const run = createConnectorSqlRunner({ connectors, secretsKey: 'k', createDb });
+    await expect(run({ connectorId: 'c1', sql: 'SELECT 1 AS x EXEC p' })).rejects.toThrow(/on SQL Server/);
+    expect(createDb).not.toHaveBeenCalled();
+    expect(connectors.getDecryptedConfig).not.toHaveBeenCalled();
+  });
+
+  it('on a Postgres connector keeps a SQL Server statement word as a name', async () => {
+    const createDb = vi.fn(() => ({ query: async () => ({ rows: [] }), close: async () => {} }));
+    const run = createConnectorSqlRunner({ connectors: connectorsFake({ type: 'postgres', enabled: true }), secretsKey: 'k', createDb });
+    await run({ connectorId: 'c1', sql: 'SELECT backup FROM t' });
+    expect(createDb).toHaveBeenCalledWith('postgres', expect.anything());
+  });
+
+  it('refuses a connector type it has no dialect for before opening a connection', async () => {
+    const createDb = vi.fn();
+    const connectors = connectorsFake({ type: 'oracle', enabled: true });
+    const run = createConnectorSqlRunner({ connectors, secretsKey: 'k', createDb });
+    await expect(run({ connectorId: 'c1', sql: 'select 1' })).rejects.toThrow('unsupported connector type: oracle');
+    expect(createDb).not.toHaveBeenCalled();
+    expect(connectors.getDecryptedConfig).not.toHaveBeenCalled();
+  });
 });

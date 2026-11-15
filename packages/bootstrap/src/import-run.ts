@@ -463,8 +463,8 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       });
       const spec = querySpecSchema.parse(await sink.invoke(plugin.source.entrypoints.queries, { options: run.options }));
       // Check the plugin's statements before opening a connection or running any of them.
-      validateSelectSql(fillKeyQuery(spec.keyQuery.sql, null, 1));
-      for (const d of spec.detailQueries) validateSelectSql(fillDetailQuery(d.sql, ['A']));
+      validateSelectSql(fillKeyQuery(spec.keyQuery.sql, null, 1), 'mssql');
+      for (const d of spec.detailQueries) validateSelectSql(fillDetailQuery(d.sql, ['A']), 'mssql');
 
       const access = await sourceAccess(run.connectorId, type);
       clean = access.clean;
@@ -666,7 +666,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       try {
         for (const check of spec.checks) {
           try {
-            validateSelectSql(check.sql);
+            validateSelectSql(check.sql, 'mssql');
           } catch {
             results.push({ id: check.id, value: null, error: 'NOT_A_SELECT' });
             continue;

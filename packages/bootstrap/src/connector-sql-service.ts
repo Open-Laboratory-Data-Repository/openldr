@@ -41,25 +41,21 @@ export function createConnectorSqlRunner(deps: ConnectorSqlDeps) {
     const c = await deps.connectors.get(connectorId);
     if (!c || !c.enabled) throw new Error(`connector ${connectorId} not found or disabled`);
     if (!c.type) throw new Error(`connector ${connectorId} is not a database connector`);
+    // The check reads the SQL as this connector's engine does, so the dialect comes first. A type
+    // with no dialect is refused here, with the sentence createConnectorDb would throw for it.
+    const dialect = dialectFor(c.type);
+    if (!dialect) throw new Error(`unsupported connector type: ${c.type}`);
     // SELECT-only guard before any connection is opened or credentials decrypted.
-    validateSelectSql(userSql);
+    validateSelectSql(userSql, dialect);
     const config = await deps.connectors.getDecryptedConfig(connectorId, deps.secretsKey);
     const conn = make(c.type, config);
     try {
-      const dialect = dialectFor(c.type);
       const cap = rowCap ?? DEFAULT_ROW_CAP;
-      let rows: Record<string, unknown>[];
-      if (dialect) {
-        const plan = planPagination(userSql.replace(/;\s*$/, ''), dialect, { limit: cap, offset });
-        const res = await conn.query(plan.sql);
-        // MSSQL applies its offset in JS (SET ROWCOUNT fetched offset+limit rows); Postgres already
-        // offset in SQL, so sliceOffset is 0.
-        rows = plan.sliceOffset ? res.rows.slice(plan.sliceOffset) : res.rows;
-      } else {
-        // Unknown dialect (unreachable — every supported connector type maps to a dialect). The SELECT
-        // is still validated above; without a dialect there is no safe row-cap wrapper, so run as-is.
-        rows = (await conn.query(userSql)).rows;
-      }
+      const plan = planPagination(userSql.replace(/;\s*$/, ''), dialect, { limit: cap, offset });
+      const res = await conn.query(plan.sql);
+      // MSSQL applies its offset in JS (SET ROWCOUNT fetched offset+limit rows); Postgres already
+      // offset in SQL, so sliceOffset is 0.
+      const rows = plan.sliceOffset ? res.rows.slice(plan.sliceOffset) : res.rows;
       const columns = rows[0] ? Object.keys(rows[0]).map((k) => ({ key: k, label: k })) : [];
       return { columns, rows };
     } finally {

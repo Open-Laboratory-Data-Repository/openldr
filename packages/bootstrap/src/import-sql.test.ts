@@ -42,7 +42,7 @@ describe('fillKeyQuery', () => {
     expect(() => fillKeyQuery(`${KEY_SQL} AND x = {{secret}}`, null, 10)).toThrow(/unknown token/);
   });
   it('produces a statement the SELECT-only validator accepts', () => {
-    expect(() => validateSelectSql(fillKeyQuery(KEY_SQL, 'REQ001', 500))).not.toThrow();
+    expect(() => validateSelectSql(fillKeyQuery(KEY_SQL, 'REQ001', 500), 'mssql')).not.toThrow();
   });
 });
 
@@ -59,7 +59,7 @@ describe('fillDetailQuery', () => {
   });
   it('stays a valid SELECT with 2000 keys', () => {
     const keys = Array.from({ length: 2000 }, (_, i) => `REQ${String(i).padStart(6, '0')}`);
-    expect(() => validateSelectSql(fillDetailQuery(DETAIL_SQL, keys))).not.toThrow();
+    expect(() => validateSelectSql(fillDetailQuery(DETAIL_SQL, keys), 'mssql')).not.toThrow();
   });
   it('a key cannot turn the statement into anything but a SELECT', () => {
     const sql = fillDetailQuery(DETAIL_SQL, ["x'); DELETE FROM Requests; --"]);

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { exportCustomQueries, importCustomQueries, CustomQueryTransferError, type AppContext } from '@openldr/bootstrap';
-import { CustomQueryInputSchema, validateSelectSql } from '@openldr/dashboards';
+import { CustomQueryInputSchema, validateSelectSqlForSave } from '@openldr/dashboards';
 import type { CustomQueryGroupStore, CustomQueryStore } from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
@@ -316,7 +316,7 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
   app.post('/api/query/param-options', GUARD, async (req, reply) => {
     const body = z.object({ connectorId: z.string().min(1), optionsSql: z.string().min(1) }).safeParse(req.body);
     if (!body.success) { reply.code(400); return { error: body.error.message }; }
-    try { validateSelectSql(body.data.optionsSql); } catch (e) { reply.code(400); return { error: (e as Error).message }; }
+    try { validateSelectSqlForSave(body.data.optionsSql); } catch (e) { reply.code(400); return { error: (e as Error).message }; }
     const c = await deps.connectors.get(body.data.connectorId);
     if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found' }; }
     try {

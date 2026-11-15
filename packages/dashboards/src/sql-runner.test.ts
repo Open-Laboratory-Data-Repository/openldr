@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { validateSelectSql, runSqlQuery, planPagination } from './sql-runner';
+import { validateSelectSql, validateSelectSqlForSave, runSqlQuery, planPagination } from './sql-runner';
 
 // --- Fake Kysely db/executor for driving runSqlQuery's `sql`/`sql.raw` calls through the
 // transaction. Mirrors just enough of kysely's RawBuilder.execute() contract (getExecutor() →
@@ -50,27 +50,27 @@ function makeFakeDb(
   return { db, executed };
 }
 
-describe('validateSelectSql', () => {
-  it('accepts a single SELECT', () => { expect(() => validateSelectSql('SELECT 1')).not.toThrow(); });
-  it('accepts a CTE (WITH)', () => { expect(() => validateSelectSql('WITH t AS (SELECT 1) SELECT * FROM t')).not.toThrow(); });
-  it('rejects INSERT', () => { expect(() => validateSelectSql('INSERT INTO x VALUES (1)')).toThrow(); });
+describe('validateSelectSqlForSave', () => {
+  it('accepts a single SELECT', () => { expect(() => validateSelectSqlForSave('SELECT 1')).not.toThrow(); });
+  it('accepts a CTE (WITH)', () => { expect(() => validateSelectSqlForSave('WITH t AS (SELECT 1) SELECT * FROM t')).not.toThrow(); });
+  it('rejects INSERT', () => { expect(() => validateSelectSqlForSave('INSERT INTO x VALUES (1)')).toThrow(); });
   it('rejects UPDATE/DELETE/DROP', () => {
-    for (const s of ['UPDATE x SET a=1', 'DELETE FROM x', 'DROP TABLE x']) expect(() => validateSelectSql(s)).toThrow();
+    for (const s of ['UPDATE x SET a=1', 'DELETE FROM x', 'DROP TABLE x']) expect(() => validateSelectSqlForSave(s)).toThrow();
   });
-  it('rejects multiple statements', () => { expect(() => validateSelectSql('SELECT 1; DROP TABLE x')).toThrow(); });
-  it('strips a trailing comment so it does not smuggle a second statement', () => { expect(() => validateSelectSql('SELECT 1 -- ; DROP')).not.toThrow(); });
+  it('rejects multiple statements', () => { expect(() => validateSelectSqlForSave('SELECT 1; DROP TABLE x')).toThrow(); });
+  it('strips a trailing comment so it does not smuggle a second statement', () => { expect(() => validateSelectSqlForSave('SELECT 1 -- ; DROP')).not.toThrow(); });
   it('rejects SELECT ... INTO (creates a table — not read-only)', () => {
-    expect(() => validateSelectSql('SELECT * INTO shadow FROM t')).toThrow();
-    expect(() => validateSelectSql('select id into #tmp from t')).toThrow();
+    expect(() => validateSelectSqlForSave('SELECT * INTO shadow FROM t')).toThrow();
+    expect(() => validateSelectSqlForSave('select id into #tmp from t')).toThrow();
   });
   it('allows "into" inside a string literal (not a false positive)', () => {
-    expect(() => validateSelectSql("SELECT 'convert this into that' as note")).not.toThrow();
+    expect(() => validateSelectSqlForSave("SELECT 'convert this into that' as note")).not.toThrow();
   });
   it('reads a comment marker inside a string as text, so a second statement is still found', () => {
-    expect(() => validateSelectSql("SELECT '--', 1; SELECT 2")).toThrow('only a single statement is allowed');
+    expect(() => validateSelectSqlForSave("SELECT '--', 1; SELECT 2")).toThrow('only a single statement is allowed');
   });
   it('refuses a string that is never closed', () => {
-    expect(() => validateSelectSql("SELECT 'abc")).toThrow();
+    expect(() => validateSelectSqlForSave("SELECT 'abc")).toThrow();
   });
 });
 
@@ -81,20 +81,75 @@ describe('validateSelectSql and the dialect', () => {
     expect(() => validateSelectSql("SELECT 'it\\'s' AS a", 'mysql')).not.toThrow();
     expect(() => validateSelectSql('SELECT ["]; SELECT 2; SELECT ["]', 'mssql')).toThrow();
   });
-  it('with no dialect, passes when one engine would accept the text', () => {
-    expect(() => validateSelectSql("SELECT [it's] FROM t")).not.toThrow();
-    expect(() => validateSelectSql("SELECT $$it's$$ AS a")).not.toThrow();
-    expect(() => validateSelectSql("SELECT 1 # don't\n")).not.toThrow();
+  it('the save form passes when one engine would accept the text', () => {
+    expect(() => validateSelectSqlForSave("SELECT [it's] FROM t")).not.toThrow();
+    expect(() => validateSelectSqlForSave("SELECT $$it's$$ AS a")).not.toThrow();
+    expect(() => validateSelectSqlForSave("SELECT 1 # don't\n")).not.toThrow();
   });
-  it('with no dialect, the error thrown is the one from the postgres reading', () => {
+  it('the save form throws the error from the postgres reading', () => {
     const message = (fn: () => void) => { try { fn(); return ''; } catch (e) { return String(e); } };
-    expect(message(() => validateSelectSql("SELECT 'abc"))).toBe(message(() => validateSelectSql("SELECT 'abc", 'postgres')));
-    expect(message(() => validateSelectSql("SELECT 'abc"))).not.toBe('');
+    expect(message(() => validateSelectSqlForSave("SELECT 'abc"))).toBe(message(() => validateSelectSql("SELECT 'abc", 'postgres')));
+    expect(message(() => validateSelectSqlForSave("SELECT 'abc"))).not.toBe('');
   });
-  it('with no dialect, still refuses what every engine refuses', () => {
-    expect(() => validateSelectSql("SELECT 'abc")).toThrow();
-    expect(() => validateSelectSql("SELECT '--', 1; SELECT 2")).toThrow();
-    expect(() => validateSelectSql('DROP TABLE t')).toThrow();
+  it('the save form still refuses what every engine refuses', () => {
+    expect(() => validateSelectSqlForSave("SELECT 'abc")).toThrow();
+    expect(() => validateSelectSqlForSave("SELECT '--', 1; SELECT 2")).toThrow();
+    expect(() => validateSelectSqlForSave('DROP TABLE t')).toThrow();
+  });
+});
+
+// Task 1's real run on SQL Server 2025 found `load` and `dump` are not reserved, so they are not here.
+const STATEMENT_WORDS = ['exec', 'execute', 'waitfor', 'dbcc', 'backup', 'restore', 'shutdown', 'kill', 'deny',
+  'declare', 'set', 'reconfigure', 'begin', 'commit', 'rollback', 'save', 'if', 'while', 'print', 'raiserror',
+  'goto', 'return', 'open', 'close', 'deallocate', 'checkpoint', 'bulk', 'writetext', 'updatetext', 'readtext',
+  'setuser', 'revert', 'add'];
+
+const MSSQL_REFUSAL = 'only read-only SELECT queries are allowed on SQL Server (statement words such as EXEC are refused; put a name that is such a word in [brackets])';
+
+describe('validateSelectSql on SQL Server', () => {
+  it.each(STATEMENT_WORDS)('mssql refuses the statement word %s', (w) => {
+    expect(() => validateSelectSql(`SELECT 1 AS x ${w.toUpperCase()} something`, 'mssql')).toThrow();
+  });
+  it.each(STATEMENT_WORDS)('other dialects keep %s as a name', (w) => {
+    expect(() => validateSelectSql(`SELECT ${w} FROM t`, 'postgres')).not.toThrow();
+    expect(() => validateSelectSqlForSave(`SELECT ${w} FROM t`)).not.toThrow();
+  });
+  it.each(STATEMENT_WORDS)('mysql keeps %s as a name', (w) => {
+    expect(() => validateSelectSql(`SELECT ${w} FROM t`, 'mysql')).not.toThrow();
+  });
+  it.each(['load', 'dump'])('mssql keeps %s as a name', (w) => {
+    expect(() => validateSelectSql(`SELECT ${w} FROM ${w}`, 'mssql')).not.toThrow();
+  });
+  it.each([
+    "SELECT * FROM OPENQUERY(lnk, 'select 1')", "SELECT * FROM OPENROWSET('a','b','c')",
+    "SELECT * FROM OPENDATASOURCE('a','b').x.dbo.t", 'SELECT * FROM OPENXML(1, 2)',
+    'SELECT 1 AS x USE other', 'SELECT * FROM t x DISABLE TRIGGER trg ON t',
+    'SELECT * FROM t x ENABLE TRIGGER trg ON t', 'SELECT NEXT VALUE FOR dbo.seq',
+    'SELECT a FROM t OPTION (USE hints)', 'SELECT 1 AS x USE',
+    'SELECT NEXT /* c */ VALUE\n  FOR dbo.seq', 'SELECT 1 AS x\nEXEC p', 'SELECT 1 AS x [a]exec p',
+  ])('mssql refuses %s', (q) => { expect(() => validateSelectSql(q, 'mssql')).toThrow(); });
+  it.each([
+    'SELECT [open], open_date, [set] FROM t', 'SELECT * FROM ##open', 'SELECT @set AS a',
+    "SELECT 'please exec this' AS a", 'SELECT 1 -- exec later', "SELECT a FROM t OPTION (USE HINT('X'))",
+    'SELECT a FROM t OPTION (USE PLAN N\'<p/>\')', 'SELECT a FROM t ORDER BY a OFFSET 0 ROWS FETCH NEXT 5 ROWS ONLY',
+    'SELECT CASE WHEN a = 1 THEN 2 END FROM t', 'SELECT enable, disable, next, value FROM t',
+    'SELECT * FROM OPENJSON(@j)', 'SELECT open$x, x$open, open1, _open, opened FROM t',
+    'SELECT 1 /* exec p */ AS a', 'SELECT [exec] FROM t', 'SELECT a FROM t OPTION (use\n  hint (\'X\'))',
+  ])('mssql allows %s', (q) => { expect(() => validateSelectSql(q, 'mssql')).not.toThrow(); });
+
+  it('refuses with one fixed sentence that holds none of the SQL', () => {
+    for (const q of ['SELECT 1 AS x EXEC secret_proc', "SELECT * FROM OPENQUERY(lnk, 'x')", 'SELECT 1 AS x USE secret_db']) {
+      let message = '';
+      try { validateSelectSql(q, 'mssql'); } catch (e) { message = (e as Error).message; }
+      expect(message).toBe(MSSQL_REFUSAL);
+    }
+  });
+
+  it('the save form applies the SQL Server rule in its mssql reading', () => {
+    // Postgres and MySQL read `'s] ...` as a string that is never closed, so only the mssql
+    // reading can pass this text. That reading refuses EXEC.
+    expect(() => validateSelectSqlForSave("SELECT [it's] AS a")).not.toThrow();
+    expect(() => validateSelectSqlForSave("SELECT [it's] AS a EXEC p")).toThrow();
   });
 });
 
