@@ -6,6 +6,114 @@
       "version": null,
       "entries": [
         {
+          "hash": "127de445",
+          "type": "fix",
+          "scope": "v1-import",
+          "title": "Focus has somewhere to go after a start, and Escape closes a menu from the page body"
+        },
+        {
+          "hash": "20d273b6",
+          "type": "fix",
+          "scope": "query",
+          "title": "A Postgres connector takes one statement per request, and a refused widget query answers 400"
+        },
+        {
+          "hash": "010203bb",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "On Postgres a string may not continue an escape string, and the rest of a binary literal is checked"
+        },
+        {
+          "hash": "b8f2d10d",
+          "type": "fix",
+          "scope": "query",
+          "title": "A dropped Postgres connection during a read-only query does not stop the server, and a count survives a trailing comment"
+        },
+        {
+          "hash": "4cf32a09",
+          "type": "fix",
+          "scope": "query",
+          "title": "Checked SQL runs read-only on a Postgres connector and is rolled back on SQL Server"
+        },
+        {
+          "hash": "a8b50217",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The widget preview sends its template and values, so the server fills once"
+        },
+        {
+          "hash": "a5e88695",
+          "type": "fix",
+          "scope": "import",
+          "title": "A token inside quotes or a comment in a SQL template is refused, and a filled value stays one literal"
+        },
+        {
+          "hash": "ee0c188c",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "A binary literal is one number to the SELECT check, and pair words cannot hide behind a control character"
+        },
+        {
+          "hash": "d9e1b41a",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "The SQL reader refuses a NUL, and a SQL Server line comment holds only plain characters"
+        },
+        {
+          "hash": "55b0200a",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "On SQL Server a statement word right after a number is still refused, and the engine is required to run SQL"
+        },
+        {
+          "hash": "ad15175c",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "The SQL reader refuses MariaDB's reversed version comment and odd line breaks in a SQL Server comment"
+        },
+        {
+          "hash": "0585a3ca",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "On SQL Server the SELECT check refuses a second statement and pass-through SQL"
+        },
+        {
+          "hash": "e327f2a8",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "The SQL reader refuses text an engine may read two ways"
+        },
+        {
+          "hash": "1a6cc00d",
+          "type": "fix",
+          "scope": "v1-import",
+          "title": "The Copy tab says when a start is under way, and an open menu lets go of the keyboard"
+        },
+        {
+          "hash": "800fbfd8",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "The SQL reader follows one engine at a time, and a token is found by position"
+        },
+        {
+          "hash": "64eeb2b5",
+          "type": "fix",
+          "scope": "v1-import",
+          "title": "Start copy sits in a dots menu on the Copy tab"
+        },
+        {
+          "hash": "7d2c1052",
+          "type": "fix",
+          "scope": "import",
+          "title": "A wrong password on a source reads as a refused login"
+        },
+        {
+          "hash": "964568d1",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "The SELECT check reads strings, comments and quoted names in one pass"
+        },
+        {
           "hash": "30b3b29f",
           "type": "fix",
           "scope": "v1-import",
