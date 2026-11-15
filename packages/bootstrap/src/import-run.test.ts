@@ -916,11 +916,66 @@ describe('import run: adopt', () => {
       expect(second.persist.mock.calls.map((c) => (c[0] as Array<{ id: string }>)[0].id)).toEqual(['p-REQ0005', 'p-REQ0006', 'p-REQ0007', 'p-REQ0008']);
       const events = second.audited.filter((e) => e.action !== 'import.allow');
       expect(events.map((e) => [e.action, e.actor])).toEqual([['import.resume', SYSTEM], ['import.finish', SYSTEM]]);
-      // The resume row keeps the cursor, as a resume by hand does. That is older behaviour.
-      expect(events[0].metadata).toEqual({ cursor: 'REQ0004' });
+      // R43. The system's resume row holds no cursor: a cursor is a source key, and no person asked.
+      expect(events[0]).not.toHaveProperty('metadata');
+      expect(JSON.stringify(second.audited)).not.toContain('REQ0004');
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("a person's resume still records the cursor in its audit row", async () => {
+    const h = await harness(keysOf(4), { origin: 'server' });
+    await storeRun(h, { status: 'stopped' });
+    await h.svc.resume('v1-import', 'dead', ADMIN);
+    await h.svc.wait('dead');
+    const row = h.audited.find((e) => e.action === 'import.resume');
+    expect(row).toMatchObject({ actor: ADMIN, metadata: { cursor: 'REQ0002' } });
+  });
+
+  it('a crash in the middle of a page, then a redo that fails fewer keys, lists no stale failure', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      // The first server fails REQ0005 and REQ0006 on the second page, then dies while saving REQ0007.
+      const first = await harness(keysOf(8), { origin: 'server' });
+      first.setMapper(({ keys }) => ({
+        groups: keys.map((key) => (key === 'REQ0005' || key === 'REQ0006'
+          ? { key, resources: [], error: 'NO_REQUEST_ROWS' }
+          : { key, resources: [{ resourceType: 'Patient', id: `p-${key}` }] })),
+      }));
+      first.persist.mockImplementation(async (resources: Array<{ id: string }>) => {
+        if (resources[0].id === 'p-REQ0007') await new Promise(() => {});
+        return [];
+      });
+      const started = await first.svc.start({ ...START, pageSize: 4 });
+      await vi.waitFor(() => expect(first.persist.mock.calls.some((c) => (c[0] as Array<{ id: string }>)[0].id === 'p-REQ0007')).toBe(true));
+      expect(await rawRun(started.id)).toMatchObject({ cursor: 'REQ0004', failuresStored: 0 });
+
+      // The redo fails REQ0005 only. REQ0006's entry from the dead page must not be listed.
+      const second = await harness(keysOf(8), { origin: 'server' });
+      second.setMapper(({ keys }) => ({
+        groups: keys.map((key) => (key === 'REQ0005'
+          ? { key, resources: [], error: 'NO_REQUEST_ROWS' }
+          : { key, resources: [{ resourceType: 'Patient', id: `p-${key}` }] })),
+      }));
+      second.clock.now = first.clock.now + STALE_MS + 1;
+      await second.svc.adopt();
+      expect(await second.svc.wait(started.id)).toMatchObject({ status: 'completed', failuresStored: 1, counts: { failed: 1 } });
+      expect(await second.svc.failures('v1-import', started.id)).toEqual([{ key: 'REQ0005', error: 'NO_REQUEST_ROWS' }]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a person's resume and adopt on the same run in one process start one drive", async () => {
+    const h = await harness(keysOf(2), { origin: 'server' });
+    await storeRun(h, { cursor: null, counts: { keys: 0, imported: 0, failed: 0, resources: 0 } });
+    h.clock.now += STALE_MS + 1;
+    await Promise.all([h.svc.resume('v1-import', 'dead', ADMIN), h.svc.adopt()]);
+    expect(await h.svc.wait('dead')).toMatchObject({ status: 'completed', counts: { keys: 2, imported: 2 } });
+    // One drive reads the page once and saves each request once.
+    expect(h.mapInputs.map((m) => m.keys)).toEqual([['REQ0001', 'REQ0002']]);
+    expect(h.persist).toHaveBeenCalledTimes(2);
   });
 
   it('adopt logs one line when it cannot resume a run, with the run id and no error text', async () => {

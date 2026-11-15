@@ -726,7 +726,11 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
 
     async failures(pluginId, runId) {
       const entries = await deps.pluginData.list(pluginId, FAILURES, { where: { field: 'runId', eq: runId }, limit: MAX_STORED_FAILURES });
-      return entries.map((e) => {
+      // An entry at or above the stored count was written in a page that never ended, as in a
+      // crash. The redo of that page writes its own entries from the same number.
+      const stored = (await read(pluginId, runId))?.failuresStored;
+      const kept = stored === undefined ? entries : entries.filter((e) => Number(e.key.slice(e.key.lastIndexOf(':') + 1)) < stored);
+      return kept.map((e) => {
         const doc = e.doc as { key: string; error: string };
         return { key: doc.key, error: doc.error };
       });
@@ -761,8 +765,16 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       const run: ImportRun = {
         ...stored, status: 'running', finishedAt: null, lastError: null, pluginVersion: plugin.version, waiting: null, origin,
       };
-      await auditOrRefuseHere({ action: 'import.resume', pluginId, connectorId: run.connectorId, runId, actor, metadata: { cursor: run.cursor } });
+      // A cursor is a source key. A person's resume has always recorded it. The server's own resume
+      // (adopt) is new, and no source key goes to the audit log without a person (R43).
+      await auditOrRefuseHere({
+        action: 'import.resume', pluginId, connectorId: run.connectorId, runId, actor,
+        ...(actor.type === 'system' ? {} : { metadata: { cursor: run.cursor } }),
+      });
       await save(run);
+      // A resume by hand and adopt can both pass the checks above before either launches. The
+      // second one does not start a second drive in this process.
+      if (local.has(runId)) return { ...run };
       launch(run, actor);
       return { ...run };
     },
