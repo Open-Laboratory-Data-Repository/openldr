@@ -75,6 +75,11 @@ const BASE_WORDS = ['insert', 'update', 'delete', 'drop', 'alter', 'create', 'tr
  *  number at a letter that cannot continue it, so a word at the end of such a run is a word of its
  *  own: SQL Server reads `1KILL` as `1` then `KILL`. A word counts there when it ends the run.
  *
+ *  A binary literal is the exception, on SQL Server only. A run that starts with `0x` or `0X` is
+ *  `0x` and every hex digit after it, then the rest of the run as a new token. A word counts only
+ *  when it is the whole of that rest. So `0xADD` is one literal, `0x1DELETE` is `0x1DE` then the
+ *  name `LETE`, and `0x1KILL` is `0x1` then the word `KILL`.
+ *
  *  `\b` is not used: it treats `#`, `@` and `$` as word ends, so `##open` and `@set` would match,
  *  and it treats a digit as part of a word, so `1KILL` would not. */
 interface WordReading {
@@ -82,12 +87,15 @@ interface WordReading {
   run: RegExp;
   /** The first character of a run that is one name. */
   nameStart: RegExp;
+  /** Whether a run that starts with `0x` is read as a binary literal. */
+  binaryLiterals: boolean;
 }
 
 /** T-SQL: a name starts with a letter, `_`, `#` or `@`, and goes on with those, digits and `$`. */
 const MSSQL_READING: WordReading = {
   run: /[\p{L}\p{Nd}_#@$]+/gu,
   nameStart: /^[\p{L}_#@]/u,
+  binaryLiterals: true,
 };
 
 /** Postgres: a name starts with a letter or `_`, and goes on with those, digits and `$`. `#` and `@`
@@ -95,7 +103,11 @@ const MSSQL_READING: WordReading = {
 const POSTGRES_READING: WordReading = {
   run: /[\p{L}\p{Nd}_$]+/gu,
   nameStart: /^[\p{L}_]/u,
+  binaryLiterals: false,
 };
+
+/** `0x` and the hex digits after it, at the start of a run. */
+const BINARY_LITERAL = /^0[xX][0-9a-fA-F]*/;
 
 /** A word list as two tests on one run: the whole run, or the end of the run. */
 interface WordList { whole: RegExp; end: RegExp }
@@ -106,12 +118,18 @@ function wordList(words: readonly string[]): WordList {
 }
 
 /** The longest word in any list below, with room to spare. The end test reads only this much of a
- *  run, so a long run costs no more than a short one. */
+ *  run, so a long run costs no more than a short one. A test keeps it at least as long as every
+ *  listed word. */
 const LONGEST_WORD = 32;
 
 /** True when `run` holds a word of `list` that counts, read as `reading` says. */
 function runHasWord(run: string, reading: WordReading, list: WordList): boolean {
   if (reading.nameStart.test(run)) return list.whole.test(run);
+  const literal = reading.binaryLiterals ? BINARY_LITERAL.exec(run) : null;
+  if (literal) {
+    const rest = run.slice(literal[0].length);
+    return rest !== '' && list.whole.test(rest);
+  }
   return list.end.test(run.slice(-LONGEST_WORD));
 }
 
@@ -132,15 +150,32 @@ function hasBaseWord(blanked: string, dialect: SqlDialect): boolean {
   return false;
 }
 
+/** Words refused only by what follows them. */
+const MSSQL_FOLLOWED_WORDS = ['use', 'enable', 'disable', 'next'];
+
 const MSSQL_REFUSED_WORDS = wordList([...MSSQL_STATEMENT_WORDS, ...MSSQL_PASS_THROUGH]);
 const MSSQL_USE = wordList(['use']);
 const MSSQL_TRIGGER_PAIR = wordList(['enable', 'disable']);
 const MSSQL_NEXT = wordList(['next']);
 
+/** Every word list, and the window the end test reads. Exported for the test that keeps the window
+ *  as long as the longest word. Not for other use. */
+export const SQL_CHECK_WORDS_FOR_TESTS: { lists: readonly (readonly string[])[]; window: number } = {
+  lists: [BASE_WORDS, MSSQL_STATEMENT_WORDS, MSSQL_PASS_THROUGH, MSSQL_FOLLOWED_WORDS],
+  window: LONGEST_WORD,
+};
+
+/** What may sit between two words of a pair: anything that is not a name character and not
+ *  printable punctuation. That is whitespace, every control character (U+0000 to U+001F and U+007F
+ *  to U+009F), every format character such as U+200B, and every Unicode space or separator such as
+ *  U+00A0, U+2028 and U+2029. SQL Server may treat some of them as a word break; refusing is the
+ *  safe side. */
+const PAIR_GAP = String.raw`[\s\p{Cc}\p{Cf}\p{Z}]+`;
+
 /** What may follow `use` in a query hint: `HINT (` or `PLAN` and a string, with an optional `N`. */
 const MSSQL_USE_HINT = /\s+(?:hint\s*\(|plan(?:\s*|\s+N)'')/iuy;
-const MSSQL_TRIGGER_AFTER = /\s+trigger(?![\p{L}\p{Nd}_#@$])/iuy;
-const MSSQL_NEXT_AFTER = /\s+value\s+for(?![\p{L}\p{Nd}_#@$])/iuy;
+const MSSQL_TRIGGER_AFTER = new RegExp(String.raw`${PAIR_GAP}trigger(?![\p{L}\p{Nd}_#@$])`, 'iuy');
+const MSSQL_NEXT_AFTER = new RegExp(String.raw`${PAIR_GAP}value${PAIR_GAP}for(?![\p{L}\p{Nd}_#@$])`, 'iuy');
 
 /** True when the sticky pattern matches `text` at `at`. */
 function followedBy(text: string, at: number, sticky: RegExp): boolean {

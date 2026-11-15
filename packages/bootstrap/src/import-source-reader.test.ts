@@ -369,8 +369,11 @@ describe('createSourceReader', () => {
     }
   });
 
-  it('reads the key query as SQL Server does, so a statement word in it is refused before it runs', async () => {
-    // Postgres and MySQL read EXEC as a name here. Only the mssql reading refuses it.
+  it('refuses a key query with a SQL Server statement word before any connection opens', async () => {
+    // Postgres and MySQL read EXEC as a name here. Only the mssql reading refuses it. The reader
+    // checks the key query twice, in readPage and again in sourceRows, and both run before it opens
+    // a connection. So this pins what the early check guarantees, no open and no query, and not
+    // which of the two checks refused.
     const source = fakeSource();
     const { reader } = harness(source);
     const keySql = `${KEY_SQL} EXEC [dbo].[Wipe]`;

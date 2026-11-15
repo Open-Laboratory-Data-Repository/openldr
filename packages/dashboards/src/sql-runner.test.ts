@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { validateSelectSql, validateSelectSqlForSave, runSqlQuery, planPagination } from './sql-runner';
+import { validateSelectSql, validateSelectSqlForSave, runSqlQuery, planPagination, SQL_CHECK_WORDS_FOR_TESTS } from './sql-runner';
 
 // --- Fake Kysely db/executor for driving runSqlQuery's `sql`/`sql.raw` calls through the
 // transaction. Mirrors just enough of kysely's RawBuilder.execute() contract (getExecutor() →
@@ -171,9 +171,41 @@ describe('a statement word right after a number, on mssql', () => {
     'SELECT 1FROM t', 'SELECT 1KILLS FROM t', 'SELECT a1exec FROM t', 'SELECT _1exec FROM t',
     'SELECT #1exec FROM t', 'SELECT 1e5 AS x', 'SELECT 0x1F AS x',
   ])('allows %s', (q) => { expect(() => validateSelectSql(q, 'mssql')).not.toThrow(); });
-  it('the save form refuses it too, in every reading that would run it as a statement', () => {
+  it('the save form accepts it, because mysql reads 1DELETE as a name, and the postgres reading refuses it', () => {
     expect(() => validateSelectSqlForSave('SELECT 1DELETE FROM t')).not.toThrow(); // mysql reads 1DELETE as a name
     expect(() => validateSelectSql('SELECT 1DELETE FROM t', 'postgres')).toThrow();
+  });
+});
+
+describe('a binary literal on mssql', () => {
+  it.each([
+    'SELECT 0xADD AS b', 'SELECT 0x0DBCC AS b', 'SELECT 0x AS b', 'SELECT 0x1F AS b',
+    'SELECT 0x1DELETE FROM t', 'SELECT 0x1EXEC p', 'SELECT 0X0ADD AS b',
+  ])('allows %s', (q) => { expect(() => validateSelectSql(q, 'mssql')).not.toThrow(); });
+  it.each([
+    'SELECT 0x1KILL 55', 'SELECT 0xFFWAITFOR DELAY \'00:00:01\'', 'SELECT 0xGO_SET', 'SELECT 0x1 EXEC p',
+  ])('handles %s by the rule', (q) => {
+    const refused = !['SELECT 0xGO_SET'].includes(q);
+    if (refused) expect(() => validateSelectSql(q, 'mssql')).toThrow();
+    else expect(() => validateSelectSql(q, 'mssql')).not.toThrow();
+  });
+});
+
+describe('pair words and the characters between them, on mssql', () => {
+  it.each([
+    'SELECT * FROM t x DISABLE\u001fTRIGGER trg ON t',
+    'SELECT NEXT\u0085VALUE FOR dbo.seq',
+    'SELECT * FROM t x ENABLE ​TRIGGER trg ON t',
+  ])('refuses %j with the SQL Server sentence', (q) => { expect(() => validateSelectSql(q, 'mssql')).toThrow(MSSQL_REFUSAL); });
+  it('keeps the words as names when printable punctuation sits between them', () => {
+    expect(() => validateSelectSql('SELECT next.value, disable.trigger FROM t', 'mssql')).not.toThrow();
+  });
+});
+
+describe('the window the end test reads', () => {
+  it('is at least as long as the longest listed word', () => {
+    const longest = Math.max(...SQL_CHECK_WORDS_FOR_TESTS.lists.flat().map((w) => w.length));
+    expect(SQL_CHECK_WORDS_FOR_TESTS.window).toBeGreaterThanOrEqual(longest);
   });
 });
 
