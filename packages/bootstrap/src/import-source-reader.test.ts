@@ -200,7 +200,9 @@ describe('createSourceReader', () => {
     const page = await reader.readPage(first);
     expect(page).toMatchObject({ kind: 'page', size: 250, keys: SOURCE_KEYS });
     expect(keySizes(source)).toEqual([500, 250]);
-    expect(source.log.opens).toEqual([undefined, { queryTimeoutMs: 5000 }]);
+    // The timed-out connection is dropped and a new one opened, even though the probe answered.
+    expect(source.log.opens).toEqual([undefined, { queryTimeoutMs: 5000 }, undefined]);
+    expect(source.log.closes).toBe(1);
     expect(source.counts.probe).toBe(1);
     expect(source.log.probeCloses).toBe(1);
     expect(waiting).toEqual([]);
@@ -253,7 +255,7 @@ describe('createSourceReader', () => {
     const source = fakeSource(() => timeout());
     const { reader, waiting } = harness(source, 200);
     expect(await reader.readPage({ ...first, size: 1 })).toEqual({ kind: 'stopped' });
-    expect(keySizes(source).every((s) => s === 1)).toBe(true);
+    expect(source.counts.details).toBe(0);
     expect(waiting.filter((w) => w !== null).length).toBeGreaterThan(3);
   });
 
@@ -347,6 +349,67 @@ describe('createSourceReader', () => {
     const { reader, waiting } = harness(source);
     await expect(reader.readPage({ ...first, after: 'R002' })).rejects.toThrow('the key query made no progress past the last key');
     expect(waiting).toEqual([]);
+  });
+
+  it('a stop asked during a halving retry is honoured before the next query', async () => {
+    const source = fakeSource((kind, sql) => (kind === 'keys' && sizeOf(sql) > 1 ? timeout() : undefined));
+    // The first stopWanted call already asks to stop.
+    const { reader, waiting } = harness(source, 0);
+    expect(await reader.readPage(first)).toEqual({ kind: 'stopped' });
+    expect(keySizes(source)).toEqual([500]);
+    expect(source.counts.probe).toBe(1);
+    expect(waiting).toEqual([]);
+  });
+
+  it('a stop asked during the tries at a page of one is honoured before the next query', async () => {
+    const source = fakeSource((kind) => (kind === 'details' ? timeout() : undefined));
+    // The first retry goes ahead. The second check asks to stop.
+    const { reader } = harness(source, 1);
+    expect(await reader.readPage({ ...first, size: 1 })).toEqual({ kind: 'stopped' });
+    expect(source.counts.details).toBe(2);
+  });
+
+  it('error 245 with a row value is thrown without the value', async () => {
+    const source = fakeSource((kind) => (kind === 'details'
+      ? err('EREQUEST', "Conversion failed when converting the varchar value 'ZX-ROW-VALUE-4417' to data type int.", { number: 245 })
+      : undefined));
+    const { reader, waiting } = harness(source);
+    const failure = await reader.readPage(first).catch((e: Error) => e);
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toBe('the source refused the query (SQL Server error 245)');
+    expect((failure as Error).message).not.toContain('ZX-ROW-VALUE-4417');
+    expect(waiting).toEqual([]);
+  });
+
+  it('error 245 that is retried puts no row value in the waiting state', async () => {
+    // No EREQUEST code, so it reads as lost and is retried. Its text still follows the number rule.
+    const source = fakeSource((kind, _sql, n) => (kind === 'details' && n === 1
+      ? Object.assign(new Error("Conversion failed when converting the varchar value 'ZX-ROW-VALUE-4417' to data type int."), { number: 245 })
+      : undefined));
+    const { reader, waiting } = harness(source);
+    expect((await reader.readPage(first)).kind).toBe('page');
+    expect(waiting).toEqual([{ attempt: 1, error: 'the source refused the query (SQL Server error 245)' }, null]);
+    expect(JSON.stringify(waiting)).not.toContain('ZX-ROW-VALUE-4417');
+  });
+
+  it('error 208 keeps its table name', async () => {
+    const source = fakeSource((kind) => (kind === 'keys'
+      ? err('EREQUEST', "Invalid object name 'dbo.Requests'.", { number: 208 })
+      : undefined));
+    const { reader } = harness(source);
+    await expect(reader.readPage(first)).rejects.toThrow("Invalid object name 'dbo.Requests'.");
+  });
+
+  it('close does not wait for a connection that never finishes closing', async () => {
+    const source = fakeSource();
+    const realOpen = source.open.getMockImplementation()!;
+    source.open.mockImplementation(async (opts) => {
+      const db = await realOpen(opts);
+      return { query: db.query, close: () => new Promise<void>(() => undefined) };
+    });
+    const { reader } = harness(source);
+    await reader.readPage(first);
+    await expect(reader.close()).resolves.toBeUndefined();
   });
 
   it('the error handed to onWaiting has been through clean', async () => {

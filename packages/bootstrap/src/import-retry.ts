@@ -18,19 +18,50 @@ const MAX_WAIT_MS = 300_000;
 const GROW_AFTER = 5;
 /** SQL Server: this request was chosen as a deadlock victim. Running it again can work. */
 const DEADLOCK_VICTIM = 1205;
+/** SQL Server errors whose message names a column, a table, a database or a login, never a row. */
+const NAMES_NO_ROW = new Set([207, 208, 229, 230, 262, 911, 916, 4060, 18452, 18456]);
+
+function fields(err: unknown): { code: string; number: number | null; message: string } {
+  const e = (typeof err === 'object' && err !== null ? err : {}) as { code?: unknown; number?: unknown; message?: unknown };
+  return {
+    code: typeof e.code === 'string' ? e.code : '',
+    number: typeof e.number === 'number' && Number.isFinite(e.number) ? e.number : null,
+    message: typeof e.message === 'string' ? e.message : typeof err === 'string' ? err : '',
+  };
+}
 
 /** Order matters. An unknown error is `lost`, so it is retried and shown rather than ending the
  *  run: the complaint this answers is a run that stops and waits for a person. */
 export function classifySourceError(err: unknown): SourceErrorKind {
-  const e = (typeof err === 'object' && err !== null ? err : {}) as { code?: unknown; number?: unknown; message?: unknown };
-  const code = typeof e.code === 'string' ? e.code : '';
-  const message = typeof e.message === 'string' ? e.message : typeof err === 'string' ? err : '';
+  const { code, number, message } = fields(err);
   if (code === 'ETIMEOUT' || code === 'ETIMEDOUT' || /timeout|timed out/i.test(message)) return 'timeout';
   if (code === 'ELOGIN') return 'refused';
   const hint = classifyConnectError(message);
   if (hint === 'loginFailed' || hint === 'databaseMissing') return 'refused';
-  if (code === 'EREQUEST') return e.number === DEADLOCK_VICTIM ? 'lost' : 'refused';
+  if (code === 'EREQUEST') return number === DEADLOCK_VICTIM ? 'lost' : 'refused';
   return 'lost';
+}
+
+/**
+ * The only way a source error becomes text, for an error thrown to the caller and for the
+ * waiting state. A SQL Server message can quote a row value (error 245 does), so the driver's
+ * message is kept only when it cannot. Rules, in order:
+ *  1. a login error: the driver's message;
+ *  2. a SQL Server error that names a column, table, database or login: the driver's message;
+ *  3. any other SQL Server error: its number only;
+ *  4. no number, and a lost link or a timeout: the driver's message (network and timer text);
+ *  5. anything else: a fixed sentence.
+ * The driver's message always goes through `clean`.
+ */
+export function describeSourceError(err: unknown, clean: (text: string) => string): string {
+  const { code, number, message } = fields(err);
+  if (code === 'ELOGIN') return clean(message);
+  if (number !== null) {
+    return NAMES_NO_ROW.has(number) ? clean(message) : `the source refused the query (SQL Server error ${number})`;
+  }
+  const kind = classifySourceError(err);
+  if (kind === 'lost' || kind === 'timeout') return clean(message);
+  return 'the source failed in a way OpenLDR does not recognise';
 }
 
 /** The wait before try number `attempt` (1 for the first retry): 5 s, doubling, at most 300 s. */

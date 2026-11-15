@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifySourceError, growPage, retryWaitMs, shrinkPage } from './import-retry';
+import { classifySourceError, describeSourceError, growPage, retryWaitMs, shrinkPage } from './import-retry';
 
 // Layer: pure functions only. No driver, no connection, no database. Whether a real tedious,
 // pg or mysql2 error carries these codes and messages is not tested here.
@@ -33,6 +33,54 @@ describe('classifySourceError', () => {
     expect(classifySourceError('boom')).toBe('lost');
     expect(classifySourceError(null)).toBe('lost');
     expect(classifySourceError(undefined)).toBe('lost');
+  });
+});
+
+describe('describeSourceError', () => {
+  const clean = (text: string) => `[${text.replace(/hunter2/g, '***')}]`;
+  const ROW_VALUE = 'ZX-ROW-VALUE-4417';
+  const sqlError = (number: number, message: string, code = 'EREQUEST') => Object.assign(new Error(message), { code, number });
+
+  it('rule 1: a login error keeps the driver message, through clean', () => {
+    expect(describeSourceError(sqlError(18456, "Login failed for user 'sa'. hunter2", 'ELOGIN'), clean))
+      .toBe("[Login failed for user 'sa'. ***]");
+    expect(describeSourceError({ code: 'ELOGIN', message: 'Login failed.' }, clean)).toBe('[Login failed.]');
+  });
+
+  it.each([207, 208, 229, 230, 262, 911, 916, 4060, 18452, 18456])(
+    'rule 2: SQL Server error %i names no row, so the driver message is kept through clean',
+    (number) => expect(describeSourceError(sqlError(number, 'object name text'), clean)).toBe('[object name text]'),
+  );
+
+  it('rule 2: error 208 keeps its table name', () => {
+    expect(describeSourceError(sqlError(208, "Invalid object name 'dbo.Requests'."), clean))
+      .toBe("[Invalid object name 'dbo.Requests'.]");
+  });
+
+  it('rule 3: any other SQL Server error number is shown as the number only', () => {
+    const message = `Conversion failed when converting the varchar value '${ROW_VALUE}' to data type int.`;
+    const text = describeSourceError(sqlError(245, message), clean);
+    expect(text).toBe('the source refused the query (SQL Server error 245)');
+    expect(text).not.toContain(ROW_VALUE);
+    expect(describeSourceError(sqlError(1205, `deadlock victim ${ROW_VALUE}`), clean))
+      .toBe('the source refused the query (SQL Server error 1205)');
+    // A number with no code still counts.
+    expect(describeSourceError({ number: 245, message }, clean)).toBe('the source refused the query (SQL Server error 245)');
+  });
+
+  it('rule 4: a network or timer error with no number keeps the driver message, through clean', () => {
+    expect(describeSourceError(Object.assign(new Error('Connection lost - read ECONNRESET'), { code: 'ESOCKET' }), clean))
+      .toBe('[Connection lost - read ECONNRESET]');
+    expect(describeSourceError(Object.assign(new Error('Timeout: Request failed to complete in 30000ms'), { code: 'ETIMEOUT' }), clean))
+      .toBe('[Timeout: Request failed to complete in 30000ms]');
+    expect(describeSourceError(new Error('something nobody has seen'), clean)).toBe('[something nobody has seen]');
+  });
+
+  it('rule 5: anything else is a fixed sentence', () => {
+    expect(describeSourceError(new Error(`password authentication failed for user "${ROW_VALUE}"`), clean))
+      .toBe('the source failed in a way OpenLDR does not recognise');
+    expect(describeSourceError({ code: 'EREQUEST', message: `bad value ${ROW_VALUE}` }, clean))
+      .toBe('the source failed in a way OpenLDR does not recognise');
   });
 });
 

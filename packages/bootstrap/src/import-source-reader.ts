@@ -1,6 +1,6 @@
 import { validateSelectSql } from '@openldr/dashboards';
 import type { ConnectorDb } from './connector-db';
-import { classifySourceError, retryWaitMs, shrinkPage } from './import-retry';
+import { classifySourceError, describeSourceError, retryWaitMs, shrinkPage } from './import-retry';
 import { assertSafeKey, fillDetailQuery, fillKeyQuery, toPluginRow } from './import-sql';
 
 // Reads one page of a source database: the key query, then every detail query for those keys.
@@ -11,7 +11,8 @@ import { assertSafeKey, fillDetailQuery, fillKeyQuery, toPluginRow } from './imp
 //    so the page is halved and read again, down to 1;
 //  - a key whose details time out 3 times at a page of 1 is handed back as skipped;
 //  - an error the source returned, such as a missing table, is thrown to the caller.
-// The reader keeps no position. The caller passes `after` and `size` on every call.
+// A stop is asked for before every retry. Source error text comes only from describeSourceError,
+// so it cannot quote a row. The reader keeps no position. The caller passes `after` and `size` on every call.
 
 export type PageResult =
   | {
@@ -65,12 +66,6 @@ const SKIP_AFTER = 3;
  *  fault of the plugin or the data and is thrown as it is. */
 class SourceFailure {
   constructor(readonly cause: unknown) {}
-}
-
-function errorText(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  const message = (err as { message?: unknown } | null)?.message;
-  return typeof message === 'string' ? message : String(err);
 }
 
 function firstColumn(row: Record<string, unknown>): string {
@@ -168,12 +163,16 @@ export function createSourceReader(deps: SourceReaderDeps): SourceReader {
           return { kind: 'page', keys, keyRows: keyRows.map(toPluginRow), rows, size };
         } catch (err) {
           if (!(err instanceof SourceFailure)) throw err;
-          const error = deps.clean(errorText(err.cause));
+          const error = describeSourceError(err.cause, deps.clean);
           let kind = classifySourceError(err.cause);
           if (kind === 'refused') throw new Error(error);
+          // A timed-out connection may be dead even when a fresh one answers (a half-open
+          // socket), so it is dropped on a timeout as well as on a lost link.
+          drop();
           if (kind === 'timeout' && !(await probe())) kind = 'lost';
 
           if (kind === 'timeout' && size > 1) {
+            if (await deps.stopWanted()) return { kind: 'stopped' };
             size = shrinkPage(size);
             continue;
           }
@@ -183,21 +182,20 @@ export function createSourceReader(deps: SourceReaderDeps): SourceReader {
             if (key !== slowKey) { slowKey = key; slowCount = 0; }
             slowCount += 1;
             if (slowCount >= SKIP_AFTER) return { kind: 'skipped', key };
+            if (await deps.stopWanted()) return { kind: 'stopped' };
             continue;
           }
           // A lost link, or a key query that times out at a page of 1. No key is known to skip,
-          // so it is waited on and retried.
-          if (kind === 'lost') drop();
+          // so it is waited on and retried. The wait asks for a stop before each slice.
           attempt += 1;
           if (await wait(attempt, error)) return { kind: 'stopped' };
         }
       }
     },
 
+    /** A close after a cut link can hang, so the caller's `finally` is not held up by it. */
     async close() {
-      const old = db;
-      db = null;
-      if (old) await old.close();
+      drop();
     },
   };
 }
