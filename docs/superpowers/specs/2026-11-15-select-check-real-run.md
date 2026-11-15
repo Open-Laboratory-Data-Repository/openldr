@@ -327,3 +327,104 @@ Every result above rests on my own log, `task-9-log.md` in the plan's notes fold
 - Whether a product deadline (`withDeadline`) shortens the D7 lock wait.
 - G3 with the menu still open while a date field takes keys. The Tab closes the menu first, so that state does not come up from the keyboard.
 - A Postgres target store for the scratch server. Its warehouse was SQL Server. The Postgres side of `runReadQuery` was not run.
+
+## After the fix round
+
+Date: 2026-11-15, at `5a3c1fdf`, the fix round's fourth commit.
+
+All five tries are PROVEN. Postgres reads a string after an `E'...'` string with backslash escapes, and the reader now refuses that text. A Postgres connector now refuses a second statement in one request. A Postgres target store runs SQL and builder widgets, reads `standard_conforming_strings` as `on` inside a widget, and runs a widget that ends in `-- note`. On SQL Server the store's deadline cancels a blocked read, and the next read on the same handle finds no open transaction. A refused widget query answers 400 with its fixed sentence.
+
+Counts: 5 tries, 5 PROVEN, 0 DISPROVEN, 0 NOT TESTED. Two tries needed a second attempt, listed under P2 and P4.
+
+### How I ran it
+
+- My own containers, from images already on the machine, ports bound to 127.0.0.1 only, no volumes: `sa-scratch-sel-fw-pg` from `postgres:16-alpine` on 127.0.0.1:55441 (PostgreSQL 16.15), and `sa-scratch-sel-fw-mssql` from `mcr.microsoft.com/mssql/server:2025-latest` on 127.0.0.1:14341 (17.0.5035.5, RTM-CU10).
+- Postgres databases: `sa_scratch_sel_fw_internal`, `sa_scratch_sel_fw_target` and `sa_scratch_sel_fw_conn` (table `proof (i int)`, one row 1). SQL Server database: `sa_scratch_sel_fw` (table `dbo.proof (i int)`, one row 1).
+- Scripts ran from source with `tsx` under `env -i`, with only `PATH`, a scratch `HOME`, `OPENLDR_SKIP_ENV_FILE=true` and the passwords, read from a file outside the raw folder.
+- A scratch OpenLDR on 127.0.0.1:3992, started from this worktree under `env -i` with `OPENLDR_SKIP_ENV_FILE=true`, `AUTH_DEV_BYPASS=true` in its own environment only, file blob storage in a scratch folder, and its internal database and **Postgres target store** in `sa-scratch-sel-fw-pg`.
+- One CLI call, `plugin list`, with `--server-url http://127.0.0.1:3992` and `OPENLDR_URL` set to the same. It printed `(no plugins)`, and my server's log shows `POST /api/cli/run` on host 127.0.0.1:3992. No other CLI call was made. Every other request was `curl` to 127.0.0.1:3992.
+- No request went to port 3000. The dev Postgres on 5433 and the operator's two SQL Server containers were not used. Ports 3000, 5433 and 8180 were listening before the run and after it.
+- Every script, wrapper and raw output is kept in the session's scratch folder `sel-fw/raw/`, one file per try. The scratch server's two logs are there too.
+
+### P1. A string after an escape string, on Postgres
+
+Sent with `psql` in `sa-scratch-sel-fw-pg`: `SELECT E'a'`, a line feed, then `'b\'' AS x, 2 AS y -- '`.
+
+| Item | What came back | Verdict |
+|------|----------------|---------|
+| P1 | `standard_conforming_strings` read `on`. **Two columns**: `x` = `ab'`, `y` = 2. | PROVEN: Postgres read the second string with backslash escapes |
+| P1 reader | `blankSql` and `validateSelectSql` on `postgres` threw `the SQL has a string directly after an E'...' escape string, which Postgres may read as part of it` | PROVEN: refused |
+| P1 control | the reader at `6f8086c3` returned `SELECT E''` then a line feed and `''` | PROVEN: the old reader hid `AS x, 2 AS y` inside a string |
+
+### P2. One statement per request on the Postgres connector
+
+`createConnectorDb('postgres', ...)` on `sa_scratch_sel_fw_conn`, sent below the check.
+
+| Item | Sent | What came back | Verdict |
+|------|------|----------------|---------|
+| P2-a | `queryReadOnly('SELECT 1 AS a; SELECT 2 AS b')` | error 42601, `cannot insert multiple commands into a prepared statement` | PROVEN |
+| P2-a2 | `queryReadOnly('SELECT 1 AS a; INSERT INTO proof VALUES (8)')` | the same error 42601 | PROVEN |
+| P2-b | `queryReadOnly('SELECT 1 AS one')` | `one` = 1 | PROVEN |
+| P2-c | `queryReadOnly('INSERT INTO proof VALUES (9)')` | error 25006, `cannot execute INSERT in a read-only transaction` | PROVEN |
+| P2-d | `queryReadOnly('SHOW standard_conforming_strings')` | `on` | PROVEN |
+| P2-e | `query('SELECT 1 AS a; SELECT 2 AS b')`, the method the import page reader uses | no error; `rows` came back undefined, as pg gives for two results | PROVEN: `query` is not changed |
+| P2-f | `query` count of `proof` | 1 row, no 8 and no 9 | PROVEN |
+
+The first attempt at P2 did not run. `tsx` read the script as CommonJS and refused its top-level `await`. The script was renamed to `.mts` and run again. Both outputs are kept.
+
+### P3. A Postgres target store, through the product
+
+Before P3 I set `standard_conforming_strings = off` as the default of `sa_scratch_sel_fw_target`, and restarted the scratch server so that its pool opened new sessions. A new `psql` session on that database read `off`. The warehouse was empty, so I put three rows into `lab_requests` with `psql` (`sel-fw-r1` to `sel-fw-r3`, statuses `final`, `final`, `registered`). The raw-SQL flag was on for P3 and P5, and off again afterwards.
+
+| Item | `POST /api/dashboards/query` | What came back | Verdict |
+|------|------------------------------|----------------|---------|
+| P3-a | SQL widget, `SELECT id, status FROM lab_requests ORDER BY id` | 200, 3 rows | PROVEN |
+| P3-b | builder widget, count of `service_requests` by `status` | 200, 2 rows: `final` 2, `registered` 1 | PROVEN |
+| P3-c | SQL widget, `SHOW standard_conforming_strings` | 400, `only SELECT/WITH queries are allowed` | the check refuses `SHOW`, so the next row reads the setting another way |
+| P3-c2 | SQL widget, `SELECT current_setting('standard_conforming_strings') AS scs` | 200, `scs` = `on` | PROVEN: on, against a database default of off |
+| P3-d | SQL widget, `SELECT id FROM lab_requests ORDER BY id -- note` | 200, 3 rows | PROVEN |
+
+The brief named `SHOW` for P3. A widget cannot run `SHOW`, so `current_setting` stands in for it.
+
+### P4. A deadline on SQL Server, then the next read
+
+A script built the handle as the SQL Server target store does: `createMssqlStore` with the store's settings, and the deadline `store.withRequestTimeout`, which is what `withQueryTimeout` calls. A `sqlcmd` session in `sa-scratch-sel-fw-mssql` ran `begin tran; update dbo.proof set i = 2; waitfor delay '00:00:20'; rollback`. Three seconds in, `sys.dm_tran_locks` showed session 80 holding an X lock on the row.
+
+| Item | Sent | What came back | Verdict |
+|------|------|----------------|---------|
+| P4-0 | plain `SELECT @@SPID, @@TRANCOUNT` on the handle | session 82, 0 | the start |
+| P4-1 | `runReadQuery('SELECT * FROM dbo.proof')`, `timeoutMs` 2000, with the deadline | `RequestError`, code ETIMEOUT, `Timeout: Request failed to complete in 2000ms`, after 2031 ms | PROVEN: the deadline cancelled it |
+| P4-2 | `runReadQuery('SELECT @@SPID, @@TRANCOUNT')` on the same handle | session 82, 1, inside its own transaction | PROVEN: the next read works |
+| P4-3 | plain `SELECT @@SPID, @@TRANCOUNT` on the same handle | session 82, **0** | PROVEN |
+| P4-4 | `sys.dm_exec_sessions` for this pool | session 82, `open_transaction_count` 0 | PROVEN |
+
+After the holder rolled back, `dbo.proof` read 1 again. The first attempt at P4 used `update dbo.proof set i = i`. That holds an X lock but changes nothing, and the read was not blocked: it returned the row at once. The second attempt changed the row. The first attempt also read its times before the result came, so its times are wrong. Both outputs are kept.
+
+### P5. A refused widget query answers 400
+
+| Item | `POST /api/dashboards/query` | What came back | Verdict |
+|------|------------------------------|----------------|---------|
+| P5-a | `SELECT '{{ward}}' AS w`, value `SECRETVALUE` | 400, `a {{ward}} sits inside quotes, a comment or a quoted name: remove the quotes; the value is quoted for you` | PROVEN |
+| P5-b | `SELECT 1 AS a; DELETE FROM lab_requests` | 400, `only a single statement is allowed` | PROVEN |
+| P5-c | `SELECT E'a'`, a line feed, `'b' AS x` | 400, the escape-string sentence from P1 | PROVEN |
+| P5-d | control, `SELECT * FROM sa_scratch_no_such_table` | 500, `relation "sa_scratch_no_such_table" does not exist` | PROVEN: an error from the database stays as it was |
+
+The warehouse still held 3 rows afterwards. The server log has no line with `SECRETVALUE` or `lab_requests`, and no line at level 40 or above other than the `AUTH_DEV_BYPASS` warning.
+
+### What I removed
+
+| Thing | Removed with | Check |
+|-------|-------------|-------|
+| Scratch OpenLDR on 127.0.0.1:3992, first start, pid 3049897 | `kill -TERM`, before the restart for P3 | nothing listened on 3992 afterwards |
+| Scratch OpenLDR on 127.0.0.1:3992, second start, pid 3059144 | `kill -TERM` | nothing listened on 3992; `ps -p` found no such pid |
+| Container `sa-scratch-sel-fw-pg` | `docker rm -f sa-scratch-sel-fw-pg sa-scratch-sel-fw-mssql`, which printed both names | `docker ps -a` lists no `sa-scratch-sel-fw` name |
+| Container `sa-scratch-sel-fw-mssql` | the same command | the same check |
+| The password file and the scratch `HOME`, blob, crash and terminology folders | `rm` | `ls` of the scratch run folder shows only `raw/` |
+
+Before the password file was deleted, a search of `raw/` for each password found it in no file. `raw/` stays for the reviewer. After the run, ports 3000, 5433 and 8180 were listening, 3992, 55441 and 14341 were not, and `docker ps` counted 18 containers, the same 18 as before.
+
+### What was not tried
+
+- MySQL. There is still no MySQL server on this machine.
+- How the scratch server's own sessions read `standard_conforming_strings` without the `SET LOCAL`. Every product path to the warehouse now sets it, so only a new `psql` session showed the `off` default.
+- A real browser on the Copy tab after the fix round's focus change. Only the page's tests cover it.
