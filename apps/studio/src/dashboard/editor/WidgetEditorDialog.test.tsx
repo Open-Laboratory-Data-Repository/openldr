@@ -289,6 +289,26 @@ describe('WidgetEditorDialog', () => {
     expect(calls[1].values).toEqual({ test: '{{word}} [[x]]' });
   });
 
+  // With the flag on, the preview runs what the author is writing, not the saved widget.
+  it('previews the edited, unsaved SQL when sqlEnabled is true', async () => {
+    const calls: any[] = [];
+    const result = { columns: [{ key: 'value' }], rows: [{ value: 7 }], chart: { type: 'stat', value: '7', label: 'K' }, meta: { generatedAt: 'now', rowCount: 1 } };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any, init?: any) => {
+      if (String(url).includes('/api/dashboards/query')) {
+        calls.push(JSON.parse(init.body));
+        return new Response(JSON.stringify(result), { status: 200 });
+      }
+      return new Response('[]', { status: 200 });
+    });
+    const { getByLabelText } = render(<WidgetEditorDialog open sqlEnabled initial={sqlWidget} dashboardFilters={[]} onClose={() => {}} onSave={() => {}} />);
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0].sql).toBe('select 42 as value');
+    fireEvent.change(getByLabelText('SQL'), { target: { value: 'select 7 as value' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Run query' }));
+    await waitFor(() => expect(calls.length).toBe(2));
+    expect(calls[1].sql).toBe('select 7 as value');
+  });
+
   // SQL -> Builder import guard: unrecognizable SQL (a UNION here) must not silently drop into
   // the builder pane with a wrong/partial query — the toggle disables and the refusal reason
   // (from @openldr/dashboards' recognizeSql) is shown inline so the test can assert it without

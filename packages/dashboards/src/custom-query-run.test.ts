@@ -136,7 +136,7 @@ describe('substituteParams: a token sits in plain SQL', () => {
 
   it('on postgres a token right after a lone E is refused', () => {
     expect(() => substituteParams('SELECT E{{param.name}}', [name], { name: 'x' }, 'postgres'))
-      .toThrow('a {{param.name}} follows a lone E, which Postgres reads as the start of an escape string: put a space before it');
+      .toThrow('a {{param.name}} follows a lone E, which Postgres reads as the start of an escape string: remove the E');
     expect(substituteParams('SELECT E{{param.name}}', [name], { name: 'x' }, 'mssql')).toBe("SELECT E'x'");
   });
 

@@ -17,7 +17,7 @@ import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, createStarterPackStore, seededStarterPacks, type FormStore, type StarterPackStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
-import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, StoredQueryRowLimitError, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type SqlDialect, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
+import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, validateSelectSql, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, StoredQueryRowLimitError, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type SqlDialect, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
 import { runReportStoredQuery } from './report-query';
 import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
 import {
@@ -614,6 +614,19 @@ export function widgetSqlToRun(q: { sql: string; values?: Record<string, unknown
   return applyTemplate(q.sql, resolveValues(q.values ?? {}), engine);
 }
 
+/** `widgetSqlToRun`, then the SQL check with the same engine. A refusal from either is thrown
+ *  again as a `DashboardQueryError` with the same fixed sentence, which the route answers with
+ *  400. Nothing here reaches the database. */
+export function checkedWidgetSqlToRun(q: { sql: string; values?: Record<string, unknown> }, engine: SqlDialect): string {
+  try {
+    const filled = widgetSqlToRun(q, engine);
+    validateSelectSql(filled, engine);
+    return filled;
+  } catch (error) {
+    throw new DashboardQueryError(error instanceof Error ? error.message : 'the widget query was refused');
+  }
+}
+
 /** Group a reconciliation's grants into one audit event per role. Pure, so the grouping is
  *  testable without a live context. Empty in → empty out: a boot that changed nothing writes
  *  no events, which is what keeps the signal meaningful across ordinary restarts. */
@@ -930,7 +943,8 @@ const reporting: ReportingApi = {
         throw new DashboardQueryError('raw SQL widgets are disabled');
       }
       const engine: SqlDialect = cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : cfg.TARGET_STORE_ADAPTER === 'mysql' ? 'mysql' : 'postgres';
-      data = await runSqlQuery(reportingDb, widgetSqlToRun(q, engine), {
+      // A refused template or statement answers 400. An error from the database stays as it is.
+      data = await runSqlQuery(reportingDb, checkedWidgetSqlToRun(q, engine), {
         timeoutMs: await numberSettings.get('dashboard.sql_timeout_ms'),
         rowCap: await numberSettings.get('dashboard.sql_row_cap'),
         withDeadline: selectedTarget.withQueryTimeout,

@@ -4,7 +4,7 @@ import { createAppSettingsStore, createReportStore, createRoleStore, referenceCa
 import { createDashboardStore, createColumnPolicyStore, joinableTablesForClient } from '@openldr/dashboards';
 import { createFormStore } from '@openldr/forms';
 import type { Config } from '@openldr/config';
-import { createAppContext, capabilityBackfillEvents, buildReportingForTest, widgetSqlToRun, type AppContext } from './index';
+import { createAppContext, capabilityBackfillEvents, buildReportingForTest, widgetSqlToRun, checkedWidgetSqlToRun, DashboardQueryError, type AppContext } from './index';
 import { truncateTables } from './danger';
 
 const cfg: Config = Object.freeze({
@@ -314,6 +314,23 @@ describe('widgetSqlToRun: the SQL a dashboard SQL widget runs', () => {
     expect(widgetSqlToRun({ sql: 'SELECT {{a}} AS a', values: { a: `x${backslash}` } }, 'mysql')).toBe(`SELECT 'x${backslash}${backslash}' AS a`);
     expect(widgetSqlToRun({ sql: 'SELECT {{a}} AS a', values: { a: `x${backslash}` } }, 'postgres')).toBe(`SELECT 'x${backslash}' AS a`);
     expect(() => widgetSqlToRun({ sql: 'SELECT [{{a}}]', values: { a: 'x' } }, 'mssql')).toThrow(/remove the quotes/);
+  });
+});
+
+describe('checkedWidgetSqlToRun: a refused widget query is a DashboardQueryError', () => {
+  const QUOTED = 'a {{a}} sits inside quotes, a comment or a quoted name: remove the quotes; the value is quoted for you';
+  it('a template with a token inside quotes', () => {
+    const run = () => checkedWidgetSqlToRun({ sql: "SELECT '{{a}}' AS a", values: { a: 'x' } }, 'postgres');
+    expect(run).toThrow(DashboardQueryError);
+    expect(run).toThrow(QUOTED);
+  });
+  it('a filled statement the check refuses, read by the target store engine', () => {
+    expect(() => checkedWidgetSqlToRun({ sql: 'DELETE FROM t' }, 'postgres')).toThrow(DashboardQueryError);
+    expect(() => checkedWidgetSqlToRun({ sql: 'SELECT 1 AS n EXEC p' }, 'mssql')).toThrow(DashboardQueryError);
+    expect(() => checkedWidgetSqlToRun({ sql: 'SELECT 1 AS n EXEC p' }, 'postgres')).not.toThrow();
+  });
+  it('a good one returns the filled SQL', () => {
+    expect(checkedWidgetSqlToRun({ sql: 'SELECT {{a}} AS a', values: { a: "O'K" } }, 'postgres')).toBe("SELECT 'O''K' AS a");
   });
 });
 

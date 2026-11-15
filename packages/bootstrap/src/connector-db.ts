@@ -11,7 +11,8 @@ export interface ConnectorDb {
   /** One raw statement, no transaction. The import page reader reads its pages with this. */
   query(rawSql: string): Promise<{ rows: Record<string, unknown>[] }>;
   /** One raw statement that cannot keep a write, for SQL a person typed or saved, after the SQL
-   *  check. Postgres: a read-only transaction, then ROLLBACK. SQL Server: a transaction that is
+   *  check. Postgres: a read-only transaction, the statement in extended mode so that the server
+ *  takes one statement only, then ROLLBACK. SQL Server: a transaction that is
    *  always rolled back. MySQL: the same as `query` (operator, 2026-11-15). A failed roll-back
    *  never replaces the statement's own error, and never turns a good read into an error. */
   queryReadOnly(rawSql: string): Promise<{ rows: Record<string, unknown>[] }>;
@@ -102,7 +103,7 @@ async function queryPgReadOnly(pool: pg.Pool, rawSql: string): Promise<{ rows: R
     failLost(error);
   };
   client.on('error', onError);
-  const step = (text: string) => Promise.race([client.query(text), connectionLost]);
+  const step = (query: string | pg.QueryConfig) => Promise.race([client.query(query), connectionLost]);
 
   let rows: Record<string, unknown>[] = [];
   let failure: unknown;
@@ -113,7 +114,10 @@ async function queryPgReadOnly(pool: pg.Pool, rawSql: string): Promise<{ rows: R
     // The SQL check reads a backslash in a string as an ordinary character. This makes the
     // server read it the same way, whatever the server or the session says.
     await step('SET LOCAL standard_conforming_strings = on');
-    rows = (await step(rawSql)).rows;
+    // Extended mode: Postgres itself refuses a second statement in the text. With no values pg
+    // would use the simple protocol, which runs every statement it is sent. `queryMode` is in
+    // pg's `lib/query.js` but not in its type file.
+    rows = (await step({ text: rawSql, queryMode: 'extended' } as pg.QueryConfig)).rows;
   } catch (error) {
     failed = true;
     failure = error;

@@ -1,8 +1,9 @@
 // The `{{token}}` names a dashboard filter produces in SQL, for the filter editor and the widget
 // SQL editor.
 //
-// The studio does not fill templates. The widget preview and the live widget both send the
-// stored template plus the filter values, and the server fills them once, for its own engine
+// The studio does not fill templates. The live widget sends the stored template plus the filter
+// values. The widget editor's preview sends the stored template too, except with the raw-SQL
+// flag on, when it sends the editor's unsaved text. The server fills them once, for its own engine
 // (`applyTemplate` and `resolveValues` in @openldr/dashboards). The studio does not depend on
 // the @openldr/dashboards root, which would pull server-only DB deps into the browser bundle,
 // so this rule is kept in step with the server's `filterTokens` by hand.

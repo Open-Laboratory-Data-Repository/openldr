@@ -79,8 +79,12 @@ function fakePg(fail: {
   const emitLost = (error: Error) => {
     try { client.emit('error', error); } catch (thrown) { emitThrew.push(thrown); }
   };
+  const sent: unknown[] = [];
   const client = Object.assign(new EventEmitter(), {
-    query(text: string): Promise<{ rows: Record<string, unknown>[] }> {
+    query(arg: string | { text: string }): Promise<{ rows: Record<string, unknown>[] }> {
+      // `sent` keeps each call's argument as it came; `onClient` keeps its text.
+      sent.push(arg);
+      const text = typeof arg === 'string' ? arg : arg.text;
       onClient.push(text);
       if (dead) return Promise.reject(new Error('Client has encountered a connection error and is not queryable'));
       if (fail.drop?.on === text) {
@@ -118,7 +122,7 @@ function fakePg(fail: {
     end: async () => {},
   };
   pgFake.make = (options) => { created.push(options); return pool; };
-  return { onClient, onPool, releases, listenersAtRelease, emitThrew, toPool, client, pool, created };
+  return { onClient, sent, onPool, releases, listenersAtRelease, emitThrew, toPool, client, pool, created };
 }
 
 /** A real Kysely over a fake SQL Server driver with a pool of ONE connection. It records each
@@ -345,6 +349,20 @@ describe('queryReadOnly on postgres', () => {
     expect(pg.onPool).toEqual([]);
     // Given back healthy: no error passed, so the pool keeps it.
     expect(pg.releases).toEqual([[]]);
+  });
+  it('postgres: the statement goes in extended mode, so the server takes one statement only; the other three do not', async () => {
+    const pg = fakePg();
+    const conn = createConnectorDb('postgres', PG);
+    await conn.queryReadOnly('select 1');
+    expect(pg.sent).toEqual(['BEGIN READ ONLY', SCS, { text: 'select 1', queryMode: 'extended' }, 'ROLLBACK']);
+  });
+  it('postgres: query is not changed, and sends its text as it is to the pool', async () => {
+    const pg = fakePg();
+    const conn = createConnectorDb('postgres', PG);
+    await conn.query('select 1; select 2');
+    expect(pg.pool.query).toHaveBeenCalledWith('select 1; select 2');
+    expect(pg.pool.query.mock.calls[0]).toHaveLength(1);
+    expect(pg.sent).toEqual([]);
   });
   it('postgres: an error in the statement still sends ROLLBACK and releases the client as broken', async () => {
     const pg = fakePg({ statement: new Error('canceling statement due to statement timeout') });

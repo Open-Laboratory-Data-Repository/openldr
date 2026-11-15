@@ -1,5 +1,6 @@
-// SQL-variable template logic for the server. The widget preview and the live widget both send
-// the STORED template (stable, vettable) plus opaque filter values, and the server fills it
+// SQL-variable template logic for the server. The live widget sends the STORED template plus
+// opaque filter values. The widget editor's preview sends the stored template too, except with
+// the raw-SQL flag on, when it sends the editor's unsaved text. Either way the server fills it
 // once, for its own engine. The client never fills SQL. The studio keeps only its own copy of
 // `filterTokens`, kept in step with the one here by hand.
 
@@ -76,7 +77,7 @@ export function assertTokensInPlainSql(
   }
   if (dialect === undefined || dialect === 'postgres') {
     const afterE = matches.find((m) => followsLoneE(template, m.index ?? 0));
-    if (afterE) throw new Error(`a ${afterE[0]} follows a lone E, which Postgres reads as the start of an escape string: put a space before it`);
+    if (afterE) throw new Error(`a ${afterE[0]} follows a lone E, which Postgres reads as the start of an escape string: remove the E`);
   }
 }
 

@@ -93,7 +93,7 @@ describe('applyTemplate: a token sits in plain SQL', () => {
 
   it('on postgres and with no dialect, a token right after a lone E is refused', () => {
     // E'...' is a Postgres escape string: a backslash in the value would escape the closing quote.
-    const sentence = 'a {{a}} follows a lone E, which Postgres reads as the start of an escape string: put a space before it';
+    const sentence = 'a {{a}} follows a lone E, which Postgres reads as the start of an escape string: remove the E';
     for (const sql of ['SELECT E{{a}}', 'SELECT 1 WHERE x = e{{a}}']) {
       expect(() => applyTemplate(sql, { a: 'SECRETVALUE' }, 'postgres')).toThrow(sentence);
       expect(() => applyTemplate(sql, { a: 'SECRETVALUE' })).toThrow(sentence);
