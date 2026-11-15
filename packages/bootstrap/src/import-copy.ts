@@ -5,8 +5,8 @@ import { validateSelectSql } from '@openldr/dashboards';
 import type { CopyRow, ImportCopyStore } from '@openldr/db';
 import { canCopy } from '@openldr/marketplace';
 import {
-  NAME, STALE_MS, auditOrRefuse, auditQuietly, defaultCreateDb, loadImportSink, openSourceAccess, optionsSchema,
-  querySpecSchema, resolveImportConnector, resolveImportPlugin,
+  NAME, STALE_MS, StoppedWhileWaiting, auditOrRefuse, auditQuietly, defaultCreateDb, loadImportSink, loadImportSinkWaiting,
+  openSourceAccess, optionsSchema, querySpecSchema, resolveImportConnector, resolveImportPlugin,
   type ImportActor, type ImportServiceDeps, type ResolvedPlugin,
 } from './import-run';
 import { growPage } from './import-retry';
@@ -153,6 +153,7 @@ const copySpecSchema = z.object({
   }
 });
 type CopySet = z.infer<typeof copySpecSchema>['sets'][number];
+type Sink = Awaited<ReturnType<typeof loadImportSink>>;
 interface CopySpec { sets: CopySet[]; hashes: Record<string, string> }
 
 /** A fault of the plugin. Its own text is never kept: a plugin's text is not trusted. */
@@ -292,9 +293,14 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     return { ...plugin, copyEntrypoint: entry };
   }
 
-  /** Ask the plugin what to copy, check every statement, and hash each set's SQL. */
-  async function readSpec(plugin: ResolvedPlugin & { copyEntrypoint: string }, options: Record<string, string>): Promise<CopySpec> {
-    const sink = await loadImportSink(deps.plugins, plugin);
+  /** Ask the plugin what to copy, check every statement, and hash each set's SQL. A drive passes a
+   *  `load` that waits for the plugin's code. A start loads it at once, so the person sees a fault. */
+  async function readSpec(
+    plugin: ResolvedPlugin & { copyEntrypoint: string },
+    options: Record<string, string>,
+    load: (p: ResolvedPlugin) => Promise<Sink> = (p) => loadImportSink(deps.plugins, p),
+  ): Promise<CopySpec> {
+    const sink = await load(plugin);
     let raw: unknown;
     try {
       raw = await sink.invoke(plugin.copyEntrypoint, { options });
@@ -455,9 +461,28 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     const body = async (): Promise<CopyOutcome> => {
       // Taken over while a stop was pending: finish the stop.
       if (run.status === 'stopping') return 'stopped';
+
+      /** When the current wait began. A first try starts a new wait. */
+      let waitingSince: string | null = null;
+      /** A wait for the plugin's code or for the source. */
+      const onWaiting = async (state: { attempt: number; error: string } | null): Promise<void> => {
+        if (state) {
+          if (state.attempt === 1 || waitingSince === null) waitingSince = now().toISOString();
+          run.status = 'waiting';
+          // The error is the reader's text, already made safe, or a fixed sentence. It is stored as given.
+          run.waiting = { since: waitingSince, attempt: state.attempt, error: state.error };
+        } else {
+          run.status = 'running';
+          run.waiting = null;
+        }
+        await d.saveKeepingStop();
+      };
+      const stopWanted = async (): Promise<boolean> => (await d.haltWanted()) !== null;
+      const sleep = deps.sleep ? { sleep: deps.sleep } : {};
+
       const plugin = await resolveCopier(run.pluginId);
       const { type } = await resolveImportConnector(deps.connectors, isAllowed, plugin, run.connectorId);
-      const spec = await readSpec(plugin, run.options);
+      const spec = await readSpec(plugin, run.options, (p) => loadImportSinkWaiting(deps.plugins, p, { onWaiting, stopWanted, ...sleep }));
       // The SQL a start recorded is the SQL the rows came from. A plugin upgraded since then must
       // not add rows of other SQL to them. A start asks the person, so the run stops here.
       const changed = changedSets(run.setSql, spec.hashes);
@@ -467,25 +492,12 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
 
       const access = await openSourceAccess(deps, makeDb, run.connectorId, type);
       clean = access.clean;
-      /** When the current wait for the source began. A first try starts a new wait. */
-      let waitingSince: string | null = null;
       reader = createSourceReader({
         open: async (opts) => access.open(opts),
-        onWaiting: async (state) => {
-          if (state) {
-            if (state.attempt === 1 || waitingSince === null) waitingSince = now().toISOString();
-            run.status = 'waiting';
-            // The error is the reader's text, already made safe. It is stored as given.
-            run.waiting = { since: waitingSince, attempt: state.attempt, error: state.error };
-          } else {
-            run.status = 'running';
-            run.waiting = null;
-          }
-          await d.saveKeepingStop();
-        },
-        stopWanted: async () => (await d.haltWanted()) !== null,
+        onWaiting,
+        stopWanted,
         clean,
-        ...(deps.sleep ? { sleep: deps.sleep } : {}),
+        ...sleep,
       });
 
       // Sets the plugin no longer names: empty them, then drop them.
@@ -615,13 +627,18 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     try {
       outcome = await body();
     } catch (err) {
-      outcome = 'failed';
-      // A plugin fault and a fault of CE's own database carry fixed sentences. Anything else is
-      // the reader's text, already made safe, or OpenLDR's own; it is cleaned and capped as the
-      // one-pass import does.
-      run.lastError = err instanceof PluginFault || err instanceof OwnDbFault
-        ? err.message
-        : clean(err instanceof Error ? err.message : String(err));
+      if (err instanceof StoppedWhileWaiting) {
+        // A stop or a release came while it waited for the plugin's code.
+        outcome = haltOutcome(entry.halt);
+      } else {
+        outcome = 'failed';
+        // A plugin fault and a fault of CE's own database carry fixed sentences. Anything else is
+        // the reader's text, already made safe, or OpenLDR's own; it is cleaned and capped as the
+        // one-pass import does.
+        run.lastError = err instanceof PluginFault || err instanceof OwnDbFault
+          ? err.message
+          : clean(err instanceof Error ? err.message : String(err));
+      }
     } finally {
       await d.stopBeating();
       await reader?.close();

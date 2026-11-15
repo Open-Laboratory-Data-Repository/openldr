@@ -54,7 +54,7 @@ function fakes() {
     idle: vi.fn(async () => { log.push('idle'); }),
     release: vi.fn(async () => { log.push('release'); }),
   };
-  const imports = { adopt: vi.fn(async () => { log.push('adopt'); return []; }) };
+  const imports = { adopt: vi.fn(async (_opts?: { signal?: AbortSignal }) => { log.push('adopt'); return []; }) };
   return { log, copies, imports };
 }
 
@@ -171,6 +171,23 @@ describe('the import driver loop', () => {
     await stopping;
     expect(f.log).toEqual(['adopt', 'release', 'idle']);
     expect(f.copies.tick).not.toHaveBeenCalled();
+  });
+
+  it('stop tells an adopt in hand to resume nothing more', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const f = fakes();
+    const held = gate<[]>();
+    const signals: Array<AbortSignal | undefined> = [];
+    f.imports.adopt.mockImplementation(async (opts) => { signals.push(opts?.signal); return held.promise; });
+    const driver = startImportDriver({ copies: f.copies, imports: f.imports, intervalMs: 5_000 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(signals).toHaveLength(1);
+    expect(signals[0]?.aborted).toBe(false);
+    const stopping = driver.stop();
+    // Told at once, while that adopt is still going through the runs.
+    expect(signals[0]?.aborted).toBe(true);
+    held.open([]);
+    await stopping;
   });
 });
 

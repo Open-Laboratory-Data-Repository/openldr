@@ -5,7 +5,7 @@ import { validateSelectSql } from '@openldr/dashboards';
 import type { PluginDataStore, Provenance } from '@openldr/db';
 import { allowedResourceTypes, canImportOnePass, importSourceSchema, readGrant, type Capability, type ImportSource } from '@openldr/marketplace';
 import { createConnectorDb, type ConnectorDb } from './connector-db';
-import { growPage } from './import-retry';
+import { growPage, retryWaitMs } from './import-retry';
 import { createSourceReader, type SourceReader } from './import-source-reader';
 import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, fillDetailQuery, fillKeyQuery, toPluginRow } from './import-sql';
 
@@ -39,6 +39,7 @@ export const STALE_MS = 2 * 60_000;
 /** How often a driver writes its run, even in the middle of a page or a wait. */
 const HEARTBEAT_MS = 30_000;
 const SYSTEM: ImportActor = { type: 'system', id: null, name: 'system' };
+const ADOPT_FAILED = 'an import whose server stopped could not be resumed; it is tried again every 5 seconds';
 
 /** `waiting`: the source cannot be reached, and the run will try again by itself. */
 export type ImportStatus = 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed' | 'interrupted';
@@ -110,6 +111,8 @@ export interface ImportServiceDeps {
   sleep?: (ms: number) => Promise<void>;
   /** The kind of process this service runs in, recorded on each run it starts. Default `cli`. */
   origin?: 'server' | 'cli';
+  /** For `adopt`'s line when it cannot resume a run. */
+  logger?: { warn(fields: Record<string, unknown>, msg: string): void };
 }
 
 export interface ImportStartInput {
@@ -142,8 +145,9 @@ export interface ImportService {
   /** Server only: in a service whose origin is not `server` it does nothing. Resume every run a
    *  server started that has had no write for 2 minutes and that this process is not driving, as
    *  the system. A run that was stopping is stopped instead, so a restart never sets running what a
-   *  person asked to stop. Returns the runs it acted on. */
-  adopt(): Promise<ImportRun[]>;
+   *  person asked to stop. Returns the runs it acted on. Once `signal` is aborted it acts on no
+   *  more runs. A run it cannot resume is logged once, by id, until it is resumed. */
+  adopt(opts?: { signal?: AbortSignal }): Promise<ImportRun[]>;
   /** Resolves when this process finishes driving the run. For the CLI and tests. */
   wait(runId: string): Promise<ImportRun>;
 }
@@ -257,6 +261,51 @@ export async function loadImportSink(plugins: ImportServiceDeps['plugins'], plug
   const sink = await plugins.loadSink(plugin.id, plugin.version);
   if (!sink) throw new Error(`plugin ${plugin.id} exposes no invokable wasm`);
   return sink;
+}
+
+/** Shown while a drive waits for the plugin's code. Fixed: the loader's own text can name hosts. */
+export const PLUGIN_CODE_NOT_LOADED = "the plugin's code could not be loaded yet";
+/** A wait is slept in slices this long, so a stop or a release is felt within a second. */
+const WAIT_SLICE_MS = 1000;
+
+/** Thrown by `loadImportSinkWaiting` when a stop or a release came while it waited. */
+export class StoppedWhileWaiting extends Error {
+  constructor() { super('stopped while waiting for the plugin code'); }
+}
+
+/**
+ * For a drive. `loadSink` reads the plugin's code from blob storage on its first use in a process.
+ * After a power cut that storage may come up after the server, and the S3 client then throws. A
+ * throw is waited out as a lost link is: `onWaiting` with the try number, then `retryWaitMs`, slept
+ * in slices with `stopWanted` asked before each. A load that finds no invokable code is a fault of
+ * the plugin and throws as `loadImportSink` does.
+ */
+export async function loadImportSinkWaiting(
+  plugins: ImportServiceDeps['plugins'],
+  plugin: ResolvedPlugin,
+  waits: {
+    onWaiting(state: { attempt: number; error: string } | null): Promise<void>;
+    stopWanted(): Promise<boolean>;
+    sleep?: (ms: number) => Promise<void>;
+  },
+) {
+  const sleep = waits.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  for (let attempt = 1; ; attempt++) {
+    let sink: Awaited<ReturnType<ImportServiceDeps['plugins']['loadSink']>>;
+    try {
+      sink = await plugins.loadSink(plugin.id, plugin.version);
+    } catch {
+      await waits.onWaiting({ attempt, error: PLUGIN_CODE_NOT_LOADED });
+      for (let left = retryWaitMs(attempt); left > 0; left -= WAIT_SLICE_MS) {
+        if (await waits.stopWanted()) throw new StoppedWhileWaiting();
+        await sleep(Math.min(WAIT_SLICE_MS, left));
+      }
+      continue;
+    }
+    if (attempt > 1) await waits.onWaiting(null);
+    if (!sink) throw new Error(`plugin ${plugin.id} exposes no invokable wasm`);
+    return sink;
+  }
 }
 
 /** How to open the connector, and how to make its driver's text safe to show. */
@@ -388,9 +437,27 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     }, HEARTBEAT_MS);
 
     try {
+      /** When the current wait began. A first try starts a new wait. */
+      let waitingSince: string | null = null;
+      /** A wait for the plugin's code or for the source. */
+      const onWaiting = async (state: { attempt: number; error: string } | null): Promise<void> => {
+        if (state) {
+          if (state.attempt === 1 || waitingSince === null) waitingSince = now().toISOString();
+          run.status = 'waiting';
+          // The error is the reader's text, already made safe, or a fixed sentence. It is stored as given.
+          run.waiting = { since: waitingSince, attempt: state.attempt, error: state.error };
+        } else {
+          run.status = 'running';
+          run.waiting = null;
+        }
+        await saveKeepingStop();
+      };
+
       const plugin = await resolvePlugin(run.pluginId, 'import');
       const { type } = await resolveConnector(plugin, run.connectorId);
-      const sink = await loadSink(plugin);
+      const sink = await loadImportSinkWaiting(deps.plugins, plugin, {
+        onWaiting, stopWanted: () => stopWanted(run), ...(deps.sleep ? { sleep: deps.sleep } : {}),
+      });
       const spec = querySpecSchema.parse(await sink.invoke(plugin.source.entrypoints.queries, { options: run.options }));
       // Check the plugin's statements before opening a connection or running any of them.
       validateSelectSql(fillKeyQuery(spec.keyQuery.sql, null, 1));
@@ -398,22 +465,9 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
 
       const access = await sourceAccess(run.connectorId, type);
       clean = access.clean;
-      /** When the current wait for the source began. A first try starts a new wait. */
-      let waitingSince: string | null = null;
       reader = createSourceReader({
         open: async (opts) => access.open(opts),
-        onWaiting: async (state) => {
-          if (state) {
-            if (state.attempt === 1 || waitingSince === null) waitingSince = now().toISOString();
-            run.status = 'waiting';
-            // The error is the reader's text, already made safe. It is stored as given.
-            run.waiting = { since: waitingSince, attempt: state.attempt, error: state.error };
-          } else {
-            run.status = 'running';
-            run.waiting = null;
-          }
-          await saveKeepingStop();
-        },
+        onWaiting,
         stopWanted: () => stopWanted(run),
         clean,
         ...(deps.sleep ? { sleep: deps.sleep } : {}),
@@ -489,11 +543,15 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
         await saveKeepingStop();
       }
     } catch (err) {
-      outcome = 'failed';
-      // Kept (redacted, capped) because an admin needs it to fix the source, for example a missing
-      // table. A source error reaches here only as the reader's own text, already made safe.
-      // Per-request failures above never keep such text.
-      run.lastError = clean(err instanceof Error ? err.message : String(err));
+      if (err instanceof StoppedWhileWaiting) {
+        outcome = 'stopped';
+      } else {
+        outcome = 'failed';
+        // Kept (redacted, capped) because an admin needs it to fix the source, for example a missing
+        // table. A source error reaches here only as the reader's own text, already made safe.
+        // Per-request failures above never keep such text.
+        run.lastError = clean(err instanceof Error ? err.message : String(err));
+      }
     } finally {
       clearInterval(heartbeat);
       await beating;
@@ -542,6 +600,9 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       }
     }
   }
+
+  /** Runs `adopt` could not resume and has logged, so each is logged once until it is resumed. */
+  const unadoptable = new Set<string>();
 
   /** A server-started run whose driver has gone: a stored status a driver holds, no write for
    *  2 minutes, and not driven here. A run with no `origin` predates it and reads as `cli`. */
@@ -699,20 +760,28 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       return { ...run };
     },
 
-    async adopt() {
+    async adopt(opts = {}) {
       // A run adopted here would be recorded as this process's. From a CLI process that would be
       // `cli`, and no server would adopt it again.
       if (origin !== 'server') return [];
       const out: ImportRun[] = [];
       for (const row of await deps.plugins.list()) {
         for (const stored of await allRuns(row.id)) {
+          // Asked before each run, so a server that is shutting down resumes nothing more.
+          if (opts.signal?.aborted) return out;
           if (!needsAdopting(stored)) continue;
           try {
             out.push(stored.status === 'stopping' ? await finishStop(stored) : await service.resume(stored.pluginId, stored.id, SYSTEM));
+            unadoptable.delete(stored.id);
           } catch {
             // A plugin that is now disabled, a connector no longer allowed, or the audit log down.
             // The run stays as it is and reads as interrupted, so a person can see it and resume
-            // it by hand. The next turn tries again.
+            // it by hand. The next turn tries again. One line per run, with no error text: the
+            // error can quote a host or a source's words.
+            if (!unadoptable.has(stored.id)) {
+              unadoptable.add(stored.id);
+              deps.logger?.warn({ runId: stored.id }, ADOPT_FAILED);
+            }
           }
         }
       }

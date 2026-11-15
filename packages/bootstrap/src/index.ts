@@ -1813,6 +1813,7 @@ const reporting: ReportingApi = {
     persist: workflowPersist,
     audit: importAudit,
     origin: importOrigin,
+    logger,
   });
   // Copies of a source's rows (import-copy.ts). Every context can start, stop and delete one. Only
   // the driver below drives them, and the id here is what each drive writes on the copy it holds.

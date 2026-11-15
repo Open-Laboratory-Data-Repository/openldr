@@ -36,10 +36,12 @@ export function startImportDriver(deps: ImportDriverDeps): ImportDriver {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let turn: Promise<void> | null = null;
   let stopping: Promise<void> | null = null;
+  /** Aborted by `stop`, so an adopt in hand resumes no more runs. */
+  const ending = new AbortController();
 
   async function oneTurn(): Promise<void> {
     // Each step on its own, so a fault in one does not keep the other from running.
-    try { await deps.imports.adopt(); } catch (err) { report(err); }
+    try { await deps.imports.adopt({ signal: ending.signal }); } catch (err) { report(err); }
     if (ended) return;
     try { await deps.copies.tick(); } catch (err) { report(err); }
   }
@@ -62,6 +64,7 @@ export function startImportDriver(deps: ImportDriverDeps): ImportDriver {
     stop() {
       stopping ??= (async () => {
         ended = true;
+        ending.abort();
         if (timer) clearTimeout(timer);
         timer = null;
         try {

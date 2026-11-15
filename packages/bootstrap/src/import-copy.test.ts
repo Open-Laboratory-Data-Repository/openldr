@@ -185,9 +185,18 @@ async function world(requests: string[], facilities: string[] = []) {
   let held = false;
   let waiters: Array<() => void> = [];
   const clock = { now: Date.UTC(2026, 10, 11, 12, 0, 0) };
+  /** Loads of the plugin's code that throw, as when the place it is stored is not up yet. */
+  let sinkLoadFaults = 0;
+  let noSink = false;
   const pluginsDep = {
     list: async () => plugins,
-    loadSink: async () => ({ invoke }),
+    loadSink: async () => {
+      if (sinkLoadFaults > 0) {
+        sinkLoadFaults -= 1;
+        throw Object.assign(new Error('connect ECONNREFUSED 10.0.0.9:3900 secret-pw'), { code: 'ECONNREFUSED' });
+      }
+      return noSink ? undefined : { invoke };
+    },
   };
   const connectors = {
     get: async (id: string) => (id === 'c1' ? { type: 'microsoft-sql', enabled: true } : id === 'pg' ? { type: 'postgres', enabled: true } : id === 'off' ? { type: 'microsoft-sql', enabled: false } : null),
@@ -226,6 +235,10 @@ async function world(requests: string[], facilities: string[] = []) {
     rivalWrites: (match: (doc: CopyRun) => boolean, times: number) => { rivals.push({ match, left: times }); },
     setCopy: (fn: (options: Record<string, string>) => unknown) => { copyFn = fn; },
     failCopy: (on: boolean) => { copyFails = on; },
+    /** The next `times` loads of the plugin's code throw. */
+    failSinkLoads: (times: number) => { sinkLoadFaults = times; },
+    /** Loading the plugin's code finds no invokable wasm. */
+    setNoSink: (on: boolean) => { noSink = on; },
     failAuditOn: (action: ImportAuditEvent['action'] | null) => { auditFails = action; },
     /** Hold the next audit write of this action until the returned release is called. */
     holdAudit: (action: ImportAuditEvent['action']) => {
@@ -1429,5 +1442,103 @@ describe('copy: two callers at the same moment', () => {
     await w.raw.put(PLUGIN, '__import-copies', COPY, { ...started, sets: { facilities: started.sets.facilities, requests: started.sets.requests } });
     expect(Object.keys((await w.svc.get(PLUGIN, COPY))!.sets)).toEqual(['requests', 'facilities']);
     expect(Object.keys((await w.svc.list(PLUGIN))[0].sets)).toEqual(['requests', 'facilities']);
+  });
+});
+
+// R33. After a power cut every service starts at once, and the place plugin code is stored may come
+// up after the server. The plugin's code loader is made to throw as the S3 client does when blob
+// storage is not up. Not covered: a real blob store, a real restart order of services.
+describe('copy: the plugin code cannot be loaded yet', () => {
+  const NOT_LOADED = "the plugin's code could not be loaded yet";
+
+  it('waits for the plugin code, then completes with no person', async () => {
+    const w = await world(keysOf(4));
+    await w.svc.start({ ...START, pageSize: 2 });
+    w.failSinkLoads(2);
+    await drive(w.svc);
+    expect(await w.svc.get(PLUGIN, COPY)).toMatchObject({
+      status: 'completed', waiting: null, lastError: null, sets: { requests: { keys: 4, done: true } },
+    });
+    const at = new Date(w.clock.now).toISOString();
+    expect(w.runSaves.filter((r) => r.status === 'waiting').map((r) => r.waiting)).toEqual([
+      { since: at, attempt: 1, error: NOT_LOADED },
+      { since: at, attempt: 2, error: NOT_LOADED },
+    ]);
+    // 5 seconds, then 10, in slices of a second.
+    expect(w.sleeps).toEqual([...Array(5).fill(1000), ...Array(10).fill(1000)]);
+    expect(JSON.stringify(w.runSaves)).not.toMatch(/secret-pw|ECONNREFUSED|10\.0\.0\.9/);
+    expect(actions(w)).toEqual(['import.allow', 'import.copy.start', 'import.copy.finish']);
+  });
+
+  it('a release is felt while it waits, and leaves the status for the next server', async () => {
+    const w = await world(keysOf(4));
+    w.holdSleeps();
+    await w.svc.start({ ...START, pageSize: 2 });
+    w.failSinkLoads(1_000_000);
+    await w.svc.tick();
+    await vi.waitFor(async () => expect((await w.stored())?.status).toBe('waiting'));
+    const releasing = w.svc.release();
+    w.releaseSleeps();
+    await releasing;
+    expect(await w.stored()).toMatchObject({ status: 'waiting', driver: 'server-1', finishedAt: null, lastError: null });
+    expect(actions(w)).not.toContain('import.copy.finish');
+    expect(w.sleeps.every((ms) => ms <= 1000)).toBe(true);
+
+    // The storage is up when the next server takes the copy.
+    w.failSinkLoads(0);
+    const next = w.service('server-2');
+    w.clock.now += STALE_MS + 1;
+    await drive(next);
+    expect(await next.get(PLUGIN, COPY)).toMatchObject({ status: 'completed', sets: { requests: { keys: 4 } } });
+  });
+
+  it('a stop is felt while it waits, and ends the copy stopped', async () => {
+    const w = await world(keysOf(4));
+    w.holdSleeps();
+    await w.svc.start({ ...START, pageSize: 2 });
+    w.failSinkLoads(1_000_000);
+    await w.svc.tick();
+    await vi.waitFor(async () => expect((await w.stored())?.status).toBe('waiting'));
+    expect((await w.svc.stop(PLUGIN, COPY, ADMIN)).status).toBe('stopping');
+    w.releaseSleeps();
+    await w.svc.idle();
+    expect(await w.stored()).toMatchObject({ status: 'stopped', driver: null, waiting: null, lastError: null });
+    expect(w.source.statements).toEqual([]);
+  });
+
+  it('the heartbeat keeps running while it waits', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      const w = await world(keysOf(4));
+      w.holdSleeps();
+      await w.svc.start({ ...START, pageSize: 2 });
+      w.failSinkLoads(1);
+      await w.svc.tick();
+      await vi.waitFor(async () => expect((await w.stored())?.status).toBe('waiting'));
+      const before = w.runSaves.length;
+      w.clock.now += 30_000;
+      vi.advanceTimersByTime(30_000);
+      await vi.waitFor(() => expect(w.runSaves.length).toBe(before + 1));
+      expect(w.runSaves[before]).toMatchObject({
+        status: 'waiting', waiting: { attempt: 1, error: NOT_LOADED }, updatedAt: new Date(w.clock.now).toISOString(),
+      });
+      w.releaseSleeps();
+      await w.svc.idle();
+      expect((await w.stored())?.status).toBe('completed');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a plugin with no invokable code still ends the copy as failed, with no wait', async () => {
+    const w = await world(keysOf(4));
+    await w.svc.start({ ...START, pageSize: 2 });
+    w.setNoSink(true);
+    await drive(w.svc);
+    const run = (await w.stored())!;
+    expect(run.status).toBe('failed');
+    expect(run.lastError).toContain('exposes no invokable wasm');
+    expect(w.sleeps).toEqual([]);
+    expect(w.runSaves.some((r) => r.status === 'waiting')).toBe(false);
   });
 });

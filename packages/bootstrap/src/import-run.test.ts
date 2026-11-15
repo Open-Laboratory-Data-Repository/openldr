@@ -83,11 +83,17 @@ interface Harness {
   failAuditOn(action: ImportAuditEvent['action'] | null): void;
   /** Every run record as it was saved, in order. */
   runSaves: ImportRun[];
+  /** Every warn line the service logged. */
+  warnings: Array<{ fields: Record<string, unknown>; msg: string }>;
   /** Every wait the reader asked for, in ms. */
   sleeps: number[];
   /** Hold every wait until `releaseSleeps`. Waits end at once otherwise. */
   holdSleeps(): void;
   releaseSleeps(): void;
+  /** The next `times` loads of the plugin's code throw, as when the place it is stored is not up yet. */
+  failSinkLoads(times: number): void;
+  /** Loading the plugin's code finds no invokable wasm. */
+  setNoSink(on: boolean): void;
 }
 
 let internalDb: Awaited<ReturnType<typeof makeMigratedDb>>;
@@ -95,6 +101,7 @@ let internalDb: Awaited<ReturnType<typeof makeMigratedDb>>;
 async function harness(keys: string[], opts: { origin?: 'server' | 'cli' } = {}): Promise<Harness> {
   const source = fakeSource(keys);
   const runSaves: ImportRun[] = [];
+  const warnings: Harness['warnings'] = [];
   const sleeps: number[] = [];
   let held = false;
   let waiters: Array<() => void> = [];
@@ -122,16 +129,25 @@ async function harness(keys: string[], opts: { origin?: 'server' | 'cli' } = {})
   });
   const persist = vi.fn(async (resources: unknown[]) => resources.map(() => ({ saved: true })));
   const clock = { now: Date.UTC(2026, 10, 11, 12, 0, 0) };
+  let sinkLoadFaults = 0;
+  let noSink = false;
   const svc = createImportService({
     plugins: {
       list: async () => [{ id: 'v1-import', version: '1.2.0', enabled: true, manifest: currentManifest as Record<string, unknown> }],
-      loadSink: async () => ({ invoke }),
+      loadSink: async () => {
+        if (sinkLoadFaults > 0) {
+          sinkLoadFaults -= 1;
+          throw Object.assign(new Error('connect ECONNREFUSED 10.0.0.9:3900 secret-pw'), { code: 'ECONNREFUSED' });
+        }
+        return noSink ? undefined : { invoke };
+      },
     },
     connectors: {
       get: async (id) => (id === 'c1' ? { type: 'microsoft-sql', enabled: true } : id === 'pg' ? { type: 'postgres', enabled: true } : id === 'off' ? { type: 'microsoft-sql', enabled: false } : null),
       getDecryptedConfig: async () => ({ host: 'v1', password: 'secret-pw' }),
     },
     secretsKey: 'k',
+    logger: { warn: (fields: Record<string, unknown>, msg: string) => { warnings.push({ fields, msg }); } },
     pluginData,
     persist,
     audit: async (e) => { if (e.action === auditFails) throw new Error('audit store down'); audited.push(e); },
@@ -145,10 +161,12 @@ async function harness(keys: string[], opts: { origin?: 'server' | 'cli' } = {})
   });
   await svc.allow('v1-import', 'c1', ADMIN);
   return {
-    svc, source, persist, invoke, audited, mapInputs, clock, runSaves, sleeps,
+    svc, source, persist, invoke, audited, mapInputs, clock, runSaves, sleeps, warnings,
     holdSleeps: () => { held = true; },
     releaseSleeps: () => { held = false; const w = waiters; waiters = []; for (const resolve of w) resolve(); },
     failAuditOn: (action) => { auditFails = action; },
+    failSinkLoads: (times) => { sinkLoadFaults = times; },
+    setNoSink: (on) => { noSink = on; },
     setManifest: (m) => { currentManifest = m; },
     setQueries: (q) => { queries = q; },
     setMapper: (fn) => { mapper = fn; },
@@ -713,6 +731,7 @@ describe('import run: who may read what', () => {
 // a real process kill, real Postgres, the server's own start (import-driver.test.ts has the wiring).
 describe('import run: adopt', () => {
   const SYSTEM: ImportActor = { type: 'system', id: null, name: 'system' };
+  const ADOPT_FAILED = 'an import whose server stopped could not be resumed; it is tried again every 5 seconds';
 
   /** A run record as a server left it, written straight to the store. */
   async function storeRun(h: Harness, over: Record<string, unknown>): Promise<void> {
@@ -868,5 +887,100 @@ describe('import run: adopt', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('adopt logs one line when it cannot resume a run, with the run id and no error text', async () => {
+    const h = await harness(keysOf(4), { origin: 'server' });
+    await storeRun(h, {});
+    h.clock.now += STALE_MS + 1;
+    h.failAuditOn('import.resume');
+    expect(await h.svc.adopt()).toEqual([]);
+    expect(h.warnings).toEqual([{ fields: { runId: 'dead' }, msg: ADOPT_FAILED }]);
+    // The next turns try again, and say nothing more about the same run.
+    expect(await h.svc.adopt()).toEqual([]);
+    expect(h.warnings).toHaveLength(1);
+    expect(JSON.stringify(h.warnings)).not.toContain('audit');
+    h.failAuditOn(null);
+    expect((await h.svc.adopt()).map((r) => r.id)).toEqual(['dead']);
+    expect(await h.svc.wait('dead')).toMatchObject({ status: 'completed' });
+  });
+
+  it('adopt resumes nothing once its signal is aborted', async () => {
+    const h = await harness(keysOf(4), { origin: 'server' });
+    await storeRun(h, {});
+    h.clock.now += STALE_MS + 1;
+    const stop = new AbortController();
+    stop.abort();
+    expect(await h.svc.adopt({ signal: stop.signal })).toEqual([]);
+    expect(await rawRun('dead')).toMatchObject({ status: 'running' });
+    expect(h.audited.filter((e) => e.action !== 'import.allow')).toEqual([]);
+    expect(h.warnings).toEqual([]);
+  });
+});
+
+// Layer: the same as above, with the plugin's code loader made to throw as the S3 client does when
+// blob storage is not up yet. Not covered: a real blob store, a real restart order of services.
+describe('import run: the plugin code cannot be loaded yet', () => {
+  const NOT_LOADED = "the plugin's code could not be loaded yet";
+
+  it('waits for the plugin code, then completes with no person', async () => {
+    const h = await harness(keysOf(4));
+    h.failSinkLoads(2);
+    const run = await h.svc.wait((await h.svc.start({ ...START, pageSize: 2 })).id);
+    expect(run).toMatchObject({ status: 'completed', lastError: null, waiting: null, counts: { keys: 4, imported: 4 } });
+    const at = new Date(h.clock.now).toISOString();
+    expect(h.runSaves.filter((r) => r.status === 'waiting').map((r) => r.waiting)).toEqual([
+      { since: at, attempt: 1, error: NOT_LOADED },
+      { since: at, attempt: 2, error: NOT_LOADED },
+    ]);
+    // 5 seconds, then 10, in slices of a second.
+    expect(h.sleeps).toEqual([...Array(5).fill(1000), ...Array(10).fill(1000)]);
+    expect(JSON.stringify(h.runSaves)).not.toMatch(/secret-pw|ECONNREFUSED|10\.0\.0\.9/);
+  });
+
+  it('a stop is felt while it waits for the plugin code', async () => {
+    const h = await harness(keysOf(4));
+    h.holdSleeps();
+    h.failSinkLoads(1_000_000);
+    const started = await h.svc.start(START);
+    await vi.waitFor(async () => expect((await h.svc.get('v1-import', started.id))?.status).toBe('waiting'));
+    expect((await h.svc.stop('v1-import', started.id, ADMIN)).status).toBe('stopping');
+    h.releaseSleeps();
+    expect(await h.svc.wait(started.id)).toMatchObject({ status: 'stopped', waiting: null, lastError: null });
+    expect(h.sleeps.every((ms) => ms <= 1000)).toBe(true);
+    // The plugin was never asked for its queries: its code never loaded.
+    expect(h.invoke).not.toHaveBeenCalled();
+  });
+
+  it('the heartbeat keeps running while it waits for the plugin code', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      const h = await harness(keysOf(4));
+      h.holdSleeps();
+      h.failSinkLoads(1);
+      const started = await h.svc.start(START);
+      await vi.waitFor(async () => expect((await h.svc.get('v1-import', started.id))?.status).toBe('waiting'));
+      const before = h.runSaves.length;
+      h.clock.now += 30_000;
+      vi.advanceTimersByTime(30_000);
+      await vi.waitFor(() => expect(h.runSaves.length).toBe(before + 1));
+      expect(h.runSaves[before]).toMatchObject({
+        status: 'waiting', waiting: { attempt: 1, error: NOT_LOADED }, updatedAt: new Date(h.clock.now).toISOString(),
+      });
+      h.releaseSleeps();
+      expect((await h.svc.wait(started.id)).status).toBe('completed');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a plugin with no invokable code still ends the import as failed, with no wait', async () => {
+    const h = await harness(keysOf(4));
+    h.setNoSink(true);
+    const run = await h.svc.wait((await h.svc.start(START)).id);
+    expect(run.status).toBe('failed');
+    expect(run.lastError).toContain('exposes no invokable wasm');
+    expect(h.sleeps).toEqual([]);
+    expect(h.runSaves.some((r) => r.status === 'waiting')).toBe(false);
   });
 });
