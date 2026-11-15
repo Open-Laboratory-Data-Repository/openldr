@@ -308,14 +308,16 @@ scratch server gets `--memory 3g` and `MSSQL_MEMORY_LIMIT_MB=2048`.
 
 ### 6.8 Faults to fix after the port matches
 
-Each is a claim until it is checked against the code and the real data. Only the first two
-are confirmed.
+Each is a claim until it is checked against the code and the real data. The rows marked
+confirmed are the only ones that are.
 
 | Fault | State |
 |---|---|
 | Groups 9 to 12 read as blank, so 64 parameters lose their coded answers | Confirmed in code and on 329 real results |
 | A request with two birth rows gets whichever the database returns first | Confirmed on real data: 2 of 3 sampled cases differed between two reads. The plugin takes the earliest date. Which date is right needs v1, in part 3 |
 | A request with two taken-date rows has the same unordered read as two birth rows | Claim, from the whole-branch review of the first build. The plugin takes the earliest |
+| The organism sorter's word stems match whole words only, so Plasmodium and the like sort as bacteria | Confirmed by running the toolchain's `classify` on 2026-11-15 |
+| Printing a very large number strips the zeros of its exponent | Confirmed by reading `result-mapping.ts:178` |
 | Middle name is never set | Claim, from reading `specimenrecpt.ts` |
 | Two age decoders read different bytes | Claim |
 | The date of birth index is a `datetime` and may be lost as the taken date once was | Claim. The column type is confirmed |
