@@ -228,7 +228,8 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
       // T-SQL rejects when the inner query ends in ORDER BY — so MSSQL results page without a total.
       let total: number | undefined;
       if (parsed.data.limit !== undefined && c.type !== 'microsoft-sql') {
-        const cnt = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: `select count(*) as _n from (${inner}) as _q` });
+        // The line feed ends a trailing `-- comment` in the person's SQL before the wrapper's end.
+        const cnt = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: `select count(*) as _n from (${inner}\n) as _q` });
         total = Number(Object.values(cnt.rows[0] ?? {})[0] ?? capped.length);
       }
       return { columns, rows: capped, rowCount: capped.length, ms: Date.now() - started, ...(total !== undefined ? { total } : {}), ...(probeNext ? { hasMore: rows.length > cap } : {}) };

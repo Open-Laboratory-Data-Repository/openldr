@@ -82,31 +82,53 @@ function wrap(store: {
 /** Postgres: run `rawSql` in a read-only transaction on one client of `pool`, then roll it back.
  *  Each step is its own query, so the pool's `statement_timeout` and `query_timeout` bound each.
  *  On any error the client is dropped from the pool rather than given back, and the error thrown
- *  is the statement's own. */
+ *  is the statement's own.
+ *
+ *  A dropped connection: pg-pool takes its own `'error'` listener off a client it hands out, and pg
+ *  emits `'error'` on the client when the connection dies. With no listener that emit throws and
+ *  ends the process. So the client has a listener for as long as it is out, as `pool.query` does
+ *  for its own client. The first of that error and the running step's own error ends the step. An
+ *  error during the ROLLBACK after a good read is swallowed. The client is then dropped either way,
+ *  and no ROLLBACK is sent on a dead connection. */
 async function queryPgReadOnly(pool: pg.Pool, rawSql: string): Promise<{ rows: Record<string, unknown>[] }> {
   const client = await pool.connect();
+  let lost = false;
+  let failLost: (error: unknown) => void = () => {};
+  const connectionLost = new Promise<never>((_resolve, reject) => { failLost = reject; });
+  connectionLost.catch(() => undefined);
+  const onError = (error: unknown) => {
+    if (lost) return;
+    lost = true;
+    failLost(error);
+  };
+  client.on('error', onError);
+  const step = (text: string) => Promise.race([client.query(text), connectionLost]);
+
   let rows: Record<string, unknown>[] = [];
   let failure: unknown;
   let failed = false;
   let drop = false;
   try {
-    await client.query('BEGIN READ ONLY');
+    await step('BEGIN READ ONLY');
     // The SQL check reads a backslash in a string as an ordinary character. This makes the
     // server read it the same way, whatever the server or the session says.
-    await client.query('SET LOCAL standard_conforming_strings = on');
-    rows = (await client.query(rawSql)).rows;
+    await step('SET LOCAL standard_conforming_strings = on');
+    rows = (await step(rawSql)).rows;
   } catch (error) {
     failed = true;
     failure = error;
     drop = true;
   }
-  try {
-    await client.query('ROLLBACK');
-  } catch {
-    // The statement's outcome stands. A client whose ROLLBACK failed is not given back.
-    drop = true;
+  if (!lost) {
+    try {
+      await step('ROLLBACK');
+    } catch {
+      // The statement's outcome stands. A client whose ROLLBACK failed is not given back.
+      drop = true;
+    }
   }
-  if (drop) client.release(true);
+  client.removeListener('error', onError);
+  if (drop || lost) client.release(true);
   else client.release();
   if (failed) throw failure;
   return { rows };
@@ -132,6 +154,9 @@ export function createConnectorDb(
       // COUNT(*) and AVG() as numbers, not text (bug 13). See pgNumberTypes.
       types: pgNumberTypes as never,
     });
+    // A connection that dies while idle in the pool makes the pool emit `'error'`. With no
+    // listener that throws and ends the process. The pool drops that connection by itself.
+    pool.on('error', () => undefined);
     let closed = false;
     return {
       async query(rawSql) {

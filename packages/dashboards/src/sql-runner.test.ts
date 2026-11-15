@@ -499,7 +499,10 @@ describe('runReadQuery on mssql runs in a transaction that is always rolled back
   it('runReadQuery on mssql: after a deadline cancels the query, the next query on the same db finds no open transaction', async () => {
     // The real deadline is the driver's request timeout: the statement's request fails, and the
     // transaction stays open on the server. This fake does no reset on release, so only the
-    // roll-back can close it.
+    // roll-back can close it. What it proves: after a failed statement a roll-back is sent and the
+    // connection goes back with no transaction open. It has no timer and no real attention, so it
+    // shows neither the roll-back's timing nor what SQL Server does after a cancel. The old
+    // `transaction()` code also rolled back on an error, so this test passed before the change too.
     let cancelNext = true;
     const shared = recordingDb('mssql', {
       rows: [{ a: 1 }],

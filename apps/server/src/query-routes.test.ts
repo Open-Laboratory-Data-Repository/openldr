@@ -141,6 +141,21 @@ describe('POST /api/query/run', () => {
     expect(calls.some((s) => /count\(\*\)/i.test(s))).toBe(false);
   });
 
+  // R29: a trailing line comment in the person's SQL must not swallow the end of the count wrapper.
+  it('a query that ends in a line comment gives a count whose added text starts on a new line', async () => {
+    for (const type of ['postgres', 'mysql']) {
+      const deps = makeDeps();
+      deps.connectors.get = (async (id: string) => (id === 'c1' ? { id, name: 'C', type, enabled: true } : null)) as any;
+      const calls: string[] = [];
+      deps.runConnectorSql = (async ({ sql }: { sql: string }) => { calls.push(sql); return { columns: [{ key: 'n', label: 'n' }], rows: [{ n: 1 }] }; }) as any;
+      const app = await build(deps);
+      const res = await app.inject({ method: 'POST', url: '/api/query/run',
+        payload: { connectorId: 'c1', sql: 'select 1 as n -- note', limit: 50, offset: 0 } });
+      expect(res.statusCode).toBe(200);
+      expect(calls).toEqual(['select 1 as n -- note', 'select count(*) as _n from (select 1 as n -- note\n) as _q']);
+    }
+  });
+
   it('substitutes declared params before running', async () => {
     const deps = makeDeps();
     let seen = '';
