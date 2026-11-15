@@ -136,7 +136,8 @@ describe('SetupChecks', () => {
       vi.mocked(api.fetchSampleDataAllowed).mockResolvedValue(true);
       page();
       const dialog = await openSampleConfirm();
-      expect(dialog.getByText(/made-up patient and laboratory/)).toBeTruthy();
+      expect(dialog.getByText(/Sample data adds 60 fictional lab orders, 39 of them with results, and an example dashboard/)).toBeTruthy();
+      expect(dialog.getByText(/Do not load sample data on an installation meant for real patient data\.$/)).toBeTruthy();
       await act(async () => { fireEvent.click(dialog.getByRole('button', { name: 'Load sample data' })); });
       await waitFor(() => expect(api.runSetupChecks).toHaveBeenCalledTimes(2));
       expect(api.loadSampleData).toHaveBeenCalledTimes(1);

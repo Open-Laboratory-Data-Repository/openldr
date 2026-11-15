@@ -61,6 +61,17 @@ async function start(opts: { dataDir?: string; port: number; host: string; event
       stopLeftoverPostgres,
       // Loaded only now, after runStart has set the environment the server reads when it loads.
       startServer: async (cfg, logger) => (await import('@openldr/server/start')).startServer(cfg, logger),
+      // Reads only. Opens its own connections and closes them again.
+      pendingMigrations: async (cfg) => {
+        const { createDbContext } = await import('@openldr/bootstrap');
+        const db = await createDbContext(cfg);
+        try {
+          const { internal, external } = await db.pendingMigrations();
+          return [...internal.map((n) => `internal:${n}`), ...external.map((n) => `external:${n}`)];
+        } finally {
+          await db.close();
+        }
+      },
       print,
       printNow,
       now: () => new Date(),

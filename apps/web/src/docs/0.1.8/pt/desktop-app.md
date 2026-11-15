@@ -60,17 +60,17 @@ No macOS, o instalador assina a aplicação no seu Mac com `codesign`, com uma a
 ## O primeiro arranque
 
 1. Abra a aplicação. A janela mostra **A iniciar o OpenLDR** enquanto a base de dados e o servidor arrancam.
-2. O Studio mostra **Criar o administrador**. A aplicação preenche **Código de configuração**, e a indicação por baixo do campo diz **Preenchido pela aplicação OpenLDR.**
+2. O Studio mostra **Criar o administrador**. A aplicação introduz o código em **Código de configuração**, e a indicação por baixo do campo diz **A aplicação OpenLDR introduziu este código por si.**
 3. Escolha um nome de utilizador e uma palavra-passe, e selecione **Criar o administrador**.
-4. Seguem-se três passos. Dê nome ao laboratório, carregue dados de exemplo, e veja que verificações ainda precisam de si. Pode saltar os dois primeiros.
+4. Seguem-se três passos. Dá um nome ao seu laboratório, carrega dados de exemplo, e revê as verificações de instalação que precisam de atenção. Pode saltar os dois primeiros.
 
-O guia do Studio, **Primeiro arranque**, descreve os três passos. Os dados de exemplo só são oferecidos enquanto a instalação não tiver dados de laboratório. Se os saltar, Definições, Verificações de instalação pode carregá-los mais tarde, a partir do menu de pontos.
+O guia do Studio, **Primeiro arranque**, descreve os três passos. Os dados de exemplo acrescentam 60 pedidos fictícios, 39 deles com resultados, e um painel de exemplo. Nenhuma ação remove mais tarde apenas os pedidos de exemplo, e a Redefinição de fábrica deixa-os ficar. Só apagar todos os seus dados os remove, por exemplo apagando a pasta de dados. Os dados de exemplo só são oferecidos enquanto a instalação não tiver dados de laboratório. Se os saltar, pode carregá-los mais tarde a partir do menu de pontos em Definições → Verificações de instalação.
 
 A aplicação abre o Studio em `http://127.0.0.1:3000/studio/`. Usa a porta 3000 quando está livre. Caso contrário, escolhe outra porta livre e guarda-a. O endereço fica então o mesmo enquanto essa porta estiver livre.
 
-A aplicação só preenche o código de configuração para um OpenLDR que ela própria iniciou. O OpenLDR pode já estar a funcionar quando a aplicação arranca. Pode tê-lo iniciado num terminal. Ou uma aplicação terminada à força deixou-o a funcionar. A aplicação mostra então esse OpenLDR, e o campo do código fica vazio.
+A aplicação só introduz o código de configuração para um OpenLDR que ela própria iniciou. O OpenLDR pode já estar a funcionar quando a aplicação arranca. Pode tê-lo iniciado num terminal. Ou uma aplicação terminada à força deixou-o a funcionar. A aplicação mostra então esse OpenLDR, e o campo do código fica vazio. A indicação por baixo do campo diz **Selecione Sair no menu da área de notificação e volte a abrir o OpenLDR. Depois, a aplicação introduz o código por si.**
 
-O mais simples é selecionar **Sair** no menu da área de notificação e abrir a aplicação de novo. A aplicação inicia então o OpenLDR ela própria e preenche o código. Também pode executar o comando `openldr-standalone` da aplicação, e escrever o código mostrado:
+O mais simples é selecionar **Sair** no menu da área de notificação e abrir a aplicação de novo. A aplicação inicia então o OpenLDR ela própria e introduz o código. Também pode executar o comando `openldr-standalone` da aplicação, e escrever o código mostrado:
 
 | Sistema | Comando |
 | --- | --- |
@@ -106,13 +106,13 @@ Saia do OpenLDR e execute de novo a linha de instalação. Ela substitui a aplic
 O instalador recusa enquanto o OpenLDR estiver a funcionar, antes de descarregar o que quer que seja. No Linux e no macOS, mostra:
 
 ```text
-✗ OpenLDR is running. Quit it from its tray icon, or run: "/home/you/.local/share/openldr-desktop/openldr-standalone" stop. Then run this again.
+✗ OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: "/home/you/.local/share/openldr-desktop/openldr-standalone" stop
 ```
 
 No Windows, mostra:
 
 ```text
-X OpenLDR is running. Quit it from its tray icon, or run: & "C:\Users\you\AppData\Local\Programs\OpenLDR\openldr-standalone.cmd" stop. Then run this again.
+X OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: & "C:\Users\you\AppData\Local\Programs\OpenLDR\openldr-standalone.cmd" stop
 ```
 
 O caminho na mensagem é o comando `openldr-standalone` da sua instalação. Saia do OpenLDR pelo ícone de notificação, ou execute essa linha `stop`. Depois execute de novo a linha de instalação.
@@ -181,7 +181,7 @@ Leia primeiro a mensagem, depois os registos. `desktop.log` é o registo da apli
 | --- | --- |
 | `This data folder was last used by OpenLDR <newer>. This is OpenLDR <older>, which is older and cannot open it. Install OpenLDR <newer> or newer.` | Instale essa versão ou uma mais recente. Veja abaixo. |
 | `OpenLDR is not running. A recovery command is using the database (process <n>). Try again when it has finished.` | Um comando como `openldr-standalone cli -- doctor` está a usar a pasta de dados. Espere que termine, e selecione **Tentar novamente**. |
-| `O OpenLDR não respondeu quando a aplicação verificou se está em execução.` | Selecione **Tentar novamente**. Se a mensagem voltar, leia `desktop.log`. |
+| `O OpenLDR não respondeu a uma verificação de estado.` | Selecione **Tentar novamente**. Se a mensagem voltar, leia `desktop.log`. |
 | `O OpenLDR parou inesperadamente.` | Leia `server.log` e `postgres.log`, e selecione **Tentar novamente**. |
 | `O OpenLDR já não está em execução.` | Algo parou o OpenLDR fora da aplicação, como `openldr-standalone stop` num terminal. Selecione **Tentar novamente**. |
 | `O OpenLDR não está compilado. Compile-o e volte a abrir a aplicação.` | Numa aplicação instalada, quer dizer que faltam ficheiros. Execute de novo a linha de instalação. |

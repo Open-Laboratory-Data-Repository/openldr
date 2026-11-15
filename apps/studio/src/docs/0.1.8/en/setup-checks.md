@@ -106,7 +106,7 @@ Select **Run again**. Wait for the checks to finish.
 
 ## Load sample data
 
-Use this to try OpenLDR on a new install. It loads the same sample data as the sample data step in [First run](/docs/first-run). The menu offers it only while the install holds no lab data. You need the Danger zone permission. Administrator has it.
+Use this to try OpenLDR on a new install. It loads the same sample data as the sample data step in [First run](/docs/first-run): 60 fictional lab orders, 39 of them with results, and an example dashboard. The sample orders stay once loaded. No action removes only them, and **Factory reset** leaves them in place. The menu offers it only while the install holds no lab data. You need the Danger zone permission. Administrator has it.
 
 ### 1. Open the page actions
 
@@ -160,7 +160,7 @@ The report describes the checks at the time they ran. All checks passed does not
 
 **Load sample data is not in the menu.** The install already holds lab data, or your role does not have the Danger zone permission. A patient, a lab request, a specimen, a result, a saved form response, an organization or a location counts as lab data.
 
-**Sample data could not be loaded:** followed by a reason. The load did not finish. Some sample data may already be in place. A second try is then refused, and the menu item is gone the next time you open the page. The server log names the error.
+**Could not load sample data:** followed by a reason. The load did not finish. Some sample data may already be in place. A second try is then refused, and the menu item is gone the next time you open the page. The server log names the error.
 
 ## Related guides
 

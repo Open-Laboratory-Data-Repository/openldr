@@ -313,7 +313,7 @@ General settings, plus the sync admin routes (next section). Each route needs a 
 | `PUT` | `/api/settings/numbers/:key` | Set a numeric setting. |
 | `POST` | `/api/settings/danger/:action` | Run a danger-zone action (reset-dashboards, clear-audit, factory-reset). |
 | `GET` | `/api/settings/sample-data` | Say whether sample data may load: `{ allowed }`, false once the install holds lab data. Needs `settings.danger_zone`. |
-| `POST` | `/api/settings/sample-data` | Load the sample data `openldr db seed` loads. Answers 409 `has_lab_data` when the install holds lab data, and 409 `sample_data_busy` while a load runs. Needs `settings.danger_zone`. Writes a `settings.sample_data.load` audit row. When the load fails, it answers 500 `Sample data could not be loaded.`, and the audit row has `ok: false`. That row is written on any failure, because a failed load can still leave sample data behind. |
+| `POST` | `/api/settings/sample-data` | Load the sample data `openldr db seed` loads. Answers 409 `has_lab_data` when the install holds lab data, and 409 `sample_data_busy` while a load runs. Needs `settings.danger_zone`. Writes a `settings.sample_data.load` audit row. When the load fails, it answers 500 `The load stopped partway. The server log names the error.`, and the audit row has `ok: false`. That row is written on any failure, because a failed load can still leave sample data behind. |
 
 ## Distributed Sync
 

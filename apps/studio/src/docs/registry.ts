@@ -1352,7 +1352,7 @@ export const DOC_GUIDES: DocGuide[] = [
     slug: 'first-run',
     title: 'First run',
     group: 'administration',
-    summary: 'Name the laboratory, load sample data and see what still needs you, straight after the first administrator is made.',
+    summary: 'Name your laboratory, load sample data and review the setup checks, straight after you create the first administrator.',
     audience: ['administrators'],
     requiredRoles: [],
     estimatedMinutes: 5,

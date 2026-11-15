@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@openldr/config', () => ({ loadConfig: vi.fn(() => ({ config: true })) }));
-vi.mock('@openldr/bootstrap', () => ({ createIngestContext: mocks.createIngestContext }));
+// The real ingestAndWait runs over the fake context, so these tests cover the moved wait loop.
+vi.mock('@openldr/bootstrap', async (original) => ({ ...await original<typeof import('@openldr/bootstrap')>(), createIngestContext: mocks.createIngestContext }));
 
 import { runIngest } from './ingest';
 

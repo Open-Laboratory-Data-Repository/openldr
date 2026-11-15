@@ -60,17 +60,17 @@ Sous macOS, l'installateur signe l'application sur votre Mac avec `codesign`, av
 ## Le premier démarrage
 
 1. Démarrez l'application. La fenêtre affiche **Démarrage d'OpenLDR** pendant que la base de données et le serveur démarrent.
-2. Studio affiche **Créer l'administrateur**. L'application remplit **Code de configuration**, et l'indication sous le champ dit **Rempli par l'application OpenLDR.**
+2. Studio affiche **Créer l'administrateur**. L'application saisit le code dans **Code de configuration**, et l'indication sous le champ dit **L'application OpenLDR a saisi ce code pour vous.**
 3. Choisissez un nom d'utilisateur et un mot de passe, puis sélectionnez **Créer l'administrateur**.
-4. Trois étapes suivent. Nommez le laboratoire, chargez des données d'exemple, puis voyez quelles vérifications demandent encore votre attention. Vous pouvez passer les deux premières.
+4. Trois étapes suivent. Vous nommez votre laboratoire, chargez des données d'exemple, puis revoyez les vérifications d’installation qui demandent votre attention. Vous pouvez passer les deux premières.
 
-Le guide de Studio, **Premier démarrage**, décrit ces trois étapes. Les données d'exemple ne sont proposées que tant que l'installation ne contient aucune donnée de laboratoire. Si vous les passez, Paramètres, Vérifications d’installation peut les charger plus tard, depuis son menu à points.
+Le guide de Studio, **Premier démarrage**, décrit ces trois étapes. Les données d'exemple ajoutent 60 demandes fictives, dont 39 avec leurs résultats, et un tableau de bord d'exemple. Aucune action ne supprime plus tard uniquement les demandes d'exemple, et la réinitialisation usine les laisse en place. Seul l'effacement de toutes vos données les supprime, par exemple en supprimant le dossier de données. Les données d'exemple ne sont proposées que tant que l'installation ne contient aucune donnée de laboratoire. Si vous les passez, vous pourrez les charger plus tard depuis le menu à points de Paramètres → Vérifications d’installation.
 
 L'application ouvre Studio à `http://127.0.0.1:3000/studio/`. Elle prend le port 3000 s'il est libre. Sinon, elle choisit un autre port libre et le retient. L'adresse reste alors la même tant que ce port reste libre.
 
-L'application ne remplit le code de configuration que pour un OpenLDR qu'elle a démarré elle-même. OpenLDR peut déjà tourner quand l'application démarre. Vous l'avez peut-être lancé depuis un terminal. Ou une application arrêtée de force l'a laissé tourner. L'application affiche alors cet OpenLDR, et le champ du code reste vide.
+L'application ne saisit le code de configuration que pour un OpenLDR qu'elle a démarré elle-même. OpenLDR peut déjà tourner quand l'application démarre. Vous l'avez peut-être lancé depuis un terminal. Ou une application arrêtée de force l'a laissé tourner. L'application affiche alors cet OpenLDR, et le champ du code reste vide. L'indication sous le champ dit **Sélectionnez Quitter dans le menu de la zone de notification, puis rouvrez OpenLDR. L'application saisira alors le code pour vous.**
 
-Le plus simple est de sélectionner **Quitter** dans le menu de la zone de notification, puis de relancer l'application. Elle démarre alors OpenLDR elle-même et remplit le code. Vous pouvez aussi lancer la commande `openldr-standalone` de l'application, puis taper le code affiché :
+Le plus simple est de sélectionner **Quitter** dans le menu de la zone de notification, puis de relancer l'application. Elle démarre alors OpenLDR elle-même et saisit le code. Vous pouvez aussi lancer la commande `openldr-standalone` de l'application, puis taper le code affiché :
 
 | Système | Commande |
 | --- | --- |
@@ -106,13 +106,13 @@ Quittez OpenLDR, puis relancez la ligne d'installation. Elle remplace l'applicat
 L'installateur refuse tant qu'OpenLDR tourne, avant de télécharger quoi que ce soit. Sous Linux et macOS, il affiche :
 
 ```text
-✗ OpenLDR is running. Quit it from its tray icon, or run: "/home/you/.local/share/openldr-desktop/openldr-standalone" stop. Then run this again.
+✗ OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: "/home/you/.local/share/openldr-desktop/openldr-standalone" stop
 ```
 
 Sous Windows, il affiche :
 
 ```text
-X OpenLDR is running. Quit it from its tray icon, or run: & "C:\Users\you\AppData\Local\Programs\OpenLDR\openldr-standalone.cmd" stop. Then run this again.
+X OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: & "C:\Users\you\AppData\Local\Programs\OpenLDR\openldr-standalone.cmd" stop
 ```
 
 Le chemin du message est la commande `openldr-standalone` de votre installation. Quittez OpenLDR depuis son icône de notification, ou lancez cette ligne `stop`. Relancez ensuite la ligne d'installation.
@@ -181,7 +181,7 @@ Lisez d'abord le message, puis les journaux. `desktop.log` est le journal de l'a
 | --- | --- |
 | `This data folder was last used by OpenLDR <newer>. This is OpenLDR <older>, which is older and cannot open it. Install OpenLDR <newer> or newer.` | Installez cette version ou une plus récente. Voir plus bas. |
 | `OpenLDR is not running. A recovery command is using the database (process <n>). Try again when it has finished.` | Une commande comme `openldr-standalone cli -- doctor` tient le dossier de données. Attendez qu'elle se termine, puis sélectionnez **Réessayer**. |
-| `OpenLDR n'a pas répondu quand l'application a vérifié s'il est en cours d'exécution.` | Sélectionnez **Réessayer**. Si le message revient, lisez `desktop.log`. |
+| `OpenLDR n'a pas répondu à une vérification d'état.` | Sélectionnez **Réessayer**. Si le message revient, lisez `desktop.log`. |
 | `OpenLDR s'est arrêté de façon inattendue.` | Lisez `server.log` et `postgres.log`, puis sélectionnez **Réessayer**. |
 | `OpenLDR n'est plus en cours d'exécution.` | Quelque chose a arrêté OpenLDR en dehors de l'application, comme `openldr-standalone stop` dans un terminal. Sélectionnez **Réessayer**. |
 | `OpenLDR n'est pas compilé. Compilez-le, puis relancez l'application.` | Dans une application installée, cela veut dire que des fichiers manquent. Relancez la ligne d'installation. |

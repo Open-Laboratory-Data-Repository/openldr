@@ -9,6 +9,7 @@ import type { Config } from '@openldr/config';
 import type { RunningServer } from '@openldr/server/start';
 import {
   FORCED_STOP_ERROR,
+  PENDING_RECHECK_MS,
   RECOVERY_DONE,
   RECOVERY_NOTICE,
   STOP_WAIT_MS,
@@ -770,6 +771,218 @@ describe('runStart and the version that last used the data folder', () => {
     };
     await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow('boom');
     expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+    await expectNothingLeft(f);
+  });
+
+  /**
+   * A fake pendingMigrations. Each read gives the next entry: a list, or an error to throw. Each
+   * read also goes into f.order, so a test can see where it happened.
+   */
+  function pendingReads(f: Fakes, lists: Array<string[] | Error>): { count: number; cfgs: Config[] } {
+    const reads = { count: 0, cfgs: [] as Config[] };
+    f.deps.pendingMigrations = async (cfg) => {
+      const next = lists[Math.min(reads.count, lists.length - 1)]!;
+      reads.count += 1;
+      reads.cfgs.push(cfg);
+      f.order.push('migrations.read');
+      if (next instanceof Error) throw next;
+      return [...next];
+    };
+    return reads;
+  }
+
+  function serverFails(f: Fakes, err: Error = new Error('boom')): void {
+    f.deps.startServer = async () => {
+      f.order.push('server.start');
+      throw err;
+    };
+  }
+
+  const PENDING = ['internal:001_a', 'internal:002_b', 'external:001_c'];
+
+  /**
+   * A fake pendingMigrations whose first read gives PENDING. The second read turns on fake timers
+   * before it answers, so the launcher's limit on that read runs on them, and the test can move
+   * the clock and count the timers left. The first read stays on real timers.
+   */
+  function secondReadUnderFakeTimers(f: Fakes, answer: () => Promise<string[]>): { reached: Promise<void> } {
+    let reads = 0;
+    let markReached!: () => void;
+    const reached = new Promise<void>((r) => (markReached = r));
+    f.deps.pendingMigrations = () => {
+      reads += 1;
+      f.order.push('migrations.read');
+      if (reads === 1) return Promise.resolve([...PENDING]);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      markReached();
+      return answer();
+    };
+    return { reached };
+  }
+
+  describe('a start whose server fails and migrated nothing', () => {
+    it('puts the older record back', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      const reads = pendingReads(f, [PENDING, PENDING]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(await readFile(paths.versionFile, 'utf8')).toBe('{"version":"0.1.0"}\n');
+      expect(reads.count).toBe(2);
+      await expectNothingLeft(f);
+    });
+
+    it('removes the record when there was none before', async () => {
+      const f = fakes();
+      pendingReads(f, [PENDING, PENDING]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      await expect(readFile(paths.versionFile, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+      await expectNothingLeft(f);
+    });
+
+    it('reads the list again before Postgres is stopped', async () => {
+      const f = fakes();
+      pendingReads(f, [PENDING, PENDING]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(f.order).toEqual(['pg.leftover', 'pg.start', 'migrations.read', 'server.start', 'migrations.read', 'pg.stop']);
+    });
+
+    it('puts the record back when the second read answers within the limit, and leaves no timer running', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      secondReadUnderFakeTimers(f, async () => [...PENDING]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(vi.getTimerCount()).toBe(0);
+      vi.useRealTimers();
+      expect(await readFile(paths.versionFile, 'utf8')).toBe('{"version":"0.1.0"}\n');
+      await expectNothingLeft(f);
+    });
+
+    it('still says the port is taken, and puts the record back', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      pendingReads(f, [PENDING, PENDING]);
+      serverFails(
+        f,
+        Object.assign(new Error(`listen EADDRINUSE: address already in use 127.0.0.1:${PORT}`), { code: 'EADDRINUSE' }),
+      );
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(
+        `Port ${PORT} is already in use. Choose another with --port.`,
+      );
+      expect(await readFile(paths.versionFile, 'utf8')).toBe('{"version":"0.1.0"}\n');
+      await expectNothingLeft(f);
+    });
+  });
+
+  describe('a start whose server fails keeps the new record', () => {
+    it('when a migration ran: the lists differ', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      pendingReads(f, [PENDING, PENDING.slice(1)]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+      await expectNothingLeft(f);
+    });
+
+    it('when the same names come back in another order', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      pendingReads(f, [PENDING, [...PENDING].reverse()]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+    });
+
+    it('when the second read throws, and the start error is the one thrown', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      const reads = pendingReads(f, [PENDING, new Error('second read boom')]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+      expect(reads.count).toBe(2);
+      await expectNothingLeft(f);
+    });
+
+    it('when the first read threw: the start went on, and nothing is read again', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      const reads = pendingReads(f, [new Error('first read boom'), PENDING]);
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(f.order).toContain('server.start');
+      expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+      expect(reads.count).toBe(1);
+      await expectNothingLeft(f);
+    });
+
+    it('when the second read never answers: it gives up after 10 seconds, and the start error is the one thrown', async () => {
+      expect(PENDING_RECHECK_MS).toBe(10_000);
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      const second = secondReadUnderFakeTimers(f, () => new Promise<string[]>(() => {}));
+      serverFails(f);
+      let settled = false;
+      const result = runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+      void result.then(() => (settled = true));
+      await second.reached;
+      await vi.advanceTimersByTimeAsync(PENDING_RECHECK_MS - 1);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      const err = await result;
+      expect(vi.getTimerCount()).toBe(0);
+      vi.useRealTimers();
+      expect(err?.message).toBe('boom');
+      expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+      expect(f.pg.stopped).toBe(true);
+      await expectNothingLeft(f);
+    });
+
+    it('when there is no pendingMigrations', async () => {
+      await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+      const f = fakes();
+      expect(f.deps.pendingMigrations).toBeUndefined();
+      serverFails(f);
+      await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+      expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+      await expectNothingLeft(f);
+    });
+  });
+
+  it('a start whose first read throws still starts', async () => {
+    const f = fakes();
+    pendingReads(f, [new Error('first read boom')]);
+    await start(f.deps);
+    expect(f.server.started).toBe(true);
+    expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+  });
+
+  it('a start that works reads the list once, with the config the server gets', async () => {
+    await writeFile(paths.versionFile, '{"version":"0.1.0"}\n');
+    const f = fakes();
+    const reads = pendingReads(f, [PENDING, PENDING]);
+    await start(f.deps);
+    expect(JSON.parse(await readFile(paths.versionFile, 'utf8'))).toEqual({ version: f.deps.appVersion });
+    expect(reads.count).toBe(1);
+    expect(reads.cfgs[0]).toBe(f.server.cfg);
+  });
+
+  it('a failed start on a folder that already holds this version leaves the file and reads the list once', async () => {
+    await writeFile(paths.versionFile, '{"version":"0.1.11"}\n');
+    const f = fakes();
+    expect(f.deps.appVersion).toBe('0.1.11');
+    const reads = pendingReads(f, [PENDING, PENDING]);
+    serverFails(f);
+    await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1' }, f.deps)).rejects.toThrow(/^boom$/);
+    expect(await readFile(paths.versionFile, 'utf8')).toBe('{"version":"0.1.11"}\n');
+    expect(reads.count).toBe(1);
     await expectNothingLeft(f);
   });
 

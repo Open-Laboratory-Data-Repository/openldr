@@ -50,7 +50,7 @@ const button = (name: string) => screen.getByRole('button', { name });
 
 /** Waits for step 1 to finish loading, then presses its Skip. */
 async function skipLab() {
-  await screen.findByLabelText('Name');
+  await screen.findByLabelText('Laboratory name');
   fireEvent.click(button('Skip'));
 }
 
@@ -76,7 +76,7 @@ describe('FirstRunPage, step 1', () => {
   it('shows the stored name; Save sends both keys once, then step 2 shows', async () => {
     page();
     expect(screen.getByText('Step 1 of 3')).toBeInTheDocument();
-    const name = await screen.findByLabelText('Name');
+    const name = await screen.findByLabelText('Laboratory name');
     expect(name).toHaveValue('Central Lab');
     expect(button('Africa/Maputo')).toBeInTheDocument();
     fireEvent.change(name, { target: { value: 'Mbeya Lab' } });
@@ -91,7 +91,7 @@ describe('FirstRunPage, step 1', () => {
     browserZone('Pacific/Fiji');
     vi.mocked(api.fetchLabIdentity).mockResolvedValue(identity({ 'lab.name': 'Central Lab', 'lab.timezone': '' }) as never);
     page();
-    await screen.findByLabelText('Name');
+    await screen.findByLabelText('Laboratory name');
     fireEvent.click(button('Pacific/Fiji'));
     const list = within(await screen.findByRole('dialog'));
     const options = list.getAllByRole('button');
@@ -131,7 +131,7 @@ describe('FirstRunPage, step 1', () => {
   it('a failed load leaves the stored name alone: Save without typing sends no name', async () => {
     vi.mocked(api.fetchLabIdentity).mockRejectedValue(new Error('load lab identity failed: 500'));
     page();
-    await screen.findByLabelText('Name');
+    await screen.findByLabelText('Laboratory name');
     fireEvent.click(button('Save'));
     await screen.findByRole('heading', { name: 'Sample data' });
     expect(api.saveLabIdentity).toHaveBeenCalledTimes(1);
@@ -142,7 +142,7 @@ describe('FirstRunPage, step 1', () => {
   it('a failed load still sends a name the person typed', async () => {
     vi.mocked(api.fetchLabIdentity).mockRejectedValue(new Error('load lab identity failed: 500'));
     page();
-    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: '  Mbeya Lab ' } });
+    fireEvent.change(await screen.findByLabelText('Laboratory name'), { target: { value: '  Mbeya Lab ' } });
     fireEvent.click(button('Save'));
     await screen.findByRole('heading', { name: 'Sample data' });
     const sent = vi.mocked(api.saveLabIdentity).mock.calls[0]![0] as Record<string, string>;
@@ -159,7 +159,7 @@ describe('FirstRunPage, step 1', () => {
   it('a failed save shows the error and stays on step 1', async () => {
     vi.mocked(api.saveLabIdentity).mockRejectedValue(new Error('save lab identity failed: invalid lab identity'));
     page();
-    await screen.findByLabelText('Name');
+    await screen.findByLabelText('Laboratory name');
     fireEvent.click(button('Save'));
     expect((await screen.findByRole('alert')).textContent).toContain('invalid lab identity');
     expect(screen.getByText('Step 1 of 3')).toBeInTheDocument();
@@ -168,12 +168,12 @@ describe('FirstRunPage, step 1', () => {
 });
 
 describe('FirstRunPage, skipping', () => {
-  it('Skip, Skip, then Open OpenLDR ends the flow and sends nothing', async () => {
+  it('Skip, Skip, then Continue to OpenLDR ends the flow and sends nothing', async () => {
     const onDone = page();
     await skipLab();
     await screen.findByRole('heading', { name: 'Sample data' });
     fireEvent.click(button('Skip'));
-    fireEvent.click(await screen.findByRole('button', { name: 'Open OpenLDR' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue to OpenLDR' }));
     expect(onDone).toHaveBeenCalledTimes(1);
     expect(api.saveLabIdentity).not.toHaveBeenCalled();
     expect(api.loadSampleData).not.toHaveBeenCalled();
@@ -183,7 +183,7 @@ describe('FirstRunPage, skipping', () => {
     vi.mocked(api.fetchSampleDataAllowed).mockResolvedValue(false);
     page();
     await skipLab();
-    expect(await screen.findByRole('heading', { name: 'You are ready' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'OpenLDR is ready' })).toBeInTheDocument();
     expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Sample data' })).toBeNull();
   });
@@ -195,7 +195,7 @@ describe('FirstRunPage, skipping', () => {
     expect(screen.getByText('Step 2 of 3')).toBeInTheDocument();
     expect(screen.getByRole('status')).toBeInTheDocument();
     fireEvent.click(button('Skip'));
-    expect(await screen.findByRole('heading', { name: 'You are ready' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'OpenLDR is ready' })).toBeInTheDocument();
     expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
     expect(api.loadSampleData).not.toHaveBeenCalled();
   });
@@ -204,7 +204,7 @@ describe('FirstRunPage, skipping', () => {
     vi.mocked(api.fetchSampleDataAllowed).mockRejectedValue(new Error('check sample data failed: 403'));
     page();
     await skipLab();
-    expect(await screen.findByRole('heading', { name: 'You are ready' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'OpenLDR is ready' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Sample data' })).toBeNull();
   });
 });
@@ -222,7 +222,7 @@ describe('FirstRunPage, step 2', () => {
     expect(button('Load sample data')).toBeDisabled();
     expect(button('Skip')).toBeDisabled();
     await act(async () => { load.resolve(); });
-    expect(await screen.findByRole('heading', { name: 'You are ready' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'OpenLDR is ready' })).toBeInTheDocument();
     expect(api.loadSampleData).toHaveBeenCalledTimes(1);
   });
 
@@ -235,7 +235,7 @@ describe('FirstRunPage, step 2', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('already holds lab data');
     expect(button('Skip')).toBeEnabled();
     fireEvent.click(button('Skip'));
-    expect(await screen.findByRole('heading', { name: 'You are ready' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'OpenLDR is ready' })).toBeInTheDocument();
   });
 });
 
@@ -244,7 +244,7 @@ describe('FirstRunPage, step 3', () => {
     vi.mocked(api.fetchSampleDataAllowed).mockResolvedValue(false);
     const onDone = page();
     await skipLab();
-    await screen.findByRole('heading', { name: 'You are ready' });
+    await screen.findByRole('heading', { name: 'OpenLDR is ready' });
     return onDone;
   }
 
@@ -254,13 +254,21 @@ describe('FirstRunPage, step 3', () => {
     expect(screen.getByTestId('setup-check-connectors').getAttribute('data-status')).toBe('fail');
     expect(screen.queryByTestId('setup-check-adapters')).toBeNull();
     expect(screen.queryByTestId('setup-check-sync')).toBeNull();
-    expect(screen.queryByText(/Nothing needs you now/)).toBeNull();
+    expect(screen.getByText('These setup checks need attention. You can review them at any time under Settings → Setup checks.')).toBeInTheDocument();
+    expect(screen.queryByText(/All setup checks passed/)).toBeNull();
   });
 
-  it('says nothing needs the person when every check passed', async () => {
+  // The same rule as "All checks passed." on Settings, Setup checks: a skipped check is not open.
+  it('says every check passed when the rest were skipped', async () => {
+    vi.mocked(api.runSetupChecks).mockResolvedValue({ ok: true, checks: [{ id: 'adapters', status: 'pass' }, { id: 'sync', status: 'skip' }] } as never);
+    await toStep3();
+    expect(await screen.findByText('All setup checks passed. You can review them at any time under Settings → Setup checks.')).toBeInTheDocument();
+  });
+
+  it('says every check passed when none failed or warned', async () => {
     vi.mocked(api.runSetupChecks).mockResolvedValue({ ok: true, checks: [{ id: 'adapters', status: 'pass' }] } as never);
     await toStep3();
-    expect(await screen.findByText(/Nothing needs you now/)).toBeInTheDocument();
+    expect(await screen.findByText(/All setup checks passed/)).toBeInTheDocument();
     expect(screen.queryByTestId('setup-check-adapters')).toBeNull();
   });
 
@@ -268,14 +276,14 @@ describe('FirstRunPage, step 3', () => {
     vi.mocked(api.runSetupChecks).mockRejectedValue(new Error('run setup checks failed: 500'));
     const onDone = await toStep3();
     expect((await screen.findByRole('alert')).textContent).toContain('500');
-    fireEvent.click(button('Open OpenLDR'));
+    fireEvent.click(button('Continue to OpenLDR'));
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('Open OpenLDR calls onDone', async () => {
+  it('Continue to OpenLDR calls onDone', async () => {
     const onDone = await toStep3();
     await screen.findByTestId('setup-check-labName');
-    fireEvent.click(button('Open OpenLDR'));
+    fireEvent.click(button('Continue to OpenLDR'));
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 

@@ -1,5 +1,7 @@
 // Writes a FHIR transaction Bundle of made-up lab activity for the docs examples.
 // Deterministic: the same seed always gives the same file, so screenshots and doc numbers match.
+// After you run it, copy the output to packages/bootstrap/src/samples/sample-lab-data.json too.
+// Studio's "Load sample data" loads that copy, and a test fails when the two copies differ.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 

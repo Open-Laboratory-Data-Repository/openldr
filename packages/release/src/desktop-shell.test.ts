@@ -321,7 +321,8 @@ function twoReleases(homeName?: string): Host {
 }
 
 /** The refusal while OpenLDR runs. It names the installed command, for a person with no tray icon. */
-const running = (h: Host) => `OpenLDR is running. Quit it from its tray icon, or run: "${h.cmd}" stop. Then run this again.`;
+const running = (h: Host) =>
+  `OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: "${h.cmd}" stop`;
 /** Each call that fetched the archive or its SHA256SUMS. */
 const archiveFetches = (r: Result) =>
   r.calls.filter((c) => c.tool === 'curl' && c.args.some((a) => a.endsWith('.tar.gz') || a.endsWith('/SHA256SUMS')));
@@ -506,6 +507,17 @@ describe.skipIf(platform() === 'win32')('install/desktop.sh on Linux', () => {
     // Refused before the download: the archive was never fetched.
     expect(archiveFetches(r)).toEqual([]);
     expect(r.calls.filter((c) => c.tool === 'tar')).toEqual([]);
+  });
+
+  it('ends the "is running" line with the stop command, so a copied line runs', () => {
+    const h = twoReleases();
+    expect(h.run(['--version', '0.1.10']).code).toBe(0);
+    h.ctl('status', '0');
+    const r = h.run([]);
+    expect(r.code).toBe(1);
+    const line = r.stderr.split('\n').find((l) => l.startsWith('✗ OpenLDR is running.'));
+    expect(line, r.stderr).toBeDefined();
+    expect(line!.endsWith(`"${h.cmd}" stop`)).toBe(true);
   });
 
   it('refuses an update when a process runs from the app folder, even when status says not running', () => {
@@ -1049,11 +1061,18 @@ describe('desktop.ps1 (unproven: nothing here runs PowerShell)', () => {
     expect(code).toContain("'The download does not match its checksum. Nothing was installed.'");
     // The running refusal names the installed command. The & runs a quoted path in PowerShell.
     expect(fns.get('Get-OpenLdrRunningMessage') ?? '').toContain(
-      '"OpenLDR is running. Quit it from its tray icon, or run: & `"$Target\\openldr-standalone.cmd`" stop. Then run this again."',
+      '"OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: & `"$Target\\openldr-standalone.cmd`" stop"',
     );
-    expect(code).not.toContain('Quit it from its tray icon, then run this again.');
+    expect(code).not.toContain('Then run this again.');
     expect(count(code, /throw \(Get-OpenLdrRunningMessage \$\w+\)/g)).toBe(3);
     expect(fns.get('Write-OpenLdrFail') ?? '').toContain('Write-Host "X $Message"');
+  });
+
+  it('ends the "is running" message with the stop command, so a copied line runs', () => {
+    // The text of the string Get-OpenLdrRunningMessage returns, without its closing quote.
+    const m = /return "(.*)"\s*$/m.exec(fns.get('Get-OpenLdrRunningMessage') ?? '');
+    expect(m).not.toBeNull();
+    expect(m![1]!.endsWith('openldr-standalone.cmd`" stop')).toBe(true);
   });
 
   it('checks whether OpenLDR runs before the download, inside the install function', () => {

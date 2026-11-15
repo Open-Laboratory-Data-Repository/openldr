@@ -151,7 +151,7 @@ function Test-OpenLdrStatus([string]$Command) {
 # The refusal while OpenLDR runs. It names the installed command, for a person whose app was
 # killed or whose taskbar shows no tray icon. The & runs a quoted path in PowerShell.
 function Get-OpenLdrRunningMessage([string]$Target) {
-  return "OpenLDR is running. Quit it from its tray icon, or run: & `"$Target\openldr-standalone.cmd`" stop. Then run this again."
+  return "OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: & `"$Target\openldr-standalone.cmd`" stop"
 }
 
 # True when OpenLDR runs from the installed copy: its own status says so, or a process runs from
