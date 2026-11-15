@@ -882,6 +882,17 @@ export interface PluginDataTable {
   updated_at: Generated<Date>;
 }
 
+/** Rows copied from a source database. One row per source row (migration 118). */
+export interface ImportCopyRowsTable {
+  copy_id: string;
+  set_name: string;
+  detail_name: string;
+  key: string;
+  seq: number;
+  row: JSONColumnType<Record<string, unknown>>;
+  read_at: Generated<Date>;
+}
+
 export interface AppSettingsTable {
   key: string;
   value: string;
@@ -1088,6 +1099,7 @@ export interface InternalSchema {
   connectors: ConnectorsTable;
   registries: RegistriesTable;
   plugin_data: PluginDataTable;
+  import_copy_rows: ImportCopyRowsTable;
   app_settings: AppSettingsTable;
   report_designs: ReportDesignsTable;
   report_design_versions: ReportDesignVersionsTable;
