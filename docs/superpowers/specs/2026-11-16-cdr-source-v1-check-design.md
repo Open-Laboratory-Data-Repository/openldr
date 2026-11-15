@@ -347,8 +347,8 @@ real twins change verdict.
 
 ## 10. Open questions
 
-1. **The mark's code.** `v1-check` names OpenLDR v1, which is CE's own older product, not the
-   source system. If the operator wants a neutral code, `source-check` is the alternative.
+1. **The mark's code.** Settled on 2026-11-16: `v1-check`. It names OpenLDR v1, which is CE's
+   own older product, not the source system.
 2. **A login that reads v1.** The real-twin runs need SELECT on the restored `OpenLDRData_TZ`
    as well as the three source databases. Same terms as before: created for the run, dropped
    after it, rows deleted.
