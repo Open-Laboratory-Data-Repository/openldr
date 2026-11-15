@@ -12,6 +12,7 @@ function fixture(count: number, primaryQueryId = 'large') {
   const render = vi.fn(async () => Buffer.from('%PDF'));
   const query = (id: string, values: Record<string, unknown>) => runStoredQuery({
     customQueries: { get: async () => ({ connectorId: 'c', sql: 'select a from rows', params: [] }) as any },
+    connectorDialect: async () => 'postgres' as const,
     runConnectorSql: async ({ rowCap }) => ({ columns: [{ key: 'a', label: 'a' }],
       rows: Array.from({ length: Math.min(id === 'large' ? count : 1, rowCap!) }, (_, a) => ({ a })) }),
   }, id, values);

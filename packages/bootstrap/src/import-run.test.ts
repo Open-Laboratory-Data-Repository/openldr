@@ -67,6 +67,7 @@ function fakeSource(keys: string[]) {
       const date = new Date(Date.UTC(2024, 2, 5, 14, 30, 0, 0));
       return { rows: inList.map((k) => (sql.includes('LabResults') ? { RequestID: k, SIValue: 4.2 } : { RequestID: k, RegisteredDateTime: date })) };
     },
+    async queryReadOnly(): Promise<never> { throw new Error('the import reader calls query, never queryReadOnly'); },
     async close() { closed += 1; },
   };
   return {
@@ -339,11 +340,21 @@ describe('import run', () => {
     expect(fresh.runSaves.some((r) => r.status === 'waiting')).toBe(false);
   });
 
-  it('refuses SQL from the plugin that is not a SELECT, before running anything', async () => {
+  it('refuses a plugin template with a token in a comment, before running anything', async () => {
     const h = await harness(keysOf(2));
     h.setQueries({ keyQuery: { sql: 'DELETE FROM [dbo].[Requests] WHERE [RequestID] > {{after}} -- {{limit}}' }, detailQueries: [] });
     const run = await h.svc.wait((await h.svc.start(START)).id);
     expect(run.status).toBe('failed');
+    expect(run.lastError).toContain('import SQL has a token inside quotes, a comment or a quoted name: remove the quotes around {{limit}}');
+    expect(h.source.statements).toEqual([]);
+  });
+
+  it('refuses SQL from the plugin that is not a SELECT, before running anything', async () => {
+    const h = await harness(keysOf(2));
+    h.setQueries({ keyQuery: { sql: 'DELETE TOP ({{limit}}) FROM [dbo].[Requests] WHERE [RequestID] > {{after}}' }, detailQueries: [] });
+    const run = await h.svc.wait((await h.svc.start(START)).id);
+    expect(run.status).toBe('failed');
+    expect(run.lastError).toContain('only SELECT/WITH queries are allowed');
     expect(h.source.statements).toEqual([]);
   });
 

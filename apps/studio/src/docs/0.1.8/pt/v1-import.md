@@ -12,7 +12,7 @@ As capturas usam um pedido, um paciente e um resultado de texto fictícios num S
 
 ## Autorizar o plugin a ler um conector
 
-Instale o plugin através de Marketplace ou do ficheiro aprovado. Crie um conector Microsoft SQL cujo início de sessão tenha SELECT nas tabelas v1 e nada mais. Assim lê a origem e nunca a altera.
+Instale o plugin através de Marketplace ou do ficheiro aprovado. Crie um conector Microsoft SQL cujo início de sessão tenha só a permissão SELECT nas tabelas v1. Assim lê a origem e nunca a altera.
 
 ### 1. Abrir Connectors
 
@@ -182,9 +182,9 @@ Selecione o conector. Em **Opções da cópia**, preencha os mesmos valores que 
 
 ### 3. Iniciar a cópia
 
-Selecione **Iniciar cópia**. O estado mostra **Na fila. O servidor inicia-a dentro de alguns segundos.** Depois mostra **A copiar**. Pode sair da página. Enquanto uma cópia está a decorrer, as suas opções ficam bloqueadas. Pode mesmo assim escolher outro conector para ver ou iniciar a sua cópia.
+Abra o menu de pontos no canto superior direito do separador Cópia e selecione **Iniciar cópia**. O estado mostra **Na fila. O servidor inicia-a dentro de alguns segundos.** Depois mostra **A copiar**. Pode sair da página. Enquanto uma cópia está a decorrer, as suas opções ficam bloqueadas. Pode mesmo assim escolher outro conector para ver ou iniciar a sua cópia.
 
-![Iniciar cópia entrega a cópia ao servidor.](v1-import-guide-copy-start.png)
+![Iniciar cópia está no menu de pontos no canto superior direito do separador.](v1-import-guide-copy-start.png)
 
 ### 4. Ler a tabela de conjuntos
 
@@ -200,9 +200,9 @@ Quando o CE não conseguiu copiar alguns pedidos, uma linha cor de âmbar dá **
 
 ### 5. Não mexer numa cópia à espera
 
-Quando a origem ou a ligação a ela está em baixo, o estado mostra **À espera da origem. Voltará a tentar automaticamente.** A página mostra **Tentativas até agora:**, quando começou a espera e o último erro. Não precisa de fazer nada. A primeira espera dura 5 segundos. Cada espera duplica, até 5 minutos, até a origem responder ou alguém parar a cópia. Se a origem responder mas a mesma página se perder duas vezes seguidas, a cópia lê essa página de novo com metade do tamanho, e as esperas voltam a começar em 5 segundos. A página volta a crescer depois de 5 páginas boas seguidas.
+Quando a origem ou a ligação a ela está em baixo, o estado mostra **À espera da origem. Voltará a tentar automaticamente.** A página mostra **Tentativas até agora:**, quando começou a espera e o último erro. Não precisa de fazer nada. A primeira espera dura 5 segundos. Cada espera duplica, até 5 minutos, até a origem responder ou alguém parar a cópia. Se a origem responder mas a mesma página se perder duas vezes seguidas, a cópia lê essa página de novo com metade do tamanho. As esperas voltam então a começar em 5 segundos. A página volta a crescer depois de 5 páginas boas seguidas.
 
-O último erro de uma ligação perdida começa com palavras simples e depois dá as palavras do controlador. Quando a própria origem reinicia, pode recusar o início de sessão ou dizer que a base de dados falta durante algum tempo. Uma cópia que já leu esta origem espera então até cerca de uma hora. O mesmo acontece com uma palavra-passe errada escrita no conector antes de continuar uma cópia. Essa cópia espera até cerca de uma hora e depois falha. Uma cópia nova com uma palavra-passe errada falha logo.
+O último erro de uma ligação perdida começa em geral com palavras simples e depois dá as palavras do controlador. Quando a própria origem reinicia, pode recusar o início de sessão ou indicar que a base de dados não está disponível durante algum tempo. Uma cópia que já leu esta origem espera então até cerca de uma hora. O mesmo acontece com uma palavra-passe errada escrita no conector antes de continuar uma cópia. Essa cópia espera até cerca de uma hora e depois falha. Uma cópia nova com uma palavra-passe errada falha depois de cerca de meio minuto.
 
 Depois de mudar as definições do conector, pare a cópia e continue-a. Uma cópia à espera continua a tentar as definições antigas.
 
@@ -212,11 +212,11 @@ Uma cópia também continua sozinha depois de o servidor CE reiniciar. Não prec
 
 ### 6. Parar e continuar
 
-Abra o menu de pontos ao lado do estado e selecione **Parar**. O estado mostra **A parar depois desta página** e depois **Parada**. Uma cópia na fila para logo. As linhas já copiadas ficam. Para continuar, selecione **Continuar cópia**. Cada conjunto continua de onde parou. Numa cópia concluída, **Continuar cópia** só tenta de novo os pedidos deixados de fora. Não lê pedidos novos da origem. Se a cópia foi iniciada pela CLI sem fuso, **Fuso horário do local** fica vazio, à parte uma dica cinzenta, e a página pede um desfasamento válido, como `Z`, antes de **Continuar cópia** funcionar. Esse desfasamento não muda nada na cópia.
+Abra o menu de pontos ao lado do estado e selecione **Parar**. O estado mostra **A parar depois desta página** e depois **Parada**. Uma cópia na fila é parada logo. As linhas já copiadas ficam. Para continuar, abra o menu de pontos no canto superior direito do separador e selecione **Continuar cópia**. Cada conjunto continua de onde parou. Numa cópia concluída, **Continuar cópia** só tenta de novo os pedidos deixados de fora. Não lê pedidos novos da origem. Se a cópia foi iniciada pela CLI sem fuso, **Fuso horário do local** fica vazio, exceto um exemplo a cinzento. A página pede então um desfasamento válido, como `Z`, antes de **Continuar cópia** funcionar. Esse desfasamento não muda nada na cópia.
 
 ![Parar está no menu de pontos ao lado do estado.](v1-import-guide-copy-stop.png)
 
-Se mudou **Base de dados**, **Data inicial**, **Data final** ou **Códigos de painel**, Continuar cópia pergunta **Ler de novo desde o início?** e nomeia os conjuntos. **Ler de novo** elimina as linhas já copiadas para esses conjuntos e depois lê-os de novo desde o início. Numa ligação lenta isso pode levar dias. Para manter a cópia, selecione **Cancelar**, reponha as opções e selecione **Continuar cópia**.
+Se mudou **Base de dados**, **Data inicial**, **Data final** ou **Códigos de painel**, Continuar cópia pergunta **Ler de novo desde o início?** e nomeia os conjuntos. **Ler de novo** elimina as linhas já copiadas para esses conjuntos e depois lê-os de novo desde o início. Numa ligação lenta isso pode levar dias. Para manter a cópia, selecione **Cancelar** e reponha as opções. Depois abra o menu de pontos no canto superior direito do separador e selecione **Continuar cópia**.
 
 ![Ler de novo elimina o que foi copiado para os conjuntos nomeados.](v1-import-guide-copy-reread.png)
 
@@ -255,7 +255,7 @@ pnpm openldr import copy delete openldr-v1-import <copy-id> --force
 
 Acompanhe o progresso com `status`. Mostra uma linha por cópia: o identificador da cópia, o estado e depois `keys`, `rows`, `bytes` e `skipped` de cada conjunto. Uma cópia concluída com pedidos deixados de fora mostra `completed with skipped keys`. Uma cópia à espera ou com falha termina a linha com o erro. O identificador da cópia é o primeiro valor da linha.
 
-Quando uma opção mudou o que um conjunto lê, `start` nomeia os conjuntos e não muda nada. Execute-o de novo com `--reread` para ler esses conjuntos de novo desde o início. Uma cópia a copiar ou à espera tem de ser parada primeiro. `stop` para a cópia depois da página em curso. `delete` recusa sem `--force`. Tal como o botão, termina antes de as linhas desaparecerem, e o servidor continua a eliminar em segundo plano.
+Quando uma opção mudou o que um conjunto lê, `start` nomeia os conjuntos e não muda nada. Execute-o de novo com `--reread` para ler esses conjuntos de novo desde o início. Uma cópia a copiar ou à espera tem de ser parada primeiro. `stop` para a cópia depois da página em curso. `delete` recusa sem `--force`. Tal como o botão, o comando termina antes de as linhas desaparecerem, e o servidor continua a eliminar em segundo plano.
 
 ## Prática opcional com dados de origem fictícios
 
@@ -283,11 +283,11 @@ No código-fonte, `pnpm build:v1-import` prepara o importador de referência. Ex
 
 **A cópia mostra À espera da origem.** O CE não consegue ligar-se à origem, ou a ligação a ela está em baixo. A cópia volta a tentar sozinha, com no máximo 5 minutos entre tentativas. Leia o último erro. Se a espera continuar, execute Diagnose no conector. Depois de corrigir o conector, pare a cópia e continue-a, para que use as definições novas. Pare a cópia só se quiser que deixe de tentar.
 
-**Alguns pedidos ficaram de fora.** A linha cor de âmbar **Pedidos deixados de fora:** dá quantos são. O CE deixa um pedido de fora por uma de duas razões. Lido sozinho, excedeu o tempo limite três vezes. O CE regista isto como `SOURCE_TIMEOUT`. Ou uma das suas linhas tem texto que a base de dados do CE não consegue guardar, como um carácter NUL. O CE regista isto como `ROW_NOT_STORABLE`. A cópia tenta-os de novo no fim de cada passagem e no início seguinte. A página e a CLI mostram só o número. Na CLI, o estado lê-se `completed with skipped keys`. Uma cópia com pedidos deixados de fora não está completa.
+**Alguns pedidos ficaram de fora.** A linha cor de âmbar **Pedidos deixados de fora:** dá quantos são. O CE deixa um pedido de fora por uma de duas razões. Lido sozinho, excedeu o tempo limite três vezes. O CE regista isto como `SOURCE_TIMEOUT`. Ou uma das suas linhas tem texto que a base de dados do CE não consegue guardar, como um carácter NUL. O CE regista isto como `ROW_NOT_STORABLE`. A cópia tenta-os de novo no fim de cada passagem e no início seguinte. A página e a CLI mostram só o número. Na CLI, o estado aparece como `completed with skipped keys`. Uma cópia com pedidos deixados de fora não está completa.
 
 **Continuar cópia pede para ler um conjunto de novo.** Na CLI, `start` nomeia os conjuntos em vez disso. Mudou uma opção que decide que pedidos são lidos, ou o plugin foi atualizado. Ler de novo elimina as linhas copiadas para os conjuntos nomeados. Selecione **Cancelar** e reponha as opções para as manter.
 
-**A cópia falhou.** Leia o último erro. Um início de sessão recusado, uma base ou tabela em falta, uma falha do plugin, ou uma escrita recusada pela base de dados do próprio CE, por exemplo com o disco cheio, termina a cópia. Tentar de novo não resolve isso. Há uma exceção. Uma cópia que já leu esta origem espera até cerca de uma hora por um início de sessão recusado ou uma base em falta, caso a origem esteja a reiniciar. Corrija a causa e selecione **Continuar cópia**. As linhas já copiadas ficam.
+**A cópia falhou.** Leia o último erro. Um início de sessão recusado, uma base ou tabela em falta, uma falha do plugin, ou uma escrita recusada pela base de dados do próprio CE, por exemplo com o disco cheio, termina a cópia. Tentar de novo não resolve isso. Há uma exceção. Uma cópia que já leu esta origem espera até cerca de uma hora por um início de sessão recusado ou uma base em falta, caso a origem esteja a reiniciar. Corrija a causa e depois abra o menu de pontos no canto superior direito do separador Cópia e selecione **Continuar cópia**. As linhas já copiadas ficam.
 
 **Eliminar cópia está a cinzento.** Só se pode eliminar uma cópia parada, com falha ou concluída. Pare-a primeiro.
 

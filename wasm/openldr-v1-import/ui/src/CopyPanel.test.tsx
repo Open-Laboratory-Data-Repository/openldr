@@ -41,6 +41,11 @@ const type = (id: string, value: string) => fireEvent.input(byId(id), { target: 
 const disabled = (id: string) => (byId(id) as HTMLButtonElement).disabled;
 // A menu item is marked aria-disabled, not disabled, so the keyboard can still reach it.
 const itemOff = (id: string) => byId(id).getAttribute('aria-disabled') === 'true';
+/** Start copy sits in the Copy tab's own dots menu (spec 4.6): open the menu, then choose the item. */
+function chooseStart() {
+  click('copy-actions');
+  click('copy-start');
+}
 
 /** Render the page and open the Copy tab. */
 async function openCopy() {
@@ -61,13 +66,14 @@ describe('copy tab', () => {
     setup({ start, status: async () => started });
     await openCopy();
     expect(screen.getByTestId('tab-copy').getAttribute('aria-selected')).toBe('true');
-    expect(byId('copy-start').textContent).toMatch(/Start copy/);
-    expect(disabled('copy-start')).toBe(true);
+    expect(disabled('copy-actions')).toBe(true);
     fireEvent.click(await pane().findByTestId('connector-ms'));
     type('opt-tz', '+03:00');
     type('opt-database', 'OpenLDRData');
     type('opt-panels', ' HIVVL ');
-    expect(disabled('copy-start')).toBe(false);
+    expect(disabled('copy-actions')).toBe(false);
+    click('copy-actions');
+    expect(byId('copy-start').textContent).toMatch(/Start copy/);
     click('copy-start');
     await waitFor(() => expect(byId('copy-status').textContent).toMatch(/Queued/));
     expect(start).toHaveBeenCalledTimes(1);
@@ -202,13 +208,13 @@ describe('copy tab', () => {
     expect((byId('opt-database') as HTMLInputElement).value).toBe('LabDB');
     expect((byId('opt-from') as HTMLInputElement).value).toBe('2024-01-01');
     expect((byId('opt-database') as HTMLInputElement).readOnly).toBe(true);
-    expect(disabled('copy-start')).toBe(true);
+    expect(disabled('copy-actions')).toBe(true);
     click('copy-menu');
     click('copy-stop');
     // Once stopped, the form opens again with the options the copy had, and Start copy sends it.
     await waitFor(() => expect((byId('opt-tz') as HTMLInputElement).readOnly).toBe(false));
     expect((byId('opt-tz') as HTMLInputElement).value).toBe('+01:00');
-    expect(disabled('copy-start')).toBe(false);
+    expect(disabled('copy-actions')).toBe(false);
   });
 
   it('asks before reading a changed set again, and sends reread only on yes', async () => {
@@ -221,7 +227,7 @@ describe('copy tab', () => {
     setup({ list: async () => [stopped], status: async () => current, start });
     await openCopy();
     type('opt-from', '2025-01-01');
-    click('copy-start');
+    chooseStart();
     const dialog = await pane().findByTestId('copy-reread-dialog');
     expect(dialog.textContent).toContain('These will be read again from the start: requests');
     // No: nothing is sent again, and the copy is left as it was.
@@ -231,7 +237,7 @@ describe('copy tab', () => {
     expect(start).toHaveBeenLastCalledWith({ connectorId: 'ms', options: { tz: '+02:00', from: '2025-01-01' } });
     expect(byId('copy-status').textContent).toMatch(/Stopped/);
     // Ask again, and say yes this time.
-    click('copy-start');
+    chooseStart();
     await pane().findByTestId('copy-reread-dialog');
     click('copy-reread-yes');
     await waitFor(() => expect(byId('copy-status').textContent).toMatch(/Queued/));
@@ -281,7 +287,7 @@ describe('copy tab', () => {
     await openCopy();
     fireEvent.click(await pane().findByTestId('connector-ms'));
     type('opt-tz', '+02:00');
-    click('copy-start');
+    chooseStart();
     expect((await pane().findByTestId('copy-start-error')).textContent).toContain('copy cp1 is being deleted');
   });
 });
@@ -346,6 +352,15 @@ describe('reading the copy', () => {
 const other = { id: 'ms2', name: 'Second v1 server', type: 'microsoft-sql' };
 const active = () => document.activeElement as HTMLElement | null;
 const key = (k: string, shift = false) => fireEvent.keyDown(active() ?? document.body, { key: k, shiftKey: shift });
+/** Puts focus on the page body. jsdom will not blur a disabled button, so focus moves to a
+ *  field of the test's own first, and that field is then blurred and removed. */
+function focusBody() {
+  const spot = document.createElement('input');
+  document.body.appendChild(spot);
+  spot.focus();
+  spot.blur();
+  spot.remove();
+}
 
 describe('R35: a yes to read again sends exactly what was asked', () => {
   it('locks the picker and the form while the start call is out and the step is open, and the yes resends the first values', async () => {
@@ -358,7 +373,7 @@ describe('R35: a yes to read again sends exactly what was asked', () => {
     Object.assign(o.imports, { allowed: async () => [ms, other] });
     await openCopy();
     type('opt-from', '2025-01-01');
-    click('copy-start');
+    chooseStart();
     // The call is out: the form and the picker do not take input.
     expect((byId('opt-from') as HTMLInputElement).readOnly).toBe(true);
     type('opt-from', '2030-12-31');
@@ -396,8 +411,8 @@ describe('two connectors', () => {
     await waitFor(() => expect(byId('copy-status').textContent).toMatch(/Stopped/));
     expect((byId('opt-database') as HTMLInputElement).value).toBe('Other');
     expect((byId('opt-tz') as HTMLInputElement).readOnly).toBe(false);
-    expect(disabled('copy-start')).toBe(false);
-    click('copy-start');
+    expect(disabled('copy-actions')).toBe(false);
+    chooseStart();
     await waitFor(() => expect(start).toHaveBeenCalledWith({ connectorId: 'ms2', options: { tz: '+01:00', database: 'Other' } }));
     // And back to the live one, still read-only.
     await waitFor(() => expect(disabled('connector-ms')).toBe(false));
@@ -436,16 +451,16 @@ describe('the dots menu and the sets table', () => {
 });
 
 describe('R36: a confirm step is modal', () => {
-  it('the read-again step takes focus, keeps Tab inside, closes on Escape and gives focus back to Start', async () => {
+  it('the read-again step takes focus, keeps Tab inside, closes on Escape and gives focus back to the Start menu button', async () => {
     const stopped = copy({ status: 'stopped' });
     setup({ list: async () => [stopped], status: async () => stopped, start: async () => ({ changedSets: ['requests'] }) });
     await openCopy();
-    byId('copy-start').focus();
-    click('copy-start');
+    chooseStart();
     const dialog = await pane().findByTestId('copy-reread-dialog');
     await waitFor(() => expect(dialog.contains(active())).toBe(true));
-    // Everything behind the step is out of reach.
+    // Everything behind the step is out of reach, the Start menu with it.
     expect(byId('copy-main').hasAttribute('inert')).toBe(true);
+    expect(byId('copy-main').contains(byId('copy-actions'))).toBe(true);
     const no = byId('copy-reread-no');
     const yes = byId('copy-reread-yes');
     yes.focus();
@@ -456,7 +471,7 @@ describe('R36: a confirm step is modal', () => {
     key('Escape');
     await waitFor(() => expect(pane().queryByTestId('copy-reread-dialog')).toBeNull());
     expect(byId('copy-main').hasAttribute('inert')).toBe(false);
-    await waitFor(() => expect(active()).toBe(byId('copy-start')));
+    await waitFor(() => expect(active()).toBe(byId('copy-actions')));
   });
 
   it('the delete step takes focus, keeps Tab inside, locks the picker, and gives focus back to the dots button', async () => {
@@ -485,5 +500,270 @@ describe('R36: a confirm step is modal', () => {
     await waitFor(() => expect(pane().queryByTestId('copy-delete-dialog')).toBeNull());
     await waitFor(() => expect(active()).toBe(byId('copy-menu')));
     expect(remove).not.toHaveBeenCalled();
+  });
+});
+
+// The two dots menus are told apart by their names.
+const START_MENU = 'Copy tab actions';
+const CARD_MENU = 'Copy actions';
+const menuNamed = (name: string) => pane().queryByRole('menu', { name });
+
+describe('spec 4.6: Start copy sits in a dots menu', () => {
+  it('has no plain Start button; the menu button sits in the picker row and is off until a connector is picked', async () => {
+    setup();
+    await openCopy();
+    expect(pane().queryByTestId('copy-start')).toBeNull();
+    const button = byId('copy-actions');
+    expect(button.getAttribute('aria-label')).toBe(START_MENU);
+    expect(button.getAttribute('aria-haspopup')).toBe('menu');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    // R3: no menu that opens with nothing usable in it.
+    expect(disabled('copy-actions')).toBe(true);
+    const row = byId('copy-source-row');
+    expect(row.contains(byId('connector-ms'))).toBe(true);
+    expect(row.contains(button)).toBe(true);
+    click('connector-ms');
+    expect(disabled('copy-actions')).toBe(false);
+    click('copy-actions');
+    const menu = menuNamed(START_MENU)!;
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.getAttribute('data-testid'))).toEqual(['copy-start']);
+    expect(byId('copy-start').textContent).toBe('Start copy');
+    expect(itemOff('copy-start')).toBe(false);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    // Focus moves to the item.
+    expect(active()).toBe(byId('copy-start'));
+  });
+
+  it('names the item Continue copy when a copy exists and is not live', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    expect(byId('copy-start').textContent).toBe('Continue copy');
+  });
+
+  it('is off while the copy shown is live, and its menu is never drawn', async () => {
+    setup({ list: async () => [copy()], status: async () => copy() });
+    await openCopy();
+    expect(disabled('copy-actions')).toBe(true);
+    expect(menuNamed(START_MENU)).toBeNull();
+    // jsdom delivers a click to a disabled button and a real browser does not. So this checks the
+    // button's own guard: the list is not drawn even for a moment.
+    const seen = new MutationObserver(() => {});
+    seen.observe(screen.getByTestId('copy-panel'), { childList: true, subtree: true });
+    click('copy-actions');
+    const added = seen.takeRecords().flatMap((r) => [...r.addedNodes]);
+    seen.disconnect();
+    expect(added.some((n) => n instanceof Element && (n.matches('[role="menu"]') || n.querySelector('[role="menu"]') !== null))).toBe(false);
+    expect(byId('copy-actions').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('R3: an open menu closes, and its button is off, once the item cannot be used', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    expect(menuNamed(START_MENU)).toBeTruthy();
+    expect(active()).toBe(byId('copy-start'));
+    // A form that is not right: Start cannot be used now.
+    type('opt-tz', 'not an offset');
+    await waitFor(() => expect(menuNamed(START_MENU)).toBeNull());
+    expect(byId('copy-actions').getAttribute('aria-expanded')).toBe('false');
+    expect(disabled('copy-actions')).toBe(true);
+    // Focus was in the menu, which is gone, so it goes to the status line.
+    expect(active()).toBe(byId('copy-status'));
+  });
+
+  it('R3: when focus is in a field as the menu closes, it stays in the field', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    const tz = byId('opt-tz');
+    tz.focus();
+    type('opt-tz', 'not an offset');
+    await waitFor(() => expect(menuNamed(START_MENU)).toBeNull());
+    expect(active()).toBe(tz);
+  });
+
+  it('choosing the item calls start with the form, closes the menu and gives focus to its button', async () => {
+    const stopped = copy({ status: 'stopped' });
+    const start = vi.fn(async () => { throw new Error('no room on the disk'); });
+    setup({ list: async () => [stopped], status: async () => stopped, start });
+    await openCopy();
+    const focus = vi.spyOn(byId('copy-actions'), 'focus');
+    chooseStart();
+    expect(menuNamed(START_MENU)).toBeNull();
+    expect(byId('copy-actions').getAttribute('aria-expanded')).toBe('false');
+    expect(focus).toHaveBeenCalled();
+    // Not asserted: whether focus stays on the button while the call makes it disabled. jsdom keeps it; a real browser may not.
+    await pane().findByTestId('copy-start-error');
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledWith({ connectorId: 'ms', options: { tz: '+02:00' } });
+  });
+
+  it('says Starting… in a status line while the start call is out, and nothing once it settles', async () => {
+    const stopped = copy({ status: 'stopped' });
+    // Each call waits until the test answers it.
+    type Answer = { run?: PluginCopyRun; changedSets?: string[] };
+    let settle = { resolve: (_v: Answer) => {}, reject: (_e: unknown) => {} };
+    const start = vi.fn(() => new Promise<Answer>((resolve, reject) => { settle = { resolve, reject }; }));
+    setup({ list: async () => [stopped], status: async () => stopped, start });
+    await openCopy();
+    const line = () => byId('copy-starting');
+    expect(line().getAttribute('role')).toBe('status');
+    expect(line().textContent).toBe('');
+    // A call that fails.
+    chooseStart();
+    expect(line().textContent).toBe('Starting…');
+    settle.reject(new Error('no room on the disk'));
+    await pane().findByTestId('copy-start-error');
+    expect(line().textContent).toBe('');
+    // A call that works.
+    chooseStart();
+    expect(line().textContent).toBe('Starting…');
+    settle.resolve({ run: copy({ status: 'queued' }) });
+    await waitFor(() => expect(line().textContent).toBe(''));
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+
+  it('Tab closes an open Start menu', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    expect(active()).toBe(byId('copy-start'));
+    // Not asserted: where Tab then moves focus. jsdom has no Tab default action; the browser moves it.
+    key('Tab');
+    expect(menuNamed(START_MENU)).toBeNull();
+    expect(byId('copy-actions').getAttribute('aria-expanded')).toBe('false');
+    click('copy-actions');
+    key('Tab', true);
+    expect(menuNamed(START_MENU)).toBeNull();
+  });
+
+  it('Tab closes an open card menu', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-menu');
+    expect(menuNamed(CARD_MENU)).toBeTruthy();
+    key('Tab');
+    expect(menuNamed(CARD_MENU)).toBeNull();
+    expect(byId('copy-menu').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('an open menu does not take the arrow keys or Escape from a field', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    const from = byId('opt-from');
+    from.focus();
+    // fireEvent returns false when a listener called preventDefault.
+    expect(fireEvent.keyDown(from, { key: 'ArrowDown' })).toBe(true);
+    expect(active()).toBe(from);
+    expect(fireEvent.keyDown(from, { key: 'ArrowUp' })).toBe(true);
+    expect(active()).toBe(from);
+    expect(fireEvent.keyDown(from, { key: 'Escape' })).toBe(true);
+    expect(active()).toBe(from);
+  });
+
+  it('Escape closes the menu and gives focus back to its button; the arrow keys stay on the one item', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    expect(active()).toBe(byId('copy-start'));
+    key('ArrowDown');
+    expect(active()).toBe(byId('copy-start'));
+    key('ArrowUp');
+    expect(active()).toBe(byId('copy-start'));
+    key('Escape');
+    expect(menuNamed(START_MENU)).toBeNull();
+    expect(active()).toBe(byId('copy-actions'));
+  });
+
+  it('a click outside closes the menu', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    expect(menuNamed(START_MENU)).toBeTruthy();
+    click('copy-status');
+    expect(menuNamed(START_MENU)).toBeNull();
+  });
+
+  it('never has both menus open: opening one closes the other', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-menu');
+    expect(menuNamed(CARD_MENU)).toBeTruthy();
+    click('copy-actions');
+    expect(menuNamed(CARD_MENU)).toBeNull();
+    expect(byId('copy-menu').getAttribute('aria-expanded')).toBe('false');
+    expect(menuNamed(START_MENU)).toBeTruthy();
+    click('copy-menu');
+    expect(menuNamed(START_MENU)).toBeNull();
+    expect(byId('copy-actions').getAttribute('aria-expanded')).toBe('false');
+    expect(menuNamed(CARD_MENU)).toBeTruthy();
+    // The card menu still holds Stop and Delete, and nothing else.
+    expect(within(menuNamed(CARD_MENU)!).getAllByRole('menuitem').map((i) => i.getAttribute('data-testid'))).toEqual(['copy-stop', 'copy-delete']);
+  });
+
+  it('Escape closes an open menu while focus is on the page body, for both menus', async () => {
+    const stopped = copy({ status: 'stopped' });
+    setup({ list: async () => [stopped], status: async () => stopped });
+    await openCopy();
+    click('copy-actions');
+    focusBody();
+    expect(active()).toBe(document.body);
+    key('Escape');
+    expect(menuNamed(START_MENU)).toBeNull();
+    expect(active()).toBe(byId('copy-actions'));
+    click('copy-menu');
+    focusBody();
+    expect(active()).toBe(document.body);
+    key('Escape');
+    expect(menuNamed(CARD_MENU)).toBeNull();
+    expect(active()).toBe(byId('copy-menu'));
+  });
+});
+
+describe('R33: focus after a start call', () => {
+  // A real browser drops focus from a button that turns disabled; jsdom keeps it. Each test moves
+  // focus to the page body while the call is out, as the browser does.
+  type Answer = { run?: PluginCopyRun; changedSets?: string[] };
+  function pendingStart() {
+    let settle = { resolve: (_v: Answer) => {}, reject: (_e: unknown) => {} };
+    const start = vi.fn(() => new Promise<Answer>((resolve, reject) => { settle = { resolve, reject }; }));
+    return { start, settle: () => settle };
+  }
+
+  it('a start that works: focus goes to the status line, because the Start menu button is off for the live copy', async () => {
+    const stopped = copy({ status: 'stopped' });
+    const call = pendingStart();
+    setup({ list: async () => [stopped], status: async () => copy({ status: 'queued' }), start: call.start });
+    await openCopy();
+    chooseStart();
+    focusBody();
+    expect(active()).toBe(document.body);
+    call.settle().resolve({ run: copy({ status: 'queued' }) });
+    await waitFor(() => expect(active()).toBe(byId('copy-status')));
+    expect(disabled('copy-actions')).toBe(true);
+  });
+
+  it('a start that fails: focus goes back to the Start menu button', async () => {
+    const stopped = copy({ status: 'stopped' });
+    const call = pendingStart();
+    setup({ list: async () => [stopped], status: async () => stopped, start: call.start });
+    await openCopy();
+    chooseStart();
+    focusBody();
+    expect(active()).toBe(document.body);
+    call.settle().reject(new Error('no room on the disk'));
+    await pane().findByTestId('copy-start-error');
+    await waitFor(() => expect(active()).toBe(byId('copy-actions')));
   });
 });

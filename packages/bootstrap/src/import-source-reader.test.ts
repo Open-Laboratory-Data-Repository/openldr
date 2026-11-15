@@ -23,6 +23,8 @@ const lost = () => err('ESOCKET', 'Connection lost - read ECONNRESET');
 /** How `lost()` reads in the waiting state (R41). */
 const LOST_TEXT = 'the source could not be reached: Connection lost - read ECONNRESET';
 const STARTING_UP = 'the source may still be starting up: ';
+/** What the connection pool really throws on a failed connect: the driver's words, no code, no number. */
+const poolError = (message: string) => Object.assign(new Error(message), { name: 'TimeoutError' });
 
 type Kind = 'keys' | 'details' | 'probe';
 /** `{ throws }` throws a value that is not an Error, such as the array Kysely rejects with. */
@@ -71,6 +73,7 @@ function fakeSource(answer: (kind: Kind, sql: string, n: number) => Answer | und
         if (kind === 'probe') return { rows: [{ '': 1 }] };
         return { rows: kind === 'keys' ? realKeys(sql) : realDetails(sql) };
       },
+      async queryReadOnly(): Promise<never> { throw new Error('the import reader calls query, never queryReadOnly'); },
       async close() {
         if (isProbe) log.probeCloses += 1;
         else log.closes += 1;
@@ -367,6 +370,28 @@ describe('createSourceReader', () => {
     }
   });
 
+  it('refuses a key query with a SQL Server statement word before any connection opens', async () => {
+    // Postgres and MySQL read EXEC as a name here. Only the mssql reading refuses it. The reader
+    // checks the key query twice, in readPage and again in sourceRows, and both run before it opens
+    // a connection. So this pins what the early check guarantees, no open and no query, and not
+    // which of the two checks refused.
+    const source = fakeSource();
+    const { reader } = harness(source);
+    const keySql = `${KEY_SQL} EXEC [dbo].[Wipe]`;
+    await expect(reader.readPage({ ...first, keySql })).rejects.toThrow(/on SQL Server/);
+    expect(source.log.queries).toEqual([]);
+    expect(source.open).not.toHaveBeenCalled();
+  });
+
+  it('reads the detail queries as SQL Server does before the key query runs', async () => {
+    const source = fakeSource();
+    const { reader } = harness(source);
+    const details = [{ name: 'results', sql: `${DETAIL_SQL} EXEC [dbo].[Wipe]` }];
+    await expect(reader.readPage({ ...first, details })).rejects.toThrow(/on SQL Server/);
+    expect(source.log.queries).toEqual([]);
+    expect(source.open).not.toHaveBeenCalled();
+  });
+
   it('a key that is not safe is thrown as it is, not retried', async () => {
     const source = fakeSource((kind) => (kind === 'keys' ? [{ RequestID: 'Ré' }] : undefined));
     const { reader, waiting } = harness(source);
@@ -462,7 +487,7 @@ describe('createSourceReader', () => {
     const realOpen = source.open.getMockImplementation()!;
     source.open.mockImplementation(async (opts) => {
       const db = await realOpen(opts);
-      return { query: db.query, close: () => new Promise<void>(() => undefined) };
+      return { query: db.query, queryReadOnly: db.queryReadOnly, close: () => new Promise<void>(() => undefined) };
     });
     const { reader } = harness(source);
     await reader.readPage(first);
@@ -513,11 +538,20 @@ describe('a source that may be starting up', () => {
     expect(waiting).toEqual([{ attempt: 1, error: `${STARTING_UP}Login failed for user 'x'.` }, null]);
   });
 
+  it('a login the pool refuses on open is waited on with the fixed sentence after the lead', async () => {
+    const source = fakeSource();
+    const realOpen = source.open.getMockImplementation()!;
+    source.open.mockImplementationOnce(async () => { throw poolError("Login failed for user 'x'."); }).mockImplementation(realOpen);
+    const { reader, waiting } = harness(source);
+    expect((await reader.readPage(readBefore)).kind).toBe('page');
+    expect(waiting).toEqual([{ attempt: 1, error: 'the source may still be starting up: the source refused the login' }, null]);
+  });
+
   it('a new run with a wrong password fails at once', async () => {
     const source = fakeSource();
-    source.open.mockImplementation(async () => { throw err('ELOGIN', "Login failed for user 'x'."); });
+    source.open.mockImplementation(async () => { throw poolError("Login failed for user 'x'."); });
     const { reader, waiting, sleeps } = harness(source);
-    await expect(reader.readPage({ ...first, readBefore: false })).rejects.toThrow("Login failed for user 'x'.");
+    await expect(reader.readPage({ ...first, readBefore: false })).rejects.toThrow(/^the source refused the login$/);
     expect(waiting).toEqual([]);
     expect(sleeps).toEqual([]);
     expect(source.open).toHaveBeenCalledTimes(1);

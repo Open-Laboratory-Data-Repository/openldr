@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { exportCustomQueries, importCustomQueries, CustomQueryTransferError, type AppContext } from '@openldr/bootstrap';
-import { CustomQueryInputSchema, validateSelectSql } from '@openldr/dashboards';
+import { dialectFor, exportCustomQueries, importCustomQueries, CustomQueryTransferError, type AppContext } from '@openldr/bootstrap';
+import { CustomQueryInputSchema, validateSelectSqlForSave } from '@openldr/dashboards';
 import type { CustomQueryGroupStore, CustomQueryStore } from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
@@ -205,7 +205,10 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found or disabled' }; }
     let inner: string;
     try {
-      inner = prepareSelect(parsed.data.sql, (parsed.data.params ?? []) as never, parsed.data.values ?? {});
+      // Filled for the connector's engine. A type with no dialect is filled with none, and the
+      // connector runner then refuses it.
+      const dialect = (c.type ? dialectFor(c.type) : null) ?? undefined;
+      inner = prepareSelect(parsed.data.sql, (parsed.data.params ?? []) as never, parsed.data.values ?? {}, dialect);
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
     // Always wrap with a LIMIT so an unbounded `select * from big_table` never streams every row
     // into memory; the requested limit is clamped to ROW_CAP. Pagination is delegated to
@@ -225,7 +228,8 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
       // T-SQL rejects when the inner query ends in ORDER BY — so MSSQL results page without a total.
       let total: number | undefined;
       if (parsed.data.limit !== undefined && c.type !== 'microsoft-sql') {
-        const cnt = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: `select count(*) as _n from (${inner}) as _q` });
+        // The line feed ends a trailing `-- comment` in the person's SQL before the wrapper's end.
+        const cnt = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: `select count(*) as _n from (${inner}\n) as _q` });
         total = Number(Object.values(cnt.rows[0] ?? {})[0] ?? capped.length);
       }
       return { columns, rows: capped, rowCount: capped.length, ms: Date.now() - started, ...(total !== undefined ? { total } : {}), ...(probeNext ? { hasMore: rows.length > cap } : {}) };
@@ -316,7 +320,7 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
   app.post('/api/query/param-options', GUARD, async (req, reply) => {
     const body = z.object({ connectorId: z.string().min(1), optionsSql: z.string().min(1) }).safeParse(req.body);
     if (!body.success) { reply.code(400); return { error: body.error.message }; }
-    try { validateSelectSql(body.data.optionsSql); } catch (e) { reply.code(400); return { error: (e as Error).message }; }
+    try { validateSelectSqlForSave(body.data.optionsSql); } catch (e) { reply.code(400); return { error: (e as Error).message }; }
     const c = await deps.connectors.get(body.data.connectorId);
     if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found' }; }
     try {

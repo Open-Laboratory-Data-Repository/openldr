@@ -1,21 +1,42 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { EventEmitter } from 'node:events';
+import {
+  Kysely, MssqlAdapter, MssqlIntrospector, MssqlQueryCompiler,
+  type CompiledQuery, type DatabaseConnection, type Driver, type QueryResult,
+} from 'kysely';
 
 // Captures what the mysql arm does to its pool. mysql2 is mocked at the module boundary because the
 // thing under test happens at POOL CONSTRUCTION, before any connection exists, and there is no
 // server here to open one against.
-const { poolOn, poolQuery, mssqlWithRequestTimeout, mssqlCreate } = vi.hoisted(() => ({
-  mssqlCreate: vi.fn(),
-  poolOn: vi.fn(),
-  poolQuery: vi.fn(),
-  mssqlWithRequestTimeout: vi.fn(async (timeoutMs: number) => {
-    throw new Error(`bounded at ${timeoutMs}`);
-  }),
-}));
-vi.mock('mysql2', () => ({
-  createPool: () => ({ on: poolOn, query: poolQuery, getConnection: vi.fn(), end: vi.fn() }),
-}));
+const { poolOn, poolQuery, mssqlWithRequestTimeout, mssqlCreate, mysqlCreatePool, pgFake, mssqlFake } = vi.hoisted(() => {
+  const poolOn = vi.fn();
+  const poolQuery = vi.fn();
+  return {
+    mssqlCreate: vi.fn(),
+    poolOn,
+    poolQuery,
+    mssqlWithRequestTimeout: vi.fn(async (timeoutMs: number) => {
+      throw new Error(`bounded at ${timeoutMs}`);
+    }),
+    mysqlCreatePool: vi.fn((_options: Record<string, unknown>): unknown => ({ on: poolOn, query: poolQuery, getConnection: vi.fn(), end: vi.fn() })),
+    /** When set, `new pg.Pool(options)` returns what this makes. Otherwise the real pool. */
+    pgFake: { make: null as null | ((options: Record<string, unknown>) => unknown) },
+    /** When set, `createMssqlStore` returns this store. */
+    mssqlFake: { store: null as unknown },
+  };
+});
+vi.mock('mysql2', () => ({ createPool: mysqlCreatePool }));
+vi.mock('pg', async (importOriginal) => {
+  const real = await importOriginal<typeof import('pg')>();
+  class Pool {
+    constructor(options: Record<string, unknown>) {
+      return (pgFake.make ? pgFake.make(options) : new real.default.Pool(options)) as never;
+    }
+  }
+  return { ...real, default: { ...real.default, Pool } };
+});
 vi.mock('@openldr/adapter-mssql-store', () => ({
-  createMssqlStore: (cfg: unknown) => (mssqlCreate(cfg), {
+  createMssqlStore: (cfg: unknown) => (mssqlCreate(cfg), mssqlFake.store ?? {
     db: {},
     withRequestTimeout: mssqlWithRequestTimeout,
     close: vi.fn(),
@@ -23,6 +44,170 @@ vi.mock('@openldr/adapter-mssql-store', () => ({
 }));
 
 import { createConnectorDb, buildPgUrl, splitMssqlHost } from './connector-db';
+
+afterEach(() => {
+  pgFake.make = null;
+  mssqlFake.store = null;
+});
+
+const SCS = 'SET LOCAL standard_conforming_strings = on';
+const MSSQL_CONFIG = { host: 'h', port: '1433', database: 'd', user: 'u', password: 'p' };
+const MYSQL_CONFIG = { host: 'h', port: '3306', database: 'd', user: 'u', password: 'p' };
+
+/** A fake pg pool: records what the pool and its one client are sent, and how the client is
+ *  given back. `fail` makes the BEGIN, the person's statement or the ROLLBACK throw.
+ *
+ *  `drop` models the connection dying while `drop.on` is the running query, the way pg does it:
+ *  the client emits `'error'` at once (`pg lib/client.js:405-411`), and the running query is
+ *  failed on the next tick (`:129-144`). With `statementFirst`, the query's own error comes first
+ *  and the emit follows. The client is a real event emitter, so an `'error'` emit with no listener
+ *  throws, as it does in pg. The fake catches that throw and records it. */
+function fakePg(fail: {
+  begin?: Error;
+  statement?: Error;
+  rollback?: Error;
+  drop?: { on: string; error: Error; statementFirst?: Error };
+} = {}) {
+  const onClient: string[] = [];
+  const onPool: string[] = [];
+  const releases: unknown[][] = [];
+  const listenersAtRelease: number[] = [];
+  const emitThrew: unknown[] = [];
+  const created: Record<string, unknown>[] = [];
+  const own = new Set(['BEGIN READ ONLY', SCS, 'ROLLBACK']);
+  let dead = false;
+  const emitLost = (error: Error) => {
+    try { client.emit('error', error); } catch (thrown) { emitThrew.push(thrown); }
+  };
+  const sent: unknown[] = [];
+  const client = Object.assign(new EventEmitter(), {
+    query(arg: string | { text: string }): Promise<{ rows: Record<string, unknown>[] }> {
+      // `sent` keeps each call's argument as it came; `onClient` keeps its text.
+      sent.push(arg);
+      const text = typeof arg === 'string' ? arg : arg.text;
+      onClient.push(text);
+      if (dead) return Promise.reject(new Error('Client has encountered a connection error and is not queryable'));
+      if (fail.drop?.on === text) {
+        const { error, statementFirst } = fail.drop;
+        return new Promise((_resolve, reject) => {
+          setTimeout(() => {
+            dead = true;
+            if (statementFirst) {
+              reject(statementFirst);
+              setTimeout(() => emitLost(error), 0);
+            } else {
+              emitLost(error);
+              process.nextTick(() => reject(error));
+            }
+          }, 0);
+        });
+      }
+      if (text === 'BEGIN READ ONLY' && fail.begin) return Promise.reject(fail.begin);
+      if (text === 'ROLLBACK' && fail.rollback) return Promise.reject(fail.rollback);
+      if (!own.has(text) && fail.statement) return Promise.reject(fail.statement);
+      return Promise.resolve({ rows: [{ n: 1 }] });
+    },
+    release: (...args: unknown[]) => {
+      releases.push(args);
+      listenersAtRelease.push(client.listenerCount('error'));
+      // pg-pool puts its idle listener back on a released client (`pg-pool index.js:385`).
+      client.on('error', (e: unknown) => toPool.push(e));
+    },
+  });
+  const toPool: unknown[] = [];
+  const pool = {
+    connect: vi.fn(async () => client),
+    query: vi.fn(async (text: string) => { onPool.push(text); return { rows: [{ n: 1 }] }; }),
+    on: vi.fn(),
+    end: async () => {},
+  };
+  pgFake.make = (options) => { created.push(options); return pool; };
+  return { onClient, sent, onPool, releases, listenersAtRelease, emitThrew, toPool, client, pool, created };
+}
+
+/** A real Kysely over a fake SQL Server driver with a pool of ONE connection. It records each
+ *  request, models the server's transaction state, and notes any request sent outside the
+ *  store's request deadline. A connection that is never given back makes the next query fail. */
+function fakeMssqlStore(server: {
+  rows?: Record<string, unknown>[];
+  failQuery?: (sql: string) => { error: Error; endsTransaction?: boolean } | undefined;
+  failRollback?: () => Error | undefined;
+  failBegin?: Error;
+} = {}) {
+  const trail: string[] = [];
+  const outsideDeadline: string[] = [];
+  const state = { leased: false, inTransaction: false, inDeadline: false };
+  const note = (step: string) => { trail.push(step); if (!state.inDeadline) outsideDeadline.push(step); };
+  const connection: DatabaseConnection = {
+    async executeQuery<R>(q: CompiledQuery): Promise<QueryResult<R>> {
+      note(q.sql);
+      const fail = server.failQuery?.(q.sql);
+      if (fail) {
+        if (fail.endsTransaction) state.inTransaction = false;
+        throw fail.error;
+      }
+      return { rows: (server.rows ?? []) as R[] };
+    },
+    async *streamQuery() { throw new Error('fake driver: not used'); },
+  };
+  const driver: Driver = {
+    async init() {},
+    async acquireConnection() {
+      if (state.leased) throw new Error('fake pool: the only connection was never given back');
+      state.leased = true;
+      note('acquire');
+      return connection;
+    },
+    async beginTransaction() {
+      note('begin');
+      if (server.failBegin) throw server.failBegin;
+      if (state.inTransaction) throw new Error('fake server: a transaction is already open');
+      state.inTransaction = true;
+    },
+    async commitTransaction() { note('commit'); state.inTransaction = false; },
+    async rollbackTransaction() {
+      note('rollback');
+      const failure = server.failRollback?.();
+      if (failure) throw failure;
+      if (!state.inTransaction) throw new Error('3903: the ROLLBACK TRANSACTION request has no corresponding BEGIN TRANSACTION');
+      state.inTransaction = false;
+    },
+    async releaseConnection() { note('release'); state.leased = false; },
+    async destroy() {},
+  };
+  const db = new Kysely<any>({
+    dialect: {
+      createAdapter: () => new MssqlAdapter(),
+      createDriver: () => driver,
+      createQueryCompiler: () => new MssqlQueryCompiler(),
+      createIntrospector: (k) => new MssqlIntrospector(k),
+    },
+  });
+  const withRequestTimeout = vi.fn(async <T>(_ms: number, op: () => Promise<T>): Promise<T> => {
+    state.inDeadline = true;
+    try { return await op(); } finally { state.inDeadline = false; }
+  });
+  mssqlFake.store = { db, withRequestTimeout, close: async () => {} };
+  return { trail, outsideDeadline, state, withRequestTimeout };
+}
+
+/** A fake mysql2 pool whose one connection records what it is sent and how it is given back. */
+function fakeMysql() {
+  const sent: string[] = [];
+  const given: string[] = [];
+  const connection = {
+    threadId: 7,
+    query: (text: string, cb: (e: unknown, rows: unknown) => void) => { sent.push(text); cb(null, [{ n: 1 }]); },
+    release: () => { given.push('release'); },
+    destroy: () => { given.push('destroy'); },
+  };
+  mysqlCreatePool.mockImplementationOnce(() => ({
+    on: vi.fn(),
+    getConnection: (cb: (e: unknown, c: typeof connection) => void) => cb(null, connection),
+    end: (cb: (e?: unknown) => void) => cb(),
+  }));
+  return { sent, given };
+}
 
 describe('createConnectorDb', () => {
   it.each([0, -1, 30_001, Infinity, 1.5])('rejects a disabled or excessive query deadline: %s', (queryTimeoutMs) => {
@@ -121,6 +306,239 @@ describe('microsoft-sql instance and Windows login', () => {
   });
   it('still validates the port when there is no instance', () => {
     expect(() => createConnectorDb('microsoft-sql', { host: 'LABSRV', port: 'not-a-port' })).toThrow(/invalid connector port/);
+  });
+});
+
+// The import page reader calls `query` for every page it reads. These pin it as it is: one raw
+// statement, no transaction, on each engine.
+describe('query is unchanged', () => {
+  it('query is unchanged: one raw statement, no transaction (postgres)', async () => {
+    const pg = fakePg();
+    const conn = createConnectorDb('postgres', { host: 'h', port: '5432', database: 'd', user: 'u', password: 'p' });
+    expect((await conn.query('select 1')).rows).toEqual([{ n: 1 }]);
+    expect(pg.onPool).toEqual(['select 1']);
+    expect(pg.pool.connect).not.toHaveBeenCalled();
+    expect(pg.onClient).toEqual([]);
+  });
+  it('query is unchanged: one raw statement, no transaction (microsoft-sql)', async () => {
+    const mssql = fakeMssqlStore({ rows: [{ n: 1 }] });
+    const conn = createConnectorDb('microsoft-sql', MSSQL_CONFIG, { queryTimeoutMs: 432 });
+    expect((await conn.query('select 1')).rows).toEqual([{ n: 1 }]);
+    expect(mssql.trail).toEqual(['acquire', 'select 1', 'release']);
+    expect(mssql.withRequestTimeout).toHaveBeenCalledWith(432, expect.any(Function));
+  });
+  it('query is unchanged: one raw statement, no transaction (mysql)', async () => {
+    const mysql = fakeMysql();
+    const conn = createConnectorDb('mysql', MYSQL_CONFIG);
+    expect((await conn.query('select 1')).rows).toEqual([{ n: 1 }]);
+    expect(mysql.sent).toEqual(['select 1']);
+    expect(mysql.given).toEqual(['release']);
+    await conn.close();
+  });
+});
+
+describe('queryReadOnly on postgres', () => {
+  const PG = { host: 'h', port: '5432', database: 'd', user: 'u', password: 'p' };
+
+  it('postgres: BEGIN READ ONLY, the statement, ROLLBACK, in that order on one client', async () => {
+    const pg = fakePg();
+    const conn = createConnectorDb('postgres', PG);
+    expect((await conn.queryReadOnly('select 1')).rows).toEqual([{ n: 1 }]);
+    expect(pg.onClient).toEqual(['BEGIN READ ONLY', SCS, 'select 1', 'ROLLBACK']);
+    expect(pg.pool.connect).toHaveBeenCalledTimes(1);
+    expect(pg.onPool).toEqual([]);
+    // Given back healthy: no error passed, so the pool keeps it.
+    expect(pg.releases).toEqual([[]]);
+  });
+  it('postgres: the statement goes in extended mode, so the server takes one statement only; the other three do not', async () => {
+    const pg = fakePg();
+    const conn = createConnectorDb('postgres', PG);
+    await conn.queryReadOnly('select 1');
+    expect(pg.sent).toEqual(['BEGIN READ ONLY', SCS, { text: 'select 1', queryMode: 'extended' }, 'ROLLBACK']);
+  });
+  it('postgres: query is not changed, and sends its text as it is to the pool', async () => {
+    const pg = fakePg();
+    const conn = createConnectorDb('postgres', PG);
+    await conn.query('select 1; select 2');
+    expect(pg.pool.query).toHaveBeenCalledWith('select 1; select 2');
+    expect(pg.pool.query.mock.calls[0]).toHaveLength(1);
+    expect(pg.sent).toEqual([]);
+  });
+  it('postgres: an error in the statement still sends ROLLBACK and releases the client as broken', async () => {
+    const pg = fakePg({ statement: new Error('canceling statement due to statement timeout') });
+    const conn = createConnectorDb('postgres', PG);
+    await expect(conn.queryReadOnly('select pg_sleep(60)')).rejects.toThrow('canceling statement due to statement timeout');
+    expect(pg.onClient).toEqual(['BEGIN READ ONLY', SCS, 'select pg_sleep(60)', 'ROLLBACK']);
+    expect(pg.releases).toEqual([[true]]);
+  });
+  it('postgres: a ROLLBACK that fails after a failed statement does not hide the statement error', async () => {
+    const pg = fakePg({ statement: new Error('relation "nope" does not exist'), rollback: new Error('Connection terminated') });
+    const conn = createConnectorDb('postgres', PG);
+    await expect(conn.queryReadOnly('select * from nope')).rejects.toThrow('relation "nope" does not exist');
+    expect(pg.releases).toEqual([[true]]);
+  });
+  it('postgres: a ROLLBACK that fails after a good read returns the rows and drops the client', async () => {
+    const pg = fakePg({ rollback: new Error('Connection terminated') });
+    const conn = createConnectorDb('postgres', PG);
+    expect((await conn.queryReadOnly('select 1')).rows).toEqual([{ n: 1 }]);
+    expect(pg.releases).toEqual([[true]]);
+  });
+  it('postgres: the pool timeouts that bound query still bound queryReadOnly', async () => {
+    const pg = fakePg();
+    const conn = createConnectorDb('postgres', PG, { queryTimeoutMs: 432 });
+    await conn.queryReadOnly('select 1');
+    // statement_timeout is set on every session of the pool, query_timeout on every client query.
+    expect(pg.created).toHaveLength(1);
+    expect(pg.created[0]).toMatchObject({ statement_timeout: 432, query_timeout: 1432 });
+    expect(pg.pool.connect).toHaveBeenCalledTimes(1);
+  });
+  it('postgres: a BEGIN that fails still sends ROLLBACK, drops the client and throws its own error', async () => {
+    const pg = fakePg({ begin: new Error('the database system is shutting down') });
+    const conn = createConnectorDb('postgres', PG);
+    await expect(conn.queryReadOnly('select 1')).rejects.toThrow('the database system is shutting down');
+    expect(pg.onClient).toEqual(['BEGIN READ ONLY', 'ROLLBACK']);
+    expect(pg.releases).toEqual([[true]]);
+  });
+});
+
+// pg-pool takes its own `'error'` listener off a client it hands out (`pg-pool index.js:344`). A
+// dropped connection then emits `'error'` on that client, and with no listener the emit throws,
+// which the server treats as an uncaught exception and exits.
+describe('queryReadOnly on postgres when the connection drops', () => {
+  const PG = { host: 'h', port: '5432', database: 'd', user: 'u', password: 'p' };
+  const lost = () => new Error('terminating connection due to administrator command');
+
+  it('during the statement: the emit does not throw, the call rejects, and the client is dropped', async () => {
+    const error = lost();
+    const pg = fakePg({ drop: { on: 'select pg_sleep(60)', error } });
+    const conn = createConnectorDb('postgres', PG);
+    await expect(conn.queryReadOnly('select pg_sleep(60)')).rejects.toBe(error);
+    expect(pg.emitThrew).toEqual([]);
+    // The connection is gone, so no ROLLBACK is sent on it.
+    expect(pg.onClient).toEqual(['BEGIN READ ONLY', SCS, 'select pg_sleep(60)']);
+    expect(pg.releases).toEqual([[true]]);
+    // No listener of ours is left: it is taken off just before the release.
+    expect(pg.listenersAtRelease).toEqual([0]);
+  });
+  it('during the statement, after the statement\'s own error: the call rejects with the statement\'s error', async () => {
+    const own = new Error('canceling statement due to user request');
+    const pg = fakePg({ drop: { on: 'select pg_sleep(60)', error: lost(), statementFirst: own } });
+    const conn = createConnectorDb('postgres', PG);
+    await expect(conn.queryReadOnly('select pg_sleep(60)')).rejects.toBe(own);
+    // Let the late emit arrive. It comes after the release, so the pool's listener takes it.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(pg.emitThrew).toEqual([]);
+    expect(pg.toPool).toHaveLength(1);
+    expect(pg.releases).toEqual([[true]]);
+    expect(pg.listenersAtRelease).toEqual([0]);
+  });
+  it('during the ROLLBACK after a good read: the error is swallowed, the rows come back, the client is dropped', async () => {
+    const pg = fakePg({ drop: { on: 'ROLLBACK', error: lost() } });
+    const conn = createConnectorDb('postgres', PG);
+    expect((await conn.queryReadOnly('select 1')).rows).toEqual([{ n: 1 }]);
+    expect(pg.emitThrew).toEqual([]);
+    expect(pg.releases).toEqual([[true]]);
+    expect(pg.listenersAtRelease).toEqual([0]);
+  });
+  it('the pool listens for a connection that drops while idle', () => {
+    const pg = fakePg();
+    createConnectorDb('postgres', PG);
+    const registration = pg.pool.on.mock.calls.find((c) => c[0] === 'error');
+    expect(registration, 'the postgres pool registers no error handler').toBeDefined();
+    expect(() => (registration![1] as (e: Error) => void)(lost())).not.toThrow();
+  });
+});
+
+describe('queryReadOnly on microsoft-sql', () => {
+  it('mssql: the statement runs on a transaction that is rolled back on success', async () => {
+    const mssql = fakeMssqlStore({ rows: [{ n: 1 }] });
+    const conn = createConnectorDb('microsoft-sql', MSSQL_CONFIG, { queryTimeoutMs: 432 });
+    expect((await conn.queryReadOnly('select 1')).rows).toEqual([{ n: 1 }]);
+    expect(mssql.trail).toEqual(['acquire', 'begin', 'select 1', 'rollback', 'release']);
+    expect(mssql.withRequestTimeout).toHaveBeenCalledWith(432, expect.any(Function));
+    expect(mssql.outsideDeadline).toEqual([]);
+    expect(mssql.state).toMatchObject({ leased: false, inTransaction: false });
+  });
+  it('mssql: the statement runs on a transaction that is rolled back on failure', async () => {
+    const mssql = fakeMssqlStore({ failQuery: () => ({ error: new Error("Invalid object name 'nope'.") }) });
+    const conn = createConnectorDb('microsoft-sql', MSSQL_CONFIG);
+    await expect(conn.queryReadOnly('select * from nope')).rejects.toThrow("Invalid object name 'nope'.");
+    expect(mssql.trail).toEqual(['acquire', 'begin', 'select * from nope', 'rollback', 'release']);
+    expect(mssql.trail).not.toContain('commit');
+    expect(mssql.outsideDeadline).toEqual([]);
+    expect(mssql.state).toMatchObject({ leased: false, inTransaction: false });
+  });
+  it('mssql: when the roll-back itself fails, the error thrown is the statement\'s own', async () => {
+    const mssql = fakeMssqlStore({
+      failQuery: (s) => (s === 'SELECT 1' ? { error: new Error('Conversion failed'), endsTransaction: true } : undefined),
+      failRollback: () => new Error('3903'),
+    });
+    const conn = createConnectorDb('microsoft-sql', MSSQL_CONFIG);
+    await expect(conn.queryReadOnly('SELECT 1')).rejects.toThrow('Conversion failed');
+    expect(mssql.trail.slice(-2)).toEqual(['rollback', 'release']);
+    // The pool's one connection serves the next query: it was given back.
+    await expect(conn.query('select 2')).resolves.toEqual({ rows: [] });
+  });
+  it('mssql: a roll-back that fails after a good read still returns the rows and gives the connection back', async () => {
+    const mssql = fakeMssqlStore({ rows: [{ n: 1 }], failRollback: () => new Error('the roll-back request failed') });
+    const conn = createConnectorDb('microsoft-sql', MSSQL_CONFIG);
+    expect((await conn.queryReadOnly('select 1')).rows).toEqual([{ n: 1 }]);
+    expect(mssql.trail.slice(-2)).toEqual(['rollback', 'release']);
+    expect(mssql.state.leased).toBe(false);
+  });
+  it('mssql: a TM BEGIN that fails throws its own error and gives the connection back', async () => {
+    const mssql = fakeMssqlStore({ failBegin: new Error('Connection lost - read ECONNRESET') });
+    const conn = createConnectorDb('microsoft-sql', MSSQL_CONFIG);
+    await expect(conn.queryReadOnly('select 1')).rejects.toThrow('Connection lost - read ECONNRESET');
+    expect(mssql.trail).toEqual(['acquire', 'begin', 'release']);
+    expect(mssql.state.leased).toBe(false);
+  });
+  // The roll-back request is sent from inside the request-deadline scope. The scope does not bound
+  // it: tedious sends TM ROLLBACK with its own Request class, so its default request timeout does.
+  it('mssql: after the deadline cancels the statement, the roll-back is requested from inside the deadline scope', async () => {
+    const mssql = fakeMssqlStore({ failQuery: () => ({ error: new Error('Timeout: Request failed to complete in 432ms') }) });
+    const conn = createConnectorDb('microsoft-sql', MSSQL_CONFIG, { queryTimeoutMs: 432 });
+    await expect(conn.queryReadOnly('select 1')).rejects.toThrow('Timeout');
+    expect(mssql.trail).toEqual(['acquire', 'begin', 'select 1', 'rollback', 'release']);
+    expect(mssql.outsideDeadline).toEqual([]);
+    expect(mssql.state).toMatchObject({ leased: false, inTransaction: false });
+  });
+});
+
+// R7: the roll-back is its own request, so a trailing line comment cannot swallow it.
+describe('a statement that ends in a line comment', () => {
+  it('is still rolled back on mssql, and still ends with ROLLBACK on postgres', async () => {
+    const mssql = fakeMssqlStore();
+    await createConnectorDb('microsoft-sql', MSSQL_CONFIG).queryReadOnly('SELECT 1 -- note');
+    expect(mssql.trail).toEqual(['acquire', 'begin', 'SELECT 1 -- note', 'rollback', 'release']);
+    expect(mssql.state.inTransaction).toBe(false);
+
+    const pg = fakePg();
+    await createConnectorDb('postgres', { host: 'h', port: '5432', database: 'd', user: 'u', password: 'p' }).queryReadOnly('SELECT 1 -- note');
+    expect(pg.onClient).toEqual(['BEGIN READ ONLY', SCS, 'SELECT 1 -- note', 'ROLLBACK']);
+  });
+});
+
+describe('queryReadOnly on mysql', () => {
+  it('mysql: queryReadOnly sends exactly what query sends', async () => {
+    const mysql = fakeMysql();
+    const conn = createConnectorDb('mysql', MYSQL_CONFIG);
+    const a = await conn.query('select 1');
+    const b = await conn.queryReadOnly('select 1');
+    expect(b).toEqual(a);
+    // One raw statement each, and no transaction words.
+    expect(mysql.sent).toEqual(['select 1', 'select 1']);
+    expect(mysql.given).toEqual(['release', 'release']);
+    await conn.close();
+  });
+  it('mysql: neither pool turns multipleStatements on', () => {
+    mysqlCreatePool.mockClear();
+    // A config key of that name is not carried into the pool either.
+    createConnectorDb('mysql', { ...MYSQL_CONFIG, multipleStatements: 'true' });
+    expect(mysqlCreatePool).toHaveBeenCalledTimes(1);
+    const options = mysqlCreatePool.mock.calls[0][0];
+    expect(options.multipleStatements).toBeUndefined();
+    expect(options.host).toBe('h');
   });
 });
 

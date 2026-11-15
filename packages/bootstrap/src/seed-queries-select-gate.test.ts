@@ -15,10 +15,12 @@ import { prepareSelect, substituteParams, validateSelectSql, type SqlDialect } f
  * inside `created`, and `_` is a word character. Measured below, because the opposite is the
  * natural assumption and it changes how careful a future alias has to be.
  *
- * ⛔ Substituted the way the runner substitutes, not run raw. `prepareSelect` is exactly what
- * `runStoredQuery` calls (packages/dashboards/src/custom-query-run.ts:52) — substitute first, then
- * validate. Validating the raw text would test a string that never reaches a database, and would
- * also miss a banned word arriving through a parameter's quoted literal.
+ * ⛔ Substituted the way the runner substitutes, not run raw. `runStoredQuery` substitutes with
+ * `prepareSelect`, and the connector runner then checks the result with the connector's dialect.
+ * This gate does both in one place: `prepareSelect(..., dialect)` substitutes and checks with that
+ * dialect, and `validateSelectSql(prepared, dialect)` repeats the connector runner's check.
+ * Validating the raw text would test a string that never reaches a database, and would also miss a
+ * banned word arriving through a parameter's quoted literal.
  *
  * ⛔ Lives in `@openldr/bootstrap`, not in `report-seeds.test.ts` where the other seed tests are.
  * `@openldr/dashboards` already depends on `@openldr/reporting`, so importing the gate into
@@ -43,28 +45,32 @@ describe('every seeded query passes the SELECT-only gate, in every dialect', () 
     for (const dialect of DIALECTS) {
       it(`${q.id} — ${dialect}`, () => {
         const params = (q.params ?? []) as { id: string; type: string; required?: boolean }[];
-        expect(() => prepareSelect(q.sql[dialect], q.params ?? [], valuesFor(params))).not.toThrow();
+        let prepared = '';
+        expect(() => { prepared = prepareSelect(q.sql[dialect], q.params ?? [], valuesFor(params), dialect); }).not.toThrow();
+        expect(() => validateSelectSql(prepared, dialect)).not.toThrow();
       });
     }
   }
 
-  it('the gate is not vacuous — it rejects a banned BARE word used as an alias or CTE name', () => {
-    // The mutation this suite exists to catch, made explicit. Proves the loop above would fail
-    // rather than pass on anything.
-    expect(() => validateSelectSql('select 1 as call')).toThrow(/read-only/i);
-    expect(() => validateSelectSql('with merge as (select 1 as a) select a from merge'))
-      .toThrow(/read-only/i);
-    expect(() => validateSelectSql('select 1 as ok')).not.toThrow();
-  });
+  for (const dialect of DIALECTS) {
+    it(`the gate is not vacuous — it rejects a banned BARE word used as an alias or CTE name — ${dialect}`, () => {
+      // The mutation this suite exists to catch, made explicit. Proves the loop above would fail
+      // rather than pass on anything.
+      expect(() => validateSelectSql('select 1 as call', dialect)).toThrow(/read-only/i);
+      expect(() => validateSelectSql('with merge as (select 1 as a) select a from merge', dialect))
+        .toThrow(/read-only/i);
+      expect(() => validateSelectSql('select 1 as ok', dialect)).not.toThrow();
+    });
 
-  it('the ban is on the WHOLE word — an alias that merely contains one is fine', () => {
-    // Worth pinning, because it is the natural wrong assumption about this gate and it decides
-    // how careful a future alias has to be. `\bcreate\b` does not match inside `created`, and `_`
-    // is a word character so it does not match inside `call_log` either. Only the bare word bites.
-    expect(() => validateSelectSql('select 1 as created')).not.toThrow();
-    expect(() => validateSelectSql('with call_log as (select 1 as a) select a from call_log'))
-      .not.toThrow();
-  });
+    it(`the ban is on the WHOLE word — an alias that merely contains one is fine — ${dialect}`, () => {
+      // Worth pinning, because it is the natural wrong assumption about this gate and it decides
+      // how careful a future alias has to be. `\bcreate\b` does not match inside `created`, and `_`
+      // is a word character so it does not match inside `call_log` either. Only the bare word bites.
+      expect(() => validateSelectSql('select 1 as created', dialect)).not.toThrow();
+      expect(() => validateSelectSql('with call_log as (select 1 as a) select a from call_log', dialect))
+        .not.toThrow();
+    });
+  }
 });
 
 /**

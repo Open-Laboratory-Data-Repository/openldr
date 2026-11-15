@@ -21,7 +21,7 @@ function fixture(params = [range('period')]) {
   const runConnectorSql = vi.fn(async (_input: { connectorId: string; sql: string; rowCap?: number }) => ({
     columns: [{ key: 'start_date', label: 'start_date' }], rows: [{ start_date: '2026-01-01' }],
   }));
-  const deps = { customQueries: { get }, runConnectorSql };
+  const deps = { customQueries: { get }, connectorDialect: async () => 'postgres' as const, runConnectorSql };
   const query = (id: string, values: Record<string, unknown>) => runReportStoredQuery(deps, id, values);
   const design = ReportDesignSchema.parse({
     id: 'd', name: 'Dates', parameters: [{ key: 'period', label: 'Period', type: 'daterange', required: true }],

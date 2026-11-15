@@ -3,11 +3,19 @@ import type { TargetSchema } from '@openldr/ports';
 import pg from 'pg';
 import { pgNumberTypes } from '@openldr/adapter-db-store';
 import { createMssqlStore } from '@openldr/adapter-mssql-store';
+import { runInRolledBackTransaction } from '@openldr/dashboards';
 import { createPool, createConnection, type ConnectionOptions } from 'mysql2';
 
 /** A connector-backed DB connection: run one raw query, then close. */
 export interface ConnectorDb {
+  /** One raw statement, no transaction. The import page reader reads its pages with this. */
   query(rawSql: string): Promise<{ rows: Record<string, unknown>[] }>;
+  /** One raw statement that cannot keep a write, for SQL a person typed or saved, after the SQL
+   *  check. Postgres: a read-only transaction, the statement in extended mode so that the server
+ *  takes one statement only, then ROLLBACK. SQL Server: a transaction that is
+   *  always rolled back. MySQL: the same as `query` (operator, 2026-11-15). A failed roll-back
+   *  never replaces the statement's own error, and never turns a good read into an error. */
+  queryReadOnly(rawSql: string): Promise<{ rows: Record<string, unknown>[] }>;
   close(): Promise<void>;
 }
 
@@ -57,8 +65,77 @@ function wrap(store: {
         ? execute()
         : store.withRequestTimeout(queryTimeoutMs, execute);
     },
+    async queryReadOnly(rawSql) {
+      // The begin, the statement and the roll-back each go as their own request, inside the same
+      // request deadline that `query` uses.
+      const execute = () => runInRolledBackTransaction(store.db, async (trx) => {
+        const r = await sql.raw(rawSql).execute(trx);
+        return { rows: r.rows as Record<string, unknown>[] };
+      });
+      return queryTimeoutMs === undefined || !store.withRequestTimeout
+        ? execute()
+        : store.withRequestTimeout(queryTimeoutMs, execute);
+    },
     close: () => store.close(),
   };
+}
+
+/** Postgres: run `rawSql` in a read-only transaction on one client of `pool`, then roll it back.
+ *  Each step is its own query, so the pool's `statement_timeout` and `query_timeout` bound each.
+ *  On any error the client is dropped from the pool rather than given back, and the error thrown
+ *  is the statement's own.
+ *
+ *  A dropped connection: pg-pool takes its own `'error'` listener off a client it hands out, and pg
+ *  emits `'error'` on the client when the connection dies. With no listener that emit throws and
+ *  ends the process. So the client has a listener for as long as it is out, as `pool.query` does
+ *  for its own client. The first of that error and the running step's own error ends the step. An
+ *  error during the ROLLBACK after a good read is swallowed. The client is then dropped either way,
+ *  and no ROLLBACK is sent on a dead connection. */
+async function queryPgReadOnly(pool: pg.Pool, rawSql: string): Promise<{ rows: Record<string, unknown>[] }> {
+  const client = await pool.connect();
+  let lost = false;
+  let failLost: (error: unknown) => void = () => {};
+  const connectionLost = new Promise<never>((_resolve, reject) => { failLost = reject; });
+  connectionLost.catch(() => undefined);
+  const onError = (error: unknown) => {
+    if (lost) return;
+    lost = true;
+    failLost(error);
+  };
+  client.on('error', onError);
+  const step = (query: string | pg.QueryConfig) => Promise.race([client.query(query), connectionLost]);
+
+  let rows: Record<string, unknown>[] = [];
+  let failure: unknown;
+  let failed = false;
+  let drop = false;
+  try {
+    await step('BEGIN READ ONLY');
+    // The SQL check reads a backslash in a string as an ordinary character. This makes the
+    // server read it the same way, whatever the server or the session says.
+    await step('SET LOCAL standard_conforming_strings = on');
+    // Extended mode: Postgres itself refuses a second statement in the text. With no values pg
+    // would use the simple protocol, which runs every statement it is sent. `queryMode` is in
+    // pg's `lib/query.js` but not in its type file.
+    rows = (await step({ text: rawSql, queryMode: 'extended' } as pg.QueryConfig)).rows;
+  } catch (error) {
+    failed = true;
+    failure = error;
+    drop = true;
+  }
+  if (!lost) {
+    try {
+      await step('ROLLBACK');
+    } catch {
+      // The statement's outcome stands. A client whose ROLLBACK failed is not given back.
+      drop = true;
+    }
+  }
+  client.removeListener('error', onError);
+  if (drop || lost) client.release(true);
+  else client.release();
+  if (failed) throw failure;
+  return { rows };
 }
 
 /** Build an ephemeral DB connection for a host connector by type + decrypted config.
@@ -81,6 +158,9 @@ export function createConnectorDb(
       // COUNT(*) and AVG() as numbers, not text (bug 13). See pgNumberTypes.
       types: pgNumberTypes as never,
     });
+    // A connection that dies while idle in the pool makes the pool emit `'error'`. With no
+    // listener that throws and ends the process. The pool drops that connection by itself.
+    pool.on('error', () => undefined);
     let closed = false;
     return {
       async query(rawSql) {
@@ -88,6 +168,7 @@ export function createConnectorDb(
         const result = await pool.query(rawSql);
         return { rows: result.rows };
       },
+      queryReadOnly: (rawSql) => queryPgReadOnly(pool, rawSql),
       async close() { if (!closed) { closed = true; await pool.end(); } },
     };
   }
@@ -144,7 +225,7 @@ export function createConnectorDb(
       });
     });
     let closed = false;
-    return {
+    const connectorDb: ConnectorDb = {
       query(rawSql) {
         return new Promise((resolve, reject) => {
           pool.getConnection((acquireError, connection) => {
@@ -175,12 +256,16 @@ export function createConnectorDb(
           });
         });
       },
+      // MySQL gets no transaction (operator, 2026-11-15): the read-only form is the same call,
+      // with the same deadline and KILL.
+      queryReadOnly: (rawSql) => connectorDb.query(rawSql),
       async close() {
         if (closed) return;
         closed = true;
         await new Promise<void>((resolve, reject) => pool.end((error) => error ? reject(error) : resolve()));
       },
     };
+    return connectorDb;
   }
   throw new Error(`unsupported connector type: ${type}`);
 }

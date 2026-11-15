@@ -7,7 +7,8 @@ import { createConnectorDb, type ConnectorDb } from './connector-db';
 // into memory. Callers that need pagination pass their own rowCap.
 const DEFAULT_ROW_CAP = 10_000;
 
-function dialectFor(type: string): SqlDialect | null {
+/** The SQL dialect of a connector type, or null when the type has none. */
+export function dialectFor(type: string): SqlDialect | null {
   if (type === 'postgres') return 'postgres';
   if (type === 'microsoft-sql') return 'mssql';
   // mysql has its own SqlDialect; planPagination's mysql arm internally reuses the
@@ -26,6 +27,22 @@ export interface ConnectorSqlDeps {
   createDb?: (type: string, config: Record<string, string>) => ConnectorDb;
 }
 
+/** The type of a connector the runner may use. Throws for a missing or disabled connector and
+ *  for one with no type. */
+function usableType(c: { type: string | null; enabled: boolean } | null, connectorId: string): string {
+  if (!c || !c.enabled) throw new Error(`connector ${connectorId} not found or disabled`);
+  if (!c.type) throw new Error(`connector ${connectorId} is not a database connector`);
+  return c.type;
+}
+
+/** Builds the `connectorDialect` dependency of `runStoredQuery`: the dialect of one connector,
+ *  read the way the runner reads it. It throws the runner's sentences for a missing, disabled or
+ *  typeless connector, and returns null for a type with no SQL dialect. */
+export function createConnectorDialectLookup(connectors: Pick<ConnectorSqlDeps['connectors'], 'get'>) {
+  return async (connectorId: string): Promise<SqlDialect | null> =>
+    dialectFor(usableType(await connectors.get(connectorId), connectorId));
+}
+
 /** Build the runConnectorSql implementation: resolve a host connector, decrypt its config,
  *  open an ephemeral connection, run a validated SELECT, and always close.
  *
@@ -34,32 +51,27 @@ export interface ConnectorSqlDeps {
  *   - `validateSelectSql` rejects DML/DDL, multi-statement batches, and `SELECT … INTO` (a write
  *     masquerading as a read). This is the same validator the dashboard/custom-query SQL paths use.
  *   - a default row cap bounds unbounded scans when the caller omits one.
+ *   - the statement runs through `queryReadOnly`: read-only on Postgres, rolled back on SQL Server.
  *  Write-capable SQL must go through a separate, explicitly privileged path — never this runner. */
 export function createConnectorSqlRunner(deps: ConnectorSqlDeps) {
   const make = deps.createDb ?? createConnectorDb;
   return async ({ connectorId, sql: userSql, rowCap, offset }: { connectorId: string; sql: string; rowCap?: number; offset?: number }): Promise<SqlResult> => {
-    const c = await deps.connectors.get(connectorId);
-    if (!c || !c.enabled) throw new Error(`connector ${connectorId} not found or disabled`);
-    if (!c.type) throw new Error(`connector ${connectorId} is not a database connector`);
+    const type = usableType(await deps.connectors.get(connectorId), connectorId);
+    // The check reads the SQL as this connector's engine does, so the dialect comes first. A type
+    // with no dialect is refused here, with the sentence createConnectorDb would throw for it.
+    const dialect = dialectFor(type);
+    if (!dialect) throw new Error(`unsupported connector type: ${type}`);
     // SELECT-only guard before any connection is opened or credentials decrypted.
-    validateSelectSql(userSql);
+    validateSelectSql(userSql, dialect);
     const config = await deps.connectors.getDecryptedConfig(connectorId, deps.secretsKey);
-    const conn = make(c.type, config);
+    const conn = make(type, config);
     try {
-      const dialect = dialectFor(c.type);
       const cap = rowCap ?? DEFAULT_ROW_CAP;
-      let rows: Record<string, unknown>[];
-      if (dialect) {
-        const plan = planPagination(userSql.replace(/;\s*$/, ''), dialect, { limit: cap, offset });
-        const res = await conn.query(plan.sql);
-        // MSSQL applies its offset in JS (SET ROWCOUNT fetched offset+limit rows); Postgres already
-        // offset in SQL, so sliceOffset is 0.
-        rows = plan.sliceOffset ? res.rows.slice(plan.sliceOffset) : res.rows;
-      } else {
-        // Unknown dialect (unreachable — every supported connector type maps to a dialect). The SELECT
-        // is still validated above; without a dialect there is no safe row-cap wrapper, so run as-is.
-        rows = (await conn.query(userSql)).rows;
-      }
+      const plan = planPagination(userSql.replace(/;\s*$/, ''), dialect, { limit: cap, offset });
+      const res = await conn.queryReadOnly(plan.sql);
+      // MSSQL applies its offset in JS (SET ROWCOUNT fetched offset+limit rows); Postgres already
+      // offset in SQL, so sliceOffset is 0.
+      const rows = plan.sliceOffset ? res.rows.slice(plan.sliceOffset) : res.rows;
       const columns = rows[0] ? Object.keys(rows[0]).map((k) => ({ key: k, label: k })) : [];
       return { columns, rows };
     } finally {

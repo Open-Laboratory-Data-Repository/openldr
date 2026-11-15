@@ -149,7 +149,7 @@ export function createSourceReader(deps: SourceReaderDeps): SourceReader {
   }
 
   async function sourceRows(sql: string): Promise<Array<Record<string, unknown>>> {
-    validateSelectSql(sql);
+    validateSelectSql(sql, 'mssql');
     try {
       if (!db) db = await deps.open();
       const { rows } = await db.query(sql);
@@ -162,7 +162,7 @@ export function createSourceReader(deps: SourceReaderDeps): SourceReader {
 
   /** True when the source answers `SELECT 1` within 5 seconds, on a connection of its own. */
   async function probe(): Promise<boolean> {
-    validateSelectSql(PROBE_SQL);
+    validateSelectSql(PROBE_SQL, 'mssql');
     let conn: ConnectorDb | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const answered = (async () => {
@@ -201,8 +201,8 @@ export function createSourceReader(deps: SourceReaderDeps): SourceReader {
       const { keySql, details, after, checkRowKeys = false, readBefore = false } = input;
       let size = input.size;
       // Check every statement before opening a connection or running any of them.
-      validateSelectSql(fillKeyQuery(keySql, after, size));
-      for (const d of details) validateSelectSql(fillDetailQuery(d.sql, ['A']));
+      validateSelectSql(fillKeyQuery(keySql, after, size), 'mssql');
+      for (const d of details) validateSelectSql(fillDetailQuery(d.sql, ['A']), 'mssql');
 
       /** The try number of the next wait. */
       let attempt = 0;

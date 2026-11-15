@@ -4,7 +4,7 @@ Date: 2026-11-15. Follows the merge of migration part 1 (`1d0b7b7b`).
 
 ## 1. Why
 
-OpenLDR runs SQL it did not write in these places: the Query page (typed SQL, the schema tree's browse SQL at `apps/server/src/query-routes.ts:276`, `:289`, `:309`, and its count wrapper at `:228`), saved custom queries, dashboard SQL widgets, builder dashboards (`packages/dashboards/src/compile.ts:406`), reports (`report-query.ts:22`, `report-designs-routes.ts:171`, `packages/bootstrap/src/index.ts:306`, `:332`, `:385`), the workflow Database node, the workflow SQL Query node (`workflow-sql.ts:30`), and import plugins. All of it is meant to be read-only. One function decides that: `validateSelectSql` (`packages/dashboards/src/sql-runner.ts:17`).
+OpenLDR runs SQL it did not write in these places: the Query page (typed SQL, the schema tree's browse SQL at `apps/server/src/query-routes.ts:276`, `:289`, `:309`, and its count wrapper at `:228`), saved custom queries, dashboard SQL widgets, builder dashboards (`packages/dashboards/src/compile.ts:406`), reports (`report-query.ts:22`, `report-designs-routes.ts:171`, `packages/bootstrap/src/index.ts:306`, `:332`, `:385`), the workflow Database node, the workflow SQL Query node (`workflow-sql.ts:30`), and import plugins. All of it is meant to be read-only. One check decides that, in `packages/dashboards/src/sql-runner.ts`. Since the build it has two forms: `validateSelectSql(sql, dialect)` for code that runs SQL, and `validateSelectSqlForSave(sql)` for code that only saves or imports a query (section 10).
 
 The focused read at the end of part 1 found four ways past it. Reading its callers found that the problem is wider than plugins:
 
@@ -42,28 +42,32 @@ Approach B, chosen by the operator on 2026-11-15: a better reader of the SQL tex
 
 ### 4.1 One reader of the SQL text (closes H2)
 
+Amended by the build: the reader follows one engine at a time and refuses text an engine may read two ways. Section 10 has the rules as built. The paragraph below is the design as first approved.
+
 Replace `stripComments` and `stripStringLiterals` with one pass, left to right, that knows five things at once: a `'string'` with `''` inside, a `-- line comment`, a `/* block comment */` with nesting, a `[bracketed name]` with `]]` inside, and a `"quoted name"` or `` `backtick name` ``. It returns the text with each of those blanked. A comment marker inside a string is then text, and a banned word inside a bracketed name is a name.
 
 Everything else in the check reads that blanked text, as today.
 
 ### 4.2 A rule for SQL Server (closes H1 and H3)
 
-`validateSelectSql(sql, dialect?)` gains an optional dialect. When it is `mssql`, the blanked text is also refused if it holds:
+`validateSelectSql(sql, dialect)` takes the dialect of the engine that will run the SQL. As first approved the dialect was optional; the build made it required and gave the save-time check its own name (section 10). When the dialect is `mssql`, the blanked text is also refused if it holds:
 
-- a reserved word that can start a statement: `exec`, `execute`, `waitfor`, `dbcc`, `backup`, `restore`, `shutdown`, `kill`, `deny`, `declare`, `set`, `reconfigure`, `begin`, `commit`, `rollback`, `save`, `if`, `while`, `print`, `raiserror`, `goto`, `return`, `open`, `close`, `deallocate`, `checkpoint`, `bulk`, `writetext`, `updatetext`, `readtext`, `load`, `dump`, `setuser`, `revert`, `add`;
-- `use`, unless the next word is `hint` or `plan` (a query hint);
+- a reserved word that can start a statement: `exec`, `execute`, `waitfor`, `dbcc`, `backup`, `restore`, `shutdown`, `kill`, `deny`, `declare`, `set`, `reconfigure`, `begin`, `commit`, `rollback`, `save`, `if`, `while`, `print`, `raiserror`, `goto`, `return`, `open`, `close`, `deallocate`, `checkpoint`, `bulk`, `writetext`, `updatetext`, `readtext`, `setuser`, `revert`, `add`;
+- `use`, unless it is a query hint: `hint` then `(`, or `plan` then a string;
 - `openquery`, `openrowset`, `opendatasource`, `openxml`;
 - the pairs `enable trigger`, `disable trigger`, and `next value for`.
 
 `fetch` and `end` stay allowed, because `OFFSET ... FETCH` and `CASE ... END` use them.
 
-A word is matched whole. The characters `#`, `@`, `$` and `_` count as part of a word, so a temp table `##open` or a variable-like name `@set` is not the word `open` or `set`.
+`load` and `dump` are not on the list. Task 1's real run found that SQL Server 2025 takes both as plain names (the record is `2026-11-15-select-check-real-run.md`). Microsoft's published list of reserved keywords, read on 2026-11-15, still has both; the server decides.
+
+A word is matched whole. Letters, digits, `#`, `@`, `$` and `_` count as part of a name, so a temp table `##open` or a variable-like name `@set` is not the word `open` or `set`. One case is different, found in review: SQL Server reads a number and a word with no space between them as two things, so in a run of name characters that starts with a digit, a listed word at the end still counts (`1KILL`). A run that starts with `0x` is a binary number, `0x` and its hex digits, and holds no word (`0xADD`). Section 10 has the rule in full.
 
 `SELECT NEXT VALUE FOR dbo.seq` is valid T-SQL today and is refused on purpose: it moves a sequence on.
 
 Not refused, and known: the Service Broker statements `SEND`, `RECEIVE`, `MOVE CONVERSATION`, `END CONVERSATION` and `GET CONVERSATION GROUP`. None of those words is reserved, so refusing them would refuse a column named `send` or `move`. All of them are undone by the roll-back in 4.4. The import page reader has no roll-back, so a plugin's template could still carry one to a source that uses Service Broker. I accept that for now.
 
-Why this refuses no working query: in T-SQL a reserved word cannot be a bare column or table name. It has to be in brackets, and 4.1 blanks brackets. I am stating the reserved list from memory. The plan checks every word against Microsoft's reserved keyword list and on a scratch SQL Server, and drops any word that is not reserved.
+Why this refuses no working query: in T-SQL a reserved word cannot be a bare column or table name. It has to be in brackets, and 4.1 blanks brackets. I stated the reserved list from memory. Task 1 checked every word on a scratch SQL Server 2025, and the controller checked the list against Microsoft's published one. Both checks are in section 10.
 
 On Postgres and MySQL the word list stays as it is today. A Postgres column named `backup` keeps working.
 
@@ -72,7 +76,7 @@ Who passes the dialect:
 - `createConnectorSqlRunner` already knows the connector type. It passes the dialect and checks after it has read the type.
 - The import paths pass `mssql`. An import source can only be SQL Server today.
 - `runSqlQuery` already receives its engine and passes it on.
-- A check with no dialect (saving a query, importing a pack of queries, the options SQL of a parameter) keeps the base rules. The run-time check with the dialect is the guard.
+- A check made when a query is saved or imported, where the engine is not known, uses `validateSelectSqlForSave`. It passes when the text passes under at least one engine's reading. It is not the guard for a run. The options SQL of a parameter is checked this way first and then again with the connector's dialect when it runs.
 
 ### 4.3 Tokens sit in plain SQL (closes H4)
 
@@ -159,3 +163,68 @@ Calls I made from its questions. Each is mine, not the operator's, and can be ch
 Decided by the operator on 2026-11-15: **MySQL does not get the roll-back.** The MySQL driver refuses a second statement by itself (neither `connector-db.ts:115-120` nor `packages/adapter-mysql-store/src/index.ts:29-44` turns `multipleStatements` on), and the existing word list already refuses a single statement that writes. So no statement is known that the roll-back would catch there. Building it would have meant hand-written transaction SQL inside the code that cancels a slow MySQL query (`connector-db.ts:148-176`), with no MySQL server here to try it on. MySQL still gets the new reader (4.1) and the token rule (4.3). One test pins that neither MySQL path turns `multipleStatements` on, because this decision rests on it.
 
 The operator approved this design on 2026-11-15.
+
+## 10. What the build changed in this design
+
+The build's reviews found that parts of sections 4.1 to 4.4 were wrong or left too much open. Each change below was a ruling by the controller during the build. The operator approved the design above; these rulings were made on the operator's behalf and are listed for the operator to check. Sections 4.5, 4.6 and 4.7 were built as approved.
+
+### 10.1 The reader follows one engine
+
+A reader with no engine cannot be right for three engines at once. So the reader always takes a dialect, and it follows that engine exactly. Where an engine's reading depends on its version or its settings, or is not known for certain, the reader refuses the text with a fixed sentence.
+
+- A string is `'...'` with `''` inside, on every engine. A quoted name is `"..."` on every engine, `[...]` on SQL Server only, and a backtick name on MySQL only. Square brackets are array subscripts on Postgres.
+- Postgres also has dollar-quoted strings (`$tag$ ... $tag$`) and `E'...'` strings, where a backslash makes the next character ordinary. Postgres joins two strings that are separated only by white space with a line break, and reads the second with escapes when the first is an `E'...'` string. The reader refuses a string that directly follows an escape string, so it never has to follow that rule. It also refuses a digit directly before `E'` or before a dollar quote, where Postgres reads a number and then a string.
+- A line comment is `--` to the end of the line. On MySQL `--` opens a comment only before a space or a control character, and `#` also opens one. On Postgres a line comment ends at a line feed or a carriage return. On MySQL it ends at a line feed. On SQL Server 2025 it ends at a line feed or a lone carriage return, as Task 9's real run showed; the reader ends it at a line feed and refuses a lone carriage return inside it.
+- A block comment nests on SQL Server and Postgres. On MySQL it ends at the first `*/`.
+- On MySQL, `/*! ... */` keeps its inside as SQL, because MySQL runs it.
+
+Refused, because the engine's reading is not certain:
+
+- a NUL character anywhere, on every engine;
+- on MySQL, a comment that carries a version number (`/*!50000 ... */`, `/*!!50000 ... */`) and a MariaDB comment (`/*M! ... */`): the server's version decides whether it runs;
+- on SQL Server, inside a `--` comment, any control character other than a tab, and the two Unicode line separators. Task 9's real run tried each one on SQL Server 2025: a lone carriage return ends the comment, so refusing it is needed; the others stay inside the comment, so refusing them is stricter than that server needs. The rule stays as it is, because it is right whichever way another SQL Server version reads them, and no query a person types holds them. One cost: a file with doubled carriage returns before each line feed is refused when a comment line has them;
+- on MySQL and SQL Server, a carriage return inside a line comment that is not followed by a line feed and is not the last character.
+
+Three engine defaults the reader assumes, where refusing would break working queries:
+
+- on MySQL, a backslash inside `'...'` and `"..."` makes the next character ordinary. That is the server's default. On a MySQL server set to `NO_BACKSLASH_ESCAPES` or `ANSI_QUOTES`, text after such a string can be hidden from the check. MySQL runs one statement per request, and the run paths wrap the SQL in a derived table, so what could hide is a read or a row lock. On a server set to `NO_BACKSLASH_ESCAPES`, a string that ends in a backslash is also a working query that the reader refuses as never closed;
+- on Postgres, a backslash in a plain string is an ordinary character. Both Postgres paths now run `SET LOCAL standard_conforming_strings = on` at the start of their transaction, which makes this true whatever the server or the session says;
+- on SQL Server, `"..."` is read the same whether it is a name or a string.
+
+### 10.2 Two forms of the check
+
+- `validateSelectSql(sql, dialect)`: the dialect is required. Every path that runs SQL calls it with the engine that will run it. `runSqlQuery` and `runReadQuery` take the engine as a required parameter.
+- `validateSelectSqlForSave(sql)`: passes when the text passes under at least one of the three engines' readings. It is used only where a query is saved or imported and the engine is not known. A query can therefore be saved and then refused when it runs.
+
+### 10.3 The SQL Server word rule
+
+- `load` and `dump` are not on the list (section 4.2).
+- In a run of name characters that starts with a letter, `_`, `#` or `@`, a listed word counts only when it is the whole run. In a run that starts with a digit or `$`, it counts when the run ends with it, because SQL Server reads a number and a word with no space as two things. A run that starts with `0x` is a binary number: `0x` and as many hex digits as follow; what is left after them is checked again by the same rule.
+- The same rule applies to the older word list (`insert`, `update`, `delete` and the rest) on SQL Server and Postgres. MySQL keeps the older word boundary, because a MySQL name may start with a digit.
+- Between the words of a pair (`enable trigger`, `disable trigger`, `next value for`), spaces, control characters and Unicode separators all count as a gap.
+- `use` is allowed only in the shape of a query hint.
+
+### 10.4 Tokens and the values that fill them
+
+- A token is found by position: every character of it must be plain SQL in the engine's reading. Counting tokens before and after blanking was wrong.
+- The fill takes the dialect. The dashboard query passes the target store's engine, and a saved query asks for its connector's dialect. With no dialect the token check passes when one engine's reading passes. The one caller with no dialect is the Query page's run route on a connector type that has no dialect, and the connector runner then refuses that type.
+- A number goes in only when it is finite. A negative number goes in inside parentheses, so it cannot make `--` after a minus sign. On MySQL a string value doubles its backslashes as well as its quotes.
+- The studio's widget editor no longer fills a template in the browser. It sends the template and the values, and the server fills once. The studio's own copy of the fill is deleted.
+- A token directly after a lone `E` is refused on Postgres, because the filled value would then be read as an `E'...'` string.
+- A refused template or statement on the dashboards query route answers 400 with its fixed sentence. It answered 500 before. An error from the database is unchanged.
+
+### 10.5 Transactions
+
+- A trailing line comment in a person's SQL used to swallow what `planPagination` and the Query page's count query added after it. Both now put a line feed first. On Postgres and MySQL this makes a query that ends in a comment work, where it failed before.
+- The roll-back is always its own request, never text added to the person's SQL.
+- On the Postgres connector path a client is taken from the pool by hand. It carries an error listener for as long as it is out, so a dropped connection ends the query with an error and cannot stop the server.
+- A connection is never handed back to a pool with an open transaction. Kysely does not release a connection when its own roll-back fails, so the roll-back is wrapped so that the connection is released either way.
+- On the Postgres connector path the person's statement is sent in the driver's extended mode, where Postgres itself refuses a second statement in one request. The fix round's real run showed the refusal (error 42601). The path that dashboards, reports on the target store and the workflow SQL Query node use goes through Kysely, which has no such switch: there one request can still hold several statements, and the text check and the read-only transaction are the guards.
+
+### 10.6 Found during the build and not fixed, for the operator
+
+- **A dropped Postgres connection can stop the server.** Kysely's Postgres driver adds no error listener to a client it takes from a pool. This affects every query on OpenLDR's own two Postgres databases. It is older than this work. The fix sits in `packages/adapter-db-store/src/index.ts` and `packages/db/src/internal-db.ts`.
+- **The lock-wait limit on a SQL Server target store has no effect.** `runReadQuery` sends `set lock_timeout` as its own request, and the driver ends a session setting with the request that made it. Task 9 measured it: asked for 2000 ms, it waited 15057 ms, until the driver's own timeout.
+- **A wrong password on a SQL Server source is retried for about 30 seconds.** Task 9 counted 122 failed logins before the copy failed. The connection pool does this. A source with a lockout policy could lock the login.
+- **On a SQL Server target store the warehouse projection fails** with a syntax error near the word `use`, from `packages/db/src/batch-upsert.ts`, which writes column names without brackets.
+- **A count for a query that ends in `; -- note` still fails**, as it did before.

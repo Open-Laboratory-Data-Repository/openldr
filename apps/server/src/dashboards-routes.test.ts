@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
 import { modelsForClient, joinableTablesForClient } from '@openldr/dashboards';
+import { checkedWidgetSqlToRun } from '@openldr/bootstrap';
 import { registerDashboardRoutes } from './dashboards-routes';
 import './auth-plugin';
 
@@ -93,6 +94,17 @@ describe('dashboard routes', () => {
     const app = appWith(fakeCtx());
     const res = await app.inject({ method: 'POST', url: '/api/dashboards/query', payload: { mode: 'sql', sql: 'select 1' } });
     expect(res.statusCode).toBe(400);
+  });
+  it('answers a template with a token inside quotes with 400 and the fixed sentence', async () => {
+    const ctx = fakeCtx();
+    // The query goes through the same fill and check that `runDashboardQuery` uses.
+    ctx.dashboards.query = async (q: any) => { checkedWidgetSqlToRun(q, 'postgres'); throw new Error('the database was reached'); };
+    const res = await appWith(ctx).inject({
+      method: 'POST', url: '/api/dashboards/query',
+      payload: { mode: 'sql', sql: "select '{{ward}}' as w", values: { ward: 'SECRETVALUE' } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'a {{ward}} sits inside quotes, a comment or a quoted name: remove the quotes; the value is quoted for you' });
   });
 
   it('compile-sql returns SQL text for a builder query', async () => {

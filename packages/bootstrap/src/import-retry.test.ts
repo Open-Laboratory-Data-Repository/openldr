@@ -79,30 +79,30 @@ describe('describeSourceError', () => {
     expect(text).not.toContain(ROW_VALUE);
   });
 
-  it('rule 4: a timeout with no number keeps the driver message, through clean', () => {
+  it('rule 5: a timeout with no number keeps the driver message, through clean', () => {
     expect(describeSourceError(Object.assign(new Error('Timeout: Request failed to complete in 30000ms'), { code: 'ETIMEOUT' }), clean))
       .toBe('[Timeout: Request failed to complete in 30000ms]');
   });
 
-  it('rule 4: a lost link in the LoggedIn-state error is a fixed sentence, with no driver words', () => {
+  it('rule 5: a lost link in the LoggedIn-state error is a fixed sentence, with no driver words', () => {
     const e = Object.assign(new Error('Requests can only be made in the LoggedIn state, not the Final state'), { code: 'EINVALIDSTATE' });
     expect(describeSourceError(e, clean)).toBe('the source could not be reached');
   });
 
   it.each(['ESOCKET', 'ECONNRESET', 'ECONNREFUSED', 'ECONNCLOSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE'])(
-    'rule 4: network code %s leads with "the source could not be reached"',
+    'rule 5: network code %s leads with "the source could not be reached"',
     (code) => {
       expect(describeSourceError(Object.assign(new Error('Connection lost - read ECONNRESET hunter2'), { code }), clean))
         .toBe('[the source could not be reached: Connection lost - read ECONNRESET ***]');
     },
   );
 
-  it('rule 4: any other lost error leads with "the source could not be read"', () => {
+  it('rule 5: any other lost error leads with "the source could not be read"', () => {
     expect(describeSourceError(new Error('something nobody has seen'), clean)).toBe('[the source could not be read: something nobody has seen]');
     expect(describeSourceError({ code: 'EWHATEVER', message: 'odd' }, clean)).toBe('[the source could not be read: odd]');
   });
 
-  it('rule 4: the lead is kept when the text is cut to the cap', () => {
+  it('rule 5: the lead is kept when the text is cut to the cap', () => {
     const cap = (text: string) => text.slice(0, 300);
     const long = `Connection lost ${'x'.repeat(400)}`;
     const text = describeSourceError(Object.assign(new Error(long), { code: 'ESOCKET' }), cap);
@@ -113,9 +113,30 @@ describe('describeSourceError', () => {
     expect(other.startsWith('the source could not be read: Connection lost x')).toBe(true);
   });
 
-  it('rule 5: anything else is a fixed sentence', () => {
-    expect(describeSourceError(new Error(`password authentication failed for user "${ROW_VALUE}"`), clean))
-      .toBe('the source failed in a way OpenLDR does not recognise');
+  // The connection pool drops the driver's code and number on a failed connect. It gives a
+  // TimeoutError that holds only the driver's words.
+  const poolError = (message: string) => Object.assign(new Error(message), { name: 'TimeoutError' });
+
+  it('a login refused at connect reads as a refused login', () => {
+    expect(describeSourceError(poolError("Login failed for user 'copy'."), clean)).toBe('the source refused the login');
+  });
+
+  it('a database that cannot be opened reads as that', () => {
+    expect(describeSourceError(poolError('Cannot open database "LabA" requested by the login.'), clean))
+      .toBe('the source could not open the database');
+  });
+
+  it('the sentence holds none of the driver\'s words', () => {
+    expect(describeSourceError(poolError("Login failed for user 'SECRETUSER'."), clean)).not.toContain('SECRETUSER');
+  });
+
+  it('rule 4: a failed login with no code from another engine reads as a refused login too', () => {
+    const text = describeSourceError(new Error(`password authentication failed for user "${ROW_VALUE}"`), clean);
+    expect(text).toBe('the source refused the login');
+    expect(text).not.toContain(ROW_VALUE);
+  });
+
+  it('rule 6: anything else is a fixed sentence', () => {
     expect(describeSourceError({ code: 'EREQUEST', message: `bad value ${ROW_VALUE}` }, clean))
       .toBe('the source failed in a way OpenLDR does not recognise');
   });

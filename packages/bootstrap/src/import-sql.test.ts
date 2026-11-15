@@ -42,7 +42,7 @@ describe('fillKeyQuery', () => {
     expect(() => fillKeyQuery(`${KEY_SQL} AND x = {{secret}}`, null, 10)).toThrow(/unknown token/);
   });
   it('produces a statement the SELECT-only validator accepts', () => {
-    expect(() => validateSelectSql(fillKeyQuery(KEY_SQL, 'REQ001', 500))).not.toThrow();
+    expect(() => validateSelectSql(fillKeyQuery(KEY_SQL, 'REQ001', 500), 'mssql')).not.toThrow();
   });
 });
 
@@ -59,12 +59,35 @@ describe('fillDetailQuery', () => {
   });
   it('stays a valid SELECT with 2000 keys', () => {
     const keys = Array.from({ length: 2000 }, (_, i) => `REQ${String(i).padStart(6, '0')}`);
-    expect(() => validateSelectSql(fillDetailQuery(DETAIL_SQL, keys))).not.toThrow();
+    expect(() => validateSelectSql(fillDetailQuery(DETAIL_SQL, keys), 'mssql')).not.toThrow();
   });
   it('a key cannot turn the statement into anything but a SELECT', () => {
     const sql = fillDetailQuery(DETAIL_SQL, ["x'); DELETE FROM Requests; --"]);
     // The whole payload sits inside one string literal.
     expect(sql).toContain("IN ('x''); DELETE FROM Requests; --')");
+  });
+});
+
+describe('a token sits in plain SQL', () => {
+  it('refuses a template with a token inside quotes or a comment', () => {
+    expect(() => fillDetailQuery("SELECT * FROM t WHERE id IN ('{{keys}}')", ['A'])).toThrow(/\{\{keys\}\}/);
+    expect(() => fillKeyQuery('SELECT TOP ({{limit}}) id FROM t WHERE id > {{after}} /* {{after}} */ ORDER BY id', null, 1))
+      .toThrow('import SQL has a token inside quotes, a comment or a quoted name: remove the quotes around {{after}}');
+    expect(() => fillKeyQuery('SELECT k FROM t WHERE k > {{after}} -- {{limit}}', null, 1))
+      .toThrow('import SQL has a token inside quotes, a comment or a quoted name: remove the quotes around {{limit}}');
+  });
+  it('refuses a token inside a bracketed name', () => {
+    expect(() => fillDetailQuery('SELECT [{{keys}}] FROM t', ['A'])).toThrow(/remove the quotes around \{\{keys\}\}/);
+  });
+  it('the refusal names the token and holds no key', () => {
+    let message = '';
+    try { fillDetailQuery("SELECT * FROM t WHERE id IN ('{{keys}}')", ['SECRETKEY1']); } catch (e) { message = String(e); }
+    expect(message).toBe('Error: import SQL has a token inside quotes, a comment or a quoted name: remove the quotes around {{keys}}');
+    expect(message).not.toContain('SECRETKEY1');
+  });
+  it('a string that is never closed is refused with the reader sentence', () => {
+    expect(() => fillKeyQuery("SELECT TOP ({{limit}}) k FROM t WHERE k > {{after}} AND x = 'open", null, 1))
+      .toThrow('the SQL has a string, comment or quoted name that is never closed');
   });
 });
 

@@ -311,8 +311,8 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     if (!parsed.success) throw new PluginFault();
     // Check the plugin's statements before opening a connection or running any of them.
     for (const set of parsed.data.sets) {
-      validateSelectSql(fillKeyQuery(set.keyQuery.sql, null, 1));
-      for (const d of set.detailQueries) validateSelectSql(fillDetailQuery(d.sql, ['A']));
+      validateSelectSql(fillKeyQuery(set.keyQuery.sql, null, 1), 'mssql');
+      for (const d of set.detailQueries) validateSelectSql(fillDetailQuery(d.sql, ['A']), 'mssql');
     }
     return { sets: parsed.data.sets, hashes: Object.fromEntries(parsed.data.sets.map((s) => [s.name, setHash(s)])) };
   }

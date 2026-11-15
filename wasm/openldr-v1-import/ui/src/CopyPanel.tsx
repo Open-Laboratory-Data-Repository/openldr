@@ -107,6 +107,52 @@ function Confirm({ id, title, onCancel, returnTo, children }: {
 /** The request a start call sent, kept with the sets it named, so a yes resends exactly that (R35). */
 interface Asked { connectorId: string; options: Record<string, string>; changedSets: string[] }
 
+/** The tab's two dots menus: Start at the top, Stop and Delete on the copy card. One is open at most. */
+type MenuName = 'start' | 'card';
+type SetMenu = (next: (open: MenuName | null) => MenuName | null) => void;
+
+/**
+ * A dots menu: focus moves to its first usable item, the arrow keys move between items, and a
+ * click outside or Escape closes it. Escape gives focus back to the menu's button. Tab closes it
+ * and lets focus move on. Arrows and Escape count only while focus is in the menu or on its
+ * button, so a field below keeps its own keys. Escape also counts while focus is on the page body.
+ */
+function useMenu(name: MenuName, open: boolean, setOpen: SetMenu, box: { current: HTMLElement | null }, button: { current: HTMLElement | null }) {
+  useEffect(() => {
+    if (!open) return;
+    // Closes this menu only, so a press that opened the other menu is kept.
+    const close = () => setOpen((o) => (o === name ? null : o));
+    const items = () => [...(box.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+    (items().find((i) => i.getAttribute('aria-disabled') !== 'true') ?? items()[0])?.focus();
+    const onClick = (e: Event) => { if (!box.current?.contains(e.target as Node)) close(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') {
+        close();
+        return;
+      }
+      // Focus on the page body counts as in the menu for Escape only, so a menu whose focus was
+      // lost still closes from the keyboard.
+      const onBody = document.activeElement === null || document.activeElement === document.body;
+      if (!box.current?.contains(document.activeElement) && !(e.key === 'Escape' && onBody)) return;
+      if (e.key === 'Escape') {
+        close();
+        button.current?.focus();
+        return;
+      }
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      const list = items();
+      if (list.length === 0) return;
+      e.preventDefault();
+      const i = list.indexOf(document.activeElement as HTMLElement);
+      const next = e.key === 'ArrowDown' ? (i + 1) % list.length : (i - 1 + list.length) % list.length;
+      list[next]!.focus();
+    };
+    document.addEventListener('click', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('click', onClick); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+}
+
 /**
  * The Copy tab: pick a connector and options, start a copy, and watch, stop or delete it.
  * `shown` is false while the Import tab is in front: the panel then stops reading the copy.
@@ -125,7 +171,9 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
   const [actionError, setActionError] = useState<string | null>(null);
   const [pollFailed, setPollFailed] = useState(false);
   const [deleted, setDeleted] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [openMenu, setOpenMenu] = useState<MenuName | null>(null);
+  const menuOpen = openMenu === 'card';
+  const startMenuOpen = openMenu === 'start';
   const [asked, setAsked] = useState<Asked | null>(null);
   // The copy the delete step is for, fixed when the step opens.
   const [deleting, setDeleting] = useState<CopyRun | null>(null);
@@ -142,6 +190,8 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
   // The dots menu holds Stop and Delete. When neither can be used any more, it closes.
   const menuUsable = run !== null && !busy
     && (canStopCopy(run.status) || run.status === 'stopped' || run.status === 'completed' || run.status === 'failed');
+  // The Start menu's one item. Its button is off when this is false (R3).
+  const canStart = connectorId !== null && !busy && !locked && problems(form).length === 0;
 
   const put = useCallback((next: CopyRun) => setCopies((list) => [next, ...list.filter((c) => c.id !== next.id)]), []);
 
@@ -215,41 +265,42 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
     wasLive.current = live;
   }, [live, run]);
 
-  // The dots menu: focus moves to its first usable item, the arrow keys move between items, and
-  // a click outside or Escape closes it.
+  // The copy card's dots menu, and the Start menu at the top of the tab.
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
-  const startButton = useRef<HTMLButtonElement>(null);
+  const startMenuRef = useRef<HTMLDivElement>(null);
+  const startMenuButton = useRef<HTMLButtonElement>(null);
   const statusLine = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const items = () => [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
-    (items().find((i) => i.getAttribute('aria-disabled') !== 'true') ?? items()[0])?.focus();
-    const onClick = (e: Event) => { if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false); };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setMenuOpen(false);
-        menuButton.current?.focus();
-        return;
-      }
-      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-      const list = items();
-      if (list.length === 0) return;
-      e.preventDefault();
-      const i = list.indexOf(document.activeElement as HTMLElement);
-      const next = e.key === 'ArrowDown' ? (i + 1) % list.length : (i - 1 + list.length) % list.length;
-      list[next]!.focus();
-    };
-    document.addEventListener('click', onClick);
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('click', onClick); document.removeEventListener('keydown', onKey); };
-  }, [menuOpen]);
+  useMenu('card', menuOpen, setOpenMenu, menuRef, menuButton);
+  useMenu('start', startMenuOpen, setOpenMenu, startMenuRef, startMenuButton);
   // The dots button is disabled once nothing in the menu can be used, so focus goes to the status line.
   useEffect(() => {
     if (!menuOpen || menuUsable) return;
-    setMenuOpen(false);
+    setOpenMenu((o) => (o === 'card' ? null : o));
     statusLine.current?.focus();
   }, [menuOpen, menuUsable]);
+  // R3, the same for the Start menu. Focus moves only if it was in the menu, which is going.
+  useEffect(() => {
+    if (!startMenuOpen || canStart) return;
+    const hadFocus = startMenuRef.current?.contains(document.activeElement) ?? false;
+    setOpenMenu((o) => (o === 'start' ? null : o));
+    if (hadFocus) statusLine.current?.focus();
+  }, [startMenuOpen, canStart]);
+
+  // R33: the Start menu button is off while a start call is out, so a browser drops its focus to
+  // the page body. When the call ends, focus that is on the body or on that button goes to the
+  // button if it is on, else to the copy card's status line. Focus a step took is left alone.
+  const wasStarting = useRef(starting);
+  useEffect(() => {
+    const ended = wasStarting.current && !starting;
+    wasStarting.current = starting;
+    if (!ended) return;
+    const at = document.activeElement;
+    const button = startMenuButton.current;
+    if (at !== null && at !== document.body && at !== button) return;
+    if (button && !button.disabled) button.focus();
+    else statusLine.current?.focus();
+  }, [starting]);
 
   /** Where focus goes when a step closes: its opener, or the status line when the opener is disabled. */
   const focusBack = (opener: HTMLElement | null) => () => (opener && !(opener as HTMLButtonElement).disabled ? opener : statusLine.current);
@@ -287,7 +338,7 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
   }
 
   async function act(copyId: string, call: (id: string) => Promise<CopyRun>) {
-    setMenuOpen(false);
+    setOpenMenu(null);
     setBusy(true);
     setActionError(null);
     actions.current += 1;
@@ -306,7 +357,6 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
   if (!loaded) return <p class="v1i-status" data-testid="copy-loading">{t('loading')}</p>;
 
   const formShown = live && run ? fromOptions(run.options) : form;
-  const canStart = connectorId !== null && !busy && !locked && problems(form).length === 0;
   const sum = run ? totals(run) : null;
   const names = run ? setNames(run) : [];
   const current = run ? names.find((n) => !run.sets[n]!.done) : undefined;
@@ -331,7 +381,51 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
         <p class="v1i-help">{t('copy.help')}</p>
         {loadError ? <p class="v1i-error v1i-wrap" data-testid="copy-load-error">{t('loadError', { error: loadError })}</p> : null}
 
-        <SourceStep connectors={connectors} connectorId={connectorId} onPick={pick} disabled={pickerLocked} />
+        {/* The first row: the connector picker, and at its right end the dots menu that holds Start (spec 4.6). */}
+        <div class="v1i-source-row" data-testid="copy-source-row">
+          <div class="v1i-source-main">
+            <SourceStep connectors={connectors} connectorId={connectorId} onPick={pick} disabled={pickerLocked} />
+          </div>
+          <div class="v1i-menu" ref={startMenuRef}>
+            <button
+              ref={startMenuButton}
+              type="button"
+              class="v1i-btn v1i-btn-plain v1i-btn-icon"
+              data-testid="copy-actions"
+              aria-label={t('copy.actions')}
+              aria-haspopup="menu"
+              aria-expanded={startMenuOpen}
+              // R3: no menu that opens with nothing usable in it, as the copy card's menu.
+              disabled={!canStart}
+              // Checked here too: a test DOM delivers clicks to a disabled button.
+              onClick={() => { if (canStart) setOpenMenu((o) => (o === 'start' ? null : 'start')); }}
+            >
+              <span aria-hidden="true">⋯</span>
+            </button>
+            {startMenuOpen ? (
+              <div class="v1i-menu-list" role="menu" aria-label={t('copy.actions')}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="v1i-menu-item"
+                  data-testid="copy-start"
+                  aria-disabled={!canStart}
+                  onClick={() => {
+                    if (!canStart || !connectorId) return;
+                    setOpenMenu(null);
+                    startMenuButton.current?.focus();
+                    void start({ connectorId, options: toOptions(form) }, false);
+                  }}
+                >
+                  {run && !live ? t('copy.continue') : t('copy.start')}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+        {/* The menu cannot open while a start call is out, so this line says it is under way. It is
+            always in the page, so a screen reader hears the text arrive. Empty, it takes no room. */}
+        <div class="v1i-muted v1i-start-status" role="status" data-testid="copy-starting">{starting ? t('copy.starting') : null}</div>
 
         {connectorId ? (
           <div class="v1i-block">
@@ -347,18 +441,6 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
           </div>
         ) : null}
 
-        <div class="v1i-block v1i-end">
-          <button
-            ref={startButton}
-            type="button"
-            class="v1i-btn"
-            data-testid="copy-start"
-            disabled={!canStart}
-            onClick={() => { if (connectorId) void start({ connectorId, options: toOptions(form) }, false); }}
-          >
-            {starting ? t('copy.starting') : run && !live ? t('copy.continue') : t('copy.start')}
-          </button>
-        </div>
         {startError ? <p class="v1i-error v1i-wrap" data-testid="copy-start-error">{t('copy.startError', { error: startError })}</p> : null}
         {deleted ? <p class="v1i-ok" data-testid="copy-deleted">{t('copy.deleted')}</p> : null}
 
@@ -383,7 +465,7 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
                   aria-expanded={menuOpen}
                   // R37: no menu that opens with nothing usable in it.
                   disabled={!canStop && !canDelete}
-                  onClick={() => setMenuOpen((o) => !o)}
+                  onClick={() => setOpenMenu((o) => (o === 'card' ? null : 'card'))}
                 >
                   <span aria-hidden="true">⋯</span>
                 </button>
@@ -408,7 +490,7 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
                       aria-disabled={!canDelete}
                       onClick={() => {
                         if (!canDelete) return;
-                        setMenuOpen(false);
+                        setOpenMenu(null);
                         setDeleteText('');
                         setDeleting(run);
                       }}
@@ -466,7 +548,7 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
       </div>
 
       {asked ? (
-        <Confirm id="copy-reread-dialog" title={t('copy.rereadTitle')} onCancel={() => setAsked(null)} returnTo={focusBack(startButton.current)}>
+        <Confirm id="copy-reread-dialog" title={t('copy.rereadTitle')} onCancel={() => setAsked(null)} returnTo={focusBack(startMenuButton.current)}>
           <p>{t('copy.rereadBody', { sets: asked.changedSets.join(', ') })}</p>
           <p class="v1i-muted">{t('copy.rereadHelp')}</p>
           <div class="v1i-dialog-foot">

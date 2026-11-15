@@ -80,6 +80,7 @@ function fakeSource(requests: string[], facilities: string[] = []) {
       }
       return { rows: inList.map((k) => ({ __key: k, RequestID: k, RegisteredDateTime: DATE })) };
     },
+    async queryReadOnly(): Promise<never> { throw new Error('the import reader calls query, never queryReadOnly'); },
     async close() {},
   };
   return {
@@ -839,10 +840,18 @@ describe('copy: starting, and what a start may change', () => {
     expect(JSON.stringify([run, w.audited])).not.toContain('Maria');
   });
 
-  it('refuses SQL from the plugin that is not a SELECT, before running anything', async () => {
+  it('refuses a plugin template with a token in a comment, before running anything', async () => {
     const w = await world(keysOf(2));
     w.setCopy(() => ({ sets: [{ name: 'requests', keyQuery: { sql: 'DELETE FROM [dbo].[Requests] WHERE [RequestID] > {{after}} -- {{limit}}' }, detailQueries: [] }] }));
-    await expect(w.svc.start(START)).rejects.toThrow();
+    await expect(w.svc.start(START)).rejects.toThrow('import SQL has a token inside quotes, a comment or a quoted name: remove the quotes around {{limit}}');
+    expect(await w.svc.list(PLUGIN)).toEqual([]);
+    expect(w.source.statements).toEqual([]);
+  });
+
+  it('refuses SQL from the plugin that is not a SELECT, before running anything', async () => {
+    const w = await world(keysOf(2));
+    w.setCopy(() => ({ sets: [{ name: 'requests', keyQuery: { sql: 'DELETE TOP ({{limit}}) FROM [dbo].[Requests] WHERE [RequestID] > {{after}}' }, detailQueries: [] }] }));
+    await expect(w.svc.start(START)).rejects.toThrow('only SELECT/WITH queries are allowed');
     expect(await w.svc.list(PLUGIN)).toEqual([]);
     expect(w.source.statements).toEqual([]);
   });

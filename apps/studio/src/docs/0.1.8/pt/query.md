@@ -432,6 +432,15 @@ Leia a confirmação e escolha Delete query apenas para a definição que preten
 
 **Resultado esperado:** a definição guardada desaparece do Explorer.
 
+## O que a página Query recusa
+
+Uma consulta que não cumpra uma destas regras é recusada antes de chegar à base de dados.
+
+- Num conector SQL Server, uma consulta que contenha uma palavra de instrução como `EXEC` é recusada. Uma palavra dentro de uma cadeia de texto, de um comentário ou de um nome entre parênteses retos não conta. A mensagem, em inglês, é `only read-only SELECT queries are allowed on SQL Server (statement words such as EXEC are refused; put a name that is such a word in [brackets])`. Quer dizer que no SQL Server só são permitidas consultas SELECT só de leitura, que as palavras de instrução como EXEC são recusadas, e que um nome que seja uma dessas palavras tem de ficar entre parênteses retos.
+- No SQL Server, escreva entre parênteses retos uma coluna ou tabela cujo nome seja uma dessas palavras, como `[open]`.
+- Escreva um parâmetro como `{{ param.from }}` sem aspas à volta. O OpenLDR põe o valor entre aspas. Um parâmetro entre aspas é recusado quando a consulta é executada, e a mensagem diz para retirar as aspas.
+- Num conector MySQL ou MariaDB, um comentário com um número de versão, como `/*!50000 ... */`, é recusado.
+
 ## Escolher os tipos de parâmetros
 
 Text aceita um valor lido com `{{ param.variableId }}`. Select pede um valor de Options SQL. A primeira coluna devolvida fornece as escolhas. Date range fornece `{{ param.from }}` e `{{ param.to }}`.
