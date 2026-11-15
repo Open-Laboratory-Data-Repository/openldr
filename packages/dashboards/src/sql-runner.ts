@@ -1,23 +1,16 @@
 import { type Kysely, CompiledQuery, sql } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { ReportResultData, ReportColumn } from '@openldr/reporting';
+import { blankSql, type SqlDialect } from './sql-text';
 
-/** Strip line (`-- ...`) and block (slash-star ... star-slash) comments before structural checks. */
-function stripComments(input: string): string {
-  return input.replace(/--[^\n]*/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
-}
-
-/** Replace single-quoted string literals (including `''` escapes) with an empty literal so a
- *  keyword like `into` sitting inside a quoted string isn't mistaken for the SQL keyword. Only
- *  applied to the validation copy — never to the SQL that actually runs. */
-function stripStringLiterals(input: string): string {
-  return input.replace(/'(?:[^']|'')*'/g, "''");
-}
+export type { SqlDialect } from './sql-text';
 
 export function validateSelectSql(rawSql: string): void {
-  // Strip comments AND string literals before the structural/keyword checks so quoted text (e.g.
-  // 'convert this into that') can't trigger a false positive or smuggle a banned keyword.
-  const stripped = stripStringLiterals(stripComments(rawSql)).trim();
+  // Blank strings, comments and quoted names in one pass before the structural and keyword checks,
+  // so quoted text (e.g. 'convert this into that') can't trigger a false positive or hide a
+  // statement. Only the validation copy is blanked, never the SQL that runs. A throw from the
+  // reader (text that is never closed, for one) is a refusal.
+  const stripped = blankSql(rawSql).trim();
   if (!stripped) throw new Error('empty query');
   // Reject multiple statements: any semicolon that is not the final char.
   const noTrailing = stripped.replace(/;\s*$/, '');
@@ -30,8 +23,6 @@ export function validateSelectSql(rawSql: string): void {
     throw new Error('only read-only SELECT queries are allowed (INTO/DDL/DML rejected)');
   }
 }
-
-export type SqlDialect = 'postgres' | 'mssql' | 'mysql';
 
 export interface PaginationPlan {
   /** SQL to execute (a multi-statement batch for MSSQL). */

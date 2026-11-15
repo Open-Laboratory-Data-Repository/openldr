@@ -66,6 +66,12 @@ describe('validateSelectSql', () => {
   it('allows "into" inside a string literal (not a false positive)', () => {
     expect(() => validateSelectSql("SELECT 'convert this into that' as note")).not.toThrow();
   });
+  it('reads a comment marker inside a string as text, so a second statement is still found', () => {
+    expect(() => validateSelectSql("SELECT '--', 1; SELECT 2")).toThrow('only a single statement is allowed');
+  });
+  it('refuses a string that is never closed', () => {
+    expect(() => validateSelectSql("SELECT 'abc")).toThrow();
+  });
 });
 
 describe('runSqlQuery numeric guards', () => {
