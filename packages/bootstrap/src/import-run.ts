@@ -5,7 +5,7 @@ import { validateSelectSql } from '@openldr/dashboards';
 import type { PluginDataStore, Provenance } from '@openldr/db';
 import { allowedResourceTypes, canImportOnePass, importSourceSchema, readGrant, type Capability, type ImportSource } from '@openldr/marketplace';
 import { createConnectorDb, type ConnectorDb } from './connector-db';
-import { growPage, retryWaitMs } from './import-retry';
+import { growPage, isStorageDown, retryWaitMs } from './import-retry';
 import { createSourceReader, type SourceReader } from './import-source-reader';
 import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, fillDetailQuery, fillKeyQuery, toPluginRow } from './import-sql';
 
@@ -275,10 +275,11 @@ export class StoppedWhileWaiting extends Error {
 
 /**
  * For a drive. `loadSink` reads the plugin's code from blob storage on its first use in a process.
- * After a power cut that storage may come up after the server, and the S3 client then throws. A
- * throw is waited out as a lost link is: `onWaiting` with the try number, then `retryWaitMs`, slept
- * in slices with `stopWanted` asked before each. A load that finds no invokable code is a fault of
- * the plugin and throws as `loadImportSink` does.
+ * After a power cut that storage may come up after the server, and the S3 client then throws. Only
+ * such a throw (`isStorageDown`) is waited out, as a lost link is: `onWaiting` with the try number,
+ * then `retryWaitMs`, slept in slices with `stopWanted` asked before each. Any other throw, such as
+ * a hash mismatch, is thrown as it is. A load that finds no invokable code throws as
+ * `loadImportSink` does.
  */
 export async function loadImportSinkWaiting(
   plugins: ImportServiceDeps['plugins'],
@@ -294,7 +295,9 @@ export async function loadImportSinkWaiting(
     let sink: Awaited<ReturnType<ImportServiceDeps['plugins']['loadSink']>>;
     try {
       sink = await plugins.loadSink(plugin.id, plugin.version);
-    } catch {
+    } catch (err) {
+      // Any other fault ends the run with its own text, as before this wait existed.
+      if (!isStorageDown(err)) throw err;
       await waits.onWaiting({ attempt, error: PLUGIN_CODE_NOT_LOADED });
       for (let left = retryWaitMs(attempt); left > 0; left -= WAIT_SLICE_MS) {
         if (await waits.stopWanted()) throw new StoppedWhileWaiting();

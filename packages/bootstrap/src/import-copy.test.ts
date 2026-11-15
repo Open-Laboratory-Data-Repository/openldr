@@ -40,6 +40,12 @@ function manifest(over: { id?: string; version?: string; capabilities?: unknown[
 const missingTable = () => Object.assign(new Error("Invalid object name 'dbo.LabResults'."), { code: 'EREQUEST', number: 208 });
 const cutLink = () => Object.assign(new Error('Connection lost - read ECONNRESET at secret-pw'), { code: 'ESOCKET' });
 const timedOut = () => Object.assign(new Error('Timeout: Request failed to complete in 30000ms'), { code: 'ETIMEOUT' });
+/** What the S3 client throws when blob storage is not up: Node's socket error, passed on as it is. */
+const storageRefused = () => Object.assign(new Error('connect ECONNREFUSED 10.0.0.9:3900 secret-pw'), { code: 'ECONNREFUSED' });
+/** What the plugin runtime throws when the stored code is not the code that was installed. */
+const hashMismatch = () => new Error('plugin v1-import@1.2.0 sha256 mismatch (expected aa11, got bb22)');
+/** What the file-system adapter throws for a code file that is not there. */
+const missingFile = () => Object.assign(new Error("ENOENT: no such file or directory, open '/data/objects/plugins/v1-import/1.2.0/plugin.wasm'"), { code: 'ENOENT' });
 
 const DATE = new Date(Date.UTC(2024, 2, 5, 14, 30, 0, 0));
 const DATE_TEXT = '2024-03-05T14:30:00.000';
@@ -185,15 +191,16 @@ async function world(requests: string[], facilities: string[] = []) {
   let held = false;
   let waiters: Array<() => void> = [];
   const clock = { now: Date.UTC(2026, 10, 11, 12, 0, 0) };
-  /** Loads of the plugin's code that throw, as when the place it is stored is not up yet. */
+  /** Loads of the plugin's code that throw, by default as when the place it is stored is not up yet. */
   let sinkLoadFaults = 0;
+  let sinkFault: () => unknown = storageRefused;
   let noSink = false;
   const pluginsDep = {
     list: async () => plugins,
     loadSink: async () => {
       if (sinkLoadFaults > 0) {
         sinkLoadFaults -= 1;
-        throw Object.assign(new Error('connect ECONNREFUSED 10.0.0.9:3900 secret-pw'), { code: 'ECONNREFUSED' });
+        throw sinkFault();
       }
       return noSink ? undefined : { invoke };
     },
@@ -235,8 +242,8 @@ async function world(requests: string[], facilities: string[] = []) {
     rivalWrites: (match: (doc: CopyRun) => boolean, times: number) => { rivals.push({ match, left: times }); },
     setCopy: (fn: (options: Record<string, string>) => unknown) => { copyFn = fn; },
     failCopy: (on: boolean) => { copyFails = on; },
-    /** The next `times` loads of the plugin's code throw. */
-    failSinkLoads: (times: number) => { sinkLoadFaults = times; },
+    /** The next `times` loads of the plugin's code throw `fault`. */
+    failSinkLoads: (times: number, fault: () => unknown = storageRefused) => { sinkLoadFaults = times; sinkFault = fault; },
     /** Loading the plugin's code finds no invokable wasm. */
     setNoSink: (on: boolean) => { noSink = on; },
     failAuditOn: (action: ImportAuditEvent['action'] | null) => { auditFails = action; },
@@ -1528,6 +1535,41 @@ describe('copy: the plugin code cannot be loaded yet', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('a 503 from the storage waits too', async () => {
+    const w = await world(keysOf(2));
+    await w.svc.start(START);
+    w.failSinkLoads(1, () => Object.assign(new Error('ServiceUnavailable'), { name: 'ServiceUnavailable', $metadata: { httpStatusCode: 503 } }));
+    await drive(w.svc);
+    expect(await w.stored()).toMatchObject({ status: 'completed', lastError: null });
+    expect(w.runSaves.filter((r) => r.status === 'waiting').map((r) => r.waiting?.error)).toEqual([NOT_LOADED]);
+  });
+
+  it('a hash mismatch on the plugin code fails the copy at once, and shows why', async () => {
+    // A tamper signal a person must see. It never reads as "not loaded yet".
+    const w = await world(keysOf(2));
+    await w.svc.start(START);
+    w.failSinkLoads(1_000_000, hashMismatch);
+    await drive(w.svc);
+    const run = (await w.stored())!;
+    expect(run.status).toBe('failed');
+    expect(run.lastError).toBe('plugin v1-import@1.2.0 sha256 mismatch (expected aa11, got bb22)');
+    expect(w.sleeps).toEqual([]);
+    expect(w.runSaves.some((r) => r.status === 'waiting')).toBe(false);
+    expect(w.source.statements).toEqual([]);
+  });
+
+  it('a missing code file fails the copy at once', async () => {
+    const w = await world(keysOf(2));
+    await w.svc.start(START);
+    w.failSinkLoads(1_000_000, missingFile);
+    await drive(w.svc);
+    const run = (await w.stored())!;
+    expect(run.status).toBe('failed');
+    expect(run.lastError).toContain('ENOENT: no such file or directory');
+    expect(w.sleeps).toEqual([]);
+    expect(w.runSaves.some((r) => r.status === 'waiting')).toBe(false);
   });
 
   it('a plugin with no invokable code still ends the copy as failed, with no wait', async () => {

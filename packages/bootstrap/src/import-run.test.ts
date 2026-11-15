@@ -28,6 +28,13 @@ function manifest(over: { capabilities?: unknown[]; importSource?: unknown } = {
   };
 }
 
+/** What the S3 client throws when blob storage is not up: Node's socket error, passed on as it is. */
+const storageRefused = () => Object.assign(new Error('connect ECONNREFUSED 10.0.0.9:3900 secret-pw'), { code: 'ECONNREFUSED' });
+/** What the plugin runtime throws when the stored code is not the code that was installed. */
+const hashMismatch = () => new Error('plugin v1-import@1.2.0 sha256 mismatch (expected aa11, got bb22)');
+/** What the file-system adapter throws for a code file that is not there. */
+const missingFile = () => Object.assign(new Error("ENOENT: no such file or directory, open '/data/objects/plugins/v1-import/1.2.0/plugin.wasm'"), { code: 'ENOENT' });
+
 /** What tedious throws for a missing table: the SQL Server itself refused the query. */
 const missingTable = () => Object.assign(new Error("Invalid object name 'dbo.Requests'."), { code: 'EREQUEST', number: 208 });
 /** What tedious throws when the link drops in the middle of a query. */
@@ -90,8 +97,9 @@ interface Harness {
   /** Hold every wait until `releaseSleeps`. Waits end at once otherwise. */
   holdSleeps(): void;
   releaseSleeps(): void;
-  /** The next `times` loads of the plugin's code throw, as when the place it is stored is not up yet. */
-  failSinkLoads(times: number): void;
+  /** The next `times` loads of the plugin's code throw `fault`. By default the S3 client's refused
+   *  connection, as when the place the code is stored is not up yet. */
+  failSinkLoads(times: number, fault?: () => unknown): void;
   /** Loading the plugin's code finds no invokable wasm. */
   setNoSink(on: boolean): void;
 }
@@ -130,6 +138,7 @@ async function harness(keys: string[], opts: { origin?: 'server' | 'cli' } = {})
   const persist = vi.fn(async (resources: unknown[]) => resources.map(() => ({ saved: true })));
   const clock = { now: Date.UTC(2026, 10, 11, 12, 0, 0) };
   let sinkLoadFaults = 0;
+  let sinkFault: () => unknown = storageRefused;
   let noSink = false;
   const svc = createImportService({
     plugins: {
@@ -137,7 +146,7 @@ async function harness(keys: string[], opts: { origin?: 'server' | 'cli' } = {})
       loadSink: async () => {
         if (sinkLoadFaults > 0) {
           sinkLoadFaults -= 1;
-          throw Object.assign(new Error('connect ECONNREFUSED 10.0.0.9:3900 secret-pw'), { code: 'ECONNREFUSED' });
+          throw sinkFault();
         }
         return noSink ? undefined : { invoke };
       },
@@ -165,7 +174,7 @@ async function harness(keys: string[], opts: { origin?: 'server' | 'cli' } = {})
     holdSleeps: () => { held = true; },
     releaseSleeps: () => { held = false; const w = waiters; waiters = []; for (const resolve of w) resolve(); },
     failAuditOn: (action) => { auditFails = action; },
-    failSinkLoads: (times) => { sinkLoadFaults = times; },
+    failSinkLoads: (times, fault = storageRefused) => { sinkLoadFaults = times; sinkFault = fault; },
     setNoSink: (on) => { noSink = on; },
     setManifest: (m) => { currentManifest = m; },
     setQueries: (q) => { queries = q; },
@@ -972,6 +981,36 @@ describe('import run: the plugin code cannot be loaded yet', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('a storage error wrapped in a cause waits too', async () => {
+    const h = await harness(keysOf(2));
+    h.failSinkLoads(1, () => new Error('GetObject failed', { cause: Object.assign(new Error('socket hang up'), { name: 'TimeoutError' }) }));
+    const run = await h.svc.wait((await h.svc.start(START)).id);
+    expect(run).toMatchObject({ status: 'completed', lastError: null });
+    expect(h.runSaves.filter((r) => r.status === 'waiting').map((r) => r.waiting?.error)).toEqual([NOT_LOADED]);
+  });
+
+  it('a hash mismatch on the plugin code fails the import at once, and shows why', async () => {
+    // A tamper signal a person must see. It never reads as "not loaded yet".
+    const h = await harness(keysOf(2));
+    h.failSinkLoads(1_000_000, hashMismatch);
+    const run = await h.svc.wait((await h.svc.start(START)).id);
+    expect(run.status).toBe('failed');
+    expect(run.lastError).toBe('plugin v1-import@1.2.0 sha256 mismatch (expected aa11, got bb22)');
+    expect(h.sleeps).toEqual([]);
+    expect(h.runSaves.some((r) => r.status === 'waiting')).toBe(false);
+    expect(h.invoke).not.toHaveBeenCalled();
+  });
+
+  it('a missing code file fails the import at once', async () => {
+    const h = await harness(keysOf(2));
+    h.failSinkLoads(1_000_000, missingFile);
+    const run = await h.svc.wait((await h.svc.start(START)).id);
+    expect(run.status).toBe('failed');
+    expect(run.lastError).toContain('ENOENT: no such file or directory');
+    expect(h.sleeps).toEqual([]);
+    expect(h.runSaves.some((r) => r.status === 'waiting')).toBe(false);
   });
 
   it('a plugin with no invokable code still ends the import as failed, with no wait', async () => {

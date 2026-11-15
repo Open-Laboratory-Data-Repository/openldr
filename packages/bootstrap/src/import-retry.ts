@@ -94,6 +94,37 @@ export function describeSourceError(err: unknown, clean: (text: string) => strin
 }
 
 /** The wait before try number `attempt` (1 for the first retry): 5 s, doubling, at most 300 s. */
+/** Socket codes that mean the storage could not be reached. The same eight the AWS SDK retries
+ *  (@smithy/core 3.29, retry, NODEJS_TIMEOUT_ERROR_CODES and NODEJS_NETWORK_ERROR_CODES). */
+const STORAGE_DOWN_CODES = new Set(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE']);
+/** S3 error names for a store that is up but cannot answer now, and the HTTP handler's timeout. */
+const STORAGE_DOWN_NAMES = new Set(['TimeoutError', 'RequestTimeout', 'ServiceUnavailable', 'SlowDown', 'InternalError']);
+/** Far deeper than any real chain of causes. Stops a cause that points back at itself. */
+const MAX_CAUSE_DEPTH = 10;
+
+function storageDownAt(err: unknown, depth: number): boolean {
+  if (depth > MAX_CAUSE_DEPTH || typeof err !== 'object' || err === null) return false;
+  const e = err as { code?: unknown; name?: unknown; $metadata?: { httpStatusCode?: unknown }; cause?: unknown; errors?: unknown };
+  if (typeof e.code === 'string' && STORAGE_DOWN_CODES.has(e.code)) return true;
+  if (typeof e.name === 'string' && STORAGE_DOWN_NAMES.has(e.name)) return true;
+  const status = e.$metadata?.httpStatusCode;
+  // 429 is not in R33b's list. The SDK treats it as throttling, and waiting cures it.
+  if (typeof status === 'number' && (status >= 500 || status === 429)) return true;
+  if (storageDownAt(e.cause, depth + 1)) return true;
+  return Array.isArray(e.errors) && e.errors.some((m) => storageDownAt(m, depth + 1));
+}
+
+/**
+ * True when loading a plugin's code failed because blob storage cannot answer right now: after a
+ * power cut it may come up after the server. The error, its `cause` followed down, and each entry
+ * of an `errors` array are looked at. Everything else is false, so a hash mismatch (a tamper
+ * signal), a missing object or file (`NoSuchKey`, `ENOENT`) and a plugin that cannot be invoked
+ * fail the run and show why.
+ */
+export function isStorageDown(err: unknown): boolean {
+  return storageDownAt(err, 0);
+}
+
 export function retryWaitMs(attempt: number): number {
   const n = Math.max(1, Math.floor(attempt));
   return Math.min(MAX_WAIT_MS, FIRST_WAIT_MS * 2 ** (n - 1));

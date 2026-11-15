@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifySourceError, describeSourceError, growPage, retryWaitMs, shrinkPage } from './import-retry';
+import { classifySourceError, describeSourceError, growPage, isStorageDown, retryWaitMs, shrinkPage } from './import-retry';
 
 // Layer: pure functions only. No driver, no connection, no database. Whether a real tedious,
 // pg or mysql2 error carries these codes and messages is not tested here.
@@ -170,5 +170,61 @@ describe('growPage', () => {
 
   it('leaves a page at the target as it is', () => {
     expect(growPage(500, 500, 9)).toBe(500);
+  });
+});
+
+// R33b. The shapes are the ones @smithy/node-http-handler 4.7 and @smithy/core 3.29 throw for a
+// GetObject: a Node socket error as it is (ECONNRESET, EPIPE and ETIMEDOUT renamed TimeoutError), or
+// an S3 service error named by its code with `$metadata.httpStatusCode`. Built by hand here.
+describe('isStorageDown', () => {
+  const sysErr = (code: string) => Object.assign(new Error(`connect ${code} 10.0.0.9:3900`), { code });
+  const s3Err = (name: string, httpStatusCode: number) => Object.assign(new Error(name), { name, $metadata: { httpStatusCode, attempts: 3 } });
+
+  it.each(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE'])(
+    'is true for a socket error with code %s',
+    (code) => { expect(isStorageDown(sysErr(code))).toBe(true); },
+  );
+
+  it.each(['TimeoutError', 'RequestTimeout', 'ServiceUnavailable', 'SlowDown', 'InternalError'])(
+    'is true for an error named %s',
+    (name) => { expect(isStorageDown(Object.assign(new Error('x'), { name }))).toBe(true); },
+  );
+
+  it('is true for the connect timeout the HTTP handler throws, which has a name and no code', () => {
+    const err = Object.assign(new Error('the request socket did not establish a connection with the server within the configured timeout of 1000 ms.'), { name: 'TimeoutError' });
+    expect(isStorageDown(err)).toBe(true);
+  });
+
+  it.each([500, 502, 503, 504, 599])('is true for HTTP status %i', (status) => {
+    expect(isStorageDown(s3Err('Unknown', status))).toBe(true);
+  });
+
+  it('is true for HTTP status 429, which the SDK itself treats as throttling', () => {
+    // Added to R33b's list: a store or a proxy that is overloaded answers 429. Waiting cures it.
+    expect(isStorageDown(s3Err('TooManyRequests', 429))).toBe(true);
+  });
+
+  it('follows cause down, and looks in an errors array', () => {
+    expect(isStorageDown(new Error('outer', { cause: new Error('middle', { cause: sysErr('ECONNREFUSED') }) }))).toBe(true);
+    // What Node's net throws when every address of a host refuses (autoSelectFamily).
+    expect(isStorageDown(new AggregateError([new Error('a'), sysErr('ECONNREFUSED')], 'all refused'))).toBe(true);
+    expect(isStorageDown({ errors: [{ cause: { code: 'ETIMEDOUT' } }] })).toBe(true);
+  });
+
+  it('is false for a hash mismatch, a missing file, a missing object and a plugin that cannot be invoked', () => {
+    expect(isStorageDown(new Error('plugin v1-import@1.2.0 sha256 mismatch (expected aa, got bb)'))).toBe(false);
+    expect(isStorageDown(Object.assign(new Error("ENOENT: no such file or directory, open '/data/plugins/x'"), { code: 'ENOENT' }))).toBe(false);
+    expect(isStorageDown(s3Err('NoSuchKey', 404))).toBe(false);
+    expect(isStorageDown(s3Err('AccessDenied', 403))).toBe(false);
+    expect(isStorageDown(new Error('plugin v1-import@1.2.0 is not invokable (kind=source, no entrypoints)'))).toBe(false);
+    expect(isStorageDown(new Error('empty object: plugins/x/1/plugin.wasm'))).toBe(false);
+  });
+
+  it('is false for values that are not errors, and stops on a cause that loops', () => {
+    for (const v of [null, undefined, 'ECONNREFUSED', 42, {}]) expect(isStorageDown(v)).toBe(false);
+    const a: { cause?: unknown } = {};
+    const b = { cause: a };
+    a.cause = b;
+    expect(isStorageDown(a)).toBe(false);
   });
 });
