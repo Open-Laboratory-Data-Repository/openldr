@@ -251,6 +251,14 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'import start': { kind: 'app', capability: 'connectors.manage', alsoRequires: ['ingest.run'] },
   'import status': { kind: 'app', capability: 'connectors.manage' },
   'import stop': { kind: 'app', capability: 'connectors.manage' },
+  // Copy a source's rows to CE's own disk. No route does it. The plugin page reaches the copy
+  // service through the plugin broker, whose copy ops are gated as the import ops are
+  // (plugin-broker.ts:170), so these take the import key. A copy saves no FHIR record, so none
+  // needs ingest.run. start is destructive because --reread empties a set.
+  'import copy delete': { kind: 'app', capability: 'connectors.manage', destructive: true },
+  'import copy start': { kind: 'app', capability: 'connectors.manage', destructive: true },
+  'import copy status': { kind: 'app', capability: 'connectors.manage' },
+  'import copy stop': { kind: 'app', capability: 'connectors.manage' },
 
   // No route sends a file through the pipeline with any converter. It writes clinical records.
   // ingest.run is new, and only lab_admin holds it.

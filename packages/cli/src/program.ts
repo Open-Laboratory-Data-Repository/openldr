@@ -193,6 +193,30 @@ export function buildProgram(): Command {
     .action(async (plugin: string, run: string, opts: { json: boolean }) => {
       try { process.exitCode = await runImportFailures(plugin, run, opts); } catch (err) { process.stderr.write(`import failures failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
+  const copies = imports.command('copy').description('Copy the rows of a source database to OpenLDR\'s own disk. The server does the copying');
+  copies.command('start').description('Ask for a copy, or for a stopped or finished one to carry on, and return. The server does the copying')
+    .requiredOption('--plugin <id>', 'the plugin that names the rows to copy')
+    .requiredOption('--connector <id>', 'the database connector to read (must be allowed for the plugin)')
+    .option('--option <name=value...>', 'a plugin option, repeatable (for example tz=+02:00)')
+    .option('--page-size <n>', 'source keys per page, 1 to 2000 (default 500)')
+    .option('--reread', 'empty every set whose SQL changed and read it again from the start', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { plugin: string; connector: string; option?: string[]; pageSize?: string; reread: boolean; json: boolean }) => {
+      try { process.exitCode = await runImportCopyStart(opts); } catch (err) { process.stderr.write(`import copy start failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  copies.command('status <plugin> [copy]').description('Show one copy, or every copy of a plugin').option('--json', 'emit JSON', false)
+    .action(async (plugin: string, copy: string | undefined, opts: { json: boolean }) => {
+      try { process.exitCode = await runImportCopyStatus(plugin, copy, opts); } catch (err) { process.stderr.write(`import copy status failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  copies.command('stop <plugin> <copy>').description('Stop a copy at its next page. The rows copied so far stay')
+    .action(async (plugin: string, copy: string) => {
+      try { process.exitCode = await runImportCopyStop(plugin, copy); } catch (err) { process.stderr.write(`import copy stop failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  copies.command('delete <plugin> <copy>').description('Delete a stopped or finished copy and every row it holds. Refuses without --force')
+    .option('--force', 'confirm the delete', false)
+    .action(async (plugin: string, copy: string, opts: { force: boolean }) => {
+      try { process.exitCode = await runImportCopyDelete(plugin, copy, opts); } catch (err) { process.stderr.write(`import copy delete failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
 
   program
     .command('doctor')
@@ -1701,3 +1725,4 @@ import { runDoctor } from './doctor';
 import {
   runImportAllow, runImportAllowed, runImportFailures, runImportResume, runImportRevoke, runImportStart, runImportStatus, runImportStop,
 } from './import';
+import { runImportCopyDelete, runImportCopyStart, runImportCopyStatus, runImportCopyStop } from './import-copy';

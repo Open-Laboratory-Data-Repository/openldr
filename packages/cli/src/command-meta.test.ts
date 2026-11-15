@@ -213,7 +213,7 @@ const PERSON = 'a name written into a record as is; refusing it through the app 
 const REASON: Record<string, string> = {
   // positional arguments
   action: CHOICE, batchId: ID, capability: ID, code: ID, columns: 'column names in the warehouse', connector: ID,
-  conceptMapUrl: URI, display: TEXT, entityId: ID, entityType: CHOICE, field: SETTING, id: ID, idA: ID, idB: ID,
+  conceptMapUrl: URI, copy: ID, display: TEXT, entityId: ID, entityType: CHOICE, field: SETTING, id: ID, idA: ID, idB: ID,
   key: SETTING, keyId: ID, kind: CHOICE, level: CHOICE, loinc: ID, name: ID, plugin: ID, requestId: ID,
   resourceId: ID, resourceType: CHOICE, roles: ID, run: ID, site: CHOICE, siteId: ID, slug: ID, state: CHOICE,
   subject: ID, system: URI, systemId: ID, systemUrl: URI, table: 'a warehouse table name', 'target-code': ID,
@@ -255,6 +255,10 @@ const NOT_A_PATH: Record<string, string[]> = {
   'import status': ['plugin', 'run'],
   'import stop': ['plugin', 'run'],
   'import failures': ['plugin', 'run'],
+  'import copy start': ['--plugin', '--connector', '--option', '--page-size'],
+  'import copy status': ['plugin', 'copy'],
+  'import copy stop': ['plugin', 'copy'],
+  'import copy delete': ['plugin', 'copy'],
   'settings flags set': ['key', 'value'],
   'settings numbers set': ['key', 'value'],
   'settings lab set': ['--name', '--address', '--contact', '--timezone'],
@@ -489,6 +493,7 @@ const READ_NAME_WRITE_KEY: Record<string, string> = {
   'data-exposure list': 'lists hidden columns; GET /api/dashboards/column-policy needs data_exposure.manage (dashboards-routes.ts:143)',
   'data-exposure show': 'not a read: it exposes hidden columns, a write to the policy (dashboards-routes.ts:162)',
   'import status': 'shows import runs; Studio lets only lab_admin read them, like the connector routes (plugin-broker.ts:170)',
+  'import copy status': 'shows copies; it takes the key of import status, whose broker op only lab_admin may call (plugin-broker.ts:170)',
   'query export': 'writes saved queries to a file; POST /api/custom-queries/export needs query.run, the one query key (query-routes.ts:148)',
   'settings flags list': 'lists feature flags; GET /api/settings/flags needs settings.feature_flags (settings-routes.ts:68)',
   'settings numbers list': 'lists number settings; GET /api/settings/numbers needs settings.edit_general (settings-routes.ts:406)',
@@ -518,7 +523,7 @@ const WRITE_NAME_VIEW_KEY: Record<string, string> = {
 const EXTRA_CARE = [
   // code or SQL
   'plugin install', 'plugin run', 'plugin test', 'market install', 'market update', 'market rollback', 'artifact publish',
-  'query import', 'ingest', 'import start', 'import resume',
+  'query import', 'ingest', 'import start', 'import resume', 'import copy start',
   // lab data out in bulk
   'export', 'report run', 'report glass-export', 'sync export', 'query export', 'patients duplicates export',
   'patients list', 'patients show', 'patients duplicates list',
@@ -533,7 +538,7 @@ const EXTRA_CARE = [
   'settings danger', 'db reproject', 'terminology reproject', 'facilities delete', 'layouts delete', 'report-def delete',
   'report-design delete', 'roles delete', 'connectors remove', 'plugin remove', 'market remove', 'terminology distribution purge',
   'terminology ontology unlink', 'test-catalog map clear', 'test-catalog result-fields unlink', 'sync divergence clear',
-  'sync import', 'sync merge-patient',
+  'sync import', 'sync merge-patient', 'import copy delete',
   // sign-in or the install
   'settings flags set', 'settings numbers set', 'settings lab set', 'settings sync set', 'settings validation set',
   'sync enroll', 'sync rotate', 'sync revoke',
