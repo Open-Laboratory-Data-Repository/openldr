@@ -206,7 +206,7 @@ Quando o CE não conseguiu copiar alguns pedidos, uma linha cor de âmbar dá **
 
 Quando a origem ou a ligação a ela está em baixo, o estado mostra **À espera da origem. Voltará a tentar automaticamente.** A página mostra **Tentativas até agora:**, quando começou a espera e o último erro. Não precisa de fazer nada. A primeira espera dura 5 segundos. Cada espera duplica, até 5 minutos, até a origem responder ou alguém parar a cópia. Se a origem responder mas a mesma página se perder duas vezes seguidas, a cópia lê essa página de novo com metade do tamanho, e as esperas voltam a começar em 5 segundos. A página volta a crescer depois de 5 páginas boas seguidas.
 
-O último erro de uma ligação perdida começa com palavras simples, como `the source could not be reached` ou `the source could not be read`. Quando a própria origem reinicia, pode recusar o início de sessão ou dizer que a base de dados falta durante algum tempo. Uma cópia que já leu esta origem espera então até cerca de 35 minutos. Uma cópia nova com uma palavra-passe errada falha logo.
+O último erro de uma ligação perdida começa com palavras simples e depois dá as palavras do controlador. Quando a própria origem reinicia, pode recusar o início de sessão ou dizer que a base de dados falta durante algum tempo. Uma cópia que já leu esta origem espera então até cerca de uma hora. O mesmo acontece com uma palavra-passe errada escrita no conector antes de continuar uma cópia. Essa cópia espera até cerca de uma hora e depois falha. Uma cópia nova com uma palavra-passe errada falha logo.
 
 Depois de mudar as definições do conector, pare a cópia e continue-a. Uma cópia à espera continua a tentar as definições antigas.
 
@@ -216,7 +216,7 @@ Uma cópia também continua sozinha depois de o servidor CE reiniciar. Não prec
 
 ### 6. Parar e continuar
 
-Abra o menu de pontos ao lado do estado e selecione **Parar**. O estado mostra **A parar depois desta página** e depois **Parada**. Uma cópia na fila para logo. As linhas já copiadas ficam. Para continuar, selecione **Continuar cópia**. Cada conjunto continua de onde parou. Numa cópia concluída, **Continuar cópia** só tenta de novo os pedidos deixados de fora. Não lê pedidos novos da origem.
+Abra o menu de pontos ao lado do estado e selecione **Parar**. O estado mostra **A parar depois desta página** e depois **Parada**. Uma cópia na fila para logo. As linhas já copiadas ficam. Para continuar, selecione **Continuar cópia**. Cada conjunto continua de onde parou. Numa cópia concluída, **Continuar cópia** só tenta de novo os pedidos deixados de fora. Não lê pedidos novos da origem. Se a cópia foi iniciada pela CLI sem fuso, **Fuso horário do local** fica vazio, à parte uma dica cinzenta, e a página pede um desfasamento válido, como `Z`, antes de **Continuar cópia** funcionar. Esse desfasamento não muda nada na cópia.
 
 ![Parar está no menu de pontos ao lado do estado.](/docs-images/operator/v1-import-guide-copy-stop.png)
 
@@ -366,7 +366,7 @@ No código-fonte, `pnpm build:v1-import` prepara o importador de referência. Ex
 
 **Continuar cópia pede para ler um conjunto de novo.** Na CLI, `start` nomeia os conjuntos em vez disso. Mudou uma opção que decide que pedidos são lidos, ou o plugin foi atualizado. Ler de novo elimina as linhas copiadas para os conjuntos nomeados. Selecione **Cancelar** e reponha as opções para as manter.
 
-**A cópia falhou.** Leia o último erro. Um início de sessão recusado, uma base ou tabela em falta, uma falha do plugin, ou uma escrita recusada pela base de dados do próprio CE, por exemplo com o disco cheio, termina a cópia. Tentar de novo não resolve isso. Há uma exceção. Uma cópia que já leu esta origem espera até cerca de 35 minutos por um início de sessão recusado ou uma base em falta, caso a origem esteja a reiniciar. Corrija a causa e selecione **Continuar cópia**. As linhas já copiadas ficam.
+**A cópia falhou.** Leia o último erro. Um início de sessão recusado, uma base ou tabela em falta, uma falha do plugin, ou uma escrita recusada pela base de dados do próprio CE, por exemplo com o disco cheio, termina a cópia. Tentar de novo não resolve isso. Há uma exceção. Uma cópia que já leu esta origem espera até cerca de uma hora por um início de sessão recusado ou uma base em falta, caso a origem esteja a reiniciar. Corrija a causa e selecione **Continuar cópia**. As linhas já copiadas ficam.
 
 **Eliminar cópia está a cinzento.** Só se pode eliminar uma cópia parada, com falha ou concluída. Pare-a primeiro.
 

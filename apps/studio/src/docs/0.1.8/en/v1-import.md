@@ -202,7 +202,7 @@ When CE could not copy some requests, an amber line gives **Requests left out:**
 
 When the source or the link to it is down, the status reads **Waiting for the source. It will try again by itself.** The page shows **Tries so far:**, when the wait began, and the last error. You do nothing. The first wait is 5 seconds. Each wait doubles, up to 5 minutes, until the source answers or someone stops the copy. If the source answers but the same page is lost twice in a row, the copy reads that page again at half the size, and the waits start again at 5 seconds. The page grows back after 5 good pages in a row.
 
-The last error of a lost link starts with plain words, such as `the source could not be reached` or `the source could not be read`. When the source itself restarts, it can refuse the login or say its database is missing for a while. A copy that has read from this source before waits on that for up to about 35 minutes. A new copy with a wrong password fails at once.
+The last error of a lost link starts with plain words, then gives the driver's own words. When the source itself restarts, it can refuse the login or say its database is missing for a while. A copy that has read from this source before waits on that for up to about an hour. The same goes for a wrong password typed into the connector before you continue a copy. That copy waits up to about an hour, then fails. A new copy with a wrong password fails at once.
 
 After you change the connector's settings, stop the copy and continue it. A waiting copy keeps trying the old settings.
 
@@ -212,7 +212,7 @@ A copy also carries on by itself after the CE server restarts. Nobody presses an
 
 ### 6. Stop and continue
 
-Open the dots menu beside the status and select **Stop**. The status reads **Stopping after this page**, then **Stopped**. A queued copy stops at once. The rows copied so far stay. To carry on, select **Continue copy**. Each set carries on from where it stopped. On a finished copy, **Continue copy** only tries the left-out requests again. It reads no new requests from the source.
+Open the dots menu beside the status and select **Stop**. The status reads **Stopping after this page**, then **Stopped**. A queued copy stops at once. The rows copied so far stay. To carry on, select **Continue copy**. Each set carries on from where it stopped. On a finished copy, **Continue copy** only tries the left-out requests again. It reads no new requests from the source. If the copy was started from the CLI without a time zone, **Site time zone** is empty apart from a grey hint, and the page asks for any valid offset, such as `Z`, before **Continue copy** works. That offset changes nothing in the copy.
 
 ![Stop is in the dots menu beside the status.](v1-import-guide-copy-stop.png)
 
@@ -287,7 +287,7 @@ In a source checkout, `pnpm build:v1-import` stages the reference importer. It n
 
 **Continue copy asks to read a set again.** In the CLI, `start` names the sets instead. An option that decides which requests are read has changed, or the plugin was upgraded. Read again deletes the rows copied for the named sets. Select **Cancel** and put the options back to keep them.
 
-**The copy failed.** Read the last error. A refused login, a missing database or table, a fault in the plugin, or a write that CE's own database refused, such as on a full disk, ends the copy. Trying again cannot fix those. There is one exception. A copy that has read this source before waits up to about 35 minutes on a refused login or a missing database, in case the source is restarting. Fix the cause, then select **Continue copy**. The rows copied so far stay.
+**The copy failed.** Read the last error. A refused login, a missing database or table, a fault in the plugin, or a write that CE's own database refused, such as on a full disk, ends the copy. Trying again cannot fix those. There is one exception. A copy that has read this source before waits up to about an hour on a refused login or a missing database, in case the source is restarting. Fix the cause, then select **Continue copy**. The rows copied so far stay.
 
 **Delete copy is greyed.** A copy can be deleted only when it is stopped, failed or finished. Stop it first.
 
