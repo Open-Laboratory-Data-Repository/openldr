@@ -8,11 +8,35 @@ Design: `2026-11-13-desktop-app-design.md`. Built on the branch `claude/desktop-
 
 ## What is proven and what is not
 
-- Linux, this machine: the app starts, shows Studio, hands the setup code over, attaches, quits
-  and installs. Every run so far used `--no-sandbox`, because the sandbox profile needs your
-  password. Step 1 below is the real proof.
-- Windows and macOS: nothing has been run. The packages were built on Linux and checked by
-  listing what is inside them. `install/desktop.ps1` has never been run by anyone.
+The builder's own runs, all on Linux:
+
+- The app starts, shows Studio, hands the setup code over, attaches, quits and installs. Every
+  builder run used `--no-sandbox`, because the sandbox profile needs your password.
+- The builder ran nothing on Windows or macOS. Those packages were built on Linux and checked by
+  listing what is inside them.
+
+The operator's runs on 2026-11-15, with the packages built from `90caabca`. These are the
+operator's reports, not the builder's proof:
+
+- **Linux.** A real install with `install/desktop.sh`, started on a fresh temp data folder. The
+  operator reported that all of it worked: the setup code filled in, the three first-run steps,
+  "Load sample data", and the dashboard with 60 orders. The installed app never turns its
+  sandbox off, so the builder reads this as a run with the sandbox on. The self-check line of
+  step 1 was not reported.
+- **Windows.** The first run of `install/desktop.ps1` by anyone. Reported as working: install,
+  uninstall, the tray icon, the setup code filled in, the first run with 60 orders on the
+  dashboard, Quit from the tray, and a second start bringing the first window back.
+- **macOS, the Mac mini.** Reported as "works fine". Which checklist lines were tried was not
+  said. The ad-hoc signing step did not stop the app from opening.
+
+Not yet reported by anyone:
+
+- Windows: the update refused while OpenLDR runs, `openldr-standalone.cmd status`, ending
+  `OpenLDR.exe` from Task Manager, shutdown with OpenLDR running, a Windows with no Visual C++
+  runtime.
+- macOS: the right app coming forward while another Electron app runs (checklist line 6),
+  the Dock icon, "Start when I sign in", shutdown, what uninstall leaves behind.
+- All three: shutdown or sign-out with OpenLDR running.
 
 ## Before you start: serve the packages
 
@@ -104,7 +128,7 @@ The download is about 566 MB. The script says so and shows no progress bar.
 The checklist. Answer each line; copy the system's own words where it showed a message.
 
 1. Did the script itself run? If PowerShell printed a red parse error, copy it whole and stop.
-   Nobody has ever run this script.
+   The operator ran it once, on 2026-11-15, and it installed and uninstalled.
 2. Did Windows warn or block anything while downloading, unpacking or starting? Give its words.
    Look for SmartScreen, Smart App Control and Defender.
 3. Did the script end with `OK` lines naming `...\Programs\OpenLDR`? If it ended with an `X`
@@ -162,7 +186,8 @@ curl -fsSL http://100.107.125.94:3996/desktop.sh | OPENLDR_DESKTOP_DOWNLOAD_BASE
 ```
 
 The download is about 604 MB. The app goes to `~/Applications/OpenLDR.app`. The script signs it on
-the Mac with an ad-hoc signature; that step is a guess nobody could try.
+the Mac with an ad-hoc signature. The builder could not try that step. On 2026-11-15 the app
+opened on the operator's Mac mini after it.
 
 The checklist:
 
