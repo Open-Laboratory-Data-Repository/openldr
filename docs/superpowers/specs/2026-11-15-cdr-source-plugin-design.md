@@ -318,6 +318,8 @@ confirmed are the only ones that are.
 | A request with two taken-date rows has the same unordered read as two birth rows | Claim, from the whole-branch review of the first build. The plugin takes the earliest |
 | The organism sorter's word stems match whole words only, so Plasmodium and the like sort as bacteria | Confirmed by running the toolchain's `classify` on 2026-11-15 |
 | Printing a very large number strips the zeros of its exponent | Confirmed by reading `result-mapping.ts:178` |
+| The status step subtracts 100 from a run number twice, which changes any run number above 200 | Confirmed by reading `review-status.ts:110` and `obr-sets.ts:122`, during the second build |
+| A birth date from the birth index reaches the audit as a long date text with no milliseconds | Confirmed: two fixtures depend on it. The plugin reproduces it |
 | Middle name is never set | Claim, from reading `specimenrecpt.ts` |
 | Two age decoders read different bytes | Claim |
 | The date of birth index is a `datetime` and may be lost as the taken date once was | Claim. The column type is confirmed |
