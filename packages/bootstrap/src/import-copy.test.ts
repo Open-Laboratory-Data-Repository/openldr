@@ -80,6 +80,7 @@ function fakeSource(requests: string[], facilities: string[] = []) {
       }
       return { rows: inList.map((k) => ({ __key: k, RequestID: k, RegisteredDateTime: DATE })) };
     },
+    async queryReadOnly(): Promise<never> { throw new Error('the import reader calls query, never queryReadOnly'); },
     async close() {},
   };
   return {

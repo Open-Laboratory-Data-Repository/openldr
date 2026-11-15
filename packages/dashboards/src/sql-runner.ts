@@ -210,8 +210,8 @@ function checkBlankedSelect(blanked: string, dialect: SqlDialect): void {
   if (noTrailing.includes(';')) throw new Error('only a single statement is allowed');
   if (!/^(select|with)\b/i.test(noTrailing)) throw new Error('only SELECT/WITH queries are allowed');
   // `into` is banned too: `SELECT … INTO <table>` creates a table and writes rows (a write
-  // masquerading as a SELECT). On Postgres a read-only txn caught this; on MSSQL there is no
-  // read-only txn, so this shared validator is the only guard for both Path A and Path B.
+  // masquerading as a SELECT). On Postgres a read-only txn catches this too. On MSSQL there is no
+  // read-only txn: the runners roll the transaction back, and this check refuses it first.
   if (hasBaseWord(noTrailing, dialect)) {
     throw new Error('only read-only SELECT queries are allowed (INTO/DDL/DML rejected)');
   }
@@ -234,11 +234,13 @@ export interface PaginationPlan {
 export function planPagination(inner: string, dialect: SqlDialect, opts: { limit: number; offset?: number }): PaginationPlan {
   const limit = Math.floor(opts.limit);
   const offset = Math.floor(opts.offset ?? 0);
+  // A line feed follows the person's SQL in both arms, so a trailing `-- comment` in it ends there
+  // and cannot swallow what the plan adds after it.
   if (dialect === 'mssql') {
-    return { sql: `set rowcount ${offset + limit}; ${inner}; set rowcount 0`, sliceOffset: offset };
+    return { sql: `set rowcount ${offset + limit}; ${inner}\n; set rowcount 0`, sliceOffset: offset };
   }
   // Postgres AND MySQL/MariaDB: native LIMIT/OFFSET in a derived table (server-side offset).
-  return { sql: `select * from (${inner}) as _q limit ${limit} offset ${offset}`, sliceOffset: 0 };
+  return { sql: `select * from (${inner}\n) as _q limit ${limit} offset ${offset}`, sliceOffset: 0 };
 }
 
 export interface SqlRunOpts {
@@ -265,7 +267,8 @@ async function isMariaDb(db: object, trx: Kysely<ExternalSchema>): Promise<boole
 /** Run user SQL inside a read-only transaction with a statement/lock timeout and row cap.
  *  Dialect-aware: Postgres uses `set transaction read only` + `statement_timeout`; SQL Server has
  *  no equivalent transaction-level read-only mode or per-statement timeout, so it relies on the
- *  SELECT-only validation above for read-only-ness and bounds lock waits with LOCK_TIMEOUT.
+ *  SELECT-only validation above, runs in a transaction that is always rolled back
+ *  (`runInRolledBackTransaction`), and bounds lock waits with LOCK_TIMEOUT.
  *  MySQL/MariaDB likewise have no read-only pragma usable mid-transaction (so they too rely on
  *  SELECT-only validation), and their statement timeout is applied PER-STATEMENT — no session var
  *  is mutated, so nothing leaks onto the pooled connection: MySQL 8 uses the
@@ -294,20 +297,55 @@ export async function runReadQuery(
   if (!Number.isFinite(opts.rowCap) || opts.rowCap < 1) throw new Error('rowCap must be a finite positive number');
   const cap = Math.floor(opts.rowCap);
   const ms = Math.floor(opts.timeoutMs);
-  const execute = () => db.transaction().execute(async (trx) => {
-    let statement = planPagination(query.sql, engine, { limit: cap }).sql;
-    if (engine === 'mssql') {
+  const planned = planPagination(query.sql, engine, { limit: cap }).sql;
+  const execute = engine === 'mssql'
+    // SQL Server has no read-only transaction, so whatever the statement wrote is rolled back.
+    ? () => runInRolledBackTransaction(db, async (trx) => {
       // LOCK_TIMEOUT bounds lock waits only. The driver owns execution cancellation.
       await sql`set lock_timeout ${sql.lit(ms)}`.execute(trx);
-    } else if (engine === 'mysql') {
-      statement = (await isMariaDb(db, trx))
-        ? `set statement max_statement_time=${ms / 1000} for ${statement}`
-        : statement.replace(/^select/i, `select /*+ MAX_EXECUTION_TIME(${ms}) */`);
-    } else {
-      await sql`set transaction read only`.execute(trx);
-      await sql`set local statement_timeout = ${sql.lit(ms)}`.execute(trx);
-    }
-    return (await trx.executeQuery<Record<string, unknown>>({ ...query, sql: statement })).rows;
-  });
+      return (await trx.executeQuery<Record<string, unknown>>({ ...query, sql: planned })).rows;
+    })
+    : () => db.transaction().execute(async (trx) => {
+      let statement = planned;
+      if (engine === 'mysql') {
+        statement = (await isMariaDb(db, trx))
+          ? `set statement max_statement_time=${ms / 1000} for ${statement}`
+          : statement.replace(/^select/i, `select /*+ MAX_EXECUTION_TIME(${ms}) */`);
+      } else {
+        await sql`set transaction read only`.execute(trx);
+        // The SQL check reads a backslash in a string as an ordinary character. This makes the
+        // server read it the same way, whatever the server or the session says.
+        await sql`SET LOCAL standard_conforming_strings = on`.execute(trx);
+        await sql`set local statement_timeout = ${sql.lit(ms)}`.execute(trx);
+      }
+      return (await trx.executeQuery<Record<string, unknown>>({ ...query, sql: statement })).rows;
+    });
   return opts.withDeadline ? opts.withDeadline(ms, execute) : execute();
+}
+
+/** Run `work` in a transaction on one connection of `db`, then roll it back, on success and on
+ *  failure. The roll-back is the driver's own request, never text added after the SQL.
+ *
+ *  A failed roll-back never replaces the outcome. The error thrown is the work's own, and a good
+ *  result is still returned. SQL Server ends a transaction by itself after some errors (a
+ *  conversion error is one), and the roll-back then fails with error 3903.
+ *
+ *  Why `connection()` around `startTransaction()`: when Kysely's roll-back fails, it never gives
+ *  the connection back, so the pool would lose it and closing the pool would wait for it forever.
+ *  `connection()` gives it back in every case. On SQL Server that release resets the connection
+ *  (`resetConnectionsOnRelease` in `@openldr/adapter-mssql-store`), which also ends a
+ *  transaction a failed roll-back left open. */
+export async function runInRolledBackTransaction<DB, T>(db: Kysely<DB>, work: (trx: Kysely<DB>) => Promise<T>): Promise<T> {
+  return db.connection().execute(async (one) => {
+    const trx = await one.startTransaction().execute();
+    let result: T;
+    try {
+      result = await work(trx);
+    } catch (error) {
+      await trx.rollback().execute().catch(() => undefined);
+      throw error;
+    }
+    await trx.rollback().execute().catch(() => undefined);
+    return result;
+  });
 }

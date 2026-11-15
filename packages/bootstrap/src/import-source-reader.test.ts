@@ -73,6 +73,7 @@ function fakeSource(answer: (kind: Kind, sql: string, n: number) => Answer | und
         if (kind === 'probe') return { rows: [{ '': 1 }] };
         return { rows: kind === 'keys' ? realKeys(sql) : realDetails(sql) };
       },
+      async queryReadOnly(): Promise<never> { throw new Error('the import reader calls query, never queryReadOnly'); },
       async close() {
         if (isProbe) log.probeCloses += 1;
         else log.closes += 1;
@@ -486,7 +487,7 @@ describe('createSourceReader', () => {
     const realOpen = source.open.getMockImplementation()!;
     source.open.mockImplementation(async (opts) => {
       const db = await realOpen(opts);
-      return { query: db.query, close: () => new Promise<void>(() => undefined) };
+      return { query: db.query, queryReadOnly: db.queryReadOnly, close: () => new Promise<void>(() => undefined) };
     });
     const { reader } = harness(source);
     await reader.readPage(first);

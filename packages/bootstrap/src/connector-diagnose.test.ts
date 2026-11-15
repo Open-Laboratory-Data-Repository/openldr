@@ -15,6 +15,7 @@ function fakeDb(versionRow = 'PostgreSQL 16.4 on x86_64\nsecond line', fail?: Er
       if (fail) throw fail;
       return { rows: sql === 'select 1' ? [{ one: 1 }] : [{ version: versionRow }] };
     },
+    async queryReadOnly() { throw new Error('the diagnose probe calls query, never queryReadOnly'); },
     async close() { closed = true; },
   };
   return { make: () => db, closed: () => closed, queries };

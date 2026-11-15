@@ -51,6 +51,7 @@ export function createConnectorDialectLookup(connectors: Pick<ConnectorSqlDeps['
  *   - `validateSelectSql` rejects DML/DDL, multi-statement batches, and `SELECT … INTO` (a write
  *     masquerading as a read). This is the same validator the dashboard/custom-query SQL paths use.
  *   - a default row cap bounds unbounded scans when the caller omits one.
+ *   - the statement runs through `queryReadOnly`: read-only on Postgres, rolled back on SQL Server.
  *  Write-capable SQL must go through a separate, explicitly privileged path — never this runner. */
 export function createConnectorSqlRunner(deps: ConnectorSqlDeps) {
   const make = deps.createDb ?? createConnectorDb;
@@ -67,7 +68,7 @@ export function createConnectorSqlRunner(deps: ConnectorSqlDeps) {
     try {
       const cap = rowCap ?? DEFAULT_ROW_CAP;
       const plan = planPagination(userSql.replace(/;\s*$/, ''), dialect, { limit: cap, offset });
-      const res = await conn.query(plan.sql);
+      const res = await conn.queryReadOnly(plan.sql);
       // MSSQL applies its offset in JS (SET ROWCOUNT fetched offset+limit rows); Postgres already
       // offset in SQL, so sliceOffset is 0.
       const rows = plan.sliceOffset ? res.rows.slice(plan.sliceOffset) : res.rows;

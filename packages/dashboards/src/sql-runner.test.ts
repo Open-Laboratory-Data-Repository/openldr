@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { validateSelectSql, validateSelectSqlForSave, runSqlQuery, planPagination, SQL_CHECK_WORDS_FOR_TESTS } from './sql-runner';
+import {
+  CompiledQuery, Kysely, MssqlAdapter, MssqlIntrospector, MssqlQueryCompiler, PostgresAdapter,
+  PostgresIntrospector, PostgresQueryCompiler, type DatabaseConnection, type Driver, type QueryResult,
+} from 'kysely';
+import { validateSelectSql, validateSelectSqlForSave, runSqlQuery, runReadQuery, planPagination, SQL_CHECK_WORDS_FOR_TESTS } from './sql-runner';
 
 // --- Fake Kysely db/executor for driving runSqlQuery's `sql`/`sql.raw` calls through the
 // transaction. Mirrors just enough of kysely's RawBuilder.execute() contract (getExecutor() →
@@ -45,10 +49,92 @@ function makeFakeDb(
       return { rows };
     },
   };
-  const trx = { getExecutor: () => executor, executeQuery: executor.executeQuery };
-  const db = { transaction: () => ({ execute: (cb: (trx: unknown) => unknown) => cb(trx) }) };
+  const trx = {
+    getExecutor: () => executor,
+    executeQuery: executor.executeQuery,
+    rollback: () => ({ execute: async () => {} }),
+  };
+  const db = {
+    transaction: () => ({ execute: (cb: (trx: unknown) => unknown) => cb(trx) }),
+    // The mssql arm opens a rolled-back transaction on one connection.
+    connection: () => ({
+      execute: (cb: (one: unknown) => unknown) => cb({ startTransaction: () => ({ execute: async () => trx }) }),
+    }),
+  };
   return { db, executed };
 }
+
+// --- A real Kysely over a fake driver with a pool of ONE connection. It records what each
+// request is, and models the server's transaction state on that connection. Because the pool has
+// one connection, a connection that is never given back makes the next query fail at once.
+type Trail = string;
+
+interface FakeServer {
+  rows?: Record<string, unknown>[];
+  /** Fail a statement. `endsTransaction` models SQL Server ending the transaction by itself. */
+  failQuery?: (sql: string) => { error: Error; endsTransaction?: boolean } | undefined;
+  /** Fail the roll-back request itself, whatever the transaction state. */
+  failRollback?: () => Error | undefined;
+  /** Model `resetConnectionsOnRelease: true`: the reset on release ends an open transaction. */
+  resetOnRelease?: boolean;
+}
+
+function recordingDb(dialect: 'mssql' | 'postgres', server: FakeServer = {}) {
+  const trail: Trail[] = [];
+  const state = { leased: false, inTransaction: false, acquiredInTransaction: [] as boolean[] };
+  const connection: DatabaseConnection = {
+    async executeQuery<R>(q: CompiledQuery): Promise<QueryResult<R>> {
+      trail.push(q.sql);
+      const fail = server.failQuery?.(q.sql);
+      if (fail) {
+        if (fail.endsTransaction) state.inTransaction = false;
+        throw fail.error;
+      }
+      return { rows: (server.rows ?? []) as R[] };
+    },
+    async *streamQuery() { throw new Error('fake driver: not used'); },
+  };
+  const driver: Driver = {
+    async init() {},
+    async acquireConnection() {
+      if (state.leased) throw new Error('fake pool: the only connection was never given back');
+      state.leased = true;
+      state.acquiredInTransaction.push(state.inTransaction);
+      trail.push('acquire');
+      return connection;
+    },
+    async beginTransaction() {
+      trail.push('begin');
+      if (state.inTransaction) throw new Error('fake server: a transaction is already open');
+      state.inTransaction = true;
+    },
+    async commitTransaction() { trail.push('commit'); state.inTransaction = false; },
+    async rollbackTransaction() {
+      trail.push('rollback');
+      const failure = server.failRollback?.();
+      if (failure) throw failure;
+      if (!state.inTransaction) throw new Error('3903: the ROLLBACK TRANSACTION request has no corresponding BEGIN TRANSACTION');
+      state.inTransaction = false;
+    },
+    async releaseConnection() {
+      trail.push('release');
+      if (server.resetOnRelease) state.inTransaction = false;
+      state.leased = false;
+    },
+    async destroy() {},
+  };
+  const db = new Kysely<any>({
+    dialect: {
+      createAdapter: () => (dialect === 'mssql' ? new MssqlAdapter() : new PostgresAdapter()),
+      createDriver: () => driver,
+      createQueryCompiler: () => (dialect === 'mssql' ? new MssqlQueryCompiler() : new PostgresQueryCompiler()),
+      createIntrospector: (k) => (dialect === 'mssql' ? new MssqlIntrospector(k) : new PostgresIntrospector(k)),
+    },
+  });
+  return { db, trail, state };
+}
+
+const RUN = { timeoutMs: 5000, rowCap: 10 };
 
 describe('validateSelectSqlForSave', () => {
   it('accepts a single SELECT', () => { expect(() => validateSelectSqlForSave('SELECT 1')).not.toThrow(); });
@@ -241,7 +327,7 @@ describe('runSqlQuery reads the SQL as its engine does', () => {
   it('on postgres sends the same word as a name to the database', async () => {
     const { db, executed } = makeFakeDb([{ backup: 1 }]);
     await runSqlQuery(db, 'SELECT backup FROM t', { timeoutMs: 5000, rowCap: 10 }, 'postgres');
-    expect(executed).toContain('select * from (SELECT backup FROM t) as _q limit 10 offset 0');
+    expect(executed).toContain('select * from (SELECT backup FROM t\n) as _q limit 10 offset 0');
   });
 });
 
@@ -275,7 +361,7 @@ describe('runSqlQuery dialect-aware session setup + capped query', () => {
     const result = await runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 }, 'postgres');
     expect(executed).toContain('set transaction read only');
     expect(executed).toContain('set local statement_timeout = 5000');
-    expect(executed).toContain('select * from (select 1 as a) as _q limit 100 offset 0');
+    expect(executed).toContain('select * from (select 1 as a\n) as _q limit 100 offset 0');
     expect(result.rows).toEqual([{ a: 1 }]);
     expect(result.columns).toEqual([{ key: 'a', label: 'a', kind: 'number' }]);
   });
@@ -285,7 +371,7 @@ describe('runSqlQuery dialect-aware session setup + capped query', () => {
     await runSqlQuery(db, 'select 1 as a', { timeoutMs: 2500, rowCap: 10 }, 'postgres');
     expect(executed).toContain('set transaction read only');
     expect(executed).toContain('set local statement_timeout = 2500');
-    expect(executed).toContain('select * from (select 1 as a) as _q limit 10 offset 0');
+    expect(executed).toContain('select * from (select 1 as a\n) as _q limit 10 offset 0');
   });
 
   it('mssql: SET LOCK_TIMEOUT (no read-only/statement_timeout) + SET ROWCOUNT capped batch', async () => {
@@ -294,7 +380,7 @@ describe('runSqlQuery dialect-aware session setup + capped query', () => {
     expect(executed).toContain('set lock_timeout 5000');
     expect(executed.some((s) => /read only/i.test(s))).toBe(false);
     expect(executed.some((s) => /statement_timeout/i.test(s))).toBe(false);
-    expect(executed).toContain('set rowcount 100; select 1 as a; set rowcount 0');
+    expect(executed).toContain('set rowcount 100; select 1 as a\n; set rowcount 0');
     expect(result.rows).toEqual([{ a: 1 }]);
   });
 
@@ -320,7 +406,7 @@ describe('runSqlQuery dialect-aware session setup + capped query', () => {
     const { db, executed } = makeFakeDb([{ a: 1 }], '8.4.0'); // version() has no "MariaDB"
     const result = await runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 }, 'mysql');
     // The row cap is the wrapping SELECT; the timeout rides on it as an optimizer hint (ms).
-    expect(executed).toContain('select /*+ MAX_EXECUTION_TIME(5000) */ * from (select 1 as a) as _q limit 100 offset 0');
+    expect(executed).toContain('select /*+ MAX_EXECUTION_TIME(5000) */ * from (select 1 as a\n) as _q limit 100 offset 0');
     // Nothing session-scoped and no pg/mssql pragmas — no leak onto the pooled connection.
     expect(executed.some((s) => /set session/i.test(s))).toBe(false);
     expect(executed.some((s) => /max_statement_time/i.test(s))).toBe(false); // that's MariaDB's, not MySQL's
@@ -332,7 +418,7 @@ describe('runSqlQuery dialect-aware session setup + capped query', () => {
   it('mysql (MariaDB): per-statement SET STATEMENT max_statement_time wrapper (seconds) — no hint, no session SET', async () => {
     const { db, executed } = makeFakeDb([{ a: 1 }], '11.4.2-MariaDB-1:11.4.2+maria~ubu2404');
     const result = await runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 }, 'mysql');
-    expect(executed).toContain('set statement max_statement_time=5 for select * from (select 1 as a) as _q limit 100 offset 0');
+    expect(executed).toContain('set statement max_statement_time=5 for select * from (select 1 as a\n) as _q limit 100 offset 0');
     expect(executed.some((s) => /max_execution_time/i.test(s))).toBe(false); // that's MySQL's hint, not MariaDB's
     expect(executed.some((s) => /set session/i.test(s))).toBe(false);
     expect(result.rows).toEqual([{ a: 1 }]);
@@ -341,38 +427,164 @@ describe('runSqlQuery dialect-aware session setup + capped query', () => {
   it('mysql: a fractional-second timeout renders a decimal max_statement_time on MariaDB', async () => {
     const { db, executed } = makeFakeDb([{ a: 1 }], '11.4.2-MariaDB');
     await runSqlQuery(db, 'select 1 as a', { timeoutMs: 2500, rowCap: 10 }, 'mysql');
-    expect(executed).toContain('set statement max_statement_time=2.5 for select * from (select 1 as a) as _q limit 10 offset 0');
+    expect(executed).toContain('set statement max_statement_time=2.5 for select * from (select 1 as a\n) as _q limit 10 offset 0');
   });
 });
 
 describe('planPagination', () => {
   it('wraps Postgres with LIMIT/OFFSET (server-side offset, no slice)', () => {
     expect(planPagination('select 1', 'postgres', { limit: 100, offset: 0 }))
-      .toEqual({ sql: 'select * from (select 1) as _q limit 100 offset 0', sliceOffset: 0 });
+      .toEqual({ sql: 'select * from (select 1\n) as _q limit 100 offset 0', sliceOffset: 0 });
   });
   it('wraps Postgres with a non-zero offset in SQL', () => {
     expect(planPagination('select 1', 'postgres', { limit: 50, offset: 25 }))
-      .toEqual({ sql: 'select * from (select 1) as _q limit 50 offset 25', sliceOffset: 0 });
+      .toEqual({ sql: 'select * from (select 1\n) as _q limit 50 offset 25', sliceOffset: 0 });
   });
   it('caps MSSQL with SET ROWCOUNT (works with an ORDER BY query), offset applied by slicing', () => {
     // ORDER BY in the inner query would be invalid inside a derived table on SQL Server; SET ROWCOUNT avoids that.
     expect(planPagination('select 1 order by 1', 'mssql', { limit: 100, offset: 0 }))
-      .toEqual({ sql: 'set rowcount 100; select 1 order by 1; set rowcount 0', sliceOffset: 0 });
+      .toEqual({ sql: 'set rowcount 100; select 1 order by 1\n; set rowcount 0', sliceOffset: 0 });
   });
   it('MSSQL fetches offset+limit rows via SET ROWCOUNT and reports sliceOffset', () => {
     expect(planPagination('select 1', 'mssql', { limit: 50, offset: 25 }))
-      .toEqual({ sql: 'set rowcount 75; select 1; set rowcount 0', sliceOffset: 25 });
+      .toEqual({ sql: 'set rowcount 75; select 1\n; set rowcount 0', sliceOffset: 25 });
   });
   it('defaults offset to 0 and floors non-integers', () => {
     expect(planPagination('select 1', 'postgres', { limit: 10.9 }))
-      .toEqual({ sql: 'select * from (select 1) as _q limit 10 offset 0', sliceOffset: 0 });
+      .toEqual({ sql: 'select * from (select 1\n) as _q limit 10 offset 0', sliceOffset: 0 });
     expect(planPagination('select 1', 'mssql', { limit: 10.9 }))
-      .toEqual({ sql: 'set rowcount 10; select 1; set rowcount 0', sliceOffset: 0 });
+      .toEqual({ sql: 'set rowcount 10; select 1\n; set rowcount 0', sliceOffset: 0 });
   });
   it('wraps MySQL with LIMIT/OFFSET (reuses the Postgres server-side-offset path)', () => {
     expect(planPagination('select 1', 'mysql', { limit: 100, offset: 0 }))
-      .toEqual({ sql: 'select * from (select 1) as _q limit 100 offset 0', sliceOffset: 0 });
+      .toEqual({ sql: 'select * from (select 1\n) as _q limit 100 offset 0', sliceOffset: 0 });
     expect(planPagination('select 1', 'mysql', { limit: 50, offset: 25 }))
-      .toEqual({ sql: 'select * from (select 1) as _q limit 50 offset 25', sliceOffset: 0 });
+      .toEqual({ sql: 'select * from (select 1\n) as _q limit 50 offset 25', sliceOffset: 0 });
+  });
+  // R7: a trailing line comment in the person's SQL must not swallow what the plan adds.
+  it.each(['postgres', 'mysql'] as const)('%s: a query that ends in a line comment gets the wrapper end on a new line', (dialect) => {
+    const plan = planPagination('select 1 -- note', dialect, { limit: 10, offset: 5 });
+    expect(plan.sql).toBe('select * from (select 1 -- note\n) as _q limit 10 offset 5');
+    expect(plan.sql.split('\n')[1]).toBe(') as _q limit 10 offset 5');
+  });
+  it('mssql: a query that ends in a line comment gets the row-cap reset on a new line', () => {
+    const plan = planPagination('select 1 -- note', 'mssql', { limit: 10 });
+    expect(plan.sql).toBe('set rowcount 10; select 1 -- note\n; set rowcount 0');
+    expect(plan.sql.split('\n')[1]).toBe('; set rowcount 0');
+    expect(plan.sql.endsWith('set rowcount 0')).toBe(true);
+  });
+});
+
+describe('runReadQuery on mssql runs in a transaction that is always rolled back', () => {
+  it('runReadQuery on mssql rolls back after a good query and after a failed one', async () => {
+    const good = recordingDb('mssql', { rows: [{ a: 1 }] });
+    const rows = await runReadQuery(good.db, CompiledQuery.raw('select 1 as a'), RUN, 'mssql');
+    expect(rows).toEqual([{ a: 1 }]);
+    expect(good.trail).toEqual([
+      'acquire', 'begin', 'set lock_timeout 5000', 'set rowcount 10; select 1 as a\n; set rowcount 0', 'rollback', 'release',
+    ]);
+    expect(good.state).toMatchObject({ leased: false, inTransaction: false });
+
+    const bad = recordingDb('mssql', {
+      failQuery: (s) => (s.includes('select nope') ? { error: new Error('Invalid column name') } : undefined),
+    });
+    await expect(runReadQuery(bad.db, CompiledQuery.raw('select nope'), RUN, 'mssql')).rejects.toThrow('Invalid column name');
+    expect(bad.trail).toEqual([
+      'acquire', 'begin', 'set lock_timeout 5000', 'set rowcount 10; select nope\n; set rowcount 0', 'rollback', 'release',
+    ]);
+    expect(bad.trail).not.toContain('commit');
+    expect(bad.state).toMatchObject({ leased: false, inTransaction: false });
+  });
+
+  it('runReadQuery on mssql: after a deadline cancels the query, the next query on the same db finds no open transaction', async () => {
+    // The real deadline is the driver's request timeout: the statement's request fails, and the
+    // transaction stays open on the server. This fake does no reset on release, so only the
+    // roll-back can close it.
+    let cancelNext = true;
+    const shared = recordingDb('mssql', {
+      rows: [{ a: 1 }],
+      failQuery: (s) => {
+        if (!s.startsWith('set rowcount') || !cancelNext) return undefined;
+        cancelNext = false;
+        return { error: new Error('Timeout: Request failed to complete in 5000ms') };
+      },
+    });
+    const deadlines: number[] = [];
+    const opts = { ...RUN, withDeadline: <T>(ms: number, op: () => Promise<T>) => { deadlines.push(ms); return op(); } };
+
+    await expect(runReadQuery(shared.db, CompiledQuery.raw('select 1 as a'), opts, 'mssql')).rejects.toThrow('Timeout');
+    expect(shared.trail.slice(-2)).toEqual(['rollback', 'release']);
+
+    const rows = await runReadQuery(shared.db, CompiledQuery.raw('select 1 as a'), opts, 'mssql');
+    expect(rows).toEqual([{ a: 1 }]);
+    expect(deadlines).toEqual([5000, 5000]);
+    // The second query got the same connection with no transaction open, and began its own.
+    expect(shared.state.acquiredInTransaction).toEqual([false, false]);
+    expect(shared.trail.filter((t) => t === 'begin')).toHaveLength(2);
+    expect(shared.state).toMatchObject({ leased: false, inTransaction: false });
+  });
+
+  it('runReadQuery on mssql: when SQL Server ended the transaction, the person sees their own error, not 3903', async () => {
+    const db = recordingDb('mssql', {
+      failQuery: (s) => (s.startsWith('set rowcount')
+        ? { error: new Error("Conversion failed when converting the varchar value 'x' to data type int."), endsTransaction: true }
+        : undefined),
+    });
+    await expect(runReadQuery(db.db, CompiledQuery.raw("select cast('x' as int) as a"), RUN, 'mssql'))
+      .rejects.toThrow('Conversion failed');
+    expect(db.trail.slice(-2)).toEqual(['rollback', 'release']);
+    expect(db.state).toMatchObject({ leased: false, inTransaction: false });
+  });
+
+  it('runReadQuery on mssql: a roll-back that fails after a good read still returns the rows and gives the connection back', async () => {
+    // The store resets a connection when it is given back (`resetConnectionsOnRelease: true`), and
+    // that reset ends an open transaction. The fake models it here, for this case only.
+    let failOnce = true;
+    const db = recordingDb('mssql', {
+      rows: [{ a: 1 }],
+      resetOnRelease: true,
+      failRollback: () => {
+        if (!failOnce) return undefined;
+        failOnce = false;
+        return new Error('the roll-back request failed');
+      },
+    });
+    expect(await runReadQuery(db.db, CompiledQuery.raw('select 1 as a'), RUN, 'mssql')).toEqual([{ a: 1 }]);
+    expect(db.trail.slice(-2)).toEqual(['rollback', 'release']);
+    // Not leaked: the pool's one connection serves the next query.
+    expect(await runReadQuery(db.db, CompiledQuery.raw('select 1 as a'), RUN, 'mssql')).toEqual([{ a: 1 }]);
+    expect(db.state.acquiredInTransaction).toEqual([false, false]);
+  });
+
+  it('runReadQuery on mssql: a statement that ends in a line comment is still rolled back, as its own request', async () => {
+    const db = recordingDb('mssql', { rows: [] });
+    await runReadQuery(db.db, CompiledQuery.raw('select 1 as a -- note'), RUN, 'mssql');
+    expect(db.trail).toEqual([
+      'acquire', 'begin', 'set lock_timeout 5000', 'set rowcount 10; select 1 as a -- note\n; set rowcount 0', 'rollback', 'release',
+    ]);
+    expect(db.state.inTransaction).toBe(false);
+  });
+});
+
+describe('runReadQuery on postgres', () => {
+  it('runReadQuery on postgres still sets the transaction read only', async () => {
+    const db = recordingDb('postgres', { rows: [{ a: 1 }] });
+    expect(await runReadQuery(db.db, CompiledQuery.raw('select 1 as a'), RUN, 'postgres')).toEqual([{ a: 1 }]);
+    expect(db.trail).toEqual([
+      'acquire', 'begin',
+      'set transaction read only',
+      'SET LOCAL standard_conforming_strings = on',
+      'set local statement_timeout = 5000',
+      'select * from (select 1 as a\n) as _q limit 10 offset 0',
+      'commit', 'release',
+    ]);
+  });
+  it('a postgres statement that fails is rolled back and the connection given back', async () => {
+    const db = recordingDb('postgres', {
+      failQuery: (s) => (s.startsWith('select *') ? { error: new Error('canceling statement due to statement timeout') } : undefined),
+    });
+    await expect(runReadQuery(db.db, CompiledQuery.raw('select pg_sleep(9)'), RUN, 'postgres')).rejects.toThrow('statement timeout');
+    expect(db.trail.slice(-2)).toEqual(['rollback', 'release']);
+    expect(db.state).toMatchObject({ leased: false, inTransaction: false });
   });
 });

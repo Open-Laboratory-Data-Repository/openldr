@@ -6,6 +6,9 @@ const connectorsFake = (rec: unknown) => ({
   getDecryptedConfig: vi.fn(async () => ({ host: 'h', port: '5432', database: 'd', user: 'u', password: 'p' })),
 });
 
+/** The runner runs checked SQL through `queryReadOnly`. `query` is the import reader's method. */
+const notQuery = async (): Promise<never> => { throw new Error('the runner must call queryReadOnly, not query'); };
+
 describe('dialectFor', () => {
   it('maps each SQL connector type to its dialect, and any other type to null', () => {
     expect(dialectFor('postgres')).toBe('postgres');
@@ -35,7 +38,7 @@ describe('createConnectorDialectLookup', () => {
 describe('createConnectorSqlRunner', () => {
   it('resolves + decrypts + queries + closes (rows → SqlResult)', async () => {
     let closed = false;
-    const createDb = vi.fn(() => ({ query: async () => ({ rows: [{ a: 1, b: 'x' }] }), close: async () => { closed = true; } }));
+    const createDb = vi.fn(() => ({ query: notQuery, queryReadOnly: async () => ({ rows: [{ a: 1, b: 'x' }] }), close: async () => { closed = true; } }));
     const run = createConnectorSqlRunner({ connectors: connectorsFake({ type: 'postgres', enabled: true }), secretsKey: 'k', createDb });
     const res = await run({ connectorId: 'h1', sql: 'select 1' });
     expect(res.rows).toEqual([{ a: 1, b: 'x' }]);
@@ -45,7 +48,7 @@ describe('createConnectorSqlRunner', () => {
   });
   it('closes the connection even when the query throws', async () => {
     let closed = false;
-    const createDb = vi.fn(() => ({ query: async () => { throw new Error('boom'); }, close: async () => { closed = true; } }));
+    const createDb = vi.fn(() => ({ query: notQuery, queryReadOnly: async () => { throw new Error('boom'); }, close: async () => { closed = true; } }));
     const run = createConnectorSqlRunner({ connectors: connectorsFake({ type: 'postgres', enabled: true }), secretsKey: 'k', createDb });
     await expect(run({ connectorId: 'h1', sql: 'select 1' })).rejects.toThrow('boom');
     expect(closed).toBe(true);
@@ -64,10 +67,10 @@ describe('createConnectorSqlRunner', () => {
     const run = createConnectorSqlRunner({
       connectors: connectorsFake({ type: 'postgres', enabled: true }),
       secretsKey: 'k',
-      createDb: () => ({ query: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
+      createDb: () => ({ query: notQuery, queryReadOnly: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
     });
     await run({ connectorId: 'c1', sql: 'select * from t', rowCap: 100, offset: 0 });
-    expect(seen[0]).toBe('select * from (select * from t) as _q limit 100 offset 0');
+    expect(seen[0]).toBe('select * from (select * from t\n) as _q limit 100 offset 0');
   });
 
   it('caps MSSQL with SET ROWCOUNT when rowCap is given (works with ORDER BY, no derived-table wrap)', async () => {
@@ -75,10 +78,10 @@ describe('createConnectorSqlRunner', () => {
     const run = createConnectorSqlRunner({
       connectors: connectorsFake({ type: 'microsoft-sql', enabled: true }),
       secretsKey: 'k',
-      createDb: () => ({ query: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
+      createDb: () => ({ query: notQuery, queryReadOnly: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
     });
     await run({ connectorId: 'c1', sql: 'select * from t order by id', rowCap: 100 });
-    expect(seen[0]).toBe('set rowcount 100; select * from t order by id; set rowcount 0');
+    expect(seen[0]).toBe('set rowcount 100; select * from t order by id\n; set rowcount 0');
   });
 
   it('applies the MSSQL offset by slicing the returned rows (SET ROWCOUNT fetched offset+limit)', async () => {
@@ -87,10 +90,10 @@ describe('createConnectorSqlRunner', () => {
     const run = createConnectorSqlRunner({
       connectors: connectorsFake({ type: 'microsoft-sql', enabled: true }),
       secretsKey: 'k',
-      createDb: () => ({ query: async (s: string) => { seen.push(s); return { rows: [{ id: 1 }, { id: 2 }, { id: 3 }] }; }, close: async () => {} }) as never,
+      createDb: () => ({ query: notQuery, queryReadOnly: async (s: string) => { seen.push(s); return { rows: [{ id: 1 }, { id: 2 }, { id: 3 }] }; }, close: async () => {} }) as never,
     });
     const out = await run({ connectorId: 'c1', sql: 'select id from t', rowCap: 2, offset: 1 });
-    expect(seen[0]).toBe('set rowcount 3; select id from t; set rowcount 0');
+    expect(seen[0]).toBe('set rowcount 3; select id from t\n; set rowcount 0');
     expect(out.rows).toEqual([{ id: 2 }, { id: 3 }]); // dropped the first (offset 1)
   });
 
@@ -99,10 +102,10 @@ describe('createConnectorSqlRunner', () => {
     const run = createConnectorSqlRunner({
       connectors: connectorsFake({ type: 'mysql', enabled: true }),
       secretsKey: 'k',
-      createDb: () => ({ query: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
+      createDb: () => ({ query: notQuery, queryReadOnly: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
     });
     await run({ connectorId: 'c1', sql: 'select * from t', rowCap: 100 });
-    expect(seen[0]).toBe('select * from (select * from t) as _q limit 100 offset 0');
+    expect(seen[0]).toBe('select * from (select * from t\n) as _q limit 100 offset 0');
   });
 
   it('runs a mysql connector query through the LIMIT/OFFSET pagination wrapper', async () => {
@@ -111,12 +114,13 @@ describe('createConnectorSqlRunner', () => {
       connectors: connectorsFake({ type: 'mysql', enabled: true }),
       secretsKey: undefined,
       createDb: () => ({
-        query: async (sqlText: string) => { seen.push(sqlText); return { rows: [{ n: 1 }] }; },
+        query: notQuery,
+        queryReadOnly: async (sqlText: string) => { seen.push(sqlText); return { rows: [{ n: 1 }] }; },
         close: async () => {},
       }),
     });
     const res = await runner({ connectorId: 'c1', sql: 'select 1 as n', rowCap: 50, offset: 10 });
-    expect(seen[0]).toBe('select * from (select 1 as n) as _q limit 50 offset 10');
+    expect(seen[0]).toBe('select * from (select 1 as n\n) as _q limit 50 offset 10');
     expect(seen[0]).not.toMatch(/rowcount/i);
     expect(res.rows).toEqual([{ n: 1 }]);
   });
@@ -126,11 +130,11 @@ describe('createConnectorSqlRunner', () => {
     const run = createConnectorSqlRunner({
       connectors: connectorsFake({ type: 'postgres', enabled: true }),
       secretsKey: 'k',
-      createDb: () => ({ query: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
+      createDb: () => ({ query: notQuery, queryReadOnly: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
     });
     await run({ connectorId: 'c1', sql: 'select 1' });
     // No caller-supplied cap → the shared default (10000) bounds the scan instead of running unwrapped.
-    expect(seen[0]).toBe('select * from (select 1) as _q limit 10000 offset 0');
+    expect(seen[0]).toBe('select * from (select 1\n) as _q limit 10000 offset 0');
   });
 
   it('rejects non-SELECT SQL at the runner boundary (DML/DDL, multi-statement, SELECT…INTO)', async () => {
@@ -163,7 +167,7 @@ describe('createConnectorSqlRunner', () => {
   });
 
   it('on a Postgres connector keeps a SQL Server statement word as a name', async () => {
-    const createDb = vi.fn(() => ({ query: async () => ({ rows: [] }), close: async () => {} }));
+    const createDb = vi.fn(() => ({ query: notQuery, queryReadOnly: async () => ({ rows: [] }), close: async () => {} }));
     const run = createConnectorSqlRunner({ connectors: connectorsFake({ type: 'postgres', enabled: true }), secretsKey: 'k', createDb });
     await run({ connectorId: 'c1', sql: 'SELECT backup FROM t' });
     expect(createDb).toHaveBeenCalledWith('postgres', expect.anything());
@@ -176,5 +180,22 @@ describe('createConnectorSqlRunner', () => {
     await expect(run({ connectorId: 'c1', sql: 'select 1' })).rejects.toThrow('unsupported connector type: oracle');
     expect(createDb).not.toHaveBeenCalled();
     expect(connectors.getDecryptedConfig).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['postgres', 'select * from (select 1 -- note\n) as _q limit 10 offset 0'],
+    ['microsoft-sql', 'set rowcount 10; select 1 -- note\n; set rowcount 0'],
+    ['mysql', 'select * from (select 1 -- note\n) as _q limit 10 offset 0'],
+  ])('on %s runs the planned SQL once through queryReadOnly, with what the plan adds on a new line', async (type, planned) => {
+    const sent: string[] = [];
+    const query = vi.fn(notQuery);
+    const run = createConnectorSqlRunner({
+      connectors: connectorsFake({ type, enabled: true }),
+      secretsKey: 'k',
+      createDb: () => ({ query, queryReadOnly: async (s: string) => { sent.push(s); return { rows: [] }; }, close: async () => {} }),
+    });
+    await run({ connectorId: 'c1', sql: 'select 1 -- note', rowCap: 10 });
+    expect(sent).toEqual([planned]);
+    expect(query).not.toHaveBeenCalled();
   });
 });

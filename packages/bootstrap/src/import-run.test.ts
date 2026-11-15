@@ -67,6 +67,7 @@ function fakeSource(keys: string[]) {
       const date = new Date(Date.UTC(2024, 2, 5, 14, 30, 0, 0));
       return { rows: inList.map((k) => (sql.includes('LabResults') ? { RequestID: k, SIValue: 4.2 } : { RequestID: k, RegisteredDateTime: date })) };
     },
+    async queryReadOnly(): Promise<never> { throw new Error('the import reader calls query, never queryReadOnly'); },
     async close() { closed += 1; },
   };
   return {

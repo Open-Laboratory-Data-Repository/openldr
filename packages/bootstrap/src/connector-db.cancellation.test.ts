@@ -46,3 +46,36 @@ it.each(['constructor throws', 'control stalls', 'server refuses'])(
     await conn.close();
   },
 );
+
+it('queryReadOnly on mysql meets the deadline the way query does: KILL on a second connection, then the first is destroyed', async () => {
+  vi.useFakeTimers();
+  const sent: string[] = [];
+  const killed: string[] = [];
+  let originalOpen = true;
+  const original = {
+    threadId: 321,
+    query: (sql: string) => { sent.push(sql); },
+    release: vi.fn(),
+    destroy: () => { originalOpen = false; },
+  };
+  const control = Object.assign(new EventEmitter(), {
+    query: (sql: string, callback: (error: null) => void) => { killed.push(sql); callback(null); },
+    destroy: () => {},
+  });
+  mocks.createPool.mockReturnValue({
+    on: vi.fn(),
+    getConnection: (callback: (error: null, connection: typeof original) => void) => callback(null, original),
+    end: (callback: () => void) => callback(),
+  });
+  mocks.createConnection.mockReturnValue(control);
+  const conn = createConnectorDb('mysql', {}, { queryTimeoutMs: 10 });
+  let rejection: unknown;
+  void conn.queryReadOnly('select sleep(5)').catch((error) => { rejection = error; });
+  await vi.advanceTimersByTimeAsync(20);
+  expect(sent).toEqual(['select sleep(5)']);
+  expect(killed).toEqual(['KILL CONNECTION 321']);
+  expect((rejection as Error).message).toBe('connector query deadline exceeded');
+  expect(originalOpen).toBe(false);
+  expect(original.release).not.toHaveBeenCalled();
+  await conn.close();
+});

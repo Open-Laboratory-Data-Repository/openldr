@@ -3,11 +3,18 @@ import type { TargetSchema } from '@openldr/ports';
 import pg from 'pg';
 import { pgNumberTypes } from '@openldr/adapter-db-store';
 import { createMssqlStore } from '@openldr/adapter-mssql-store';
+import { runInRolledBackTransaction } from '@openldr/dashboards';
 import { createPool, createConnection, type ConnectionOptions } from 'mysql2';
 
 /** A connector-backed DB connection: run one raw query, then close. */
 export interface ConnectorDb {
+  /** One raw statement, no transaction. The import page reader reads its pages with this. */
   query(rawSql: string): Promise<{ rows: Record<string, unknown>[] }>;
+  /** One raw statement that cannot keep a write, for SQL a person typed or saved, after the SQL
+   *  check. Postgres: a read-only transaction, then ROLLBACK. SQL Server: a transaction that is
+   *  always rolled back. MySQL: the same as `query` (operator, 2026-11-15). A failed roll-back
+   *  never replaces the statement's own error, and never turns a good read into an error. */
+  queryReadOnly(rawSql: string): Promise<{ rows: Record<string, unknown>[] }>;
   close(): Promise<void>;
 }
 
@@ -57,8 +64,52 @@ function wrap(store: {
         ? execute()
         : store.withRequestTimeout(queryTimeoutMs, execute);
     },
+    async queryReadOnly(rawSql) {
+      // The begin, the statement and the roll-back each go as their own request, inside the same
+      // request deadline that `query` uses.
+      const execute = () => runInRolledBackTransaction(store.db, async (trx) => {
+        const r = await sql.raw(rawSql).execute(trx);
+        return { rows: r.rows as Record<string, unknown>[] };
+      });
+      return queryTimeoutMs === undefined || !store.withRequestTimeout
+        ? execute()
+        : store.withRequestTimeout(queryTimeoutMs, execute);
+    },
     close: () => store.close(),
   };
+}
+
+/** Postgres: run `rawSql` in a read-only transaction on one client of `pool`, then roll it back.
+ *  Each step is its own query, so the pool's `statement_timeout` and `query_timeout` bound each.
+ *  On any error the client is dropped from the pool rather than given back, and the error thrown
+ *  is the statement's own. */
+async function queryPgReadOnly(pool: pg.Pool, rawSql: string): Promise<{ rows: Record<string, unknown>[] }> {
+  const client = await pool.connect();
+  let rows: Record<string, unknown>[] = [];
+  let failure: unknown;
+  let failed = false;
+  let drop = false;
+  try {
+    await client.query('BEGIN READ ONLY');
+    // The SQL check reads a backslash in a string as an ordinary character. This makes the
+    // server read it the same way, whatever the server or the session says.
+    await client.query('SET LOCAL standard_conforming_strings = on');
+    rows = (await client.query(rawSql)).rows;
+  } catch (error) {
+    failed = true;
+    failure = error;
+    drop = true;
+  }
+  try {
+    await client.query('ROLLBACK');
+  } catch {
+    // The statement's outcome stands. A client whose ROLLBACK failed is not given back.
+    drop = true;
+  }
+  if (drop) client.release(true);
+  else client.release();
+  if (failed) throw failure;
+  return { rows };
 }
 
 /** Build an ephemeral DB connection for a host connector by type + decrypted config.
@@ -88,6 +139,7 @@ export function createConnectorDb(
         const result = await pool.query(rawSql);
         return { rows: result.rows };
       },
+      queryReadOnly: (rawSql) => queryPgReadOnly(pool, rawSql),
       async close() { if (!closed) { closed = true; await pool.end(); } },
     };
   }
@@ -144,7 +196,7 @@ export function createConnectorDb(
       });
     });
     let closed = false;
-    return {
+    const connectorDb: ConnectorDb = {
       query(rawSql) {
         return new Promise((resolve, reject) => {
           pool.getConnection((acquireError, connection) => {
@@ -175,12 +227,16 @@ export function createConnectorDb(
           });
         });
       },
+      // MySQL gets no transaction (operator, 2026-11-15): the read-only form is the same call,
+      // with the same deadline and KILL.
+      queryReadOnly: (rawSql) => connectorDb.query(rawSql),
       async close() {
         if (closed) return;
         closed = true;
         await new Promise<void>((resolve, reject) => pool.end((error) => error ? reject(error) : resolve()));
       },
     };
+    return connectorDb;
   }
   throw new Error(`unsupported connector type: ${type}`);
 }
