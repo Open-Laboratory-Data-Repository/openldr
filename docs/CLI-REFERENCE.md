@@ -263,9 +263,11 @@ connector first (`openldr import allow <plugin> <connector>`).
     openldr import copy delete <plugin> <copy> --force
 
 `start` records the request and returns. The server does the copying, so the command never
-waits for it. Run `status` to follow it. `start` on a stopped, failed or finished copy carries it
-on from where each set stopped. `--page-size` is the number of source keys per page, 1 to 2000,
-default 500.
+waits for it. Run `status` to follow it. `start` on a stopped or failed copy carries it on from
+where each set stopped. `start` on a finished copy reads no set again. It only tries the skipped
+keys again, so it reads no new source rows. `start` on a queued, running or waiting copy whose
+SQL has not changed returns it unchanged. `--page-size` is the number of source keys per page,
+1 to 2000, default 500. The v1 import plugin's copy does not need the `tz` option.
 
 When the plugin's SQL for a set changed since the copy began, `start` prints
 `these sets would be read again from the start: <names>. Run again with --reread to do that.`
@@ -282,6 +284,9 @@ No source key is ever printed, and `--json` leaves out each set's position.
 
 `stop` stops the copy at its next page. The rows copied so far stay. `delete` removes a stopped,
 failed or finished copy and every row it holds. It refuses without `--force` and changes nothing.
+With `--force` it returns while the copy is still being deleted, and prints its status as
+`deleting`. The server deletes the rows in batches, and carries on after a restart. Run `status`
+to see when the copy is gone: it prints `(no copies)` once the last one is deleted.
 
 All four go through the app and need `connectors.manage`. `start` and `delete` are marked
 destructive. Exit code 0 when the request was recorded or the answer was printed, and 1 on a
