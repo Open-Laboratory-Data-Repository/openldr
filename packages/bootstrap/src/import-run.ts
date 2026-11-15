@@ -74,7 +74,8 @@ export interface ImportRun {
 export interface ImportActor { type: 'user' | 'cli' | 'system'; id: string | null; name: string }
 
 export interface ImportAuditEvent {
-  action: 'import.allow' | 'import.revoke' | 'import.start' | 'import.stop' | 'import.resume' | 'import.finish';
+  action: 'import.allow' | 'import.revoke' | 'import.start' | 'import.stop' | 'import.resume' | 'import.finish'
+    | 'import.copy.start' | 'import.copy.stop' | 'import.copy.takeover' | 'import.copy.finish' | 'import.copy.delete';
   pluginId: string;
   connectorId?: string;
   runId?: string;
@@ -141,8 +142,9 @@ export interface ImportService {
   wait(runId: string): Promise<ImportRun>;
 }
 
-const NAME = /^[A-Za-z0-9_]{1,40}$/;
-const querySpecSchema = z.object({
+/** A name a plugin gives a query, a check, an option or a copy set. */
+export const NAME = /^[A-Za-z0-9_]{1,40}$/;
+export const querySpecSchema = z.object({
   keyQuery: z.object({ sql: z.string().min(1).max(20_000) }),
   detailQueries: z.array(z.object({ name: z.string().regex(NAME), sql: z.string().min(1).max(20_000) })).max(12),
 });
@@ -152,7 +154,7 @@ const checksSchema = z.object({
 const mapOutputSchema = z.object({
   groups: z.array(z.object({ key: z.string(), resources: z.array(z.unknown()).default([]), error: z.string().optional() })),
 });
-const optionsSchema = z.record(z.string().regex(NAME), z.string().max(500)).refine((o) => Object.keys(o).length <= 20);
+export const optionsSchema = z.record(z.string().regex(NAME), z.string().max(500)).refine((o) => Object.keys(o).length <= 20);
 
 const CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
 /** A plugin's error is kept only if it is a bare code. Anything else could quote a row. */
@@ -174,60 +176,112 @@ function checkResources(resources: unknown[], allowedTypes: Set<string>): string
   return null;
 }
 
-interface ResolvedPlugin { id: string; version: string; source: ImportSource; capabilities: Capability[] }
+export interface ResolvedPlugin { id: string; version: string; source: ImportSource; capabilities: Capability[] }
 /** A plugin that can run a one-pass import, so `queries` and `map` are both present. */
-interface ImportingPlugin extends ResolvedPlugin {
+export interface ImportingPlugin extends ResolvedPlugin {
   source: ImportSource & { entrypoints: { queries: string; map: string } };
 }
 /** What a caller needs from a plugin. `read`: it may be allowed a connector. `import`: it can
  *  also run a one-pass import. A plugin with only a copy entrypoint passes `read` alone. */
-type PluginNeed = 'read' | 'import';
+export type PluginNeed = 'read' | 'import';
+
+/** Opens a host database connector. The page reader passes a query timeout for its probe. */
+export type CreateConnectorDb = (type: string, config: Record<string, string>, opts?: { queryTimeoutMs?: number }) => ConnectorDb;
+export const defaultCreateDb: CreateConnectorDb = (type, config, opts) => createConnectorDb(type, config, opts);
+
+// The helpers below are shared by the one-pass import and the copy (import-copy.ts), so both
+// apply the same trust rules with the same words.
+
+/** For events that record something already done (stop, revoke, finish). A failure here
+ *  cannot undo it, so it is swallowed; the sink logs it. */
+export async function auditQuietly(sink: ImportServiceDeps['audit'], event: ImportAuditEvent): Promise<void> {
+  try { await sink(event); } catch { /* see above */ }
+}
+
+/** For events that open the door to reading or writing (allow, start, resume). Called BEFORE
+ *  the change is made. If the row cannot be written, the action is refused. The sink's own
+ *  error text is not passed on: it can name hosts. */
+export async function auditOrRefuse(sink: ImportServiceDeps['audit'], event: ImportAuditEvent): Promise<void> {
+  try {
+    await sink(event);
+  } catch {
+    throw new Error('the audit log could not be written, so nothing was changed');
+  }
+}
+
+/** The enabled plugin with this id, checked for an import source, the host:import grant and `need`. */
+export function resolveImportPlugin(plugins: ImportServiceDeps['plugins'], pluginId: string, need: 'import'): Promise<ImportingPlugin>;
+export function resolveImportPlugin(plugins: ImportServiceDeps['plugins'], pluginId: string, need: PluginNeed): Promise<ResolvedPlugin>;
+export async function resolveImportPlugin(plugins: ImportServiceDeps['plugins'], pluginId: string, need: PluginNeed): Promise<ResolvedPlugin> {
+  const row = (await plugins.list()).find((r) => r.id === pluginId && r.enabled);
+  if (!row) throw new Error(`plugin ${pluginId} is not installed or disabled`);
+  const raw = (row.manifest as { payload?: { importSource?: unknown } }).payload?.importSource;
+  if (raw === undefined || raw === null) throw new Error(`plugin ${pluginId} cannot import: it declares no import source`);
+  const source = importSourceSchema.parse(raw);
+  // Fail closed: a row with no capability list predates capabilities and was never asked for this one.
+  const grant = readGrant(row.manifest);
+  if (grant.legacy || !grant.capabilities.some((c) => c.kind === 'host:import')) {
+    throw new Error(`plugin ${pluginId} was not granted the host:import capability`);
+  }
+  if (need === 'import' && !canImportOnePass(source)) {
+    throw new Error(`plugin ${pluginId} can be copied from but cannot import`);
+  }
+  return { id: row.id, version: row.version, source, capabilities: grant.capabilities };
+}
+
+/** The connector, checked to be enabled, of a type the plugin reads, and allowed for the plugin. */
+export async function resolveImportConnector(
+  connectors: ImportServiceDeps['connectors'],
+  isAllowed: (pluginId: string, connectorId: string) => Promise<boolean>,
+  plugin: ResolvedPlugin,
+  connectorId: string,
+): Promise<{ type: string }> {
+  const c = await connectors.get(connectorId);
+  if (!c || !c.enabled) throw new Error(`connector ${connectorId} not found or disabled`);
+  if (!c.type || !(plugin.source.connectorTypes as string[]).includes(c.type)) {
+    throw new Error(`plugin ${plugin.id} imports from ${plugin.source.connectorTypes.join(', ')} connectors only`);
+  }
+  if (!(await isAllowed(plugin.id, connectorId))) {
+    throw new Error(`connector ${connectorId} is not allowed for plugin ${plugin.id}`);
+  }
+  return { type: c.type };
+}
+
+export async function loadImportSink(plugins: ImportServiceDeps['plugins'], plugin: ResolvedPlugin) {
+  const sink = await plugins.loadSink(plugin.id, plugin.version);
+  if (!sink) throw new Error(`plugin ${plugin.id} exposes no invokable wasm`);
+  return sink;
+}
+
+/** How to open the connector, and how to make its driver's text safe to show. */
+export async function openSourceAccess(
+  deps: Pick<ImportServiceDeps, 'connectors' | 'secretsKey'>,
+  makeDb: CreateConnectorDb,
+  connectorId: string,
+  type: string,
+): Promise<{ open: (opts?: { queryTimeoutMs?: number }) => ConnectorDb; clean: (text: string) => string }> {
+  const config = await deps.connectors.getDecryptedConfig(connectorId, deps.secretsKey);
+  const mask = makeRedactor([config.password].filter((v): v is string => Boolean(v)));
+  return { open: (opts) => makeDb(type, config, opts), clean: (text) => redact(mask(text)).slice(0, 300) };
+}
 
 export function createImportService(deps: ImportServiceDeps): ImportService {
   const now = deps.now ?? (() => new Date());
   const newId = deps.newId ?? (() => randomUUID());
   const origin = deps.origin ?? 'cli';
-  const makeDb = deps.createDb
-    ?? ((type: string, config: Record<string, string>, opts?: { queryTimeoutMs?: number }) => createConnectorDb(type, config, opts));
+  const makeDb = deps.createDb ?? defaultCreateDb;
   /** Runs this process is driving right now. */
   const local = new Map<string, { promise: Promise<ImportRun>; stop: boolean }>();
   /** How the last few runs driven here ended, so `wait` still answers just after one finishes. */
   const ended = new Map<string, ImportRun>();
 
-  /** For events that record something already done (stop, revoke, finish). A failure here
-   *  cannot undo it, so it is swallowed; the sink logs it. */
-  const audit = async (event: ImportAuditEvent): Promise<void> => {
-    try { await deps.audit(event); } catch { /* see above */ }
-  };
-
-  /** For events that open the door to reading or writing (allow, start, resume). Called BEFORE
-   *  the change is made. If the row cannot be written, the action is refused. The sink's own
-   *  error text is not passed on: it can name hosts. */
-  const auditOrRefuse = async (event: ImportAuditEvent): Promise<void> => {
-    try {
-      await deps.audit(event);
-    } catch {
-      throw new Error('the audit log could not be written, so nothing was changed');
-    }
-  };
+  const audit = (event: ImportAuditEvent): Promise<void> => auditQuietly(deps.audit, event);
+  const auditOrRefuseHere = (event: ImportAuditEvent): Promise<void> => auditOrRefuse(deps.audit, event);
 
   function resolvePlugin(pluginId: string, need: 'import'): Promise<ImportingPlugin>;
   function resolvePlugin(pluginId: string, need: PluginNeed): Promise<ResolvedPlugin>;
-  async function resolvePlugin(pluginId: string, need: PluginNeed): Promise<ResolvedPlugin> {
-    const row = (await deps.plugins.list()).find((r) => r.id === pluginId && r.enabled);
-    if (!row) throw new Error(`plugin ${pluginId} is not installed or disabled`);
-    const raw = (row.manifest as { payload?: { importSource?: unknown } }).payload?.importSource;
-    if (raw === undefined || raw === null) throw new Error(`plugin ${pluginId} cannot import: it declares no import source`);
-    const source = importSourceSchema.parse(raw);
-    // Fail closed: a row with no capability list predates capabilities and was never asked for this one.
-    const grant = readGrant(row.manifest);
-    if (grant.legacy || !grant.capabilities.some((c) => c.kind === 'host:import')) {
-      throw new Error(`plugin ${pluginId} was not granted the host:import capability`);
-    }
-    if (need === 'import' && !canImportOnePass(source)) {
-      throw new Error(`plugin ${pluginId} can be copied from but cannot import`);
-    }
-    return { id: row.id, version: row.version, source, capabilities: grant.capabilities };
+  function resolvePlugin(pluginId: string, need: PluginNeed): Promise<ResolvedPlugin> {
+    return resolveImportPlugin(deps.plugins, pluginId, need);
   }
 
   /** Every enabled plugin that passes `need`, with the connector types each reads. */
@@ -245,33 +299,12 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     return out;
   }
 
-  async function resolveConnector(plugin: ResolvedPlugin, connectorId: string): Promise<{ type: string }> {
-    const c = await deps.connectors.get(connectorId);
-    if (!c || !c.enabled) throw new Error(`connector ${connectorId} not found or disabled`);
-    if (!c.type || !(plugin.source.connectorTypes as string[]).includes(c.type)) {
-      throw new Error(`plugin ${plugin.id} imports from ${plugin.source.connectorTypes.join(', ')} connectors only`);
-    }
-    if ((await deps.pluginData.get(plugin.id, ALLOWED, connectorId)) === null) {
-      throw new Error(`connector ${connectorId} is not allowed for plugin ${plugin.id}`);
-    }
-    return { type: c.type };
-  }
-
-  async function loadSink(plugin: ResolvedPlugin) {
-    const sink = await deps.plugins.loadSink(plugin.id, plugin.version);
-    if (!sink) throw new Error(`plugin ${plugin.id} exposes no invokable wasm`);
-    return sink;
-  }
-
-  /** How to open the connector, and how to make its driver's text safe to show. */
-  async function sourceAccess(connectorId: string, type: string): Promise<{
-    open: (opts?: { queryTimeoutMs?: number }) => ConnectorDb;
-    clean: (text: string) => string;
-  }> {
-    const config = await deps.connectors.getDecryptedConfig(connectorId, deps.secretsKey);
-    const mask = makeRedactor([config.password].filter((v): v is string => Boolean(v)));
-    return { open: (opts) => makeDb(type, config, opts), clean: (text) => redact(mask(text)).slice(0, 300) };
-  }
+  const isAllowed = async (pluginId: string, connectorId: string): Promise<boolean> =>
+    (await deps.pluginData.get(pluginId, ALLOWED, connectorId)) !== null;
+  const resolveConnector = (plugin: ResolvedPlugin, connectorId: string): Promise<{ type: string }> =>
+    resolveImportConnector(deps.connectors, isAllowed, plugin, connectorId);
+  const loadSink = (plugin: ResolvedPlugin) => loadImportSink(deps.plugins, plugin);
+  const sourceAccess = (connectorId: string, type: string) => openSourceAccess(deps, makeDb, connectorId, type);
 
   async function openDb(connectorId: string, type: string): Promise<ConnectorDb> {
     return (await sourceAccess(connectorId, type)).open();
@@ -518,7 +551,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       if (!c.type || !(plugin.source.connectorTypes as string[]).includes(c.type)) {
         throw new Error(`plugin ${plugin.id} imports from ${plugin.source.connectorTypes.join(', ')} connectors only`);
       }
-      await auditOrRefuse({ action: 'import.allow', pluginId, connectorId, actor });
+      await auditOrRefuseHere({ action: 'import.allow', pluginId, connectorId, actor });
       await deps.pluginData.put(pluginId, ALLOWED, connectorId, { connectorId, allowedBy: actor.name, allowedAt: now().toISOString() });
     },
 
@@ -583,7 +616,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
         startedAt: at, updatedAt: at, finishedAt: null, lastError: null, startedBy: input.actor.name,
         waiting: null, origin,
       };
-      await auditOrRefuse({
+      await auditOrRefuseHere({
         action: 'import.start', pluginId: run.pluginId, connectorId: run.connectorId, runId: run.id, actor: input.actor,
         metadata: { dryRun: run.dryRun, pageSize, limit },
       });
@@ -638,7 +671,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       const run: ImportRun = {
         ...stored, status: 'running', finishedAt: null, lastError: null, pluginVersion: plugin.version, waiting: null, origin,
       };
-      await auditOrRefuse({ action: 'import.resume', pluginId, connectorId: run.connectorId, runId, actor, metadata: { cursor: run.cursor } });
+      await auditOrRefuseHere({ action: 'import.resume', pluginId, connectorId: run.connectorId, runId, actor, metadata: { cursor: run.cursor } });
       await save(run);
       launch(run, actor);
       return { ...run };
