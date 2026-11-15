@@ -84,8 +84,16 @@ describe.skipIf(!present)('openldr-v1-import wasm', () => {
       { name: 'ast', sql: 'SELECT [RequestID] AS [__key], * FROM [OpenLDRData].[dbo].[ASTResults] WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode]' },
     ]);
     // The copy takes the import's options, and refuses the bad ones the same way.
-    await expect(s.invoke('import_copy', { options: {} })).rejects.toThrow(/tz/);
     await expect(s.invoke('import_copy', { options: { tz: 'Z', where: '1=1' } })).rejects.toThrow(/unknown option where/);
+    await expect(s.invoke('import_copy', { options: { tz: 'CAT' } })).rejects.toThrow(/tz/);
+  });
+
+  it('starts a copy without a time zone, which the copy never uses (R42b)', async () => {
+    const s = sink();
+    const without = (await s.invoke('import_copy', { options: { database: 'OpenLDRData' } })) as any;
+    const withTz = (await s.invoke('import_copy', { options: { tz: '+02:00', database: 'OpenLDRData' } })) as any;
+    expect(without).toEqual(withTz);
+    await expect(s.invoke('import_queries', { options: {} })).rejects.toThrow(/tz/);
   });
 
   it('returns checks, and fails clearly without a time zone', async () => {

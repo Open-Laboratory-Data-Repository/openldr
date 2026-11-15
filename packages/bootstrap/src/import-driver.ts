@@ -1,7 +1,7 @@
 import type { ImportCopyService } from './import-copy';
 import type { ImportService } from './import-run';
 
-// The loop that drives imports and copies in the server (spec 9.4). Only the API server starts it
+// The loop that drives imports and copies in the server (spec 9.3). Only the API server starts it
 // (`AppContextOptions.runImportDriver`). An `openldr` command builds an app context too, and must
 // never drive: it would hold a copy for as long as the command runs, and drop it when it exits.
 //

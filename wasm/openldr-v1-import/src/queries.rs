@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 #[derive(Debug, Clone, PartialEq)]
 pub struct Options {
     /// UTC offset of the v1 site: "+02:00", "-05:00" or "Z". v1 stores local time with no zone.
+    /// Empty only for a copy that was given none.
     pub tz: String,
     /// Database that holds the v1 tables. None means the connector's own database.
     pub database: Option<String>,
@@ -43,7 +44,18 @@ fn date(options: &Value, key: &str) -> Result<Option<String>, String> {
     }
 }
 
+/// The import's options. `tz` is required: the import maps v1's local times with it.
 pub fn parse_options(options: &Value) -> Result<Options, String> {
+    parse(options, true)
+}
+
+/// The copy's options. The copy's SQL never uses `tz`, so it may be left out, and then `tz` is
+/// empty. A `tz` that is given is checked as for the import. Every other option is checked the same.
+pub fn parse_copy_options(options: &Value) -> Result<Options, String> {
+    parse(options, false)
+}
+
+fn parse(options: &Value, tz_required: bool) -> Result<Options, String> {
     let empty = serde_json::Map::new();
     let map = match options {
         Value::Null => &empty,
@@ -59,7 +71,7 @@ pub fn parse_options(options: &Value) -> Result<Options, String> {
         }
     }
     let tz = options.get("tz").and_then(Value::as_str).map(js_trim).unwrap_or("");
-    if !is_tz_offset(tz) {
+    if (tz_required || !tz.is_empty()) && !is_tz_offset(tz) {
         return Err("option tz is required: the site's UTC offset, like +02:00, or Z".to_string());
     }
     let database = match options.get("database").and_then(Value::as_str).map(js_trim).filter(|s| !s.is_empty()) {
@@ -323,6 +335,50 @@ mod tests {
         assert_eq!(REQUEST_COLUMNS.len(), 53);
     }
 
+    /// The import's four statements, written out in full. The ORDER BY strings are shared with the
+    /// copy, so a change made for the copy would move the import's order with no other test failing.
+    #[test]
+    fn the_import_detail_queries_are_these_exact_statements() {
+        let q = queries(&opts(json!({ "tz": "Z" })).unwrap());
+        let sql = |i: usize| q["detailQueries"][i]["sql"].as_str().unwrap().to_string();
+        assert_eq!(
+            sql(0),
+            "SELECT [RequestID], [OBRSetID], [LIMSPanelCode], [LIMSPanelDesc], [LIMSSpecimenSourceCode], \
+             [LIMSSpecimenSourceDesc], [RequestingFacilityCode], [TestingFacilityCode], [SpecimenDateTime], \
+             [ReceivedDateTime], [RegisteredDateTime], [AnalysisDateTime], [AuthorisedDateTime], [ClinicalInfo], \
+             [ICD10ClinicalInfoCodes], [Therapy], [HL7PriorityCode], [AgeInYears], [AgeInDays], [HL7SexCode], \
+             [HL7PatientClassCode], [HL7SectionCode], [HL7ResultStatusCode], [AttendingDoctor], [TestedBy], \
+             [AuthorisedBy], [RegisteredBy], [RequestTypeCode], [LIMSAnalyzerCode], [LIMSRejectionCode], \
+             [LIMSRejectionDesc], [LIMSPointOfCareDesc], [LIMSPreReg_RegistrationDateTime], \
+             [LIMSPreReg_ReceivedDateTime], [LIMSPreReg_RegistrationFacilityCode], [LOINCPanelCode], \
+             [AdmitAttendDateTime], [CollectionVolume], [HL7SpecimenSourceCode], [HL7SpecimenSiteCode], \
+             [LIMSSpecimenSiteCode], [LIMSSpecimenSiteDesc], [WorkUnits], [CostUnits], [OrderingNotes], \
+             [EncryptedPatientID], [HL7EthnicGroupCode], [Deceased], [Newborn], [ReferringRequestID], \
+             [TargetTimeDays], [TargetTimeMins], [Repeated] FROM [dbo].[Requests] \
+             WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID], [OBRSetID]"
+        );
+        assert_eq!(
+            sql(1),
+            "SELECT [RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [HL7ResultTypeCode], [SIValue], [SIUnits], \
+             [SILoRange], [SIHiRange], [HL7AbnormalFlagCodes], [CodedValue], [LIMSObservationCode], \
+             [LIMSObservationDesc], [LIMSRptResult], [LIMSRptUnits], [LIMSRptFlag], [LIMSRptRange], \
+             [LIMSCodedValue] FROM [dbo].[LabResults] \
+             WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID], [OBRSetID], [OBXSetID], [OBXSubID]"
+        );
+        assert_eq!(
+            sql(2),
+            "SELECT [RequestID], [SURNAME], [FIRSTNAME], [DOB], [NATIONALID], [MOBILE], [TELHOME], [EMAIL], \
+             [HOSPID] FROM [dbo].[Patients] WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID]"
+        );
+        assert_eq!(
+            sql(3),
+            "SELECT [RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode], [LIMSSubstanceName], \
+             [ORGANISM], [LIMSOrganismCode], [BreakpointType], [Methodology], [Units], [ASTValue], [ASTResult] \
+             FROM [dbo].[ASTResults] WHERE [RequestID] IN ({{keys}}) \
+             ORDER BY [RequestID], [OBRSetID], [OBXSetID], [OBXSubID], [LIMSSubstanceCode]"
+        );
+    }
+
     #[test]
     fn copy_is_one_set_with_the_import_queries() {
         let o = opts(json!({ "tz": "Z" })).unwrap();
@@ -402,9 +458,23 @@ mod tests {
         assert!(err(json!({ "tz": "Z", "panels": "HIVVL, a'b" })).contains("panels"));
         assert!(err(json!({ "tz": "Z", "from": "2024-02-30" })).contains("from"));
         assert!(err(json!({ "tz": "Z", "from": "2024-03-01", "to": "2024-02-01" })).contains("from"));
-        assert!(err(json!({})).contains("tz"));
+        // A time zone is not needed for a copy (R42b), but one that is given is still checked.
+        assert!(err(json!({ "tz": "CAT" })).contains("tz"));
         let ok = crate::import_copy(&json!({ "options": { "tz": "+02:00", "database": "OpenLDRData", "panels": "HIVVL,VIRAL", "from": "2024-01-01", "to": "2024-12-31" } })).unwrap();
         assert_eq!(ok, c);
+    }
+
+    #[test]
+    fn copy_starts_without_tz_and_the_import_still_needs_it() {
+        // The copy's SQL never uses the time zone, so a copy may leave it out.
+        let with = copy(&opts(json!({ "tz": "Z", "database": "OpenLDRData" })).unwrap());
+        assert_eq!(crate::import_copy(&json!({ "options": { "database": "OpenLDRData" } })).unwrap(), with);
+        assert_eq!(crate::import_copy(&json!({ "options": { "database": "OpenLDRData", "tz": "  " } })).unwrap(), with);
+        assert!(crate::import_copy(&json!({ "options": {} })).is_ok());
+        assert!(crate::import_copy(&json!({})).is_ok());
+        // The import maps times with it, so its entrypoints still refuse to start without it.
+        assert!(crate::import_queries(&json!({ "options": {} })).unwrap_err().contains("tz"));
+        assert!(crate::import_map(&json!({ "options": {}, "keys": [], "rows": {} })).unwrap_err().contains("tz"));
     }
 
     #[test]

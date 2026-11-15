@@ -378,6 +378,63 @@ describe('R35: a yes to read again sends exactly what was asked', () => {
   });
 });
 
+describe('two connectors', () => {
+  // M4. Spec 9.2: to copy two databases, make two connectors. One live copy must not hide the other.
+  it("while one copy is live, another connector can be picked to see or start its copy", async () => {
+    const live = copy();
+    const second = copy({ id: 'cp2', connectorId: 'ms2', status: 'stopped', options: { tz: '+01:00', database: 'Other' } });
+    const start = vi.fn(async () => ({ run: { ...second, status: 'queued' as const } }));
+    const o = setup({ list: async () => [live, second], status: async (id: string) => (id === 'cp2' ? second : live), start });
+    Object.assign(o.imports, { allowed: async () => [ms, other] });
+    await openCopy();
+    // The live copy's form stays read-only, but the picker is open.
+    expect(byId('connector-ms').getAttribute('aria-checked')).toBe('true');
+    expect((byId('opt-tz') as HTMLInputElement).readOnly).toBe(true);
+    expect(disabled('connector-ms2')).toBe(false);
+    click('connector-ms2');
+    expect(byId('connector-ms2').getAttribute('aria-checked')).toBe('true');
+    await waitFor(() => expect(byId('copy-status').textContent).toMatch(/Stopped/));
+    expect((byId('opt-database') as HTMLInputElement).value).toBe('Other');
+    expect((byId('opt-tz') as HTMLInputElement).readOnly).toBe(false);
+    expect(disabled('copy-start')).toBe(false);
+    click('copy-start');
+    await waitFor(() => expect(start).toHaveBeenCalledWith({ connectorId: 'ms2', options: { tz: '+01:00', database: 'Other' } }));
+    // And back to the live one, still read-only.
+    await waitFor(() => expect(disabled('connector-ms')).toBe(false));
+    click('connector-ms');
+    await waitFor(() => expect(byId('copy-status').textContent).toMatch(/Copying|Running/));
+    expect((byId('opt-tz') as HTMLInputElement).readOnly).toBe(true);
+  });
+});
+
+describe('the dots menu and the sets table', () => {
+  it('closes the dots menu when neither item can be used any more', async () => {
+    const live = copy();
+    let current = live;
+    setup({ list: async () => [live], status: async () => current });
+    await openCopy();
+    click('copy-menu');
+    expect(pane().getByRole('menu')).toBeTruthy();
+    // Another process asks the copy to stop: nothing in the menu can be used now.
+    current = { ...live, status: 'stopping' };
+    await waitFor(() => expect(pane().queryByRole('menu')).toBeNull());
+    expect(byId('copy-menu').getAttribute('aria-expanded')).toBe('false');
+    expect(disabled('copy-menu')).toBe(true);
+  });
+
+  it('puts State second, so it is on screen on a phone', async () => {
+    setup({ list: async () => [copy()], status: async () => copy() });
+    await openCopy();
+    const heads = within(byId('copy-sets')).getAllByRole('columnheader').map((th) => th.textContent);
+    expect(heads[0]).toBe('Set');
+    expect(heads[1]).toBe('State');
+    const cells = within(byId('copy-set-requests')).getAllByRole('cell').map((td) => td.textContent);
+    expect(cells[0]).toBe('requests');
+    expect(cells[1]).toMatch(/Copying/);
+    expect(cells[2]).toBe('1,240,500');
+  });
+});
+
 describe('R36: a confirm step is modal', () => {
   it('the read-again step takes focus, keeps Tab inside, closes on Escape and gives focus back to Start', async () => {
     const stopped = copy({ status: 'stopped' });

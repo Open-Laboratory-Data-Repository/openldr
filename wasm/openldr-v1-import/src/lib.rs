@@ -34,8 +34,9 @@ pub fn import_checks(input: &Value) -> Result<Value, String> {
     Ok(queries::checks(&options(input)?))
 }
 
+/// The copy reads rows as they are and never uses the time zone, so `tz` is optional here.
 pub fn import_copy(input: &Value) -> Result<Value, String> {
-    Ok(queries::copy(&options(input)?))
+    Ok(queries::copy(&queries::parse_copy_options(input.get("options").unwrap_or(&Value::Null))?))
 }
 
 pub fn import_map(input: &Value) -> Result<Value, String> {

@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
-import { api, canStopCopy, copyApi, isCopyLive, type AllowedConnector, type CopyRun } from './api';
+import { api, canStopCopy, copyApi, isCopyLive, type AllowedConnector, type CopyRun, type CopyStatus } from './api';
 import { browserOffset, fromOptions, problems, toOptions, type OptionsForm } from './options';
 import { formatBytes, formatNumber, formatTime, t } from './i18n';
 import { OptionsStep, SourceStep } from './steps';
@@ -24,8 +24,20 @@ function totals(run: CopyRun) {
   return out;
 }
 
+/** Every copy status, so a status added to the SDK fails to compile here until it has a label. */
+const STATUSES: Record<CopyStatus, true> = {
+  queued: true, running: true, waiting: true, stopping: true, stopped: true, completed: true, failed: true, deleting: true,
+};
+/** Every status key the page can build. The i18n test checks each has a label in every language. */
+export const COPY_STATUS_KEYS: readonly string[] = [
+  ...Object.keys(STATUSES).map((s) => `copy.status.${s}`), 'copy.status.completedSkipped',
+];
+/** Every state a set can show. `setState` returns one of these, so the list stays whole. */
+export const SET_STATES = ['deleting', 'reread', 'done', 'copying', 'waiting', 'partial', 'notStarted'] as const;
+type SetState = (typeof SET_STATES)[number];
+
 /** What one set is doing. The copy reads sets in order, so the first set not done is the one being read. */
-function setState(run: CopyRun, name: string, current: string | undefined): string {
+function setState(run: CopyRun, name: string, current: string | undefined): SetState {
   const p = run.sets[name]!;
   if (run.status === 'deleting') return 'deleting';
   if (p.empty) return 'reread';
@@ -122,8 +134,14 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
   const run = copies.find((c) => c.connectorId === connectorId) ?? null;
   const live = run !== null && isCopyLive(run.status);
   const stepOpen = asked !== null || deleting !== null;
-  // The picker and the form take no input while a copy is live, a start call is out, or a step is open.
-  const locked = live || starting || stepOpen;
+  // The picker takes no input while a start call is out or a step is open (R35). A live copy does
+  // not lock it: with two connectors, the other one's copy can be seen or started (spec 9.2).
+  const pickerLocked = starting || stepOpen;
+  // The form also takes no input while the copy shown is live.
+  const locked = live || pickerLocked;
+  // The dots menu holds Stop and Delete. When neither can be used any more, it closes.
+  const menuUsable = run !== null && !busy
+    && (canStopCopy(run.status) || run.status === 'stopped' || run.status === 'completed' || run.status === 'failed');
 
   const put = useCallback((next: CopyRun) => setCopies((list) => [next, ...list.filter((c) => c.id !== next.id)]), []);
 
@@ -226,12 +244,18 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('click', onClick); document.removeEventListener('keydown', onKey); };
   }, [menuOpen]);
+  // The dots button is disabled once nothing in the menu can be used, so focus goes to the status line.
+  useEffect(() => {
+    if (!menuOpen || menuUsable) return;
+    setMenuOpen(false);
+    statusLine.current?.focus();
+  }, [menuOpen, menuUsable]);
 
   /** Where focus goes when a step closes: its opener, or the status line when the opener is disabled. */
   const focusBack = (opener: HTMLElement | null) => () => (opener && !(opener as HTMLButtonElement).disabled ? opener : statusLine.current);
 
   function pick(id: string) {
-    if (id === connectorId || locked) return;
+    if (id === connectorId || pickerLocked) return;
     setConnectorId(id);
     setStartError(null);
     setActionError(null);
@@ -307,7 +331,7 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
         <p class="v1i-help">{t('copy.help')}</p>
         {loadError ? <p class="v1i-error v1i-wrap" data-testid="copy-load-error">{t('loadError', { error: loadError })}</p> : null}
 
-        <SourceStep connectors={connectors} connectorId={connectorId} onPick={pick} disabled={locked} />
+        <SourceStep connectors={connectors} connectorId={connectorId} onPick={pick} disabled={pickerLocked} />
 
         {connectorId ? (
           <div class="v1i-block">
@@ -409,10 +433,11 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
                 <thead>
                   <tr>
                     <th scope="col">{t('copy.col.set')}</th>
+                    {/* State second, so it is on screen at phone width. */}
+                    <th scope="col">{t('copy.col.state')}</th>
                     <th scope="col" class="v1i-num">{t('copy.col.keys')}</th>
                     <th scope="col" class="v1i-num">{t('copy.col.rows')}</th>
                     <th scope="col" class="v1i-num">{t('copy.col.bytes')}</th>
-                    <th scope="col">{t('copy.col.state')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -421,10 +446,10 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
                     return (
                       <tr key={name} data-set={name} data-testid={`copy-set-${name}`}>
                         <td class="v1i-set-name">{name}</td>
+                        <td>{t(`copy.set.${setState(run, name, current)}`)}</td>
                         <td class="v1i-num">{formatNumber(p.keys)}</td>
                         <td class="v1i-num">{formatNumber(p.rows)}</td>
                         <td class="v1i-num">{formatBytes(p.bytes)}</td>
-                        <td>{t(`copy.set.${setState(run, name, current)}`)}</td>
                       </tr>
                     );
                   })}
