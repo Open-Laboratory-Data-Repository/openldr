@@ -105,6 +105,13 @@ describe('SetupPage', () => {
     expect(screen.getByText('Run "openldr auth setup-code" on the server to get one.')).toBeInTheDocument();
   });
 
+  it('without the desktop app, names the server command and not the app', () => {
+    render(<SetupPage onSignedIn={vi.fn()} onSignInInstead={vi.fn()} />);
+    expect(screen.getByText('Run "openldr auth setup-code" on the server to get one.')).toBeInTheDocument();
+    expect(screen.queryByText('Quit OpenLDR and open it again. The app then enters the code for you.')).toBeNull();
+    expect(screen.queryByText('The OpenLDR app entered this code for you.')).toBeNull();
+  });
+
   it('fills the dynamic viewport height, never h-screen', () => {
     const { container } = render(<SetupPage onSignedIn={vi.fn()} onSignInInstead={vi.fn()} />);
     const outer = container.firstElementChild as HTMLElement;
@@ -116,8 +123,10 @@ describe('SetupPage', () => {
 describe('SetupPage in the desktop app', () => {
   const FIRST = 'ABCD-EFGH-JK23';
   const SECOND = 'WXYZ-2345-MN67';
-  const FROM_APP = 'Filled in by the OpenLDR app.';
-  const TYPED_HINT = 'Run "openldr auth setup-code" on the server to get one.';
+  const FROM_APP = 'The OpenLDR app entered this code for you.';
+  const SERVER_HINT = 'Run "openldr auth setup-code" on the server to get one.';
+  // A desktop install has no openldr command, so the app's own hint replaces the server one.
+  const DESKTOP_HINT = 'Quit OpenLDR and open it again. The app then enters the code for you.';
   const session = { accessToken: 't', expiresIn: 600, mustChangePassword: false };
 
   function stub(setupCode: () => Promise<string>) {
@@ -150,7 +159,8 @@ describe('SetupPage in the desktop app', () => {
     expect((field as HTMLInputElement).value).toHaveLength(FIRST.length);
     expect(field).toBeEnabled();
     expect(screen.getByText(FROM_APP)).toBeInTheDocument();
-    expect(screen.queryByText(TYPED_HINT)).toBeNull();
+    expect(screen.queryByText(SERVER_HINT)).toBeNull();
+    expect(screen.queryByText(DESKTOP_HINT)).toBeNull();
   });
 
   it('disables the field while it waits for the app', () => {
@@ -180,7 +190,24 @@ describe('SetupPage in the desktop app', () => {
     expect(field).toHaveValue('');
     expect(field).not.toHaveAttribute('readonly');
     expect(field).not.toHaveAttribute('type', 'password');
-    expect(screen.getByText(TYPED_HINT)).toBeInTheDocument();
+    expect(screen.getByText(DESKTOP_HINT)).toBeInTheDocument();
+    expect(screen.queryByText(SERVER_HINT)).toBeNull();
+  });
+
+  it('shows the desktop hint, not the server command, when the app gives an empty code', async () => {
+    const app = stub(() => Promise.resolve(''));
+    render(<SetupPage onSignedIn={vi.fn()} onSignInInstead={vi.fn()} />);
+    const field = screen.getByLabelText('Setup code');
+    await waitFor(() => expect(field).toBeEnabled());
+    expect(app.setupCode).toHaveBeenCalledTimes(1);
+    expect(field).toHaveValue('');
+    expect(field).not.toHaveAttribute('readonly');
+    // The person can still type a code.
+    fireEvent.change(field, { target: { value: 'ABCD-1234' } });
+    expect(field).toHaveValue('ABCD-1234');
+    expect(screen.getByText(DESKTOP_HINT)).toBeInTheDocument();
+    expect(screen.queryByText(SERVER_HINT)).toBeNull();
+    expect(screen.queryByText(FROM_APP)).toBeNull();
   });
 
   it('gives up on the app after 30 seconds', async () => {
@@ -195,7 +222,7 @@ describe('SetupPage in the desktop app', () => {
     expect(field).toBeEnabled();
     expect(field).toHaveValue('');
     expect(field).not.toHaveAttribute('readonly');
-    expect(screen.getByText(TYPED_HINT)).toBeInTheDocument();
+    expect(screen.getByText(DESKTOP_HINT)).toBeInTheDocument();
     // An answer after the limit is ignored.
     await act(async () => { answer(FIRST); });
     expect(field).toHaveValue('');

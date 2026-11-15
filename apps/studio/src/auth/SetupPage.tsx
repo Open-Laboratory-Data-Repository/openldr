@@ -48,6 +48,16 @@ function codeFromApp(app: OpenldrDesktop): Promise<string | undefined> {
 type CodeSource = 'typed' | 'asking' | 'app';
 
 /**
+ * The line under the setup code field. A desktop install has no `openldr` command, so when the
+ * app gives no code the line tells the person to open the app again instead.
+ */
+function hintKey(codeSource: CodeSource): string {
+  if (codeSource === 'app') return 'auth.setupCodeFromApp';
+  if (codeSource === 'typed' && desktopApp()) return 'auth.setupCodeHintDesktop';
+  return 'auth.setupCodeHint';
+}
+
+/**
  * Creates the first administrator under AUTH_ADAPTER=local. AuthProvider renders it in place
  * while the install needs setup, with the same layout as LoginPage. The setup code comes from
  * `openldr auth setup-code` on the server. Inside the OpenLDR desktop app, the app fills it in.
@@ -155,7 +165,7 @@ export function SetupPage({ onSignedIn, onSignInInstead }: {
               onChange={(e) => setSetupCode(e.target.value)}
             />
             <p id="local-setup-code-hint" className="col-start-2 text-xs text-muted-foreground">
-              {t(codeSource === 'app' ? 'auth.setupCodeFromApp' : 'auth.setupCodeHint')}
+              {t(hintKey(codeSource))}
             </p>
             <Label htmlFor="local-setup-username" className="whitespace-nowrap">{t('users.username')}</Label>
             <Input
