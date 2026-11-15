@@ -320,6 +320,8 @@ confirmed are the only ones that are.
 | Printing a very large number strips the zeros of its exponent | Confirmed by reading `result-mapping.ts:178` |
 | The status step subtracts 100 from a run number twice, which changes any run number above 200 | Confirmed by reading `review-status.ts:110` and `obr-sets.ts:122`, during the second build |
 | A birth date from the birth index reaches the audit as a long date text with no milliseconds | Confirmed: two fixtures depend on it. The plugin reproduces it |
+| Four finding messages name the source system or its tables | Confirmed by the whole-branch review of the second build: `audit.rs:173`, `:373`, `:413`, `:424`, copied from the toolchain. They leave the plugin in `findings`, so they must change before part 4 shows a finding |
+| A panel code that holds a tab makes the toolchain throw a TypeError | Confirmed by reading `result-mapping.ts:537-543`. The plugin sorts the code and carries on. The fix gives that request an error code |
 | Middle name is never set | Claim, from reading `specimenrecpt.ts` |
 | Two age decoders read different bytes | Claim |
 | The date of birth index is a `datetime` and may be lost as the taken date once was | Claim. The column type is confirmed |
@@ -357,6 +359,46 @@ review left two things for the next plan to do first.
 
 Also not proven: the copy statements on a real SQL Server 2008 R2. They ran on SQL Server
 2025 against databases at compatibility level 100.
+
+### 6.11 What the second build leaves
+
+The second plan (steps 3 to 6 above) was built and reviewed on 2026-11-15. Both points of
+6.10 are closed. Rows are grouped once per page, and a page of 500 real requests decodes in
+under half a second natively. Rows read back out of a CE copy equal the rows read directly
+for 3,000 of 3,000 requests, and decode to the same answers.
+
+On 20,000 real requests of the one site, all five stages equal the toolchain with no field
+different. The plugin repository's `docs/real-data-check.md` holds the counts.
+
+One change to 6.2. `source_decode` now fails the whole call when `dictionaries` lacks any of
+its six sets or `rows` lacks any of its six details. A missing set used to read as empty,
+which loosened the audit and still gave plausible FHIR. A set that is present and empty is
+accepted.
+
+Left for later plans:
+
+- **Step 7, the faults of 6.8.** Start with the four finding messages that name the source
+  system. They must change before part 4 puts a finding on a screen.
+- **The sandbox.** Nothing calls the wasm export `source_decode` yet. Its speed inside CE is
+  not measured. Part 4 adds the caller.
+- **Text outside printable ASCII.** The plugin's ordering matches Node for printable ASCII
+  and differs beyond it. That changes the order of some findings and result ids. Before a
+  second site, check that every panel code in its dictionaries and test rows is printable
+  ASCII.
+- **Smaller items from the whole-branch review**, none of which changes an answer today: the
+  real-data tool can overwrite a copy's rows if given the wrong folder, `compare.py` ignores a
+  repeated key, number printing does more work than it needs, five tests the entrypoint lacks,
+  and helper functions copied between files.
+- **`tests/data/classify-golden.json`** holds 659 organism descriptions from one site's
+  dictionary, copied from the toolchain's own fixture. It holds no patient data. The operator
+  decides whether it stays.
+
+Found in CE itself during the real runs, and not fixed:
+
+- A plugin reinstalled at the same version is not picked up by a running server's copy until
+  the server restarts.
+- Deleting a copy removes about 1,550 rows a second. A full copy of the one site would take
+  about nine hours to delete.
 
 ## 7. What is left to the builder
 
