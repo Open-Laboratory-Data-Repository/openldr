@@ -106,13 +106,13 @@ Quit OpenLDR, then run the install line again. It replaces the app and leaves th
 The installer refuses while OpenLDR runs, before it downloads anything. On Linux and macOS it says:
 
 ```text
-✗ OpenLDR is running. Quit it from its tray icon, or run: "/home/you/.local/share/openldr-desktop/openldr-standalone" stop. Then run this again.
+✗ OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: "/home/you/.local/share/openldr-desktop/openldr-standalone" stop
 ```
 
 On Windows it says:
 
 ```text
-X OpenLDR is running. Quit it from its tray icon, or run: & "C:\Users\you\AppData\Local\Programs\OpenLDR\openldr-standalone.cmd" stop. Then run this again.
+X OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: & "C:\Users\you\AppData\Local\Programs\OpenLDR\openldr-standalone.cmd" stop
 ```
 
 The path in the message is the `openldr-standalone` command of your install. Quit OpenLDR from its tray icon, or run that `stop` line. Then run the install line again.

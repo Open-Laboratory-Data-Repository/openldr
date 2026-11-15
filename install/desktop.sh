@@ -282,7 +282,8 @@ main() {
   uid=$(id -u)
   profile_file="$APPARMOR_DIR/openldr-desktop-$uid"
   # A person whose app was killed, or whose desktop shows no tray icon, can still stop it this way.
-  RUNNING_MSG="OpenLDR is running. Quit it from its tray icon, or run: \"$CMD\" stop. Then run this again."
+  # The command comes last, so a person who copies up to the end of the line runs it as it is.
+  RUNNING_MSG="OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: \"$CMD\" stop"
 
   # Before anything moves: no folder this script replaces or removes may hold the data folder.
   for p in "$TARGET" "$OLD" "$NEW" "$DL" "$APP_DIR"; do refuse_data "$p"; done

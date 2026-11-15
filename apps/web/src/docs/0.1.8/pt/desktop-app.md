@@ -106,13 +106,13 @@ Saia do OpenLDR e execute de novo a linha de instalação. Ela substitui a aplic
 O instalador recusa enquanto o OpenLDR estiver a funcionar, antes de descarregar o que quer que seja. No Linux e no macOS, mostra:
 
 ```text
-✗ OpenLDR is running. Quit it from its tray icon, or run: "/home/you/.local/share/openldr-desktop/openldr-standalone" stop. Then run this again.
+✗ OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: "/home/you/.local/share/openldr-desktop/openldr-standalone" stop
 ```
 
 No Windows, mostra:
 
 ```text
-X OpenLDR is running. Quit it from its tray icon, or run: & "C:\Users\you\AppData\Local\Programs\OpenLDR\openldr-standalone.cmd" stop. Then run this again.
+X OpenLDR is running. Quit it from its tray icon, then run this again. Or stop it with: & "C:\Users\you\AppData\Local\Programs\OpenLDR\openldr-standalone.cmd" stop
 ```
 
 O caminho na mensagem é o comando `openldr-standalone` da sua instalação. Saia do OpenLDR pelo ícone de notificação, ou execute essa linha `stop`. Depois execute de novo a linha de instalação.
