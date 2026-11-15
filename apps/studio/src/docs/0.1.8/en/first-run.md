@@ -6,7 +6,7 @@ First run appears once, only on an install that uses OpenLDR's own sign-in. Only
 
 ## Name your laboratory
 
-The laboratory name appears on reports as the issuing laboratory. Reports count each day in the time zone you select. The page shows **Step 1 of 3** and **Name your laboratory**.
+The laboratory name appears on reports as the issuing laboratory. Reports use this time zone to decide which day each record belongs to. The page shows **Step 1 of 3** and **Name your laboratory**.
 
 1. In **Laboratory name**, type your laboratory's name, such as `Central Hospital Laboratory`.
 2. Select **Time zone**. Studio starts with your computer's time zone.
@@ -20,7 +20,7 @@ To leave the name and time zone as they are, select **Skip** instead of **Save**
 
 ## Load sample data
 
-The page says what sample data holds: **Sample data adds 60 fictional lab orders, 39 of them with results, plus example forms, workflows and a dashboard, so you can try OpenLDR before your own data arrives. OpenLDR cannot remove the sample records afterwards, so skip this step on an installation meant for real patient data.**
+The page says what sample data holds: **Sample data adds 60 fictional lab orders, 39 of them with results, and an example dashboard, so you can try OpenLDR before your own data arrives. There is no way to remove only the sample records later. Do not load sample data on an installation meant for real patient data.**
 
 1. On **Sample data**, select **Load sample data**.
 2. Wait while the page shows **Loading sample data…**.
@@ -52,7 +52,8 @@ When no check shows a warning or a failure, the page says **All setup checks pas
 - It appears once. After **Continue to OpenLDR**, a link, or signing out, it does not come back.
 - A reload of the page in the middle starts first run again from step 1. A name you saved stays saved. Closing that tab in the middle ends first run for good.
 - Sample data is offered only while the install holds no lab data.
-- The 60 sample orders and their results stay once loaded. OpenLDR has no way to remove them. **Factory reset**, in **Danger Zone**, does not remove them either.
+- The 60 sample orders and their results stay once loaded. No action removes only them. **Factory reset**, in **Danger Zone**, leaves them in place. `openldr db reset --force` removes them, but it also erases all other data in both databases.
+- If this installation later sends its data to a central server, the sample orders are sent with it.
 
 ## Troubleshooting
 

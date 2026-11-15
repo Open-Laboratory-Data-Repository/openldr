@@ -106,7 +106,7 @@ Select **Run again**. Wait for the checks to finish.
 
 ## Load sample data
 
-Use this to try OpenLDR on a new install. It loads the same sample data as the sample data step in [First run](/docs/first-run): 60 fictional lab orders, 39 of them with results, plus example forms, workflows and a dashboard. The sample orders stay once loaded. OpenLDR cannot remove them, and **Factory reset** does not remove them either. The menu offers it only while the install holds no lab data. You need the Danger zone permission. Administrator has it.
+Use this to try OpenLDR on a new install. It loads the same sample data as the sample data step in [First run](/docs/first-run): 60 fictional lab orders, 39 of them with results, and an example dashboard. The sample orders stay once loaded. No action removes only them, and **Factory reset** leaves them in place. The menu offers it only while the install holds no lab data. You need the Danger zone permission. Administrator has it.
 
 ### 1. Open the page actions
 

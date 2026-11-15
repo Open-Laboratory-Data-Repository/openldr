@@ -568,7 +568,7 @@ PostgreSQL, MySQL, MariaDB and SQL Server all stop the database work at the time
 
 **My practice totals differ.** The quoted totals assume only the practice records are loaded. Other data changes the totals.
 
-- **Every number is 0 and every chart says No data.** The warehouse is empty. [Load the sample data](#load-the-sample-data), or load your own. On an install that offers it, you can load the sample data from the dots menu under Settings → Setup checks.
+- **Every number is 0 and every chart says No data.** The warehouse is empty. [Load the sample data](#load-the-sample-data), or load your own. While the install holds no lab data, you can also load the sample data from the dots menu under Settings → Setup checks.
 - **No dashboard appears.** None exists yet. The empty page offers **New dashboard** and **Import dashboard**.
 - **Edit is missing from the menu.** Your role lacks **Edit dashboards**.
 - **The SQL cannot be edited, or saving says `raw SQL widgets are disabled`.** Turn on **Dashboard raw SQL**. See [Turn on SQL widgets](#turn-on-sql-widgets).

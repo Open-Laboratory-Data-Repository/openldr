@@ -568,7 +568,7 @@ O PostgreSQL, o MySQL, o MariaDB e o SQL Server param todos o trabalho da base n
 
 **Os meus totais são diferentes.** Os resultados pressupõem apenas os registos de exemplo. Outros dados mudam os totais.
 
-- **Cada número é 0 e cada gráfico mostra No data.** O armazém está vazio. [Carregue os dados de exemplo](#carregar-os-dados-de-exemplo), ou carregue os seus. Numa instalação que o ofereça, pode carregar os dados de exemplo a partir do menu de pontos em Definições → Verificações de instalação.
+- **Cada número é 0 e cada gráfico mostra No data.** O armazém está vazio. [Carregue os dados de exemplo](#carregar-os-dados-de-exemplo), ou carregue os seus. Enquanto a instalação não tiver dados de laboratório, também pode carregar os dados de exemplo a partir do menu de três pontos em Definições → Verificações de instalação.
 - **Não aparece nenhum painel.** Ainda não existe nenhum. A página vazia oferece **Novo painel** e **Importar**.
 - **Edit não aparece no menu.** A sua função não tem **Edit dashboards**.
 - **O SQL não se pode editar, ou guardar mostra `raw SQL widgets are disabled`.** Ative **SQL bruto no painel**. Veja [Ativar os widgets SQL](#ativar-os-widgets-sql).

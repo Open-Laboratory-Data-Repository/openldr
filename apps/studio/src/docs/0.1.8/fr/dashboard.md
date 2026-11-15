@@ -568,7 +568,7 @@ PostgreSQL, MySQL, MariaDB et SQL Server arrêtent tous le travail de la base au
 
 **Mes totaux sont différents.** Les résultats supposent que seules les données d'exemple sont chargées. Les autres données changent les totaux.
 
-- **Chaque chiffre vaut 0 et chaque graphique affiche No data.** L'entrepôt est vide. [Chargez les données d'exemple](#charger-les-donnees-d-exemple), ou chargez les vôtres. Sur une installation qui le propose, vous pouvez charger les données d'exemple depuis le menu à points de Paramètres → Vérifications d’installation.
+- **Chaque chiffre vaut 0 et chaque graphique affiche No data.** L'entrepôt est vide. [Chargez les données d'exemple](#charger-les-donnees-d-exemple), ou chargez les vôtres. Tant que l'installation ne contient aucune donnée de laboratoire, vous pouvez aussi charger les données d'exemple depuis le menu à trois points de Paramètres → Vérifications d’installation.
 - **Aucun tableau de bord n'apparaît.** Il n'en existe encore aucun. La page vide propose **Nouveau tableau de bord** et **Importer**.
 - **Edit n'apparaît pas dans le menu.** Votre rôle n'a pas **Edit dashboards**.
 - **Le SQL n'est pas modifiable, ou l'enregistrement affiche `raw SQL widgets are disabled`.** Activez **SQL brut pour les tableaux de bord**. Voir [Activer les widgets SQL](#activer-les-widgets-sql).

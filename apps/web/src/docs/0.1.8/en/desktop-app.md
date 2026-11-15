@@ -64,11 +64,11 @@ On macOS the installer signs the app on your Mac with `codesign`, using a signat
 3. Choose a username and a password, then select **Create the administrator**.
 4. Three steps follow. You name your laboratory, load sample data, then review the setup checks that need attention. You can skip the first two.
 
-Studio's own guide, **First run**, covers the three steps. Sample data adds 60 fictional lab orders, 39 of them with results, plus example forms, workflows and a dashboard. The sample orders stay once loaded, because OpenLDR cannot remove them. Only deleting the data folder removes them, and that removes all your other data too. Sample data is offered only while the install holds no lab data. If you skip it, you can load it later from the dots menu under Settings → Setup checks.
+Studio's own guide, **First run**, covers the three steps. Sample data adds 60 fictional lab orders, 39 of them with results, and an example dashboard. No action removes only the sample orders later, and Factory reset leaves them in place. Only erasing all your data removes them, for example by deleting the data folder. Sample data is offered only while the install holds no lab data. If you skip it, you can load it later from the dots menu under Settings → Setup checks.
 
 The app loads Studio at `http://127.0.0.1:3000/studio/`. It takes port 3000 when that port is free. If not, it picks another free port and remembers it. The address then stays the same while that port stays free.
 
-The app enters the setup code only for an OpenLDR it started itself. OpenLDR may already run when the app starts. You may have started it from a terminal. Or an app that was killed left it running. The app then shows that OpenLDR, and the setup code field stays empty. The hint under it says **Quit OpenLDR and open it again. The app then enters the code for you.**
+The app enters the setup code only for an OpenLDR it started itself. OpenLDR may already run when the app starts. You may have started it from a terminal. Or an app that was killed left it running. The app then shows that OpenLDR, and the setup code field stays empty. The hint under it says **Select Quit in the tray menu, then open OpenLDR again. The app will enter the code for you.**
 
 The simple way out is to select **Quit** in the tray menu and start the app again. The app then starts OpenLDR itself and enters the code. Or run the app's `openldr-standalone` command, and type the code it prints:
 

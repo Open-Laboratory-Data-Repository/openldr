@@ -6,7 +6,7 @@ O primeiro arranque aparece uma só vez, e só numa instalação que usa o iníc
 
 ## Dar um nome ao seu laboratório
 
-O nome do laboratório aparece nos relatórios como laboratório emissor. Os relatórios contam cada dia no fuso horário que selecionar. A página mostra **Passo 1 de 3** e **Dê um nome ao seu laboratório**.
+O nome do laboratório aparece nos relatórios como laboratório emissor. Os relatórios usam este fuso horário para saber a que dia pertence cada registo. A página mostra **Passo 1 de 3** e **Dê um nome ao seu laboratório**.
 
 1. Em **Nome do laboratório**, escreva o nome do seu laboratório, por exemplo `Laboratório do Hospital Central`.
 2. Selecione **Fuso horário**. O Studio começa pelo fuso do seu computador.
@@ -20,7 +20,7 @@ Para deixar o nome e o fuso como estão, selecione **Saltar** em vez de **Guarda
 
 ## Carregar dados de exemplo
 
-A página diz o que os dados de exemplo contêm: **Os dados de exemplo acrescentam 60 pedidos fictícios, 39 deles com resultados, além de formulários, fluxos de trabalho e um painel de exemplo, para que possa experimentar o OpenLDR antes de chegarem os seus próprios dados. O OpenLDR não consegue remover os registos de exemplo mais tarde, por isso salte este passo numa instalação destinada a dados reais de pacientes.**
+A página diz o que os dados de exemplo contêm: **Os dados de exemplo acrescentam 60 pedidos fictícios, 39 deles com resultados, e um painel de exemplo, para que possa experimentar o OpenLDR antes de chegarem os seus próprios dados. Não é possível remover mais tarde apenas os registos de exemplo. Não os carregue numa instalação destinada a dados reais de pacientes.**
 
 1. Em **Dados de exemplo**, selecione **Carregar dados de exemplo**.
 2. Aguarde enquanto a página mostra **A carregar os dados de exemplo…**.
@@ -52,7 +52,8 @@ Quando nenhuma verificação mostra um aviso ou uma falha, a página diz **Todas
 - Aparece uma só vez. Depois de **Continuar para o OpenLDR**, de uma ligação ou de terminar sessão, não volta.
 - Recarregar a página a meio recomeça o primeiro arranque no passo 1. Um nome já guardado continua guardado. Fechar esse separador a meio termina o primeiro arranque de vez.
 - Os dados de exemplo só são oferecidos enquanto a instalação não tiver dados de laboratório.
-- Depois de carregados, os 60 pedidos de exemplo e os seus resultados ficam. O OpenLDR não tem forma de os remover. A **Redefinição de fábrica**, em **Zona de perigo**, também não os remove.
+- Depois de carregados, os 60 pedidos de exemplo e os seus resultados ficam. Nenhuma ação remove apenas esses pedidos. A **Redefinição de fábrica**, em **Zona de perigo**, deixa-os ficar. O `openldr db reset --force` remove-os, mas apaga também todos os outros dados das duas bases de dados.
+- Se esta instalação enviar mais tarde os seus dados para uma instalação central do OpenLDR, os pedidos de exemplo são enviados com eles.
 
 ## Resolução de problemas
 

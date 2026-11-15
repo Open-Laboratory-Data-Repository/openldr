@@ -6,7 +6,7 @@ Le premier démarrage n'apparaît qu'une fois, et seulement sur une installation
 
 ## Nommer votre laboratoire
 
-Le nom du laboratoire figure sur les rapports comme laboratoire émetteur. Les rapports comptent chaque jour selon le fuseau horaire que vous sélectionnez. La page affiche **Étape 1 sur 3** et **Nommez votre laboratoire**.
+Le nom du laboratoire figure sur les rapports comme laboratoire émetteur. Les rapports utilisent ce fuseau horaire pour savoir à quel jour appartient chaque dossier. La page affiche **Étape 1 sur 3** et **Nommez votre laboratoire**.
 
 1. Dans **Nom du laboratoire**, tapez le nom de votre laboratoire, par exemple `Laboratoire de l'hôpital central`.
 2. Sélectionnez **Fuseau horaire**. Studio part du fuseau de votre ordinateur.
@@ -20,7 +20,7 @@ Pour laisser le nom et le fuseau tels quels, sélectionnez **Passer** au lieu de
 
 ## Charger les données d'exemple
 
-La page indique ce que contiennent les données d'exemple : **Les données d'exemple ajoutent 60 demandes fictives, dont 39 avec leurs résultats, ainsi que des exemples de formulaires, de flux de travail et un tableau de bord, pour que vous puissiez essayer OpenLDR avant l'arrivée de vos propres données. OpenLDR ne peut pas supprimer ces données d'exemple par la suite, donc passez cette étape sur une installation destinée à de vraies données de patients.**
+La page indique ce que contiennent les données d'exemple : **Les données d'exemple ajoutent 60 demandes fictives, dont 39 avec leurs résultats, et un tableau de bord d'exemple, pour que vous puissiez essayer OpenLDR avant l'arrivée de vos propres données. Il est impossible de supprimer plus tard uniquement les données d'exemple. Ne les chargez pas sur une installation destinée à de vraies données de patients.**
 
 1. Sur **Données d'exemple**, sélectionnez **Charger les données d'exemple**.
 2. Attendez pendant que la page affiche **Chargement des données d'exemple…**.
@@ -52,7 +52,8 @@ Quand aucune vérification n'affiche d'avertissement ni d'échec, la page affich
 - Il n'apparaît qu'une fois. Après **Continuer vers OpenLDR**, un lien ou une déconnexion, il ne revient pas.
 - Recharger la page en cours de route relance le premier démarrage à l'étape 1. Un nom déjà enregistré reste enregistré. Fermer cet onglet en cours de route met fin au premier démarrage pour de bon.
 - Les données d'exemple ne sont proposées que tant que l'installation ne contient aucune donnée de laboratoire.
-- Une fois chargées, les 60 demandes d'exemple et leurs résultats restent en place. OpenLDR ne permet pas de les supprimer. **Réinitialisation usine**, dans **Zone dangereuse**, ne les supprime pas non plus.
+- Une fois chargées, les 60 demandes d'exemple et leurs résultats restent en place. Aucune action ne supprime uniquement ces demandes. **Réinitialisation usine**, dans **Zone dangereuse**, les laisse en place. `openldr db reset --force` les supprime, mais efface aussi toutes les autres données des deux bases.
+- Si cette installation envoie plus tard ses données à une installation centrale OpenLDR, les demandes d'exemple sont envoyées avec elles.
 
 ## Résolution de problèmes
 

@@ -106,7 +106,7 @@ Sélectionnez **Run again**. Attendez la fin des vérifications.
 
 ## Charger les données d'exemple
 
-Utilisez cette action pour essayer OpenLDR sur une nouvelle installation. Elle charge les mêmes données d'exemple que l'étape des données d'exemple du [Premier démarrage](/docs/first-run) : 60 demandes fictives, dont 39 avec leurs résultats, ainsi que des exemples de formulaires, de flux de travail et un tableau de bord. Une fois chargées, les demandes d'exemple restent en place. OpenLDR ne peut pas les supprimer, et **Réinitialisation usine** ne les supprime pas non plus. Le menu ne la propose que tant que l'installation ne contient aucune donnée de laboratoire. Vous avez besoin de la permission Zone de danger. Administrator l'a.
+Utilisez cette action pour essayer OpenLDR sur une nouvelle installation. Elle charge les mêmes données d'exemple que l'étape des données d'exemple du [Premier démarrage](/docs/first-run) : 60 demandes fictives, dont 39 avec leurs résultats, et un tableau de bord d'exemple. Une fois chargées, les demandes d'exemple restent en place. Aucune action ne supprime uniquement ces demandes, et **Réinitialisation usine** les laisse en place. Le menu ne la propose que tant que l'installation ne contient aucune donnée de laboratoire. Vous avez besoin de la permission Zone de danger. Administrator l'a.
 
 ### 1. Ouvrir les actions de la page
 
