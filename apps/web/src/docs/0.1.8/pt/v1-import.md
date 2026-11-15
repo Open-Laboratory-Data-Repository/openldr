@@ -16,7 +16,7 @@ As capturas usam um pedido, um paciente e um resultado de texto fictícios num S
 
 ## Autorizar o plugin a ler um conector
 
-Instale o plugin através de Marketplace ou do ficheiro aprovado. Crie um conector Microsoft SQL cujo início de sessão tenha só a permissão SELECT nas tabelas v1 e nada mais. Assim lê a origem e nunca a altera.
+Instale o plugin através de Marketplace ou do ficheiro aprovado. Crie um conector Microsoft SQL cujo início de sessão tenha só a permissão SELECT nas tabelas v1. Assim lê a origem e nunca a altera.
 
 ### 1. Abrir Connectors
 
@@ -206,7 +206,7 @@ Quando o CE não conseguiu copiar alguns pedidos, uma linha cor de âmbar dá **
 
 Quando a origem ou a ligação a ela está em baixo, o estado mostra **À espera da origem. Voltará a tentar automaticamente.** A página mostra **Tentativas até agora:**, quando começou a espera e o último erro. Não precisa de fazer nada. A primeira espera dura 5 segundos. Cada espera duplica, até 5 minutos, até a origem responder ou alguém parar a cópia. Se a origem responder mas a mesma página se perder duas vezes seguidas, a cópia lê essa página de novo com metade do tamanho. As esperas voltam então a começar em 5 segundos. A página volta a crescer depois de 5 páginas boas seguidas.
 
-O último erro de uma ligação perdida começa em geral com palavras simples e depois dá as palavras do controlador. Quando a própria origem reinicia, pode recusar o início de sessão ou indicar que a base de dados não está disponível durante algum tempo. Uma cópia que já leu esta origem espera então até cerca de uma hora. O mesmo acontece com uma palavra-passe errada escrita no conector antes de continuar uma cópia. Essa cópia espera até cerca de uma hora e depois falha. Uma cópia nova com uma palavra-passe errada falha logo.
+O último erro de uma ligação perdida começa em geral com palavras simples e depois dá as palavras do controlador. Quando a própria origem reinicia, pode recusar o início de sessão ou indicar que a base de dados não está disponível durante algum tempo. Uma cópia que já leu esta origem espera então até cerca de uma hora. O mesmo acontece com uma palavra-passe errada escrita no conector antes de continuar uma cópia. Essa cópia espera até cerca de uma hora e depois falha. Uma cópia nova com uma palavra-passe errada falha depois de cerca de meio minuto.
 
 Depois de mudar as definições do conector, pare a cópia e continue-a. Uma cópia à espera continua a tentar as definições antigas.
 
@@ -366,7 +366,7 @@ No código-fonte, `pnpm build:v1-import` prepara o importador de referência. Ex
 
 **Continuar cópia pede para ler um conjunto de novo.** Na CLI, `start` nomeia os conjuntos em vez disso. Mudou uma opção que decide que pedidos são lidos, ou o plugin foi atualizado. Ler de novo elimina as linhas copiadas para os conjuntos nomeados. Selecione **Cancelar** e reponha as opções para as manter.
 
-**A cópia falhou.** Leia o último erro. Um início de sessão recusado, uma base ou tabela em falta, uma falha do plugin, ou uma escrita recusada pela base de dados do próprio CE, por exemplo com o disco cheio, termina a cópia. Tentar de novo não resolve isso. Há uma exceção. Uma cópia que já leu esta origem espera até cerca de uma hora por um início de sessão recusado ou uma base em falta, caso a origem esteja a reiniciar. Corrija a causa, abra o menu de pontos no canto superior direito do separador Cópia e selecione **Continuar cópia**. As linhas já copiadas ficam.
+**A cópia falhou.** Leia o último erro. Um início de sessão recusado, uma base ou tabela em falta, uma falha do plugin, ou uma escrita recusada pela base de dados do próprio CE, por exemplo com o disco cheio, termina a cópia. Tentar de novo não resolve isso. Há uma exceção. Uma cópia que já leu esta origem espera até cerca de uma hora por um início de sessão recusado ou uma base em falta, caso a origem esteja a reiniciar. Corrija a causa e depois abra o menu de pontos no canto superior direito do separador Cópia e selecione **Continuar cópia**. As linhas já copiadas ficam.
 
 **Eliminar cópia está a cinzento.** Só se pode eliminar uma cópia parada, com falha ou concluída. Pare-a primeiro.
 

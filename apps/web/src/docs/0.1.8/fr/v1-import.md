@@ -16,7 +16,7 @@ Les captures utilisent une demande, un patient et un résultat texte fictifs sur
 
 ## Autoriser le plugin à lire un connecteur
 
-Installez le plugin dans Marketplace ou depuis son fichier approuvé. Créez un connecteur Microsoft SQL dont le compte de connexion n'a que le droit SELECT sur les tables v1, et rien de plus. Il peut ainsi lire la source sans jamais la modifier.
+Installez le plugin dans Marketplace ou depuis son fichier approuvé. Créez un connecteur Microsoft SQL dont le compte de connexion n'a que le droit SELECT sur les tables v1. Il peut ainsi lire la source sans jamais la modifier.
 
 ### 1. Ouvrir Connectors
 
@@ -206,7 +206,7 @@ Quand CE n'a pas pu copier certaines demandes, une ligne orange donne **Demandes
 
 Quand la source ne répond pas ou que la connexion est coupée, l'état affiche **En attente de la source. OpenLDR réessaiera de lui-même.** La page montre **Essais jusqu’ici :**, le début de l'attente et la dernière erreur. Vous n'avez rien à faire. La première attente dure 5 secondes. Chaque attente double, sans dépasser 5 minutes, jusqu'à ce que la source réponde ou qu'une personne arrête la copie. Si la source répond mais que la même page est perdue deux fois de suite, la copie relit cette page à la moitié de sa taille. Les attentes repartent alors de 5 secondes. La page reprend sa taille après 5 bonnes pages de suite.
 
-La dernière erreur d'une connexion perdue commence en général par des mots simples, puis donne les mots du pilote. Quand la source elle-même redémarre, elle peut refuser l'authentification ou signaler que sa base est introuvable pendant un moment. Une copie qui a déjà lu cette source attend alors jusqu'à une heure environ. C'est aussi le cas d'un mauvais mot de passe saisi dans le connecteur avant de reprendre une copie. Cette copie attend jusqu'à une heure environ, puis échoue. Une nouvelle copie avec un mauvais mot de passe échoue tout de suite.
+La dernière erreur d'une connexion perdue commence en général par des mots simples, puis donne les mots du pilote. Quand la source elle-même redémarre, elle peut refuser l'authentification ou signaler que sa base est introuvable pendant un moment. Une copie qui a déjà lu cette source attend alors jusqu'à une heure environ. C'est aussi le cas d'un mauvais mot de passe saisi dans le connecteur avant de reprendre une copie. Cette copie attend jusqu'à une heure environ, puis échoue. Une nouvelle copie avec un mauvais mot de passe échoue au bout d'une demi-minute environ.
 
 Après avoir changé les paramètres du connecteur, arrêtez la copie puis reprenez-la. Une copie en attente continue d'essayer les anciens paramètres.
 
