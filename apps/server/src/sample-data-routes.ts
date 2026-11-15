@@ -27,7 +27,8 @@ export function registerSampleDataRoutes(app: FastifyInstance<any, any, any, any
     return reply.send({ allowed });
   });
 
-  // Loads what `openldr db seed` loads. It checks again itself and never trusts an earlier GET.
+  // Loads what `openldr db seed` loads, then the sample orders. It checks again itself and never
+  // trusts an earlier GET.
   app.post('/api/settings/sample-data', DANGER_ZONE, async (req, reply) => {
     if (busy) {
       return reply.code(409).send({ error: 'Sample data is already loading.', code: 'sample_data_busy' });
@@ -67,6 +68,7 @@ export function registerSampleDataRoutes(app: FastifyInstance<any, any, any, any
           connectorsSeeded: counts.connectorsSeeded,
           dashboardsSeeded: counts.dashboardsSeeded,
           settingsSeeded: counts.settingsSeeded,
+          sampleResources: counts.sampleResources,
         },
       });
       return reply.send({
@@ -76,6 +78,7 @@ export function registerSampleDataRoutes(app: FastifyInstance<any, any, any, any
         connectorsSeeded: counts.connectorsSeeded,
         dashboardsSeeded: counts.dashboardsSeeded,
         settingsSeeded: counts.settingsSeeded,
+        sampleResources: counts.sampleResources,
       });
     } finally {
       busy = false;

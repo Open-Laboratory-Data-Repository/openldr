@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { Kysely } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
@@ -6,6 +8,7 @@ import { makeMigratedExternalDb } from '@openldr/db/testing-external';
 import { createFhirStore } from '@openldr/db';
 import type { Config } from '@openldr/config';
 import { installHoldsLabData, loadSampleData, LAB_DATA_RESOURCE_TYPES, type SampleDataDeps } from './sample-data';
+import type { IngestOutcome } from './ingest-and-wait';
 
 // Layer under test: installHoldsLabData against the migrated internal FHIR store and the migrated
 // warehouse, both on pg-mem. pg-mem is not Postgres: this proves the query shape and the sources
@@ -70,29 +73,80 @@ describe('installHoldsLabData', () => {
   });
 });
 
-// Layer under test: loadSampleData's three calls, with seedDatabase and createDbContext faked.
-// What seedDatabase writes is tested in seed.test.ts.
+// Layer under test: loadSampleData's calls, with seedDatabase, createDbContext and the orders load
+// faked. What seedDatabase writes is tested in seed.test.ts. The real orders load
+// (createIngestContext over a real database) is not run here.
 describe('loadSampleData', () => {
   beforeEach(() => { seedDatabase.mockReset(); close.mockReset(); });
 
-  const deps = { cfg: {} as Config, seedTarget: { marker: true } } as unknown as SampleDataDeps;
+  const seeded = {
+    resources: [{ id: 'seed-pat', flattened: 'x' }], formsSeeded: 4, workflowsSeeded: 2, connectorsSeeded: 1,
+    dashboardsSeeded: 1, reportDesignsSeeded: 3, demoDesignsRemoved: 0, dataDrivenReportsSeeded: {}, settingsSeeded: 5,
+  };
+  const outcome = (o: Partial<IngestOutcome> = {}): IngestOutcome =>
+    ({ batchId: 'b1', status: 'done', resourceCount: 226, error: null, finished: true, ...o });
+  const withOrders = (ingestSampleOrders: SampleDataDeps['ingestSampleOrders']) =>
+    ({ cfg: { marker: 'cfg' } as unknown as Config, seedTarget: { marker: true }, ingestSampleOrders }) as unknown as SampleDataDeps;
 
-  it('seeds through seedDatabase, returns the five counts only, and closes the context', async () => {
-    seedDatabase.mockResolvedValue({
-      resources: [{ id: 'seed-pat', flattened: 'x' }], formsSeeded: 4, workflowsSeeded: 2, connectorsSeeded: 1,
-      dashboardsSeeded: 1, reportDesignsSeeded: 3, demoDesignsRemoved: 0, dataDrivenReportsSeeded: {}, settingsSeeded: 5,
-    });
+  it('seeds through seedDatabase, then loads the orders, returns the six counts, and closes the context', async () => {
+    seedDatabase.mockResolvedValue(seeded);
+    const ingest = vi.fn(async () => outcome());
+    const deps = withOrders(ingest);
     expect(await loadSampleData(deps)).toEqual({
-      formsSeeded: 4, workflowsSeeded: 2, connectorsSeeded: 1, dashboardsSeeded: 1, settingsSeeded: 5,
+      formsSeeded: 4, workflowsSeeded: 2, connectorsSeeded: 1, dashboardsSeeded: 1, settingsSeeded: 5, sampleResources: 226,
     });
     expect(seedDatabase).toHaveBeenCalledOnce();
     expect(seedDatabase.mock.calls[0][1]).toBe(deps.seedTarget);
+    expect(ingest).toHaveBeenCalledOnce();
+    expect(ingest).toHaveBeenCalledWith(deps.cfg);
+    expect(seedDatabase.mock.invocationCallOrder[0]).toBeLessThan(ingest.mock.invocationCallOrder[0]);
     expect(close).toHaveBeenCalledOnce();
   });
 
-  it('closes the context when the seed throws', async () => {
+  it('never loads the orders when the seed throws, and closes the context', async () => {
     seedDatabase.mockRejectedValue(new Error('seed failed'));
-    await expect(loadSampleData(deps)).rejects.toThrow('seed failed');
+    const ingest = vi.fn(async () => outcome());
+    await expect(loadSampleData(withOrders(ingest))).rejects.toThrow('seed failed');
+    expect(ingest).not.toHaveBeenCalled();
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('throws when the orders batch failed, with the status only in the message', async () => {
+    seedDatabase.mockResolvedValue(seeded);
+    const ingest = vi.fn(async () => outcome({ status: 'failed', error: 'bad bundle at /srv/data/x.json on db.example:5432' }));
+    const err = await loadSampleData(withOrders(ingest)).then(() => null, (e: unknown) => e as Error);
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toContain('failed');
+    for (const part of ['/srv', 'x.json', 'db.example', '5432', 'bad bundle', 'sample-lab-data']) expect(err?.message).not.toContain(part);
+  });
+
+  it('throws when the orders batch did not finish in time', async () => {
+    seedDatabase.mockResolvedValue(seeded);
+    const ingest = vi.fn(async () => outcome({ status: 'processing', finished: false, resourceCount: 0 }));
+    await expect(loadSampleData(withOrders(ingest))).rejects.toThrow('processing');
+  });
+
+  it('throws when the orders batch is gone', async () => {
+    seedDatabase.mockResolvedValue(seeded);
+    const ingest = vi.fn(async () => outcome({ status: undefined, finished: false, resourceCount: undefined, error: undefined }));
+    await expect(loadSampleData(withOrders(ingest))).rejects.toThrow(Error);
+  });
+});
+
+// Layer under test: the shipped file on disk. It proves the bootstrap copy matches the docs copy
+// and holds the 60 orders the docs describe. It does not prove the pipeline accepts it.
+describe('the sample orders file', () => {
+  const bootstrapCopy = fileURLToPath(new URL('./samples/sample-lab-data.json', import.meta.url));
+  const webCopy = fileURLToPath(new URL('../../../apps/web/public/docs-samples/openldr-sample-lab-data.json', import.meta.url));
+
+  it('is byte-identical to the copy the docs link to', () => {
+    expect(readFileSync(bootstrapCopy).equals(readFileSync(webCopy))).toBe(true);
+  });
+
+  it('is a FHIR Bundle with 60 ServiceRequest entries', () => {
+    const bundle = JSON.parse(readFileSync(bootstrapCopy, 'utf8')) as { resourceType: string; entry: { resource: { resourceType: string } }[] };
+    expect(bundle.resourceType).toBe('Bundle');
+    expect(bundle.entry.filter((e) => e.resource.resourceType === 'ServiceRequest')).toHaveLength(60);
+    expect(bundle.entry).toHaveLength(226);
   });
 });

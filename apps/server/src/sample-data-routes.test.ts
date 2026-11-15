@@ -7,7 +7,7 @@ import { registerSampleDataRoutes } from './sample-data-routes';
 // the check and the load faked. The check itself is tested in
 // packages/bootstrap/src/sample-data.test.ts. No real seed runs here.
 
-const counts: SampleDataCounts = { formsSeeded: 4, workflowsSeeded: 2, connectorsSeeded: 1, dashboardsSeeded: 1, settingsSeeded: 5 };
+const counts: SampleDataCounts = { formsSeeded: 4, workflowsSeeded: 2, connectorsSeeded: 1, dashboardsSeeded: 1, settingsSeeded: 5, sampleResources: 226 };
 const URL = '/api/settings/sample-data';
 
 function build(opts: {
@@ -67,11 +67,13 @@ describe('sample data routes', () => {
     const res = await build({ load, audited }).inject({ method: 'POST', url: URL });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true, ...counts });
+    expect(res.json()).toMatchObject({ sampleResources: 226 });
     expect(load).toHaveBeenCalledOnce();
     expect(audited).toEqual([expect.objectContaining({
       actorType: 'user', actorId: 'u1', action: 'settings.sample_data.load',
       entityType: 'system', entityId: 'sample-data', metadata: { ok: true, ...counts },
     })]);
+    expect((audited[0] as { metadata: Record<string, unknown> }).metadata.sampleResources).toBe(226);
   });
 
   it('a second POST while the first load runs answers 409 sample_data_busy', async () => {
