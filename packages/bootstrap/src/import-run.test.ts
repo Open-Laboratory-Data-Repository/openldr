@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createPluginDataStore } from '@openldr/db';
+import { createPluginDataStore, type PluginDataStore } from '@openldr/db';
 import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
-import { createImportService, type ImportActor, type ImportAuditEvent, type ImportService } from './import-run';
+import { STALE_MS, createImportService, type ImportActor, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
 
 const ADMIN: ImportActor = { type: 'user', id: 'u-admin', name: 'admin' };
 
-// Layer under test: the import service over the real plugin_data store on pg-mem. The plugin
-// (wasm), the source database and CE's save function are fakes. Not covered here: real SQL
-// Server, real wasm, real Postgres.
+// Layer under test: the import service and the real page reader over the real plugin_data store
+// on pg-mem. The plugin (wasm), the source database, its errors, the reader's waits and CE's save
+// function are fakes. Not covered here: real SQL Server and the errors tedious really throws, real
+// wasm, real Postgres.
 
 const KEY_SQL = 'SELECT DISTINCT TOP ({{limit}}) [RequestID] FROM [dbo].[Requests] WHERE [RequestID] > {{after}} ORDER BY [RequestID]';
 const REQ_SQL = 'SELECT [RequestID], [RegisteredDateTime] FROM [dbo].[Requests] WHERE [RequestID] IN ({{keys}})';
@@ -27,16 +28,28 @@ function manifest(over: { capabilities?: unknown[]; importSource?: unknown } = {
   };
 }
 
+/** What tedious throws for a missing table: the SQL Server itself refused the query. */
+const missingTable = () => Object.assign(new Error("Invalid object name 'dbo.Requests'."), { code: 'EREQUEST', number: 208 });
+/** What tedious throws when the link drops in the middle of a query. */
+const cutLink = () => Object.assign(new Error('Connection lost - read ECONNRESET at secret-pw'), { code: 'ESOCKET' });
+/** What tedious throws when a query runs out of time. */
+const timedOut = () => Object.assign(new Error('Timeout: Request failed to complete in 30000ms'), { code: 'ETIMEOUT' });
+
 /** A fake v1 database: answers the filled-in key and detail statements from a list of keys. */
 function fakeSource(keys: string[]) {
   const sorted = [...keys].sort();
   const statements: string[] = [];
   let closed = 0;
   let failOn: RegExp | null = null;
+  /** Throw `err` for the next `left` statements that match `re`. */
+  const rules: Array<{ re: RegExp; err: () => unknown; left: number }> = [];
   const db = {
     async query(sql: string) {
       statements.push(sql);
-      if (failOn?.test(sql)) throw new Error("Invalid object name 'dbo.Requests'.");
+      if (failOn?.test(sql)) throw missingTable();
+      const rule = rules.find((r) => r.left > 0 && r.re.test(sql));
+      if (rule) { rule.left -= 1; throw rule.err(); }
+      if (sql === 'SELECT 1') return { rows: [{ ok: 1 }] };
       const top = /TOP \((\d+)\)/.exec(sql);
       if (top) {
         const after = /> '((?:[^']|'')*)'/.exec(sql)![1].replace(/''/g, "'");
@@ -49,7 +62,10 @@ function fakeSource(keys: string[]) {
     },
     async close() { closed += 1; },
   };
-  return { db, statements, closed: () => closed, failWhen: (re: RegExp | null) => { failOn = re; } };
+  return {
+    db, statements, closed: () => closed, failWhen: (re: RegExp | null) => { failOn = re; },
+    failNext: (re: RegExp, err: () => unknown, times = 1) => { rules.push({ re, err, left: times }); },
+  };
 }
 
 interface Harness {
@@ -65,12 +81,31 @@ interface Harness {
   clock: { now: number };
   /** Make the audit sink throw for this action, as when the audit store is down. */
   failAuditOn(action: ImportAuditEvent['action'] | null): void;
+  /** Every run record as it was saved, in order. */
+  runSaves: ImportRun[];
+  /** Every wait the reader asked for, in ms. */
+  sleeps: number[];
+  /** Hold every wait until `releaseSleeps`. Waits end at once otherwise. */
+  holdSleeps(): void;
+  releaseSleeps(): void;
 }
 
 let internalDb: Awaited<ReturnType<typeof makeMigratedDb>>;
 
-async function harness(keys: string[]): Promise<Harness> {
+async function harness(keys: string[], opts: { origin?: 'server' | 'cli' } = {}): Promise<Harness> {
   const source = fakeSource(keys);
+  const runSaves: ImportRun[] = [];
+  const sleeps: number[] = [];
+  let held = false;
+  let waiters: Array<() => void> = [];
+  const store = createPluginDataStore(internalDb);
+  const pluginData: PluginDataStore = {
+    ...store,
+    async put(pluginId, collection, key, doc) {
+      if (collection === '__import-runs') runSaves.push(structuredClone(doc) as ImportRun);
+      return store.put(pluginId, collection, key, doc);
+    },
+  };
   const audited: ImportAuditEvent[] = [];
   const mapInputs: Harness['mapInputs'] = [];
   let auditFails: ImportAuditEvent['action'] | null = null;
@@ -97,15 +132,22 @@ async function harness(keys: string[]): Promise<Harness> {
       getDecryptedConfig: async () => ({ host: 'v1', password: 'secret-pw' }),
     },
     secretsKey: 'k',
-    pluginData: createPluginDataStore(internalDb),
+    pluginData,
     persist,
     audit: async (e) => { if (e.action === auditFails) throw new Error('audit store down'); audited.push(e); },
     createDb: () => source.db,
     now: () => new Date(clock.now),
+    sleep: async (ms) => {
+      sleeps.push(ms);
+      if (held) await new Promise<void>((resolve) => { waiters.push(resolve); });
+    },
+    ...(opts.origin ? { origin: opts.origin } : {}),
   });
   await svc.allow('v1-import', 'c1', ADMIN);
   return {
-    svc, source, persist, invoke, audited, mapInputs, clock,
+    svc, source, persist, invoke, audited, mapInputs, clock, runSaves, sleeps,
+    holdSleeps: () => { held = true; },
+    releaseSleeps: () => { held = false; const w = waiters; waiters = []; for (const resolve of w) resolve(); },
     failAuditOn: (action) => { auditFails = action; },
     setManifest: (m) => { currentManifest = m; },
     setQueries: (q) => { queries = q; },
@@ -298,6 +340,142 @@ describe('import run', () => {
     h.clock.now += 60_000;
     const b = await h.svc.wait((await h.svc.start(START)).id);
     expect((await h.svc.list('v1-import')).map((r) => r.id)).toEqual([b.id, a.id]);
+  });
+});
+
+describe('import run: a source that goes away', () => {
+  /** The key query of the second page, at a page size of 2. Detail queries have no `>`. */
+  const SECOND_PAGE = /> 'REQ0002'/;
+  const savedIds = (h: Harness) => h.persist.mock.calls.map((c) => (c[0] as Array<{ id: string }>)[0].id);
+
+  it('a cut link in the middle of a run shows waiting, then the run completes with no resume', async () => {
+    const h = await harness(keysOf(4));
+    h.source.failNext(SECOND_PAGE, cutLink);
+    const run = await h.svc.wait((await h.svc.start({ ...START, pageSize: 2 })).id);
+    expect(run).toMatchObject({ status: 'completed', cursor: 'REQ0004', waiting: null, counts: { keys: 4, imported: 4, failed: 0 } });
+    const waiting = h.runSaves.findIndex((r) => r.status === 'waiting');
+    expect(waiting).toBeGreaterThan(-1);
+    expect(h.runSaves[waiting].waiting).toEqual({
+      since: new Date(h.clock.now).toISOString(), attempt: 1, error: expect.stringContaining('Connection lost'),
+    });
+    // The driver's text is cleaned before it is stored: the connector password never shows.
+    expect(JSON.stringify(h.runSaves)).not.toContain('secret-pw');
+    // When the source answers again the run is running, with no waiting state.
+    expect(h.runSaves.slice(waiting + 1).some((r) => r.status === 'running' && r.waiting === null)).toBe(true);
+    // One wait of 5 seconds, slept in slices.
+    expect(h.sleeps.reduce((a, b) => a + b, 0)).toBe(5000);
+    // No person pressed Resume, and no request was saved twice.
+    expect(h.audited.map((e) => e.action)).toEqual(['import.allow', 'import.start', 'import.finish']);
+    expect(savedIds(h)).toEqual(['p-REQ0001', 'p-REQ0002', 'p-REQ0003', 'p-REQ0004']);
+  });
+
+  it('a run that is waiting can be stopped', async () => {
+    const h = await harness(keysOf(4));
+    h.holdSleeps();
+    h.source.failNext(SECOND_PAGE, cutLink);
+    const started = await h.svc.start({ ...START, pageSize: 2 });
+    await vi.waitFor(async () => expect((await h.svc.get('v1-import', started.id))?.status).toBe('waiting'));
+    // A waiting run is active: a second run on the same connector is refused.
+    await expect(h.svc.start(START)).rejects.toThrow(/already running/);
+    expect((await h.svc.stop('v1-import', started.id, ADMIN)).status).toBe('stopping');
+    h.releaseSleeps();
+    const stopped = await h.svc.wait(started.id);
+    expect(stopped).toMatchObject({ status: 'stopped', cursor: 'REQ0002', waiting: null, counts: { keys: 2 } });
+    // The stop was felt in the wait: the second page was not read again.
+    expect(h.source.statements.filter((s) => SECOND_PAGE.test(s))).toHaveLength(1);
+    expect(h.audited.map((e) => e.action)).toContain('import.stop');
+  });
+
+  it('a missing table still ends the run as failed', async () => {
+    const h = await harness(keysOf(4));
+    h.source.failWhen(SECOND_PAGE);
+    const run = await h.svc.wait((await h.svc.start({ ...START, pageSize: 2 })).id);
+    expect(run).toMatchObject({ status: 'failed', cursor: 'REQ0002', waiting: null, counts: { keys: 2 } });
+    expect(run.lastError).toContain('Invalid object name');
+    // Retrying cannot fix it, so the run never waited.
+    expect(h.runSaves.some((r) => r.status === 'waiting')).toBe(false);
+    expect(h.sleeps).toEqual([]);
+  });
+
+  it('a key that cannot be read is recorded with SOURCE_TIMEOUT and the run goes on', async () => {
+    const h = await harness(keysOf(4));
+    // Every detail read that holds REQ0002 runs out of time. The source still answers SELECT 1.
+    h.source.failNext(/IN \(.*'REQ0002'/, timedOut, 100);
+    const run = await h.svc.wait((await h.svc.start({ ...START, pageSize: 4 })).id);
+    expect(run).toMatchObject({ status: 'completed', cursor: 'REQ0004', counts: { keys: 4, imported: 3, failed: 1 } });
+    expect(await h.svc.failures('v1-import', run.id)).toEqual([{ key: 'REQ0002', error: 'SOURCE_TIMEOUT' }]);
+    expect(savedIds(h)).toEqual(['p-REQ0001', 'p-REQ0003', 'p-REQ0004']);
+    // A slow key is not a lost link: the run never waited.
+    expect(h.sleeps).toEqual([]);
+  });
+
+  it('keeps a halved page small, and doubles it again after 5 good pages', async () => {
+    const h = await harness(keysOf(20));
+    h.source.failNext(/IN \(.*'REQ0001'/, timedOut);
+    const run = await h.svc.wait((await h.svc.start({ ...START, pageSize: 4 })).id);
+    expect(run).toMatchObject({ status: 'completed', counts: { keys: 20, imported: 20, failed: 0 } });
+    const tops = h.source.statements.flatMap((s) => { const m = /TOP \((\d+)\)/.exec(s); return m ? [Number(m[1])] : []; });
+    // 4 timed out and was halved to 2. Five more good pages of 2, then 4 again.
+    expect(tops).toEqual([4, 2, 2, 2, 2, 2, 2, 4, 4, 4]);
+  });
+
+  it('a waiting run writes its record at least every 30 seconds', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      const h = await harness(keysOf(4));
+      h.holdSleeps();
+      h.source.failNext(SECOND_PAGE, cutLink);
+      const started = await h.svc.start({ ...START, pageSize: 2 });
+      await vi.waitFor(async () => expect((await h.svc.get('v1-import', started.id))?.status).toBe('waiting'));
+      const before = h.runSaves.length;
+      const last = h.runSaves[before - 1].updatedAt;
+      h.clock.now += 30_000;
+      vi.advanceTimersByTime(30_000);
+      await vi.waitFor(() => expect(h.runSaves.length).toBe(before + 1));
+      expect(h.runSaves[before]).toMatchObject({ status: 'waiting', updatedAt: new Date(h.clock.now).toISOString() });
+      expect(Date.parse(h.runSaves[before].updatedAt) - Date.parse(last)).toBe(30_000);
+      h.releaseSleeps();
+      expect((await h.svc.wait(started.id)).status).toBe('completed');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('records where the run was started', async () => {
+    const h = await harness(keysOf(1), { origin: 'server' });
+    const started = await h.svc.start(START);
+    expect(started.origin).toBe('server');
+    expect((await h.svc.wait(started.id)).origin).toBe('server');
+    expect(h.runSaves.map((r) => r.origin)).toEqual(h.runSaves.map(() => 'server'));
+  });
+
+  it('records cli when no origin is given, and reads a run from before this change as cli and not waiting', async () => {
+    const h = await harness(keysOf(1));
+    expect((await h.svc.wait((await h.svc.start(START)).id)).origin).toBe('cli');
+    const old = {
+      id: 'old', pluginId: 'v1-import', pluginVersion: '1.2.0', connectorId: 'c1', status: 'stopped', dryRun: false,
+      options: {}, pageSize: 2, limit: null, cursor: null, counts: { keys: 0, imported: 0, failed: 0, resources: 0 },
+      failuresStored: 0, startedAt: new Date(h.clock.now).toISOString(), updatedAt: new Date(h.clock.now).toISOString(),
+      finishedAt: null, lastError: null, startedBy: 'admin',
+    };
+    await createPluginDataStore(internalDb).put('v1-import', '__import-runs', 'old', old);
+    expect(await h.svc.get('v1-import', 'old')).toMatchObject({ origin: 'cli', waiting: null });
+  });
+
+  it('reads a waiting run nobody is driving as interrupted after 2 minutes with no write', async () => {
+    expect(STALE_MS).toBe(2 * 60_000);
+    const h = await harness(keysOf(1));
+    const at = new Date(h.clock.now).toISOString();
+    await createPluginDataStore(internalDb).put('v1-import', '__import-runs', 'gone', {
+      id: 'gone', pluginId: 'v1-import', pluginVersion: '1.2.0', connectorId: 'c1', status: 'waiting', dryRun: false,
+      options: {}, pageSize: 2, limit: null, cursor: null, counts: { keys: 0, imported: 0, failed: 0, resources: 0 },
+      failuresStored: 0, startedAt: at, updatedAt: at, finishedAt: null, lastError: null, startedBy: 'admin',
+      waiting: { since: at, attempt: 3, error: 'Connection lost' }, origin: 'cli',
+    });
+    h.clock.now += STALE_MS;
+    expect((await h.svc.get('v1-import', 'gone'))?.status).toBe('waiting');
+    h.clock.now += 1;
+    expect((await h.svc.get('v1-import', 'gone'))?.status).toBe('interrupted');
   });
 });
 

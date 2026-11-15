@@ -62,7 +62,8 @@ export interface ActivityService {
 function importStatus(status: string): ActivityLifecycle['status'] {
   if (status === 'completed') return 'complete';
   if (status === 'failed') return 'failed';
-  return status === 'running' || status === 'stopping' ? 'running' : 'stopped';
+  // A run waiting for its source will carry on by itself, so it is still running.
+  return status === 'running' || status === 'waiting' || status === 'stopping' ? 'running' : 'stopped';
 }
 
 /** One import run as a lifecycle: who started it, then what it has saved so far. */

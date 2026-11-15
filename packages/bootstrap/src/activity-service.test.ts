@@ -65,6 +65,11 @@ it('names an import that is running, stopped or failed as what it is, not as stu
   expect(await status({ status: 'failed' })).toBe('failed/persisted');
 });
 
+it('names an import that is waiting for its source as running', async () => {
+  const svc = createActivityService({ ...deps, importRuns: async () => [importRun({ status: 'waiting', finishedAt: null })] } as any);
+  expect((await svc.listRecent({ limit: 10, offset: 0 })).find((p) => p.correlationId === 'imp-1')?.status).toBe('running');
+});
+
 it('gives an import run a lifecycle with who started it and what it saved', async () => {
   const svc = createActivityService({ ...deps, importRuns: async () => [importRun()] } as any);
   expect(await svc.getLifecycle('imp-1')).toEqual({

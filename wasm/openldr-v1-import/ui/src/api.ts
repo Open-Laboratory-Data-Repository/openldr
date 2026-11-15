@@ -7,7 +7,7 @@ export type StepStatus = 'pass' | 'warn' | 'fail' | 'skip';
 export interface DiagnoseStep { id: string; status: StepStatus; detail?: string }
 export interface DiagnoseResult { ok: boolean; steps: DiagnoseStep[] }
 export interface CheckResult { id: string; value: unknown; error?: string }
-export type RunStatus = 'running' | 'stopping' | 'stopped' | 'completed' | 'failed' | 'interrupted';
+export type RunStatus = 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed' | 'interrupted';
 export interface ImportRun {
   id: string;
   connectorId: string;
@@ -37,5 +37,5 @@ export const api = {
   resume: (runId: string) => imports().resume(runId) as Promise<ImportRun>,
 };
 
-export const isActive = (status: RunStatus): boolean => status === 'running' || status === 'stopping';
+export const isActive = (status: RunStatus): boolean => status === 'running' || status === 'waiting' || status === 'stopping';
 export const canResume = (status: RunStatus): boolean => status === 'stopped' || status === 'failed' || status === 'interrupted';

@@ -5,7 +5,9 @@ import { validateSelectSql } from '@openldr/dashboards';
 import type { PluginDataStore, Provenance } from '@openldr/db';
 import { allowedResourceTypes, canImportOnePass, importSourceSchema, readGrant, type Capability, type ImportSource } from '@openldr/marketplace';
 import { createConnectorDb, type ConnectorDb } from './connector-db';
-import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, assertSafeKey, fillDetailQuery, fillKeyQuery, toPluginRow } from './import-sql';
+import { growPage } from './import-retry';
+import { createSourceReader, type SourceReader } from './import-source-reader';
+import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, fillDetailQuery, fillKeyQuery, toPluginRow } from './import-sql';
 
 // Runs an import for a plugin that declares `payload.importSource` (see the marketplace manifest).
 //
@@ -31,11 +33,14 @@ const ALLOWED = '__import-allowed';
 
 const DEFAULT_PAGE_SIZE = 500;
 const MAX_STORED_FAILURES = 1000;
-/** A run that has not written progress for this long, and that this process is not driving, is
- *  shown as interrupted and may be resumed. One page is a few 30-second calls at worst. */
-const STALE_MS = 5 * 60_000;
+/** A run that has not been written for this long, and that this process is not driving, has no
+ *  driver. It is shown as interrupted and may be resumed. The driver writes it every 30 seconds. */
+export const STALE_MS = 2 * 60_000;
+/** How often a driver writes its run, even in the middle of a page or a wait. */
+const HEARTBEAT_MS = 30_000;
 
-export type ImportStatus = 'running' | 'stopping' | 'stopped' | 'completed' | 'failed' | 'interrupted';
+/** `waiting`: the source cannot be reached, and the run will try again by itself. */
+export type ImportStatus = 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed' | 'interrupted';
 
 export interface ImportRun {
   id: string;
@@ -56,10 +61,17 @@ export interface ImportRun {
   finishedAt: string | null;
   lastError: string | null;
   startedBy: string;
+  /** Set while the run waits for its source: since when, which try is next, and the last error
+   *  as the page reader made it safe to show. Null otherwise. Absent on a run from before this
+   *  field, which reads as null. */
+  waiting: { since: string; attempt: number; error: string } | null;
+  /** The kind of process that started or last resumed the run. Absent on a run from before this
+   *  field, which reads as `cli`. */
+  origin: 'server' | 'cli';
 }
 
-/** Who asked. A studio user through the broker, or the `openldr` CLI. */
-export interface ImportActor { type: 'user' | 'cli'; id: string | null; name: string }
+/** Who asked. A studio user through the broker, the `openldr` CLI, or OpenLDR itself. */
+export interface ImportActor { type: 'user' | 'cli' | 'system'; id: string | null; name: string }
 
 export interface ImportAuditEvent {
   action: 'import.allow' | 'import.revoke' | 'import.start' | 'import.stop' | 'import.resume' | 'import.finish';
@@ -87,10 +99,15 @@ export interface ImportServiceDeps {
    *  refuse to act when their row cannot be written, so no plugin reads a connector or saves
    *  records without the audit log showing it. */
   audit(event: ImportAuditEvent): Promise<void>;
-  /** Injectable for tests; defaults to the real connector connection. */
-  createDb?: (type: string, config: Record<string, string>) => ConnectorDb;
+  /** Injectable for tests; defaults to the real connector connection. The page reader passes a
+   *  query timeout for its `SELECT 1` probe. */
+  createDb?: (type: string, config: Record<string, string>, opts?: { queryTimeoutMs?: number }) => ConnectorDb;
   now?: () => Date;
   newId?: () => string;
+  /** Injectable for tests; the page reader's wait between tries. */
+  sleep?: (ms: number) => Promise<void>;
+  /** The kind of process this service runs in, recorded on each run it starts. Default `cli`. */
+  origin?: 'server' | 'cli';
 }
 
 export interface ImportStartInput {
@@ -169,7 +186,9 @@ type PluginNeed = 'read' | 'import';
 export function createImportService(deps: ImportServiceDeps): ImportService {
   const now = deps.now ?? (() => new Date());
   const newId = deps.newId ?? (() => randomUUID());
-  const makeDb = deps.createDb ?? ((type: string, config: Record<string, string>) => createConnectorDb(type, config));
+  const origin = deps.origin ?? 'cli';
+  const makeDb = deps.createDb
+    ?? ((type: string, config: Record<string, string>, opts?: { queryTimeoutMs?: number }) => createConnectorDb(type, config, opts));
   /** Runs this process is driving right now. */
   const local = new Map<string, { promise: Promise<ImportRun>; stop: boolean }>();
   /** How the last few runs driven here ended, so `wait` still answers just after one finishes. */
@@ -244,16 +263,27 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     return sink;
   }
 
-  async function openDb(connectorId: string, type: string): Promise<{ db: ConnectorDb; clean: (text: string) => string }> {
+  /** How to open the connector, and how to make its driver's text safe to show. */
+  async function sourceAccess(connectorId: string, type: string): Promise<{
+    open: (opts?: { queryTimeoutMs?: number }) => ConnectorDb;
+    clean: (text: string) => string;
+  }> {
     const config = await deps.connectors.getDecryptedConfig(connectorId, deps.secretsKey);
     const mask = makeRedactor([config.password].filter((v): v is string => Boolean(v)));
-    return { db: makeDb(type, config), clean: (text) => redact(mask(text)).slice(0, 300) };
+    return { open: (opts) => makeDb(type, config, opts), clean: (text) => redact(mask(text)).slice(0, 300) };
   }
 
-  /** What a caller sees: a run nobody is driving any more reads as interrupted. */
-  function view(run: ImportRun): ImportRun {
-    const active = run.status === 'running' || run.status === 'stopping';
-    if (active && !local.has(run.id) && now().getTime() - Date.parse(run.updatedAt) > STALE_MS) {
+  async function openDb(connectorId: string, type: string): Promise<ConnectorDb> {
+    return (await sourceAccess(connectorId, type)).open();
+  }
+
+  const isActive = (status: ImportStatus): boolean => status === 'running' || status === 'waiting' || status === 'stopping';
+
+  /** What a caller sees: a run nobody is driving any more reads as interrupted. A run from before
+   *  `waiting` and `origin` existed gets their defaults. */
+  function view(stored: ImportRun): ImportRun {
+    const run: ImportRun = { ...stored, waiting: stored.waiting ?? null, origin: stored.origin ?? 'cli' };
+    if (isActive(run.status) && !local.has(run.id) && now().getTime() - Date.parse(run.updatedAt) > STALE_MS) {
       return { ...run, status: 'interrupted' };
     }
     return run;
@@ -283,9 +313,30 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
   }
 
   async function drive(run: ImportRun, actor: ImportActor): Promise<ImportRun> {
-    let db: ConnectorDb | undefined;
+    let reader: SourceReader | undefined;
     let clean = (text: string) => redact(text).slice(0, 300);
     let outcome: ImportStatus = 'failed';
+
+    // Saves go one after another, so a heartbeat that started first never lands last.
+    let saving: Promise<void> = Promise.resolve();
+    const saveInTurn = (): Promise<void> => {
+      const next = saving.then(() => save(run));
+      saving = next.catch(() => {});
+      return next;
+    };
+    /** Save, and keep a stop that another process asked for through the stored status. */
+    const saveKeepingStop = async (): Promise<void> => {
+      if (await stopWanted(run)) run.status = 'stopping';
+      await saveInTurn();
+    };
+    // Written every 30 seconds while this drives, even in the middle of a page or a wait, so
+    // another process can tell a live run from one whose driver has gone. A failed write here is
+    // not acted on: the next page's save meets the same fault and ends the run.
+    let beating: Promise<void> | null = null;
+    const heartbeat = setInterval(() => {
+      beating ??= saveKeepingStop().catch(() => {}).finally(() => { beating = null; });
+    }, HEARTBEAT_MS);
+
     try {
       const plugin = await resolvePlugin(run.pluginId, 'import');
       const { type } = await resolveConnector(plugin, run.connectorId);
@@ -295,33 +346,63 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       validateSelectSql(fillKeyQuery(spec.keyQuery.sql, null, 1));
       for (const d of spec.detailQueries) validateSelectSql(fillDetailQuery(d.sql, ['A']));
 
-      const opened = await openDb(run.connectorId, type);
-      db = opened.db;
-      clean = opened.clean;
+      const access = await sourceAccess(run.connectorId, type);
+      clean = access.clean;
+      /** When the current wait for the source began. A first try starts a new wait. */
+      let waitingSince: string | null = null;
+      reader = createSourceReader({
+        open: async (opts) => access.open(opts),
+        onWaiting: async (state) => {
+          if (state) {
+            if (state.attempt === 1 || waitingSince === null) waitingSince = now().toISOString();
+            run.status = 'waiting';
+            // The error is the reader's text, already made safe. It is stored as given.
+            run.waiting = { since: waitingSince, attempt: state.attempt, error: state.error };
+          } else {
+            run.status = 'running';
+            run.waiting = null;
+          }
+          await saveKeepingStop();
+        },
+        stopWanted: () => stopWanted(run),
+        clean,
+        ...(deps.sleep ? { sleep: deps.sleep } : {}),
+      });
       const allowedTypes = new Set(allowedResourceTypes(plugin.capabilities));
       const provenance: Provenance = {
         batchId: run.id, pluginId: plugin.id, pluginVersion: plugin.version,
         sourceSystem: plugin.source.sourceSystem ?? plugin.id,
       };
 
+      // The page size to ask for. A page the reader had to halve stays halved, and doubles again
+      // after 5 good pages in a row, never above the run's own page size.
+      let size = run.pageSize;
+      let goodInRow = 0;
       for (;;) {
         if (await stopWanted(run)) { outcome = 'stopped'; break; }
-        const size = run.limit === null ? run.pageSize : Math.min(run.pageSize, run.limit - run.counts.keys);
-        if (size <= 0) { outcome = 'completed'; break; }
+        const ask = run.limit === null ? size : Math.min(size, run.limit - run.counts.keys);
+        if (ask <= 0) { outcome = 'completed'; break; }
 
-        const keySql = fillKeyQuery(spec.keyQuery.sql, run.cursor, size);
-        validateSelectSql(keySql);
-        const keys = (await db.query(keySql)).rows.map((r) => String(Object.values(r)[0] ?? ''));
-        if (keys.length === 0) { outcome = 'completed'; break; }
-        for (const key of keys) assertSafeKey(key);
-        if (keys[keys.length - 1] === run.cursor) throw new Error('the key query made no progress past the last key');
-
-        const rows: Record<string, Array<Record<string, unknown>>> = {};
-        for (const d of spec.detailQueries) {
-          const sql = fillDetailQuery(d.sql, keys);
-          validateSelectSql(sql);
-          rows[d.name] = (await db.query(sql)).rows.map(toPluginRow);
+        const page = await reader.readPage({ keySql: spec.keyQuery.sql, details: spec.detailQueries, after: run.cursor, size: ask });
+        if (page.kind === 'stopped') { outcome = 'stopped'; break; }
+        if (page.kind === 'end') { outcome = 'completed'; break; }
+        if (page.kind === 'skipped') {
+          // One key timed out 3 times even read alone. It is listed, and the run moves past it.
+          await recordFailure(run, page.key, 'SOURCE_TIMEOUT');
+          run.counts.keys += 1;
+          run.cursor = page.key;
+          await saveKeepingStop();
+          continue;
         }
+        if (page.size < ask) {
+          size = page.size;
+          goodInRow = 0;
+        } else {
+          goodInRow += 1;
+          const grown = growPage(size, run.pageSize, goodInRow);
+          if (grown !== size) { size = grown; goodInRow = 0; }
+        }
+        const { keys, rows } = page;
 
         const mapped = mapOutputSchema.parse(await sink.invoke(plugin.source.entrypoints.map, { keys, rows, options: run.options }));
         const groups = new Map<string, (typeof mapped.groups)[number]>();
@@ -349,20 +430,23 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
         run.counts.keys += keys.length;
         run.cursor = keys[keys.length - 1];
         // Keep a stop that arrived during this page; the next loop turn acts on it.
-        if (await stopWanted(run)) run.status = 'stopping';
-        await save(run);
+        await saveKeepingStop();
       }
     } catch (err) {
       outcome = 'failed';
-      // The driver's text is kept (redacted, capped) because an admin needs it to fix the source,
-      // for example a missing table. Per-request failures above never keep such text.
+      // Kept (redacted, capped) because an admin needs it to fix the source, for example a missing
+      // table. A source error reaches here only as the reader's own text, already made safe.
+      // Per-request failures above never keep such text.
       run.lastError = clean(err instanceof Error ? err.message : String(err));
     } finally {
-      await db?.close().catch(() => {});
+      clearInterval(heartbeat);
+      await beating;
+      await reader?.close();
     }
     run.status = outcome;
+    run.waiting = null;
     run.finishedAt = now().toISOString();
-    await save(run);
+    await saveInTurn();
     await audit({
       action: 'import.finish', pluginId: run.pluginId, connectorId: run.connectorId, runId: run.id, actor,
       metadata: { status: outcome, dryRun: run.dryRun, ...run.counts },
@@ -394,8 +478,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
   async function assertNoActiveRun(pluginId: string, connectorId: string, exceptId?: string): Promise<void> {
     for (const run of await allRuns(pluginId)) {
       if (run.id === exceptId || run.connectorId !== connectorId) continue;
-      const status = view(run).status;
-      if (status === 'running' || status === 'stopping') {
+      if (isActive(view(run).status)) {
         throw new Error(`an import from connector ${connectorId} is already running for plugin ${pluginId}`);
       }
     }
@@ -446,7 +529,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
             continue;
           }
           try {
-            db ??= (await openDb(connectorId, type)).db;
+            db ??= await openDb(connectorId, type);
             const row = (await db.query(check.sql)).rows[0];
             results.push({ id: check.id, value: row ? Object.values(toPluginRow(row))[0] ?? null : null });
           } catch {
@@ -478,6 +561,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
         status: 'running', dryRun: Boolean(input.dryRun), options: options.data, pageSize, limit,
         cursor: null, counts: { keys: 0, imported: 0, failed: 0, resources: 0 }, failuresStored: 0,
         startedAt: at, updatedAt: at, finishedAt: null, lastError: null, startedBy: input.actor.name,
+        waiting: null, origin,
       };
       await auditOrRefuse({
         action: 'import.start', pluginId: run.pluginId, connectorId: run.connectorId, runId: run.id, actor: input.actor,
@@ -508,7 +592,8 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     async stop(pluginId, runId, actor) {
       const run = await read(pluginId, runId);
       if (!run) throw new Error(`import run ${runId} not found`);
-      if (view(run).status !== 'running') throw new Error(`import run ${runId} is not running`);
+      const status = view(run).status;
+      if (status !== 'running' && status !== 'waiting') throw new Error(`import run ${runId} is not running`);
       const entry = local.get(runId);
       if (entry) entry.stop = true;
       // Written too, so a run driven by another process (the server, or a CLI) sees it. The
@@ -529,7 +614,10 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       const plugin = await resolvePlugin(pluginId, 'import');
       await resolveConnector(plugin, stored.connectorId);
       await assertNoActiveRun(pluginId, stored.connectorId, runId);
-      const run: ImportRun = { ...stored, status: 'running', finishedAt: null, lastError: null, pluginVersion: plugin.version };
+      // The process that resumes the run is the one that drives it now.
+      const run: ImportRun = {
+        ...stored, status: 'running', finishedAt: null, lastError: null, pluginVersion: plugin.version, waiting: null, origin,
+      };
       await auditOrRefuse({ action: 'import.resume', pluginId, connectorId: run.connectorId, runId, actor, metadata: { cursor: run.cursor } });
       await save(run);
       launch(run, actor);
