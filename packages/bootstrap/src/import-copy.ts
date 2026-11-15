@@ -321,9 +321,9 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     const keys = [...new Set(page.keys)];
     const byKey = new Map<string, CopyRow[]>(keys.map((k) => [k, []]));
     const add = (detail: string, key: string | null, row: Record<string, unknown>, seqs: Map<string, number>) => {
-      const list = key === null ? undefined : byKey.get(key);
       // The reader checks this with checkRowKeys; this keeps replaceKeys from ever seeing a stray row.
-      if (!list || key === null) throw new Error(`a row of ${detail} has a first column that is not a key of the page`);
+      if (key === null || !byKey.has(key)) throw new Error(`a row of ${detail} has a first column that is not a key of the page`);
+      const list = byKey.get(key)!;
       const seq = seqs.get(key) ?? 0;
       seqs.set(key, seq + 1);
       list.push({ detail, key, seq, row });
@@ -729,7 +729,10 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
 
   /** Start driving a run in the background and remember it until it ends. */
   function launch(run: CopyRun): void {
-    if (local.has(run.id)) return;
+    // After a release nothing new starts here (R29b). A takeover writes its audit row between its
+    // claim and this call, and a release can land in that gap. The claim stands, and the next
+    // server takes the run by the 2-minute rule.
+    if (released || local.has(run.id)) return;
     const entry: Drive = { halt: null, promise: Promise.resolve() };
     local.set(run.id, entry);
     const work = run.status === 'deleting' ? driveDelete(run, entry) : driveCopy(run, entry);

@@ -72,33 +72,54 @@ function firstColumn(row: Record<string, unknown>): string {
   return String(Object.values(row)[0] ?? '');
 }
 
-/** A key as SQL Server's usual collation compares it: trailing spaces gone, ASCII letters one case. */
-const foldKey = (s: string): string => s.replace(/ +$/, '').replace(/[a-z]/g, (c) => c.toUpperCase());
+/** The text with its trailing spaces (U+0020) removed. A plain loop: a regular expression such as
+ *  / +$/ backtracks, and takes seconds on a long run of spaces that does not end the string. */
+function dropTrailingSpaces(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 32) end -= 1;
+  return end === s.length ? s : s.slice(0, end);
+}
+/** ASCII letters folded to one case. Other letters are left as they are. */
+const foldAscii = (s: string): string => s.replace(/[a-z]/g, (c) => c.toUpperCase());
+const spaceStep = dropTrailingSpaces;
+const caseStep = (s: string): string => foldAscii(dropTrailingSpaces(s));
+
 /** Each page's keys are indexed once, however many rows ask. Pages are short-lived arrays. */
-const keyIndexes = new WeakMap<readonly string[], { exact: Set<string>; folded: Map<string, string | null> }>();
+interface KeyIndex { exact: Set<string>; spaces: Map<string, string | null>; cased: Map<string, string | null> }
+const keyIndexes = new WeakMap<readonly string[], KeyIndex>();
+
+/** Page keys by `step(key)`. Two different page keys with the same form map to null. */
+function indexBy(pageKeys: string[], step: (s: string) => string): Map<string, string | null> {
+  const out = new Map<string, string | null>();
+  for (const key of pageKeys) {
+    const f = step(key);
+    out.set(f, out.has(f) && out.get(f) !== key ? null : key);
+  }
+  return out;
+}
 
 /**
- * The page key a detail row belongs to, by the string form of its first column (R30). SQL
+ * The page key a detail row belongs to, by the string form of its first column (R30, R30b). SQL
  * Server's usual collation ignores letter case and trailing spaces, so `IN ('ABC')` also returns
- * rows keyed `abc` or `ABC `. Rules: a page key that equals `value` exactly; else the one page key
- * that equals it with trailing spaces removed and ASCII letters folded to one case. When none, or
- * more than one, matches that way: null, a fault of the plugin or the data.
+ * rows keyed `abc` or `ABC `. Three steps, in order, stopping at the first that matches:
+ *  1. a page key equal to `value`;
+ *  2. a page key equal to it once trailing spaces are removed from both;
+ *  3. a page key equal to it once trailing spaces are removed and ASCII letters folded to one case.
+ * A step that matches more than one page key is a fault at that step, and the later steps are not
+ * tried. So on a case-sensitive source with `abc` and `ABC` on one page, a row `abc ` is `abc`.
+ * No match at any step, or a fault: null, a fault of the plugin or the data.
  * `pageKeys` is indexed on first use and must not change afterwards.
  */
 export function matchPageKey(pageKeys: string[], value: string): string | null {
   let index = keyIndexes.get(pageKeys);
   if (!index) {
-    const folded = new Map<string, string | null>();
-    for (const key of pageKeys) {
-      const f = foldKey(key);
-      // Two different page keys that fold alike: a row that folds to them matches neither.
-      folded.set(f, folded.has(f) && folded.get(f) !== key ? null : key);
-    }
-    index = { exact: new Set(pageKeys), folded };
+    index = { exact: new Set(pageKeys), spaces: indexBy(pageKeys, spaceStep), cased: indexBy(pageKeys, caseStep) };
     keyIndexes.set(pageKeys, index);
   }
   if (index.exact.has(value)) return value;
-  return index.folded.get(foldKey(value)) ?? null;
+  const spaced = spaceStep(value);
+  if (index.spaces.has(spaced)) return index.spaces.get(spaced) ?? null;
+  return index.cased.get(foldAscii(spaced)) ?? null;
 }
 
 export function createSourceReader(deps: SourceReaderDeps): SourceReader {

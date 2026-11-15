@@ -159,7 +159,18 @@ async function world(requests: string[], facilities: string[] = []) {
   };
   const audited: ImportAuditEvent[] = [];
   let auditFails: ImportAuditEvent['action'] | null = null;
-  const audit = async (e: ImportAuditEvent) => { if (e.action === auditFails) throw new Error('audit store down'); audited.push(structuredClone(e)); };
+  /** Audit writes held until released, by action. */
+  const auditHolds: Array<{ action: ImportAuditEvent['action']; reached: () => void; gate: Promise<void> }> = [];
+  const audit = async (e: ImportAuditEvent) => {
+    const hold = auditHolds.find((h) => h.action === e.action);
+    if (hold) {
+      auditHolds.splice(auditHolds.indexOf(hold), 1);
+      hold.reached();
+      await hold.gate;
+    }
+    if (e.action === auditFails) throw new Error('audit store down');
+    audited.push(structuredClone(e));
+  };
   const plugins: Array<{ id: string; version: string; enabled: boolean; manifest: Record<string, unknown> }> = [
     { id: PLUGIN, version: '1.2.0', enabled: true, manifest: manifest() },
   ];
@@ -216,6 +227,15 @@ async function world(requests: string[], facilities: string[] = []) {
     setCopy: (fn: (options: Record<string, string>) => unknown) => { copyFn = fn; },
     failCopy: (on: boolean) => { copyFails = on; },
     failAuditOn: (action: ImportAuditEvent['action'] | null) => { auditFails = action; },
+    /** Hold the next audit write of this action until the returned release is called. */
+    holdAudit: (action: ImportAuditEvent['action']) => {
+      let reached: () => void = () => {};
+      let release: () => void = () => {};
+      const at = new Promise<void>((resolve) => { reached = resolve; });
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      auditHolds.push({ action, reached, gate });
+      return { reached: at, release };
+    },
     failReplace: (fault: (() => unknown) | null) => { replaceFault = fault; },
     capDeletes: (n: number | null) => { deleteCap = n; },
     holdSleeps: () => { held = true; },
@@ -1042,6 +1062,25 @@ describe('copy: who drives', () => {
     });
     expect((await w.svc.get(PLUGIN, COPY))!).toMatchObject({ status: 'completed', driver: null, sets: { requests: { cursor: 'REQ0004', keys: 4, rows: 12 } } });
     expect(keyAfters(w)).toEqual(['REQ0002', 'REQ0004']);
+  });
+
+  it('a release during a takeover audit write launches no drive, and idle resolves', async () => {
+    const w = await world(keysOf(4));
+    await orphan(w, { updatedAt: at(w.clock.now - STALE_MS - 1) });
+    // The claim is written; the takeover's audit row is held. The release lands in that gap.
+    const held = w.holdAudit('import.copy.takeover');
+    const ticking = w.svc.tick();
+    await held.reached;
+    expect((await w.stored())!.driver).toBe('server-1');
+    await w.svc.release();
+    held.release();
+    await ticking;
+    await w.svc.idle();
+    // Nothing was launched: no plugin call, no source query, no write after the claim.
+    expect(w.invoke).toHaveBeenCalledTimes(1);
+    expect(w.source.statements).toEqual([]);
+    expect((await w.stored())!).toMatchObject({ status: 'running', driver: 'server-1' });
+    expect(w.runSaves.at(-1)!.driver).toBe('server-1');
   });
 
   it('a stale stopping run is taken and ends as stopped; a finished run is never taken', async () => {

@@ -490,6 +490,29 @@ describe('matchPageKey', () => {
     expect(matchPageKey(['abc', 'ABC'], 'Abc')).toBeNull();
   });
 
+  // R30b. Trailing spaces are tried before case, so a case-sensitive source keeps abc and ABC apart.
+  it('tries trailing spaces before case: abc and ABC on one page, a row abc with spaces is abc', () => {
+    expect(matchPageKey(['abc', 'ABC'], 'abc ')).toBe('abc');
+    expect(matchPageKey(['abc', 'ABC'], 'ABC   ')).toBe('ABC');
+    // With no space match, case folding still applies.
+    expect(matchPageKey(['ABC', 'DEF'], 'abc ')).toBe('ABC');
+  });
+
+  it('a step that matches two page keys is a fault at that step, and case is not tried', () => {
+    // Both trim to the same text. Folding case would not tell them apart either way.
+    expect(matchPageKey(['AB', 'AB '], 'AB  ')).toBeNull();
+  });
+
+  it('removes a long run of trailing spaces in one pass', () => {
+    const spaces = ' '.repeat(200_000);
+    const started = Date.now();
+    expect(matchPageKey(['ABC'], `abc${spaces}`)).toBe('ABC');
+    // A run of spaces that does not end the string: none are trailing, so nothing matches.
+    expect(matchPageKey(['ABC'], `ABC${spaces}x`)).toBeNull();
+    // A backtracking pattern takes seconds or more on this; a loop takes milliseconds.
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
   it('returns null for a row that matches no page key', () => {
     expect(matchPageKey(['ABC'], 'ABD')).toBeNull();
     // Leading spaces count, as they do in SQL Server.
