@@ -320,6 +320,8 @@ confirmed are the only ones that are.
 | Printing a very large number strips the zeros of its exponent | Confirmed by reading `result-mapping.ts:178` |
 | The status step subtracts 100 from a run number twice, which changes any run number above 200 | Confirmed by reading `review-status.ts:110` and `obr-sets.ts:122`, during the second build |
 | A birth date from the birth index reaches the audit as a long date text with no milliseconds | Confirmed: two fixtures depend on it. The plugin reproduces it |
+| A collected date with no time of day reads as no date | Confirmed on real twins on 2026-11-16. The record holds the date at bytes 159 to 162 and zero in the two time bytes; the decoder's long time gives none for two zero bytes, so the whole date is dropped. 848,351 of 2,326,075 source records (36.5%) are like this. v1 holds the same date at midnight in 6,003 of 6,004 sampled cases. It is why 6,004 of 20,000 sampled twins fail the v1 check. A fix must come with the next row |
+| A registration with no age gives the specimen date as the date of birth | Confirmed by the fault check of 2026-11-16 (`src/records.rs`, `dob_or_age`). Today it is masked wherever the collected date is dropped by the row above |
 | Four finding messages name the source system or its tables | Confirmed by the whole-branch review of the second build: `audit.rs:173`, `:373`, `:413`, `:424`, copied from the toolchain. They leave the plugin in `findings`, so they must change before part 4 shows a finding |
 | A panel code that holds a tab makes the toolchain throw a TypeError | Confirmed by reading `result-mapping.ts:537-543`. The plugin sorts the code and carries on. The fix gives that request an error code |
 | Middle name is never set | Claim, from reading `specimenrecpt.ts` |
