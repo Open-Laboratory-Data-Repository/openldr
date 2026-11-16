@@ -6,16 +6,136 @@
       "version": null,
       "entries": [
         {
+          "hash": "90d1af9c",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Import check start takes --from-start and says where it begins, the status line shows the copy, and the export reads by key"
+        },
+        {
+          "hash": "79a60569",
+          "type": "fix",
+          "scope": "plugin-ui-sdk",
+          "title": "FromStart on a check start, after and next on heldItems, and other is not a filter"
+        },
+        {
+          "hash": "767863fa",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "A stopped or failed check carries on, a revoked connector stops it, held requests are read by key, and a removed copy takes its check"
+        },
+        {
+          "hash": "2e18a40d",
+          "type": "fix",
+          "scope": "db",
+          "title": "Held requests can be read by key, so a page does not move while rows come and go"
+        },
+        {
+          "hash": "b53eb3ab",
+          "type": "fix",
+          "scope": "cli",
+          "title": "A check start needs the ingest key, held reads are audited, and an export is written whole to a private file or not at all"
+        },
+        {
+          "hash": "2b8c039a",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Import check start, status, stop and held, with an export of held requests"
+        },
+        {
+          "hash": "83b4af57",
+          "type": "feat",
+          "scope": "terminology",
+          "title": "A request attribute for a date of birth worked out from the stored age"
+        },
+        {
+          "hash": "5911eda6",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "A check that names no laboratory sends none, and a count cannot be named away"
+        },
+        {
+          "hash": "c6fbf844",
+          "type": "feat",
+          "scope": "",
+          "title": "A check counts by laboratory, and held requests can be filtered by it"
+        },
+        {
+          "hash": "65c14c5a",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A plugin frame's download limit holds across its reloads, and pending files are capped"
+        },
+        {
+          "hash": "c39ce7e9",
+          "type": "feat",
+          "scope": "",
+          "title": "A plugin page can save a text file and read held requests in batches"
+        },
+        {
+          "hash": "7871f455",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The host's default styles for a plugin page sit in the lowest layer"
+        },
+        {
+          "hash": "5964de9c",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Ids are made without crypto.randomUUID, which a plain HTTP page lacks"
+        },
+        {
           "hash": "7cb94182",
           "type": "feat",
           "scope": "web",
           "title": "Put desktop first in documentation paths"
         },
         {
+          "hash": "e1b92c2d",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "A check refuses a copy made from other statements"
+        },
+        {
+          "hash": "c3f937bf",
+          "type": "feat",
+          "scope": "studio",
+          "title": "A plugin page gets the studio's theme and follows a switch"
+        },
+        {
           "hash": "135fc6ed",
           "type": "feat",
           "scope": "web",
           "title": "Compare deployment tiers and update install guides"
+        },
+        {
+          "hash": "f0bd8c32",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "The check run guards its copies and ends on a fault that cannot pass"
+        },
+        {
+          "hash": "0d6e0052",
+          "type": "feat",
+          "scope": "",
+          "title": "Check run operations for a plugin page"
+        },
+        {
+          "hash": "f8836bf9",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "A check run over a copy, saving what passes and keeping what is held"
+        },
+        {
+          "hash": "add9d8d4",
+          "type": "feat",
+          "scope": "marketplace",
+          "title": "A plugin can name a decode and a twin-keys entrypoint"
+        },
+        {
+          "hash": "aad500ea",
+          "type": "feat",
+          "scope": "db",
+          "title": "List a copy's keys and keep held-back requests"
         },
         {
           "hash": "7712d7f6",
