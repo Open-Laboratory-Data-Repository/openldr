@@ -19,6 +19,8 @@ vi.mock('@openldr/bootstrap', () => ({
   // The numbers the plugin broker checks a held request page against.
   HELD_LABEL_MAX: 64, HELD_LIST_LIMIT_MAX: 100, HELD_ITEMS_LIMIT_MAX: 200,
   checkIdOf: (copyId: string) => `check-of-${copyId}`,
+  // The service's own rule for a check that still adds and removes held rows.
+  isLiveCheck: (s: string) => ['queued', 'running', 'waiting', 'stopping'].includes(s),
   // The one function the broker's audit row and this command's audit row both come from.
   recordCheckRead: mocks.recordCheckRead,
 }));
@@ -90,9 +92,22 @@ describe('import check CLI', () => {
       expect(checks.start.mock.calls[0]![0]).toEqual({
         pluginId: 'v1-check', copyId: 'c0ffee', referenceCopyId: null, options: {}, actor: cli,
       });
-      expect(out.join('')).toBe('ab12cd  queued  read=120 saved=100 held=15 failed=5\n');
+      // The run it got has requests already read, so it carried on.
+      expect(out.join('')).toBe('ab12cd  queued  copy=c0ffee  read=120 saved=100 held=15 failed=5\nCarries on from 120 requests read.\n');
       expect(printed()).not.toContain(SECRET_KEY);
       expect(closed).toBe(1);
+    });
+
+    it('says when the run starts from the first request, and --from-start asks for that', async () => {
+      checks.start.mockResolvedValue(run({ status: 'queued', driver: null, cursor: null, counts: counts({ read: 0, saved: 0, held: 0, failed: 0 }) }));
+      expect(await runImportCheckStart({ ...startOpts, fromStart: true })).toBe(0);
+      expect(checks.start.mock.calls[0]![0]).toEqual({
+        pluginId: 'v1-check', copyId: 'c0ffee', referenceCopyId: null, options: {}, fromStart: true, actor: cli,
+      });
+      expect(out.join('')).toBe('ab12cd  queued  copy=c0ffee  read=0 saved=0 held=0 failed=0\nStarts from the first request.\n');
+      // Without the flag nothing is sent for it, so the service decides.
+      expect(await runImportCheckStart({ ...startOpts, fromStart: false })).toBe(0);
+      expect(checks.start.mock.calls[1]![0]).not.toHaveProperty('fromStart');
     });
 
     it('passes the reference, the parsed options and the page size', async () => {
@@ -111,6 +126,7 @@ describe('import check CLI', () => {
 
     it('--json prints the run without its cursor and driver', async () => {
       expect(await runImportCheckStart({ ...startOpts, json: true })).toBe(0);
+      // One JSON value and nothing else.
       const parsed = JSON.parse(out.join(''));
       expect(parsed.id).toBe('ab12cd');
       expect(parsed).not.toHaveProperty('cursor');
@@ -129,15 +145,15 @@ describe('import check CLI', () => {
     it('shows one run', async () => {
       expect(await runImportCheckStatus('v1-check', 'ab12cd', { json: false, laboratories: false })).toBe(0);
       expect(checks.get).toHaveBeenCalledWith('v1-check', 'ab12cd');
-      expect(out.join('')).toBe('ab12cd  running  read=120 saved=100 held=15 failed=5\n');
+      expect(out.join('')).toBe('ab12cd  running  copy=c0ffee  read=120 saved=100 held=15 failed=5\n');
     });
 
     it('shows every run of the plugin, one line each', async () => {
       expect(await runImportCheckStatus('v1-check', undefined, { json: false, laboratories: false })).toBe(0);
       expect(checks.list).toHaveBeenCalledWith('v1-check');
       expect(out.join('').trim().split('\n')).toEqual([
-        'ab12cd  running  read=120 saved=100 held=15 failed=5',
-        'ab12ce  completed  read=120 saved=100 held=15 failed=5',
+        'ab12cd  running  copy=c0ffee  read=120 saved=100 held=15 failed=5',
+        'ab12ce  completed  copy=c0ffee  read=120 saved=100 held=15 failed=5',
       ]);
     });
 
@@ -153,7 +169,7 @@ describe('import check CLI', () => {
     it('--laboratories adds one line per laboratory, (none) for no code', async () => {
       expect(await runImportCheckStatus('v1-check', 'ab12cd', { json: false, laboratories: true })).toBe(0);
       expect(out.join('').trim().split('\n')).toEqual([
-        'ab12cd  running  read=120 saved=100 held=15 failed=5',
+        'ab12cd  running  copy=c0ffee  read=120 saved=100 held=15 failed=5',
         '  LAB1  read=100 saved=90 held=8 failed=2',
         '  (none)  read=20 saved=10 held=7 failed=3',
       ]);
@@ -169,7 +185,7 @@ describe('import check CLI', () => {
       checks.get.mockResolvedValue(run({ status: 'failed', lastError: 'the plugin\nfailed:  DECODE_FAILED' }));
       expect(await runImportCheckStatus('v1-check', 'ab12cd', { json: false, laboratories: false })).toBe(0);
       expect(out.join('').trim().split('\n')).toEqual([
-        'ab12cd  failed  read=120 saved=100 held=15 failed=5',
+        'ab12cd  failed  copy=c0ffee  read=120 saved=100 held=15 failed=5',
         'error: the plugin failed: DECODE_FAILED',
       ]);
       expect(formatCheckRun(run() as never)).not.toContain('error');
@@ -191,7 +207,7 @@ describe('import check CLI', () => {
     it('calls the service with the cli actor and prints the run', async () => {
       expect(await runImportCheckStop('v1-check', 'ab12cd', { json: false })).toBe(0);
       expect(checks.stop).toHaveBeenCalledWith('v1-check', 'ab12cd', cli);
-      expect(out.join('')).toBe('ab12cd  stopping  read=120 saved=100 held=15 failed=5\n');
+      expect(out.join('')).toBe('ab12cd  stopping  copy=c0ffee  read=120 saved=100 held=15 failed=5\n');
       expect(closed).toBe(1);
     });
 
@@ -286,18 +302,23 @@ describe('import check CLI', () => {
     const folder = () => readdir(dir);
     beforeEach(() => { checks.get.mockResolvedValue(run({ status: 'completed', driver: null })); });
 
-    /** A fake that pages the way the service does: by offset and limit over `n` rows. */
+    /** The position after a key K0001..: the number in it. */
+    const at = (after: string | null) => (after === null ? 0 : Number(after.slice(1)));
+    /** A fake that pages the way the service does by key: the rows past `after`, and `next`. */
     const serve = (n: number) => {
-      checks.heldItems.mockImplementation(async (_p: string, _c: string, o: { offset: number; limit: number }) => ({
-        items: items(o.offset, Math.min(n, o.offset + o.limit)), total: n,
-      }));
+      checks.heldItems.mockImplementation(async (_p: string, _c: string, o: { after: string | null; limit: number }) => {
+        const from = at(o.after);
+        const to = Math.min(n, from + o.limit);
+        return { items: items(from, to), total: n, next: to < n ? heldItem(to).key : null };
+      });
     };
 
-    it('pages until the total is reached and writes one object per line with findings and check', async () => {
+    it('reads by key until no row is left and writes one object per line with findings and check', async () => {
       serve(450);
       expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file() })).toBe(0);
-      const offsets = checks.heldItems.mock.calls.map((c) => (c[2] as { offset: number }).offset);
-      expect(offsets).toEqual([0, 200, 400]);
+      const afters = checks.heldItems.mock.calls.map((c) => (c[2] as { after: string | null }).after);
+      expect(afters).toEqual([null, 'K0200', 'K0400']);
+      for (const c of checks.heldItems.mock.calls) expect(c[2]).not.toHaveProperty('offset');
       for (const c of checks.heldItems.mock.calls) expect((c[2] as { limit: number }).limit).toBeLessThanOrEqual(200);
       expect(checks.held).not.toHaveBeenCalled();
       const lines = (await readFile(file(), 'utf8')).split('\n');
@@ -311,7 +332,7 @@ describe('import check CLI', () => {
     it('sends the filters on every page and no offset or limit of the caller', async () => {
       serve(3);
       expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file(), reason: 'error', label: 'x_y', laboratory: 'LAB1' })).toBe(0);
-      expect(checks.heldItems.mock.calls[0]![2]).toMatchObject({ reason: 'error', label: 'x_y', laboratory: 'LAB1', offset: 0 });
+      expect(checks.heldItems.mock.calls[0]![2]).toEqual({ reason: 'error', label: 'x_y', laboratory: 'LAB1', after: null, limit: 200 });
       await expect(runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: join(dir, 'b'), limit: '10' })).rejects.toThrow(/--export/);
       await expect(runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: join(dir, 'b'), offset: '10' })).rejects.toThrow(/--export/);
     });
@@ -364,7 +385,7 @@ describe('import check CLI', () => {
 
     it('a fault midway removes the half file and puts no value in the error', async () => {
       checks.heldItems
-        .mockResolvedValueOnce({ items: items(0, 200), total: 450 })
+        .mockResolvedValueOnce({ items: items(0, 200), total: 450, next: 'K0200' })
         .mockRejectedValueOnce(new Error('connection lost'));
       await expect(runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file() })).rejects.toThrow(/connection lost/);
       await expect(stat(file())).rejects.toThrow();
@@ -375,7 +396,7 @@ describe('import check CLI', () => {
     it('with --force, a fault keeps the old file whole and removes only the temporary file', async () => {
       await writeFile(file(), 'the old export');
       checks.heldItems
-        .mockResolvedValueOnce({ items: items(0, 200), total: 450 })
+        .mockResolvedValueOnce({ items: items(0, 200), total: 450, next: 'K0200' })
         .mockRejectedValueOnce(new Error('connection lost'));
       await expect(runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file(), force: true })).rejects.toThrow(/connection lost/);
       expect(await readFile(file(), 'utf8')).toBe('the old export');
@@ -392,13 +413,15 @@ describe('import check CLI', () => {
 
     it('writes to a private temporary file beside the target, and the target appears only at the end', async () => {
       const seen: { names: string[]; modes: number[]; target: boolean }[] = [];
-      checks.heldItems.mockImplementation(async (_p: string, _c: string, o: { offset: number; limit: number }) => {
-        if (o.offset > 0) {
+      checks.heldItems.mockImplementation(async (_p: string, _c: string, o: { after: string | null; limit: number }) => {
+        const from = at(o.after);
+        if (from > 0) {
           const names = await folder();
           const modes = await Promise.all(names.map(async (n) => (await stat(join(dir, n))).mode & 0o777));
           seen.push({ names, modes, target: names.includes('held.ndjson') });
         }
-        return { items: items(o.offset, Math.min(450, o.offset + o.limit)), total: 450 };
+        const to = Math.min(450, from + o.limit);
+        return { items: items(from, to), total: 450, next: to < 450 ? heldItem(to).key : null };
       });
       expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file() })).toBe(0);
       expect(seen.length).toBe(2);
@@ -463,10 +486,9 @@ describe('import check CLI', () => {
     it('a count that differs from the total is a fault: no file, exit 1, both numbers in the message', async () => {
       // A row left the set during the export, so the last page is short and the total is still 450.
       checks.heldItems
-        .mockResolvedValueOnce({ items: items(0, 200), total: 450 })
-        .mockResolvedValueOnce({ items: items(200, 400), total: 450 })
-        .mockResolvedValueOnce({ items: items(400, 449), total: 450 })
-        .mockResolvedValueOnce({ items: [], total: 450 });
+        .mockResolvedValueOnce({ items: items(0, 200), total: 450, next: 'K0200' })
+        .mockResolvedValueOnce({ items: items(200, 400), total: 450, next: 'K0400' })
+        .mockResolvedValueOnce({ items: items(400, 449), total: 450, next: null });
       expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file() })).toBe(1);
       expect(err.join('')).toBe('The export is not whole: 449 requests were read and the total is 450. The file was not written. Run it again.\n');
       expect(await folder()).toEqual([]);
@@ -477,8 +499,8 @@ describe('import check CLI', () => {
     it('a short count keeps the old file when --force was given', async () => {
       await writeFile(file(), 'the old export');
       checks.heldItems
-        .mockResolvedValueOnce({ items: items(0, 200), total: 450 })
-        .mockResolvedValueOnce({ items: [], total: 450 });
+        .mockResolvedValueOnce({ items: items(0, 200), total: 450, next: 'K0200' })
+        .mockResolvedValueOnce({ items: [], total: 450, next: null });
       expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file(), force: true })).toBe(1);
       expect(err.join('')).toContain('200');
       expect(err.join('')).toContain('450');
@@ -497,6 +519,33 @@ describe('import check CLI', () => {
       ]);
       expect(JSON.stringify(mocks.recordCheckRead.mock.calls)).not.toContain(PATIENT_VALUE);
       expect(JSON.stringify(mocks.recordCheckRead.mock.calls)).not.toContain(dir);
+    });
+
+    it('a row removed and a row added while it reads neither repeats nor skips a row it keeps', async () => {
+      // Rows by key. Between the first and the second page, K0001 leaves and K00005 arrives before
+      // it. Read by offset, the second page would start one row late.
+      let rows = ['K0001', 'K0002', 'K0003', 'K0004'];
+      checks.heldItems.mockImplementation(async (_p: string, _c: string, o: { after: string | null; limit: number }) => {
+        const past = rows.filter((k) => o.after === null || k > o.after);
+        const page = past.slice(0, o.limit);
+        if (o.after === null) rows = ['K00005', ...rows.filter((k) => k !== 'K0001')];
+        return {
+          items: page.map((key) => ({ ...heldItem(1), key })), total: rows.length,
+          next: past.length > o.limit ? page[page.length - 1]! : null,
+        };
+      });
+      // A page of 200 reads all four at once, so ask the fake for two at a time by its own rule.
+      const real = checks.heldItems.getMockImplementation()!;
+      checks.heldItems.mockImplementation(async (p: string, c: string, o: { after: string | null; limit: number }) => real(p, c, { ...o, limit: 2 }));
+      expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file() })).toBe(0);
+      const keys = (await readFile(file(), 'utf8')).trim().split('\n').map((l) => JSON.parse(l).key);
+      expect(keys).toEqual(['K0001', 'K0002', 'K0003', 'K0004']);
+    });
+
+    it('stops when the service answers without a next, and the count check still holds', async () => {
+      checks.heldItems.mockResolvedValueOnce({ items: items(0, 2), total: 2 });
+      expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file() })).toBe(0);
+      expect(checks.heldItems).toHaveBeenCalledTimes(1);
     });
 
     it('a close that throws after a whole export does not remove the file', async () => {

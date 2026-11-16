@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { open, rename, unlink, type FileHandle } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import {
-  HELD_ITEMS_LIMIT_MAX, HELD_LABEL_MAX, HELD_LIST_LIMIT_MAX, LABORATORY_CODE, checkIdOf, createAppContext, recordCheckRead,
+  HELD_ITEMS_LIMIT_MAX, HELD_LABEL_MAX, HELD_LIST_LIMIT_MAX, LABORATORY_CODE, checkIdOf, createAppContext, isLiveCheck, recordCheckRead,
   type CheckRun, type ImportActor,
 } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
@@ -15,6 +15,7 @@ import { outputTargetRefusal } from './output-target';
 // the checks and the audit trail are the same.
 //
 // `start` records the request and returns. The server drives the check. Nothing here waits for it.
+// A stopped or failed check carries on from its last page unless --from-start is given.
 //
 // A run's `cursor` is a source key and its `driver` names a server process. Neither is printed, on
 // the one-line form or in --json. The `findings` and `check` of a held request hold patient values.
@@ -45,10 +46,15 @@ export function checkRunForJson(run: CheckRun): Omit<CheckRun, 'cursor' | 'drive
   return rest;
 }
 
-/** One line: the id, the status, then the counts. */
+/** One line: the id, the status, the copy it checks (which `held` needs), then the counts. */
 export function formatCheckRun(run: CheckRun): string {
   const c = run.counts;
-  return `${run.id}  ${run.status}  read=${c.read} saved=${c.saved} held=${c.held} failed=${c.failed}`;
+  return `${run.id}  ${run.status}  copy=${run.copyId}  read=${c.read} saved=${c.saved} held=${c.held} failed=${c.failed}`;
+}
+
+/** Where a start begins, told from the run it got: a run that carried on has requests already read. */
+function startedFrom(run: CheckRun): string {
+  return run.counts.read > 0 ? `Carries on from ${run.counts.read} requests read.` : 'Starts from the first request.';
 }
 
 /** The run's line, a line for each laboratory when asked, and the last error on its own line. The
@@ -71,6 +77,7 @@ export interface ImportCheckStartOpts extends JsonOpt {
   reference?: string;
   option?: string[];
   pageSize?: string;
+  fromStart?: boolean;
 }
 
 export async function runImportCheckStart(opts: ImportCheckStartOpts): Promise<number> {
@@ -82,9 +89,10 @@ export async function runImportCheckStart(opts: ImportCheckStartOpts): Promise<n
     const run = await ctx.importChecks.start({
       pluginId: opts.plugin, copyId: opts.copy, referenceCopyId: opts.reference ?? null, options,
       ...(pageSize !== undefined ? { pageSize } : {}),
+      ...(opts.fromStart === true ? { fromStart: true } : {}),
       actor: actor(),
     });
-    emit(opts.json, checkRunForJson(run), formatCheckRun(run));
+    emit(opts.json, checkRunForJson(run), `${formatCheckRun(run)}\n${startedFrom(run)}`);
     return 0;
   } finally { await ctx.close(); }
 }
@@ -178,9 +186,6 @@ export async function runImportCheckHeld(pluginId: string, copyId: string, opts:
   } finally { await ctx.close(); }
 }
 
-/** Statuses of a check that still adds and removes held rows. */
-const LIVE_CHECK = new Set(['queued', 'running', 'waiting', 'stopping']);
-
 /** Writes every matching row, with its findings and check, to `path` as one JSON object per line.
  *  The file holds patient values, so it is made 0600 and nothing from it is printed.
  *
@@ -195,9 +200,10 @@ async function exportHeld(pluginId: string, copyId: string, filters: HeldFilters
   let written = 0;
   const ctx = await createAppContext(loadConfig());
   try {
-    // A check that is running adds and removes rows, so pages would repeat or skip one.
+    // A check that is running adds and removes rows. Pages read by key do not move, but the file
+    // would hold rows the check is still changing.
     const check = await ctx.importChecks.get(pluginId, checkIdOf(copyId));
-    if (check && LIVE_CHECK.has(check.status)) {
+    if (check && isLiveCheck(check.status)) {
       process.stderr.write('The check of this copy is running. Wait for it, or stop it, then export again.\n');
       return 1;
     }
@@ -205,19 +211,23 @@ async function exportHeld(pluginId: string, copyId: string, filters: HeldFilters
     let file: FileHandle | null = await open(temp, 'wx', 0o600);
     let kept = false;
     try {
-      let offset = 0;
+      // Read by key: each page starts after the last key of the one before, so a row added or
+      // removed before it does not shift the page.
+      let after: string | null = null;
       let total = 0;
       let audited = false;
       for (;;) {
-        const page = await ctx.importChecks.heldItems(pluginId, copyId, { ...filters, offset, limit: HELD_ITEMS_LIMIT_MAX });
+        const page: { items: unknown[]; total: number; next?: string | null } =
+          await ctx.importChecks.heldItems(pluginId, copyId, { ...filters, after, limit: HELD_ITEMS_LIMIT_MAX });
         // Once per export, after rows were read: the file now holds patient values.
         if (!audited) { await recordCheckRead(ctx, cliNamedActor(), { pluginId, copyId, kind: 'heldItems' }); audited = true; }
         total = page.total;
-        if (page.items.length === 0) break;
-        await file.appendFile(page.items.map((i) => `${JSON.stringify(i)}\n`).join(''));
-        written += page.items.length;
-        offset += page.items.length;
-        if (offset >= total) break;
+        if (page.items.length > 0) {
+          await file.appendFile(page.items.map((i) => `${JSON.stringify(i)}\n`).join(''));
+          written += page.items.length;
+        }
+        if (page.items.length === 0 || page.next === null || page.next === undefined) break;
+        after = page.next;
       }
       // Rows moved while the export ran: the file would repeat or miss a request.
       if (written !== total) {

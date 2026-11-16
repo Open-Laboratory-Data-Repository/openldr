@@ -219,14 +219,15 @@ export function buildProgram(): Command {
     });
 
   const checkRuns = imports.command('check').description('Check a finished copy with a plugin that decodes each request. The server does the checking');
-  checkRuns.command('start').description('Ask for a check of a finished copy, or for a stopped one to carry on, and return. The server does the checking')
+  checkRuns.command('start').description('Ask for a check of a finished copy and return. A stopped or failed check carries on from where it stopped. The server does the checking')
     .requiredOption('--plugin <id>', 'the plugin that decodes the requests')
     .requiredOption('--copy <copy>', 'the finished copy to check')
     .option('--reference <copy>', 'a copy of reference records to compare with. With none, requests are saved as not compared')
     .option('--option <name=value...>', 'a plugin option, repeatable (for example tz=+02:00)')
-    .option('--page-size <n>', 'requests per page, 1 to 2000 (default 500)')
+    .option('--page-size <n>', 'requests per page, 1 to 2000 (default 500, or the page size of a check that carries on)')
+    .option('--from-start', 'start again from the first request, with the counts at zero, even when the check could carry on', false)
     .option('--json', 'emit JSON', false)
-    .action(async (opts: { plugin: string; copy: string; reference?: string; option?: string[]; pageSize?: string; json: boolean }) => {
+    .action(async (opts: { plugin: string; copy: string; reference?: string; option?: string[]; pageSize?: string; fromStart: boolean; json: boolean }) => {
       try { process.exitCode = await runImportCheckStart(opts); } catch (err) { process.stderr.write(`import check start failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
   checkRuns.command('status <plugin> [run]').description('Show one check, or every check of a plugin')
