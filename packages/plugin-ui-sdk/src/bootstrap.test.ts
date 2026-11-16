@@ -48,6 +48,37 @@ describe('SDK_BOOTSTRAP_V1', () => {
     ]);
   });
 
+  it('the SDK sends each check call as its op', async () => {
+    let handler: ((ev: unknown) => void) | undefined;
+    const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('window', SDK_BOOTSTRAP_V1)(win);
+    const api = (win as unknown as { openldr: { imports: { check: Record<string, (...a: unknown[]) => Promise<unknown>> } } }).openldr;
+    const sent: Array<{ id: number; op: unknown }> = [];
+    const port = {
+      start: () => {},
+      onmessage: null as null | ((e: { data: unknown }) => void),
+      postMessage(m: { id: number; op: unknown }) { sent.push(m); queueMicrotask(() => port.onmessage?.({ data: { id: m.id, result: { ok: true, data: m.op } } })); },
+    };
+    handler!({ data: { type: 'openldr:init', context: { pluginId: 'p' } }, ports: [port] });
+
+    const check = api.imports.check;
+    await check.start({ copyId: 'cp1', referenceCopyId: null, options: { tz: '+02:00' }, pageSize: 200 });
+    await check.list();
+    await check.status('ck1');
+    await check.stop('ck1');
+    await check.held({ copyId: 'cp1', reason: 'held', label: 'odd_age', offset: 20, limit: 10 });
+    await check.heldItem({ copyId: 'cp1', key: 'REQ1' });
+    expect(sent.map((m) => m.op)).toEqual([
+      { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: { tz: '+02:00' }, pageSize: 200 },
+      { kind: 'import.check.list' },
+      { kind: 'import.check.status', runId: 'ck1' },
+      { kind: 'import.check.stop', runId: 'ck1' },
+      { kind: 'import.check.held', copyId: 'cp1', reason: 'held', label: 'odd_age', offset: 20, limit: 10 },
+      { kind: 'import.check.heldItem', copyId: 'cp1', key: 'REQ1' },
+    ]);
+  });
+
   it('defines window.openldr SYNCHRONOUSLY (before any openldr:init) so screens never race the injection', () => {
     // Run the bootstrap IIFE against a controlled fake window, capturing the message handler.
     let handler: ((ev: unknown) => void) | undefined;

@@ -214,8 +214,8 @@ async function world(requests: string[], facilities: string[] = []) {
     plugins: pluginsDep, connectors, secretsKey: 'k', pluginData, persist: async () => [], audit,
     createDb: () => source.db, now: () => new Date(clock.now),
   });
-  const service = (driverId = 'server-1'): ImportCopyService => createImportCopyService({
-    plugins: pluginsDep, connectors, secretsKey: 'k', pluginData, audit, store,
+  const service = (driverId = 'server-1', checks?: NonNullable<Parameters<typeof createImportCopyService>[0]['checks']>): ImportCopyService => createImportCopyService({
+    plugins: pluginsDep, connectors, secretsKey: 'k', pluginData, audit, store, checks,
     allowed: (pluginId) => imports.allowed(pluginId),
     driverId,
     createDb: () => source.db,
@@ -1025,6 +1025,26 @@ describe('copy: stop, release and delete', () => {
     expect((await w.svc.get(PLUGIN, COPY))!.status).toBe('completed');
     expect((await w.rows()).length).toBe(12);
     expect(actions(w)).not.toContain('import.copy.delete');
+  });
+
+  it('start is refused while a check on the copy is queued, running, waiting or stopping, and allowed otherwise', async () => {
+    const w = await world(keysOf(4));
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, COPY))!.status).toBe('completed');
+    let check: string | null = null;
+    const guarded = w.service('cli-1', { statusOf: async () => check, deleteHeld: async () => 0 });
+    for (const live of ['queued', 'running', 'waiting', 'stopping']) {
+      check = live;
+      await expect(guarded.start({ ...START, pageSize: 2 })).rejects.toThrow(`copy ${COPY} has a check that is ${live}; stop it before starting the copy again`);
+    }
+    // Refused starts changed nothing: the copy is still completed.
+    expect((await w.svc.get(PLUGIN, COPY))!.status).toBe('completed');
+    for (const ended of [null, 'stopped', 'completed', 'failed']) {
+      check = ended;
+      expect((await guarded.start({ ...START, pageSize: 2 })).id).toBe(COPY);
+      await drive(guarded);
+    }
   });
 
   it('remove deletes every row in batches, then the run record', async () => {

@@ -6,6 +6,7 @@ import type { PluginDataStore } from '@openldr/db';
 import type { PluginPolicy } from './policy';
 import { policyAllows } from './policy';
 import { HOST_COLLECTION_PREFIX, type ImportActor, type ImportService } from './import-run';
+import type { CheckRun, ImportCheckService } from './import-check';
 import { CopySetChangedError, type CopyRun, type CopySetProgress, type ImportCopyService } from './import-copy';
 
 /** The caller principal (the authenticated host user forwarding on the plugin's behalf). */
@@ -64,7 +65,14 @@ export type BrokerOp =
   | { kind: 'import.copy.list' }
   | { kind: 'import.copy.status'; copyId: string }
   | { kind: 'import.copy.stop'; copyId: string }
-  | { kind: 'import.copy.delete'; copyId: string; confirm: true };
+  | { kind: 'import.copy.delete'; copyId: string; confirm: true }
+  // Check runs over a finished copy (host:import too). The page names a copy and options.
+  | { kind: 'import.check.start'; copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number }
+  | { kind: 'import.check.list' }
+  | { kind: 'import.check.status'; runId: string }
+  | { kind: 'import.check.stop'; runId: string }
+  | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }
+  | { kind: 'import.check.heldItem'; copyId: string; key: string };
 
 /** A copy as a plugin page sees it: no set's `cursor`, which is a source key, and no `driver`,
  *  which names a server process. */
@@ -76,6 +84,16 @@ export function copyForPage(run: CopyRun): PageCopyRun {
   const shown: PageCopyRun['sets'] = {};
   for (const [name, { cursor: _cursor, ...progress }] of Object.entries(sets)) shown[name] = progress;
   return { ...rest, sets: shown };
+}
+
+/** A check run as a plugin page sees it: no `cursor`, which is a source key, no `driver`, which
+ *  names a server process, and none of the record's own bookkeeping. */
+export type PageCheckRun = Omit<CheckRun, 'driver' | 'rev' | 'kind' | 'pluginId' | 'pluginVersion' | 'cursor' | 'startedBy'>;
+
+/** The one place a check run is cut down for a plugin page. Every check op's answer goes through it. */
+export function checkForPage(run: CheckRun): PageCheckRun {
+  const { driver: _driver, rev: _rev, kind: _kind, pluginId: _pluginId, pluginVersion: _pluginVersion, cursor: _cursor, startedBy: _startedBy, ...rest } = run;
+  return rest;
 }
 
 export type BrokerResult = { ok: true; data: unknown } | { ok: false; error: string };
@@ -147,6 +165,18 @@ export function buildBrokerOpSchema(maxDocBytes: number) {
     z.object({ kind: z.literal('import.copy.stop'), copyId: ID }),
     // Deleting a copy throws away every row it holds, so the page must say so in the op itself.
     z.object({ kind: z.literal('import.copy.delete'), copyId: ID, confirm: z.literal(true) }),
+    z.object({
+      kind: z.literal('import.check.start'), copyId: ID, referenceCopyId: ID.nullable(), options: IMPORT_OPTIONS,
+      pageSize: z.number().int().positive().optional(),
+    }),
+    z.object({ kind: z.literal('import.check.list') }),
+    z.object({ kind: z.literal('import.check.status'), runId: ID }),
+    z.object({ kind: z.literal('import.check.stop'), runId: ID }),
+    z.object({
+      kind: z.literal('import.check.held'), copyId: ID, reason: z.enum(['held', 'error']).optional(), label: z.string().min(1).max(64).optional(),
+      offset: z.number().int().min(0), limit: z.number().int().min(1).max(100),
+    }),
+    z.object({ kind: z.literal('import.check.heldItem'), copyId: ID, key: z.string().min(1).max(200) }),
   ]);
 }
 
@@ -160,6 +190,7 @@ function gateFor(op: BrokerOp): string | undefined {
     case 'import.allowed': case 'import.diagnose': case 'import.checks': case 'import.start': case 'import.status':
     case 'import.list': case 'import.failures': case 'import.stop': case 'import.resume':
     case 'import.copy.start': case 'import.copy.list': case 'import.copy.status': case 'import.copy.stop': case 'import.copy.delete':
+    case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop': case 'import.check.held': case 'import.check.heldItem':
       return 'host:import';
     default: return undefined; // storage.*, invoke
   }
@@ -200,6 +231,7 @@ function rolesFor(op: BrokerOp): string[] {
     case 'import.list': case 'import.failures': case 'import.stop': case 'import.resume':
     // Copies read a database connector the same way, so the same rule holds.
     case 'import.copy.start': case 'import.copy.list': case 'import.copy.status': case 'import.copy.stop': case 'import.copy.delete':
+    case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop': case 'import.check.held': case 'import.check.heldItem':
       return ['lab_admin'];
     // storage.*, invoke, reports.*, fhir.* — reports/fhir reads are broadly readable (native routes have no role gate).
     default: return [];
@@ -234,6 +266,8 @@ export interface PluginBrokerDeps {
   imports?: Pick<ImportService, 'allowed' | 'checks' | 'start' | 'get' | 'list' | 'failures' | 'stop' | 'resume'>;
   /** The copy service (import-copy.ts). When absent, copy ops return a structured error. */
   copies?: Pick<ImportCopyService, 'start' | 'get' | 'list' | 'stop' | 'remove'>;
+  /** The check service (import-check.ts). When absent, check ops return a structured error. */
+  checks?: Pick<ImportCheckService, 'start' | 'get' | 'list' | 'stop' | 'held' | 'heldItem'>;
   /** Step-by-step check of a host connector (connector-diagnose.ts), by connector id. */
   diagnoseConnector?: (id: string) => Promise<unknown>;
   policy: () => PluginPolicy;
@@ -460,6 +494,41 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
               }
               case 'import.copy.stop': return { ok: true, data: copyForPage(await copies.stop(pluginId, op.copyId, actor)) };
               case 'import.copy.delete': return { ok: true, data: copyForPage(await copies.remove(pluginId, op.copyId, actor)) };
+            }
+            return { ok: false, error: 'unknown operation' };
+          }
+          case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop':
+          case 'import.check.held': case 'import.check.heldItem': {
+            const checks = deps.checks;
+            if (!checks) return { ok: false, error: 'checks are unavailable' };
+            const actor: ImportActor = { type: 'user', id: principal.id, name: principal.username ?? principal.id };
+            switch (op.kind) {
+              case 'import.check.start': return { ok: true, data: checkForPage(await checks.start({
+                pluginId, copyId: op.copyId, referenceCopyId: op.referenceCopyId, options: op.options,
+                ...(op.pageSize !== undefined ? { pageSize: op.pageSize } : {}),
+                actor,
+              })) };
+              case 'import.check.list': return { ok: true, data: (await checks.list(pluginId)).map(checkForPage) };
+              case 'import.check.status': {
+                const run = await checks.get(pluginId, op.runId);
+                return { ok: true, data: run ? checkForPage(run) : null };
+              }
+              case 'import.check.stop': return { ok: true, data: checkForPage(await checks.stop(pluginId, op.runId, actor)) };
+              case 'import.check.held': {
+                const data = await checks.held(pluginId, op.copyId, {
+                  ...(op.reason !== undefined ? { reason: op.reason } : {}),
+                  ...(op.label !== undefined ? { label: op.label } : {}),
+                  offset: op.offset, limit: op.limit,
+                });
+                // These rows hold real values. The audit row names the operation and the copy, nothing else.
+                await emit(pluginId, principal, `import.check.held:${op.copyId}`, 'ok');
+                return { ok: true, data };
+              }
+              case 'import.check.heldItem': {
+                const data = await checks.heldItem(pluginId, op.copyId, op.key);
+                await emit(pluginId, principal, `import.check.heldItem:${op.copyId}`, 'ok');
+                return { ok: true, data };
+              }
             }
             return { ok: false, error: 'unknown operation' };
           }

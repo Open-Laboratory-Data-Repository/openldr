@@ -118,7 +118,7 @@ export interface ImportCopyServiceDeps
   };
 }
 
-/** Check statuses that hold the copy: a remove is refused while the check is in one of them. */
+/** Check statuses that hold the copy: a start or a remove is refused while the check is in one of them. */
 const LIVE_CHECK = new Set(['queued', 'running', 'waiting', 'stopping']);
 
 export interface ImportCopyStartInput {
@@ -838,6 +838,11 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
         }
 
         if (existing.status === 'deleting') throw new Error(`copy ${id} is being deleted`);
+        // A start empties or extends the rows a live check reads, so it waits for the check.
+        const check = deps.checks ? await ownDb('read', () => deps.checks!.statusOf(plugin.id, id)) : null;
+        if (check !== null && LIVE_CHECK.has(check)) {
+          throw new Error(`copy ${id} has a check that is ${check}; stop it before starting the copy again`);
+        }
         if (existing.status === 'stopping') throw new Error(`copy ${id} is stopping; start it again once it has stopped`);
         const changed = changedSets(existing.setSql, spec.hashes);
         const active = existing.status === 'running' || existing.status === 'waiting';

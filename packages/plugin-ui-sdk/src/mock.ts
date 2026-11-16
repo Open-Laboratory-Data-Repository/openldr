@@ -1,10 +1,19 @@
-import type { OpenLdrPluginApi, PluginCopyRun, PluginCopyStatus, PluginSiteName } from './types';
+import type { OpenLdrPluginApi, PluginCheckRun, PluginCheckStatus, PluginCopyRun, PluginCopyStatus, PluginSiteName } from './types';
 
 function mockCopy(pluginId: string, connectorId: string, status: PluginCopyStatus): PluginCopyRun {
   const at = new Date(0).toISOString();
   return {
     id: 'mock-copy', kind: 'copy', rev: 1, pluginId, pluginVersion: '0.0.0', connectorId, status, options: {}, pageSize: 500,
     sets: {}, setOrder: [], setSql: {}, waiting: null, startedAt: at, updatedAt: at, finishedAt: null, lastError: null, startedBy: 'mock',
+  };
+}
+
+function mockCheck(copyId: string, referenceCopyId: string | null, status: PluginCheckStatus): PluginCheckRun {
+  const at = new Date(0).toISOString();
+  return {
+    id: 'mock-check', copyId, referenceCopyId, status, options: {}, pageSize: 500,
+    counts: { read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: {} },
+    waiting: null, startedAt: at, updatedAt: at, finishedAt: null, lastError: null,
   };
 }
 
@@ -74,6 +83,14 @@ export function createMockOpenldr(opts: MockOptions): OpenLdrPluginApi {
         async status() { return null; },
         async stop() { return mockCopy(opts.pluginId, 'mock-connector', 'stopping'); },
         async remove() { return mockCopy(opts.pluginId, 'mock-connector', 'deleting'); },
+      },
+      check: {
+        async start(input) { return mockCheck(input.copyId, input.referenceCopyId, 'queued'); },
+        async list() { return []; },
+        async status() { return null; },
+        async stop() { return mockCheck('mock-copy', null, 'stopping'); },
+        async held() { return { rows: [], total: 0 }; },
+        async heldItem() { return null; },
       },
     },
   };

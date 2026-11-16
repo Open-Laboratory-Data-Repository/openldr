@@ -45,7 +45,13 @@ export type PluginBrokerOp =
   | { kind: 'import.copy.list' }
   | { kind: 'import.copy.status'; copyId: string }
   | { kind: 'import.copy.stop'; copyId: string }
-  | { kind: 'import.copy.delete'; copyId: string; confirm: true };
+  | { kind: 'import.copy.delete'; copyId: string; confirm: true }
+  | { kind: 'import.check.start'; copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number }
+  | { kind: 'import.check.list' }
+  | { kind: 'import.check.status'; runId: string }
+  | { kind: 'import.check.stop'; runId: string }
+  | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }
+  | { kind: 'import.check.heldItem'; copyId: string; key: string };
 
 export type PluginCopyStatus = 'queued' | 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed' | 'deleting';
 
@@ -86,6 +92,42 @@ export interface PluginCopyRun {
   finishedAt: string | null;
   lastError: string | null;
   startedBy: string;
+}
+
+export type PluginCheckStatus = 'queued' | 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed';
+
+/** A check run as the host shows it to a page (mirror of the broker's PageCheckRun). The host
+ *  never sends the run's position in the copy, nor which server process drives it. */
+export interface PluginCheckRun {
+  id: string;
+  copyId: string;
+  referenceCopyId: string | null;
+  status: PluginCheckStatus;
+  options: Record<string, string>;
+  pageSize: number;
+  counts: { read: number; saved: number; held: number; failed: number; resources: number; labels: Record<string, number> };
+  waiting: { since: string; attempt: number; error: string } | null;
+  startedAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+  lastError: string | null;
+}
+
+/** One request the check kept back, without the plugin's own detail. */
+export interface PluginHeldRow {
+  copyId: string;
+  key: string;
+  runId: string;
+  reason: 'held' | 'error';
+  label: string | null;
+  error: string | null;
+  heldAt: string;
+}
+
+/** A held request with the plugin's own JSON. Only the plugin's page knows what is inside. */
+export interface PluginHeldItem extends PluginHeldRow {
+  findings: unknown;
+  check: unknown;
 }
 
 export type PluginRpcResult = { ok: true; data: unknown } | { ok: false; error: string };
@@ -147,6 +189,17 @@ export interface OpenLdrPluginApi {
       stop(copyId: string): Promise<PluginCopyRun>;
       /** Deletes the copy and every row it holds. */
       remove(copyId: string): Promise<PluginCopyRun>;
+    };
+    /** A check of a finished copy: the plugin decodes each request, CE saves what passes and keeps
+     *  the rest. One per copy. The held calls return real values; show them to the person, never log them. */
+    check: {
+      /** Records the request and returns. Fails with a sentence when the copy is not finished, a run is live, or a copy is not this plugin's. */
+      start(input: { copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number }): Promise<PluginCheckRun>;
+      list(): Promise<PluginCheckRun[]>;
+      status(runId: string): Promise<PluginCheckRun | null>;
+      stop(runId: string): Promise<PluginCheckRun>;
+      held(input: { copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }): Promise<{ rows: PluginHeldRow[]; total: number }>;
+      heldItem(input: { copyId: string; key: string }): Promise<PluginHeldItem | null>;
     };
   };
 }

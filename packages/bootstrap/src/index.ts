@@ -1890,6 +1890,7 @@ const reporting: ReportingApi = {
     pluginData,
     imports,
     copies: importCopies,
+    checks: importChecks,
     // Step-by-step connection check for the import page. The broker only calls this for a
     // connector the admin allowed for the calling plugin.
     diagnoseConnector: async (id: string) => {
