@@ -6,7 +6,7 @@ import {
 import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
 import { STALE_MS, type ImportActor, type ImportAuditEvent } from './import-run';
 import { copyIdOf, createImportCopyService, type CopyRun, type ImportCopyService } from './import-copy';
-import { checkIdOf, createImportCheckService, type CheckRun, type ImportCheckService } from './import-check';
+import { checkIdOf, createImportCheckService, liveCheckStatus, type CheckRun, type ImportCheckService } from './import-check';
 
 // Layer under test: the check service over the real plugin_data store, the real copy row store and
 // the real held store on pg-mem, with the real copy service for reading and removing a copy. The
@@ -42,6 +42,10 @@ const FACILITIES: CopyRow[] = [
   { detail: 'facilities', key: 'F1', seq: 0, row: { FacilityCode: 'F1', Name: 'Clinic One' } },
   { detail: 'facilities', key: 'F2', seq: 0, row: { FacilityCode: 'F2', Name: 'Clinic Two' } },
 ];
+const setSpec = (name: string, details: string[]) => ({
+  name, keyQuery: { sql: `SELECT TOP ({{limit}}) [K] FROM [${name}] WHERE [K] > {{after}} ORDER BY [K]` },
+  detailQueries: details.map((d) => ({ name: d, sql: `SELECT [K] AS [__key], * FROM [${d}] WHERE [K] IN ({{keys}})` })),
+});
 const pass = (key: string): Group => ({ key, resources: [{ resourceType: 'ServiceRequest', id: key }], label: 'passed' });
 
 function manifest(entrypoints: Record<string, string>, id = PLUGIN) {
@@ -77,8 +81,13 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
   const realCopyStore = createImportCopyStore(internalDb);
   const readSetCalls: Array<{ set: string; maxBytes: number }> = [];
   let readSetFault: ((set: string, maxBytes: number) => unknown) | null = null;
+  const readCalls: Array<{ copyId: string; set: string; keys: number }> = [];
   const copyStore: ImportCopyStore = {
     ...realCopyStore,
+    async read(copyId, setName, keys) {
+      readCalls.push({ copyId, set: setName, keys: keys.length });
+      return realCopyStore.read(copyId, setName, keys);
+    },
     async readSet(copyId, setName, maxBytes) {
       readSetCalls.push({ set: setName, maxBytes });
       if (readSetFault) throw readSetFault(setName, maxBytes);
@@ -87,9 +96,11 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
   };
   const realHeld = createImportCheckHeldStore(internalDb);
   let heldPutFaults = 0;
+  const heldPuts: unknown[] = [];
   const held: ImportCheckHeldStore = {
     ...realHeld,
     async put(item) {
+      heldPuts.push(structuredClone(item));
       if (heldPutFaults > 0) {
         heldPutFaults -= 1;
         // What Postgres says on a full disk. Its detail field quotes the row.
@@ -108,6 +119,12 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
   const twinCalls: Array<{ options: Record<string, string>; keys: string[] }> = [];
   let decodeFn: (input: DecodeInput) => unknown = (input) => ({ groups: input.keys.map(pass) });
   let twinFn: (keys: string[]) => unknown = (keys) => ({ keys: keys.map((k) => `T-${k}`) });
+  const copyCalls: Array<Record<string, string>> = [];
+  /** The plugin's copy answer. The source names requests (two details) and one dictionary; a copy
+   *  made with the option role=reference names the set twins. */
+  let copyFn: (options: Record<string, string>) => unknown = (options) => (options.role === 'reference'
+    ? { sets: [setSpec('twins', ['requests', 'results'])] }
+    : { sets: [setSpec('requests', ['requests', 'results']), setSpec('facilities', [])] });
   const invoke = vi.fn(async (entrypoint: string, input: unknown) => {
     if (entrypoint === 'import_decode') {
       const i = structuredClone(input) as DecodeInput;
@@ -118,6 +135,11 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
       const i = input as { options: Record<string, string>; keys: string[] };
       twinCalls.push(structuredClone(i));
       return twinFn(i.keys);
+    }
+    if (entrypoint === 'import_copy') {
+      const i = input as { options: Record<string, string> };
+      copyCalls.push(structuredClone(i.options));
+      return copyFn(i.options);
     }
     throw new Error(`no entrypoint ${entrypoint}`);
   });
@@ -134,12 +156,11 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
   const sleeps: number[] = [];
   const connectors = { get: async () => null, getDecryptedConfig: async () => ({}) };
 
-  let checksRef: ImportCheckService | null = null;
   const copies: ImportCopyService = createImportCopyService({
     plugins: pluginsDep, connectors, secretsKey: 'k', pluginData, audit, store: realCopyStore,
     allowed: async () => [], driverId: 'server-1', now: () => new Date(clock.now),
     checks: {
-      statusOf: async (pluginId, copyId) => (await checksRef!.get(pluginId, checkIdOf(copyId)))?.status ?? null,
+      liveCheckStatus: (pluginId, copyId) => liveCheckStatus(raw, pluginId, copyId),
       deleteHeld: (copyId, limit) => realHeld.deleteSome(copyId, limit),
     },
   });
@@ -149,7 +170,6 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
     sleep: async (ms) => { sleeps.push(ms); },
   });
   const svc = service();
-  checksRef = svc;
   worlds.push({ plainCheckPuts });
 
   /** Write a copy as a finished one leaves it: its record and its rows. */
@@ -157,7 +177,8 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
     const at = new Date(clock.now).toISOString();
     const setOrder = Object.keys(sets);
     const run: CopyRun = {
-      id: copyId, kind: 'copy', rev: 1, pluginId, pluginVersion: '1.2.0', connectorId, status, options: {}, pageSize: 500,
+      id: copyId, kind: 'copy', rev: 1, pluginId, pluginVersion: '1.2.0', connectorId, status,
+      options: copyId === REF ? { role: 'reference' } : {}, pageSize: 500,
       sets: Object.fromEntries(setOrder.map((n) => [n, { cursor: null, keys: 0, rows: sets[n].length, bytes: 0, skipped: 0, done: true }])),
       setOrder, setSql: {}, waiting: null, driver: null, startedAt: at, updatedAt: at, finishedAt: at, lastError: null, startedBy: 'admin',
     };
@@ -166,14 +187,15 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
       await realCopyStore.replaceKeys(copyId, name, [...new Set(rows.map((r) => r.key))], rows);
     }
   }
-  const setCopyStatus = async (copyId: string, status: CopyRun['status']) => {
+  const setCopyStatus = async (copyId: string, status: CopyRun['status'], over: Partial<CopyRun> = {}) => {
     const run = (await raw.get(PLUGIN, '__import-copies', copyId)) as CopyRun;
-    await raw.put(PLUGIN, '__import-copies', copyId, { ...run, status, rev: run.rev + 1 });
+    await raw.put(PLUGIN, '__import-copies', copyId, { ...run, status, rev: run.rev + 1, ...over });
   };
 
   return {
     svc, service, copies, raw, audited, runSaves, decodeCalls, twinCalls, invoke, persisted, clock, sleeps, plugins,
-    readSetCalls, realHeld, seedCopy, setCopyStatus,
+    readSetCalls, readCalls, heldPuts, copyCalls,
+    setCopy: (fn: (options: Record<string, string>) => unknown) => { copyFn = fn; }, realHeld, seedCopy, setCopyStatus,
     setDecode: (fn: (input: DecodeInput) => unknown) => { decodeFn = fn; },
     setTwinKeys: (fn: (keys: string[]) => unknown) => { twinFn = fn; },
     failPersist: (fn: ((resources: unknown[]) => unknown) | null) => { persistFault = fn; },
@@ -639,5 +661,277 @@ describe('check: what may be shown', () => {
     expect(shown).not.toContain('Maria');
     for (const e of w.audited) expect(JSON.stringify(e)).not.toMatch(/REQ000/);
     expect((await w.svc.heldItem(PLUGIN, SRC, 'REQ0002'))!.findings).toEqual([{ value: SECRET }]);
+  });
+});
+
+describe('check: fix round 1', () => {
+  const twinRows = (k: string): CopyRow[] => [
+    { detail: 'requests', key: k, seq: 0, row: { RequestID: k } },
+    { detail: 'results', key: k, seq: 0, row: { RequestID: k, Value: 1 } },
+  ];
+
+  it('I1: a live check guards its source and its reference copy against a remove', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: twinRows('T-REQ0001') });
+    await w.svc.start({ ...START, referenceCopyId: REF });
+    expect(await liveCheckStatus(w.raw, PLUGIN, SRC)).toBe('queued');
+    expect(await liveCheckStatus(w.raw, PLUGIN, REF)).toBe('queued');
+    expect(await liveCheckStatus(w.raw, PLUGIN, 'another')).toBeNull();
+    await expect(w.copies.remove(PLUGIN, REF, ADMIN)).rejects.toThrow(`copy ${REF} has a check that is queued; stop it before deleting the copy`);
+    await expect(w.copies.remove(PLUGIN, SRC, ADMIN)).rejects.toThrow(`copy ${SRC} has a check that is queued; stop it before deleting the copy`);
+    await drive(w.svc);
+    expect(await liveCheckStatus(w.raw, PLUGIN, REF)).toBeNull();
+    expect((await w.copies.remove(PLUGIN, REF, ADMIN)).status).toBe('deleting');
+  });
+
+  it('I1: a reference copy that is no longer completed fails the run at the next page', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: twinRows('T-REQ0001') });
+    let flipped = false;
+    w.setDecode(async (input) => {
+      if (!flipped) { flipped = true; await w.setCopyStatus(REF, 'queued'); }
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, referenceCopyId: REF, pageSize: 2 });
+    await drive(w.svc);
+    expect(w.decodeCalls).toHaveLength(1);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
+      status: 'failed', cursor: 'REQ0002', counts: { read: 2, saved: 2 },
+      lastError: `copy ${REF} changed while the check was reading it; start the check again once the copy has completed`,
+    });
+  });
+
+  it('I1: a source copy read again to the end under a running check fails the run, and never completes it', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    let flipped = false;
+    w.setDecode(async (input) => {
+      // Still completed, but a later pass: its finish time moved.
+      if (!flipped) { flipped = true; await w.setCopyStatus(SRC, 'completed', { finishedAt: new Date(w.clock.now + 1000).toISOString() }); }
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
+      status: 'failed', lastError: `copy ${SRC} changed while the check was reading it; start the check again once the copy has completed`,
+    });
+    expect(w.decodeCalls).toHaveLength(1);
+  });
+
+  it('I2: a fault of CE database that never clears fails the run after 5 tries again, with the code and no value', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ key, held: true })) }));
+    w.failHeldPuts(Number.POSITIVE_INFINITY);
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(w.runSaves.filter((r) => r.status === 'waiting').map((r) => r.waiting?.attempt)).toEqual([1, 2, 3, 4, 5]);
+    expect(w.sleeps.reduce((n, ms) => n + ms, 0)).toBe(5_000 + 10_000 + 20_000 + 40_000 + 80_000);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run).toMatchObject({
+      status: 'failed', waiting: null, counts: { read: 0, held: 0 },
+      lastError: "OpenLDR's own database refused a write (53100) on 6 tries of one page in a row, so the check stopped",
+    });
+    expect(w.decodeCalls).toHaveLength(6);
+    expect(JSON.stringify([run, w.audited])).not.toContain('Maria');
+  });
+
+  it('I2: a fault part-way through a page counts each request once', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    w.setDecode((input) => ({ groups: input.keys.map((key) => (key === 'REQ0003' ? { key, held: true } : pass(key))) }));
+    // The held write of REQ0003 fails once, after REQ0001 and REQ0002 were saved.
+    w.failHeldPuts(1);
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    expect(w.persisted.map((p) => (p.resources[0] as { id: string }).id)).toEqual(['REQ0001', 'REQ0002', 'REQ0001', 'REQ0002', 'REQ0004']);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
+      status: 'completed', counts: { read: 4, saved: 3, held: 1, failed: 0, resources: 3, labels: { passed: 3 } },
+    });
+  });
+
+  it('I2: a NUL character in findings or check is replaced before the held store sees it', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(1));
+    w.setDecode(() => ({
+      groups: [{ key: 'REQ0001', held: true, findings: [{ note: 'a\u0000b', ['k\u0000ey']: 'x' }], check: { list: ['\u0000', 3, null] } }],
+    }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const cleaned = { findings: [{ note: 'a�b', ['k�ey']: 'x' }], check: { list: ['�', 3, null] } };
+    expect(w.heldPuts).toEqual([expect.objectContaining(cleaned)]);
+    expect(JSON.stringify(w.heldPuts)).not.toContain('\\u0000');
+    expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0001')).toMatchObject(cleaned);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { held: 1 } });
+  });
+
+  it('I3: a twin-keys answer past 20 keys a request is a failed call, and twin rows are read 500 keys at a time', async () => {
+    const w = await world();
+    const keys = keysOf(60);
+    await sourceCopy(w, keys);
+    await w.seedCopy(REF, 'c2', 'completed', { twins: twinRows('T-REQ0001-0') });
+    let calls = 0;
+    w.setTwinKeys((page) => {
+      calls += 1;
+      const many = page.flatMap((k) => Array.from({ length: 20 }, (_, i) => `T-${k}-${i}`));
+      // The first answer has one key too many. The second repeats every key once more.
+      return { keys: calls === 1 ? [...many, 'T-EXTRA'] : calls === 2 ? [...many, ...many.slice(0, 5)] : many };
+    });
+    await w.svc.start({ ...START, referenceCopyId: REF, pageSize: 60 });
+    await drive(w.svc);
+    // The first page was refused whole and halved. No twin row was read for it.
+    expect(w.decodeCalls.map((c) => c.keys.length)).toEqual([30, 30]);
+    expect(w.readCalls.filter((c) => c.set === 'twins').map((c) => c.keys)).toEqual([500, 100, 500, 100]);
+    expect(w.decodeCalls[0].twins.requests).toEqual([{ RequestID: 'T-REQ0001-0' }]);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { read: 60, saved: 60 } });
+  });
+
+  it('I3: a twin-keys call that throws or gives what is not a list of keys halves the page', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [] });
+    let calls = 0;
+    w.setTwinKeys((page) => {
+      calls += 1;
+      if (calls === 1) throw new Error(`no twin for ${SECRET}`);
+      if (calls === 2) return { keys: [1, 2] };
+      return { keys: page };
+    });
+    await w.svc.start({ ...START, referenceCopyId: REF, pageSize: 2 });
+    await drive(w.svc);
+    // Page of 2 fails, then REQ0001 alone fails at one key, then REQ0002 passes.
+    expect(w.decodeCalls.map((c) => c.keys)).toEqual([['REQ0002']]);
+    const list = await w.svc.held(PLUGIN, SRC, { offset: 0, limit: 10 });
+    expect(list.rows.map((r) => [r.key, r.error])).toEqual([['REQ0001', 'DECODE_FAILED']]);
+  });
+
+  it('I4: two groups for one key fail it as DUPLICATE_GROUP, and nothing of it is saved', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    w.setDecode(() => ({
+      groups: [pass('REQ0001'), { key: 'REQ0001', held: true, findings: [1] }, pass('REQ0002')],
+    }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(w.persisted.map((p) => (p.resources[0] as { id: string }).id)).toEqual(['REQ0002']);
+    const list = await w.svc.held(PLUGIN, SRC, { offset: 0, limit: 10 });
+    expect(list.rows.map((r) => [r.key, r.reason, r.error])).toEqual([['REQ0001', 'error', 'DUPLICATE_GROUP']]);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ counts: { read: 2, saved: 1, failed: 1, held: 0 } });
+  });
+
+  it('I5: start refuses a source copy with no set requests and a reference copy with no set twins', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: twinRows('T-REQ0001') });
+    // The two copies swapped.
+    await expect(w.svc.start({ ...START, copyId: REF, referenceCopyId: SRC })).rejects.toThrow(
+      `copy ${REF} has no set requests, so it cannot be the source of a check; pick the source copy`,
+    );
+    // A second source copy, from another connector, picked as the reference.
+    const other = copyIdOf(PLUGIN, 'c3');
+    await w.seedCopy(other, 'c3', 'completed', { requests: requestRows(keysOf(1)) });
+    await expect(w.svc.start({ ...START, referenceCopyId: other })).rejects.toThrow(
+      `copy ${other} has no set twins, so it cannot be the reference of a check; pick the reference copy, or no reference`,
+    );
+    expect(w.audited).toEqual([]);
+    expect((await w.svc.start({ ...START, referenceCopyId: REF })).status).toBe('queued');
+  });
+});
+
+describe('check: fix round 1, the details the plugin declares (I6)', () => {
+  it('a page where one detail has no rows still decodes, with that detail as an empty list', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    // The source names a third detail, taken, and no request of the page has a row of it.
+    w.setCopy(() => ({ sets: [setSpec('requests', ['requests', 'results', 'taken']), setSpec('facilities', [])] }));
+    w.setDecode((input) => {
+      // As the real plugin does: every detail of the set must be a list.
+      if (!['requests', 'results', 'taken'].every((n) => Array.isArray(input.rows[n]))) throw new Error('rows must hold the three details');
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(w.decodeCalls).toHaveLength(1);
+    expect(w.decodeCalls[0].rows.taken).toEqual([]);
+    expect(w.copyCalls).toEqual([{}]);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { saved: 2 }, lastError: null });
+  });
+
+  it('a reference page with no result rows hands results as an empty list', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(1));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [{ detail: 'requests', key: 'T-REQ0001', seq: 0, row: { RequestID: 'T-REQ0001' } }] });
+    // The reference copy names a third detail too.
+    w.setCopy((options) => (options.role === 'reference'
+      ? { sets: [setSpec('twins', ['requests', 'results', 'specimens'])] }
+      : { sets: [setSpec('requests', ['requests', 'results']), setSpec('facilities', [])] }));
+    await w.svc.start({ ...START, referenceCopyId: REF });
+    await drive(w.svc);
+    expect(w.decodeCalls[0].twins).toEqual({ requests: [{ RequestID: 'T-REQ0001' }], results: [], specimens: [] });
+    // Each copy was asked about with its own options.
+    expect(w.copyCalls).toEqual([{}, { role: 'reference' }]);
+  });
+
+  it('an empty dictionary set is handed as an empty list, and a set with no detail queries is one detail', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(1));
+    w.setCopy(() => ({ sets: [setSpec('requests', []), setSpec('facilities', []), setSpec('wards', [])] }));
+    await w.seedCopy(SRC, 'c1', 'completed', {
+      requests: [{ detail: 'requests', key: 'REQ0001', seq: 0, row: reqRow('REQ0001') }], facilities: FACILITIES,
+    });
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(w.decodeCalls[0].dictionaries).toEqual({ facilities: FACILITIES.map((r) => r.row), wards: [] });
+    expect(Object.keys(w.decodeCalls[0].rows)).toEqual(['requests']);
+  });
+
+  it('a copy entrypoint that fails, or no longer names the set, fails the run with a fixed sentence', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(1));
+    w.setCopy(() => { throw new Error(`panic on ${SECRET}`); });
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
+      status: 'failed', lastError: `the plugin's copy entrypoint failed, so the check cannot tell what copy ${SRC} holds`,
+    });
+    w.setCopy(() => ({ sets: [setSpec('facilities', [])] }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
+      status: 'failed', lastError: `the plugin no longer names the set requests for copy ${SRC}`,
+    });
+    w.setCopy(() => ({ sets: 'nope' }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!.lastError).toBe(`the plugin's copy entrypoint gave an answer that is not valid for copy ${SRC}`);
+    expect(w.decodeCalls).toEqual([]);
+    expect(JSON.stringify(w.runSaves)).not.toContain('Maria');
+  });
+
+  it('a failed decode call says why on the run, in a fixed sentence, until a good page clears it', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    let calls = 0;
+    w.setDecode((input) => {
+      calls += 1;
+      if (calls === 1) throw new Error(`plugin timed out after 30000ms near ${SECRET}`);
+      if (calls === 2) throw new Error(`panic: ${SECRET}`);
+      if (calls === 3) return { groups: 'nope' };
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    const errors = w.runSaves.map((r) => r.lastError).filter((e, i, all) => e !== all[i - 1]);
+    expect(errors).toEqual([
+      null,
+      "the plugin's decode call timed out",
+      'the plugin refused the decode call',
+      "the plugin's decode answer was not valid",
+      null,
+    ]);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', lastError: null });
+    expect(JSON.stringify(w.runSaves)).not.toContain('Maria');
   });
 });

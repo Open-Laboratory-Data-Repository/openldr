@@ -85,7 +85,7 @@ import { createPatientDuplicates, type PatientDuplicates } from './patient-dupli
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { createImportService, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
 import { createImportCopyService, type ImportCopyService } from './import-copy';
-import { checkIdOf, createImportCheckService } from './import-check';
+import { createImportCheckService, liveCheckStatus } from './import-check';
 import { startImportDriver } from './import-driver';
 import { diagnoseConnector } from './connector-diagnose';
 import { policyFromConfig } from './policy';
@@ -1866,10 +1866,11 @@ const reporting: ReportingApi = {
     audit: importAudit,
     allowed: (pluginId) => imports.allowed(pluginId),
     driverId: importDriverId,
-    // A copy with a live check is not removed, and its held rows go with it. Read through the
-    // check service, which is built just below, so the copy service never imports it.
+    // A copy that a live check reads, as its source or its reference, is not started again or
+    // removed, and its held rows go with it. Given as two functions, so the copy service never
+    // imports the check service.
     checks: {
-      statusOf: async (pluginId, copyId) => (await importChecks.get(pluginId, checkIdOf(copyId)))?.status ?? null,
+      liveCheckStatus: (pluginId, copyId) => liveCheckStatus(pluginData, pluginId, copyId),
       deleteHeld: (copyId, limit) => importHeld.deleteSome(copyId, limit),
     },
   });

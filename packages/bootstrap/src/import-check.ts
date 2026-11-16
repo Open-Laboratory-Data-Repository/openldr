@@ -3,10 +3,10 @@ import { z } from 'zod';
 import { redact } from '@openldr/core';
 import {
   CopySetTooLargeError, type CopyRow, type HeldItem, type HeldReason, type HeldRow, type ImportCheckHeldStore,
-  type ImportCopyStore, type Provenance,
+  type ImportCopyStore, type PluginDataStore, type Provenance,
 } from '@openldr/db';
 import { allowedResourceTypes, canCheck } from '@openldr/marketplace';
-import type { CopyRun, ImportCopyService } from './import-copy';
+import { copySpecSchema, type CopyRun, type ImportCopyService } from './import-copy';
 import {
   STALE_MS, StoppedWhileWaiting, auditOrRefuse, auditQuietly, checkResources, loadImportSinkWaiting, optionsSchema,
   pluginCode, resolveImportPlugin, saveCode, type ImportActor, type ImportServiceDeps, type ResolvedPlugin,
@@ -44,6 +44,12 @@ const OTHER_LABEL = 'other';
 /** A wait is slept in slices this long, so a stop or a release is felt within a second. */
 const WAIT_SLICE_MS = 1000;
 const SYSTEM: ImportActor = { type: 'system', id: null, name: 'system' };
+/** Tries again of one page after a fault of CE's own database, before the run ends. */
+const MAX_DB_RETRIES = 5;
+/** The most twin keys the plugin may name for each key of a page. */
+const MAX_TWINS_PER_KEY = 20;
+/** Twin keys per read of the reference copy. */
+const TWIN_READ_CHUNK = 500;
 
 export type CheckStatus = 'queued' | 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed';
 
@@ -135,7 +141,8 @@ type Group = z.infer<typeof groupSchema>;
 class OwnDbFault extends Error {}
 /** A failure whose fixed text is kept as it is, with no value in it. */
 class CheckFault extends Error {}
-/** The plugin's decode or twin-keys call threw, timed out, or gave what is not its schema. */
+/** The plugin's decode or twin-keys call threw, timed out, or gave what is not its schema. Its
+ *  message is a fixed sentence for the class of the failure, never the plugin's text. */
 class PluginCallFault extends Error {}
 
 function sqlState(err: unknown): string {
@@ -154,11 +161,34 @@ async function ownDb<T>(kind: 'read' | 'write', work: () => Promise<T>): Promise
   }
 }
 
-/** Rows of a page as the copy stored them, by detail name. */
-function byDetail(rows: CopyRow[]): Record<string, Array<Record<string, unknown>>> {
-  const out: Record<string, Array<Record<string, unknown>>> = {};
+/** Rows of a page as the copy stored them, by detail name. Every declared detail is present, as
+ *  an empty list when the page has no row of it. */
+function byDetail(rows: CopyRow[], declared: string[]): Record<string, Array<Record<string, unknown>>> {
+  const out: Record<string, Array<Record<string, unknown>>> = Object.fromEntries(declared.map((n) => [n, []]));
   for (const r of rows) (out[r.detail] ??= []).push(r.row);
   return out;
+}
+
+/** A NUL, or half of a surrogate pair standing alone. Postgres jsonb refuses both. */
+const UNSTORABLE = /\u0000|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+/** The plugin's JSON with every NUL and lone surrogate, in a string or a key, replaced by U+FFFD. */
+function storable(value: unknown): unknown {
+  if (typeof value === 'string') return value.replace(UNSTORABLE, '\uFFFD');
+  if (Array.isArray(value)) return value.map(storable);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k.replace(UNSTORABLE, '\uFFFD'), storable(v)]));
+  }
+  return value;
+}
+
+/** The status of a live check that reads this copy, as its source or its reference, or null. For
+ *  the copy service, which refuses a start or a remove of such a copy. */
+export async function liveCheckStatus(pluginData: PluginDataStore, pluginId: string, copyId: string): Promise<CheckStatus | null> {
+  for (const e of await pluginData.list(pluginId, CHECKS)) {
+    const run = e.doc as CheckRun;
+    if (isLive(run.status) && (run.copyId === copyId || run.referenceCopyId === copyId)) return run.status;
+  }
+  return null;
 }
 const emptyTwins = (): Record<string, Array<Record<string, unknown>>> => ({ requests: [], results: [] });
 const freshCounts = (): CheckCounts => ({ read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: {} });
@@ -328,12 +358,47 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       };
       const useTwins = plugin.twinKeys !== null && run.referenceCopyId !== null;
 
-      /** Every set of the source copy but `requests`, read whole, by set name. */
-      const readDictionaries = async (source: CopyRun): Promise<Record<string, Array<Record<string, unknown>>>> => {
+      /** A plugin call. A throw or a bad answer is a PluginCallFault with a fixed sentence. Only
+       *  the runtime's own timeout is told apart from a refusal; the plugin's text is never kept. */
+      const callPlugin = async <T>(what: string, entrypoint: string, input: unknown, schema: z.ZodType<T>): Promise<T> => {
+        let raw: unknown;
+        try {
+          raw = await sink.invoke(entrypoint, input);
+        } catch (err) {
+          const timedOut = err instanceof Error && /timed out/i.test(err.message);
+          throw new PluginCallFault(timedOut ? `the plugin's ${what} call timed out` : `the plugin refused the ${what} call`);
+        }
+        const parsed = schema.safeParse(raw);
+        if (!parsed.success) throw new PluginCallFault(`the plugin's ${what} answer was not valid`);
+        return parsed.data;
+      };
+
+      /** The sets the plugin names for a copy, with each set's detail names. Asked of the plugin's
+       *  copy entrypoint with that copy's own options. A set with no detail queries has one detail,
+       *  named after the set, as the copy files it. */
+      const declared = async (copy: CopyRun): Promise<Map<string, string[]>> => {
+        let raw: unknown;
+        try {
+          raw = await sink.invoke(plugin.source.entrypoints.copy!, { options: copy.options });
+        } catch {
+          throw new CheckFault(`the plugin's copy entrypoint failed, so the check cannot tell what copy ${copy.id} holds`);
+        }
+        const parsed = copySpecSchema.safeParse(raw);
+        if (!parsed.success) throw new CheckFault(`the plugin's copy entrypoint gave an answer that is not valid for copy ${copy.id}`);
+        return new Map(parsed.data.sets.map((s) => [s.name, s.detailQueries.length > 0 ? s.detailQueries.map((q) => q.name) : [s.name]]));
+      };
+      const detailsOf = (sets: Map<string, string[]>, set: string, copyId: string): string[] => {
+        const names = sets.get(set);
+        if (!names) throw new CheckFault(`the plugin no longer names the set ${set} for copy ${copyId}`);
+        return names;
+      };
+
+      /** Every set the plugin names for the source copy but `requests`, read whole, by set name.
+       *  A set with no row is handed as an empty list. */
+      const readDictionaries = async (names: string[]): Promise<Record<string, Array<Record<string, unknown>>>> => {
         const out: Record<string, Array<Record<string, unknown>>> = {};
         let used = 0;
-        for (const name of source.setOrder ?? Object.keys(source.sets)) {
-          if (name === REQUESTS) continue;
+        for (const name of names) {
           let rows: CopyRow[];
           try {
             rows = await deps.copyStore.readSet(run.copyId, name, DICTIONARY_CAP - used);
@@ -351,75 +416,117 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         return out;
       };
 
-      const callPlugin = async (entrypoint: string, input: unknown): Promise<unknown> => {
-        try {
-          return await sink.invoke(entrypoint, input);
-        } catch {
-          throw new PluginCallFault();
+      /** What one drive learns once: the copies as they stood, the detail names, the dictionaries. */
+      interface Prepared {
+        source: CopyRun;
+        reference: CopyRun | null;
+        requestDetails: string[];
+        twinDetails: string[];
+        dictionaries: Record<string, Array<Record<string, unknown>>>;
+      }
+      const prepare = async (): Promise<Prepared> => {
+        const source = await completedCopy(run.pluginId, run.copyId);
+        const reference = run.referenceCopyId !== null ? await completedCopy(run.pluginId, run.referenceCopyId) : null;
+        const sourceSets = await declared(source);
+        const requestDetails = detailsOf(sourceSets, REQUESTS, source.id);
+        const twinDetails = useTwins && reference ? detailsOf(await declared(reference), TWINS, reference.id) : [];
+        const dictionaries = await readDictionaries([...sourceSets.keys()].filter((n) => n !== REQUESTS));
+        return { source, reference, requestDetails, twinDetails, dictionaries };
+      };
+      /** A copy that is not as it was when the drive began: a check must not go on reading it. */
+      const assertUnchanged = async (was: CopyRun): Promise<void> => {
+        const now = await ownDb('read', () => deps.copies.get(run.pluginId, was.id));
+        if (!now || now.status !== 'completed' || now.finishedAt !== was.finishedAt) {
+          throw new CheckFault(`copy ${was.id} changed while the check was reading it; start the check again once the copy has completed`);
         }
       };
 
       /** The reference rows for a page, by detail, or empty twins when there is no reference. */
-      const readTwins = async (keys: string[]): Promise<Record<string, Array<Record<string, unknown>>>> => {
+      const readTwins = async (keys: string[], details: string[]): Promise<Record<string, Array<Record<string, unknown>>>> => {
         if (!useTwins) return emptyTwins();
-        const parsed = twinKeysOutputSchema.safeParse(await callPlugin(plugin.twinKeys!, { options: run.options, keys }));
-        if (!parsed.success) throw new PluginCallFault();
-        const rows = await ownDb('read', () => deps.copyStore.read(run.referenceCopyId!, TWINS, parsed.data.keys));
-        return { ...emptyTwins(), ...byDetail(rows) };
+        const answer = await callPlugin('twin-keys', plugin.twinKeys!, { options: run.options, keys }, twinKeysOutputSchema);
+        const wanted = [...new Set(answer.keys)];
+        if (wanted.length > MAX_TWINS_PER_KEY * keys.length) throw new PluginCallFault("the plugin's twin-keys answer was not valid");
+        const rows: CopyRow[] = [];
+        for (let i = 0; i < wanted.length; i += TWIN_READ_CHUNK) {
+          const chunk = wanted.slice(i, i + TWIN_READ_CHUNK);
+          rows.push(...await ownDb('read', () => deps.copyStore.read(run.referenceCopyId!, TWINS, chunk)));
+        }
+        return { ...emptyTwins(), ...byDetail(rows, details) };
       };
 
-      const countLabel = (label: string | undefined): void => {
-        if (label === undefined) return;
-        const labels = run.counts.labels;
-        const named = Object.keys(labels).filter((l) => l !== OTHER_LABEL).length;
-        const name = validLabel(label) !== null && (label in labels || named < MAX_LABELS) ? label : OTHER_LABEL;
-        labels[name] = (labels[name] ?? 0) + 1;
+      /** What one page did. Added to the run's counts only when the page is done, so a page tried
+       *  again after a fault counts nothing twice. */
+      interface Tally { read: number; saved: number; held: number; failed: number; resources: number; labels: string[] }
+      const freshTally = (): Tally => ({ read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: [] });
+      const addTally = (t: Tally): void => {
+        const c = run.counts;
+        c.read += t.read; c.saved += t.saved; c.held += t.held; c.failed += t.failed; c.resources += t.resources;
+        for (const label of t.labels) {
+          const named = Object.keys(c.labels).filter((l) => l !== OTHER_LABEL).length;
+          const name = validLabel(label) !== null && (label in c.labels || named < MAX_LABELS) ? label : OTHER_LABEL;
+          c.labels[name] = (c.labels[name] ?? 0) + 1;
+        }
       };
-      const keepFailed = async (key: string, error: string, label: string | null): Promise<void> => {
+      const keepFailed = async (t: Tally, key: string, error: string, label: string | null): Promise<void> => {
         await ownDb('write', () => deps.held.put({ copyId: run.copyId, key, runId: run.id, reason: 'error', label, error, findings: null, check: null }));
-        run.counts.failed += 1;
+        t.failed += 1;
       };
 
-      let dictionaries: Record<string, Array<Record<string, unknown>>> | null = null;
+      let prepared: Prepared | null = null;
       // A page the plugin could not decode is halved, and doubles again after 5 good pages in a
       // row, never above the run's own page size.
       let size = run.pageSize;
       let goodInRow = 0;
 
       /** One page. 'done' when the set `requests` has no key left. */
-      const onePage = async (): Promise<'done' | 'next' | 'lost'> => {
+      const onePage = async (p: Prepared): Promise<'done' | 'next' | 'lost'> => {
+        await assertUnchanged(p.source);
+        if (p.reference) await assertUnchanged(p.reference);
         const keys = await ownDb('read', () => deps.copyStore.listKeys(run.copyId, REQUESTS, run.cursor, size));
         if (keys.length === 0) return 'done';
-        const rows = byDetail(await ownDb('read', () => deps.copyStore.read(run.copyId, REQUESTS, keys)));
+        const rows = byDetail(await ownDb('read', () => deps.copyStore.read(run.copyId, REQUESTS, keys)), p.requestDetails);
 
         let groups: Map<string, Group> | null = null;
+        /** Keys the plugin gave more than one group. */
+        const twice = new Set<string>();
+        let fault: PluginCallFault | null = null;
         try {
-          const twins = await readTwins(keys);
-          const raw = await callPlugin(plugin.decode, { options: run.options, now: now().toISOString(), dictionaries, keys, rows, twins });
-          const parsed = decodeOutputSchema.safeParse(raw);
-          if (!parsed.success) throw new PluginCallFault();
+          const twins = await readTwins(keys, p.twinDetails);
+          const answer = await callPlugin('decode', plugin.decode, {
+            options: run.options, now: now().toISOString(), dictionaries: p.dictionaries, keys, rows, twins,
+          }, decodeOutputSchema);
           groups = new Map();
-          for (const g of parsed.data.groups) if (!groups.has(g.key)) groups.set(g.key, g);
+          for (const g of answer.groups) {
+            if (groups.has(g.key)) twice.add(g.key);
+            else groups.set(g.key, g);
+          }
         } catch (err) {
           if (!(err instanceof PluginCallFault)) throw err;
+          fault = err;
         }
         // Another process may hold the run now. Then nothing of this page is written.
         if ((await d.haltWanted()) === 'lost') return 'lost';
 
+        const t = freshTally();
         if (groups === null) {
+          // Shown on the run, so a person can see why. Cleared by the next good page.
+          run.lastError = fault?.message ?? null;
           // Nothing of the page is saved. Halve it and read the same cursor again.
           if (keys.length > 1) {
             size = shrinkPage(keys.length);
             goodInRow = 0;
             return 'next';
           }
-          await keepFailed(keys[0], 'DECODE_FAILED', null);
-          run.counts.read += 1;
+          await keepFailed(t, keys[0], 'DECODE_FAILED', null);
+          t.read = 1;
+          addTally(t);
           run.cursor = keys[0];
           size = 1;
           goodInRow = 0;
           return 'next';
         }
+        run.lastError = null;
         goodInRow += 1;
         const grown = growPage(size, run.pageSize, goodInRow);
         if (grown !== size) { size = grown; goodInRow = 0; }
@@ -427,51 +534,51 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         const saved: string[] = [];
         for (const key of keys) {
           const group = groups.get(key);
-          if (!group) { await keepFailed(key, 'NO_GROUP', null); continue; }
-          countLabel(group.label);
+          if (!group) { await keepFailed(t, key, 'NO_GROUP', null); continue; }
+          // Two answers for one request: neither is trusted, and nothing of it is saved.
+          if (twice.has(key)) { await keepFailed(t, key, 'DUPLICATE_GROUP', null); continue; }
+          if (group.label !== undefined) t.labels.push(group.label);
           const label = validLabel(group.label);
-          if (group.error !== undefined) { await keepFailed(key, pluginCode(group.error), label); continue; }
+          if (group.error !== undefined) { await keepFailed(t, key, pluginCode(group.error), label); continue; }
           if (group.held === true) {
             await ownDb('write', () => deps.held.put({
               copyId: run.copyId, key, runId: run.id, reason: 'held', label, error: null,
-              // The store needs a value. A group that gave none is kept as null.
-              findings: group.findings ?? null, check: group.check ?? null,
+              // The store needs a value. A group that gave none is kept as null. Postgres jsonb
+              // refuses a NUL or a lone surrogate, so those are replaced.
+              findings: storable(group.findings ?? null), check: storable(group.check ?? null),
             }));
-            run.counts.held += 1;
+            t.held += 1;
             continue;
           }
           const resources = group.resources ?? [];
           const refused = checkResources(resources, allowedTypes);
-          if (refused) { await keepFailed(key, refused, label); continue; }
+          if (refused) { await keepFailed(t, key, refused, label); continue; }
           try {
             await deps.persist(resources, provenance);
           } catch (err) {
-            await keepFailed(key, saveCode(err), label);
+            await keepFailed(t, key, saveCode(err), label);
             continue;
           }
           saved.push(key);
-          run.counts.saved += 1;
-          run.counts.resources += resources.length;
+          t.saved += 1;
+          t.resources += resources.length;
         }
         // A request that passes now leaves the held-back store.
         if (saved.length > 0) await ownDb('write', () => deps.held.remove(run.copyId, saved));
-        run.counts.read += keys.length;
+        t.read = keys.length;
+        addTally(t);
         run.cursor = keys[keys.length - 1];
         return 'next';
       };
 
-      /** Tries in a row that CE's own database refused. */
+      /** Tries in a row that CE's own database refused, on one page. */
       let dbAttempt = 0;
       for (;;) {
         if (entry.halt) return haltOutcome(entry.halt);
         let step: 'done' | 'next' | 'lost';
         try {
-          if (dictionaries === null) {
-            const source = await completedCopy(run.pluginId, run.copyId);
-            if (useTwins) await completedCopy(run.pluginId, run.referenceCopyId!);
-            dictionaries = await readDictionaries(source);
-          }
-          step = await onePage();
+          prepared ??= await prepare();
+          step = await onePage(prepared);
           if (step === 'next') {
             if (dbAttempt > 0 && run.status === 'waiting') {
               run.status = 'running';
@@ -483,9 +590,13 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           }
         } catch (err) {
           if (!(err instanceof OwnDbFault)) throw err;
-          // CE's own database did not answer. Put the page back, wait, and read it again.
+          // CE's own database did not answer. Put the page back, wait, and read it again. A fault
+          // the same page meets on every try cannot pass, so after 5 tries again the run ends.
           d.rewind();
           dbAttempt += 1;
+          if (dbAttempt > MAX_DB_RETRIES) {
+            throw new CheckFault(`${err.message} on ${dbAttempt} tries of one page in a row, so the check stopped`);
+          }
           await onWaiting({ attempt: dbAttempt, error: err.message }).catch(() => false);
           for (let left = retryWaitMs(dbAttempt); left > 0; left -= WAIT_SLICE_MS) {
             const halt = await d.haltWanted().catch(() => entry.halt);
@@ -596,11 +707,19 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       const parsedOptions = optionsSchema.safeParse(input.options);
       if (!parsedOptions.success) throw new Error('invalid option: names are letters, digits and _, values up to 500 characters');
       const options = parsedOptions.data;
-      await completedCopy(plugin.id, input.copyId);
+      const source = await completedCopy(plugin.id, input.copyId);
+      // Each copy must play its role. A source copy picked as the reference would read as a site
+      // with no reference, and every request would be saved unchecked.
+      if (!(source.setOrder ?? Object.keys(source.sets)).includes(REQUESTS)) {
+        throw new Error(`copy ${source.id} has no set ${REQUESTS}, so it cannot be the source of a check; pick the source copy`);
+      }
       const referenceCopyId = input.referenceCopyId ?? null;
       if (referenceCopyId !== null) {
         if (referenceCopyId === input.copyId) throw new Error('the reference copy must be another copy than the source copy');
-        await completedCopy(plugin.id, referenceCopyId);
+        const reference = await completedCopy(plugin.id, referenceCopyId);
+        if (!(reference.setOrder ?? Object.keys(reference.sets)).includes(TWINS)) {
+          throw new Error(`copy ${reference.id} has no set ${TWINS}, so it cannot be the reference of a check; pick the reference copy, or no reference`);
+        }
       }
       const id = checkIdOf(input.copyId);
 

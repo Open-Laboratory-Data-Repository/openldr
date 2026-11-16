@@ -109,10 +109,11 @@ export interface ImportCopyServiceDeps
   /** Injectable for tests; the page reader's wait between tries. */
   sleep?: (ms: number) => Promise<void>;
   /** The check runs over a copy (import-check.ts). Given as two functions, so this service does
-   *  not import that one. Without it, a remove does not look for a check. */
+   *  not import that one. Without it, a start or a remove does not look for a check. */
   checks?: {
-    /** The status of the check run on this copy, or null when there is none. */
-    statusOf(pluginId: string, copyId: string): Promise<string | null>;
+    /** The status of a live check that reads this copy, as its source or as its reference, or
+     *  null when no live check reads it. */
+    liveCheckStatus(pluginId: string, copyId: string): Promise<string | null>;
     /** Delete up to `limit` held rows of the copy. 0 means none left. */
     deleteHeld(copyId: string, limit: number): Promise<number>;
   };
@@ -150,7 +151,9 @@ export interface ImportCopyService {
   release(): Promise<void>;
 }
 
-const copySpecSchema = z.object({
+/** What a plugin's copy entrypoint answers. The check run (import-check.ts) reads the detail names
+ *  of a set from it. */
+export const copySpecSchema = z.object({
   sets: z.array(querySpecSchema.extend({
     name: z.string().regex(NAME),
     detailQueries: querySpecSchema.shape.detailQueries.default([]),
@@ -826,6 +829,12 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
       let rereading = 0;
 
       return changeRun(plugin.id, id, async (existing) => {
+        // A start empties or extends the rows a live check reads, so it waits for the check. Asked
+        // first, so a copy that is new to this record, or read again, is refused all the same.
+        const check = deps.checks ? await ownDb('read', () => deps.checks!.liveCheckStatus(plugin.id, id)) : null;
+        if (check !== null && LIVE_CHECK.has(check)) {
+          throw new Error(`copy ${id} has a check that is ${check}; stop it before starting the copy again`);
+        }
         if (!existing) {
           rereading = 0;
           const at = now().toISOString();
@@ -838,11 +847,6 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
         }
 
         if (existing.status === 'deleting') throw new Error(`copy ${id} is being deleted`);
-        // A start empties or extends the rows a live check reads, so it waits for the check.
-        const check = deps.checks ? await ownDb('read', () => deps.checks!.statusOf(plugin.id, id)) : null;
-        if (check !== null && LIVE_CHECK.has(check)) {
-          throw new Error(`copy ${id} has a check that is ${check}; stop it before starting the copy again`);
-        }
         if (existing.status === 'stopping') throw new Error(`copy ${id} is stopping; start it again once it has stopped`);
         const changed = changedSets(existing.setSql, spec.hashes);
         const active = existing.status === 'running' || existing.status === 'waiting';
@@ -910,7 +914,7 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
       return changeRun(pluginId, copyId, async (stored) => {
         if (!stored) throw new Error(`copy ${copyId} not found`);
         if (!isTerminal(stored.status)) throw new Error(`copy ${copyId} is ${stored.status}; stop it before deleting it`);
-        const check = deps.checks ? await ownDb('read', () => deps.checks!.statusOf(pluginId, copyId)) : null;
+        const check = deps.checks ? await ownDb('read', () => deps.checks!.liveCheckStatus(pluginId, copyId)) : null;
         if (check !== null && LIVE_CHECK.has(check)) {
           throw new Error(`copy ${copyId} has a check that is ${check}; stop it before deleting the copy`);
         }

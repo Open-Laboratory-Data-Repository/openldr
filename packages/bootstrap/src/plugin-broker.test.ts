@@ -971,7 +971,8 @@ describe('plugin broker: checks', () => {
     const plugins = { list: async () => [{ id: 'p1', version: '1.0.0', enabled: true, manifest: manifest('p1') }, { id: 'p2', version: '1.0.0', enabled: true, manifest: manifest('p2') }], loadSink: async () => undefined } as any;
     const copyDoc = (id: string, pluginId: string) => ({
       id, kind: 'copy', rev: 1, pluginId, pluginVersion: '1.0.0', connectorId: 'c1', status: 'completed', options: {}, pageSize: 500,
-      sets: {}, setOrder: [], setSql: {}, waiting: null, driver: null,
+      // A source copy: a check start refuses a copy with no set requests.
+      sets: {}, setOrder: ['requests'], setSql: {}, waiting: null, driver: null,
       startedAt: '2026-11-16T08:00:00.000Z', updatedAt: '2026-11-16T08:00:00.000Z', finishedAt: '2026-11-16T08:00:00.000Z', lastError: null, startedBy: 'amina',
     });
     await pluginData.put('p1', '__import-copies', 'mine', copyDoc('mine', 'p1'));
