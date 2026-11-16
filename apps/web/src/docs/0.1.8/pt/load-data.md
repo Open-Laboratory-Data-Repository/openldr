@@ -178,6 +178,72 @@ Substitua ficheiro e PLUGIN_ID. Use opções documentadas do plugin. Depois veri
 
 ![Escolher o identificador para importar.](guide:operator-data-plugin-ingest)
 
+## Verificar uma base de origem copiada
+
+Use esta secção para verificar pelo CLI uma cópia concluída de uma base de origem. A verificação descodifica cada pedido com um plugin, guarda os que passam e mantém os restantes para os ler. Substitua `<plugin-id>`, `<copy-id>` e `<run-id>` pelos seus valores.
+
+### 1. Iniciar uma verificação
+
+O comando regista o pedido e devolve o controlo. O servidor faz a verificação. Acrescente `--reference <copy-id>` para comparar com uma cópia de registos de referência. Sem ela, nada é comparado.
+
+**`import check start`**
+
+```sh
+openldr import check start --plugin <plugin-id> --copy <copy-id>
+```
+
+**Resultado esperado:** uma linha com o identificador da execução, o estado e os contadores. Uma verificação parada continua quando volta a executar o comando.
+
+### 2. Acompanhar com status
+
+Execute-o as vezes que quiser. Acrescente `--laboratories` para uma linha por laboratório. Uma linha que começa por `error:` indica a razão da falha da última página.
+
+**`import check status`**
+
+```sh
+openldr import check status <plugin-id> <run-id>
+```
+
+**Resultado esperado:** o estado passa de `running` a `completed`, e `saved`, `held` e `failed` somam `read`.
+
+### 3. Listar o que ficou retido
+
+Este comando lista os pedidos retidos e com falha, 50 de cada vez. Restrinja com `--reason held` ou `--reason error`, `--label` e `--laboratory`. A última linha mostra o total.
+
+**`import check held`**
+
+```sh
+openldr import check held <plugin-id> <copy-id> --reason held
+```
+
+**Resultado esperado:** uma linha por pedido e depois `total N`. A lista nunca mostra valores de pacientes.
+
+### 4. Guardar os pedidos retidos num ficheiro
+
+O ficheiro tem um objeto JSON por linha, com o que o plugin encontrou. Contém valores de pacientes, por isso só você o pode ler. Guarde-o num local seguro. O comando recusa enquanto a verificação decorre, e mantém um ficheiro existente a menos que acrescente `--force`.
+
+**`import check held`**
+
+```sh
+openldr import check held <plugin-id> <copy-id> --export held-requests.jsonl
+```
+
+**Resultado esperado:** a linha `N requests written to held-requests.jsonl`.
+
+### 5. Parar uma verificação
+
+Uma verificação pára na página seguinte. Os pedidos já guardados ficam. Execute `start` outra vez para continuar.
+
+**`import check stop`**
+
+```sh
+openldr import check stop <plugin-id> <run-id>
+```
+
+**Resultado esperado:** o estado é `stopping` e depois `stopped`.
+
+Um plugin com página própria, como um importador de origem do Marketplace, mostra aí a mesma verificação. O guia do próprio plugin explica essa página.
+
 ## Exemplos opcionais de dados
 
 ### Exemplos de conteúdo

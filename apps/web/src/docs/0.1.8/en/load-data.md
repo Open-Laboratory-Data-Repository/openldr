@@ -178,6 +178,72 @@ Replace source filename and PLUGIN_ID. Use the plugin’s documented mapping/con
 
 ![Select its identifier for ingestion.](guide:operator-data-plugin-ingest)
 
+## Check a copied source database
+
+Use this section to check a finished copy of a source database from the CLI. The check decodes each request with a plugin, saves the ones that pass and keeps the rest for you to read. Replace `<plugin-id>`, `<copy-id>` and `<run-id>` with your own values.
+
+### 1. Start a check
+
+The command records the request and returns. The server does the checking. Add `--reference <copy-id>` to compare with a copy of reference records. Without it, nothing is compared.
+
+**`import check start`**
+
+```sh
+openldr import check start --plugin <plugin-id> --copy <copy-id>
+```
+
+**Expected result:** One line with the run id, its status and the counts. A stopped check carries on when you run the command again.
+
+### 2. Follow it with status
+
+Run it as often as you like. Add `--laboratories` for a line for each laboratory. A line that starts with `error:` gives the reason the last page failed.
+
+**`import check status`**
+
+```sh
+openldr import check status <plugin-id> <run-id>
+```
+
+**Expected result:** The status moves from `running` to `completed`, and `saved`, `held` and `failed` add up to `read`.
+
+### 3. List what was held back
+
+This lists the held and failed requests, 50 at a time. Narrow it with `--reason held` or `--reason error`, `--label` and `--laboratory`. The last line gives the total.
+
+**`import check held`**
+
+```sh
+openldr import check held <plugin-id> <copy-id> --reason held
+```
+
+**Expected result:** One line for each request, then `total N`. The list never shows patient values.
+
+### 4. Save the held requests to a file
+
+The file holds one JSON object per line, with what the plugin found. It holds patient values, so only you can read it. Keep it in a safe place. The command refuses while the check is running, and keeps an existing file unless you add `--force`.
+
+**`import check held`**
+
+```sh
+openldr import check held <plugin-id> <copy-id> --export held-requests.jsonl
+```
+
+**Expected result:** The line `N requests written to held-requests.jsonl`.
+
+### 5. Stop a check
+
+A check stops at its next page. The requests it already saved stay. Run `start` again to carry on.
+
+**`import check stop`**
+
+```sh
+openldr import check stop <plugin-id> <run-id>
+```
+
+**Expected result:** The status is `stopping`, then `stopped`.
+
+A plugin with its own page, such as a source importer from the marketplace, shows the same check there. Its own guide explains that page.
+
 ## Optional payload examples
 
 ### Example payloads

@@ -292,6 +292,55 @@ All four go through the app and need `connectors.manage`. `start` and `delete` a
 destructive. Exit code 0 when the request was recorded or the answer was printed, and 1 on a
 refusal.
 
+## Checking a copied source
+
+Checks a finished copy with a plugin that decodes each request. The check reads the copy, not the
+source database. The plugin decodes each request. OpenLDR saves the requests that pass. It keeps the
+held and failed ones, with the reason, so a person can read them. When no reference copy is given,
+nothing is compared with reference records, and the saved requests are marked as not compared.
+
+    openldr import check start --plugin <id> --copy <copy> [--reference <copy>] [--option name=value]... [--page-size <n>] [--json]
+    openldr import check status <plugin> [run] [--laboratories] [--json]
+    openldr import check stop <plugin> <run> [--json]
+    openldr import check held <plugin> <copy> [--label <label>] [--reason held|error] [--laboratory <code>] [--offset <n>] [--limit <n>] [--export <file> [--force]] [--json]
+
+`start` records the request and returns. The server does the checking, so the command never waits
+for it. Run `status` to follow it. `start` on a stopped run carries it on from where it stopped.
+There is one check for each copy. `--page-size` is the number of requests per page, 1 to 2000,
+default 500. `--reference` names a copy of reference records to compare with.
+
+`status` with a run id prints one line: the run's id, its status, then
+`read=N saved=N held=N failed=N`. Without a run id it prints that line for every check of the
+plugin, or `(no checks)`. The status is one of `queued`, `running`, `waiting`, `stopping`,
+`stopped`, `completed` or `failed`. `--laboratories` adds one indented line for each laboratory code
+met, with the same four counts. Requests that name no laboratory show as `(none)`. A run with an
+`error:` line has a `lastError`. It holds the reason the last page could not be decoded, or the reason
+the run failed. The next page that decodes clears it. `status` exits 1 when the run does not exist.
+No source key and no position is printed, and `--json` leaves out the run's `cursor` and `driver`.
+
+`stop` stops the check at its next page. The requests saved so far stay.
+
+`held` lists the held and failed requests of a copy, one line each: the source key, the laboratory,
+the label (or the reason when there is none), the error code or `-`, and the time it was held. The
+last line is `total N`, the number of rows the filters match. `--reason held` shows only the
+requests the plugin held. `--reason error` shows only the failed ones. `--label` is 1 to 64
+characters. `--laboratory` is 1 to 32 letters, digits, dots, dashes or underscores. `--limit` is 1 to
+100, default 50, and `--offset` skips rows. The list never shows what the plugin found. Each read of
+the list writes an audit event that names the plugin and the copy.
+
+`--export <file>` writes every matching request to the file instead, one JSON object per line, with
+what the plugin found. The file holds patient values. It is private to the person who wrote it
+(mode 0600). The command prints only how many requests it wrote. It refuses `--offset` and
+`--limit` with `--export`. An existing file is kept, and the command exits 1, unless `--force` is
+given. A folder or a link is always refused. The file is written whole or not at all: the command
+writes a temporary file beside it and renames it when every request is in. The export is refused
+while a check of that copy is queued, running, waiting or stopping, because the rows are still
+changing. It writes one audit event, as the list does.
+
+All four go through the app and need `connectors.manage`. `start` also needs `ingest.run`. `held` is
+marked destructive because of `--export`. Exit code 0 when the request was recorded or the answer was
+printed, and 1 on a refusal.
+
 ## The standalone launcher
 
 `openldr-standalone` runs OpenLDR on one computer with no Docker: a bundled Postgres 16 and the server, with all data in one folder. Source: `apps/standalone/src/commands.ts`. In a built checkout it is `pnpm openldr-standalone`. The desktop app installs it as a command of its own: `~/.local/share/openldr-desktop/openldr-standalone` on Linux, `~/Applications/OpenLDR.app/Contents/Resources/openldr-standalone` on macOS, `%LOCALAPPDATA%\Programs\OpenLDR\openldr-standalone.cmd` on Windows. The full account is in two web docs pages, `apps/web/src/docs/0.1.8/en/standalone.md` and `apps/web/src/docs/0.1.8/en/desktop-app.md`. Only Linux has been tested.
