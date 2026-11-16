@@ -86,7 +86,7 @@ import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { brokerAccessDetails } from './check-read-audit';
 import { createImportService, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
 import { createImportCopyService, type ImportCopyService } from './import-copy';
-import { createImportCheckService, liveCheckStatus, type ImportCheckService } from './import-check';
+import { createImportCheckService, deleteCheckRecord, liveCheckStatus, type ImportCheckService } from './import-check';
 import { startImportDriver } from './import-driver';
 import { diagnoseConnector } from './connector-diagnose';
 import { policyFromConfig } from './policy';
@@ -1876,10 +1876,12 @@ const reporting: ReportingApi = {
     checks: {
       liveCheckStatus: (pluginId, copyId) => liveCheckStatus(pluginData, pluginId, copyId),
       deleteHeld: (copyId, limit) => importHeld.deleteSome(copyId, limit),
+      deleteCheck: (pluginId, copyId) => deleteCheckRecord(pluginData, pluginId, copyId),
     },
   });
   // Check runs over a finished copy (import-check.ts). They read the copy, never the source, so
-  // they need no connector. Saves go through the same path as an import.
+  // they open no connector, but they ask the allow list as a copy does. Saves go through the same
+  // path as an import.
   const importChecks = createImportCheckService({
     plugins,
     pluginData,
@@ -1888,6 +1890,8 @@ const reporting: ReportingApi = {
     copyStore: importCopyStore,
     held: importHeld,
     copies: importCopies,
+    // A check stops when the plugin may no longer read the connector of its source or reference.
+    allowed: (pluginId) => imports.allowed(pluginId),
     driverId: importDriverId,
   });
   const pluginBroker = createPluginBroker({
@@ -2211,8 +2215,8 @@ export {
   type ImportService, type ImportRun, type ImportStatus, type ImportActor, type ImportAuditEvent, type ImportStartInput,
 } from './import-run';
 export type { ImportCopyService, CopyRun, CopyStatus, CopySetProgress } from './import-copy';
-export { checkIdOf, LABORATORY_CODE } from './import-check';
-export type { ImportCheckService, ImportCheckStartInput, CheckRun, CheckStatus, CheckCounts, CheckLaboratory } from './import-check';
+export { checkIdOf, isLiveCheck, LABORATORY_CODE } from './import-check';
+export type { ImportCheckService, ImportCheckStartInput, HeldItemsFilter, CheckRun, CheckStatus, CheckCounts, CheckLaboratory } from './import-check';
 export { CopySetChangedError } from './import-copy';
 export {
   runSetupChecks, setupCheckDeps, SETUP_CHECK_TITLE, SETUP_HINT_TEXT,

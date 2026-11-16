@@ -915,6 +915,54 @@ describe('plugin broker: checks', () => {
     ]);
   });
 
+  it('start passes fromStart when the page gives it, and refuses one that is not true or false', async () => {
+    const checks = fakeChecks();
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    await b.handle('p1', admin, { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: true });
+    await b.handle('p1', admin, { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: false });
+    expect(checks.calls).toEqual([
+      ['start', [{ pluginId: 'p1', copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: true, actor }]],
+      ['start', [{ pluginId: 'p1', copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: false, actor }]],
+    ]);
+    expect(await b.handle('p1', admin, { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: 'yes' }))
+      .toEqual({ ok: false, error: expect.stringMatching(/^invalid operation: fromStart/) });
+    expect(checks.calls).toHaveLength(2);
+  });
+
+  it('a page never sees what a run recorded about its copies, nor how it last started', async () => {
+    const checks = fakeChecks();
+    checks.api.get = async () => checkRun({ copyFinishedAt: { source: '2026-11-16T07:00:00.000Z', reference: null }, carriedOn: true });
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    const res = await b.handle('p1', admin, { kind: 'import.check.status', runId: 'ck1' }) as { ok: true; data: Record<string, unknown> };
+    expect(res.data).not.toHaveProperty('copyFinishedAt');
+    expect(res.data).not.toHaveProperty('carriedOn');
+  });
+
+  it('heldItems reads by after: passes the key or null, drops the offset, and answers next', async () => {
+    const checks = fakeChecks();
+    checks.api.heldItems = async (...args: unknown[]) => { checks.calls.push(['heldItems', args]); return { items: [], total: 41, next: 'K9' }; };
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    expect(await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', after: null, limit: 200 }))
+      .toEqual({ ok: true, data: { items: [], total: 41, next: 'K9' } });
+    await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', reason: 'held', label: 'odd_age', laboratory: 'LAB-9', after: 'K5', offset: 7, limit: 10 });
+    expect(checks.calls).toEqual([
+      ['heldItems', ['p1', 'cp1', { after: null, limit: 200 }]],
+      ['heldItems', ['p1', 'cp1', { reason: 'held', label: 'odd_age', laboratory: 'LAB-9', after: 'K5', limit: 10 }]],
+    ]);
+  });
+
+  it('heldItems needs an offset when it has no after, and refuses a bad after, before the service', async () => {
+    const checks = fakeChecks();
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    expect(await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', limit: 10 }))
+      .toEqual({ ok: false, error: expect.stringMatching(/^invalid operation: offset/) });
+    for (const after of ['', 'K'.repeat(201), 5]) {
+      expect(await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', after, limit: 10 }))
+        .toEqual({ ok: false, error: expect.stringMatching(/^invalid operation: after/) });
+    }
+    expect(checks.calls).toEqual([]);
+  });
+
   it('heldItems refuses a limit above 200 or below 1, a negative offset and a bad reason, before the service', async () => {
     const checks = fakeChecks();
     const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
@@ -1087,6 +1135,8 @@ describe('plugin broker: checks', () => {
     });
     const checks = createImportCheckService({
       plugins, pluginData, audit, persist: async () => [], copyStore: createImportCopyStore(db), held, copies, driverId: 'test',
+      // Every copy here was made from connector c1, which both plugins may read.
+      allowed: async () => ['c1'],
     });
     const theirRun = checkRun({ id: checkIdOf('theirs'), pluginId: 'p2', copyId: 'theirs' });
     await pluginData.put('p2', '__import-checks', theirRun.id, theirRun);

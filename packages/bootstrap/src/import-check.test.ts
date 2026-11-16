@@ -6,7 +6,7 @@ import {
 import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
 import { STALE_MS, type ImportActor, type ImportAuditEvent } from './import-run';
 import { copyIdOf, copySetHashes, copySpecSchema, createImportCopyService, type CopyRun, type ImportCopyService } from './import-copy';
-import { checkIdOf, createImportCheckService, liveCheckStatus, type CheckRun, type ImportCheckService } from './import-check';
+import { checkIdOf, createImportCheckService, deleteCheckRecord, isLiveCheck, liveCheckStatus, type CheckRun, type ImportCheckService } from './import-check';
 import { checkForPage } from './plugin-broker';
 
 // Layer under test: the check service over the real plugin_data store, the real copy row store and
@@ -156,6 +156,10 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
   const clock = { now: Date.UTC(2026, 10, 16, 12, 0, 0) };
   const sleeps: number[] = [];
   const connectors = { get: async () => null, getDecryptedConfig: async () => ({}) };
+  /** The connectors an admin allowed the plugin to read. Every copy here is made from one of them. */
+  const allowedConnectors = new Set(['c1', 'c2', 'c9']);
+  const allowedCalls: string[] = [];
+  const allowed = async (pluginId: string) => { allowedCalls.push(pluginId); return [...allowedConnectors]; };
 
   const copies: ImportCopyService = createImportCopyService({
     plugins: pluginsDep, connectors, secretsKey: 'k', pluginData, audit, store: realCopyStore,
@@ -163,10 +167,11 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
     checks: {
       liveCheckStatus: (pluginId, copyId) => liveCheckStatus(raw, pluginId, copyId),
       deleteHeld: (copyId, limit) => realHeld.deleteSome(copyId, limit),
+      deleteCheck: (pluginId, copyId) => deleteCheckRecord(raw, pluginId, copyId),
     },
   });
   const service = (driverId = 'server-1'): ImportCheckService => createImportCheckService({
-    plugins: pluginsDep, pluginData, audit, persist, copyStore, held, copies, driverId,
+    plugins: pluginsDep, pluginData, audit, persist, copyStore, held, copies, driverId, allowed,
     now: () => new Date(clock.now),
     sleep: async (ms) => { sleeps.push(ms); },
   });
@@ -201,7 +206,8 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
 
   return {
     svc, service, copies, raw, audited, runSaves, decodeCalls, twinCalls, invoke, persisted, clock, sleeps, plugins,
-    readSetCalls, readCalls, heldPuts, copyCalls,
+    readSetCalls, readCalls, heldPuts, copyCalls, allowedCalls,
+    revoke: (connectorId: string) => { allowedConnectors.delete(connectorId); },
     setCopy: (fn: (options: Record<string, string>) => unknown) => { copyFn = fn; }, realHeld, seedCopy, setCopyStatus,
     setDecode: (fn: (input: DecodeInput) => unknown) => { decodeFn = fn; },
     setTwinKeys: (fn: (keys: string[]) => unknown) => { twinFn = fn; },
@@ -269,7 +275,7 @@ describe('check: starting', () => {
     expect(CHECK).toMatch(/^[0-9a-f]{32}$/);
     expect(w.audited.at(-1)).toEqual({
       action: 'import.check.start', pluginId: PLUGIN, runId: CHECK, actor: ADMIN,
-      metadata: { copyId: SRC, referenceCopyId: null, pageSize: 500 },
+      metadata: { copyId: SRC, referenceCopyId: null, pageSize: 500, carriedOn: false },
     });
     expect(await w.svc.checkers()).toEqual([{ id: PLUGIN, version: '1.2.0', needsReference: true }]);
   });
@@ -1274,5 +1280,297 @@ describe('check: by laboratory', () => {
     expect(run).toMatchObject({ status: 'completed', counts: { read: 4, saved: 4 } });
     expect('laboratories' in run).toBe(false);
     expect('laboratories' in (await w.stored())!).toBe(false);
+  });
+});
+
+describe('check: final fix wave, a stopped or failed check carries on (design 11.1)', () => {
+  /** Held, failed and saved requests over three laboratories and three labels, the same every time. */
+  const mixed = (input: DecodeInput) => ({
+    groups: input.keys.map((key): Group => {
+      const n = Number(key.slice(3));
+      const laboratory = { code: `LAB${n % 3}` };
+      if (n % 5 === 0) return { key, held: true, findings: { n }, label: 'held_x', laboratory };
+      if (n % 7 === 0) return { key, error: 'BAD_DATE', label: 'bad_date', laboratory };
+      return { ...pass(key), laboratory, label: n % 2 ? 'odd' : 'even' };
+    }),
+  });
+  /** Decodes with `mixed`, and asks for a stop while page `at` is decoded. */
+  const stopOnPage = (w: World, at: number) => {
+    let pages = 0;
+    w.setDecode(async (input) => {
+      pages += 1;
+      if (pages === at) await w.svc.stop(PLUGIN, CHECK, ADMIN);
+      return mixed(input);
+    });
+  };
+  const startMeta = (w: World) => w.audited.filter((e) => e.action === 'import.check.start').map((e) => e.metadata?.carriedOn);
+  /** The counts and the laboratories of a run that never stopped, read from the first key. */
+  async function wholeRun(w: World) {
+    w.setDecode(mixed);
+    const fresh = await w.svc.start({ ...START, pageSize: 4, fromStart: true });
+    expect(fresh).toMatchObject({ cursor: null, counts: { read: 0 }, laboratories: [] });
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run.status).toBe('completed');
+    return { counts: run.counts, laboratories: run.laboratories };
+  }
+
+  it('a stopped check carries on from its next page with its counts and held rows, and ends as a run that never stopped', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(20));
+    stopOnPage(w, 2);
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    const stopped = (await w.stored())!;
+    expect(stopped).toMatchObject({ status: 'stopped', cursor: 'REQ0008', counts: { read: 8, saved: 6, held: 1, failed: 1 } });
+    const heldAtStop = await w.heldAll();
+    expect(heldAtStop.rows.map((r) => r.key)).toEqual(['REQ0005', 'REQ0007']);
+
+    w.setDecode(mixed);
+    w.decodeCalls.length = 0;
+    const again = await w.svc.start(START);
+    // The run it gets back has requests already read: that is how a caller tells a carry-on.
+    expect(again).toMatchObject({
+      status: 'queued', cursor: 'REQ0008', pageSize: 4, finishedAt: null, lastError: null,
+      counts: stopped.counts, laboratories: stopped.laboratories,
+    });
+    expect(await w.heldAll()).toEqual(heldAtStop);
+    await drive(w.svc);
+    expect(w.decodeCalls[0]!.keys).toEqual(keysOf(20).slice(8, 12));
+    expect(w.decodeCalls.flatMap((c) => c.keys)).toEqual(keysOf(20).slice(8));
+    const carried = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(carried.status).toBe('completed');
+    // heldAt moves when a row is written again, so the rows are compared without it.
+    const heldShape = async () => (await w.heldAll()).rows.map(({ heldAt: _at, ...r }) => r);
+    const carriedHeld = await heldShape();
+
+    const whole = await wholeRun(w);
+    expect({ counts: carried.counts, laboratories: carried.laboratories }).toEqual(whole);
+    expect(whole.counts).toMatchObject({ read: 20, held: 4, failed: 2 });
+    expect(carriedHeld).toEqual(await heldShape());
+    expect(carriedHeld).toHaveLength(6);
+    // The audit row of each start says which it was.
+    expect(startMeta(w)).toEqual([false, true, false]);
+  });
+
+  it('a failed check carries on from its last page once the fault is gone, and ends as a run that never failed', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(20));
+    w.setDecode(mixed);
+    // REQ0005, on the second page, is held. Its write fails on every try, so the run fails there.
+    w.failHeldPuts(6);
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    const failed = (await w.stored())!;
+    expect(failed).toMatchObject({ status: 'failed', cursor: 'REQ0004', counts: { read: 4 } });
+    expect(failed.lastError).toMatch(/on 6 tries of one page in a row/);
+
+    const again = await w.svc.start(START);
+    expect(again).toMatchObject({ status: 'queued', cursor: 'REQ0004', counts: failed.counts, lastError: null });
+    await drive(w.svc);
+    const carried = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(carried).toMatchObject({ status: 'completed', lastError: null });
+    expect({ counts: carried.counts, laboratories: carried.laboratories }).toEqual(await wholeRun(w));
+    expect(startMeta(w)).toEqual([false, true, false]);
+  });
+
+  it('a run taken over from a dead server carries on, and ends as a run that never stopped', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(20));
+    stopOnPage(w, 2);
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    // The same record as a server that died while running would leave it.
+    const stopped = (await w.stored())!;
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, {
+      ...stopped, status: 'running', driver: 'server-old', finishedAt: null,
+      updatedAt: new Date(w.clock.now - STALE_MS - 1000).toISOString(),
+    });
+    w.setDecode(mixed);
+    w.decodeCalls.length = 0;
+    await drive(w.service('server-b'));
+    expect(w.decodeCalls[0]!.keys).toEqual(keysOf(20).slice(8, 12));
+    expect(actions(w)).toContain('import.check.takeover');
+    const carried = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(carried.status).toBe('completed');
+    expect({ counts: carried.counts, laboratories: carried.laboratories }).toEqual(await wholeRun(w));
+  });
+
+  /** A run stopped after two pages of two, with four requests read. */
+  async function stoppedAtFour(w: World, start: { referenceCopyId?: string | null } = {}) {
+    let pages = 0;
+    w.setDecode(async (input) => {
+      pages += 1;
+      if (pages === 2) await w.svc.stop(PLUGIN, CHECK, ADMIN);
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, ...start, pageSize: 2 });
+    await drive(w.svc);
+    w.setDecode((input) => ({ groups: input.keys.map(pass) }));
+    expect(await w.stored()).toMatchObject({ status: 'stopped', cursor: 'REQ0004', counts: { read: 4, saved: 4 } });
+  }
+  const begunAtFirstKey = { status: 'queued', cursor: null, counts: { read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: {} }, laboratories: [] };
+
+  it('a check begins at the first key when it completed, or when the caller asks', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    await stoppedAtFour(w);
+    expect(await w.svc.start({ ...START, fromStart: true })).toMatchObject(begunAtFirstKey);
+    await drive(w.svc);
+    expect((await w.stored())!).toMatchObject({ status: 'completed', counts: { read: 6 } });
+    // A completed run begins again at the first key, with or without fromStart.
+    expect(await w.svc.start(START)).toMatchObject(begunAtFirstKey);
+    expect(startMeta(w)).toEqual([false, false, false]);
+  });
+
+  it('a check begins at the first key when its options or its reference differ from the run', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [] });
+    await stoppedAtFour(w);
+    expect(await w.svc.start({ ...START, options: { site: 'B' } })).toMatchObject({ ...begunAtFirstKey, options: { site: 'B' } });
+
+    await w.svc.stop(PLUGIN, CHECK, ADMIN);
+    await stoppedAtFour(w);
+    expect(await w.svc.start({ ...START, referenceCopyId: REF })).toMatchObject({ ...begunAtFirstKey, referenceCopyId: REF });
+
+    await w.svc.stop(PLUGIN, CHECK, ADMIN);
+    await stoppedAtFour(w, { referenceCopyId: REF });
+    expect(await w.svc.start(START)).toMatchObject({ ...begunAtFirstKey, referenceCopyId: null });
+
+    // Same options, same reference: it carries on.
+    await w.svc.stop(PLUGIN, CHECK, ADMIN);
+    await stoppedAtFour(w, { referenceCopyId: REF });
+    expect(await w.svc.start({ ...START, referenceCopyId: REF })).toMatchObject({ status: 'queued', cursor: 'REQ0004', counts: { read: 4 } });
+  });
+
+  it('a check begins at the first key when its source or its reference was read again since it began', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [] });
+    const later = (s: number) => new Date(w.clock.now + s * 1000).toISOString();
+
+    await stoppedAtFour(w);
+    await w.setCopyStatus(SRC, 'completed', { finishedAt: later(1) });
+    expect(await w.svc.start(START)).toMatchObject(begunAtFirstKey);
+
+    await w.svc.stop(PLUGIN, CHECK, ADMIN);
+    await stoppedAtFour(w, { referenceCopyId: REF });
+    await w.setCopyStatus(REF, 'completed', { finishedAt: later(2) });
+    expect(await w.svc.start({ ...START, referenceCopyId: REF })).toMatchObject({ ...begunAtFirstKey, referenceCopyId: REF });
+
+    // A record from before a check could carry on does not say which copy it read, so it begins again.
+    await w.svc.stop(PLUGIN, CHECK, ADMIN);
+    await stoppedAtFour(w);
+    const { copyFinishedAt: _gone, ...older } = (await w.stored())! as CheckRun & { copyFinishedAt?: unknown };
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, older);
+    expect(await w.svc.start(START)).toMatchObject(begunAtFirstKey);
+  });
+
+  it('a carry-on keeps the page size unless one is given', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    await stoppedAtFour(w);
+    expect(await w.svc.start(START)).toMatchObject({ cursor: 'REQ0004', pageSize: 2 });
+    await w.svc.stop(PLUGIN, CHECK, ADMIN);
+    expect(await w.svc.start({ ...START, pageSize: 3 })).toMatchObject({ cursor: 'REQ0004', pageSize: 3 });
+  });
+});
+
+describe('check: final fix wave, a revoked connector stops a check (design 11.3)', () => {
+  const NOT_ALLOWED = (copyId: string) => `the plugin is no longer allowed to read the connector of copy ${copyId}`;
+
+  it('start refuses a source or a reference whose connector the plugin may no longer read, and audits nothing', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [] });
+    w.revoke('c2');
+    await expect(w.svc.start({ ...START, referenceCopyId: REF })).rejects.toThrow(NOT_ALLOWED(REF));
+    w.revoke('c1');
+    await expect(w.svc.start(START)).rejects.toThrow(NOT_ALLOWED(SRC));
+    expect(w.audited).toEqual([]);
+    expect(await w.stored()).toBeNull();
+  });
+
+  it('a revoke after the start fails the run with a fixed sentence before it reads or saves anything', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    await w.svc.start(START);
+    w.revoke('c1');
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'failed', lastError: NOT_ALLOWED(SRC), counts: { read: 0 } });
+    expect(w.decodeCalls).toEqual([]);
+    expect(w.persisted).toEqual([]);
+    expect(w.audited.at(-1)).toMatchObject({ action: 'import.check.finish', metadata: { status: 'failed' } });
+  });
+
+  it('a revoke while the check runs saves nothing more after the page in hand', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    let pages = 0;
+    w.setDecode((input) => {
+      pages += 1;
+      if (pages === 1) w.revoke('c1');
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'failed', lastError: NOT_ALLOWED(SRC), cursor: 'REQ0002', counts: { read: 2, saved: 2 } });
+    expect(w.decodeCalls).toHaveLength(1);
+    expect(w.persisted).toHaveLength(2);
+  });
+
+  it('a revoke of the reference connector while the check runs fails it too', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [] });
+    let pages = 0;
+    w.setDecode((input) => {
+      pages += 1;
+      if (pages === 1) w.revoke('c2');
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, referenceCopyId: REF, pageSize: 2 });
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'failed', lastError: NOT_ALLOWED(REF), counts: { read: 2 } });
+    expect(w.persisted).toHaveLength(2);
+  });
+});
+
+describe('check: final fix wave, held requests read by key, and the copy remove (design 11.2, 11.4)', () => {
+  it('heldItems reads by after with next, and by offset as before', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(5));
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ key, held: true, findings: { key } })) }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const p1 = await w.svc.heldItems(PLUGIN, SRC, { after: null, limit: 2 });
+    expect([p1.items.map((i) => i.key), p1.total, p1.next]).toEqual([['REQ0001', 'REQ0002'], 5, 'REQ0002']);
+    const p3 = await w.svc.heldItems(PLUGIN, SRC, { after: 'REQ0004', limit: 2 });
+    expect([p3.items.map((i) => i.key), p3.next]).toEqual([['REQ0005'], null]);
+    expect(await w.svc.heldItems(PLUGIN, SRC, { offset: 1, limit: 1 })).toEqual({ items: [await w.svc.heldItem(PLUGIN, SRC, 'REQ0002')], total: 5 });
+    await expect(w.svc.heldItems(PLUGIN, 'nope', { after: null, limit: 2 })).rejects.toThrow('copy nope not found');
+  });
+
+  it('isLiveCheck names the statuses that still add and remove held rows', () => {
+    const live = (['queued', 'running', 'waiting', 'stopping', 'stopped', 'completed', 'failed'] as const).filter(isLiveCheck);
+    expect(live).toEqual(['queued', 'running', 'waiting', 'stopping']);
+  });
+
+  it('removing a copy removes its check record, after its held rows', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(3));
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ key, held: true })) }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(await w.stored()).not.toBeNull();
+    await w.copies.remove(PLUGIN, SRC, ADMIN);
+    await w.copies.tick();
+    await w.copies.idle();
+    expect(await w.stored()).toBeNull();
+    expect((await w.heldAll()).total).toBe(0);
+    // A copy made again on the same connector shows no old run.
+    await sourceCopy(w, keysOf(3));
+    expect(await w.svc.list(PLUGIN)).toEqual([]);
   });
 });

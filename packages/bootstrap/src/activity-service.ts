@@ -67,6 +67,9 @@ export interface ActivityCheckRun {
   updatedAt: string;
   finishedAt: string | null;
   startedBy: string;
+  /** Whether the last start carried on from where the run stopped or failed. Absent on a run
+   *  stored before a check could carry on. */
+  carriedOn?: boolean;
 }
 
 /** The only way a check run reaches Activity: its counts and its states. */
@@ -75,6 +78,7 @@ export function checkForActivity(run: CheckRun): ActivityCheckRun {
   return {
     id: run.id, pluginId: run.pluginId, pluginVersion: run.pluginVersion, status: run.status, read, saved, held, failed,
     startedAt: run.startedAt, updatedAt: run.updatedAt, finishedAt: run.finishedAt, startedBy: run.startedBy,
+    ...(run.carriedOn !== undefined ? { carriedOn: run.carriedOn } : {}),
   };
 }
 
@@ -167,10 +171,16 @@ function copyLifecycle(run: ActivityCopyRun): ActivityLifecycle {
   return { correlationId: run.id, status: copyStatus(run.status), stages, runIds: [] };
 }
 
+/** Where the last start of a check began. Nothing for a run stored before a check could carry on. */
+function startedFrom(run: ActivityCheckRun): string {
+  if (run.carriedOn === undefined) return '';
+  return run.carriedOn ? ', carried on from where it stopped' : ', from the first request';
+}
+
 /** One check run as a lifecycle: who started it, then what it has read, saved and held so far. */
 function checkLifecycle(run: ActivityCheckRun): ActivityLifecycle {
   const stages: ActivityLifecycle['stages'] = [
-    { stage: 'received', status: 'ok', at: run.startedAt, detail: `check: ${run.pluginId} ${run.pluginVersion}, started by ${run.startedBy}` },
+    { stage: 'received', status: 'ok', at: run.startedAt, detail: `check: ${run.pluginId} ${run.pluginVersion}, started by ${run.startedBy}${startedFrom(run)}` },
   ];
   if (run.read > 0 || run.status === 'failed') {
     stages.push({

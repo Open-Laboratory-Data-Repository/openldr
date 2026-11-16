@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { redact } from '@openldr/core';
 import {
-  CopySetTooLargeError, type CopyRow, type HeldItem, type HeldReason, type HeldRow, type ImportCheckHeldStore,
+  CopySetTooLargeError, type CopyRow, type HeldItem, type HeldItemsPage, type HeldReason, type HeldRow, type ImportCheckHeldStore,
   type ImportCopyStore, type PluginDataStore, type Provenance,
 } from '@openldr/db';
 import { allowedResourceTypes, canCheck } from '@openldr/marketplace';
@@ -89,6 +89,13 @@ export interface CheckRun {
   finishedAt: string | null;
   lastError: string | null;
   startedBy: string;
+  /** The `finishedAt` of the source copy and of the reference copy when the run began at the first
+   *  key. A start carries on only while both copies still have these: a copy read again since then
+   *  holds other rows. Absent on a record written before a check could carry on. */
+  copyFinishedAt?: { source: string | null; reference: string | null };
+  /** True when the last start carried on from where the run stopped or failed. False when it began
+   *  at the first key. Absent on a record written before a check could carry on. */
+  carriedOn?: boolean;
 }
 
 export interface ImportCheckStartInput {
@@ -97,11 +104,16 @@ export interface ImportCheckStartInput {
   referenceCopyId: string | null;
   options: Record<string, string>;
   pageSize?: number;
+  /** Begin at the first key with fresh counts, even when a stopped or failed run could carry on. */
+  fromStart?: boolean;
   actor: ImportActor;
 }
 
 /** A page of the held list. Each filter given narrows it. */
 export interface HeldFilter { reason?: HeldReason; label?: string; laboratory?: string; offset: number; limit: number }
+/** A page of `heldItems`: by offset as `held`, or by key with `after` (a key, or null for the
+ *  start). With `after`, `offset` is ignored and the answer adds `next`. */
+export type HeldItemsFilter = Omit<HeldFilter, 'offset'> & ({ offset: number; after?: undefined } | { after: string | null; offset?: number });
 
 export interface ImportCheckService {
   /** Plugins that can be checked. `needsReference`: the plugin names a twin-keys entrypoint. */
@@ -112,8 +124,10 @@ export interface ImportCheckService {
   stop(pluginId: string, runId: string, actor: ImportActor): Promise<CheckRun>;
   held(pluginId: string, copyId: string, opts: HeldFilter): Promise<{ rows: HeldRow[]; total: number }>;
   heldItem(pluginId: string, copyId: string, key: string): Promise<HeldItem | null>;
-  /** The same rows as `held`, in the same order, each with its findings and check. */
-  heldItems(pluginId: string, copyId: string, opts: HeldFilter): Promise<{ items: HeldItem[]; total: number }>;
+  /** The same rows as `held`, in the same order, each with its findings and check. With `after`,
+   *  read by key: the rows past that key, and `next`, the last key of the page or null when no row
+   *  is left. A page read by key does not move when a check adds or removes rows before it. */
+  heldItems(pluginId: string, copyId: string, opts: HeldItemsFilter): Promise<{ items: HeldItem[]; total: number; next?: string | null }>;
   /** Server only. Take every run that needs a driver and start driving it. Does not wait. */
   tick(): Promise<void>;
   /** Resolves when this process is driving nothing. */
@@ -129,6 +143,9 @@ export interface ImportCheckServiceDeps extends Pick<ImportServiceDeps, 'plugins
   held: ImportCheckHeldStore;
   /** To read a copy's record. A copy belongs to the plugin whose id it is read under. */
   copies: Pick<ImportCopyService, 'get'>;
+  /** The connectors an admin allowed the plugin to read (`ImportService.allowed`), as the copy
+   *  service has it. A check reads only copies of connectors the plugin may still read. */
+  allowed(pluginId: string): Promise<string[]>;
   /** This process. Written on each run it drives. */
   driverId: string;
   /** Injectable for tests; the wait while CE's own database does not answer. */
@@ -232,9 +249,24 @@ export async function liveCheckStatus(pluginData: PluginDataStore, pluginId: str
   }
   return null;
 }
+/** Delete the check record whose source is this copy. For the copy service, when it removes the
+ *  copy, after the held rows. */
+export async function deleteCheckRecord(pluginData: PluginDataStore, pluginId: string, copyId: string): Promise<void> {
+  await pluginData.delete(pluginId, CHECKS, checkIdOf(copyId));
+}
 const emptyTwins = (): Record<string, Array<Record<string, unknown>>> => ({ requests: [], results: [] });
 const freshCounts = (): CheckCounts => ({ read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: {} });
-const isLive = (s: CheckStatus): boolean => s === 'queued' || s === 'running' || s === 'waiting' || s === 'stopping';
+/** A check in one of these statuses still adds and removes held rows. */
+export const isLiveCheck = (s: CheckStatus): boolean => s === 'queued' || s === 'running' || s === 'waiting' || s === 'stopping';
+const isLive = isLiveCheck;
+/** The same names with the same values, in any order. */
+function sameOptions(a: Record<string, string>, b: Record<string, string>): boolean {
+  const ka = Object.keys(a);
+  return ka.length === Object.keys(b).length && ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && a[k] === b[k]);
+}
+/** Fixed. The copy id is CE's own, never a source value. */
+const notAllowed = (copyId: string): string =>
+  `the plugin is no longer allowed to read the connector of copy ${copyId}`;
 /** Statuses a driver holds. A run in one of them with no write for 2 minutes has no driver. */
 const isDriven = (s: CheckStatus): boolean => s === 'running' || s === 'waiting' || s === 'stopping';
 const validLabel = (label: string | undefined): string | null => (label !== undefined && LABEL.test(label) ? label : null);
@@ -313,6 +345,12 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
     if (!copy) throw new CheckFault(`copy ${copyId} not found`);
     if (copy.status !== 'completed') throw new CheckFault(`copy ${copyId} is ${copy.status}; a check needs a completed copy`);
     return copy;
+  }
+
+  /** Refuses a copy whose connector the plugin may no longer read. One read of the allow list. */
+  async function assertAllowed(pluginId: string, copies: CopyRun[]): Promise<void> {
+    const allowed = new Set(await ownDb('read', () => deps.allowed(pluginId)));
+    for (const copy of copies) if (!allowed.has(copy.connectorId)) throw new CheckFault(notAllowed(copy.id));
   }
 
   /** Writing, heartbeat and halting. A copy of the copy service's own, with no delete. */
@@ -567,6 +605,8 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
 
       /** One page. 'done' when the set `requests` has no key left. */
       const onePage = async (p: Prepared): Promise<'done' | 'next' | 'lost'> => {
+        // Asked before every page, so a revoke ends the run before it saves anything more.
+        await assertAllowed(run.pluginId, p.reference ? [p.source, p.reference] : [p.source]);
         await assertUnchanged(p.source);
         if (p.reference) await assertUnchanged(p.reference);
         const keys = await ownDb('read', () => deps.copyStore.listKeys(run.copyId, REQUESTS, run.cursor, size));
@@ -813,28 +853,47 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         }
         referenceRun = reference;
       }
+      await assertAllowed(plugin.id, referenceRun ? [source, referenceRun] : [source]);
       // Told now, not at the first tick: each copy must be made from the statements the plugin
       // names today.
       const sink = await loadImportSink(deps.plugins, plugin);
       await declaredSets(sink, plugin, source);
       if (referenceRun) await declaredSets(sink, plugin, referenceRun);
       const id = checkIdOf(input.copyId);
+      const copyFinishedAt = { source: source.finishedAt, reference: referenceRun?.finishedAt ?? null };
 
       return changeRun(plugin.id, id, async (existing) => {
         if (existing && isLive(existing.status)) {
           throw new Error(`check ${id} is ${existing.status}; stop it before starting it again`);
         }
-        // New, or ended: begin at the first key with counts at zero.
         const at = now().toISOString();
+        // A stopped or failed run carries on from its last page, with its counts and its held rows,
+        // while it would read the same copies the same way. Anything else begins at the first key.
+        const carriesOn = existing !== null
+          && (existing.status === 'stopped' || existing.status === 'failed')
+          && input.fromStart !== true
+          && sameOptions(existing.options, options)
+          && existing.referenceCopyId === referenceCopyId
+          && existing.copyFinishedAt !== undefined
+          && existing.copyFinishedAt.source === copyFinishedAt.source
+          && existing.copyFinishedAt.reference === copyFinishedAt.reference;
+        if (carriesOn) {
+          return {
+            ...existing, pluginVersion: plugin.version, status: 'queued', pageSize: pageSize ?? existing.pageSize,
+            waiting: null, driver: null, startedAt: at, updatedAt: at, finishedAt: null, lastError: null,
+            startedBy: input.actor.name, carriedOn: true,
+          };
+        }
         return {
           id, kind: 'check', rev: existing?.rev ?? 0, pluginId: plugin.id, pluginVersion: plugin.version,
           copyId: input.copyId, referenceCopyId, status: 'queued', options, pageSize: pageSize ?? DEFAULT_PAGE_SIZE,
           cursor: null, counts: freshCounts(), laboratories: [], waiting: null, driver: null,
           startedAt: at, updatedAt: at, finishedAt: null, lastError: null, startedBy: input.actor.name,
+          copyFinishedAt, carriedOn: false,
         };
       }, (next) => auditOrRefuse(deps.audit, {
         action: 'import.check.start', pluginId: plugin.id, runId: id, actor: input.actor,
-        metadata: { copyId: next.copyId, referenceCopyId: next.referenceCopyId, pageSize: next.pageSize },
+        metadata: { copyId: next.copyId, referenceCopyId: next.referenceCopyId, pageSize: next.pageSize, carriedOn: next.carriedOn === true },
       }));
     },
 
@@ -874,8 +933,9 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
 
     async heldItems(pluginId, copyId, opts) {
       await ownCopy(pluginId, copyId);
-      const { rows, total } = await ownDb('read', () => deps.held.listItems(copyId, opts));
-      return { items: rows, total };
+      const page: HeldItemsPage = await ownDb('read', () => deps.held.listItems(copyId, opts));
+      // By offset the answer is as it always was. By key it adds `next`.
+      return page.next === undefined ? { items: page.rows, total: page.total } : { items: page.rows, total: page.total, next: page.next };
     },
 
     tick() {

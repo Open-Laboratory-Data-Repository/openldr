@@ -116,6 +116,8 @@ export interface ImportCopyServiceDeps
     liveCheckStatus(pluginId: string, copyId: string): Promise<string | null>;
     /** Delete up to `limit` held rows of the copy. 0 means none left. */
     deleteHeld(copyId: string, limit: number): Promise<number>;
+    /** Delete the check record whose source is the copy. Called once its held rows are gone. */
+    deleteCheck(pluginId: string, copyId: string): Promise<void>;
   };
 }
 
@@ -725,6 +727,8 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
         if (gone === 0) break;
         if (!(await d.saveKeepingStop())) { outcome = 'lost'; break; }
       }
+      // Then the check record, so a copy made again on the same connector shows no old run.
+      if (outcome === 'done' && checks) await ownDb('write', () => checks.deleteCheck(run.pluginId, run.id));
       if (outcome === 'done') {
         for (const e of await listSkipped(run.pluginId, run.id)) await dropSkipped(run.pluginId, e);
         // One more compare-and-swap before the record goes, so a drive that lost the run never

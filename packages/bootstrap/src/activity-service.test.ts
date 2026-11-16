@@ -215,6 +215,16 @@ describe('check runs', () => {
     });
   });
 
+  it('the start says whether the check carried on or began at the first request', async () => {
+    const detail = async (over: Record<string, unknown>) => (await withChecks([checkRun(over)]).getLifecycle('ck-1'))?.stages[0]?.detail;
+    expect(await detail({ carriedOn: true })).toBe('check: openldr-v1-import 0.2.0, started by amina, carried on from where it stopped');
+    expect(await detail({ carriedOn: false })).toBe('check: openldr-v1-import 0.2.0, started by amina, from the first request');
+    // A run stored before a check could carry on says neither.
+    expect(await detail({})).toBe('check: openldr-v1-import 0.2.0, started by amina');
+    expect(checkForActivity(checkRun({ carriedOn: true }) as any).carriedOn).toBe(true);
+    expect('carriedOn' in checkForActivity(checkRun() as any)).toBe(false);
+  });
+
   it('names each check status, and keeps neither the cursor nor the labels', async () => {
     const status = async (s: string) => (await withChecks([checkRun({ status: s, finishedAt: null })]).getLifecycle('ck-1'))?.status;
     expect(await status('completed')).toBe('complete');

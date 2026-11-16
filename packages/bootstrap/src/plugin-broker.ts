@@ -68,13 +68,14 @@ export type BrokerOp =
   | { kind: 'import.copy.stop'; copyId: string }
   | { kind: 'import.copy.delete'; copyId: string; confirm: true }
   // Check runs over a finished copy (host:import too). The page names a copy and options.
-  | { kind: 'import.check.start'; copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number }
+  | { kind: 'import.check.start'; copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number; fromStart?: boolean }
   | { kind: 'import.check.list' }
   | { kind: 'import.check.status'; runId: string }
   | { kind: 'import.check.stop'; runId: string }
   | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }
   | { kind: 'import.check.heldItem'; copyId: string; key: string }
-  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number };
+  // By offset, or by key with `after` (a key, or null for the start). `offset` is needed only without `after`.
+  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset?: number; after?: string | null; limit: number };
 
 /** A copy as a plugin page sees it: no set's `cursor`, which is a source key, and no `driver`,
  *  which names a server process. */
@@ -89,14 +90,18 @@ export function copyForPage(run: CopyRun): PageCopyRun {
 }
 
 /** A check run as a plugin page sees it: no `cursor`, which is a source key, no `driver`, which
- *  names a server process, and none of the record's own bookkeeping. */
-export type PageCheckRun = Omit<CheckRun, 'driver' | 'rev' | 'kind' | 'pluginId' | 'pluginVersion' | 'cursor' | 'startedBy'>;
+ *  names a server process, and none of the record's own bookkeeping. A page tells a start that
+ *  carried on by its counts: such a run has requests already read. */
+export type PageCheckRun = Omit<CheckRun, 'driver' | 'rev' | 'kind' | 'pluginId' | 'pluginVersion' | 'cursor' | 'startedBy' | 'copyFinishedAt' | 'carriedOn'>;
 
 /** The one place a check run is cut down for a plugin page. Every check op's answer goes through it.
  *  A run where no request named a laboratory has only the null entry: the page gets an empty list,
  *  so it draws no picker. Once one code is named, every entry goes, the null one included. */
 export function checkForPage(run: CheckRun): PageCheckRun {
-  const { driver: _driver, rev: _rev, kind: _kind, pluginId: _pluginId, pluginVersion: _pluginVersion, cursor: _cursor, startedBy: _startedBy, laboratories, ...rest } = run;
+  const {
+    driver: _driver, rev: _rev, kind: _kind, pluginId: _pluginId, pluginVersion: _pluginVersion, cursor: _cursor, startedBy: _startedBy,
+    copyFinishedAt: _copyFinishedAt, carriedOn: _carriedOn, laboratories, ...rest
+  } = run;
   if (laboratories === undefined) return rest;
   return { ...rest, laboratories: laboratories.some((l) => l.code !== null) ? laboratories : [] };
 }
@@ -178,7 +183,7 @@ export function buildBrokerOpSchema(maxDocBytes: number) {
     z.object({ kind: z.literal('import.copy.delete'), copyId: ID, confirm: z.literal(true) }),
     z.object({
       kind: z.literal('import.check.start'), copyId: ID, referenceCopyId: ID.nullable(), options: IMPORT_OPTIONS,
-      pageSize: z.number().int().positive().optional(),
+      pageSize: z.number().int().positive().optional(), fromStart: z.boolean().optional(),
     }),
     z.object({ kind: z.literal('import.check.list') }),
     z.object({ kind: z.literal('import.check.status'), runId: ID }),
@@ -189,11 +194,17 @@ export function buildBrokerOpSchema(maxDocBytes: number) {
     }),
     z.object({ kind: z.literal('import.check.heldItem'), copyId: ID, key: z.string().min(1).max(200) }),
     // Each item carries its findings and check, so a page reads a batch of up to 200 in one call.
+    // `after` reads by key, as an export must while rows come and go. Without it, `offset` is needed.
     z.object({
       kind: z.literal('import.check.heldItems'), copyId: ID, reason: z.enum(['held', 'error']).optional(), label: z.string().min(1).max(HELD_LABEL_MAX).optional(),
-      laboratory: LABORATORY.optional(), offset: z.number().int().min(0), limit: z.number().int().min(1).max(HELD_ITEMS_LIMIT_MAX),
+      laboratory: LABORATORY.optional(), offset: z.number().int().min(0).optional(), after: z.string().min(1).max(200).nullable().optional(),
+      limit: z.number().int().min(1).max(HELD_ITEMS_LIMIT_MAX),
     }),
-  ]);
+  ]).superRefine((op, ctx) => {
+    if (op.kind === 'import.check.heldItems' && op.after === undefined && op.offset === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['offset'], message: 'Required without after' });
+    }
+  });
 }
 
 /** Maps an op to the capability it requires (undefined = private/no capability). */
@@ -524,6 +535,7 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
               case 'import.check.start': return { ok: true, data: checkForPage(await checks.start({
                 pluginId, copyId: op.copyId, referenceCopyId: op.referenceCopyId, options: op.options,
                 ...(op.pageSize !== undefined ? { pageSize: op.pageSize } : {}),
+                ...(op.fromStart !== undefined ? { fromStart: op.fromStart } : {}),
                 actor,
               })) };
               case 'import.check.list': return { ok: true, data: (await checks.list(pluginId)).map(checkForPage) };
@@ -549,12 +561,15 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
                 return { ok: true, data };
               }
               case 'import.check.heldItems': {
-                const data = await checks.heldItems(pluginId, op.copyId, {
+                const filters = {
                   ...(op.reason !== undefined ? { reason: op.reason } : {}),
                   ...(op.label !== undefined ? { label: op.label } : {}),
                   ...(op.laboratory !== undefined ? { laboratory: op.laboratory } : {}),
-                  offset: op.offset, limit: op.limit,
-                });
+                };
+                // By key when the page gives `after`; the schema makes `offset` present otherwise.
+                const data = await checks.heldItems(pluginId, op.copyId, op.after !== undefined
+                  ? { ...filters, after: op.after, limit: op.limit }
+                  : { ...filters, offset: op.offset!, limit: op.limit });
                 // As for heldItem: the operation and the copy, never a key, a value or the size.
                 await emit(pluginId, principal, checkReadOp('heldItems', op.copyId), 'ok');
                 return { ok: true, data };
