@@ -216,7 +216,7 @@ Este comando lista os pedidos retidos e com falha, 50 de cada vez. Restrinja com
 openldr import check held <plugin-id> <copy-id> --reason held
 ```
 
-**Resultado esperado:** uma linha por pedido e depois `total N`. A lista nunca mostra valores de pacientes.
+**Resultado esperado:** uma linha por pedido e depois `total N`. Cada linha mostra a chave do pedido, nunca o que o plugin encontrou.
 
 ### 4. Guardar os pedidos retidos num ficheiro
 

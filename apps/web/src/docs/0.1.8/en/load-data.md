@@ -216,7 +216,7 @@ This lists the held and failed requests, 50 at a time. Narrow it with `--reason 
 openldr import check held <plugin-id> <copy-id> --reason held
 ```
 
-**Expected result:** One line for each request, then `total N`. The list never shows patient values.
+**Expected result:** One line for each request, then `total N`. Each line shows the request's key. It never shows what the plugin found.
 
 ### 4. Save the held requests to a file
 

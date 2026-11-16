@@ -216,7 +216,7 @@ Cette commande liste les demandes retenues et en échec, 50 à la fois. Affinez 
 openldr import check held <plugin-id> <copy-id> --reason held
 ```
 
-**Résultat attendu :** une ligne par demande, puis `total N`. La liste n'affiche jamais de valeurs de patients.
+**Résultat attendu :** une ligne par demande, puis `total N`. Chaque ligne affiche la clé de la demande, jamais ce que le plugin a trouvé.
 
 ### 4. Enregistrer les demandes retenues dans un fichier
 
