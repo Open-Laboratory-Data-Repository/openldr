@@ -87,8 +87,9 @@ hours alone. An age in hours taken off a midnight nobody recorded lands on the d
 **The rule.** A new audit rule, class `dates_out_of_order`, severity warn. The steps, in order:
 the specimen's date (collected, else taken), received in lab, registered, and for each order
 row its analysis time and its authorisation time. For every pair of steps that are both set,
-the later must not be before the earlier. Both with a time: compared to the minute. Either with
-no time: compared by day. One finding per request, whose details list each pair that is out of
+the later must not be before the earlier. Both with a time: the pair is out of order only when
+the later step is more than 10 minutes before the earlier one. Either with no time: compared by
+day. One finding per request, whose details list each pair that is out of
 order with the two step names, the two values as the request holds them, and the order row's
 test code where the pair involves one. The analysis and authorisation times are read the way
 the payload already reads them (`status_by_obr` in `src/payload.rs`), so the audit and the
@@ -120,3 +121,16 @@ date-of-birth finding that appears must hold the birth row's own date.
    before receipt, and 250 with analysis before registration.
 3. One finding per request, listing every pair, not one finding per pair.
 4. The hours of an age are ignored when the collected date has no time.
+
+## 8. Decided after the first real run of the rule
+
+On 20,000 real requests the rule as first built flagged 255. 250 of those were one pair,
+analysis before registration, and the gap was up to 1 minute in 205 of them, 1 to 5 minutes in
+40, 5 to 10 in 3, and over an hour in 2. One test code held 164 of the 250, and none had an
+analyser code: tests recorded at reception in the minute the registration was saved. Nothing
+shows whether the registration time is the first registration or the last save.
+
+Such a pair is not a fault a laboratory could correct, and 250 of them would bury the few that
+are. The operator decided on 2026-11-16: allow 10 minutes. Two timed steps are out of order
+only when the later is more than 10 minutes before the earlier. A step with no time is still
+compared by day.
