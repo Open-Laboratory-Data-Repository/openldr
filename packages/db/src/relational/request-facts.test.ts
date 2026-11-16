@@ -124,6 +124,15 @@ describe('projectServiceRequestAttributes', () => {
     expect(rows[0]).toMatchObject({ code: 'v1-check', value_text: 'unchecked', system: 'urn:openldr:cs:request-attribute' });
   });
 
+  it('writes the birth-date-estimated mark as one boolean row', () => {
+    const rows = projectServiceRequestAttributes({
+      resourceType: 'ServiceRequest', id: 'sr-1',
+      extension: [attr('birth-date-estimated', { valueBoolean: true })],
+    }, {});
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ code: 'birth-date-estimated', value_boolean: true, system: 'urn:openldr:cs:request-attribute' });
+  });
+
   it('skips an attribute with no code or no value', () => {
     const rows = projectServiceRequestAttributes({
       resourceType: 'ServiceRequest', id: 'sr-1',

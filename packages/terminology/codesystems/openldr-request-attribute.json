@@ -35,6 +35,7 @@
     { "code": "target-time-mins", "display": "Target time in minutes" },
     { "code": "reference-numbers", "display": "Reference numbers" },
     { "code": "unique-id", "display": "Unique ID" },
-    { "code": "v1-check", "display": "Check against OpenLDR v1" }
+    { "code": "v1-check", "display": "Check against OpenLDR v1" },
+    { "code": "birth-date-estimated", "display": "Date of birth worked out from the stored age" }
   ]
 }
