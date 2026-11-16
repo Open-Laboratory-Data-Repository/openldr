@@ -158,6 +158,14 @@ hand copy used by the fixtures. The v1 plugin's copy statements for these two ta
 exactly that SELECT (`wasm/openldr-v1-import/src/queries.rs:178-184`). It is only that
 plugin's two other tables that this v1 lacks.
 
+**A result row has no panel code.** v1's `LabResults` table holds none. The old tool read the
+panel code and its description from the request row, through an inner join on `RequestID` and
+`OBRSetID` (`openldr.ts:280-292`). The plugin is handed the two tables apart, so it does that
+join itself: a result row takes the panel code of the request row with the same `OBRSetID`,
+and a result row with no such request row is dropped, as the join dropped it. v1's unique
+index on `(RequestID, OBRSetID)` means a result row never has two. Found by the review of the
+second task on 2026-11-16; the first fixtures had wrongly put a panel code on the result rows.
+
 `twins` must be present, with both lists. A call without it fails with `twins must hold
 requests and results`. A request whose key has no row in `twins.requests` is unchecked. The
 stage tests call the stages directly and do not change. The callers of `source_decode` itself,
