@@ -1,6 +1,18 @@
 {
-  "generatedAt": "2026-11-15",
+  "generatedAt": "2026-11-16",
   "days": [
+    {
+      "date": "2026-11-16",
+      "version": null,
+      "entries": [
+        {
+          "hash": "7712d7f6",
+          "type": "feat",
+          "scope": "terminology",
+          "title": "A request attribute for the check against OpenLDR v1"
+        }
+      ]
+    },
     {
       "date": "2026-11-15",
       "version": null,
