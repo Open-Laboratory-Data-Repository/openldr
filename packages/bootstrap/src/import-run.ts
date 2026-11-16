@@ -77,7 +77,8 @@ export interface ImportActor { type: 'user' | 'cli' | 'system'; id: string | nul
 
 export interface ImportAuditEvent {
   action: 'import.allow' | 'import.revoke' | 'import.start' | 'import.stop' | 'import.resume' | 'import.finish'
-    | 'import.copy.start' | 'import.copy.stop' | 'import.copy.takeover' | 'import.copy.finish' | 'import.copy.delete';
+    | 'import.copy.start' | 'import.copy.stop' | 'import.copy.takeover' | 'import.copy.finish' | 'import.copy.delete'
+    | 'import.check.start' | 'import.check.stop' | 'import.check.takeover' | 'import.check.finish';
   pluginId: string;
   connectorId?: string;
   runId?: string;
@@ -167,16 +168,19 @@ const mapOutputSchema = z.object({
 export const optionsSchema = z.record(z.string().regex(NAME), z.string().max(500)).refine((o) => Object.keys(o).length <= 20);
 
 const CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
-/** A plugin's error is kept only if it is a bare code. Anything else could quote a row. */
-function pluginCode(error: string): string {
+/** A plugin's error is kept only if it is a bare code. Anything else could quote a row. Shared
+ *  with the check run (import-check.ts). */
+export function pluginCode(error: string): string {
   return CODE.test(error) ? error : 'MAPPING_FAILED';
 }
-function saveCode(err: unknown): string {
+/** A save error's own code when it is a bare code, else SAVE_FAILED. Its text is never kept. */
+export function saveCode(err: unknown): string {
   const code = (err as { code?: unknown } | null)?.code;
   return typeof code === 'string' && CODE.test(code) ? code : 'SAVE_FAILED';
 }
 
-function checkResources(resources: unknown[], allowedTypes: Set<string>): string | null {
+/** Why the resources may not be saved, as a code, or null when they may. */
+export function checkResources(resources: unknown[], allowedTypes: Set<string>): string | null {
   if (resources.length === 0) return 'NO_RESOURCES';
   for (const r of resources) {
     const type = (r as { resourceType?: unknown } | null)?.resourceType;

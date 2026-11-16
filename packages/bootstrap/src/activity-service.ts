@@ -1,4 +1,5 @@
 import { buildLifecycle, type Lifecycle, type LifecycleRun } from '@openldr/workflows';
+import type { CheckRun } from './import-check';
 import type { CopyRun } from './import-copy';
 
 /** Structural view of a workflow run; `result` is widened to `unknown` so the store's
@@ -51,6 +52,32 @@ export function copyForActivity(run: CopyRun): ActivityCopyRun {
   };
 }
 
+/** A check run (import-check.ts), cut down to the counts and states Activity shows. Its cursor is
+ *  a source key, and its labels are the plugin's own codes, so both are left out here. */
+export interface ActivityCheckRun {
+  id: string;
+  pluginId: string;
+  pluginVersion: string;
+  status: string;
+  read: number;
+  saved: number;
+  held: number;
+  failed: number;
+  startedAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+  startedBy: string;
+}
+
+/** The only way a check run reaches Activity: its counts and its states. */
+export function checkForActivity(run: CheckRun): ActivityCheckRun {
+  const { read, saved, held, failed } = run.counts;
+  return {
+    id: run.id, pluginId: run.pluginId, pluginVersion: run.pluginVersion, status: run.status, read, saved, held, failed,
+    startedAt: run.startedAt, updatedAt: run.updatedAt, finishedAt: run.finishedAt, startedBy: run.startedBy,
+  };
+}
+
 /** An ingest batch (packages/ingest batch-store.ts), as much of it as Activity shows. `openldr
  *  ingest` saves a batch directly and starts no workflow run, so without this a lab that loads from
  *  the CLI saw nothing here (bug 14). */
@@ -76,6 +103,8 @@ export interface ActivityDeps {
   importRuns?: () => Promise<ActivityImportRun[]>;
   /** Every copy, through `copyForActivity`. Optional so older callers and tests need not supply it. */
   importCopies?: () => Promise<ActivityCopyRun[]>;
+  /** Every check run, through `checkForActivity`. Optional so older callers and tests need not supply it. */
+  importChecks?: () => Promise<ActivityCheckRun[]>;
   /** The newest ingest batches. Optional so older callers and tests need not supply it. */
   ingestBatches?: () => Promise<ActivityBatch[]>;
 }
@@ -138,6 +167,22 @@ function copyLifecycle(run: ActivityCopyRun): ActivityLifecycle {
   return { correlationId: run.id, status: copyStatus(run.status), stages, runIds: [] };
 }
 
+/** One check run as a lifecycle: who started it, then what it has read, saved and held so far. */
+function checkLifecycle(run: ActivityCheckRun): ActivityLifecycle {
+  const stages: ActivityLifecycle['stages'] = [
+    { stage: 'received', status: 'ok', at: run.startedAt, detail: `check: ${run.pluginId} ${run.pluginVersion}, started by ${run.startedBy}` },
+  ];
+  if (run.read > 0 || run.status === 'failed') {
+    stages.push({
+      stage: 'persisted', status: run.status === 'failed' ? 'failed' : 'ok',
+      at: run.finishedAt ?? run.updatedAt,
+      detail: `${run.read} read, ${run.saved} saved, ${run.held} held back, ${run.failed} failed`,
+    });
+  }
+  // A check has the same states as a copy, less deleting.
+  return { correlationId: run.id, status: copyStatus(run.status), stages, runIds: [] };
+}
+
 function batchStatus(status: string): ActivityLifecycle['status'] {
   if (status === 'done') return 'complete';
   if (status === 'failed') return 'failed';
@@ -191,6 +236,16 @@ export function createActivityService(deps: ActivityDeps): ActivityService {
     }
   }
 
+  /** Every check run. Activity must keep working when they cannot be read, so a failure reads as none. */
+  async function importChecks(): Promise<ActivityCheckRun[]> {
+    if (!deps.importChecks) return [];
+    try {
+      return await deps.importChecks();
+    } catch {
+      return [];
+    }
+  }
+
   /** The newest ingest batches. Activity must keep working when they cannot be read. */
   async function ingestBatches(): Promise<ActivityBatch[]> {
     if (!deps.ingestBatches) return [];
@@ -230,6 +285,12 @@ export function createActivityService(deps: ActivityDeps): ActivityService {
       startedAt: run.startedAt, currentStage: lc.stages[lc.stages.length - 1].stage, status: lc.status };
   }
 
+  function checkPayload(run: ActivityCheckRun): RecentPayload {
+    const lc = checkLifecycle(run);
+    return { correlationId: run.id, workflowId: `check:${run.pluginId}`, source: `check: ${run.pluginId}`,
+      startedAt: run.startedAt, currentStage: lc.stages[lc.stages.length - 1].stage, status: lc.status };
+  }
+
   return {
     async getLifecycle(correlationId) {
       const payload = await assemble(correlationId);
@@ -237,19 +298,22 @@ export function createActivityService(deps: ActivityDeps): ActivityService {
       const run = (await importRuns()).find((r) => r.id === correlationId);
       if (run) return importLifecycle(run);
       const copy = (await importCopies()).find((c) => c.id === correlationId);
-      return copy ? copyLifecycle(copy) : null;
+      if (copy) return copyLifecycle(copy);
+      const check = (await importChecks()).find((c) => c.id === correlationId);
+      return check ? checkLifecycle(check) : null;
     },
     async listRecent(opts) {
       const imports = await importRuns();
       const copies = await importCopies();
+      const checks = await importChecks();
       const batches = await ingestBatches();
-      if (imports.length === 0 && copies.length === 0 && batches.length === 0) {
+      if (imports.length === 0 && copies.length === 0 && checks.length === 0 && batches.length === 0) {
         const out: RecentPayload[] = [];
         for (const h of await deps.runs.listCorrelations(opts)) out.push(await workflowPayload(h));
         return out;
       }
-      // Four sources, one page. Ask the store for enough rows to cover the page once the import
-      // runs, copies and batches are merged in, order all by time, then cut the page. Only the rows
+      // Five sources, one page. Ask the store for enough rows to cover the page once the import
+      // runs, copies, checks and batches are merged in, order all by time, then cut the page. Only the rows
       // on the page are assembled, which is the costly part. A batch that also has a workflow run is
       // shown once, as the payload.
       const offset = opts?.offset ?? 0;
@@ -260,12 +324,14 @@ export function createActivityService(deps: ActivityDeps): ActivityService {
         head?: { correlationId: string; latestAt: string; workflowId: string };
         run?: ActivityImportRun;
         copy?: ActivityCopyRun;
+        check?: ActivityCheckRun;
         batch?: ActivityBatch;
       };
       const merged: Entry[] = [
         ...heads.map((h): Entry => ({ at: h.latestAt, head: h })),
         ...imports.map((run): Entry => ({ at: run.startedAt, run })),
         ...copies.map((copy): Entry => ({ at: copy.startedAt, copy })),
+        ...checks.map((check): Entry => ({ at: check.startedAt, check })),
         ...batches
           .filter((b) => !heads.some((h) => h.correlationId === b.batch_id))
           .map((b): Entry => ({ at: isoOf(b.created_at), batch: b })),
@@ -274,7 +340,7 @@ export function createActivityService(deps: ActivityDeps): ActivityService {
       const page = limit === undefined ? merged : merged.slice(offset, offset + limit);
       const out: RecentPayload[] = [];
       for (const e of page) {
-        out.push(e.run ? importPayload(e.run) : e.copy ? copyPayload(e.copy) : e.batch ? batchPayload(e.batch) : await workflowPayload(e.head!));
+        out.push(e.run ? importPayload(e.run) : e.copy ? copyPayload(e.copy) : e.check ? checkPayload(e.check) : e.batch ? batchPayload(e.batch) : await workflowPayload(e.head!));
       }
       return out;
     },

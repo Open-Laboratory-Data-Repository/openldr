@@ -108,7 +108,18 @@ export interface ImportCopyServiceDeps
   driverId: string;
   /** Injectable for tests; the page reader's wait between tries. */
   sleep?: (ms: number) => Promise<void>;
+  /** The check runs over a copy (import-check.ts). Given as two functions, so this service does
+   *  not import that one. Without it, a remove does not look for a check. */
+  checks?: {
+    /** The status of the check run on this copy, or null when there is none. */
+    statusOf(pluginId: string, copyId: string): Promise<string | null>;
+    /** Delete up to `limit` held rows of the copy. 0 means none left. */
+    deleteHeld(copyId: string, limit: number): Promise<number>;
+  };
 }
+
+/** Check statuses that hold the copy: a remove is refused while the check is in one of them. */
+const LIVE_CHECK = new Set(['queued', 'running', 'waiting', 'stopping']);
 
 export interface ImportCopyStartInput {
   pluginId: string;
@@ -696,6 +707,14 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
         if (gone === 0) { outcome = 'done'; break; }
         if (!(await d.saveKeepingStop())) { outcome = 'lost'; break; }
       }
+      // The held rows of a check on this copy go with it, in batches too.
+      const checks = deps.checks;
+      while (outcome === 'done' && checks) {
+        if (entry.halt) { outcome = entry.halt === 'lost' ? 'lost' : 'release'; break; }
+        const gone = await ownDb('write', () => checks.deleteHeld(run.id, DELETE_BATCH));
+        if (gone === 0) break;
+        if (!(await d.saveKeepingStop())) { outcome = 'lost'; break; }
+      }
       if (outcome === 'done') {
         for (const e of await listSkipped(run.pluginId, run.id)) await dropSkipped(run.pluginId, e);
         // One more compare-and-swap before the record goes, so a drive that lost the run never
@@ -886,6 +905,10 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
       return changeRun(pluginId, copyId, async (stored) => {
         if (!stored) throw new Error(`copy ${copyId} not found`);
         if (!isTerminal(stored.status)) throw new Error(`copy ${copyId} is ${stored.status}; stop it before deleting it`);
+        const check = deps.checks ? await ownDb('read', () => deps.checks!.statusOf(pluginId, copyId)) : null;
+        if (check !== null && LIVE_CHECK.has(check)) {
+          throw new Error(`copy ${copyId} has a check that is ${check}; stop it before deleting the copy`);
+        }
         return { ...stored, status: 'deleting', driver: null, waiting: null };
       }, (next, stored) => auditOrRefuse(deps.audit, {
         action: 'import.copy.delete', pluginId, connectorId: next.connectorId, runId: copyId, actor, metadata: { status: stored?.status ?? null },

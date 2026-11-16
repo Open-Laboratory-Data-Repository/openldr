@@ -1,3 +1,4 @@
+import type { ImportCheckService } from './import-check';
 import type { ImportCopyService } from './import-copy';
 import type { ImportService } from './import-run';
 
@@ -6,8 +7,9 @@ import type { ImportService } from './import-run';
 // never drive: it would hold a copy for as long as the command runs, and drop it when it exits.
 //
 // One turn adopts the imports a server started whose driver has gone, then takes every copy that
-// needs a driver. The next turn starts 5 seconds after the last one ended, so two never overlap.
-// So after a power cut and a restart, a copy or an import carries on with no person pressing Resume.
+// needs a driver, then every check run over a copy. The next turn starts 5 seconds after the last
+// one ended, so two never overlap. So after a power cut and a restart, a copy, a check or an
+// import carries on with no person pressing Resume.
 
 /** How long the driver waits between turns. */
 export const IMPORT_DRIVER_INTERVAL_MS = 5_000;
@@ -15,6 +17,9 @@ export const IMPORT_DRIVER_INTERVAL_MS = 5_000;
 export interface ImportDriverDeps {
   copies: Pick<ImportCopyService, 'tick' | 'idle' | 'release'>;
   imports: Pick<ImportService, 'adopt'>;
+  /** Check runs over a copy (import-check.ts). Taken after the copies. Optional, so a caller with
+   *  no check service drives copies alone. */
+  checks?: Pick<ImportCheckService, 'tick' | 'idle' | 'release'>;
   /** Default 5000. */
   intervalMs?: number;
   /** Told of each failed step. The loop goes on. */
@@ -22,7 +27,7 @@ export interface ImportDriverDeps {
 }
 
 export interface ImportDriver {
-  /** End the loop, tell every copy drive here to let go, and wait until each has saved its
+  /** End the loop, tell every copy and check drive here to let go, and wait until each has saved its
    *  position. The stored status stays, so the next server start takes the copy. Safe to call twice. */
   stop(): Promise<void>;
 }
@@ -44,6 +49,8 @@ export function startImportDriver(deps: ImportDriverDeps): ImportDriver {
     try { await deps.imports.adopt({ signal: ending.signal }); } catch (err) { report(err); }
     if (ended) return;
     try { await deps.copies.tick(); } catch (err) { report(err); }
+    if (ended || !deps.checks) return;
+    try { await deps.checks.tick(); } catch (err) { report(err); }
   }
 
   function schedule(delayMs: number): void {
@@ -69,10 +76,11 @@ export function startImportDriver(deps: ImportDriverDeps): ImportDriver {
         timer = null;
         try {
           // Called before the turn in hand ends, so a tick in flight launches nothing more.
-          const releasing = deps.copies.release();
+          const releasing = Promise.all([deps.copies.release(), deps.checks?.release()]);
           await turn;
           await releasing;
           await deps.copies.idle();
+          await deps.checks?.idle();
         } catch (err) {
           report(err);
         }
