@@ -105,6 +105,50 @@ describe('PluginFrame', () => {
     }
   });
 
+  it('keeps its download limit when the page reloads, and closes the old port', async () => {
+    Object.assign(URL, { createObjectURL: () => 'blob:frame', revokeObjectURL: () => {} });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const close = vi.spyOn(MessagePort.prototype, 'close');
+    try {
+      const { container, unmount } = render(<PluginFrame pluginId="ui-demo" context={{ pluginId: 'ui-demo', capabilities: [], theme: 'light', locale: 'en', sessionId: 's1' }} />);
+      const iframe = await waitFor(() => {
+        const f = container.querySelector('iframe');
+        if (!f || !f.getAttribute('srcdoc')) throw new Error('not ready');
+        return f as HTMLIFrameElement;
+      });
+      const ports: MessagePort[] = [];
+      Object.defineProperty(iframe, 'contentWindow', { configurable: true, value: { postMessage: (_m: unknown, _o: string, t?: MessagePort[]) => { if (t?.[0]) ports.push(t[0]); } } });
+      const ask = (port: MessagePort, id: number) => new Promise<unknown>((resolve) => {
+        port.onmessage = (e) => resolve(e.data);
+        port.postMessage({ id, op: { kind: 'host.download', filename: 'held.csv', mime: 'text/csv', text: 'a' } });
+      });
+
+      iframe.dispatchEvent(new Event('load'));
+      expect(await ask(ports[0]!, 1)).toEqual({ id: 1, result: { ok: true, data: null } });
+      // jsdom may fire a load of its own first, so count closes from here.
+      const base = close.mock.calls.length;
+      // The page reloads itself: load fires again and a new port is sent.
+      iframe.dispatchEvent(new Event('load'));
+      expect(close.mock.calls.length).toBe(base + 1);
+      expect(ports).toHaveLength(2);
+      expect(await ask(ports[1]!, 2)).toEqual({ id: 2, result: { ok: false, error: 'download refused: one download per second' } });
+      // The old port is closed: a message on it gets no answer.
+      let answered = false;
+      ports[0]!.onmessage = () => { answered = true; };
+      ports[0]!.postMessage({ id: 3, op: { kind: 'host.download', filename: 'held.csv', mime: 'text/csv', text: 'a' } });
+      await new Promise((r) => setTimeout(r, 50));
+      expect(answered).toBe(false);
+      expect(click).toHaveBeenCalledTimes(1);
+      // Unmounting closes the live port too.
+      unmount();
+      expect(close.mock.calls.length).toBe(base + 2);
+      for (const p of ports) p.close();
+    } finally {
+      click.mockRestore();
+      close.mockRestore();
+    }
+  });
+
   it('uses a hardened CSP: no remote (https) images, plus base-uri/form-action lockdown', async () => {
     const { container } = render(<PluginFrame pluginId="ui-demo" context={{ pluginId: 'ui-demo', capabilities: [], theme: 'light', locale: 'en', sessionId: 's1' }} />);
     const iframe = await waitFor(() => {

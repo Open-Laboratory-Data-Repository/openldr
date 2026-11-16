@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { wireHostPort, saveTextFile, type HostPortLike } from './host-bridge';
+import { wireHostPort, saveTextFile, createDownloadGate, DOWNLOAD_PENDING_MAX_BYTES, REVOKE_AFTER_MS, type HostPortLike } from './host-bridge';
 
 // Hand-rolled linked port pair (no MessageChannel polyfill needed).
 function linkedPorts(): [HostPortLike, { post(m: unknown): void; onmessage: ((e: { data: unknown }) => void) | null }] {
@@ -56,7 +56,7 @@ describe('wireHostPort: host.download', () => {
     const [host, peer] = linkedPorts();
     const call = vi.fn(async () => ({ ok: true as const, data: null }));
     const save = opts.save ?? vi.fn();
-    wireHostPort(host, { call, save, now: opts.now ?? (() => 1_000_000) });
+    wireHostPort(host, { call, gate: createDownloadGate({ save, now: opts.now ?? (() => 1_000_000) }) });
     const replies: any[] = [];
     peer.onmessage = (e) => replies.push(e.data);
     return { peer, call, save, replies };
@@ -69,7 +69,7 @@ describe('wireHostPort: host.download', () => {
     await flush();
     expect(w.call).not.toHaveBeenCalled();
     expect(w.save).toHaveBeenCalledTimes(1);
-    expect(w.save).toHaveBeenCalledWith('held.csv', 'text/csv', 'key,reason\nREQ1,held\n');
+    expect(w.save).toHaveBeenCalledWith('held.csv', 'text/csv', 'key,reason\nREQ1,held\n', expect.any(Function));
     expect(w.replies).toEqual([{ id: 3, result: { ok: true, data: null } }]);
   });
 
@@ -147,6 +147,64 @@ describe('wireHostPort: host.download', () => {
   });
 });
 
+describe('createDownloadGate', () => {
+  const MiB = 1024 * 1024;
+  const big = 'a'.repeat(64 * MiB);
+  const op = (text: string) => ({ kind: 'host.download' as const, filename: 'held.csv', mime: 'text/csv' as const, text });
+
+  it('one gate shared by two wirings, as across a reload of one frame, keeps one limit', async () => {
+    let t = 50_000;
+    const gate = createDownloadGate({ save: vi.fn(), now: () => t });
+    const first = linkedPorts();
+    wireHostPort(first[0], { call: vi.fn(), gate });
+    const replies: any[] = [];
+    first[1].onmessage = (e) => replies.push(e.data);
+    first[1].post({ id: 1, op: op('a') });
+    // The page reloads: a new port, the same gate.
+    const second = linkedPorts();
+    wireHostPort(second[0], { call: vi.fn(), gate });
+    second[1].onmessage = (e) => replies.push(e.data);
+    t += 500;
+    second[1].post({ id: 2, op: op('a') });
+    expect(replies).toEqual([
+      { id: 1, result: { ok: true, data: null } },
+      { id: 2, result: { ok: false, error: 'download refused: one download per second' } },
+    ]);
+  });
+
+  it('refuses a download that would hold more than 128 MiB in Blobs not yet revoked, and accepts one after a revoke', () => {
+    expect(DOWNLOAD_PENDING_MAX_BYTES).toBe(128 * MiB);
+    let t = 0;
+    const releases: Array<() => void> = [];
+    const save = vi.fn((_f: string, _m: string, _x: string, released: () => void) => { releases.push(released); });
+    const gate = createDownloadGate({ save, now: () => (t += 2000) });
+    expect(gate.download(op(big))).toEqual({ ok: true, data: null });
+    expect(gate.download(op(big))).toEqual({ ok: true, data: null });
+    // 128 MiB wait now. One byte more is refused, with a fixed error and no save.
+    expect(gate.download(op('x'))).toEqual({ ok: false, error: 'download refused: too many files waiting' });
+    expect(save).toHaveBeenCalledTimes(2);
+    releases[0]!();
+    // A second call of the same release frees nothing more.
+    releases[0]!();
+    expect(gate.download(op(big))).toEqual({ ok: true, data: null });
+    expect(gate.download(op('x'))).toEqual({ ok: false, error: 'download refused: too many files waiting' });
+    releases[1]!();
+    expect(gate.download(op('x'))).toEqual({ ok: true, data: null });
+  });
+
+  it('counts the UTF-8 bytes of the text, and frees them when the save throws', () => {
+    let t = 0;
+    const gate = createDownloadGate({ save: () => { throw new Error('quota'); }, now: () => (t += 2000) });
+    for (let i = 0; i < 5; i++) expect(gate.download(op(big))).toEqual({ ok: false, error: 'download failed' });
+    const kept = createDownloadGate({ save: vi.fn(), now: () => (t += 2000) });
+    // 'é' is two bytes, so 32 Mi of them is 64 MiB, and two such files fill the 128 MiB.
+    const accents = 'é'.repeat(32 * MiB);
+    expect(kept.download(op(accents))).toEqual({ ok: true, data: null });
+    expect(kept.download(op(accents))).toEqual({ ok: true, data: null });
+    expect(kept.download(op('x'))).toEqual({ ok: false, error: 'download refused: too many files waiting' });
+  });
+});
+
 describe('saveTextFile', () => {
   afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
@@ -162,7 +220,8 @@ describe('saveTextFile', () => {
     });
     const before = document.body.children.length;
 
-    saveTextFile('held.csv', 'text/csv', 'key,name\nREQ1,Maria Gonçalves\n');
+    const released = vi.fn();
+    saveTextFile('held.csv', 'text/csv', 'key,name\nREQ1,Maria Gonçalves\n', released);
 
     expect(create).toHaveBeenCalledTimes(1);
     expect(blobs[0]!.type).toBe('text/csv');
@@ -170,18 +229,35 @@ describe('saveTextFile', () => {
     // The link is gone at once. The URL lives a short while so the browser can start the save.
     expect(document.body.children.length).toBe(before);
     expect(revoke).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(60_000);
+    expect(REVOKE_AFTER_MS).toBe(10_000);
+    vi.advanceTimersByTime(REVOKE_AFTER_MS - 1);
+    expect(revoke).not.toHaveBeenCalled();
+    expect(released).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
     expect(revoke).toHaveBeenCalledWith('blob:studio/0001');
+    expect(released).toHaveBeenCalledTimes(1);
     // Read after the clock is real again: jsdom's FileReader waits on a timer.
     vi.useRealTimers();
     expect(await readBlob(blobs[0]!)).toBe('key,name\nREQ1,Maria Gonçalves\n');
+  });
+
+  it('a click that throws revokes the URL at once and frees the bytes', () => {
+    const revoke = vi.fn();
+    Object.assign(URL, { createObjectURL: () => 'blob:y', revokeObjectURL: revoke });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => { throw new Error('blocked'); });
+    const released = vi.fn();
+    const before = document.body.children.length;
+    expect(() => saveTextFile('held.csv', 'text/csv', 'a', released)).toThrow();
+    expect(revoke).toHaveBeenCalledWith('blob:y');
+    expect(released).toHaveBeenCalledTimes(1);
+    expect(document.body.children.length).toBe(before);
   });
 
   it('keeps the mime of a JSON file', async () => {
     const blobs: Blob[] = [];
     Object.assign(URL, { createObjectURL: (b: Blob) => { blobs.push(b); return 'blob:x'; }, revokeObjectURL: () => {} });
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    saveTextFile('held.json', 'application/json', '[{"a":1}]');
+    saveTextFile('held.json', 'application/json', '[{"a":1}]', () => {});
     expect(blobs[0]!.type).toBe('application/json');
     expect(await readBlob(blobs[0]!)).toBe('[{"a":1}]');
   });

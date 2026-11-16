@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { SDK_BOOTSTRAP_V1, type PluginInitContext, type PluginSiteName } from '@openldr/plugin-ui-sdk';
 import i18n from '@/i18n';
 import { authFetch, pluginUiAssetUrl, pluginBrokerCall } from '@/api';
-import { wireHostPort, type HostPortLike } from './host-bridge';
+import { createDownloadGate, wireHostPort, type DownloadGate, type HostPortLike } from './host-bridge';
 import { hostThemeTokens, themeStyleTag } from './plugin-theme';
 import { randomId } from '@/lib/random-id';
 
@@ -32,6 +32,13 @@ export function PluginFrame({ pluginId, context }: { pluginId: string; context: 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [srcdoc, setSrcdoc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // One download limit per mounted frame. A page can reload itself, which fires load again; the
+  // limit must hold across that, so it lives here and not in one wiring.
+  const gateRef = useRef<DownloadGate | null>(null);
+  // The live port. A reload gets a new one, and the old one is closed.
+  const portRef = useRef<MessagePort | null>(null);
+
+  useEffect(() => () => { portRef.current?.close(); portRef.current = null; }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,8 +70,11 @@ export function PluginFrame({ pluginId, context }: { pluginId: string; context: 
   function onLoad() {
     const win = iframeRef.current?.contentWindow;
     if (!win) return;
+    portRef.current?.close();
     const channel = new MessageChannel();
-    wireHostPort(channel.port1 as unknown as HostPortLike, { call: (op) => pluginBrokerCall(pluginId, op) });
+    portRef.current = channel.port1;
+    gateRef.current ??= createDownloadGate();
+    wireHostPort(channel.port1 as unknown as HostPortLike, { call: (op) => pluginBrokerCall(pluginId, op), gate: gateRef.current });
     channel.port1.start();
     win.postMessage({ type: 'openldr:init', context: { ...context, theme: hostTheme(), themeTokens: hostThemeTokens() } }, '*', [channel.port2]);
   }
