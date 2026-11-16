@@ -61,7 +61,7 @@ with results on some rows on 2,989, and one order row only on 2,594. In the samp
 Goals:
 
 1. One reading of the age bytes: years at 414, days at 417 to 418.
-2. A date of birth is sent only when a real one stands behind it.
+2. A date of birth worked out from the age is the collected date minus the stored days.
 3. With two birth dates, the one the stored age confirms is taken.
 4. With two taken dates, the one on the collected day is taken.
 5. Each order of a test code keeps its own latest run.
@@ -80,7 +80,6 @@ Non-goals:
 
 Anti-goals:
 
-- A date of birth nobody recorded leaving as a full date.
 - A change that moves an output it does not state. Every moved field has an override or a
   value rule, as for every earlier fault.
 - A request that passed the check against v1 failing it after this work, unexplained.
@@ -92,7 +91,7 @@ For each fault the choice was between simple fixed rules and a rule the data sup
 | Fault | Considered | Chosen, and why |
 |---|---|---|
 | 11 | (a) keep both readings; (b) days at 417 to 418, added to the years; (c) days at 417 to 418 as the whole age | (c). v1 matches it on every row, and the days sit inside the year of age, so adding them to the years would count the age twice |
-| 11, typed ages | (a) a guessed full date, as today; (b) the year only; (c) no date of birth | (c). The operator chose it on 2026-11-16: "None, keep the age" |
+| 11, typed ages | (a) a guessed full date; (b) the year only; (c) no date of birth | (a). The operator first chose (c), then on 2026-11-16, after asking about babies and partial dates, chose "Full guessed date": an estimate is better than nothing, and the stored age still leaves beside it |
 | 2 | (a) earliest; (b) latest; (c) the row the stored age confirms | (c). Earliest is right on 139 and latest on 127 of 284 |
 | 2, none confirmed | (a) earliest silently; (b) no date of birth; (c) earliest with a warning | (c). The operator chose it on 2026-11-16: "Earliest, with a warning" |
 | 3 | (a) earliest, as today; (b) latest; (c) the row on the collected day | (c). The collected day equals a taken date on 69 of 70, the latest on 47 and the earliest on 22 |
@@ -105,21 +104,25 @@ For each fault the choice was between simple fixed rules and a rule the data sup
 `dob_or_age` in `src/records.rs` reads `years` = byte 414 and `days` = bytes 417 and 418,
 little-endian. It no longer reads byte 416 or an hours byte.
 
-It gives no value when any of these holds:
+It gives no value when years and days are both 0, or when there is no collected date
+(bytes 159 to 162). Both are as today.
 
-- years and days are both 0 (as today);
-- there is no collected date (bytes 159 to 162), as today;
-- years is above 0 and days is 0;
-- years is above 0 and days equals years x 365 or floor(years x 365.25).
+Otherwise:
 
-Otherwise the value is the collected date minus `days` whole days, printed as a date.
+- days above 0: the collected date minus `days` whole days, printed as a date. This holds
+  for a baby (years 0) and for an adult alike, and also when the days are a round number of
+  years, which means someone typed the age. The operator chose a full estimated date there.
+- days 0 and years above 0 (7 requests in 1.7 million): the collected date minus that many
+  calendar years, as today.
+
 Whether the collected date has a time does not matter, since no hours are taken off.
 
-The stored age itself (`age_years`, `age_days` in the payload) does not change. A request
-with no date of birth still carries its age.
+The stored age itself does not change. The request carries `age_years` and `age_days` as
+stored, and a zero stays empty: a baby under one year has no age in years, only days. The
+operator confirmed that on 2026-11-16: a 0 for years is not wanted.
 
-Known cost: a real age that happens to be a round number of years, with no birth row, loses
-its date of birth. That is about 1 real age in 365.
+Nothing marks an estimated date of birth as estimated. A consumer can tell only by the
+missing birth row, which CE does not keep. That is an open point, in the catalogue.
 
 ### 5.2 Two birth dates (fault 2)
 
@@ -193,9 +196,9 @@ As for every earlier fault (the build's standing rule):
 
 On 20,000 sampled twins, before any code:
 
-- About half have no birth row. Of those, about 37% lose a guessed date of birth, and about
-  half get a date of birth that moves by up to a year, from collected date minus years to
-  collected date minus days.
+- About half have no birth row. Of those, nearly all with an age of a year or more get a
+  date of birth that moves by up to a year, from collected date minus years to collected
+  date minus days. A baby's date of birth moves only when the age is 256 days or more.
 - Two birth dates: 328 in 2.3 million, so 2 or 3 in the sample.
 - Two taken dates with the index read: 70 in 2.3 million, so most likely none.
 - Runs in two or more orders: about 280 test codes on about 270 requests.
@@ -211,7 +214,8 @@ On 20,000 sampled twins, before any code:
    date, or no stored days), not only when the stored age disagrees.
 4. Two taken dates give no warning.
 5. A test code with more order numbers than orders is left as today, whole.
-6. An age of years only (7 requests in 1.7 million) gives no date of birth.
+6. An age of years only (7 requests in 1.7 million) keeps today's rule: collected date minus
+   the years.
 7. A damaged birth or taken row is skipped before the choice is made. Today a damaged first
    row hides a good second one.
 8. The new warning is added last, after `dates_out_of_order`, so no existing finding moves.
@@ -266,5 +270,9 @@ The real run reports the held count, and any request newly held is listed by cau
 
 **A typed age and two birth dates.** The stored days are used to confirm a birth date
 whether or not they are a round number of years. A match must be exact.
+
+**A typed age.** No test for a round number of years is built. The count stays in the
+catalogue as a signal: where there is no birth row and the days equal years x 365 or
+floor(years x 365.25), the date of birth is an estimate.
 
 **The supersede list.** Its sort order does not change: test code, then run index.
