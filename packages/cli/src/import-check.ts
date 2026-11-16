@@ -1,8 +1,14 @@
-import { open, unlink } from 'node:fs/promises';
-import { LABORATORY_CODE, createAppContext, type CheckRun, type ImportActor } from '@openldr/bootstrap';
+import { randomBytes } from 'node:crypto';
+import { open, rename, unlink, type FileHandle } from 'node:fs/promises';
+import { basename, dirname, join } from 'node:path';
+import {
+  HELD_ITEMS_LIMIT_MAX, HELD_LABEL_MAX, HELD_LIST_LIMIT_MAX, LABORATORY_CODE, checkIdOf, createAppContext, recordCheckRead,
+  type CheckRun, type ImportActor,
+} from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
-import { cliActor } from './cli-actor';
+import { cliActor, cliNamedActor } from './cli-actor';
 import { parseImportOptions } from './import';
+import { outputTargetRefusal } from './output-target';
 
 // `openldr import check ...`: check a finished copy with a plugin that decodes each request. Every
 // command calls the check service the plugin page uses (packages/bootstrap/src/import-check.ts), so
@@ -122,12 +128,11 @@ export interface ImportCheckHeldOpts extends JsonOpt {
   force?: boolean;
 }
 
-/** A filter of the held list, with the bounds the plugin broker gives it (plugin-broker.ts, the
- *  `import.check.held` op). One page of the export reads at most the broker's 200 for heldItems. */
+/** A filter of the held list, with the bounds the plugin broker gives it (the `import.check.held`
+ *  op). The numbers come from the broker's own constants. One page of the export is the most the
+ *  broker allows for `heldItems`. */
 interface HeldFilters { reason?: 'held' | 'error'; label?: string; laboratory?: string }
 const LIST_LIMIT_DEFAULT = 50;
-const LIST_LIMIT_MAX = 100;
-const EXPORT_PAGE = 200;
 
 function heldFilters(opts: ImportCheckHeldOpts): HeldFilters {
   const f: HeldFilters = {};
@@ -136,7 +141,7 @@ function heldFilters(opts: ImportCheckHeldOpts): HeldFilters {
     f.reason = opts.reason;
   }
   if (opts.label !== undefined) {
-    if (opts.label.length < 1 || opts.label.length > 64) throw new Error('--label must be 1 to 64 characters');
+    if (opts.label.length < 1 || opts.label.length > HELD_LABEL_MAX) throw new Error(`--label must be 1 to ${HELD_LABEL_MAX} characters`);
     f.label = opts.label;
   }
   if (opts.laboratory !== undefined) {
@@ -151,7 +156,7 @@ export async function runImportCheckHeld(pluginId: string, copyId: string, opts:
   const filters = heldFilters(opts);
   const offset = wholeNumber('--offset', opts.offset);
   const limit = wholeNumber('--limit', opts.limit);
-  if (limit !== undefined && (limit < 1 || limit > LIST_LIMIT_MAX)) throw new Error(`--limit must be 1 to ${LIST_LIMIT_MAX}`);
+  if (limit !== undefined && (limit < 1 || limit > HELD_LIST_LIMIT_MAX)) throw new Error(`--limit must be 1 to ${HELD_LIST_LIMIT_MAX}`);
   if (opts.export !== undefined) {
     if (offset !== undefined || limit !== undefined) throw new Error('--export writes every row the filters match. Do not give --offset or --limit with it');
     return exportHeld(pluginId, copyId, filters, opts.export, opts);
@@ -160,51 +165,74 @@ export async function runImportCheckHeld(pluginId: string, copyId: string, opts:
   const ctx = await createAppContext(loadConfig());
   try {
     const { rows, total } = await ctx.importChecks.held(pluginId, copyId, { ...filters, offset: offset ?? 0, limit: limit ?? LIST_LIMIT_DEFAULT });
-    // The rows never carry findings. `error` is a bare code.
+    // The rows hold patient values, so the read leaves an audit row, as it does through the broker.
+    await recordCheckRead(ctx, cliNamedActor(), { pluginId, copyId, kind: 'held' });
+    // Named fields only, so a field added to a row later cannot reach the terminal. `error` is a bare code.
+    const shown = rows.map((r) => ({ key: r.key, laboratory: r.laboratory, label: r.label, reason: r.reason, error: r.error, heldAt: r.heldAt }));
     const human = [
-      ...rows.map((r) => [r.key, r.laboratory ?? '(none)', r.label ?? r.reason, r.error ?? '-', r.heldAt].join('  ')),
+      ...shown.map((r) => [r.key, r.laboratory ?? '(none)', r.label ?? r.reason, r.error ?? '-', r.heldAt].join('  ')),
       `total ${total}`,
     ].join('\n');
-    emit(opts.json, { rows, total }, human);
+    emit(opts.json, { rows: shown, total }, human);
     return 0;
   } finally { await ctx.close(); }
 }
 
+/** Statuses of a check that still adds and removes held rows. */
+const LIVE_CHECK = new Set(['queued', 'running', 'waiting', 'stopping']);
+
 /** Writes every matching row, with its findings and check, to `path` as one JSON object per line.
- *  The file holds patient values, so it is made 0600 and nothing from it is printed. */
+ *  The file holds patient values, so it is made 0600 and nothing from it is printed.
+ *
+ *  The rows go to a new file beside the target, made exclusively with mode 0600. It is renamed over
+ *  the target only when every row is in it. A failure removes that file and nothing else. */
 async function exportHeld(pluginId: string, copyId: string, filters: HeldFilters, path: string, opts: ImportCheckHeldOpts): Promise<number> {
-  let file;
-  try {
-    file = await open(path, opts.force ? 'w' : 'wx', 0o600);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
-      process.stderr.write(`${path} already exists. Run again with --force to write over it.\n`);
-      return 1;
-    }
-    throw err;
+  const refusal = await outputTargetRefusal(path, opts.force === true, '--force');
+  if (refusal !== null) {
+    process.stderr.write(`${refusal}\n`);
+    return 1;
   }
   let written = 0;
-  let ok = false;
+  const ctx = await createAppContext(loadConfig());
   try {
-    // A file that already existed keeps its old mode when opened. Make it private before any row is written.
-    await file.chmod(0o600);
-    const ctx = await createAppContext(loadConfig());
+    // A check that is running adds and removes rows, so pages would repeat or skip one.
+    const check = await ctx.importChecks.get(pluginId, checkIdOf(copyId));
+    if (check && LIVE_CHECK.has(check.status)) {
+      process.stderr.write('The check of this copy is running. Wait for it, or stop it, then export again.\n');
+      return 1;
+    }
+    const temp = join(dirname(path), `.${basename(path)}.${randomBytes(6).toString('hex')}.part`);
+    let file: FileHandle | null = await open(temp, 'wx', 0o600);
+    let kept = false;
     try {
       let offset = 0;
+      let total = 0;
+      let audited = false;
       for (;;) {
-        const { items, total } = await ctx.importChecks.heldItems(pluginId, copyId, { ...filters, offset, limit: EXPORT_PAGE });
-        if (items.length === 0) break;
-        await file.write(items.map((i) => `${JSON.stringify(i)}\n`).join(''));
-        written += items.length;
-        offset += items.length;
+        const page = await ctx.importChecks.heldItems(pluginId, copyId, { ...filters, offset, limit: HELD_ITEMS_LIMIT_MAX });
+        // Once per export, after rows were read: the file now holds patient values.
+        if (!audited) { await recordCheckRead(ctx, cliNamedActor(), { pluginId, copyId, kind: 'heldItems' }); audited = true; }
+        total = page.total;
+        if (page.items.length === 0) break;
+        await file.appendFile(page.items.map((i) => `${JSON.stringify(i)}\n`).join(''));
+        written += page.items.length;
+        offset += page.items.length;
         if (offset >= total) break;
       }
-    } finally { await ctx.close(); }
-    ok = true;
-  } finally {
-    await file.close();
-    if (!ok) await unlink(path).catch(() => undefined);
-  }
+      // Rows moved while the export ran: the file would repeat or miss a request.
+      if (written !== total) {
+        process.stderr.write(`The export is not whole: ${written} requests were read and the total is ${total}. The file was not written. Run it again.\n`);
+        return 1;
+      }
+      await file.close();
+      file = null;
+      await rename(temp, path);
+      kept = true;
+    } finally {
+      await file?.close().catch(() => undefined);
+      if (!kept) await unlink(temp).catch(() => undefined);
+    }
+  } finally { await ctx.close(); }
   emit(opts.json, { exported: written, path }, `${written} requests written to ${path}`);
   return 0;
 }

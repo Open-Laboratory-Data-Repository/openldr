@@ -19,6 +19,7 @@ import { basename, dirname, join, resolve, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import type { Command, Option } from 'commander';
 import type { CommandMeta, PathKind, PathMark } from '../command-meta';
+import { outputTargetRefusal } from '../output-target';
 import { runningVersion } from '../update';
 import { decodeFrames, encodeFrame, MAX_DATA_BYTES, PATH_PLACEHOLDER, type ClientFrame, type ServerFrame } from '../wire';
 import type { Credential } from './credentials';
@@ -155,7 +156,7 @@ function scanLeaf(cmd: Command, tokens: readonly string[]): Scan | null {
 // ---------------------------------------------------------------------------------------------
 
 interface Upload { ref: string; kind: 'input-file' | 'input-dir'; typed: string; keep: boolean; mark: PathMark }
-interface Download { ref: string; kind: 'output-file' | 'output-dir'; typed: string }
+interface Download { ref: string; kind: 'output-file' | 'output-dir'; typed: string; mark: PathMark }
 interface Plan {
   argv: string[];
   inputs: Upload[];
@@ -175,7 +176,7 @@ function placeholderFor(value: string, mark: PathMark, kind: PathKind, label: st
   }
   const ref = newRef();
   if (kind === 'input-file' || kind === 'input-dir') plan.inputs.push({ ref, kind, typed: value, keep: mark.keep === true, mark });
-  else plan.outputs.push({ ref, kind, typed: value });
+  else plan.outputs.push({ ref, kind, typed: value, mark });
   return `${PATH_PLACEHOLDER}${ref}`;
 }
 
@@ -727,6 +728,7 @@ export async function runThroughApp(input: ThroughAppInput): Promise<number> {
     if (!again || !isDeepStrictEqual(again.args, plan.expectedArgs) || !isDeepStrictEqual(again.opts, plan.expectedOpts)) {
       return await fail(NOT_PREPARED);
     }
+    await refuseKeptOutputs(plan, input);
     prepared = await prepareUploads(plan, input.parsedOpts);
   } catch (err) {
     if (err instanceof Refusal) return fail(err.message);
@@ -742,6 +744,19 @@ export async function runThroughApp(input: ThroughAppInput): Promise<number> {
     outputs: plan.outputs.map((o) => ({ ref: o.ref, kind: o.kind })),
   };
   return exchange(input, plan, start, prepared.sends, fail);
+}
+
+/** An output file whose mark says it keeps an existing file: refused before anything is sent when
+ *  the target exists and the flag that allows a write over it was not given. */
+async function refuseKeptOutputs(plan: Plan, input: ThroughAppInput): Promise<void> {
+  for (const o of plan.outputs) {
+    const flag = o.mark.keepExistingUnless;
+    if (o.kind !== 'output-file' || flag === undefined) continue;
+    const option = input.command.options.find((x) => x.long === flag);
+    if (!option) throw new Refusal(NOT_PREPARED);
+    const refusal = await outputTargetRefusal(o.typed, input.parsedOpts[option.attributeName()] === true, flag);
+    if (refusal !== null) throw new Refusal(refusal);
+  }
 }
 
 /** The upload stops: the message is printed and the exit code is 1. */
@@ -995,7 +1010,8 @@ async function exchange(
       }
       const temp = join(dirname(path), `.${basename(path)}.${randomBytes(6).toString('hex')}.part`);
       try {
-        return { handle: await open(temp, 'wx'), temp, target: path, shown: shownPath };
+        // A private output is made 0600 from the start, so the renamed file has that mode.
+        return { handle: await open(temp, 'wx', target.mark.private ? 0o600 : undefined), temp, target: path, shown: shownPath };
       } catch {
         throw new LocalWriteError(shownPath);
       }

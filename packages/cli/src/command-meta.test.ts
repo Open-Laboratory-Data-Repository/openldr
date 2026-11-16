@@ -149,6 +149,7 @@ describe('COMMAND_META', () => {
     expect(withSecond.sort()).toEqual([
       'facilities add-type: terminology.manage + facilities.manage',
       'facilities jobs: facilities.manage + facilities.view',
+      'import check start: connectors.manage + ingest.run',
       'import resume: connectors.manage + ingest.run',
       'import start: connectors.manage + ingest.run',
       'patients duplicates list: patients.view_identifiers + patients.view',

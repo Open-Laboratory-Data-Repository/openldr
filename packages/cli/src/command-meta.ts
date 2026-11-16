@@ -59,6 +59,13 @@ export interface PathMark {
   readonly companions?: (ctx: CompanionContext) => string[];
   /** True when an empty value means "no path" to the command, so it is not refused. */
   readonly allowEmpty?: true;
+  /** For an output file. True means the client makes the file with mode 0600, whatever the umask,
+   *  for a command whose output holds patient values. */
+  readonly private?: true;
+  /** For an output file. The long flag (such as '--force') that lets the command write over a file
+   *  that exists. Without it, the client refuses an existing target before it sends anything. It
+   *  also refuses a folder or a link as the target, with or without the flag. */
+  readonly keepExistingUnless?: string;
 }
 
 export interface CommandMeta {
@@ -78,7 +85,7 @@ export interface CommandMeta {
 
 const inFile = (target: string): PathMark => ({ target, kind: 'input-file' });
 const inDir = (target: string): PathMark => ({ target, kind: 'input-dir' });
-const outFile = (target: string): PathMark => ({ target, kind: 'output-file' });
+const outFile = (target: string, extra: Pick<PathMark, 'private' | 'keepExistingUnless'> = {}): PathMark => ({ target, kind: 'output-file', ...extra });
 const outDir = (target: string): PathMark => ({ target, kind: 'output-dir' });
 
 /** `terminology import <kind> <path>`: LOINC reads a folder; amr reads a WHONET database file; the
@@ -261,12 +268,14 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'import copy stop': { kind: 'app', capability: 'connectors.manage' },
   // Check a finished copy. As the copy commands: no route does it, the plugin page reaches the check
   // service through the broker's check ops (plugin-broker.ts, host:import and lab_admin), so these take
-  // the import key. held reads patient values; with --export it writes them to a file, and --force
-  // writes over one, so it is destructive.
-  'import check start': { kind: 'app', capability: 'connectors.manage' },
+  // the import key. start saves requests through the same path as an import, so it needs ingest.run
+  // too, as import start does. held reads patient values; with --export it writes them to a file, and
+  // --force writes over one, so it is destructive. The file is private and is never written over
+  // without --force, through a server as well.
+  'import check start': { kind: 'app', capability: 'connectors.manage', alsoRequires: ['ingest.run'] },
   'import check status': { kind: 'app', capability: 'connectors.manage' },
   'import check stop': { kind: 'app', capability: 'connectors.manage' },
-  'import check held': { kind: 'app', capability: 'connectors.manage', destructive: true, paths: [outFile('--export')] },
+  'import check held': { kind: 'app', capability: 'connectors.manage', destructive: true, paths: [outFile('--export', { private: true, keepExistingUnless: '--force' })] },
 
   // No route sends a file through the pipeline with any converter. It writes clinical records.
   // ingest.run is new, and only lab_admin holds it.

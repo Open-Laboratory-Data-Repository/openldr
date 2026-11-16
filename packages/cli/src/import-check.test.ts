@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // Layer under test: the CLI's argument handling, output, exit codes and the export file, over a
 // faked check service, and the four rows in command-meta. It does not cover the check service
 // itself (packages/bootstrap/src/import-check.test.ts) nor a run through a server.
-const mocks = vi.hoisted(() => ({ createAppContext: vi.fn() }));
+const mocks = vi.hoisted(() => ({ createAppContext: vi.fn(), recordCheckRead: vi.fn(async () => undefined) }));
 
 vi.mock('@openldr/config', async (importOriginal) => ({
   ...await importOriginal<typeof import('@openldr/config')>(),
@@ -16,6 +16,11 @@ vi.mock('@openldr/config', async (importOriginal) => ({
 vi.mock('@openldr/bootstrap', () => ({
   createAppContext: mocks.createAppContext,
   LABORATORY_CODE: /^[A-Za-z0-9._-]{1,32}$/,
+  // The numbers the plugin broker checks a held request page against.
+  HELD_LABEL_MAX: 64, HELD_LIST_LIMIT_MAX: 100, HELD_ITEMS_LIMIT_MAX: 200,
+  checkIdOf: (copyId: string) => `check-of-${copyId}`,
+  // The one function the broker's audit row and this command's audit row both come from.
+  recordCheckRead: mocks.recordCheckRead,
 }));
 
 import { COMMAND_META } from './command-meta';
@@ -241,6 +246,32 @@ describe('import check CLI', () => {
       expect(parsed.rows).toHaveLength(2);
     });
 
+    it('prints only the named fields of a row, so a field added to a row later never reaches the terminal', async () => {
+      const leaky = heldRow(1, { findings: [{ note: PATIENT_VALUE }], check: { who: PATIENT_VALUE }, extra: PATIENT_VALUE });
+      checks.held.mockResolvedValue({ rows: [leaky], total: 1 });
+      expect(await runImportCheckHeld('v1-check', 'c0ffee', heldOpts)).toBe(0);
+      expect(printed()).not.toContain(PATIENT_VALUE);
+      out.length = 0;
+      expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: true })).toBe(0);
+      expect(printed()).not.toContain(PATIENT_VALUE);
+      const parsed = JSON.parse(out.join(''));
+      expect(Object.keys(parsed.rows[0]).sort()).toEqual(['error', 'heldAt', 'key', 'label', 'laboratory', 'reason']);
+    });
+
+    it('writes the audit row for the list once, after the rows are read, and none when the read fails', async () => {
+      expect(await runImportCheckHeld('v1-check', 'c0ffee', heldOpts)).toBe(0);
+      expect(mocks.recordCheckRead).toHaveBeenCalledTimes(1);
+      expect(mocks.recordCheckRead.mock.calls[0]).toEqual([
+        expect.objectContaining({ importChecks: checks }),
+        expect.objectContaining({ actorType: 'cli' }),
+        { pluginId: 'v1-check', copyId: 'c0ffee', kind: 'held' },
+      ]);
+      mocks.recordCheckRead.mockClear();
+      checks.held.mockRejectedValue(new Error('copy c0ffee not found'));
+      await expect(runImportCheckHeld('v1-check', 'c0ffee', heldOpts)).rejects.toThrow(/not found/);
+      expect(mocks.recordCheckRead).not.toHaveBeenCalled();
+    });
+
     it('an empty list says so and still prints the total', async () => {
       checks.held.mockResolvedValue({ rows: [], total: 0 });
       expect(await runImportCheckHeld('v1-check', 'c0ffee', heldOpts)).toBe(0);
@@ -251,6 +282,9 @@ describe('import check CLI', () => {
   describe('held --export', () => {
     const file = () => join(dir, 'held.ndjson');
     const items = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => heldItem(from + i + 1));
+    /** Files left in the export folder: the target and any temporary file beside it. */
+    const folder = () => readdir(dir);
+    beforeEach(() => { checks.get.mockResolvedValue(run({ status: 'completed', driver: null })); });
 
     /** A fake that pages the way the service does: by offset and limit over `n` rows. */
     const serve = (n: number) => {
@@ -334,7 +368,142 @@ describe('import check CLI', () => {
         .mockRejectedValueOnce(new Error('connection lost'));
       await expect(runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file() })).rejects.toThrow(/connection lost/);
       await expect(stat(file())).rejects.toThrow();
+      expect(await folder()).toEqual([]);
       expect(closed).toBe(1);
+    });
+
+    it('with --force, a fault keeps the old file whole and removes only the temporary file', async () => {
+      await writeFile(file(), 'the old export');
+      checks.heldItems
+        .mockResolvedValueOnce({ items: items(0, 200), total: 450 })
+        .mockRejectedValueOnce(new Error('connection lost'));
+      await expect(runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file(), force: true })).rejects.toThrow(/connection lost/);
+      expect(await readFile(file(), 'utf8')).toBe('the old export');
+      expect(await folder()).toEqual(['held.ndjson']);
+    });
+
+    it('with --force, a wrong plugin or copy (the first read fails) leaves the old file alone', async () => {
+      await writeFile(file(), 'the old export');
+      checks.heldItems.mockRejectedValue(new Error('copy c0ffee not found'));
+      await expect(runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file(), force: true })).rejects.toThrow(/not found/);
+      expect(await readFile(file(), 'utf8')).toBe('the old export');
+      expect(await folder()).toEqual(['held.ndjson']);
+    });
+
+    it('writes to a private temporary file beside the target, and the target appears only at the end', async () => {
+      const seen: { names: string[]; modes: number[]; target: boolean }[] = [];
+      checks.heldItems.mockImplementation(async (_p: string, _c: string, o: { offset: number; limit: number }) => {
+        if (o.offset > 0) {
+          const names = await folder();
+          const modes = await Promise.all(names.map(async (n) => (await stat(join(dir, n))).mode & 0o777));
+          seen.push({ names, modes, target: names.includes('held.ndjson') });
+        }
+        return { items: items(o.offset, Math.min(450, o.offset + o.limit)), total: 450 };
+      });
+      expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file() })).toBe(0);
+      expect(seen.length).toBe(2);
+      for (const s of seen) {
+        expect(s.target).toBe(false);
+        expect(s.names).toHaveLength(1);
+        expect(s.modes).toEqual([0o600]);
+      }
+      expect(await folder()).toEqual(['held.ndjson']);
+    });
+
+    it('does not follow a link at the target: refuses it, with or without --force', async () => {
+      const elsewhere = join(dir, 'elsewhere.txt');
+      await writeFile(elsewhere, 'not yours');
+      await symlink(elsewhere, file());
+      serve(2);
+      for (const force of [false, true]) {
+        err.length = 0;
+        expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file(), force })).toBe(1);
+        expect(err.join('')).toBe(`${file()} is a link. Name the file itself.\n`);
+      }
+      expect(await readFile(elsewhere, 'utf8')).toBe('not yours');
+      expect(checks.heldItems).not.toHaveBeenCalled();
+    });
+
+    it('refuses a folder as the target, with or without --force, and does not say to use --force', async () => {
+      await mkdir(file());
+      serve(2);
+      for (const force of [false, true]) {
+        err.length = 0;
+        expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file(), force })).toBe(1);
+        expect(err.join('')).toBe(`${file()} is a folder. Name a file.\n`);
+      }
+      expect(checks.heldItems).not.toHaveBeenCalled();
+    });
+
+    it('refuses while a check of that copy is queued, running, waiting or stopping, before it reads a row or makes a file', async () => {
+      serve(2);
+      for (const status of ['queued', 'running', 'waiting', 'stopping']) {
+        err.length = 0;
+        checks.get.mockResolvedValue(run({ status }));
+        expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file() })).toBe(1);
+        expect(err.join(''), status).toBe('The check of this copy is running. Wait for it, or stop it, then export again.\n');
+      }
+      expect(checks.get).toHaveBeenCalledWith('v1-check', 'check-of-c0ffee');
+      expect(checks.heldItems).not.toHaveBeenCalled();
+      expect(await folder()).toEqual([]);
+      expect(mocks.recordCheckRead).not.toHaveBeenCalled();
+      expect(closed).toBe(4);
+    });
+
+    it('exports when the check is stopped, completed or failed, or there is none', async () => {
+      serve(1);
+      for (const status of ['stopped', 'completed', 'failed']) {
+        checks.get.mockResolvedValue(run({ status }));
+        expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: join(dir, `${status}.ndjson`), force: true })).toBe(0);
+      }
+      checks.get.mockResolvedValue(null);
+      expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file() })).toBe(0);
+    });
+
+    it('a count that differs from the total is a fault: no file, exit 1, both numbers in the message', async () => {
+      // A row left the set during the export, so the last page is short and the total is still 450.
+      checks.heldItems
+        .mockResolvedValueOnce({ items: items(0, 200), total: 450 })
+        .mockResolvedValueOnce({ items: items(200, 400), total: 450 })
+        .mockResolvedValueOnce({ items: items(400, 449), total: 450 })
+        .mockResolvedValueOnce({ items: [], total: 450 });
+      expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file() })).toBe(1);
+      expect(err.join('')).toBe('The export is not whole: 449 requests were read and the total is 450. The file was not written. Run it again.\n');
+      expect(await folder()).toEqual([]);
+      expect(out.join('')).toBe('');
+      expect(printed()).not.toContain(PATIENT_VALUE);
+    });
+
+    it('a short count keeps the old file when --force was given', async () => {
+      await writeFile(file(), 'the old export');
+      checks.heldItems
+        .mockResolvedValueOnce({ items: items(0, 200), total: 450 })
+        .mockResolvedValueOnce({ items: [], total: 450 });
+      expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file(), force: true })).toBe(1);
+      expect(err.join('')).toContain('200');
+      expect(err.join('')).toContain('450');
+      expect(await readFile(file(), 'utf8')).toBe('the old export');
+      expect(await folder()).toEqual(['held.ndjson']);
+    });
+
+    it('writes one audit row for the whole export, not one per page, with no key, value or path', async () => {
+      serve(450);
+      expect(await runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file() })).toBe(0);
+      expect(mocks.recordCheckRead).toHaveBeenCalledTimes(1);
+      expect(mocks.recordCheckRead.mock.calls[0]).toEqual([
+        expect.objectContaining({ importChecks: checks }),
+        expect.objectContaining({ actorType: 'cli' }),
+        { pluginId: 'v1-check', copyId: 'c0ffee', kind: 'heldItems' },
+      ]);
+      expect(JSON.stringify(mocks.recordCheckRead.mock.calls)).not.toContain(PATIENT_VALUE);
+      expect(JSON.stringify(mocks.recordCheckRead.mock.calls)).not.toContain(dir);
+    });
+
+    it('a close that throws after a whole export does not remove the file', async () => {
+      serve(2);
+      mocks.createAppContext.mockResolvedValue({ importChecks: checks, close: async () => { throw new Error('close failed'); } });
+      await expect(runImportCheckHeld('v1-check', 'c0ffee', { json: false, export: file() })).rejects.toThrow(/close failed/);
+      expect((await readFile(file(), 'utf8')).trim().split('\n')).toHaveLength(2);
     });
   });
 });
@@ -344,7 +513,12 @@ describe('command-meta rows for import check', () => {
     for (const p of ['import check start', 'import check status', 'import check stop', 'import check held']) {
       expect(COMMAND_META[p], p).toMatchObject({ kind: 'app', capability: 'connectors.manage' });
     }
-    expect(COMMAND_META['import check held']!.paths).toEqual([{ target: '--export', kind: 'output-file' }]);
+    // A check start saves records, as import start does, so it needs the ingest key too.
+    expect(COMMAND_META['import check start']!.alsoRequires).toEqual(['ingest.run']);
+    expect(COMMAND_META['import check status']!.alsoRequires).toBeUndefined();
+    expect(COMMAND_META['import check held']!.paths).toEqual([
+      { target: '--export', kind: 'output-file', private: true, keepExistingUnless: '--force' },
+    ]);
     expect(COMMAND_META['import check held']!.destructive).toBe(true);
     expect(COMMAND_META['import check status']!.destructive).toBeUndefined();
   });
