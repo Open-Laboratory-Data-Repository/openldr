@@ -424,6 +424,74 @@ It needs the operator's yes for a read-only login that can SELECT in the three s
 
 ---
 
+### Task 10: A date with no time of day is kept, and no stored age gives no date of birth
+
+Added on 2026-11-16, after the first real-twin run. The operator chose to fix it on this branch, before the final review.
+
+**What the run found.** 6,004 of 20,000 real twins fail the check because v1 holds the collection date and the decoder gives none. The date is in the registration record. Its two time bytes are zero, `long_time` gives none for two zero bytes, and `long_datetime` then drops the whole date (`src/dates.rs`, copied from the toolchain). Counted on the same sample: the collected date has a zero time in 6,667 records, the received-in-lab date in 3,550, the registered date in 8, and v1 holds the same date at midnight in every one of them. In the whole source table 848,351 of 2,326,075 records have a collected date with a zero time.
+
+**Why two fixes.** The decoder works out a date of birth from the collected date and the stored age (`dob_or_age` in `src/records.rs`). With the age bytes all zero it subtracts nothing, so the date of birth comes out as the collection date. That is wrong today for 472 of the 20,000 (a timed collected date, no birth row, zero age bytes). Once a zero-time date is kept it would be wrong for 321 more. So the second fix goes in the same task.
+
+**Files:**
+- Modify: `src/dates.rs` (`long_datetime`), `src/records.rs` (`dob_or_age`), their tests, `tools/real-data-check/compare.py`, `tools/real-data-check/compare.test.mjs`, `tools/real-data-check/allowed-differences.json`, `tools/real-data-check/README.md`, `tests/check_golden.rs`
+- Create: override files under `tests/overrides/` for each fixture the fixes move
+
+**The two rules.**
+- A long date and time whose four date bytes are not all zero and whose two time bytes are both zero is that date at 00:00. It prints as `MM/DD/YYYY 00:00`, the form every reader of these fields already takes. Six zero bytes is still no date. `header_long_datetime` in `src/payload.rs` is a different reader with its own rule for 00:00 and does not change.
+- When the years, days and hours that `dob_or_age` reads (bytes 414, 416 and 418) are all zero, there is no date of birth from the age: the text is empty. A birth row still wins over it, as today.
+
+- [ ] **Step 1: Write the failing tests.**
+
+```rust
+// src/dates.rs
+#[test]
+fn a_date_with_no_time_of_day_is_that_date_at_midnight() {
+    let c = long_datetime(&l(&[4, 3, 0xE3, 0x07, 0, 0])).unwrap();
+    assert_eq!(mmddyyyy_hhmm(&c), "03/04/2019 00:00");
+    assert!(long_datetime(&l(&[0, 0, 0, 0, 0, 0])).is_none());
+    assert!(long_datetime(&l(&[0, 0, 0, 0, 30, 14])).is_none());
+}
+
+// src/records.rs
+#[test]
+fn a_registration_date_with_a_zero_time_is_kept_in_all_three_fields() {
+    // collected 159..165, received in lab 666..670 with its time at 154..156, registered 126..130
+    // with its time at 132..134: each with a date and a zero time gives "MM/DD/YYYY 00:00"
+}
+
+#[test]
+fn no_stored_age_gives_no_date_of_birth() {
+    // collected 03/04/2019 10:00, bytes 414, 416 and 418 zero: dob_age is empty
+    // the same with byte 414 = 30: dob_age is 03/04/1989, as today
+    // the same with byte 417 = 40 and 414, 416, 418 zero: dob_age is empty
+}
+```
+
+- [ ] **Step 2: Run.** Expected: FAIL.
+
+- [ ] **Step 3: Change the two functions.** Replace each "known fault, kept" style comment with one line that says what the toolchain does and that this differs on purpose.
+
+- [ ] **Step 4: Run the golden tests** and list every fixture and stage that now differs. Each difference must trace to one of the two rules: a date field that was null and is now a date at 00:00, or a date of birth from a zero age that is now absent, and what follows from either in the audit, the payload and FHIR. A fixture whose set of audit findings changes is reported with the finding's class, before any override is written for it.
+
+- [ ] **Step 5: Write the override files**, under the fault names `date-with-no-time` and `no-age-no-birth-date`. Rule R7 binds: each `now` is justified without the code's help.
+
+- [ ] **Step 6: The check fixtures.** The check's golden tests decode each check fixture's source request with the Rust. If a check fixture now fails because its source request holds a zero-time date or a zero age, do not touch the fixture. Change the three check stage tests to build the check's input from the toolchain's own values for that request, which is what proves the port: the request JSON and the kept observations of the normal fixture with the same key (`SourceFields::from_toolchain_json`, `obs_from_toolchain_json`). Say how many check fixtures were affected.
+
+- [ ] **Step 7: The real-data rules.** In `compare.py` add a value rule for each of the two fault names, gated on the request's own rows in `raw.ndjson`: for `date-with-no-time`, the registration record holds a date with a zero time in at least one of the three fields; for `no-age-no-birth-date`, bytes 414, 416 and 418 of the record are zero and the request has no birth row. Under that gate the listed paths may differ. List in `allowed-differences.json` only paths that a fixture override or a unit test shows moving. Tests for each rule, passing and failing, in the file's style.
+
+- [ ] **Step 8: Run everything.** `cargo test`, `cargo clippy --all-targets`, `cargo build --release --target wasm32-wasip1`, the tool tests. Expected: PASS.
+
+- [ ] **Step 9: Commit**, the two fixes as two commits:
+
+```bash
+git commit -m "fix: a date with no time of day is kept"
+git commit -m "fix: no stored age gives no date of birth"
+```
+
+The controller then repeats the real-twin run. Expected: the 6,004 requests that failed on the collection date now pass, every older stage differs from the toolchain only under the two new rules and the six earlier ones, and layer 2 stays identical.
+
+---
+
 ## What this plan leaves
 
 - The next plan: the four faults that wait for v1, and the loose rules, each with a measured count (design section 7).
