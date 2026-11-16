@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Parked on 2026-11-16.** The operator approved this build, then chose to start part 4 (the check step and screens in CE) first, because the plugin is not usable in CE until part 4 exists. Nothing here is built. No branch exists. Pick it up after part 4, before the 496 requests that fail the check against v1.
+
 **Goal:** The plugin reads the stored age one way, picks between two birth dates and two taken dates by a rule the data supports, and keeps each order's own latest run.
 
 **Architecture:** Four changes in `cdr-source`, each its own task and commit: the age in `src/records.rs`, a mark on a date of birth worked out from the age, the birth and taken rows in `src/request.rs` with one new audit warning, and the order a run belongs to in `src/observations.rs` and `src/payload.rs`. Each states the outputs it moves as override operations and as one value rule in the real-data compare. The controller then runs the branch on real twins, writes the numbers down, and adds the mark's code to CE.
