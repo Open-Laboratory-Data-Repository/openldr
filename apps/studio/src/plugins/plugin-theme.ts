@@ -102,8 +102,11 @@ export function hostThemeTokens(): Record<string, string> {
   return out;
 }
 
-/** Default styles for bare elements, from the same tokens. Every selector is one `:where()`,
- *  which has no weight, so any rule of the plugin's own wins. */
+/** Default styles for bare elements, from the same tokens. They sit in the `openldr-host`
+ *  cascade layer. This style element is the first in the frame, so that layer is declared
+ *  first and is the lowest: a rule in any of the plugin's own layers (Tailwind puts its
+ *  utilities in layers) wins, and an unlayered plugin rule beats every layer. Every selector
+ *  is also one `:where()`, which has no weight, as a second guard. */
 const DEFAULT_STYLES = [
   ':where(body){background:var(--openldr-bg);color:var(--openldr-text);font-family:var(--openldr-font)}',
   ':where(a){color:var(--openldr-primary)}',
@@ -116,11 +119,17 @@ const DEFAULT_STYLES = [
 ].join('');
 
 /** A `<style>` element that sets the tokens on the page's root and gives bare elements their
- *  default styles. A token whose name or value is not safe is left out. */
+ *  default styles. A token whose name or value is not safe is left out.
+ *
+ *  The tokens stay outside the layer. They are custom properties, which no plugin rule sets
+ *  by accident, and a page reads them with its own fallback (`var(--openldr-bg, #fff)`), which
+ *  still works when one is missing. An unlayered `:root` rule of the page still beats
+ *  `:where(:root)` here. Once the SDK starts, it sets the tokens as inline style on the root,
+ *  which beats any stylesheet: the host is the source of truth for them. */
 export function themeStyleTag(tokens: Record<string, string>): string {
   const decls = Object.entries(tokens)
     .filter(([name, value]) => safeToken(name, value))
     .map(([name, value]) => `${name}:${value}`)
     .join(';');
-  return `<style data-openldr-host-theme>:where(:root){${decls}}${DEFAULT_STYLES}</style>`;
+  return `<style data-openldr-host-theme>:where(:root){${decls}}@layer openldr-host{${DEFAULT_STYLES}}</style>`;
 }

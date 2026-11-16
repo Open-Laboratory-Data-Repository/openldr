@@ -135,7 +135,10 @@ function pluginBootstrapV1(): void {
 
   /** Stamp light or dark on the root. When the host sends tokens, set each `--openldr-*`
    *  variable on the root and remove the ones it stopped sending. No tokens (an older host,
-   *  or a message that carries none) leaves the current ones as they are. */
+   *  or a message that carries none) leaves the current ones as they are.
+   *  setProperty writes the root's inline style, which beats every stylesheet rule, the page's
+   *  own included. That is on purpose: the host is the source of truth for these tokens. A
+   *  page that wants its own look reads them with a fallback, or does not read them at all. */
   function applyTheme(theme: string, tokens?: unknown): void {
     if (theme === 'light' || theme === 'dark') {
       api.theme = theme;

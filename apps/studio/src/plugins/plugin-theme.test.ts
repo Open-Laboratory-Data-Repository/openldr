@@ -92,7 +92,15 @@ describe('themeStyleTag', () => {
     const css = tag.replace(/^<style[^>]*>/, '').replace(/<\/style>$/, '');
     expect(css).toContain('--openldr-bg:rgb(1, 1, 1)');
     expect(css).toContain('--openldr-text:rgb(4, 4, 4)');
-    const rules = [...css.matchAll(/([^{}]+)\{[^{}]*\}/g)].map((m) => m[1].trim());
+    // The style holds exactly two parts: the tokens on :root, then one named layer with every
+    // default rule in it. Nothing comes after the layer.
+    const parts = /^(:where\(:root\)\{[^{}]*\})@layer openldr-host\{((?:[^{}]+\{[^{}]*\})+)\}$/.exec(css);
+    expect(parts).not.toBeNull();
+    const layered = parts![2];
+    const ruleRe = /([^{}]+)\{[^{}]*\}/g;
+    // Every default rule is inside the layer: the layer's text is rules and nothing else.
+    expect(layered.replace(ruleRe, '')).toBe('');
+    const rules = [':where(:root)', ...[...layered.matchAll(ruleRe)].map((m) => m[1].trim())];
     expect(rules.length).toBeGreaterThan(5);
     // Each selector is one :where() and nothing outside it, so its specificity is zero.
     for (const sel of rules) {
@@ -105,6 +113,16 @@ describe('themeStyleTag', () => {
     for (const el of [':root', 'body', 'a', 'button', 'input', 'select', 'textarea', 'table', 'th', 'td', 'hr', ':focus-visible']) {
       expect(inner).toContain(el);
     }
+  });
+
+  it('keeps the token declarations outside the layer and holds no other layer', () => {
+    const css = themeStyleTag({ '--openldr-bg': 'rgb(1, 1, 1)' });
+    const layerAt = css.indexOf('@layer openldr-host{');
+    expect(layerAt).toBeGreaterThan(-1);
+    expect(css.indexOf('--openldr-bg:rgb(1, 1, 1)')).toBeLessThan(layerAt);
+    expect(css.match(/@layer/g)).toHaveLength(1);
+    // No element default sits before the layer either.
+    expect(css.slice(0, layerAt)).not.toMatch(/:where\((?!:root\))/);
   });
 
   it('drops a token whose name or value is not safe in a style element', () => {

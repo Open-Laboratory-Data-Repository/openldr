@@ -48,6 +48,11 @@ describe('PluginFrame', () => {
       expect(style).toBeGreaterThan(srcdoc.indexOf('Content-Security-Policy'));
       expect(style).toBeLessThan(srcdoc.indexOf('</head>'));
       expect(srcdoc.indexOf('</head>')).toBeLessThan(srcdoc.indexOf('<div id="panel">hi</div>'));
+      // The host's style is the first style in the frame, and it names the first layer, so
+      // that layer is the lowest. The plugin's own layers (Tailwind's) come later and win.
+      expect(srcdoc.indexOf('<style')).toBe(srcdoc.indexOf('<style data-openldr-host-theme'));
+      expect(srcdoc.indexOf('@layer')).toBe(srcdoc.indexOf('@layer openldr-host{'));
+      expect(srcdoc.indexOf('@layer')).toBeGreaterThan(style);
     } finally {
       document.documentElement.style.removeProperty('--bg');
     }
