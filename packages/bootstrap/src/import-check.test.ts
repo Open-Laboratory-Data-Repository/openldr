@@ -5,7 +5,7 @@ import {
 } from '@openldr/db';
 import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
 import { STALE_MS, type ImportActor, type ImportAuditEvent } from './import-run';
-import { copyIdOf, createImportCopyService, type CopyRun, type ImportCopyService } from './import-copy';
+import { copyIdOf, copySetHashes, copySpecSchema, createImportCopyService, type CopyRun, type ImportCopyService } from './import-copy';
 import { checkIdOf, createImportCheckService, liveCheckStatus, type CheckRun, type ImportCheckService } from './import-check';
 
 // Layer under test: the check service over the real plugin_data store, the real copy row store and
@@ -176,11 +176,17 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
   async function seedCopy(copyId: string, connectorId: string, status: CopyRun['status'], sets: Record<string, CopyRow[]>, pluginId = PLUGIN) {
     const at = new Date(clock.now).toISOString();
     const setOrder = Object.keys(sets);
+    const options: Record<string, string> = copyId === REF ? { role: 'reference' } : {};
+    const setSqlFor = (o: Record<string, string>) => {
+      const spec = copySpecSchema.safeParse(copyFn(o));
+      return spec.success ? copySetHashes(spec.data.sets) : {};
+    };
     const run: CopyRun = {
       id: copyId, kind: 'copy', rev: 1, pluginId, pluginVersion: '1.2.0', connectorId, status,
-      options: copyId === REF ? { role: 'reference' } : {}, pageSize: 500,
+      options, pageSize: 500,
       sets: Object.fromEntries(setOrder.map((n) => [n, { cursor: null, keys: 0, rows: sets[n].length, bytes: 0, skipped: 0, done: true }])),
-      setOrder, setSql: {}, waiting: null, driver: null, startedAt: at, updatedAt: at, finishedAt: at, lastError: null, startedBy: 'admin',
+      // The statements the copy was made from: the plugin's copy answer for its options, as now.
+      setOrder, setSql: setSqlFor(options), waiting: null, driver: null, startedAt: at, updatedAt: at, finishedAt: at, lastError: null, startedBy: 'admin',
     };
     await raw.put(pluginId, '__import-copies', copyId, run);
     for (const [name, rows] of Object.entries(sets)) {
@@ -843,9 +849,9 @@ describe('check: fix round 1', () => {
 describe('check: fix round 1, the details the plugin declares (I6)', () => {
   it('a page where one detail has no rows still decodes, with that detail as an empty list', async () => {
     const w = await world();
-    await sourceCopy(w, keysOf(2));
     // The source names a third detail, taken, and no request of the page has a row of it.
     w.setCopy(() => ({ sets: [setSpec('requests', ['requests', 'results', 'taken']), setSpec('facilities', [])] }));
+    await sourceCopy(w, keysOf(2));
     w.setDecode((input) => {
       // As the real plugin does: every detail of the set must be a list.
       if (!['requests', 'results', 'taken'].every((n) => Array.isArray(input.rows[n]))) throw new Error('rows must hold the three details');
@@ -855,23 +861,24 @@ describe('check: fix round 1, the details the plugin declares (I6)', () => {
     await drive(w.svc);
     expect(w.decodeCalls).toHaveLength(1);
     expect(w.decodeCalls[0].rows.taken).toEqual([]);
-    expect(w.copyCalls).toEqual([{}]);
+    // Asked once at the start and once by the drive.
+    expect(w.copyCalls).toEqual([{}, {}]);
     expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { saved: 2 }, lastError: null });
   });
 
   it('a reference page with no result rows hands results as an empty list', async () => {
     const w = await world();
-    await sourceCopy(w, keysOf(1));
-    await w.seedCopy(REF, 'c2', 'completed', { twins: [{ detail: 'requests', key: 'T-REQ0001', seq: 0, row: { RequestID: 'T-REQ0001' } }] });
     // The reference copy names a third detail too.
     w.setCopy((options) => (options.role === 'reference'
       ? { sets: [setSpec('twins', ['requests', 'results', 'specimens'])] }
       : { sets: [setSpec('requests', ['requests', 'results']), setSpec('facilities', [])] }));
+    await sourceCopy(w, keysOf(1));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [{ detail: 'requests', key: 'T-REQ0001', seq: 0, row: { RequestID: 'T-REQ0001' } }] });
     await w.svc.start({ ...START, referenceCopyId: REF });
     await drive(w.svc);
     expect(w.decodeCalls[0].twins).toEqual({ requests: [{ RequestID: 'T-REQ0001' }], results: [], specimens: [] });
     // Each copy was asked about with its own options.
-    expect(w.copyCalls).toEqual([{}, { role: 'reference' }]);
+    expect(w.copyCalls).toEqual([{}, { role: 'reference' }, {}, { role: 'reference' }]);
   });
 
   it('an empty dictionary set is handed as an empty list, and a set with no detail queries is one detail', async () => {
@@ -889,23 +896,28 @@ describe('check: fix round 1, the details the plugin declares (I6)', () => {
 
   it('a copy entrypoint that fails, or no longer names the set, fails the run with a fixed sentence', async () => {
     const w = await world();
+    const good = () => ({ sets: [setSpec('requests', ['requests', 'results']), setSpec('facilities', [])] });
+    w.setCopy(good);
     await sourceCopy(w, keysOf(1));
-    w.setCopy(() => { throw new Error(`panic on ${SECRET}`); });
-    await w.svc.start(START);
-    await drive(w.svc);
-    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
+    // Each answer goes wrong between the start and the drive.
+    const runWith = async (bad: () => unknown) => {
+      w.setCopy(good);
+      await w.svc.start(START);
+      w.setCopy(bad);
+      await drive(w.svc);
+      return (await w.svc.get(PLUGIN, CHECK))!;
+    };
+    expect(await runWith(() => { throw new Error(`panic on ${SECRET}`); })).toMatchObject({
       status: 'failed', lastError: `the plugin's copy entrypoint failed, so the check cannot tell what copy ${SRC} holds`,
     });
-    w.setCopy(() => ({ sets: [setSpec('facilities', [])] }));
-    await w.svc.start(START);
-    await drive(w.svc);
-    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
-      status: 'failed', lastError: `the plugin no longer names the set requests for copy ${SRC}`,
+    // A set no longer named is a change of statements.
+    expect(await runWith(() => ({ sets: [setSpec('facilities', [])] }))).toMatchObject({
+      status: 'failed', lastError: `the plugin's copy statements changed since copy ${SRC} was made; read the copy again, then start the check`,
     });
-    w.setCopy(() => ({ sets: 'nope' }));
-    await w.svc.start(START);
-    await drive(w.svc);
-    expect((await w.svc.get(PLUGIN, CHECK))!.lastError).toBe(`the plugin's copy entrypoint gave an answer that is not valid for copy ${SRC}`);
+    expect((await runWith(() => ({ sets: 'nope' }))).lastError).toBe(`the plugin's copy entrypoint gave an answer that is not valid for copy ${SRC}`);
+    // At the start, the same sentence, at once.
+    w.setCopy(() => { throw new Error(`panic on ${SECRET}`); });
+    await expect(w.svc.start(START)).rejects.toThrow(`the plugin's copy entrypoint failed, so the check cannot tell what copy ${SRC} holds`);
     expect(w.decodeCalls).toEqual([]);
     expect(JSON.stringify(w.runSaves)).not.toContain('Maria');
   });
@@ -933,5 +945,56 @@ describe('check: fix round 1, the details the plugin declares (I6)', () => {
     ]);
     expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', lastError: null });
     expect(JSON.stringify(w.runSaves)).not.toContain('Maria');
+  });
+});
+
+describe('check: fix round 2, a copy made from other statements (N1)', () => {
+  const CHANGED = `the plugin's copy statements changed since copy ${SRC} was made; read the copy again, then start the check`;
+  const v1 = () => ({ sets: [setSpec('requests', ['requests', 'results']), setSpec('facilities', [])] });
+
+  it('a plugin whose copy answer gained a detail fails the run and saves nothing', async () => {
+    const w = await world();
+    w.setCopy(v1);
+    await sourceCopy(w, keysOf(2));
+    await w.svc.start(START);
+    // Upgraded between the start and the drive: it now names a detail the copy never read.
+    w.setCopy(() => ({ sets: [setSpec('requests', ['requests', 'results', 'specimens']), setSpec('facilities', [])] }));
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'failed', lastError: CHANGED, counts: { read: 0, saved: 0 } });
+    expect(w.decodeCalls).toEqual([]);
+    expect(w.persisted).toEqual([]);
+    // A start is told at once.
+    await expect(w.svc.start(START)).rejects.toThrow(CHANGED);
+  });
+
+  it('a plugin whose SQL text changed fails the run, for the source and for the reference', async () => {
+    const w = await world();
+    const reference = (sql: string) => ({ sets: [{ ...setSpec('twins', ['requests', 'results']), keyQuery: { sql } }] });
+    const KEY_SQL = 'SELECT TOP ({{limit}}) [K] FROM [twins] WHERE [K] > {{after}} ORDER BY [K]';
+    w.setCopy((o) => (o.role === 'reference' ? reference(KEY_SQL) : v1()));
+    await sourceCopy(w, keysOf(1));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [] });
+    await w.svc.start({ ...START, referenceCopyId: REF });
+    // Same set and detail names; one statement's text differs.
+    w.setCopy((o) => (o.role === 'reference' ? reference(`${KEY_SQL} `) : v1()));
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
+      status: 'failed', lastError: `the plugin's copy statements changed since copy ${REF} was made; read the copy again, then start the check`,
+    });
+    expect(w.decodeCalls).toEqual([]);
+    await expect(w.svc.start({ ...START, referenceCopyId: REF })).rejects.toThrow(`copy ${REF} was made`);
+    // The source alone still starts and runs: its statements did not change.
+    expect((await w.svc.start(START)).status).toBe('queued');
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { saved: 1 } });
+  });
+
+  it('an unchanged answer runs', async () => {
+    const w = await world();
+    w.setCopy(v1);
+    await sourceCopy(w, keysOf(2));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', lastError: null, counts: { read: 2, saved: 2 } });
   });
 });

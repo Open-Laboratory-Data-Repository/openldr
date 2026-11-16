@@ -200,8 +200,15 @@ function setHash(set: CopySet): string {
   return createHash('sha256').update(text).digest('hex');
 }
 
+/** Set name to the SHA-256 of its key and detail SQL, as a copy stores it in `setSql`. The check
+ *  run (import-check.ts) uses it to see that a copy was made from the statements the plugin names
+ *  now. */
+export function copySetHashes(sets: CopySet[]): Record<string, string> {
+  return Object.fromEntries(sets.map((s) => [s.name, setHash(s)]));
+}
+
 /** Sets whose SQL is not the stored SQL: changed, newly named, or no longer named. */
-function changedSets(stored: Record<string, string>, next: Record<string, string>): string[] {
+export function changedSets(stored: Record<string, string>, next: Record<string, string>): string[] {
   const names = new Set([...Object.keys(next), ...Object.keys(stored)]);
   return [...names].filter((n) => stored[n] !== next[n]);
 }
@@ -328,7 +335,7 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
       validateSelectSql(fillKeyQuery(set.keyQuery.sql, null, 1), 'mssql');
       for (const d of set.detailQueries) validateSelectSql(fillDetailQuery(d.sql, ['A']), 'mssql');
     }
-    return { sets: parsed.data.sets, hashes: Object.fromEntries(parsed.data.sets.map((s) => [s.name, setHash(s)])) };
+    return { sets: parsed.data.sets, hashes: copySetHashes(parsed.data.sets) };
   }
 
   /**

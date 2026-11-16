@@ -3,7 +3,7 @@ import { currentInFlight } from '@openldr/core';
 import { createImportCheckHeldStore, createImportCopyStore, createPluginDataStore } from '@openldr/db';
 import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
 import { createPluginBroker, buildBrokerOpSchema } from './plugin-broker';
-import { CopySetChangedError, createImportCopyService } from './import-copy';
+import { CopySetChangedError, copySetHashes, copySpecSchema, createImportCopyService } from './import-copy';
 import { checkIdOf, createImportCheckService } from './import-check';
 
 function memData() {
@@ -968,11 +968,14 @@ describe('plugin broker: checks', () => {
       capabilities: [{ kind: 'host:import' }, { kind: 'emit-fhir', resourceTypes: ['ServiceRequest'] }],
       payload: { kind: 'plugin', entrypoints: ['c', 'd'], importSource: { connectorTypes: ['microsoft-sql'], sourceSystem: 'x', entrypoints: { copy: 'c', decode: 'd' } } },
     });
-    const plugins = { list: async () => [{ id: 'p1', version: '1.0.0', enabled: true, manifest: manifest('p1') }, { id: 'p2', version: '1.0.0', enabled: true, manifest: manifest('p2') }], loadSink: async () => undefined } as any;
+    // The copy entrypoint names one set, requests. A check start compares it with each copy's setSql.
+    const copySpec = { sets: [{ name: 'requests', keyQuery: { sql: 'SELECT TOP ({{limit}}) [K] FROM [R] WHERE [K] > {{after}} ORDER BY [K]' }, detailQueries: [] }] };
+    const sink = { invoke: async (entrypoint: string) => (entrypoint === 'c' ? copySpec : { groups: [] }) };
+    const plugins = { list: async () => [{ id: 'p1', version: '1.0.0', enabled: true, manifest: manifest('p1') }, { id: 'p2', version: '1.0.0', enabled: true, manifest: manifest('p2') }], loadSink: async () => sink } as any;
     const copyDoc = (id: string, pluginId: string) => ({
       id, kind: 'copy', rev: 1, pluginId, pluginVersion: '1.0.0', connectorId: 'c1', status: 'completed', options: {}, pageSize: 500,
       // A source copy: a check start refuses a copy with no set requests.
-      sets: {}, setOrder: ['requests'], setSql: {}, waiting: null, driver: null,
+      sets: {}, setOrder: ['requests'], setSql: copySetHashes(copySpecSchema.parse(copySpec).sets), waiting: null, driver: null,
       startedAt: '2026-11-16T08:00:00.000Z', updatedAt: '2026-11-16T08:00:00.000Z', finishedAt: '2026-11-16T08:00:00.000Z', lastError: null, startedBy: 'amina',
     });
     await pluginData.put('p1', '__import-copies', 'mine', copyDoc('mine', 'p1'));

@@ -6,9 +6,9 @@ import {
   type ImportCopyStore, type PluginDataStore, type Provenance,
 } from '@openldr/db';
 import { allowedResourceTypes, canCheck } from '@openldr/marketplace';
-import { copySpecSchema, type CopyRun, type ImportCopyService } from './import-copy';
+import { changedSets, copySetHashes, copySpecSchema, type CopyRun, type ImportCopyService } from './import-copy';
 import {
-  STALE_MS, StoppedWhileWaiting, auditOrRefuse, auditQuietly, checkResources, loadImportSinkWaiting, optionsSchema,
+  STALE_MS, StoppedWhileWaiting, auditOrRefuse, auditQuietly, checkResources, loadImportSink, loadImportSinkWaiting, optionsSchema,
   pluginCode, resolveImportPlugin, saveCode, type ImportActor, type ImportServiceDeps, type ResolvedPlugin,
 } from './import-run';
 import { growPage, retryWaitMs, shrinkPage } from './import-retry';
@@ -179,6 +179,30 @@ function storable(value: unknown): unknown {
     return Object.fromEntries(Object.entries(value).map(([k, v]) => [k.replace(UNSTORABLE, '\uFFFD'), storable(v)]));
   }
   return value;
+}
+
+type Sink = { invoke(entrypoint: string, input: unknown): Promise<unknown> };
+
+/**
+ * The sets the plugin names for a copy, with each set's detail names. Asked of the plugin's copy
+ * entrypoint with that copy's own options. A set with no detail queries has one detail, named
+ * after the set, as the copy files it. The answer must be the statements the copy was made from:
+ * a plugin upgraded since then could name a detail the copy never read, and the check would hand
+ * it as an empty list, so a request could be saved without its data.
+ */
+async function declaredSets(sink: Sink, plugin: Checker, copy: CopyRun): Promise<Map<string, string[]>> {
+  let raw: unknown;
+  try {
+    raw = await sink.invoke(plugin.source.entrypoints.copy!, { options: copy.options });
+  } catch {
+    throw new CheckFault(`the plugin's copy entrypoint failed, so the check cannot tell what copy ${copy.id} holds`);
+  }
+  const parsed = copySpecSchema.safeParse(raw);
+  if (!parsed.success) throw new CheckFault(`the plugin's copy entrypoint gave an answer that is not valid for copy ${copy.id}`);
+  if (changedSets(copy.setSql ?? {}, copySetHashes(parsed.data.sets)).length > 0) {
+    throw new CheckFault(`the plugin's copy statements changed since copy ${copy.id} was made; read the copy again, then start the check`);
+  }
+  return new Map(parsed.data.sets.map((s) => [s.name, s.detailQueries.length > 0 ? s.detailQueries.map((q) => q.name) : [s.name]]));
 }
 
 /** The status of a live check that reads this copy, as its source or its reference, or null. For
@@ -373,20 +397,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         return parsed.data;
       };
 
-      /** The sets the plugin names for a copy, with each set's detail names. Asked of the plugin's
-       *  copy entrypoint with that copy's own options. A set with no detail queries has one detail,
-       *  named after the set, as the copy files it. */
-      const declared = async (copy: CopyRun): Promise<Map<string, string[]>> => {
-        let raw: unknown;
-        try {
-          raw = await sink.invoke(plugin.source.entrypoints.copy!, { options: copy.options });
-        } catch {
-          throw new CheckFault(`the plugin's copy entrypoint failed, so the check cannot tell what copy ${copy.id} holds`);
-        }
-        const parsed = copySpecSchema.safeParse(raw);
-        if (!parsed.success) throw new CheckFault(`the plugin's copy entrypoint gave an answer that is not valid for copy ${copy.id}`);
-        return new Map(parsed.data.sets.map((s) => [s.name, s.detailQueries.length > 0 ? s.detailQueries.map((q) => q.name) : [s.name]]));
-      };
+      const declared = (copy: CopyRun): Promise<Map<string, string[]>> => declaredSets(sink, plugin, copy);
       const detailsOf = (sets: Map<string, string[]>, set: string, copyId: string): string[] => {
         const names = sets.get(set);
         if (!names) throw new CheckFault(`the plugin no longer names the set ${set} for copy ${copyId}`);
@@ -429,7 +440,8 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         const reference = run.referenceCopyId !== null ? await completedCopy(run.pluginId, run.referenceCopyId) : null;
         const sourceSets = await declared(source);
         const requestDetails = detailsOf(sourceSets, REQUESTS, source.id);
-        const twinDetails = useTwins && reference ? detailsOf(await declared(reference), TWINS, reference.id) : [];
+        const referenceSets = reference ? await declared(reference) : null;
+        const twinDetails = useTwins && referenceSets && reference ? detailsOf(referenceSets, TWINS, reference.id) : [];
         const dictionaries = await readDictionaries([...sourceSets.keys()].filter((n) => n !== REQUESTS));
         return { source, reference, requestDetails, twinDetails, dictionaries };
       };
@@ -714,13 +726,20 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         throw new Error(`copy ${source.id} has no set ${REQUESTS}, so it cannot be the source of a check; pick the source copy`);
       }
       const referenceCopyId = input.referenceCopyId ?? null;
+      let referenceRun: CopyRun | null = null;
       if (referenceCopyId !== null) {
         if (referenceCopyId === input.copyId) throw new Error('the reference copy must be another copy than the source copy');
         const reference = await completedCopy(plugin.id, referenceCopyId);
         if (!(reference.setOrder ?? Object.keys(reference.sets)).includes(TWINS)) {
           throw new Error(`copy ${reference.id} has no set ${TWINS}, so it cannot be the reference of a check; pick the reference copy, or no reference`);
         }
+        referenceRun = reference;
       }
+      // Told now, not at the first tick: each copy must be made from the statements the plugin
+      // names today.
+      const sink = await loadImportSink(deps.plugins, plugin);
+      await declaredSets(sink, plugin, source);
+      if (referenceRun) await declaredSets(sink, plugin, referenceRun);
       const id = checkIdOf(input.copyId);
 
       return changeRun(plugin.id, id, async (existing) => {
