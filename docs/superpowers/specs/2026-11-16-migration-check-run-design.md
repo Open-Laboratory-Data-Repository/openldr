@@ -364,3 +364,65 @@ check. The source holds 14 laboratories, so CE would record all of them as one. 
 request under its own laboratory is a change to the decoder's output. It follows the
 decoder's own process (stated moves, the real-data compare) and waits for the four-faults
 branch, which changes the same files. It is the next decoder change after that branch.
+
+## 10. OpenLDR v1 as a source kind (decided 2026-11-16)
+
+Section 8 left this as the next piece. The operator chose where the mapping comes from:
+"Port into cdr-source". CE's own plugin, `wasm/openldr-v1-import`, already maps v1 rows to
+FHIR (`src/mapping.rs:780`, `map_page`), but on the old import path, which has no held-back
+list and no Processing or Feedback tab.
+
+### 10.1 Counted first, on the restored Tanzania v1 database (counts only)
+
+- Order rows: 3,602,986. Requests: 1,739,522 from the lab system and 154,245 from three
+  other systems. So 8 in 100 requests exist only in v1.
+- Tables: `Requests`, `LabResults`, `Monitoring`, `VersionControl`. There is no `Patients`
+  and no `ASTResults` table, which CE's plugin reads.
+- The receiving laboratory code is filled on every lab-system row and missing on 22,464 of
+  the 165,020 other rows. It is at most 8 characters, all letters and digits.
+- Date faults, in order rows: taken after received 44,260; received after authorised 3,773;
+  registered after authorised 45,353; analysed after authorised 5,726; no taken date
+  103,253; no received date 152,675; no age in years or days 56,542. No row lacks an order
+  number.
+
+### 10.2 Approaches
+
+1. **Port the mapping into cdr-source.** One plugin, one page, Kind as a select in one
+   sheet. The mapping lives in two places until CE's own plugin is retired. Chosen.
+2. Give CE's plugin the check entry point and the three tabs. No copy, but two pages.
+3. Build nothing and point to CE's plugin. No held-back list or laboratories for v1.
+
+### 10.3 What is built
+
+- **Read.** A source of kind OpenLDR v1 reads one set keyed by request id, with whole rows
+  of `Requests` and `LabResults`. `Patients` and `ASTResults` are read only when the sheet
+  says the database has them (my call: two switches, on by default; a missing table stops
+  the read with a sentence naming the table and the switch). One setting, the database
+  name. No lab code, no prefix.
+- **Decode.** The plugin's decode step, for this kind, runs the ported `map_page` with its
+  ten golden fixtures. A request that cannot be mapped comes back with its reason code and
+  is counted as failed. Every other request is saved with the label `unchecked`. Nothing is
+  compared, and the reference is not read.
+- **Laboratory.** The first order row's receiving laboratory code, when it is 1 to 32
+  letters, digits, `.`, `_` or `-`. Otherwise none.
+- **Page.** The sheet offers OpenLDR v1 as a source kind when the site has no reference.
+  The Processing tab, for such a source, asks for the time zone only and says that an
+  OpenLDR v1 source is not compared.
+- **CE core.** Nothing. A check already starts with no reference.
+
+### 10.4 Checks on an OpenLDR v1 source
+
+The operator: "there is no compare but some checks still apply". One fact limits this: CE
+keeps a request's findings only in the held-back store (`import-check.ts:28`). A warning on
+a saved request is shown nowhere today, for a lab-system source too. So a check on a v1
+source can today only fail or hold a request. Which checks apply is the operator's call,
+asked with this section.
+
+### 10.5 What is not built here
+
+- The `Monitoring` table. The ported mapping does not read it.
+- The old plugin's filters (panels, from, to).
+- A lab-system source and an OpenLDR v1 source for the other systems at one site. The rule
+  of section 8 forbids it, so those 154,245 requests are not imported at such a site. This
+  joins section 8.3.
+- Retiring `wasm/openldr-v1-import`.
