@@ -134,3 +134,28 @@ Such a pair is not a fault a laboratory could correct, and 250 of them would bur
 are. The operator decided on 2026-11-16: allow 10 minutes. Two timed steps are out of order
 only when the later is more than 10 minutes before the earlier. A step with no time is still
 compared by day.
+
+The operator then asked what the 250 were. Counted by panel on the same run:
+
+| Panel | Dictionary name | A form panel in the site list | Requests holding it | Pairs |
+|-------|-----------------|-------------------------------|--------------------:|------:|
+| TBCOL | TB Collection Info | no | 258 | 164 |
+| COL | Specimen Collection | no | 57 | 36 |
+| VLID | HIV VL Patient Information | yes | 1,115 | 27 |
+| EIDID | HIV EID Client Information | yes | 271 | 10 |
+| ARTID | ART Patient Information | yes | 3 | 3 |
+| real tests | | | | 10 |
+
+So 240 of the 250 sit on panels that hold information typed in, not a laboratory step. The
+operator said the document travels with the sample from the tracking system, so its time can
+come before registration. None in this sample is more than 10 minutes early, but a form typed
+hours or days before the laboratory registers the sample would be.
+
+The operator decided on 2026-11-16: the rule skips all five. An order row whose panel is one
+of the site's form panels (ARTID, EIDID, VLID) or one of its collection information panels
+(TBCOL, COL) gives no pair. The second list is new in the site profile. TBCOL and COL still
+leave as lab results, since only the date rule reads the new list. The 10-minute allowance
+stays for every other panel. Pairs between the request's own steps do not change.
+
+Not decided here: whether TBCOL and COL should leave as forms like the other three. The old
+tool does not send them as forms, and no form is named for them.
