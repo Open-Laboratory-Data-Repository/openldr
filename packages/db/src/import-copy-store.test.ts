@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { Kysely } from 'kysely';
 import { makeMigratedDb, makeMigratedDbWithMem } from './migrations/internal/test-helpers';
 import type { InternalSchema } from './schema/internal';
-import { createImportCopyStore, type CopyRow, type ImportCopyStore } from './import-copy-store';
+import { createImportCopyStore, CopySetTooLargeError, type CopyRow, type ImportCopyStore } from './import-copy-store';
 
 // Layer: the store's SQL against pg-mem, on a database built by every internal migration.
 // Not covered: real Postgres. pg-mem has a stable scan order and byte-order text sorting, so it
@@ -171,5 +171,81 @@ describe('import copy store', () => {
     expect(await store.deleteSome('c1', 10, 's1')).toBe(0);
     expect(await store.read('c1', 's1', ['A', 'B'])).toEqual([]);
     expect(await store.read('c1', 's2', ['A'])).toEqual([{ detail: 'd', key: 'A', seq: 0, row: { keep: true } }]);
+  });
+  describe('listKeys', () => {
+    beforeEach(async () => {
+      const rows = (keys: string[]): CopyRow[] => keys.flatMap((k) => [
+        { detail: 'a', key: k, seq: 0, row: { v: 0 } },
+        { detail: 'a', key: k, seq: 1, row: { v: 1 } },
+        { detail: 'b', key: k, seq: 0, row: { v: 2 } },
+      ]);
+      const keys = ['E', 'C', 'A', 'D', 'B'];
+      await store.replaceKeys('c1', 'requests', keys, rows(keys));
+      await store.replaceKeys('c1', 'other', ['Z0'], rows(['Z0']));
+      await store.replaceKeys('c2', 'requests', ['Z1'], rows(['Z1']));
+    });
+
+    it('pages distinct keys in key order', async () => {
+      expect(await store.listKeys('c1', 'requests', null, 2)).toEqual(['A', 'B']);
+      expect(await store.listKeys('c1', 'requests', 'B', 2)).toEqual(['C', 'D']);
+      expect(await store.listKeys('c1', 'requests', 'D', 2)).toEqual(['E']);
+      expect(await store.listKeys('c1', 'requests', 'E', 2)).toEqual([]);
+    });
+
+    it('does not see another set or another copy', async () => {
+      const all = await store.listKeys('c1', 'requests', null, 100);
+      expect(all).toEqual(['A', 'B', 'C', 'D', 'E']);
+      expect(await store.listKeys('c1', 'other', null, 100)).toEqual(['Z0']);
+      expect(await store.listKeys('c2', 'requests', null, 100)).toEqual(['Z1']);
+      expect(await store.listKeys('c3', 'requests', null, 100)).toEqual([]);
+    });
+
+    it('refuses a limit that is not a whole number of 1 or more', async () => {
+      await expect(store.listKeys('c1', 'requests', null, 0)).rejects.toThrow();
+    });
+  });
+
+  describe('readSet', () => {
+    it('reads every row of a set ordered by detail, key, seq', async () => {
+      await store.replaceKeys('c1', 'requests', ['B', 'A'], [
+        { detail: 'results', key: 'B', seq: 0, row: { v: 1 } },
+        { detail: 'results', key: 'A', seq: 1, row: { v: 2 } },
+        { detail: 'results', key: 'A', seq: 0, row: { v: 3 } },
+        { detail: 'requests', key: 'B', seq: 0, row: { v: 4 } },
+      ]);
+      await store.replaceKeys('c1', 'other', ['A'], [{ detail: 'x', key: 'A', seq: 0, row: { v: 9 } }]);
+      await store.replaceKeys('c2', 'requests', ['A'], [{ detail: 'x', key: 'A', seq: 0, row: { v: 9 } }]);
+      const got = await store.readSet('c1', 'requests', 1_000_000);
+      expect(got.map((r) => [r.detail, r.key, r.seq])).toEqual(
+        [['requests', 'B', 0], ['results', 'A', 0], ['results', 'A', 1], ['results', 'B', 0]]);
+      expect(got.map((r) => r.row)).toEqual([{ v: 4 }, { v: 3 }, { v: 2 }, { v: 1 }]);
+    });
+
+    it('returns nothing for an empty set', async () => {
+      expect(await store.readSet('c1', 'requests', 100)).toEqual([]);
+    });
+
+    it('throws CopySetTooLargeError past maxBytes, naming the set and the size, never a value', async () => {
+      await store.replaceKeys('c1', 'requests', ['A'], [
+        { detail: 'd', key: 'A', seq: 0, row: { secret: 'PATIENT-NAME-VALUE' } },
+        { detail: 'd', key: 'A', seq: 1, row: { secret: 'PATIENT-NAME-VALUE' } },
+      ]);
+      const err = await store.readSet('c1', 'requests', 10).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(CopySetTooLargeError);
+      const e = err as CopySetTooLargeError;
+      expect(e.setName).toBe('requests');
+      expect(e.bytes).toBeGreaterThan(10);
+      expect(e.message).toContain('requests');
+      expect(e.message).toContain(String(e.bytes));
+      expect(e.message).not.toContain('PATIENT-NAME-VALUE');
+      expect(e.message).not.toContain('secret');
+    });
+
+    it('reads a set that is exactly maxBytes', async () => {
+      await store.replaceKeys('c1', 'requests', ['A'], [{ detail: 'd', key: 'A', seq: 0, row: { v: 1 } }]);
+      const size = JSON.stringify({ v: 1 }).length;
+      expect(await store.readSet('c1', 'requests', size)).toHaveLength(1);
+      await expect(store.readSet('c1', 'requests', size - 1)).rejects.toBeInstanceOf(CopySetTooLargeError);
+    });
   });
 });
