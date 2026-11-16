@@ -71,8 +71,9 @@ Non-goals:
 
 - A rule for one birth row that disagrees with the stored age (54 of 882,043). It goes in
   the catalogue as a check that needs only the incoming record. Nothing is built.
-- A run whose order number has no order slot. It keeps today's handling: its result links to
-  no order. The real run counts how many there are.
+- A test code with more order numbers among its runs than orders on the registration. Such a
+  code keeps today's rule whole: one latest run across all its runs. The real run counts how
+  many there are.
 - A reference date other than the collected date for the age. Where a record has no
   collected date, no date of birth is worked out from the age, as today.
 - TBCOL and COL as forms, the unknown specimen code (fault 14), the 496 failures as such.
@@ -151,8 +152,19 @@ of the run, where the order number is the run index with 100 taken off when it i
 (`base_index` in `src/payload.rs`, the same key the order rows use). The latest run wins
 within that key, by the same comparison as today.
 
-So a rerun of one order (index 1 and 101) still leaves one run. A code ordered twice (index
-1 and 2) keeps both. The list of dropped runs and its order follow from the same rule. The
+The new key applies to a test code only when its runs hold no more distinct order numbers
+than the registration has orders of that code. That is the case in which every kept run has
+an order to link to (`Linker::new` in `src/payload.rs` pairs a code's order numbers with its
+orders and drops the surplus). When a code has more order numbers than orders, the code
+keeps today's key, the test code alone. So `supersede` takes the registration's order count
+per code as a second input.
+
+`base_index` is used as it is. So index 100 stays 100, 101 is 1, 200 is 100, and 201 is 101.
+That odd edge is catalogue entry A14 and is not changed here.
+
+So a rerun of one order (index 1 and 101) still leaves one run. A code ordered twice with
+runs at index 1 and 2 keeps both. A code ordered once with runs at index 1 and 2 keeps only
+the later one, as today. `superseded_by` is the winner's index within the same key. The list of dropped runs and its order follow from the same rule. The
 audit's finding for dropped runs lists fewer runs. An earlier order keeps its result, so its
 status is no longer "in progress" for lack of one.
 
@@ -198,5 +210,61 @@ On 20,000 sampled twins, before any code:
 3. `birth_dates_disagree` also fires when there is nothing to confirm with (no collected
    date, or no stored days), not only when the stored age disagrees.
 4. Two taken dates give no warning.
-5. A run with no order slot is left as today.
+5. A test code with more order numbers than orders is left as today, whole.
 6. An age of years only (7 requests in 1.7 million) gives no date of birth.
+7. A damaged birth or taken row is skipped before the choice is made. Today a damaged first
+   row hides a good second one.
+8. The new warning is added last, after `dates_out_of_order`, so no existing finding moves.
+9. A stored age has no upper bound. 65,535 days is about 179 years.
+
+## 8. Settled after a reviewer read this
+
+A reviewer read the design against the code and asked twelve questions. None needed the
+operator. The answers bind the build.
+
+**Whole days.** Everywhere in this design, the days between two dates are the difference of
+their calendar days. A time of day on either side is ignored. That is what the source
+counted: v1's days equal the difference in calendar days. The payload already has this as
+`age_days_between` (`src/payload.rs:476`). The builder reuses it or moves it. The collected
+date's day minus `days` calendar days is the date of birth.
+
+**Distinct dates, and damaged rows (5.2 and 5.3).** A birth row's date is what `birth_date`
+(`src/request.rs:200`) gives, which has no time. A taken row's date is what `date_only`
+gives. A row for which that gives nothing is skipped. Two rows on one day are one date. The
+dates are sorted by year, month and day as numbers, never as text. When every row is
+skipped, the request behaves as if it had no rows: the date of birth falls back to the age,
+and the taken date is empty.
+
+**What the request record gains (5.2).** One field, not printed in the request stage's
+output, which must stay equal to the old tool's: the distinct birth dates and the stored
+days, set only when the warning applies. The audit reads it and adds the finding. The
+finding is the last in the list, after `dates_out_of_order`. `compare.py` accepts it only
+when it equals the one worked out again from the raw birth rows and record bytes.
+
+**A short record (5.1).** A record too short to hold byte 418 gives no date of birth from
+the age, as it already gives no stored days in the payload. The decoder's two offsets (414
+and 417) stay where they are in `src/records.rs`, and one test pins them to the site
+profile's `age_years` and `age_days` offsets, so the two readings cannot drift apart again.
+
+**Outputs that move with the date of birth (5.1 and 5.2).** Request `DobAge`. Payload
+`patient.date_of_birth`, `age_years_at_received`, and `isolates[].patient_age_days`. FHIR
+`Patient.birthDate`. The audit's date-of-birth findings. The payload's age fields fall back
+to the stored age where there is no date of birth, as they do today. `compare.py` already
+groups these paths as derived from the birth date; the age rule covers that group by working
+each value out again.
+
+**Outputs that move with the taken date (5.3).** Request `TakenDateTime`, the payload's
+taken date, and the source value the check against v1 reads for the specimen date. FHIR's
+collected time reads the collected date first, so it does not move on any of the 70 known
+requests.
+
+**Holds.** The rule that a date of birth after the specimen date is an error stays as it is.
+The new date of birth is never after the collected date. It can be after a taken date only
+when the taken date is earlier than the collected date by more than the age. For an age
+under 256 days the date of birth does not change at all, so no newborn gains that error.
+The real run reports the held count, and any request newly held is listed by cause.
+
+**A typed age and two birth dates.** The stored days are used to confirm a birth date
+whether or not they are a round number of years. A match must be exact.
+
+**The supersede list.** Its sort order does not change: test code, then run index.
