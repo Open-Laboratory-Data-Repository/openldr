@@ -70,6 +70,9 @@ describe('SDK_BOOTSTRAP_V1', () => {
     await check.held({ copyId: 'cp1', reason: 'held', label: 'odd_age', laboratory: 'LAB-1', offset: 20, limit: 10 });
     await check.heldItem({ copyId: 'cp1', key: 'REQ1' });
     await check.heldItems({ copyId: 'cp1', reason: 'error', label: 'odd_age', laboratory: 'LAB-2', offset: 200, limit: 200 });
+    await check.start({ copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: true });
+    await check.heldItems({ copyId: 'cp1', label: 'odd_age', after: null, limit: 200 });
+    await check.heldItems({ copyId: 'cp1', after: 'REQ9', limit: 200 });
     expect(sent.map((m) => m.op)).toEqual([
       { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: { tz: '+02:00' }, pageSize: 200 },
       { kind: 'import.check.list' },
@@ -78,7 +81,12 @@ describe('SDK_BOOTSTRAP_V1', () => {
       { kind: 'import.check.held', copyId: 'cp1', reason: 'held', label: 'odd_age', laboratory: 'LAB-1', offset: 20, limit: 10 },
       { kind: 'import.check.heldItem', copyId: 'cp1', key: 'REQ1' },
       { kind: 'import.check.heldItems', copyId: 'cp1', reason: 'error', label: 'odd_age', laboratory: 'LAB-2', offset: 200, limit: 200 },
+      { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: true },
+      { kind: 'import.check.heldItems', copyId: 'cp1', label: 'odd_age', after: null, limit: 200 },
+      { kind: 'import.check.heldItems', copyId: 'cp1', after: 'REQ9', limit: 200 },
     ]);
+    // After is sent as given, a null included: null asks for the first page.
+    expect(sent.at(-2)!.op).toHaveProperty('after', null);
   });
 
   it('files.download sends the host operation and resolves with nothing', async () => {

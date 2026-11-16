@@ -48,13 +48,13 @@ export type PluginBrokerOp =
   | { kind: 'import.copy.status'; copyId: string }
   | { kind: 'import.copy.stop'; copyId: string }
   | { kind: 'import.copy.delete'; copyId: string; confirm: true }
-  | { kind: 'import.check.start'; copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number }
+  | { kind: 'import.check.start'; copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number; fromStart?: boolean }
   | { kind: 'import.check.list' }
   | { kind: 'import.check.status'; runId: string }
   | { kind: 'import.check.stop'; runId: string }
   | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }
   | { kind: 'import.check.heldItem'; copyId: string; key: string }
-  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number };
+  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset?: number; after?: string | null; limit: number };
 
 /** The types of file a page may ask the host to save. */
 export type PluginDownloadMime = 'text/csv' | 'application/json' | 'text/plain';
@@ -118,6 +118,8 @@ export interface PluginCheckRun {
   status: PluginCheckStatus;
   options: Record<string, string>;
   pageSize: number;
+  /** `labels` counts each label the plugin gave, up to 12 names. Past 12, and for a label that is not
+   *  a code, the request counts under `other`. `other` is a count only and cannot be used as a filter. */
   counts: { read: number; saved: number; held: number; failed: number; resources: number; labels: Record<string, number> };
   /** One entry for each laboratory code the plugin named, in the order first met. They add up to
    *  `counts`. Empty at a start; absent on a run stored before the host counted laboratories. */
@@ -148,6 +150,10 @@ export interface PluginHeldRow {
   error: string | null;
   heldAt: string;
 }
+
+/** The filters of a page of held requests, read by offset or by key (`after`). */
+export type PluginHeldItemsInput = { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; limit: number }
+  & ({ offset: number; after?: undefined } | { after: string | null; offset?: number });
 
 /** A held request with the plugin's own JSON. Only the plugin's page knows what is inside. */
 export interface PluginHeldItem extends PluginHeldRow {
@@ -221,16 +227,22 @@ export interface OpenLdrPluginApi {
     /** A check of a finished copy: the plugin decodes each request, CE saves what passes and keeps
      *  the rest. One per copy. The held calls return real values; show them to the person, never log them. */
     check: {
-      /** Records the request and returns. Fails with a sentence when the copy is not finished, a run is live, or a copy is not this plugin's. */
-      start(input: { copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number }): Promise<PluginCheckRun>;
+      /** Records the request and returns. Fails with a sentence when the copy is not finished, a run is live, or a copy is not this plugin's.
+       *  A stopped or failed run carries on from its last page, with its counts and held rows, unless `fromStart` is true, it reads
+       *  other options or another reference, or a copy was read again since it began. The run it answers tells which: a run
+       *  that carried on has requests already read. */
+      start(input: { copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number; fromStart?: boolean }): Promise<PluginCheckRun>;
       list(): Promise<PluginCheckRun[]>;
       status(runId: string): Promise<PluginCheckRun | null>;
       stop(runId: string): Promise<PluginCheckRun>;
       /** `laboratory` is a code of 1 to 32 of A-Z a-z 0-9 . _ -; the host refuses any other. */
       held(input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }): Promise<{ rows: PluginHeldRow[]; total: number }>;
       heldItem(input: { copyId: string; key: string }): Promise<PluginHeldItem | null>;
-      /** The same rows as `held`, in the same order, each with its findings and check. `limit` is 1 to 200. */
-      heldItems(input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }): Promise<{ items: PluginHeldItem[]; total: number }>;
+      /** The same rows as `held`, in the same order, each with its findings and check. `limit` is 1 to 200.
+       *  Give `after` to read by key, as an export should: null for the first page, then the `next` of the
+       *  page before. `offset` is then ignored, and the answer adds `next`, the last key of the page or null
+       *  when no row is left. A page read by key does not move while a check adds or removes rows. */
+      heldItems(input: PluginHeldItemsInput): Promise<{ items: PluginHeldItem[]; total: number; next?: string | null }>;
     };
   };
   /** Files the studio saves for the page. The page's frame cannot download. */

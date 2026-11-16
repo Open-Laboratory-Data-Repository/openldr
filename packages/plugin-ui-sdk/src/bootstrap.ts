@@ -116,16 +116,16 @@ function pluginBootstrapV1(): void {
         remove: (copyId: string) => call({ kind: 'import.copy.delete', copyId, confirm: true }),
       },
       check: {
-        start: (input: { copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number }) =>
-          call({ kind: 'import.check.start', copyId: input.copyId, referenceCopyId: input.referenceCopyId, options: input.options, pageSize: input.pageSize }),
+        start: (input: { copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number; fromStart?: boolean }) =>
+          call({ kind: 'import.check.start', copyId: input.copyId, referenceCopyId: input.referenceCopyId, options: input.options, pageSize: input.pageSize, fromStart: input.fromStart }),
         list: () => call({ kind: 'import.check.list' }),
         status: (runId: string) => call({ kind: 'import.check.status', runId }),
         stop: (runId: string) => call({ kind: 'import.check.stop', runId }),
         held: (input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }) =>
           call({ kind: 'import.check.held', copyId: input.copyId, reason: input.reason, label: input.label, laboratory: input.laboratory, offset: input.offset, limit: input.limit }),
         heldItem: (input: { copyId: string; key: string }) => call({ kind: 'import.check.heldItem', copyId: input.copyId, key: input.key }),
-        heldItems: (input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }) =>
-          call({ kind: 'import.check.heldItems', copyId: input.copyId, reason: input.reason, label: input.label, laboratory: input.laboratory, offset: input.offset, limit: input.limit }),
+        heldItems: (input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset?: number; after?: string | null; limit: number }) =>
+          call({ kind: 'import.check.heldItems', copyId: input.copyId, reason: input.reason, label: input.label, laboratory: input.laboratory, offset: input.offset, after: input.after, limit: input.limit }),
       },
     },
     // The studio answers this itself and saves the file in its own document.

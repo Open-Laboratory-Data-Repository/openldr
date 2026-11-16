@@ -101,7 +101,7 @@ export function createMockOpenldr(opts: MockOptions): MockOpenLdrPluginApi {
         async stop() { return mockCheck('mock-copy', null, 'stopping'); },
         async held() { return { rows: [], total: 0 }; },
         async heldItem() { return null; },
-        async heldItems() { return { items: [], total: 0 }; },
+        async heldItems(input) { return input.after !== undefined ? { items: [], total: 0, next: null } : { items: [], total: 0 }; },
       },
     },
     // Refuses what the host refuses, except the one-per-second limit, so a test can save twice.

@@ -32,6 +32,9 @@ describe('createMockOpenldr', () => {
     expect(await api.imports.check.held({ copyId: 'cp1', laboratory: 'LAB-1', offset: 0, limit: 10 })).toEqual({ rows: [], total: 0 });
     expect(await api.imports.check.heldItem({ copyId: 'cp1', key: 'REQ1' })).toBeNull();
     expect(await api.imports.check.heldItems({ copyId: 'cp1', offset: 0, limit: 200 })).toEqual({ items: [], total: 0 });
+    // By key the answer adds next, null on the last page.
+    expect(await api.imports.check.heldItems({ copyId: 'cp1', after: null, limit: 200 })).toEqual({ items: [], total: 0, next: null });
+    expect(await api.imports.check.start({ copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: true })).toMatchObject({ status: 'queued' });
   });
   it('files.download records each call so a test can read it', async () => {
     const api = createMockOpenldr({ pluginId: 'p1' });
