@@ -20,14 +20,24 @@ export interface HeldItem extends HeldRow { findings: unknown; check: unknown }
 
 export interface HeldListOptions { reason?: HeldReason; label?: string; laboratory?: string; offset: number; limit: number }
 
+/** `listItems` reads by offset, as `list` does, or by key. With `after` (a key, or null for the
+ *  start) it returns the rows whose key is greater, `offset` is ignored, and the answer adds `next`.
+ *  A page read by key does not move when rows before it are added or removed. */
+export type HeldItemsOptions = Omit<HeldListOptions, 'offset'> & ({ offset: number; after?: undefined } | { after: string | null; offset?: number });
+
+/** A page of `listItems`. `next` is there only when the page was read by `after`: the last key of
+ *  the page, or null when no row is left past it. */
+export interface HeldItemsPage { rows: HeldItem[]; total: number; next?: string | null }
+
 export interface ImportCheckHeldStore {
   /** Insert or replace by (copyId, key). */
   put(item: Omit<HeldItem, 'heldAt'>): Promise<void>;
   remove(copyId: string, keys: string[]): Promise<void>;
   /** Ordered by key. `total` counts every row that matches the filter, not only the page. */
   list(copyId: string, opts: HeldListOptions): Promise<{ rows: HeldRow[]; total: number }>;
-  /** The same rows as `list`, in the same order, each with its `findings` and `check`. */
-  listItems(copyId: string, opts: HeldListOptions): Promise<{ rows: HeldItem[]; total: number }>;
+  /** The same rows as `list`, in the same order, each with its `findings` and `check`. Read by key
+   *  when `after` is given. */
+  listItems(copyId: string, opts: HeldItemsOptions): Promise<HeldItemsPage>;
   get(copyId: string, key: string): Promise<HeldItem | null>;
   /** Delete up to `limit` rows of a copy. 0 means none left. */
   deleteSome(copyId: string, limit: number): Promise<number>;
@@ -56,7 +66,7 @@ function toRow(r: Stored): HeldRow {
 
 export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCheckHeldStore {
   /** The rows of a copy that match the filter. */
-  function matching(copyId: string, opts: HeldListOptions) {
+  function matching(copyId: string, opts: Pick<HeldListOptions, 'reason' | 'label' | 'laboratory'>) {
     let q = db.selectFrom('import_check_held').where('copy_id', '=', copyId);
     if (opts.reason !== undefined) q = q.where('reason', '=', opts.reason);
     if (opts.label !== undefined) q = q.where('label', '=', opts.label);
@@ -72,7 +82,7 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
   }
 
   /** Every matching row, not only the page. */
-  async function count(copyId: string, opts: HeldListOptions): Promise<number> {
+  async function count(copyId: string, opts: Pick<HeldListOptions, 'reason' | 'label' | 'laboratory'>): Promise<number> {
     const r = await matching(copyId, opts).select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirstOrThrow();
     return Number(r.n);
   }
@@ -120,8 +130,19 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
     },
 
     async listItems(copyId, opts) {
-      const rows = await page(copyId, opts, ['copy_id', 'key', 'run_id', 'reason', 'label', 'laboratory', 'error', 'held_at', 'findings', 'check']);
-      return { rows: rows.map((r) => ({ ...toRow(r), findings: r.findings, check: r.check })), total: await count(copyId, opts) };
+      const columns = ['copy_id', 'key', 'run_id', 'reason', 'label', 'laboratory', 'error', 'held_at', 'findings', 'check'] as const;
+      const toItem = (r: Stored & { findings: unknown; check: unknown }): HeldItem => ({ ...toRow(r), findings: r.findings, check: r.check });
+      if (opts.after === undefined) {
+        const rows = await page(copyId, opts, [...columns]);
+        return { rows: rows.map(toItem), total: await count(copyId, opts) };
+      }
+      // By key: one row more than the page, so the last page is known without another call.
+      let q = matching(copyId, opts);
+      if (opts.after !== null) q = q.where('key', '>', opts.after);
+      const got = await q.select([...columns]).orderBy('key').limit(opts.limit + 1).execute();
+      const rows = got.slice(0, opts.limit).map(toItem);
+      const next = got.length > opts.limit && rows.length > 0 ? rows[rows.length - 1]!.key : null;
+      return { rows, total: await count(copyId, opts), next };
     },
 
     async get(copyId, key) {

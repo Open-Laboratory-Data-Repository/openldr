@@ -136,6 +136,80 @@ describe('import check held store', () => {
     expect((await store.listItems('c3', { offset: 0, limit: 10 }))).toEqual({ rows: [], total: 0 });
   });
 
+  it('listItems by after reads in key order past the key, with next the last key or null on the last page', async () => {
+    for (const k of ['D', 'B', 'A', 'C', 'E']) await store.put(item(k));
+    await store.put(item('B', { copyId: 'c2' }));
+    const p1 = await store.listItems('c1', { after: null, limit: 2 });
+    expect(p1.rows.map((r) => r.key)).toEqual(['A', 'B']);
+    expect(p1).toMatchObject({ total: 5, next: 'B' });
+    const p2 = await store.listItems('c1', { after: 'B', limit: 2 });
+    expect(p2.rows.map((r) => r.key)).toEqual(['C', 'D']);
+    expect(p2.next).toBe('D');
+    // The last page: next is null, even when the page is not full.
+    const p3 = await store.listItems('c1', { after: 'D', limit: 2 });
+    expect(p3.rows.map((r) => r.key)).toEqual(['E']);
+    expect(p3).toMatchObject({ total: 5, next: null });
+    // A page that ends exactly on the last row is the last page too.
+    expect((await store.listItems('c1', { after: 'C', limit: 2 })).next).toBeNull();
+    expect(await store.listItems('c1', { after: 'E', limit: 2 })).toEqual({ rows: [], total: 5, next: null });
+    // Offset is ignored when after is given.
+    expect((await store.listItems('c1', { after: 'B', offset: 3, limit: 2 })).rows.map((r) => r.key)).toEqual(['C', 'D']);
+    // The rows are whole, as listItems by offset gives them.
+    expect(p2.rows).toEqual((await store.listItems('c1', { offset: 2, limit: 2 })).rows);
+  });
+
+  it('listItems by after takes each filter, and the total follows the filter', async () => {
+    await store.put(item('A', { label: 'x', laboratory: 'L1' }));
+    await store.put(item('B', { reason: 'error', error: 'E_X', label: 'x', laboratory: 'L2' }));
+    await store.put(item('C', { label: 'y', laboratory: 'L1' }));
+    await store.put(item('D', { label: 'x', laboratory: 'L1' }));
+    await store.put(item('E', { reason: 'error', error: 'E_Y', label: 'y', laboratory: 'L2' }));
+    const filters = [
+      {}, { reason: 'held' as const }, { reason: 'error' as const }, { label: 'x' }, { laboratory: 'L1' },
+      { reason: 'held' as const, label: 'x', laboratory: 'L1' }, { label: 'none' },
+    ];
+    for (const f of filters) {
+      const whole = await store.listItems('c1', { ...f, offset: 0, limit: 100 });
+      const read: string[] = [];
+      let after: string | null = null;
+      for (let calls = 0; calls < 10; calls++) {
+        const page = await store.listItems('c1', { ...f, after, limit: 1 });
+        expect(page.total).toBe(whole.total);
+        read.push(...page.rows.map((r) => r.key));
+        if (page.next === null || page.next === undefined) break;
+        after = page.next;
+      }
+      expect(read).toEqual(whole.rows.map((r) => r.key));
+    }
+  });
+
+  it('listItems by after neither repeats nor skips a kept row when rows are removed and added between pages', async () => {
+    for (const k of ['A', 'B', 'C', 'D', 'E', 'F']) await store.put(item(k));
+    const p1 = await store.listItems('c1', { after: null, limit: 2 });
+    expect(p1.rows.map((r) => r.key)).toEqual(['A', 'B']);
+    // A row already read leaves, and a row before the read point arrives. By offset the next page
+    // would start one row late after the remove, then one early after the add.
+    await store.remove('c1', ['A']);
+    await store.put(item('A0'));
+    const p2 = await store.listItems('c1', { after: p1.next!, limit: 2 });
+    expect(p2.rows.map((r) => r.key)).toEqual(['C', 'D']);
+    await store.remove('c1', ['C']);
+    await store.put(item('BB'));
+    const p3 = await store.listItems('c1', { after: p2.next!, limit: 2 });
+    expect(p3.rows.map((r) => r.key)).toEqual(['E', 'F']);
+    expect(p3.next).toBeNull();
+    const keys = [...p1.rows, ...p2.rows, ...p3.rows].map((r) => r.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('listItems by offset is as before: no next in the answer', async () => {
+    for (const k of ['A', 'B', 'C']) await store.put(item(k));
+    const page = await store.listItems('c1', { offset: 1, limit: 1 });
+    expect(Object.keys(page).sort()).toEqual(['rows', 'total']);
+    expect(page.rows.map((r) => r.key)).toEqual(['B']);
+    expect(page.total).toBe(3);
+  });
+
   it('remove deletes the named keys and leaves the rest', async () => {
     for (const k of ['A', 'B', 'C']) await store.put(item(k));
     await store.remove('c1', ['A', 'C', 'missing']);
