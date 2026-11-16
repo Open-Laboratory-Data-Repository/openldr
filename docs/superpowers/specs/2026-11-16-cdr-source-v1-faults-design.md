@@ -6,10 +6,16 @@ Follows `2026-11-15-cdr-source-plugin-design.md` (fault list, section 6.8) and
 
 ## 1. What this is and why
 
-Four faults in the old tool's decoder were left open because only OpenLDR v1 could say what
-the right answer is. The plugin copied each one on purpose. The restored Tanzania source and
+Four faults in the old tool's decoder were left open until real data could say what the
+right answer is. The plugin copied each one on purpose. The restored Tanzania source and
 its v1 from the same afternoon now sit on one server, so each was counted there. This design
 turns each count into a rule.
+
+v1 is a witness here, not the target. The operator said on 2026-11-16: "we are trying to
+improve data capture/storage of openldr_ce not carry over issues of v1". So each rule below
+rests on the source's own data: its birth index, its stored age, its collected date, its own
+orders. v1 only confirms that the bytes were read right. Where CE can keep something v1
+could not, it does.
 
 The operator asked for this as the second of three pieces of work on 2026-11-16: dates first,
 then these four, then the 496 real twins that still fail the check against v1.
@@ -66,14 +72,15 @@ Goals:
 4. With two taken dates, the one on the collected day is taken.
 5. Each order of a test code keeps its own latest run.
 6. No rule depends on the order the caller hands rows in.
+7. CE can tell an estimated date of birth from a recorded one.
+8. No result the laboratory produced is dropped for want of an order to hold it.
 
 Non-goals:
 
 - A rule for one birth row that disagrees with the stored age (54 of 882,043). It goes in
   the catalogue as a check that needs only the incoming record. Nothing is built.
-- A test code with more order numbers among its runs than orders on the registration. Such a
-  code keeps today's rule whole: one latest run across all its runs. The real run counts how
-  many there are.
+- A test code with runs but no order on the registration (27 cases in the whole table). It
+  keeps today's rule: one latest run, linked to no order.
 - A reference date other than the collected date for the age. Where a record has no
   collected date, no date of birth is worked out from the age, as today.
 - TBCOL and COL as forms, the unknown specimen code (fault 14), the 496 failures as such.
@@ -95,7 +102,8 @@ For each fault the choice was between simple fixed rules and a rule the data sup
 | 2 | (a) earliest; (b) latest; (c) the row the stored age confirms | (c). Earliest is right on 139 and latest on 127 of 284 |
 | 2, none confirmed | (a) earliest silently; (b) no date of birth; (c) earliest with a warning | (c). The operator chose it on 2026-11-16: "Earliest, with a warning" |
 | 3 | (a) earliest, as today; (b) latest; (c) the row on the collected day | (c). The collected day equals a taken date on 69 of 70, the latest on 47 and the earliest on 22 |
-| 13 | (a) per test code, as today; (b) per order; (c) per order, and a spare run joins the last order | (b). The operator chose it on 2026-11-16: "Per order, as v1". (c) adds a rule for a shape seen twice in 283 sampled cases |
+| 13 | (a) per test code, as today; (b) per order; (c) per order, and a spare run joins the last order | (c). The operator chose per order, then on 2026-11-16 "Yes, keep the result" for the spare run. Without it, 283 cases in the whole table lose a result the laboratory produced |
+| An estimated date of birth | (a) no mark; (b) a mark on the request | (b). The operator chose "Yes, mark it" on 2026-11-16 |
 
 ## 5. The design
 
@@ -155,23 +163,40 @@ of the run, where the order number is the run index with 100 taken off when it i
 (`base_index` in `src/payload.rs`, the same key the order rows use). The latest run wins
 within that key, by the same comparison as today.
 
-The new key applies to a test code only when its runs hold no more distinct order numbers
-than the registration has orders of that code. That is the case in which every kept run has
-an order to link to (`Linker::new` in `src/payload.rs` pairs a code's order numbers with its
-orders and drops the surplus). When a code has more order numbers than orders, the code
-keeps today's key, the test code alone. So `supersede` takes the registration's order count
-per code as a second input.
+Which order a run belongs to. Take a test code's distinct order numbers, sorted as the order
+rows already sort them. The first goes to the code's first order on the registration, the
+second to its second, and so on. An order number beyond the last order belongs to the last
+order. So a spare run joins the last order of its test, and the latest run among them is
+that order's result. One function decides this, and both `supersede` and the linking of
+results to orders (`Linker::new` in `src/payload.rs`) use it, so they cannot disagree.
+`supersede` takes the registration's orders as a second input.
+
+A code with no order on the registration keeps today's key, the test code alone.
 
 `base_index` is used as it is. So index 100 stays 100, 101 is 1, 200 is 100, and 201 is 101.
 That odd edge is catalogue entry A14 and is not changed here.
 
 So a rerun of one order (index 1 and 101) still leaves one run. A code ordered twice with
-runs at index 1 and 2 keeps both. A code ordered once with runs at index 1 and 2 keeps only
-the later one, as today. `superseded_by` is the winner's index within the same key. The list of dropped runs and its order follow from the same rule. The
+runs at index 1 and 2 keeps both. A code ordered once with runs at index 1 and 2 keeps the later
+one, and that run now links to the order, so the order shows its result. `superseded_by` is
+the winner's index within the same order. The list of dropped runs and its order follow from the same rule. The
 audit's finding for dropped runs lists fewer runs. An earlier order keeps its result, so its
 status is no longer "in progress" for lack of one.
 
-### 5.5 How each change stays tested
+### 5.5 The mark on an estimated date of birth
+
+When a request's date of birth was worked out from the stored age, and not read from a
+birth row, the request carries one attribute: code `birth-date-estimated` in
+`urn:openldr:cs:request-attribute`, value true. It is sent only when set, as `newborn` is,
+and is the last in the fixed order of attributes. CE stores it in `lab_request_attributes`
+(AGENTS.md section 8). It needs one new code in CE's list
+(`packages/terminology/codesystems/openldr-request-attribute.json`), display "Date of birth
+worked out from the stored age".
+
+The old tool has no such attribute, so it shows as a stated difference in the payload and in
+FHIR on every request it applies to.
+
+### 5.6 How each change stays tested
 
 As for every earlier fault (the build's standing rule):
 
@@ -179,8 +204,8 @@ As for every earlier fault (the build's standing rule):
   operations in `tests/overrides/`, each `now` checked by hand, never pasted from the code.
 - Fixtures that move: `registration-request-facts` and `dates-day-ten-minute-32` (age),
   `birth-row` (birth dates), `taken-from-index` (taken dates),
-  `panel-ordered-twice-two-runs` and `two-runs` (runs). Any other fixture that moves must be
-  explained in the report.
+  `panel-ordered-twice-two-runs` and `two-runs` (runs), and every fixture whose date of birth
+  comes from the age (the mark). Any other fixture that moves must be explained in the report.
 - `tools/real-data-check/compare.py` gains one value rule per fault, keyed by its name and
   gated on the request's own raw rows. Each recomputes the value it allows:
   - age: the date of birth from the raw record bytes and the birth rows;
@@ -213,7 +238,7 @@ On 20,000 sampled twins, before any code:
 3. `birth_dates_disagree` also fires when there is nothing to confirm with (no collected
    date, or no stored days), not only when the stored age disagrees.
 4. Two taken dates give no warning.
-5. A test code with more order numbers than orders is left as today, whole.
+5. A spare run joins the last order of its test, not the first or the nearest.
 6. An age of years only (7 requests in 1.7 million) keeps today's rule: collected date minus
    the years.
 7. A damaged birth or taken row is skipped before the choice is made. Today a damaged first
@@ -276,3 +301,5 @@ catalogue as a signal: where there is no birth row and the days equal years x 36
 floor(years x 365.25), the date of birth is an estimate.
 
 **The supersede list.** Its sort order does not change: test code, then run index.
+10. The mark is set whenever the date of birth comes from the age, whether the age looks typed
+    or exact. One rule, and it claims no more than is known.
