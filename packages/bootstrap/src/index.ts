@@ -85,7 +85,7 @@ import { createPatientDuplicates, type PatientDuplicates } from './patient-dupli
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { createImportService, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
 import { createImportCopyService, type ImportCopyService } from './import-copy';
-import { createImportCheckService, liveCheckStatus } from './import-check';
+import { createImportCheckService, liveCheckStatus, type ImportCheckService } from './import-check';
 import { startImportDriver } from './import-driver';
 import { diagnoseConnector } from './connector-diagnose';
 import { policyFromConfig } from './policy';
@@ -551,6 +551,9 @@ export interface AppContext {
   /** Copies of a source database's rows to CE's own disk (import-copy.ts). Only a context built
    *  with `runImportDriver` drives them. Any context may start, stop or delete one. */
   importCopies: ImportCopyService;
+  /** Checks of a finished copy (import-check.ts). The CLI reaches the service through here. Only a
+   *  context built with `runImportDriver` drives them. */
+  importChecks: ImportCheckService;
   connectors: ConnectorStore;
   appSettings: AppSettingStore;
   featureFlags: FeatureFlags;
@@ -2015,6 +2018,7 @@ const reporting: ReportingApi = {
     pluginBroker,
     imports,
     importCopies,
+    importChecks,
     connectors: connectorStore,
     appSettings,
     labIdentity,
@@ -2208,7 +2212,7 @@ export {
   type ImportService, type ImportRun, type ImportStatus, type ImportActor, type ImportAuditEvent, type ImportStartInput,
 } from './import-run';
 export type { ImportCopyService, CopyRun, CopyStatus, CopySetProgress } from './import-copy';
-export { checkIdOf } from './import-check';
+export { checkIdOf, LABORATORY_CODE } from './import-check';
 export type { ImportCheckService, ImportCheckStartInput, CheckRun, CheckStatus, CheckCounts, CheckLaboratory } from './import-check';
 export { CopySetChangedError } from './import-copy';
 export {

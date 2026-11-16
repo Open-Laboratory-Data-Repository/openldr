@@ -218,6 +218,39 @@ export function buildProgram(): Command {
       try { process.exitCode = await runImportCopyDelete(plugin, copy, opts); } catch (err) { process.stderr.write(`import copy delete failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 
+  const checkRuns = imports.command('check').description('Check a finished copy with a plugin that decodes each request. The server does the checking');
+  checkRuns.command('start').description('Ask for a check of a finished copy, or for a stopped one to carry on, and return. The server does the checking')
+    .requiredOption('--plugin <id>', 'the plugin that decodes the requests')
+    .requiredOption('--copy <copy>', 'the finished copy to check')
+    .option('--reference <copy>', 'a copy of reference records to compare with. With none, requests are saved as not compared')
+    .option('--option <name=value...>', 'a plugin option, repeatable (for example tz=+02:00)')
+    .option('--page-size <n>', 'requests per page, 1 to 2000 (default 500)')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { plugin: string; copy: string; reference?: string; option?: string[]; pageSize?: string; json: boolean }) => {
+      try { process.exitCode = await runImportCheckStart(opts); } catch (err) { process.stderr.write(`import check start failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  checkRuns.command('status <plugin> [run]').description('Show one check, or every check of a plugin')
+    .option('--laboratories', 'add a line for each laboratory', false).option('--json', 'emit JSON', false)
+    .action(async (plugin: string, run: string | undefined, opts: { laboratories: boolean; json: boolean }) => {
+      try { process.exitCode = await runImportCheckStatus(plugin, run, opts); } catch (err) { process.stderr.write(`import check status failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  checkRuns.command('stop <plugin> <run>').description('Stop a check at its next page. The requests saved so far stay').option('--json', 'emit JSON', false)
+    .action(async (plugin: string, run: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runImportCheckStop(plugin, run, opts); } catch (err) { process.stderr.write(`import check stop failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  checkRuns.command('held <plugin> <copy>').description('List the held and failed requests of a copy, without their findings. --export writes them with their findings to a file')
+    .option('--label <label>', 'only requests held under this label')
+    .option('--reason <reason>', 'only held or only error')
+    .option('--laboratory <code>', 'only requests of this laboratory')
+    .option('--offset <n>', 'skip this many rows (default 0)')
+    .option('--limit <n>', 'rows to list, 1 to 100 (default 50)')
+    .option('--export <file>', 'write every matching row, with its findings, to this file, one JSON object per line. The file holds patient values')
+    .option('--force', 'write over an existing --export file', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (plugin: string, copy: string, opts: { label?: string; reason?: string; laboratory?: string; offset?: string; limit?: string; export?: string; force: boolean; json: boolean }) => {
+      try { process.exitCode = await runImportCheckHeld(plugin, copy, opts); } catch (err) { process.stderr.write(`import check held failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+
   program
     .command('doctor')
     .description('List what this install still needs before it is ready (the same checks as Settings, Setup checks)')
@@ -1725,4 +1758,5 @@ import { runDoctor } from './doctor';
 import {
   runImportAllow, runImportAllowed, runImportFailures, runImportResume, runImportRevoke, runImportStart, runImportStatus, runImportStop,
 } from './import';
+import { runImportCheckHeld, runImportCheckStart, runImportCheckStatus, runImportCheckStop } from './import-check';
 import { runImportCopyDelete, runImportCopyStart, runImportCopyStatus, runImportCopyStop } from './import-copy';

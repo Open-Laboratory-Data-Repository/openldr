@@ -221,7 +221,7 @@ const REASON: Record<string, string> = {
   // options
   '--action': FILTER, '--activity': CHOICE, '--actor': 'audit list: a filter on the actor id, not the root --actor',
   '--address': TEXT, '--agent': PERSON, '--approved-by': PERSON, '--caps': 'capability keys', '--category': FILTER,
-  '--central-url': URI, '--code': ID, '--connector': ID, '--contact': TEXT, '--converter': ID, '--count': NUM,
+  '--central-url': URI, '--code': ID, '--connector': ID, '--contact': TEXT, '--copy': ID, '--reference': ID, '--laboratory': FILTER, '--converter': ID, '--count': NUM,
   '--country': 'an ISO3 country code', '--desc': TEXT, '--duplicate': ID, '--email': TEXT, '--enabled': CHOICE,
   '--entity': FILTER, '--entity-id': FILTER, '--entity-type': FILTER, '--expires': WHEN, '--format': CHOICE,
   '--from': WHEN, '--icon': 'an icon name', '--id': ID, '--jurisdiction': TEXT, '--kind': CHOICE, '--label': TEXT,
@@ -259,6 +259,10 @@ const NOT_A_PATH: Record<string, string[]> = {
   'import copy status': ['plugin', 'copy'],
   'import copy stop': ['plugin', 'copy'],
   'import copy delete': ['plugin', 'copy'],
+  'import check start': ['--plugin', '--copy', '--reference', '--option', '--page-size'],
+  'import check status': ['plugin', 'run'],
+  'import check stop': ['plugin', 'run'],
+  'import check held': ['plugin', 'copy', '--label', '--reason', '--laboratory', '--offset', '--limit'],
   'settings flags set': ['key', 'value'],
   'settings numbers set': ['key', 'value'],
   'settings lab set': ['--name', '--address', '--contact', '--timezone'],
@@ -493,6 +497,7 @@ const READ_NAME_WRITE_KEY: Record<string, string> = {
   'data-exposure list': 'lists hidden columns; GET /api/dashboards/column-policy needs data_exposure.manage (dashboards-routes.ts:143)',
   'data-exposure show': 'not a read: it exposes hidden columns, a write to the policy (dashboards-routes.ts:162)',
   'import status': 'shows import runs; Studio lets only lab_admin read them, like the connector routes (plugin-broker.ts:198)',
+  'import check status': 'shows checks; it takes the key of import copy status, and its broker op only lab_admin may call (plugin-broker.ts:202)',
   'import copy status': 'shows copies; it takes the key of import status, and its broker op only lab_admin may call (plugin-broker.ts:202)',
   'query export': 'writes saved queries to a file; POST /api/custom-queries/export needs query.run, the one query key (query-routes.ts:148)',
   'settings flags list': 'lists feature flags; GET /api/settings/flags needs settings.feature_flags (settings-routes.ts:68)',
@@ -523,7 +528,7 @@ const WRITE_NAME_VIEW_KEY: Record<string, string> = {
 const EXTRA_CARE = [
   // code or SQL
   'plugin install', 'plugin run', 'plugin test', 'market install', 'market update', 'market rollback', 'artifact publish',
-  'query import', 'ingest', 'import start', 'import resume', 'import copy start',
+  'query import', 'ingest', 'import start', 'import resume', 'import copy start', 'import check start', 'import check held',
   // lab data out in bulk
   'export', 'report run', 'report glass-export', 'sync export', 'query export', 'patients duplicates export',
   'patients list', 'patients show', 'patients duplicates list',

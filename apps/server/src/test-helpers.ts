@@ -537,6 +537,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     pluginBroker: {} as never,
     imports: {} as never,
     importCopies: {} as never,
+    importChecks: {} as never,
     connectors: {} as never,
     appSettings: {} as never,
     // Empty identity: every {{lab.*}} resolves to '' — the same as an install that never

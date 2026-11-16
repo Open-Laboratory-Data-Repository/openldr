@@ -259,6 +259,14 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'import copy start': { kind: 'app', capability: 'connectors.manage', destructive: true },
   'import copy status': { kind: 'app', capability: 'connectors.manage' },
   'import copy stop': { kind: 'app', capability: 'connectors.manage' },
+  // Check a finished copy. As the copy commands: no route does it, the plugin page reaches the check
+  // service through the broker's check ops (plugin-broker.ts, host:import and lab_admin), so these take
+  // the import key. held reads patient values; with --export it writes them to a file, and --force
+  // writes over one, so it is destructive.
+  'import check start': { kind: 'app', capability: 'connectors.manage' },
+  'import check status': { kind: 'app', capability: 'connectors.manage' },
+  'import check stop': { kind: 'app', capability: 'connectors.manage' },
+  'import check held': { kind: 'app', capability: 'connectors.manage', destructive: true, paths: [outFile('--export')] },
 
   // No route sends a file through the pipeline with any converter. It writes clinical records.
   // ingest.run is new, and only lab_admin holds it.
