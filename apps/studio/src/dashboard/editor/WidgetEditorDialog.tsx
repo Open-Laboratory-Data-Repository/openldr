@@ -40,6 +40,7 @@ import { filterTokens } from '../template';
 import { extractVariables, extractLogicalVariables, compatibleFilters, hasBareDateRangeToken, setVariableType } from './variables.model';
 import { BuilderForm } from './BuilderForm';
 import { buildSaveQuery, shouldRestoreEjected, measuresOf, type BuilderQuery } from './builderForm.model';
+import { randomId } from '@/lib/random-id';
 
 const WIDGET_TYPES: { value: string; label: string }[] = [
   { value: 'kpi', label: 'Number' },
@@ -428,7 +429,7 @@ export function WidgetEditorDialog({
   };
 
   const save = () => {
-    const id = initial?.id ?? (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `w-${Math.round(performance.now())}`);
+    const id = initial?.id ?? randomId();
     const query = buildSaveQuery(mode, builderQuery, sqlText, bindings, varDefs);
     onSave({ id, type, title, query, refreshIntervalSec: refreshSec, visual });
   };

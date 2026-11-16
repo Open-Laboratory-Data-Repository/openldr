@@ -6,6 +6,7 @@ import { listPluginUis, type PluginUiEntry } from '@/api';
 import { AppShell } from '@/shell/AppShell';
 import { PluginFrame } from './PluginFrame';
 import { DeclarativeForm } from './DeclarativeForm';
+import { randomId } from '@/lib/random-id';
 
 export function PluginContainer(): JSX.Element {
   const { pluginId = '' } = useParams();
@@ -34,7 +35,7 @@ export function PluginContainer(): JSX.Element {
         <div className="min-h-0 flex-1">
           <PluginFrame
             pluginId={entry.id}
-            context={{ pluginId: entry.id, capabilities: [], theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark', locale: i18n.language, sessionId: crypto.randomUUID() }}
+            context={{ pluginId: entry.id, capabilities: [], theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark', locale: i18n.language, sessionId: randomId() }}
           />
         </div>
       ) : entry.hasDeclarative ? (

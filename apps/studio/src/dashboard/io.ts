@@ -1,4 +1,5 @@
 import type { Dashboard, WidgetConfig, WidgetQuery, WidgetVariableDef } from '../api';
+import { randomId } from '@/lib/random-id';
 
 // A dashboard exported by corlix (or this app) carries widgets in one of two shapes:
 //  - native:  { ..., query: WidgetQuery }
@@ -58,7 +59,7 @@ function toWidget(w: ImportedWidget): WidgetConfig {
 export function importDashboard(raw: unknown, existingNames: string[]): Dashboard {
   const d = (raw ?? {}) as ImportedDashboard;
   return {
-    id: crypto.randomUUID(),
+    id: randomId(),
     ownerId: null,
     name: uniqueName(d.name?.trim() || 'Imported dashboard', existingNames),
     layout: (d.layout ?? []) as Dashboard['layout'],

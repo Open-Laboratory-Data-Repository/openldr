@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
-import { PluginFrame } from './PluginFrame';
+import { PluginFrame, pluginFrameContext } from './PluginFrame';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -122,5 +122,14 @@ describe('PluginFrame', () => {
     // Unchanged hardening still present.
     expect(csp).toContain("default-src 'none'");
     expect(csp).toContain("connect-src 'none'");
+  });
+});
+
+describe('pluginFrameContext on a plain HTTP page', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  it('makes a sessionId when crypto.randomUUID is missing', () => {
+    vi.stubGlobal('crypto', { getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto) });
+    const ctx = pluginFrameContext('p1', 'page');
+    expect(ctx.sessionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 });

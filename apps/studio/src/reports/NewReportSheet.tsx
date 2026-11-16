@@ -18,12 +18,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { randomId } from '@/lib/random-id';
 
 function newId(): string {
-  const rand = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-  return `r-${rand}`;
+  return `r-${randomId()}`;
 }
 
 /** The queryId bound to the first table element found in the design, if any. */

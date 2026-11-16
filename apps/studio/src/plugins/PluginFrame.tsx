@@ -4,6 +4,7 @@ import i18n from '@/i18n';
 import { authFetch, pluginUiAssetUrl, pluginBrokerCall } from '@/api';
 import { wireHostPort, type HostPortLike } from './host-bridge';
 import { hostThemeTokens, themeStyleTag } from './plugin-theme';
+import { randomId } from '@/lib/random-id';
 
 const CSP =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'";
@@ -16,7 +17,7 @@ function hostTheme(): 'light' | 'dark' {
 /** The init context for one drawing of a plugin's page. `site` tells the page where it is:
  *  its own page, a dashboard card, or the side panel. */
 export function pluginFrameContext(pluginId: string, site: PluginSiteName): PluginInitContext {
-  return { pluginId, capabilities: [], theme: hostTheme(), locale: i18n.language, sessionId: crypto.randomUUID(), site };
+  return { pluginId, capabilities: [], theme: hostTheme(), locale: i18n.language, sessionId: randomId(), site };
 }
 
 /** Wrap the plugin's body HTML in a host-controlled document: strict CSP + the injected SDK

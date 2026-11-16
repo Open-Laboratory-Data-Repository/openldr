@@ -15,9 +15,10 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { CustomQueryParam } from '../custom-query-types';
+import { randomId } from '@/lib/random-id';
 
 const TYPES: CustomQueryParam['type'][] = ['text', 'select', 'daterange'];
-function newId(): string { return `p_${crypto.randomUUID().slice(0, 6)}`; }
+function newId(): string { return `p_${randomId().slice(0, 6)}`; }
 
 export function ParametersEditor({ open, parameters, onClose, onSave }: {
   open: boolean;
