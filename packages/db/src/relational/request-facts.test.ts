@@ -115,6 +115,15 @@ describe('projectServiceRequestAttributes', () => {
     expect(new Set(rows.map((r) => r.id)).size).toBe(4);
   });
 
+  it('writes the v1-check mark as one text row', () => {
+    const rows = projectServiceRequestAttributes({
+      resourceType: 'ServiceRequest', id: 'sr-1',
+      extension: [attr('v1-check', { valueString: 'unchecked' })],
+    }, {});
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ code: 'v1-check', value_text: 'unchecked', system: 'urn:openldr:cs:request-attribute' });
+  });
+
   it('skips an attribute with no code or no value', () => {
     const rows = projectServiceRequestAttributes({
       resourceType: 'ServiceRequest', id: 'sr-1',
