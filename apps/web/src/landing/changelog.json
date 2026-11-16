@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "7cb94182",
+          "type": "feat",
+          "scope": "web",
+          "title": "Put desktop first in documentation paths"
+        },
+        {
           "hash": "135fc6ed",
           "type": "feat",
           "scope": "web",
