@@ -415,8 +415,16 @@ list and no Processing or Feedback tab.
 The operator: "there is no compare but some checks still apply". One fact limits this: CE
 keeps a request's findings only in the held-back store (`import-check.ts:28`). A warning on
 a saved request is shown nowhere today, for a lab-system source too. So a check on a v1
-source can today only fail or hold a request. Which checks apply is the operator's call,
-asked with this section.
+source can today only fail or hold a request.
+
+The operator chose "Hold date-order faults". So, beside the mapping's own faults, one rule
+runs on a v1 source: for each order row, the steps taken, received, registered, analysed and
+authorised are compared in that order, every pair that is set, with the same comparison the
+lab-system dates rule uses (`src/audit.rs`, `out_of_order`). A request with a pair out of
+order is held, with one finding that lists the pairs. The form and information panels that
+the lab-system rule skips come from a site profile, which a v1 source does not have, so no
+panel is skipped here. The count of held requests on real rows decides whether that needs
+a setting.
 
 ### 10.5 What is not built here
 
