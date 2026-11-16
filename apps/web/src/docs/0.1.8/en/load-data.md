@@ -186,13 +186,15 @@ Use this section to check a finished copy of a source database from the CLI. The
 
 The command records the request and returns. The server does the checking. Add `--reference <copy-id>` to compare with a copy of reference records. Without it, nothing is compared.
 
+A stopped or failed check carries on from where it stopped, with its counts. It starts again from the first request when it completed, when you add `--from-start`, when you change its options or its reference, or when the copy was read again. If the plugin may no longer read the copy's connector, the check fails at its next page and saves nothing more.
+
 **`import check start`**
 
 ```sh
 openldr import check start --plugin <plugin-id> --copy <copy-id>
 ```
 
-**Expected result:** One line with the run id, its status and the counts. A stopped check carries on when you run the command again.
+**Expected result:** One line with the run id, its status, the copy id and the counts. A second line says `Carries on from N requests read.` or `Starts from the first request.`
 
 ### 2. Follow it with status
 
@@ -204,7 +206,7 @@ Run it as often as you like. Add `--laboratories` for a line for each laboratory
 openldr import check status <plugin-id> <run-id>
 ```
 
-**Expected result:** The status moves from `running` to `completed`, and `saved`, `held` and `failed` add up to `read`.
+**Expected result:** The status moves from `running` to `completed`, and `saved`, `held` and `failed` add up to `read`. The line shows `copy=<copy-id>`, the id the `held` commands need.
 
 ### 3. List what was held back
 
@@ -232,7 +234,7 @@ openldr import check held <plugin-id> <copy-id> --export held-requests.jsonl
 
 ### 5. Stop a check
 
-A check stops at its next page. The requests it already saved stay. Run `start` again to carry on.
+A check stops at its next page. The requests it already saved stay. Run `start` again to carry on from where it stopped, or add `--from-start` to start again from the first request.
 
 **`import check stop`**
 

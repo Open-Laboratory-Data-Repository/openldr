@@ -283,7 +283,8 @@ A completed copy that still has skipped keys shows `completed with skipped keys`
 No source key is ever printed, and `--json` leaves out each set's position.
 
 `stop` stops the copy at its next page. The rows copied so far stay. `delete` removes a stopped,
-failed or finished copy and every row it holds. It refuses without `--force` and changes nothing.
+failed or finished copy and every row it holds, with the held requests and the record of its check.
+It refuses without `--force` and changes nothing.
 With `--force` it returns while the copy is still being deleted, and prints its status as
 `deleting`. The server deletes the rows in batches, and carries on after a restart. Run `status`
 to see when the copy is gone: it prints `(no copies)` once the last one is deleted.
@@ -299,18 +300,34 @@ source database. The plugin decodes each request. OpenLDR saves the requests tha
 held and failed ones, with the reason, so a person can read them. When no reference copy is given,
 nothing is compared with reference records, and the saved requests are marked as not compared.
 
-    openldr import check start --plugin <id> --copy <copy> [--reference <copy>] [--option name=value]... [--page-size <n>] [--json]
+    openldr import check start --plugin <id> --copy <copy> [--reference <copy>] [--option name=value]... [--page-size <n>] [--from-start] [--json]
     openldr import check status <plugin> [run] [--laboratories] [--json]
     openldr import check stop <plugin> <run> [--json]
     openldr import check held <plugin> <copy> [--label <label>] [--reason held|error] [--laboratory <code>] [--offset <n>] [--limit <n>] [--export <file> [--force]] [--json]
 
 `start` records the request and returns. The server does the checking, so the command never waits
-for it. Run `status` to follow it. `start` on a stopped run carries it on from where it stopped.
-There is one check for each copy. `--page-size` is the number of requests per page, 1 to 2000,
-default 500. `--reference` names a copy of reference records to compare with.
+for it. Run `status` to follow it. There is one check for each copy. `--page-size` is the number of
+requests per page, 1 to 2000, default 500. `--reference` names a copy of reference records to
+compare with.
 
-`status` with a run id prints one line: the run's id, its status, then
-`read=N saved=N held=N failed=N`. Without a run id it prints that line for every check of the
+`start` on a stopped or failed check carries it on from the page after the last one it finished. It
+keeps its counts, its held requests and its page size, unless `--page-size` is given. The check
+starts again from the first request, with its counts at zero, when:
+
+- the check completed;
+- `--from-start` is given;
+- the options or the reference copy differ from the check's own;
+- the copy or the reference copy was read again since the check began.
+
+After the run's line, `start` prints `Carries on from N requests read.` or
+`Starts from the first request.` When a check starts again, a request it saved before is saved again, not twice.
+
+A check reads only copies of a connector the plugin may still read. After `import revoke`, `start`
+refuses that copy, and a running check fails at its next page with the reason in `lastError`. It
+saves nothing more.
+
+`status` with a run id prints one line: the run's id, its status, `copy=<id>` (the copy it checks,
+which `held` needs), then `read=N saved=N held=N failed=N`. Without a run id it prints that line for every check of the
 plugin, or `(no checks)`. The status is one of `queued`, `running`, `waiting`, `stopping`,
 `stopped`, `completed` or `failed`. `--laboratories` adds one indented line for each laboratory code
 met, with the same four counts. Requests that name no laboratory show as `(none)`. A run with an
@@ -333,9 +350,11 @@ what the plugin found. The file holds patient values. It is private to the perso
 (mode 0600). The command prints only how many requests it wrote. It refuses `--offset` and
 `--limit` with `--export`. An existing file is kept, and the command exits 1, unless `--force` is
 given. A folder or a link is always refused. The file is written whole or not at all: the command
-writes a temporary file beside it and renames it when every request is in. The export is refused
-while a check of that copy is queued, running, waiting or stopping, because the rows are still
-changing. It writes one audit event, as the list does.
+writes a temporary file beside it and renames it when every request is in. It reads the requests in
+key order, each page after the last key of the one before, so no request is read twice. The export
+is refused while a check of that copy is queued, running, waiting or stopping, because the rows are
+still changing. When the count it wrote differs from the total, it writes no file and exits 1. It
+writes one audit event, as the list does.
 
 All four go through the app and need `connectors.manage`. `start` also needs `ingest.run`. `held` is
 marked destructive because of `--export`. Exit code 0 when the request was recorded or the answer was

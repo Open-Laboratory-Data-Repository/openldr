@@ -186,13 +186,15 @@ Cette section sert à vérifier avec le CLI une copie terminée d'une base sourc
 
 La commande enregistre la demande et rend la main. Le serveur fait la vérification. Ajoutez `--reference <copy-id>` pour comparer avec une copie de fiches de référence. Sans elle, rien n'est comparé.
 
+Une vérification arrêtée ou en échec reprend là où elle s'est arrêtée, avec ses compteurs. Elle repart de la première demande si elle est terminée, si vous ajoutez `--from-start`, si vous changez ses options ou sa référence, ou si la copie a été relue. Si le plugin n'a plus le droit de lire le connecteur de la copie, la vérification échoue à sa page suivante et n'enregistre plus rien.
+
 **`import check start`**
 
 ```sh
 openldr import check start --plugin <plugin-id> --copy <copy-id>
 ```
 
-**Résultat attendu :** une ligne avec l'identifiant de l'exécution, son statut et les compteurs. Une vérification arrêtée reprend quand vous relancez la commande.
+**Résultat attendu :** une ligne avec l'identifiant de l'exécution, son statut, l'identifiant de la copie et les compteurs. Une deuxième ligne indique `Carries on from N requests read.` ou `Starts from the first request.`
 
 ### 2. La suivre avec status
 
@@ -204,7 +206,7 @@ Lancez-la aussi souvent que vous voulez. Ajoutez `--laboratories` pour une ligne
 openldr import check status <plugin-id> <run-id>
 ```
 
-**Résultat attendu :** le statut passe de `running` à `completed`, et `saved`, `held` et `failed` s'additionnent pour donner `read`.
+**Résultat attendu :** le statut passe de `running` à `completed`, et `saved`, `held` et `failed` s'additionnent pour donner `read`. La ligne affiche `copy=<copy-id>`, l'identifiant dont les commandes `held` ont besoin.
 
 ### 3. Lister ce qui a été retenu
 
@@ -232,7 +234,7 @@ openldr import check held <plugin-id> <copy-id> --export held-requests.jsonl
 
 ### 5. Arrêter une vérification
 
-Une vérification s'arrête à sa page suivante. Les demandes déjà enregistrées restent. Relancez `start` pour reprendre.
+Une vérification s'arrête à sa page suivante. Les demandes déjà enregistrées restent. Relancez `start` pour reprendre là où elle s'est arrêtée, ou ajoutez `--from-start` pour repartir de la première demande.
 
 **`import check stop`**
 
