@@ -268,3 +268,99 @@ Then, before part 4 is called done (AGENTS.md section 6):
 5. A saved request is not un-saved when a later run holds it.
 6. The first cut leaves out the CLI, the v1-only list, the workflows switch and the docs.
    They follow before part 4 is called done.
+
+## 8. Sources and one reference (decided 2026-11-16, after the operator tested the page)
+
+The first cut spoke of "copies" and let each check pick its own reference. The operator
+tested it and said the page did not match the picture in their mind. Their model, in their
+words:
+
+> "Select a connector, in the sheet there should be a select to choose between its a
+> reference or a source. From now on that is what we call them source or reference, not
+> copy etc. Another select to choose what the source reference is, source can be 'lab
+> system' or openldr v1 (so it can work from just the v1, there is no compare but some
+> checks still apply). reference can only be openldrv1 and obviously you can't have a source
+> and reference as openldrv1. you can have multiple sources like in a distributed system,
+> all compare to one reference."
+
+### 8.1 The model
+
+- A **source** is a connector whose records are imported. A **reference** is a connector
+  whose records the sources are compared with. Those are the only two words the page, the
+  guide and the exports use. The word "copy" is gone.
+- Each has a **kind**. A source is a lab system or OpenLDR v1. A reference is OpenLDR v1.
+- A site has any number of sources and at most one reference. Every lab-system source is
+  compared with that one reference. With no reference, requests are saved as not compared.
+- An OpenLDR v1 source is never compared. A site cannot have an OpenLDR v1 source and a
+  reference at once.
+
+What stays as built: a connector still holds one set of rows, read to this server's disk,
+and a check still runs per source. So this is a change of names, of what the page asks, and
+of rules, not of how rows are read or checked.
+
+### 8.2 What changes
+
+**Plugin.** The read options gain `kind`: `lab-system` or `openldr-v1`. A reference takes
+only `openldr-v1`. A source of kind `openldr-v1` is refused with a plain message until the
+next piece of work builds it (operator: "Model first, v1 source next"). The role and kind
+are part of what a source or reference is, so changing either means reading it again.
+
+**Page.**
+
+- The first tab lists sources and the reference in one table: Connector, Role (Source or
+  Reference), Kind, Status, Requests, Rows, Size, Last update.
+- The tab line's menu holds one item there, **Add source or reference**. Its sheet asks, in
+  order: the connector (searchable), the role, the kind, then that kind's settings. The
+  kind's choices follow the role. A choice the rules forbid is not offered, and a line says
+  why: a second reference; a reference when a source is OpenLDR v1; an OpenLDR v1 source
+  when a reference exists.
+- The second tab runs a check for one source. The source is always choosable, also while a
+  check runs, so a person can look at another source's check. The reference is not chosen
+  per check any more: the tab shows the site's one reference, or says that this site has
+  none.
+- Every string, the guide in three languages, the marketplace readme and the exports' text
+  use source and reference. Actions on a row are Open, Read again, Stop and Remove.
+
+**CE core.** Nothing. The one-reference rule belongs to this plugin's page. A check's start
+already takes a reference or none.
+
+### 8.3 Reference records that no source has
+
+The operator chose "List them, decide later". The list of a reference's requests that no
+source holds stays in the later plan, with the CLI. Nothing imports them.
+
+## 9. Laboratories (decided 2026-11-16)
+
+The layout pass added a laboratory picker to the second tab. It expects counts for each
+laboratory on a check, which CE does not send. The operator: "yes, make the laboratory
+picker work".
+
+Counted on the restored databases, counts only:
+
+- The source's own testing-laboratory column is empty on all 3,778,852 test rows.
+- The first three characters of the lab number equal v1's receiving laboratory code on
+  3,437,966 of 3,437,966 order rows. There are 14 laboratories.
+- v1's testing laboratory is per order row. It equals the receiving laboratory on 2,880,009
+  rows, is empty on 548,335 with no result yet, and is another laboratory on 9,622.
+
+### 9.1 What is built
+
+- **Plugin.** Each decoded request names its laboratory: the leading characters of the lab
+  number, as many as the site profile says (3 for the one site). It travels on the group as
+  `laboratory: { code }`. No name is sent: the source's dictionaries have none that has been
+  checked.
+- **CE core.** A group may carry `laboratory`. CE counts read, saved, held, failed and the
+  labels for each laboratory, as it does for the whole source, and returns them with the
+  run as `laboratories`. At most 500 laboratories a run; past that the rest are counted
+  under one unnamed entry. A held request keeps its laboratory code, so the held list can
+  be filtered by it, and an export can be made for one laboratory.
+- **Page.** The picker the layout pass built, now fed. The held list gains a laboratory
+  filter, and the exports follow it.
+
+### 9.2 What is not built here
+
+Today the plugin files every saved request under the one laboratory code typed for the
+check. The source holds 14 laboratories, so CE would record all of them as one. Filing each
+request under its own laboratory is a change to the decoder's output. It follows the
+decoder's own process (stated moves, the real-data compare) and waits for the four-faults
+branch, which changes the same files. It is the next decoder change after that branch.
