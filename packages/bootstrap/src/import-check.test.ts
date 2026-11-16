@@ -25,7 +25,7 @@ const SECRET = 'Maria Santos';
 const CAP = 64 * 1024 * 1024;
 
 type Row = Record<string, unknown>;
-type Group = { key: string; held?: boolean; findings?: unknown; check?: unknown; resources?: unknown[]; error?: string; label?: string };
+type Group = { key: string; held?: boolean; findings?: unknown; check?: unknown; resources?: unknown[]; error?: string; label?: string; laboratory?: unknown };
 interface DecodeInput {
   options: Record<string, string>; now: string; dictionaries: Record<string, Row[]>; keys: string[];
   rows: Record<string, Row[]>; twins: Record<string, Row[]>;
@@ -1005,5 +1005,215 @@ describe('check: fix round 2, a copy made from other statements (N1)', () => {
     await w.svc.start(START);
     await drive(w.svc);
     expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', lastError: null, counts: { read: 2, saved: 2 } });
+  });
+});
+
+describe('check: by laboratory', () => {
+  type Lab = NonNullable<CheckRun['laboratories']>[number];
+  const COUNTED = ['read', 'saved', 'held', 'failed'] as const;
+  /** Every laboratory's counts add up to the run's own, count by count and label by label. */
+  function expectSums(run: Pick<CheckRun, 'counts' | 'laboratories'>): void {
+    const labs = run.laboratories ?? [];
+    for (const k of COUNTED) expect(labs.reduce((n, l) => n + l.counts[k], 0), k).toBe(run.counts[k]);
+    const labels: Record<string, number> = {};
+    for (const l of labs) for (const [name, n] of Object.entries(l.counts.labels)) labels[name] = (labels[name] ?? 0) + n;
+    expect(labels).toEqual(run.counts.labels);
+    // One entry for each code.
+    expect(new Set(labs.map((l) => l.code)).size).toBe(labs.length);
+  }
+  const lab = (code: string | null, read: number, saved: number, held: number, failed: number, labels: Record<string, number> = {}): Lab =>
+    ({ code, counts: { read, saved, held, failed, labels } });
+  const at = (code: unknown) => ({ code });
+
+  it('a mixed page counts each laboratory as the run counts, and the sums hold', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(9));
+    w.setDecode((input) => {
+      const [k1, k2, k3, k4, k5, k6, k7, k8, k9] = input.keys;
+      return {
+        groups: [
+          { ...pass(k1), laboratory: at('LAB-A') },
+          { key: k2, held: true, findings: [1], label: 'held_x', laboratory: at('LAB-A') },
+          { key: k3, error: 'BAD_DATE', label: 'bad_date', laboratory: at('LAB.B_2') },
+          pass(k4),
+          // A code with a space is no laboratory, and the request is still saved.
+          { ...pass(k5), laboratory: at('has space') },
+          // No group for k6.
+          { ...pass(k7), resources: [{ resourceType: 'Observation' }], laboratory: at('LAB.B_2') },
+          // A code that is not a string is no laboratory, never a bad answer.
+          { ...pass(k8), laboratory: at(5) },
+          { key: k9, held: true, label: 'Not A Label', laboratory: at('LAB.B_2') },
+        ].filter((g) => g.key !== k6),
+      };
+    });
+    await w.svc.start(START);
+    await drive(w.svc);
+
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run).toMatchObject({
+      status: 'completed',
+      counts: { read: 9, saved: 4, held: 2, failed: 3, labels: { passed: 5, held_x: 1, bad_date: 1, other: 1 } },
+    });
+    // In the order each code was first met.
+    expect(run.laboratories).toEqual([
+      lab('LAB-A', 2, 1, 1, 0, { passed: 1, held_x: 1 }),
+      lab('LAB.B_2', 3, 0, 1, 2, { bad_date: 1, passed: 1, other: 1 }),
+      lab(null, 4, 3, 0, 1, { passed: 3 }),
+    ]);
+    expectSums(run);
+    // Every record written along the way holds the sums too.
+    for (const saved of w.runSaves) expectSums(saved);
+
+    // A held request keeps its laboratory, and the held list filters by it.
+    const all = await w.svc.held(PLUGIN, SRC, { offset: 0, limit: 10 });
+    expect(all.rows.map((r) => [r.key, r.laboratory])).toEqual([
+      ['REQ0002', 'LAB-A'], ['REQ0003', 'LAB.B_2'], ['REQ0006', null], ['REQ0007', 'LAB.B_2'], ['REQ0009', 'LAB.B_2'],
+    ]);
+    const b = await w.svc.held(PLUGIN, SRC, { laboratory: 'LAB.B_2', offset: 0, limit: 2 });
+    expect([b.rows.map((r) => r.key), b.total]).toEqual([['REQ0003', 'REQ0007'], 3]);
+    const bHeld = await w.svc.held(PLUGIN, SRC, { laboratory: 'LAB.B_2', reason: 'held', offset: 0, limit: 10 });
+    expect([bHeld.rows.map((r) => r.key), bHeld.total]).toEqual([['REQ0009'], 1]);
+    const bPassed = await w.svc.held(PLUGIN, SRC, { laboratory: 'LAB.B_2', label: 'passed', offset: 0, limit: 10 });
+    expect([bPassed.rows.map((r) => r.key), bPassed.total]).toEqual([['REQ0007'], 1]);
+    const aItems = await w.svc.heldItems(PLUGIN, SRC, { laboratory: 'LAB-A', offset: 0, limit: 10 });
+    expect(aItems).toEqual({ items: [await w.svc.heldItem(PLUGIN, SRC, 'REQ0002')], total: 1 });
+    expect(aItems.items[0]).toMatchObject({ laboratory: 'LAB-A', findings: [1] });
+    expect((await w.svc.heldItems(PLUGIN, SRC, { laboratory: 'LAB-A', reason: 'error', offset: 0, limit: 10 })).total).toBe(0);
+    // A laboratory code never reaches an audit row.
+    expect(JSON.stringify(w.audited)).not.toContain('LAB');
+  });
+
+  it('a page tried again after a fault counts once for each laboratory', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    w.setDecode((input) => ({
+      groups: input.keys.map((key) => (key === 'REQ0003'
+        ? { key, held: true, laboratory: at('B') }
+        : { ...pass(key), laboratory: at('A') })),
+    }));
+    // The held write of REQ0003 fails once, after REQ0001 and REQ0002 were saved.
+    w.failHeldPuts(1);
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    expect(w.persisted).toHaveLength(5);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run).toMatchObject({ status: 'completed', counts: { read: 4, saved: 3, held: 1, failed: 0, labels: { passed: 3 } } });
+    expect(run.laboratories).toEqual([lab('A', 3, 3, 0, 0, { passed: 3 }), lab('B', 1, 0, 1, 0)]);
+    for (const saved of w.runSaves) expectSums(saved);
+  });
+
+  it('the 501st code is counted with the requests that named none', async () => {
+    const w = await world();
+    const keys = keysOf(502);
+    await sourceCopy(w, keys);
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ ...pass(key), laboratory: at(`L${Number(key.slice(3))}`) })) }));
+    // Two pages, so the cap holds across a page end.
+    await w.svc.start({ ...START, pageSize: 300 });
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run.counts).toMatchObject({ read: 502, saved: 502 });
+    const labs = run.laboratories!;
+    expect(labs).toHaveLength(501);
+    expect(labs.slice(0, 500).map((l) => l.code)).toEqual(Array.from({ length: 500 }, (_, i) => `L${i + 1}`));
+    expect(labs[0]).toEqual(lab('L1', 1, 1, 0, 0, { passed: 1 }));
+    expect(labs[500]).toEqual(lab(null, 2, 2, 0, 0, { passed: 2 }));
+    expectSums(run);
+  });
+
+  it('a start, and a start again, begin with no laboratory; a run that names none has one entry with a null code', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ ...pass(key), laboratory: at('A') })) }));
+    const first = await w.svc.start({ ...START, pageSize: 2 });
+    expect(first.laboratories).toEqual([]);
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!.laboratories).toEqual([lab('A', 4, 4, 0, 0, { passed: 4 })]);
+
+    w.setDecode((input) => ({ groups: input.keys.map(pass) }));
+    const again = await w.svc.start(START);
+    expect(again.laboratories).toEqual([]);
+    expect((await w.stored())!.laboratories).toEqual([]);
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!.laboratories).toEqual([lab(null, 4, 4, 0, 0, { passed: 4 })]);
+  });
+
+  it('a bad code is treated as no laboratory, never as an error', async () => {
+    const w = await world();
+    const bad: unknown[] = [
+      at('X'.repeat(33)), at('has space'), at(''), at(5), at(null), 'LAB', null, ['LAB'], {}, at('caf\u00e9'), at('a/b'),
+    ];
+    await sourceCopy(w, keysOf(bad.length + 1));
+    w.setDecode((input) => ({
+      groups: input.keys.map((key, i) => ({ key, held: true, ...(i < bad.length ? { laboratory: bad[i] } : { laboratory: at('X'.repeat(32)) }) })),
+    }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run).toMatchObject({ status: 'completed', lastError: null, counts: { read: bad.length + 1, held: bad.length + 1, failed: 0 } });
+    // 32 characters is still a code.
+    expect(run.laboratories).toEqual([lab(null, bad.length, 0, bad.length, 0), lab('X'.repeat(32), 1, 0, 1, 0)]);
+    const rows = (await w.heldAll()).rows;
+    expect(rows.slice(0, bad.length).every((r) => r.laboratory === null)).toBe(true);
+    expect(rows.at(-1)!.laboratory).toBe('X'.repeat(32));
+  });
+
+  it('labels per laboratory follow the run cap, so the sums hold past 12 labels', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(16));
+    w.setDecode((input) => ({
+      groups: input.keys.map((key) => {
+        const n = Number(key.slice(3));
+        return { ...pass(key), label: `l${String(n).padStart(2, '0')}`, laboratory: at(n % 2 === 0 ? 'EVEN' : 'ODD') };
+      }),
+    }));
+    await w.svc.start({ ...START, pageSize: 5 });
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(Object.keys(run.counts.labels)).toHaveLength(13);
+    expect(run.counts.labels.other).toBe(4);
+    expectSums(run);
+    const even = run.laboratories!.find((l) => l.code === 'EVEN')!;
+    // l14 and l16 are past the run's 12, so they are other here too.
+    expect(even.counts.labels).toMatchObject({ l02: 1, l12: 1, other: 2 });
+    expect(even.counts.labels.l14).toBeUndefined();
+  });
+
+  it('a held request that passes later leaves the store, and its laboratory filter is empty', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(3));
+    w.setDecode((input) => ({
+      groups: input.keys.map((key) => (key === 'REQ0002'
+        ? { key, held: true, findings: [1], laboratory: at('A') } : { ...pass(key), laboratory: at('A') })),
+    }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect((await w.svc.held(PLUGIN, SRC, { laboratory: 'A', offset: 0, limit: 10 })).total).toBe(1);
+
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ ...pass(key), laboratory: at('A') })) }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(await w.heldAll()).toEqual({ rows: [], total: 0 });
+    expect(await w.svc.held(PLUGIN, SRC, { laboratory: 'A', offset: 0, limit: 10 })).toEqual({ rows: [], total: 0 });
+    expect((await w.svc.get(PLUGIN, CHECK))!.laboratories).toEqual([lab('A', 3, 3, 0, 0, { passed: 3 })]);
+  });
+
+  it('a run stored before laboratories were counted is driven on without them', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    const started = await w.svc.start({ ...START, pageSize: 2 });
+    const { laboratories: _none, ...older } = started;
+    const orphan = {
+      ...older, status: 'running', driver: 'server-old', cursor: 'REQ0002',
+      counts: { read: 2, saved: 2, held: 0, failed: 0, resources: 2, labels: { passed: 2 } },
+      updatedAt: new Date(w.clock.now - STALE_MS - 1000).toISOString(),
+    };
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, orphan);
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ ...pass(key), laboratory: at('A') })) }));
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    // Counting only the pages after the takeover would not add up to the run, so it counts none.
+    expect(run).toMatchObject({ status: 'completed', counts: { read: 4, saved: 4 } });
+    expect('laboratories' in run).toBe(false);
+    expect('laboratories' in (await w.stored())!).toBe(false);
   });
 });

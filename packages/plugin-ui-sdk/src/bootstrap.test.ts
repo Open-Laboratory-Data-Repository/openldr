@@ -67,17 +67,17 @@ describe('SDK_BOOTSTRAP_V1', () => {
     await check.list();
     await check.status('ck1');
     await check.stop('ck1');
-    await check.held({ copyId: 'cp1', reason: 'held', label: 'odd_age', offset: 20, limit: 10 });
+    await check.held({ copyId: 'cp1', reason: 'held', label: 'odd_age', laboratory: 'LAB-1', offset: 20, limit: 10 });
     await check.heldItem({ copyId: 'cp1', key: 'REQ1' });
-    await check.heldItems({ copyId: 'cp1', reason: 'error', label: 'odd_age', offset: 200, limit: 200 });
+    await check.heldItems({ copyId: 'cp1', reason: 'error', label: 'odd_age', laboratory: 'LAB-2', offset: 200, limit: 200 });
     expect(sent.map((m) => m.op)).toEqual([
       { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: { tz: '+02:00' }, pageSize: 200 },
       { kind: 'import.check.list' },
       { kind: 'import.check.status', runId: 'ck1' },
       { kind: 'import.check.stop', runId: 'ck1' },
-      { kind: 'import.check.held', copyId: 'cp1', reason: 'held', label: 'odd_age', offset: 20, limit: 10 },
+      { kind: 'import.check.held', copyId: 'cp1', reason: 'held', label: 'odd_age', laboratory: 'LAB-1', offset: 20, limit: 10 },
       { kind: 'import.check.heldItem', copyId: 'cp1', key: 'REQ1' },
-      { kind: 'import.check.heldItems', copyId: 'cp1', reason: 'error', label: 'odd_age', offset: 200, limit: 200 },
+      { kind: 'import.check.heldItems', copyId: 'cp1', reason: 'error', label: 'odd_age', laboratory: 'LAB-2', offset: 200, limit: 200 },
     ]);
   });
 

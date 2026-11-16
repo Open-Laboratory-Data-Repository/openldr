@@ -2209,7 +2209,7 @@ export {
 } from './import-run';
 export type { ImportCopyService, CopyRun, CopyStatus, CopySetProgress } from './import-copy';
 export { checkIdOf } from './import-check';
-export type { ImportCheckService, ImportCheckStartInput, CheckRun, CheckStatus, CheckCounts } from './import-check';
+export type { ImportCheckService, ImportCheckStartInput, CheckRun, CheckStatus, CheckCounts, CheckLaboratory } from './import-check';
 export { CopySetChangedError } from './import-copy';
 export {
   runSetupChecks, setupCheckDeps, SETUP_CHECK_TITLE, SETUP_HINT_TEXT,

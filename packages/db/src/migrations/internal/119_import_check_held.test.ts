@@ -28,6 +28,11 @@ describe('119_import_check_held', () => {
       // Not null: run_id, reason, findings, check.
       await expect(db.insertInto('import_check_held').values({ ...one, key: 'C', run_id: null as never }).execute()).rejects.toThrow();
       await expect(db.insertInto('import_check_held').values({ ...one, key: 'D', check: null as never }).execute()).rejects.toThrow();
+      // The laboratory is a nullable text column: absent is null, and a code is kept as given.
+      expect(got[0]!.laboratory).toBeNull();
+      await db.insertInto('import_check_held').values({ ...one, key: 'E', laboratory: 'LAB-1' }).execute();
+      const e = await db.selectFrom('import_check_held').select(['laboratory']).where('copy_id', '=', 'c1').where('key', '=', 'E').executeTakeFirstOrThrow();
+      expect(e.laboratory).toBe('LAB-1');
       await down(db as unknown as Kysely<unknown>);
       await expect(db.selectFrom('import_check_held').selectAll().execute()).rejects.toThrow();
     } finally { await db.destroy(); }

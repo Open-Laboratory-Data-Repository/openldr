@@ -13,7 +13,7 @@ function mockCheck(copyId: string, referenceCopyId: string | null, status: Plugi
   const at = new Date(0).toISOString();
   return {
     id: 'mock-check', copyId, referenceCopyId, status, options: {}, pageSize: 500,
-    counts: { read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: {} },
+    counts: { read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: {} }, laboratories: [],
     waiting: null, startedAt: at, updatedAt: at, finishedAt: null, lastError: null,
   };
 }

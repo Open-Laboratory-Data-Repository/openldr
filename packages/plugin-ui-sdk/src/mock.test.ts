@@ -23,12 +23,13 @@ describe('createMockOpenldr', () => {
   it('has every check call, and start answers with a queued run', async () => {
     const api = createMockOpenldr({ pluginId: 'p1', capabilities: ['host:import'] });
     const started = await api.imports.check.start({ copyId: 'cp1', referenceCopyId: null, options: {} });
-    expect(started).toMatchObject({ id: 'mock-check', copyId: 'cp1', referenceCopyId: null, status: 'queued' });
+    expect(started).toMatchObject({ id: 'mock-check', copyId: 'cp1', referenceCopyId: null, status: 'queued', laboratories: [] });
     expect(started).not.toHaveProperty('driver');
     expect(await api.imports.check.list()).toEqual([]);
     expect(await api.imports.check.status('mock-check')).toBeNull();
     expect(await api.imports.check.stop('mock-check')).toMatchObject({ id: 'mock-check', status: 'stopping' });
     expect(await api.imports.check.held({ copyId: 'cp1', offset: 0, limit: 10 })).toEqual({ rows: [], total: 0 });
+    expect(await api.imports.check.held({ copyId: 'cp1', laboratory: 'LAB-1', offset: 0, limit: 10 })).toEqual({ rows: [], total: 0 });
     expect(await api.imports.check.heldItem({ copyId: 'cp1', key: 'REQ1' })).toBeNull();
     expect(await api.imports.check.heldItems({ copyId: 'cp1', offset: 0, limit: 200 })).toEqual({ items: [], total: 0 });
   });

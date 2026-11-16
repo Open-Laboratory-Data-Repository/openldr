@@ -900,6 +900,7 @@ export interface ImportCheckHeldTable {
   run_id: string;
   reason: string;
   label: string | null;
+  laboratory: string | null;
   error: string | null;
   findings: ColumnType<unknown, string, string>;
   check: ColumnType<unknown, string, string>;

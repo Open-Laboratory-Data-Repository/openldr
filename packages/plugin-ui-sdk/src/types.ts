@@ -52,9 +52,9 @@ export type PluginBrokerOp =
   | { kind: 'import.check.list' }
   | { kind: 'import.check.status'; runId: string }
   | { kind: 'import.check.stop'; runId: string }
-  | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }
+  | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }
   | { kind: 'import.check.heldItem'; copyId: string; key: string }
-  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number };
+  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number };
 
 /** The types of file a page may ask the host to save. */
 export type PluginDownloadMime = 'text/csv' | 'application/json' | 'text/plain';
@@ -119,11 +119,21 @@ export interface PluginCheckRun {
   options: Record<string, string>;
   pageSize: number;
   counts: { read: number; saved: number; held: number; failed: number; resources: number; labels: Record<string, number> };
+  /** One entry for each laboratory code the plugin named, in the order first met. They add up to
+   *  `counts`. Empty at a start; absent on a run stored before the host counted laboratories. */
+  laboratories?: PluginCheckLaboratory[];
   waiting: { since: string; attempt: number; error: string } | null;
   startedAt: string;
   updatedAt: string;
   finishedAt: string | null;
   lastError: string | null;
+}
+
+/** The counts of one laboratory on a check. `code` is null for the requests that named none, and
+ *  for those past the 500th code. */
+export interface PluginCheckLaboratory {
+  code: string | null;
+  counts: { read: number; saved: number; held: number; failed: number; labels: Record<string, number> };
 }
 
 /** One request the check kept back, without the plugin's own detail. */
@@ -133,6 +143,8 @@ export interface PluginHeldRow {
   runId: string;
   reason: 'held' | 'error';
   label: string | null;
+  /** The laboratory code the plugin named for the request, or null. */
+  laboratory: string | null;
   error: string | null;
   heldAt: string;
 }
@@ -214,10 +226,11 @@ export interface OpenLdrPluginApi {
       list(): Promise<PluginCheckRun[]>;
       status(runId: string): Promise<PluginCheckRun | null>;
       stop(runId: string): Promise<PluginCheckRun>;
-      held(input: { copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }): Promise<{ rows: PluginHeldRow[]; total: number }>;
+      /** `laboratory` is a code of 1 to 32 of A-Z a-z 0-9 . _ -; the host refuses any other. */
+      held(input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }): Promise<{ rows: PluginHeldRow[]; total: number }>;
       heldItem(input: { copyId: string; key: string }): Promise<PluginHeldItem | null>;
       /** The same rows as `held`, in the same order, each with its findings and check. `limit` is 1 to 200. */
-      heldItems(input: { copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }): Promise<{ items: PluginHeldItem[]; total: number }>;
+      heldItems(input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }): Promise<{ items: PluginHeldItem[]; total: number }>;
     };
   };
   /** Files the studio saves for the page. The page's frame cannot download. */

@@ -24,8 +24,8 @@ import { PAGE_SIZE_MAX, PAGE_SIZE_MIN } from './import-sql';
 // every 30 seconds, and a run with no write for 2 minutes may be taken by the next `tick` in any
 // process. Every write of the run is a compare-and-swap on its `rev`.
 //
-// CE reads `key`, `held`, `resources`, `error` and `label` of a group, and nothing inside
-// `findings` or `check`. Those two are kept as the plugin gave them, only in the held-back store.
+// CE reads `key`, `held`, `resources`, `error`, `label` and `laboratory` of a group, and nothing
+// inside `findings` or `check`. Those two are kept as the plugin gave them, only in the held-back store.
 // No row value reaches a log, an audit row or an error text: a plugin's error is kept as a bare
 // code, a save error as its code, and an error from CE's own database as its SQLSTATE.
 
@@ -41,6 +41,10 @@ const DICTIONARY_CAP = 64 * 1024 * 1024;
 const LABEL = /^[a-z][a-z0-9_]{0,31}$/;
 const MAX_LABELS = 12;
 const OTHER_LABEL = 'other';
+/** A laboratory code as a group may name it. Anything else is no laboratory. */
+export const LABORATORY_CODE = /^[A-Za-z0-9._-]{1,32}$/;
+/** The most distinct laboratory codes a run counts. Past that, a request counts under null. */
+const MAX_LABORATORIES = 500;
 /** A wait is slept in slices this long, so a stop or a release is felt within a second. */
 const WAIT_SLICE_MS = 1000;
 const SYSTEM: ImportActor = { type: 'system', id: null, name: 'system' };
@@ -54,6 +58,10 @@ const TWIN_READ_CHUNK = 500;
 export type CheckStatus = 'queued' | 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed';
 
 export interface CheckCounts { read: number; saved: number; held: number; failed: number; resources: number; labels: Record<string, number> }
+
+/** The counts of one laboratory. `code` is null for the requests that named none, and for those
+ *  past the 500th code. Counted with the run's counts, so the entries always add up to the run. */
+export interface CheckLaboratory { code: string | null; counts: Pick<CheckCounts, 'read' | 'saved' | 'held' | 'failed' | 'labels'> }
 
 export interface CheckRun {
   id: string;
@@ -70,6 +78,9 @@ export interface CheckRun {
   /** The last key of the set `requests` done. The next page starts after it. */
   cursor: string | null;
   counts: CheckCounts;
+  /** One entry for each laboratory code met, in the order first met. Empty at a start. Absent on a
+   *  record written before laboratories were counted: such a run is driven on without them. */
+  laboratories?: CheckLaboratory[];
   waiting: { since: string; attempt: number; error: string } | null;
   /** The id of the process driving it, or null when nobody does. */
   driver: string | null;
@@ -89,6 +100,9 @@ export interface ImportCheckStartInput {
   actor: ImportActor;
 }
 
+/** A page of the held list. Each filter given narrows it. */
+export interface HeldFilter { reason?: HeldReason; label?: string; laboratory?: string; offset: number; limit: number }
+
 export interface ImportCheckService {
   /** Plugins that can be checked. `needsReference`: the plugin names a twin-keys entrypoint. */
   checkers(): Promise<Array<{ id: string; version: string; needsReference: boolean }>>;
@@ -96,10 +110,10 @@ export interface ImportCheckService {
   get(pluginId: string, runId: string): Promise<CheckRun | null>;
   list(pluginId: string): Promise<CheckRun[]>;
   stop(pluginId: string, runId: string, actor: ImportActor): Promise<CheckRun>;
-  held(pluginId: string, copyId: string, opts: { reason?: HeldReason; label?: string; offset: number; limit: number }): Promise<{ rows: HeldRow[]; total: number }>;
+  held(pluginId: string, copyId: string, opts: HeldFilter): Promise<{ rows: HeldRow[]; total: number }>;
   heldItem(pluginId: string, copyId: string, key: string): Promise<HeldItem | null>;
   /** The same rows as `held`, in the same order, each with its findings and check. */
-  heldItems(pluginId: string, copyId: string, opts: { reason?: HeldReason; label?: string; offset: number; limit: number }): Promise<{ items: HeldItem[]; total: number }>;
+  heldItems(pluginId: string, copyId: string, opts: HeldFilter): Promise<{ items: HeldItem[]; total: number }>;
   /** Server only. Take every run that needs a driver and start driving it. Does not wait. */
   tick(): Promise<void>;
   /** Resolves when this process is driving nothing. */
@@ -134,6 +148,8 @@ const groupSchema = z.object({
   resources: z.array(z.unknown()).optional(),
   error: z.string().optional(),
   label: z.string().optional(),
+  // Read with care in `validLaboratory`: a bad one is no laboratory, never a bad answer.
+  laboratory: z.unknown().optional(),
 });
 const decodeOutputSchema = z.object({ groups: z.array(groupSchema) });
 const twinKeysOutputSchema = z.object({ keys: z.array(z.string()) });
@@ -222,6 +238,17 @@ const isLive = (s: CheckStatus): boolean => s === 'queued' || s === 'running' ||
 /** Statuses a driver holds. A run in one of them with no write for 2 minutes has no driver. */
 const isDriven = (s: CheckStatus): boolean => s === 'running' || s === 'waiting' || s === 'stopping';
 const validLabel = (label: string | undefined): string | null => (label !== undefined && LABEL.test(label) ? label : null);
+/** The code of a group's `laboratory: { code }`, or null for anything else. */
+function validLaboratory(raw: unknown): string | null {
+  const code = raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? (raw as { code?: unknown }).code : undefined;
+  return typeof code === 'string' && LABORATORY_CODE.test(code) ? code : null;
+}
+
+/** The run with these laboratories, or with no `laboratories` field when there are none to keep. */
+function withLaboratories(run: CheckRun, laboratories: CheckLaboratory[] | undefined): CheckRun {
+  const { laboratories: _old, ...rest } = run;
+  return laboratories ? { ...rest, laboratories } : rest;
+}
 
 type Halt = 'stop' | 'release' | 'lost';
 interface Drive { promise: Promise<void>; halt: Halt | null }
@@ -265,10 +292,10 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
   }
 
   function view(stored: CheckRun): CheckRun {
-    return {
+    return withLaboratories({
       ...stored, counts: { ...stored.counts, labels: { ...stored.counts.labels } },
       waiting: stored.waiting ?? null, driver: stored.driver ?? null,
-    };
+    }, stored.laboratories && structuredClone(stored.laboratories));
   }
 
   async function resolveChecker(pluginId: string): Promise<Checker> {
@@ -292,7 +319,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
   function driving(run: CheckRun, entry: Drive) {
     // The cursor and counts as they stood at the last page end. Only these are ever saved, so a
     // crash in the middle of a page leaves a record from which that page is read again in full.
-    const snapshot = () => ({ cursor: run.cursor, counts: structuredClone(run.counts) });
+    const snapshot = () => ({ cursor: run.cursor, counts: structuredClone(run.counts), laboratories: structuredClone(run.laboratories) });
     let pageEnd = snapshot();
     const markPageEnd = (): void => { pageEnd = snapshot(); };
 
@@ -310,7 +337,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
     const casSave = async (): Promise<boolean> => {
       for (let tries = 0; tries < 5; tries++) {
         if (entry.halt === 'lost') return false;
-        const doc: CheckRun = { ...run, cursor: pageEnd.cursor, counts: structuredClone(pageEnd.counts) };
+        const doc: CheckRun = withLaboratories({ ...run, cursor: pageEnd.cursor, counts: structuredClone(pageEnd.counts) }, pageEnd.laboratories);
         if (await writeIfRev(doc, run.rev)) {
           run.rev = doc.rev;
           run.updatedAt = doc.updatedAt;
@@ -348,7 +375,11 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       clearInterval(heartbeat);
       await beating;
     };
-    const rewind = (): void => { run.cursor = pageEnd.cursor; run.counts = structuredClone(pageEnd.counts); };
+    const rewind = (): void => {
+      run.cursor = pageEnd.cursor;
+      run.counts = structuredClone(pageEnd.counts);
+      if (pageEnd.laboratories) run.laboratories = structuredClone(pageEnd.laboratories);
+    };
     return { markPageEnd, haltWanted, saveInTurn, saveKeepingStop, stopBeating, rewind };
   }
 
@@ -469,22 +500,50 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         return { ...emptyTwins(), ...byDetail(rows, details) };
       };
 
-      /** What one page did. Added to the run's counts only when the page is done, so a page tried
-       *  again after a fault counts nothing twice. */
-      interface Tally { read: number; saved: number; held: number; failed: number; resources: number; labels: string[] }
-      const freshTally = (): Tally => ({ read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: [] });
+      /** What one page did: how each request ended, with its laboratory and the label it gave.
+       *  Added to the run's counts only when the page is done, so a page tried again after a fault
+       *  counts nothing twice. */
+      interface Decided { outcome: 'saved' | 'held' | 'failed'; laboratory: string | null; label: string | undefined }
+      interface Tally { resources: number; decided: Decided[] }
+      const freshTally = (): Tally => ({ resources: 0, decided: [] });
+      /** Each request counts once in the run and once in its laboratory, under the same label name,
+       *  so the laboratories always add up to the run. */
       const addTally = (t: Tally): void => {
         const c = run.counts;
-        c.read += t.read; c.saved += t.saved; c.held += t.held; c.failed += t.failed; c.resources += t.resources;
-        for (const label of t.labels) {
-          const named = Object.keys(c.labels).filter((l) => l !== OTHER_LABEL).length;
-          const name = validLabel(label) !== null && (label in c.labels || named < MAX_LABELS) ? label : OTHER_LABEL;
-          c.labels[name] = (c.labels[name] ?? 0) + 1;
+        c.resources += t.resources;
+        const labs = run.laboratories;
+        const byCode = new Map((labs ?? []).map((l) => [l.code, l]));
+        const entryFor = (code: string | null): CheckLaboratory => {
+          const named = byCode.size - (byCode.has(null) ? 1 : 0);
+          const at = code !== null && !byCode.has(code) && named >= MAX_LABORATORIES ? null : code;
+          let entry = byCode.get(at);
+          if (!entry) {
+            entry = { code: at, counts: { read: 0, saved: 0, held: 0, failed: 0, labels: {} } };
+            byCode.set(at, entry);
+            labs!.push(entry);
+          }
+          return entry;
+        };
+        for (const d of t.decided) {
+          c.read += 1;
+          c[d.outcome] += 1;
+          let name: string | null = null;
+          if (d.label !== undefined) {
+            const named = Object.keys(c.labels).filter((l) => l !== OTHER_LABEL).length;
+            name = validLabel(d.label) !== null && (d.label in c.labels || named < MAX_LABELS) ? d.label : OTHER_LABEL;
+            c.labels[name] = (c.labels[name] ?? 0) + 1;
+          }
+          if (!labs) continue;
+          const lc = entryFor(d.laboratory).counts;
+          lc.read += 1;
+          lc[d.outcome] += 1;
+          if (name !== null) lc.labels[name] = (lc.labels[name] ?? 0) + 1;
         }
       };
-      const keepFailed = async (t: Tally, key: string, error: string, label: string | null): Promise<void> => {
-        await ownDb('write', () => deps.held.put({ copyId: run.copyId, key, runId: run.id, reason: 'error', label, error, findings: null, check: null }));
-        t.failed += 1;
+      const keepFailed = async (key: string, error: string, label: string | null, laboratory: string | null): Promise<void> => {
+        await ownDb('write', () => deps.held.put({
+          copyId: run.copyId, key, runId: run.id, reason: 'error', label, laboratory, error, findings: null, check: null,
+        }));
       };
 
       let prepared: Prepared | null = null;
@@ -532,8 +591,8 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
             goodInRow = 0;
             return 'next';
           }
-          await keepFailed(t, keys[0], 'DECODE_FAILED', null);
-          t.read = 1;
+          await keepFailed(keys[0], 'DECODE_FAILED', null, null);
+          t.decided.push({ outcome: 'failed', laboratory: null, label: undefined });
           addTally(t);
           run.cursor = keys[0];
           size = 1;
@@ -548,38 +607,42 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         const saved: string[] = [];
         for (const key of keys) {
           const group = groups.get(key);
-          if (!group) { await keepFailed(t, key, 'NO_GROUP', null); continue; }
-          // Two answers for one request: neither is trusted, and nothing of it is saved.
-          if (twice.has(key)) { await keepFailed(t, key, 'DUPLICATE_GROUP', null); continue; }
-          if (group.label !== undefined) t.labels.push(group.label);
+          if (!group || twice.has(key)) {
+            // No answer, or two answers for one request: neither is trusted, and nothing of it is saved.
+            await keepFailed(key, group ? 'DUPLICATE_GROUP' : 'NO_GROUP', null, null);
+            t.decided.push({ outcome: 'failed', laboratory: null, label: undefined });
+            continue;
+          }
           const label = validLabel(group.label);
-          if (group.error !== undefined) { await keepFailed(t, key, pluginCode(group.error), label); continue; }
+          const laboratory = validLaboratory(group.laboratory);
+          const decided = (outcome: Decided['outcome']): void => { t.decided.push({ outcome, laboratory, label: group.label }); };
+          if (group.error !== undefined) { await keepFailed(key, pluginCode(group.error), label, laboratory); decided('failed'); continue; }
           if (group.held === true) {
             await ownDb('write', () => deps.held.put({
-              copyId: run.copyId, key, runId: run.id, reason: 'held', label, error: null,
+              copyId: run.copyId, key, runId: run.id, reason: 'held', label, laboratory, error: null,
               // The store needs a value. A group that gave none is kept as null. Postgres jsonb
               // refuses a NUL or a lone surrogate, so those are replaced.
               findings: storable(group.findings ?? null), check: storable(group.check ?? null),
             }));
-            t.held += 1;
+            decided('held');
             continue;
           }
           const resources = group.resources ?? [];
           const refused = checkResources(resources, allowedTypes);
-          if (refused) { await keepFailed(t, key, refused, label); continue; }
+          if (refused) { await keepFailed(key, refused, label, laboratory); decided('failed'); continue; }
           try {
             await deps.persist(resources, provenance);
           } catch (err) {
-            await keepFailed(t, key, saveCode(err), label);
+            await keepFailed(key, saveCode(err), label, laboratory);
+            decided('failed');
             continue;
           }
           saved.push(key);
-          t.saved += 1;
+          decided('saved');
           t.resources += resources.length;
         }
         // A request that passes now leaves the held-back store.
         if (saved.length > 0) await ownDb('write', () => deps.held.remove(run.copyId, saved));
-        t.read = keys.length;
         addTally(t);
         run.cursor = keys[keys.length - 1];
         return 'next';
@@ -753,7 +816,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         return {
           id, kind: 'check', rev: existing?.rev ?? 0, pluginId: plugin.id, pluginVersion: plugin.version,
           copyId: input.copyId, referenceCopyId, status: 'queued', options, pageSize: pageSize ?? DEFAULT_PAGE_SIZE,
-          cursor: null, counts: freshCounts(), waiting: null, driver: null,
+          cursor: null, counts: freshCounts(), laboratories: [], waiting: null, driver: null,
           startedAt: at, updatedAt: at, finishedAt: null, lastError: null, startedBy: input.actor.name,
         };
       }, (next) => auditOrRefuse(deps.audit, {

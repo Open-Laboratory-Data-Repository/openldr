@@ -15,17 +15,17 @@ describe('import check held store', () => {
   });
 
   const item = (key: string, over: Record<string, unknown> = {}) => ({
-    copyId: 'c1', key, runId: 'r1', reason: 'held' as const, label: null, error: null,
+    copyId: 'c1', key, runId: 'r1', reason: 'held' as const, label: null, laboratory: null, error: null,
     findings: [{ n: key }], check: { k: key }, ...over,
   });
 
   it('put twice on one key keeps one row with the later values', async () => {
     await store.put(item('A'));
-    await store.put(item('A', { runId: 'r2', reason: 'error', label: 'L', error: 'E_BAD', findings: [], check: { z: 1 } }));
+    await store.put(item('A', { runId: 'r2', reason: 'error', label: 'L', laboratory: 'LAB', error: 'E_BAD', findings: [], check: { z: 1 } }));
     const { rows, total } = await store.list('c1', { offset: 0, limit: 10 });
     expect(total).toBe(1);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ copyId: 'c1', key: 'A', runId: 'r2', reason: 'error', label: 'L', error: 'E_BAD' });
+    expect(rows[0]).toMatchObject({ copyId: 'c1', key: 'A', runId: 'r2', reason: 'error', label: 'L', laboratory: 'LAB', error: 'E_BAD' });
     expect(typeof rows[0]!.heldAt).toBe('string');
     const got = await store.get('c1', 'A');
     expect(got!.findings).toEqual([]);
@@ -60,12 +60,46 @@ describe('import check held store', () => {
     expect(both.total).toBe(1);
   });
 
+  it('filters by laboratory, alone and with reason and label, and the total follows the filter', async () => {
+    await store.put(item('A', { laboratory: 'L1', label: 'x' }));
+    await store.put(item('B', { laboratory: 'L1', reason: 'error', error: 'E_X', label: 'y' }));
+    await store.put(item('C', { laboratory: 'L2', label: 'x' }));
+    await store.put(item('D', { label: 'x' }));
+    await store.put(item('E', { laboratory: 'L1', label: 'x' }));
+    // Another copy's row of the same laboratory is never counted.
+    await store.put(item('F', { copyId: 'c2', laboratory: 'L1', label: 'x' }));
+    const keys = async (f: Record<string, unknown>) => {
+      const r = await store.list('c1', { ...f, offset: 0, limit: 10 });
+      const i = await store.listItems('c1', { ...f, offset: 0, limit: 10 });
+      expect(i.rows.map((row) => row.key)).toEqual(r.rows.map((row) => row.key));
+      expect(i.total).toBe(r.total);
+      return [r.rows.map((row) => row.key), r.total];
+    };
+    expect(await keys({ laboratory: 'L1' })).toEqual([['A', 'B', 'E'], 3]);
+    expect(await keys({ laboratory: 'L2' })).toEqual([['C'], 1]);
+    expect(await keys({ laboratory: 'L9' })).toEqual([[], 0]);
+    expect(await keys({ laboratory: 'L1', reason: 'held' })).toEqual([['A', 'E'], 2]);
+    expect(await keys({ laboratory: 'L1', label: 'x' })).toEqual([['A', 'E'], 2]);
+    expect(await keys({ laboratory: 'L1', reason: 'error', label: 'y' })).toEqual([['B'], 1]);
+    expect(await keys({ laboratory: 'L1', reason: 'error', label: 'x' })).toEqual([[], 0]);
+    // Paged: the total is every match, not the page.
+    const page = await store.list('c1', { laboratory: 'L1', offset: 1, limit: 1 });
+    expect([page.rows.map((r) => r.key), page.total]).toEqual([['B'], 3]);
+    // Each row carries its laboratory, null when it named none.
+    const all = await store.list('c1', { offset: 0, limit: 10 });
+    expect(all.rows.map((r) => [r.key, r.laboratory])).toEqual([['A', 'L1'], ['B', 'L1'], ['C', 'L2'], ['D', null], ['E', 'L1']]);
+    expect((await store.get('c1', 'C'))!.laboratory).toBe('L2');
+    // A put again replaces the laboratory, to null too.
+    await store.put(item('A', { laboratory: null, label: 'x' }));
+    expect(await keys({ laboratory: 'L1' })).toEqual([['B', 'E'], 2]);
+  });
+
   it('get returns the JSON as stored, and null for a missing key', async () => {
     const findings = { a: [1, 2, { b: null }] };
     const check = [{ c: 'd' }, 3];
     await store.put(item('A', { findings, check }));
     const got = await store.get('c1', 'A');
-    expect(got).toMatchObject({ copyId: 'c1', key: 'A', runId: 'r1', reason: 'held', label: null, error: null });
+    expect(got).toMatchObject({ copyId: 'c1', key: 'A', runId: 'r1', reason: 'held', label: null, laboratory: null, error: null });
     expect(got!.findings).toEqual(findings);
     expect(got!.check).toEqual(check);
     expect(await store.get('c1', 'nope')).toBeNull();

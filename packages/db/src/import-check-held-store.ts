@@ -9,6 +9,8 @@ export interface HeldRow {
   runId: string;
   reason: HeldReason;
   label: string | null;
+  /** The laboratory code the plugin named for the request, or null when it named none. */
+  laboratory: string | null;
   error: string | null;
   heldAt: string;
 }
@@ -16,7 +18,7 @@ export interface HeldRow {
 /** A held request with the plugin's own JSON. CE never reads inside `findings` or `check`. */
 export interface HeldItem extends HeldRow { findings: unknown; check: unknown }
 
-export interface HeldListOptions { reason?: HeldReason; label?: string; offset: number; limit: number }
+export interface HeldListOptions { reason?: HeldReason; label?: string; laboratory?: string; offset: number; limit: number }
 
 export interface ImportCheckHeldStore {
   /** Insert or replace by (copyId, key). */
@@ -35,8 +37,8 @@ export interface ImportCheckHeldStore {
 const REMOVE_CHUNK = 1000;
 
 type Stored = {
-  copy_id: string; key: string; run_id: string; reason: string; label: string | null; error: string | null;
-  held_at: Date | string;
+  copy_id: string; key: string; run_id: string; reason: string; label: string | null; laboratory: string | null;
+  error: string | null; held_at: Date | string;
 };
 
 function toRow(r: Stored): HeldRow {
@@ -46,6 +48,7 @@ function toRow(r: Stored): HeldRow {
     runId: r.run_id,
     reason: r.reason as HeldReason,
     label: r.label,
+    laboratory: r.laboratory,
     error: r.error,
     heldAt: new Date(r.held_at).toISOString(),
   };
@@ -57,11 +60,12 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
     let q = db.selectFrom('import_check_held').where('copy_id', '=', copyId);
     if (opts.reason !== undefined) q = q.where('reason', '=', opts.reason);
     if (opts.label !== undefined) q = q.where('label', '=', opts.label);
+    if (opts.laboratory !== undefined) q = q.where('laboratory', '=', opts.laboratory);
     return q;
   }
 
   /** One page of the matching rows. Within one copy the key is unique, so this order has no tie. */
-  function page<C extends 'copy_id' | 'key' | 'run_id' | 'reason' | 'label' | 'error' | 'held_at' | 'findings' | 'check'>(
+  function page<C extends 'copy_id' | 'key' | 'run_id' | 'reason' | 'label' | 'laboratory' | 'error' | 'held_at' | 'findings' | 'check'>(
     copyId: string, opts: HeldListOptions, columns: C[],
   ) {
     return matching(copyId, opts).select(columns).orderBy('key').limit(opts.limit).offset(opts.offset).execute();
@@ -81,6 +85,7 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
         run_id: item.runId,
         reason: item.reason,
         label: item.label,
+        laboratory: item.laboratory,
         error: item.error,
         findings: JSON.stringify(item.findings),
         check: JSON.stringify(item.check),
@@ -91,6 +96,7 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
           run_id: eb.ref('excluded.run_id'),
           reason: eb.ref('excluded.reason'),
           label: eb.ref('excluded.label'),
+          laboratory: eb.ref('excluded.laboratory'),
           error: eb.ref('excluded.error'),
           findings: eb.ref('excluded.findings'),
           check: eb.ref('excluded.check'),
@@ -109,12 +115,12 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
     },
 
     async list(copyId, opts) {
-      const rows = await page(copyId, opts, ['copy_id', 'key', 'run_id', 'reason', 'label', 'error', 'held_at']);
+      const rows = await page(copyId, opts, ['copy_id', 'key', 'run_id', 'reason', 'label', 'laboratory', 'error', 'held_at']);
       return { rows: rows.map(toRow), total: await count(copyId, opts) };
     },
 
     async listItems(copyId, opts) {
-      const rows = await page(copyId, opts, ['copy_id', 'key', 'run_id', 'reason', 'label', 'error', 'held_at', 'findings', 'check']);
+      const rows = await page(copyId, opts, ['copy_id', 'key', 'run_id', 'reason', 'label', 'laboratory', 'error', 'held_at', 'findings', 'check']);
       return { rows: rows.map((r) => ({ ...toRow(r), findings: r.findings, check: r.check })), total: await count(copyId, opts) };
     },
 

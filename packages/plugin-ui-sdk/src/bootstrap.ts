@@ -121,11 +121,11 @@ function pluginBootstrapV1(): void {
         list: () => call({ kind: 'import.check.list' }),
         status: (runId: string) => call({ kind: 'import.check.status', runId }),
         stop: (runId: string) => call({ kind: 'import.check.stop', runId }),
-        held: (input: { copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }) =>
-          call({ kind: 'import.check.held', copyId: input.copyId, reason: input.reason, label: input.label, offset: input.offset, limit: input.limit }),
+        held: (input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }) =>
+          call({ kind: 'import.check.held', copyId: input.copyId, reason: input.reason, label: input.label, laboratory: input.laboratory, offset: input.offset, limit: input.limit }),
         heldItem: (input: { copyId: string; key: string }) => call({ kind: 'import.check.heldItem', copyId: input.copyId, key: input.key }),
-        heldItems: (input: { copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }) =>
-          call({ kind: 'import.check.heldItems', copyId: input.copyId, reason: input.reason, label: input.label, offset: input.offset, limit: input.limit }),
+        heldItems: (input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }) =>
+          call({ kind: 'import.check.heldItems', copyId: input.copyId, reason: input.reason, label: input.label, laboratory: input.laboratory, offset: input.offset, limit: input.limit }),
       },
     },
     // The studio answers this itself and saves the file in its own document.

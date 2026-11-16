@@ -802,7 +802,7 @@ describe('plugin broker: checks', () => {
     startedAt: '2026-11-16T08:00:00.000Z', updatedAt: '2026-11-16T08:01:00.000Z', finishedAt: null, lastError: null, startedBy: 'amina',
     ...over,
   });
-  const heldRow = { copyId: 'cp1', key: SECRET_KEY, runId: 'ck1', reason: 'held', label: 'odd_age', error: null, heldAt: '2026-11-16T08:00:30.000Z' };
+  const heldRow = { copyId: 'cp1', key: SECRET_KEY, runId: 'ck1', reason: 'held', label: 'odd_age', laboratory: 'LAB-9', error: null, heldAt: '2026-11-16T08:00:30.000Z' };
   function fakeChecks() {
     const calls: Array<[string, unknown[]]> = [];
     const rec = (name: string, result: () => unknown) => async (...args: unknown[]) => { calls.push([name, args]); return result(); };
@@ -928,6 +928,46 @@ describe('plugin broker: checks', () => {
     expect(await b.handle('p1', admin, { kind: 'import.check.held', copyId: 'cp1', offset: 0, limit: 101 })).toMatchObject({ ok: false });
   });
 
+  it('held and heldItems pass a laboratory through, and refuse a bad one before the service', async () => {
+    const checks = fakeChecks();
+    const { b, audited } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    const code = 'LAB-1.a_' + 'X'.repeat(24);
+    expect(code).toHaveLength(32);
+    await b.handle('p1', admin, { kind: 'import.check.held', copyId: 'cp1', laboratory: code, offset: 0, limit: 10 });
+    await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', reason: 'held', label: 'odd_age', laboratory: 'TZA', offset: 0, limit: 10 });
+    expect(checks.calls).toEqual([
+      ['held', ['p1', 'cp1', { laboratory: code, offset: 0, limit: 10 }]],
+      ['heldItems', ['p1', 'cp1', { reason: 'held', label: 'odd_age', laboratory: 'TZA', offset: 0, limit: 10 }]],
+    ]);
+    // The laboratory is not in the audit row: the operation and the copy only.
+    expect(audited).toEqual([
+      { pluginId: 'p1', op: 'import.check.held:cp1', outcome: 'ok', reason: undefined },
+      { pluginId: 'p1', op: 'import.check.heldItems:cp1', outcome: 'ok', reason: undefined },
+    ]);
+    expect(JSON.stringify(audited)).not.toContain('TZA');
+    for (const kind of ['import.check.held', 'import.check.heldItems']) {
+      for (const laboratory of ['X'.repeat(33), 'has space', '', 'caf\u00e9', 'a/b', 5, null]) {
+        const refused = await b.handle('p1', admin, { kind, copyId: 'cp1', laboratory, offset: 0, limit: 10 });
+        expect(refused).toEqual({ ok: false, error: expect.stringMatching(/^invalid operation: laboratory/) });
+        if (typeof laboratory === 'string' && laboratory.length > 3) expect(JSON.stringify(refused)).not.toContain(laboratory);
+      }
+    }
+    expect(checks.calls).toHaveLength(2);
+  });
+
+  it('a run passes its laboratories to the page as they are', async () => {
+    const checks = fakeChecks();
+    const laboratories = [
+      { code: 'A', counts: { read: 6, saved: 4, held: 2, failed: 0, labels: { passed: 4 } } },
+      { code: null, counts: { read: 4, saved: 2, held: 1, failed: 1, labels: { passed: 2 } } },
+    ];
+    checks.api.get = async () => checkRun({ laboratories });
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    const res = await b.handle('p1', admin, { kind: 'import.check.status', runId: 'ck1' });
+    expect(res).toMatchObject({ ok: true, data: { laboratories } });
+    expect(JSON.stringify(res)).not.toContain(SECRET_KEY);
+  });
+
   it('heldItems leaves an audit row with the operation and the copy id, never a key, a value or the size', async () => {
     const checks = fakeChecks();
     const { b, audited, logged } = broker({ caps: IMPORT_CAPS, checks: checks.api });
@@ -1035,8 +1075,8 @@ describe('plugin broker: checks', () => {
     });
     const theirRun = checkRun({ id: checkIdOf('theirs'), pluginId: 'p2', copyId: 'theirs' });
     await pluginData.put('p2', '__import-checks', theirRun.id, theirRun);
-    await held.put({ copyId: 'mine', key: SECRET_KEY, runId: 'r', reason: 'held', label: 'odd_age', error: null, findings: { name: PATIENT }, check: { n: 1 } });
-    await held.put({ copyId: 'theirs', key: 'T1', runId: 'r', reason: 'held', label: null, error: null, findings: { name: 'Other Person' }, check: null });
+    await held.put({ copyId: 'mine', key: SECRET_KEY, runId: 'r', reason: 'held', label: 'odd_age', laboratory: 'LAB-9', error: null, findings: { name: PATIENT }, check: { n: 1 } });
+    await held.put({ copyId: 'theirs', key: 'T1', runId: 'r', reason: 'held', label: null, laboratory: null, error: null, findings: { name: 'Other Person' }, check: null });
     const { b, audited, logged } = broker({ caps: IMPORT_CAPS, checks });
 
     // Their copy is not reachable, as the copy or as the reference.
@@ -1063,6 +1103,11 @@ describe('plugin broker: checks', () => {
     expect(await start('mine2', 'mine2')).toEqual({ ok: false, error: 'the reference copy must be another copy than the source copy' });
     const heldAnswer = await b.handle('p1', admin, { kind: 'import.check.held', copyId: 'mine', offset: 0, limit: 10 });
     expect(heldAnswer).toMatchObject({ ok: true, data: { total: 1, rows: [{ key: SECRET_KEY, reason: 'held', label: 'odd_age' }] } });
+    // Through the real store: the row carries its laboratory, and the filter narrows by it.
+    expect(await b.handle('p1', admin, { kind: 'import.check.held', copyId: 'mine', laboratory: 'LAB-9', offset: 0, limit: 10 }))
+      .toMatchObject({ ok: true, data: { total: 1, rows: [{ key: SECRET_KEY, laboratory: 'LAB-9' }] } });
+    expect(await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'mine', laboratory: 'LAB-8', offset: 0, limit: 10 }))
+      .toEqual({ ok: true, data: { total: 0, items: [] } });
     expect(await b.handle('p1', admin, { kind: 'import.check.heldItem', copyId: 'mine', key: SECRET_KEY })).toMatchObject({ ok: true, data: { findings: { name: PATIENT } } });
     expect(await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'mine', offset: 0, limit: 200 })).toEqual({
       ok: true, data: { total: 1, items: [expect.objectContaining({ key: SECRET_KEY, reason: 'held', label: 'odd_age', findings: { name: PATIENT }, check: { n: 1 } })] },

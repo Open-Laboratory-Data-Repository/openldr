@@ -3,7 +3,8 @@ import { type Kysely, sql } from 'kysely';
 // Requests a check run held back or could not decode, kept until the operator deals with them.
 //
 // One row per copy and key. `reason` is 'held' (the plugin held the request) or 'error' (the decode
-// call failed for it). `label` and `error` are bare codes, never a source value. `findings` and
+// call failed for it). `label` and `error` are bare codes, never a source value. `laboratory` is the
+// code the plugin named for the request (1 to 32 of A-Z a-z 0-9 . _ -), or null when it named none. `findings` and
 // `check` are the plugin's own JSON, stored as it came. CE reads neither. They may hold source
 // values, which is why only this table and `import_copy_rows` keep them.
 //
@@ -17,6 +18,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('run_id', 'text', (c) => c.notNull())
     .addColumn('reason', 'text', (c) => c.notNull())
     .addColumn('label', 'text')
+    .addColumn('laboratory', 'text')
     .addColumn('error', 'text')
     .addColumn('findings', 'jsonb', (c) => c.notNull())
     .addColumn('check', 'jsonb', (c) => c.notNull())

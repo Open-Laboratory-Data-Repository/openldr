@@ -6,7 +6,7 @@ import type { PluginDataStore } from '@openldr/db';
 import type { PluginPolicy } from './policy';
 import { policyAllows } from './policy';
 import { HOST_COLLECTION_PREFIX, type ImportActor, type ImportService } from './import-run';
-import type { CheckRun, ImportCheckService } from './import-check';
+import { LABORATORY_CODE, type CheckRun, type ImportCheckService } from './import-check';
 import { CopySetChangedError, type CopyRun, type CopySetProgress, type ImportCopyService } from './import-copy';
 
 /** The caller principal (the authenticated host user forwarding on the plugin's behalf). */
@@ -71,9 +71,9 @@ export type BrokerOp =
   | { kind: 'import.check.list' }
   | { kind: 'import.check.status'; runId: string }
   | { kind: 'import.check.stop'; runId: string }
-  | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }
+  | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }
   | { kind: 'import.check.heldItem'; copyId: string; key: string }
-  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number };
+  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number };
 
 /** A copy as a plugin page sees it: no set's `cursor`, which is a source key, and no `driver`,
  *  which names a server process. */
@@ -108,6 +108,8 @@ const STR = z.string().min(1).max(256);
 const ID = z.string().min(1).max(256);
 // The import service checks option names and sizes again; this only bounds the wire shape.
 const IMPORT_OPTIONS = z.record(z.string().max(64), z.string().max(1000));
+/** A laboratory filter of the held list: the same rule as a code a group names. */
+const LABORATORY = z.string().regex(LABORATORY_CODE);
 
 /** Build the discriminated-union op schema. `maxDocBytes` bounds any persisted/forwarded
  *  arbitrary-object payload (doc/mapping/schedule/input) by its serialized byte size. */
@@ -175,13 +177,13 @@ export function buildBrokerOpSchema(maxDocBytes: number) {
     z.object({ kind: z.literal('import.check.stop'), runId: ID }),
     z.object({
       kind: z.literal('import.check.held'), copyId: ID, reason: z.enum(['held', 'error']).optional(), label: z.string().min(1).max(64).optional(),
-      offset: z.number().int().min(0), limit: z.number().int().min(1).max(100),
+      laboratory: LABORATORY.optional(), offset: z.number().int().min(0), limit: z.number().int().min(1).max(100),
     }),
     z.object({ kind: z.literal('import.check.heldItem'), copyId: ID, key: z.string().min(1).max(200) }),
     // Each item carries its findings and check, so a page reads a batch of up to 200 in one call.
     z.object({
       kind: z.literal('import.check.heldItems'), copyId: ID, reason: z.enum(['held', 'error']).optional(), label: z.string().min(1).max(64).optional(),
-      offset: z.number().int().min(0), limit: z.number().int().min(1).max(200),
+      laboratory: LABORATORY.optional(), offset: z.number().int().min(0), limit: z.number().int().min(1).max(200),
     }),
   ]);
 }
@@ -526,6 +528,7 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
                 const data = await checks.held(pluginId, op.copyId, {
                   ...(op.reason !== undefined ? { reason: op.reason } : {}),
                   ...(op.label !== undefined ? { label: op.label } : {}),
+                  ...(op.laboratory !== undefined ? { laboratory: op.laboratory } : {}),
                   offset: op.offset, limit: op.limit,
                 });
                 // These rows hold real values. The audit row names the operation and the copy, nothing else.
@@ -541,6 +544,7 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
                 const data = await checks.heldItems(pluginId, op.copyId, {
                   ...(op.reason !== undefined ? { reason: op.reason } : {}),
                   ...(op.label !== undefined ? { label: op.label } : {}),
+                  ...(op.laboratory !== undefined ? { laboratory: op.laboratory } : {}),
                   offset: op.offset, limit: op.limit,
                 });
                 // As for heldItem: the operation and the copy, never a key, a value or the size.
