@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "135fc6ed",
+          "type": "feat",
+          "scope": "web",
+          "title": "Compare deployment tiers and update install guides"
+        },
+        {
           "hash": "7712d7f6",
           "type": "feat",
           "scope": "terminology",
