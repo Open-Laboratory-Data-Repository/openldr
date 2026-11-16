@@ -91,10 +91,13 @@ export function copyForPage(run: CopyRun): PageCopyRun {
  *  names a server process, and none of the record's own bookkeeping. */
 export type PageCheckRun = Omit<CheckRun, 'driver' | 'rev' | 'kind' | 'pluginId' | 'pluginVersion' | 'cursor' | 'startedBy'>;
 
-/** The one place a check run is cut down for a plugin page. Every check op's answer goes through it. */
+/** The one place a check run is cut down for a plugin page. Every check op's answer goes through it.
+ *  A run where no request named a laboratory has only the null entry: the page gets an empty list,
+ *  so it draws no picker. Once one code is named, every entry goes, the null one included. */
 export function checkForPage(run: CheckRun): PageCheckRun {
-  const { driver: _driver, rev: _rev, kind: _kind, pluginId: _pluginId, pluginVersion: _pluginVersion, cursor: _cursor, startedBy: _startedBy, ...rest } = run;
-  return rest;
+  const { driver: _driver, rev: _rev, kind: _kind, pluginId: _pluginId, pluginVersion: _pluginVersion, cursor: _cursor, startedBy: _startedBy, laboratories, ...rest } = run;
+  if (laboratories === undefined) return rest;
+  return { ...rest, laboratories: laboratories.some((l) => l.code !== null) ? laboratories : [] };
 }
 
 export type BrokerResult = { ok: true; data: unknown } | { ok: false; error: string };

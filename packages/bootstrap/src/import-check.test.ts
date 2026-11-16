@@ -7,6 +7,7 @@ import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
 import { STALE_MS, type ImportActor, type ImportAuditEvent } from './import-run';
 import { copyIdOf, copySetHashes, copySpecSchema, createImportCopyService, type CopyRun, type ImportCopyService } from './import-copy';
 import { checkIdOf, createImportCheckService, liveCheckStatus, type CheckRun, type ImportCheckService } from './import-check';
+import { checkForPage } from './plugin-broker';
 
 // Layer under test: the check service over the real plugin_data store, the real copy row store and
 // the real held store on pg-mem, with the real copy service for reading and removing a copy. The
@@ -1015,9 +1016,10 @@ describe('check: by laboratory', () => {
   function expectSums(run: Pick<CheckRun, 'counts' | 'laboratories'>): void {
     const labs = run.laboratories ?? [];
     for (const k of COUNTED) expect(labs.reduce((n, l) => n + l.counts[k], 0), k).toBe(run.counts[k]);
-    const labels: Record<string, number> = {};
-    for (const l of labs) for (const [name, n] of Object.entries(l.counts.labels)) labels[name] = (labels[name] ?? 0) + n;
-    expect(labels).toEqual(run.counts.labels);
+    // Summed in a map: a label such as `constructor` must not read a plain object's own function.
+    const labels = new Map<string, number>();
+    for (const l of labs) for (const [name, n] of Object.entries(l.counts.labels)) labels.set(name, (labels.get(name) ?? 0) + n);
+    expect(Object.fromEntries(labels)).toEqual(run.counts.labels);
     // One entry for each code.
     expect(new Set(labs.map((l) => l.code)).size).toBe(labs.length);
   }
@@ -1195,6 +1197,63 @@ describe('check: by laboratory', () => {
     expect(await w.heldAll()).toEqual({ rows: [], total: 0 });
     expect(await w.svc.held(PLUGIN, SRC, { laboratory: 'A', offset: 0, limit: 10 })).toEqual({ rows: [], total: 0 });
     expect((await w.svc.get(PLUGIN, CHECK))!.laboratories).toEqual([lab('A', 3, 3, 0, 0, { passed: 3 })]);
+  });
+
+  it('a page gets no laboratories when no request named one, and every entry once one did', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    // No codes at all: the record keeps its null entry, the page gets none.
+    await w.svc.start(START);
+    await drive(w.svc);
+    const none = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(none.laboratories).toEqual([lab(null, 4, 4, 0, 0, { passed: 4 })]);
+    expect(checkForPage(none).laboratories).toEqual([]);
+    expect(checkForPage(none).counts).toMatchObject({ read: 4, saved: 4 });
+
+    // One real code and requests that named none: both entries, the null one included.
+    w.setDecode((input) => ({ groups: input.keys.map((key) => (key === 'REQ0001' ? { ...pass(key), laboratory: at('A') } : pass(key))) }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const mixed = checkForPage((await w.svc.get(PLUGIN, CHECK))!);
+    expect(mixed.laboratories).toEqual([lab('A', 1, 1, 0, 0, { passed: 1 }), lab(null, 3, 3, 0, 0, { passed: 3 })]);
+
+    // A start again that names no code: none again.
+    w.setDecode((input) => ({ groups: input.keys.map(pass) }));
+    const again = await w.svc.start(START);
+    expect(checkForPage(again).laboratories).toEqual([]);
+    await drive(w.svc);
+    expect(checkForPage((await w.svc.get(PLUGIN, CHECK))!).laboratories).toEqual([]);
+  });
+
+  it('a label or a code named like a property every object has still counts as itself', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    const codes = ['constructor', 'constructor', '__proto__', 'toString', 'A', 'A'];
+    const labels = ['constructor', 'constructor', 'tostring', 'constructor', 'hasownproperty', 'passed'];
+    w.setDecode((input) => ({
+      groups: input.keys.map((key) => {
+        const i = Number(key.slice(3)) - 1;
+        return { ...pass(key), label: labels[i], laboratory: at(codes[i]) };
+      }),
+    }));
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run.counts.labels).toEqual({ constructor: 3, tostring: 1, hasownproperty: 1, passed: 1 });
+    expect(run.laboratories).toEqual([
+      lab('constructor', 2, 2, 0, 0, { constructor: 2 }),
+      lab('__proto__', 1, 1, 0, 0, { tostring: 1 }),
+      lab('toString', 1, 1, 0, 0, { constructor: 1 }),
+      lab('A', 2, 2, 0, 0, { hasownproperty: 1, passed: 1 }),
+    ]);
+    expectSums(run);
+    // Stored and shown as plain JSON objects of the same shape.
+    const stored = (await w.stored())!;
+    expect(JSON.parse(JSON.stringify(stored))).toEqual(stored);
+    expect(stored.counts.labels).toEqual(run.counts.labels);
+    expect(Object.getPrototypeOf(run.counts.labels)).toBe(Object.prototype);
+    for (const l of run.laboratories!) expect(Object.getPrototypeOf(l.counts.labels)).toBe(Object.prototype);
+    expect(checkForPage(run).laboratories).toEqual(run.laboratories);
   });
 
   it('a run stored before laboratories were counted is driven on without them', async () => {

@@ -955,6 +955,21 @@ describe('plugin broker: checks', () => {
     expect(checks.calls).toHaveLength(2);
   });
 
+  it('a run whose only laboratory entry is the null one shows the page none, and a run with none stored shows none', async () => {
+    const checks = fakeChecks();
+    const onlyNull = [{ code: null, counts: { read: 10, saved: 6, held: 3, failed: 1, labels: { passed: 6 } } }];
+    let run: Record<string, unknown> = checkRun({ laboratories: onlyNull });
+    checks.api.get = async () => run;
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    expect(await b.handle('p1', admin, { kind: 'import.check.status', runId: 'ck1' })).toMatchObject({ ok: true, data: { laboratories: [], counts: { read: 10 } } });
+    run = checkRun({ laboratories: [] });
+    expect(await b.handle('p1', admin, { kind: 'import.check.status', runId: 'ck1' })).toMatchObject({ ok: true, data: { laboratories: [] } });
+    // A record from before laboratories were counted: the page gets no field, so it draws no picker.
+    run = checkRun();
+    const res = await b.handle('p1', admin, { kind: 'import.check.status', runId: 'ck1' }) as { ok: true; data: Record<string, unknown> };
+    expect('laboratories' in res.data).toBe(false);
+  });
+
   it('a run passes its laboratories to the page as they are', async () => {
     const checks = fakeChecks();
     const laboratories = [

@@ -524,21 +524,34 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           }
           return entry;
         };
+        // Labels are counted in maps, never by name on a plain object: a label such as
+        // `constructor` would read the object's own function. They go back as plain objects.
+        const runLabels = new Map(Object.entries(c.labels));
+        const labLabels = new Map<CheckLaboratory, Map<string, number>>();
+        const labelsOf = (entry: CheckLaboratory): Map<string, number> => {
+          let m = labLabels.get(entry);
+          if (!m) { m = new Map(Object.entries(entry.counts.labels)); labLabels.set(entry, m); }
+          return m;
+        };
+        const bump = (m: Map<string, number>, name: string): void => { m.set(name, (m.get(name) ?? 0) + 1); };
         for (const d of t.decided) {
           c.read += 1;
           c[d.outcome] += 1;
           let name: string | null = null;
           if (d.label !== undefined) {
-            const named = Object.keys(c.labels).filter((l) => l !== OTHER_LABEL).length;
-            name = validLabel(d.label) !== null && (d.label in c.labels || named < MAX_LABELS) ? d.label : OTHER_LABEL;
-            c.labels[name] = (c.labels[name] ?? 0) + 1;
+            const named = runLabels.size - (runLabels.has(OTHER_LABEL) ? 1 : 0);
+            name = validLabel(d.label) !== null && (runLabels.has(d.label) || named < MAX_LABELS) ? d.label : OTHER_LABEL;
+            bump(runLabels, name);
           }
           if (!labs) continue;
-          const lc = entryFor(d.laboratory).counts;
-          lc.read += 1;
-          lc[d.outcome] += 1;
-          if (name !== null) lc.labels[name] = (lc.labels[name] ?? 0) + 1;
+          const entry = entryFor(d.laboratory);
+          entry.counts.read += 1;
+          entry.counts[d.outcome] += 1;
+          if (name !== null) bump(labelsOf(entry), name);
         }
+        // Object.fromEntries makes an own property of every name, even one a plain object has.
+        c.labels = Object.fromEntries(runLabels);
+        for (const [entry, m] of labLabels) entry.counts.labels = Object.fromEntries(m);
       };
       const keepFailed = async (key: string, error: string, label: string | null, laboratory: string | null): Promise<void> => {
         await ownDb('write', () => deps.held.put({
