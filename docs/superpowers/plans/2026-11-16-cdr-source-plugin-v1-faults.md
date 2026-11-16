@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Parked on 2026-11-16.** The operator approved this build, then chose to start part 4 (the check step and screens in CE) first, because the plugin is not usable in CE until part 4 exists. Nothing here is built. No branch exists. Pick it up after part 4, before the 496 requests that fail the check against v1.
+> **Status, 2026-11-16.** The operator approved this build, parked it behind part 4, then asked for it to run in its own session beside part 4. Tasks 1 to 4 are being built there, on a branch of `cdr-source` cut from `main` at `cc290ae`. Task 5 (the real-data run and the code in CE) stays with the session that designs part 4.
 
 **Goal:** The plugin reads the stored age one way, picks between two birth dates and two taken dates by a rule the data supports, and keeps each order's own latest run.
 
