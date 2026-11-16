@@ -1,45 +1,44 @@
 # Getting started
 
-Install OpenLDR on a computer your organisation controls, then open Studio in a browser. OpenLDR receives laboratory data, converts it to FHIR R4, a standard format for healthcare data, and makes it available for dashboards and reports.
+Install OpenLDR on a computer your organisation controls. Use the desktop app or open Studio in a browser. OpenLDR receives laboratory data, converts it to FHIR R4, a standard format for healthcare data, and makes it available for dashboards and reports.
 
 These web guides cover installation, server configuration and troubleshooting. The guides inside Studio explain how to use the app. You can use your own data throughout. Sample data is optional.
 
 ## Choose where OpenLDR will run
 
-Choose the computer that will store your data and run OpenLDR. It needs to stay on while people use Studio. A laptop or phone opening Studio in a browser does not need its own OpenLDR installation.
+Choose the computer that will store your data and run OpenLDR. It needs to stay on while people use Studio. A phone or another computer opening Studio in a browser does not need its own installation.
 
-| Your host | Where to start |
-| --- | --- |
-| Linux, macOS or Windows 10/11 | Read [Requirements](/docs/requirements), then follow [Install](/docs/install). |
-| Windows Server | Follow [Windows Server](/docs/windows-server) to prepare a Linux environment, then install OpenLDR there. |
-| A source checkout for development | Follow [Development](/docs/development). This uses workspace commands rather than the installed CLI. |
-| An existing OpenLDR installation | Follow [Planned upgrades](/docs/upgrading). You do not need a new installation. |
+OpenLDR is free in every tier. The tiers describe how you run the software.
 
-OpenLDR comes in three tiers. The OpenLDR server is the same in each. Only the database, the file storage and the sign-in change.
+| Tier | How it runs | Where to start |
+| --- | --- | --- |
+| Standalone | One computer, with bundled PostgreSQL and files in a local folder. No Docker containers. | [Desktop app](/docs/desktop-app) installs it on Linux x64, Windows x64 or macOS on Apple silicon. Developers can [build the standalone launcher](/docs/standalone) from source. |
+| Server | A shared server with Docker containers, PostgreSQL and S3-compatible file storage. Local accounts are the default; Keycloak is optional. | Read the [Server requirements](/docs/requirements), then follow [Install](/docs/install). On Windows Server, prepare the Linux environment in [Windows Server](/docs/windows-server) first. |
+| Enterprise | A deployment based on Server, intended for multiple machines, load balancing and redundant backups. | Still in development and testing. There is no Enterprise installer yet. Use [Server installation](/docs/install) for the available shared deployment. |
 
-| Tier | Database | Stored files | Sign-in | Start here |
-| --- | --- | --- | --- | --- |
-| Standalone | Postgres 16, bundled with OpenLDR | A folder on disk | OpenLDR's own accounts | [Run without Docker](/docs/standalone). One computer, no Docker. Only Linux has been tested. |
-| Server | Postgres in Docker | Garage storage in Docker | OpenLDR's own accounts by default, Keycloak if you choose it | [Requirements](/docs/requirements), then [Install](/docs/install). |
-| Heavy | Several databases | Not decided yet | Keycloak or a ministry sign-in | Planned. It has no install of its own yet. |
+A [source checkout for development](/docs/development) uses workspace commands. For an existing Server installation, follow [Planned upgrades](/docs/upgrading). For an existing desktop installation, use the update steps in [Desktop app](/docs/desktop-app).
 
 ## Install and check the result
 
-The installer creates the configuration, generates passwords and starts the services. Run it on your chosen host.
+Follow the guide for your chosen tier.
 
-1. Open the guide for your host above. Check its requirements before running commands.
-2. Follow that guide's installation steps. Wait for the services to become ready.
-3. Keep the address and the **Setup code** printed at the end. The setup code works for 30 minutes.
+1. For Standalone, install and open the [desktop app](/docs/desktop-app). It starts the database and server, then shows Studio in its window.
+2. For Server, follow [Install](/docs/install). The installer creates the configuration, generates passwords and starts the containers.
+3. Keep the data folder and follow your guide's backup instructions.
 
-![Illustration of installer output. The highlighted lines show the address and the setup code. The code is a placeholder.](guide:install-result)
+The illustration below shows the **Server installer**. It does not describe desktop startup.
 
-**Expected result:** The installer says **OpenLDR is ready** and prints the address to open. If it says **OpenLDR is starting**, some services are not ready yet. Inspect `docker compose ps` and `docker compose logs` from the installation folder before continuing.
+![Illustration of installer output. The highlighted lines show the Server address and setup code. The code is a placeholder.](guide:install-result)
 
-The illustrated address is the default for a local installation. If you need access from other computers, configure a hostname with [Install](/docs/install). On another computer, `localhost` refers to that computer, not your OpenLDR host.
+**Expected result:** The desktop app shows Studio. The Server installer says **OpenLDR is ready** and prints the address to open. If the Server installer says **OpenLDR is starting**, inspect `docker compose ps` and `docker compose logs` from its installation folder before continuing.
+
+The desktop app opens only on its own computer by default. For a shared Server installation, configure a hostname with [Install](/docs/install). On another device, `localhost` refers to that device.
 
 ## First sign-in
 
-Follow the illustrated sign-in tasks in [Install](/docs/install). A new local-sign-in install uses the setup code to create your first administrator. An installation using Keycloak uses its generated App sign-in credentials. Each path has screenshots for every step.
+The desktop app enters the setup code for an OpenLDR it starts itself. Choose the first administrator's username and password, then follow Studio's first-run steps. [Desktop app](/docs/desktop-app) explains what to do if the code field is empty.
+
+For Server or the source-built standalone launcher, enter the setup code printed in the terminal. It works for 30 minutes. [Install](/docs/install) shows each administrator-creation screen. A Server installation using Keycloak uses its generated App sign-in credentials instead.
 
 ## Continue in the app
 

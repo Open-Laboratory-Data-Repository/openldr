@@ -2,11 +2,11 @@
 
 Vérifiez l'ordinateur qui hébergera OpenLDR avant de lancer l'installateur. Les autres ordinateurs et téléphones ouvrent Studio dans un navigateur. Ils n'ont pas besoin de Docker ni de la CLI OpenLDR.
 
-Cette page concerne l'installation avec les images fournies. Le [développement depuis le code source](/docs/development) a ses propres prérequis. Les données d'exemple sont facultatives.
+Cette page concerne le **niveau Serveur**, qui utilise des conteneurs Docker. Pour **Autonome**, suivez le [guide de l'application de bureau](/docs/desktop-app). PostgreSQL est fourni et aucun conteneur Docker n'est nécessaire. Les paquets ciblent Linux x64, Windows x64 et macOS sur Apple silicon. Prévoyez 2 Go libres pour l'installation. Le [développement depuis le code source](/docs/development) a ses propres prérequis. Les données d'exemple sont facultatives.
 
 ## Choisir un hôte compatible
 
-OpenLDR utilise des **conteneurs Linux**. Docker configuré pour les conteneurs Windows ne suffit pas.
+Le niveau Serveur utilise des **conteneurs Linux**. Docker configuré pour les conteneurs Windows ne suffit pas.
 
 La construction par défaut cible **Linux AMD64**, pour les processeurs Intel et AMD 64 bits. L'image publiée `openldr-api:latest` contient actuellement `linux/amd64` sans image ARM64 native. La compatibilité de Docker avec un ordinateur ARM ne prouve pas celle des images OpenLDR. Vérifiez séparément Apple Silicon et les autres hôtes ARM avant de les choisir pour cette installation.
 

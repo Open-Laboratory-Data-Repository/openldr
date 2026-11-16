@@ -2,7 +2,7 @@
 
 L'application de bureau OpenLDR fait tourner OpenLDR sur un seul ordinateur, dans sa propre fenêtre. Il ne faut ni Docker ni terminal. L'application démarre la base Postgres fournie et le serveur OpenLDR, affiche Studio, et arrête les deux quand vous quittez. Elle utilise le même lanceur que la page [Exécuter sans Docker](/docs/standalone), avec le même dossier de données.
 
-Il existe des paquets pour Linux x64, macOS sur Apple silicon et Windows x64. Seul Linux a été essayé. Les paquets Windows et macOS sont nouveaux. Ils sont construits sous Linux, et personne ne les a encore lancés sous Windows ou macOS.
+Il existe des paquets pour Linux x64, macOS sur Apple silicon et Windows x64. Ils sont construits sous Linux. Le 2026-11-15, l'opérateur a signalé des essais réussis sur les trois systèmes. La section Essais signalés ci-dessous précise leur portée et les vérifications encore manquantes.
 
 ## Installer
 
@@ -53,9 +53,9 @@ Sur un système sans cette règle, l'installateur ne demande rien. La règle est
 
 ### L'application n'est pas signée
 
-macOS et Windows peuvent vérifier qui a fait un programme avant de l'ouvrir. L'application OpenLDR ne porte la signature d'aucun éditeur sur ces deux systèmes. Personne ne l'a encore ouverte sous macOS ou Windows, donc cette page ne dit pas ce qu'ils affichent.
+macOS et Windows peuvent vérifier qui a fait un programme avant de l'ouvrir. L'application OpenLDR ne porte la signature d'aucun éditeur sur ces deux systèmes. L'opérateur l'a ouverte sur les deux systèmes. Le compte rendu ne décrit pas leurs messages de sécurité.
 
-Sous macOS, l'installateur signe l'application sur votre Mac avec `codesign`, avec une signature qui ne nomme aucun éditeur. Il n'est pas prouvé que macOS l'ouvre ensuite.
+Sous macOS, l'installateur signe l'application sur votre Mac avec `codesign`, avec une signature qui ne nomme aucun éditeur. Le 2026-11-15, l'opérateur a signalé que l'application s'ouvrait sur un Mac mini après cette étape.
 
 ## Le premier démarrage
 
@@ -192,12 +192,25 @@ Chaque démarrage écrit `last-version.json` juste avant que le serveur démarre
 
 Sous Windows, le Postgres fourni peut avoir besoin du runtime Microsoft Visual C++, que le paquet ne contient pas. Ce n'est pas encore confirmé.
 
+## Essais signalés
+
+Ces résultats viennent des signalements de l'opérateur du 2026-11-15, avec les paquets construits depuis `90caabca`. Ils ne prouvent pas que chaque vérification de plateforme a réussi.
+
+- Linux : installation, saisie automatique du code de configuration, étapes du premier démarrage et chargement de 60 demandes d'exemple dans le tableau de bord.
+- Windows : installation, suppression, icône de notification, saisie automatique du code, premier démarrage avec 60 demandes, sortie depuis la zone de notification et retour à la fenêtre existante au second lancement.
+- macOS sur un Mac mini : l'opérateur a signalé que l'application s'ouvrait et fonctionnait. Le compte rendu ne précise pas toutes les étapes essayées.
+
+Pas encore signalé :
+
+- Windows : refus de mise à jour pendant l'exécution, état du lanceur, arrêt depuis le Gestionnaire des tâches et démarrage sans le runtime Visual C++.
+- macOS : sélection de la fenêtre pendant qu'une autre application Electron tourne, icône du Dock, démarrage à la connexion et fichiers laissés après suppression.
+- Les trois systèmes : arrêt de l'ordinateur et fermeture de session pendant qu'OpenLDR tourne.
+
 ## Limites
 
 - Cet ordinateur seulement. L'application démarre OpenLDR sur `127.0.0.1`, donc un téléphone ou un autre ordinateur ne peut pas l'atteindre. [Exécuter sans Docker](/docs/standalone) montre comment ouvrir OpenLDR à d'autres appareils.
 - L'application ne se met pas à jour elle-même. Relancez la ligne d'installation.
 - L'application ne porte la signature d'aucun éditeur sous macOS ni sous Windows.
-- Les paquets Windows et macOS sont construits sous Linux, et personne ne les a encore lancés.
 - Sous macOS, la fenêtre peut s'ouvrir quand l'application démarre à la connexion. Ce n'est pas prouvé.
 - `desktop.log` grossit sans limite, comme `server.log` et `postgres.log`. Supprimez-le après avoir sélectionné **Quitter**.
 - Les limites de la page [Exécuter sans Docker](/docs/standalone) s'appliquent aussi, comme l'absence de TLS et la sauvegarde par copie du dossier de données arrêté.

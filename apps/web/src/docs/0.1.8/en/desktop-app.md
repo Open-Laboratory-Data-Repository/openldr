@@ -2,7 +2,7 @@
 
 The OpenLDR desktop app runs OpenLDR on one computer, in its own window. You need no Docker and no terminal. The app starts the bundled Postgres database and the OpenLDR server, shows Studio, and stops both when you quit. Inside it runs the same launcher as [Run without Docker](/docs/standalone), with the same data folder.
 
-Packages exist for Linux x64, macOS on Apple silicon and Windows x64. Only Linux has been tried. The Windows and macOS packages are new. They are built on Linux, and nobody has run them on Windows or macOS yet.
+Packages exist for Linux x64, macOS on Apple silicon and Windows x64. They are built on Linux. On 2026-11-15, the operator reported successful runs on all three systems. The Reported tests section below gives the scope and the checks still outstanding.
 
 ## Install
 
@@ -53,9 +53,9 @@ On a system without this rule, the installer asks for nothing. The rule is on wh
 
 ### The app is not signed
 
-macOS and Windows can check who made a program before they open it. The OpenLDR app carries no publisher's signature on either system. Nobody has opened it on macOS or Windows yet, so this page does not say what they show.
+macOS and Windows can check who made a program before they open it. The OpenLDR app carries no publisher's signature on either system. The operator opened it on both systems. The test record does not describe their security prompts.
 
-On macOS the installer signs the app on your Mac with `codesign`, using a signature that names no publisher. Whether macOS then opens it is not proven.
+On macOS the installer signs the app on your Mac with `codesign`, using a signature that names no publisher. On 2026-11-15, the operator reported that the app opened on a Mac mini after this step.
 
 ## The first run
 
@@ -192,12 +192,25 @@ Each start writes `last-version.json` just before the server starts, because the
 
 On Windows, the bundled Postgres may need the Microsoft Visual C++ runtime, and the package does not include it. This is not confirmed yet.
 
+## Reported tests
+
+These are operator reports from 2026-11-15, using packages built from `90caabca`. They do not prove every platform check passed.
+
+- Linux: installation, automatic setup-code entry, the first-run steps and loading 60 sample orders into the dashboard.
+- Windows: installation, removal, the tray icon, automatic setup-code entry, first run with 60 orders, quitting from the tray and bringing back the existing window on a second launch.
+- macOS on a Mac mini: the operator reported that the app opened and ran. The record does not identify every step tried.
+
+Still unreported:
+
+- Windows: refusal to update while running, launcher status, ending the app from Task Manager, and starting without the Visual C++ runtime.
+- macOS: window selection while another Electron app runs, the Dock icon, startup at sign-in and what removal leaves behind.
+- All three systems: shutdown and sign-out while OpenLDR runs.
+
 ## Limits
 
 - This computer only. The app starts OpenLDR on `127.0.0.1`, so a phone or another computer cannot reach it. [Run without Docker](/docs/standalone) shows how to open OpenLDR to other devices.
 - The app does not update itself. Run the install line again.
 - The app carries no publisher's signature on macOS or Windows.
-- The Windows and macOS packages are built on Linux, and nobody has run them yet.
 - On macOS, the window may open when the app starts at sign-in. That is not proven.
 - `desktop.log` grows without limit, like `server.log` and `postgres.log`. Delete it after you select **Quit**.
 - The limits of [Run without Docker](/docs/standalone) apply too, such as no TLS and backup by copying the stopped data folder.

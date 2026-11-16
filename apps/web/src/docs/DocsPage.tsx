@@ -28,6 +28,7 @@ import { useWebsiteTheme } from '@/components/useWebsiteTheme';
 import { hasWebFocus, WebFocusedScreenshot } from './WebFocusedScreenshot';
 import { OPERATOR_PLATFORM_MARKER, OPERATOR_PAGES, operatorExample, operatorMarkdown, operatorText } from './operatorGuide';
 import { SERVER_COMMANDS, serverMarkdown, serverScene, serverPlatform } from './serverGuide';
+import { TerminalCodeBlock } from './TerminalCodeBlock';
 
 function textContent(children: ReactNode): string {
   if (Array.isArray(children)) return children.map(textContent).join('');
@@ -173,9 +174,18 @@ function DocMedia({ src, alt, platform, locale }: { src: string; alt: string; pl
   );
 }
 
-function markdownComponents(platform: InstallPlatform, locale: DocLocale): Components {
+function markdownComponents(platform: InstallPlatform, locale: DocLocale, page: string): Components {
   const headingId = makeHeadingId();
   return {
+    pre({ children }) {
+      const code = isValidElement<{ className?: string; children?: ReactNode }>(children) ? children : null;
+      const language = code?.props.className?.match(/\blanguage-(\S+)/)?.[1] ?? '';
+      const newGuide = ['standalone', 'desktop-app', 'cli-access'].includes(page);
+      if (newGuide && ['sh', 'bash', 'shell', 'powershell', 'text'].includes(language)) {
+        return <TerminalCodeBlock language={language} locale={locale}>{children}</TerminalCodeBlock>;
+      }
+      return <pre>{children}</pre>;
+    },
     img({ src, alt }) {
       return <DocMedia src={typeof src === 'string' ? src : ''} alt={alt ?? ''} platform={platform} locale={locale} />;
     },
@@ -440,7 +450,7 @@ export function DocsPage() {
           <div className="doc-markdown">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
-              components={markdownComponents(installPlatform, locale)}
+              components={markdownComponents(installPlatform, locale, key)}
               urlTransform={(url, key) => key === 'src' && (url === 'guide:install-result' || installScene(url) || serverScene(url) || operatorExample(url)) ? url : defaultUrlTransform(url)}
             >
               {stripLeadingH1(body)}

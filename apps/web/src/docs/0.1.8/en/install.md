@@ -1,6 +1,8 @@
 # Install
 
-Install OpenLDR on your chosen host. This walkthrough uses the bundled PostgreSQL analytics database and a local address. You do not need to load sample data.
+Install the **Server tier** on your chosen host with Docker containers. This walkthrough uses the bundled PostgreSQL analytics database and a local address. You do not need to load sample data.
+
+For **Standalone**, install the [desktop app](/docs/desktop-app). It includes PostgreSQL and uses no Docker containers. Developers can also [build the standalone launcher](/docs/standalone). [Getting started](/docs/getting-started) compares the tiers. Enterprise is still in development and testing and has no installer yet.
 
 <!-- install-platform -->
 

@@ -1,45 +1,44 @@
 # Bien démarrer
 
-Installez OpenLDR sur un ordinateur contrôlé par votre organisation, puis ouvrez Studio dans un navigateur. OpenLDR reçoit les données de laboratoire, les convertit en FHIR R4, un format standard pour les données de santé, et les rend disponibles pour les tableaux de bord et les rapports.
+Installez OpenLDR sur un ordinateur contrôlé par votre organisation. Utilisez l'application de bureau ou ouvrez Studio dans un navigateur. OpenLDR reçoit les données de laboratoire, les convertit en FHIR R4, un format standard pour les données de santé, puis les rend disponibles pour les tableaux de bord et les rapports.
 
-Ces guides web couvrent l'installation, la configuration du serveur et le dépannage. Les guides intégrés à Studio expliquent comment utiliser l'application. Vous pouvez utiliser vos propres données. Les données d'exemple sont facultatives.
+Ces guides web couvrent l'installation, la configuration du serveur et le dépannage. Les guides intégrés à Studio expliquent l'utilisation de l'application. Vous pouvez utiliser vos propres données. Les données d'exemple sont facultatives.
 
 ## Choisir où exécuter OpenLDR
 
-Choisissez l'ordinateur qui stockera les données et exécutera OpenLDR. Il doit rester allumé pendant l'utilisation de Studio. Un ordinateur portable ou un téléphone qui ouvre Studio dans un navigateur n'a pas besoin de sa propre installation.
+Choisissez l'ordinateur qui conservera vos données et exécutera OpenLDR. Il doit rester allumé pendant l'utilisation de Studio. Un téléphone ou un autre ordinateur qui ouvre Studio dans un navigateur n'a pas besoin de sa propre installation.
 
-| Votre hôte | Par où commencer |
-| --- | --- |
-| Linux, macOS ou Windows 10/11 | Lisez les [Prérequis](/docs/requirements), puis suivez [Installation](/docs/install). |
-| Windows Server | Suivez [Windows Server](/docs/windows-server) pour préparer un environnement Linux, puis installez-y OpenLDR. |
-| Code source pour le développement | Suivez [Développement](/docs/development). Cette méthode utilise les commandes du projet plutôt que la CLI installée. |
-| Installation OpenLDR existante | Suivez [Mises à niveau planifiées](/docs/upgrading). Une nouvelle installation n'est pas nécessaire. |
+OpenLDR est gratuit à tous les niveaux. Les niveaux décrivent comment exécuter le logiciel.
 
-OpenLDR existe en trois niveaux. Le serveur OpenLDR est le même dans chacun. Seuls la base de données, le stockage des fichiers et la connexion changent.
+| Niveau | Fonctionnement | Par où commencer |
+| --- | --- | --- |
+| Autonome | Un ordinateur, avec PostgreSQL fourni et les fichiers dans un dossier local. Aucun conteneur Docker. | L'[application de bureau](/docs/desktop-app) s'installe sous Linux x64, Windows x64 ou macOS sur Apple silicon. Les développeurs peuvent [compiler le lanceur autonome](/docs/standalone) depuis le code source. |
+| Serveur | Un serveur partagé avec des conteneurs Docker, PostgreSQL et un stockage de fichiers compatible S3. Les comptes locaux sont utilisés par défaut ; Keycloak est facultatif. | Lisez les [prérequis du serveur](/docs/requirements), puis suivez [Installation](/docs/install). Sur Windows Server, préparez d'abord l'environnement Linux décrit dans [Windows Server](/docs/windows-server). |
+| Entreprise | Un déploiement fondé sur Serveur, prévu pour plusieurs machines, la répartition de charge et les sauvegardes redondantes. | Toujours en développement et en test. Il n'existe pas encore d'installateur Entreprise. Utilisez l'[installation Serveur](/docs/install) pour le déploiement partagé disponible. |
 
-| Niveau | Base de données | Fichiers stockés | Connexion | Par où commencer |
-| --- | --- | --- | --- | --- |
-| Autonome | Postgres 16, fourni avec OpenLDR | Un dossier sur le disque | Les comptes propres à OpenLDR | [Exécuter sans Docker](/docs/standalone). Un seul ordinateur, sans Docker. Seul Linux a été testé. |
-| Serveur | Postgres dans Docker | Stockage Garage dans Docker | Les comptes propres à OpenLDR par défaut, Keycloak si vous le choisissez | Les [Prérequis](/docs/requirements), puis [Installation](/docs/install). |
-| Grande échelle | Plusieurs bases de données | Pas encore décidé | Keycloak ou la connexion d'un ministère | Prévu. Ce niveau n'a pas encore d'installation propre. |
+Le [développement depuis le code source](/docs/development) utilise les commandes du projet. Pour une installation Serveur existante, suivez [Mises à niveau planifiées](/docs/upgrading). Pour une application de bureau existante, suivez les étapes de mise à jour dans [Application de bureau](/docs/desktop-app).
 
 ## Installer et vérifier le résultat
 
-L'installateur crée la configuration, génère les mots de passe et démarre les services. Exécutez-le sur l'hôte choisi.
+Suivez le guide du niveau choisi.
 
-1. Ouvrez le guide adapté à votre hôte ci-dessus. Vérifiez ses prérequis avant de lancer les commandes.
-2. Suivez ses étapes d'installation. Attendez que les services soient prêts.
-3. Conservez l'adresse et le code **Setup code** affichés à la fin. Le code de configuration est valable 30 minutes.
+1. Pour Autonome, installez et ouvrez l'[application de bureau](/docs/desktop-app). Elle démarre la base et le serveur, puis affiche Studio dans sa fenêtre.
+2. Pour Serveur, suivez [Installation](/docs/install). L'installateur crée la configuration, génère les mots de passe et démarre les conteneurs.
+3. Conservez le dossier de données et suivez les instructions de sauvegarde de votre guide.
 
-![Illustration de la sortie de l'installateur. Les lignes encadrées montrent l'adresse et le code de configuration. Le code est un espace réservé.](guide:install-result)
+L'illustration ci-dessous montre l'**installateur Serveur**. Elle ne décrit pas le démarrage de l'application de bureau.
 
-**Résultat attendu :** L'installateur affiche **OpenLDR is ready** et l'adresse à ouvrir. S'il affiche **OpenLDR is starting**, certains services ne sont pas encore prêts. Examinez `docker compose ps` et `docker compose logs` depuis le dossier d'installation avant de continuer.
+![Illustration de la sortie de l'installateur. Les lignes encadrées montrent l'adresse du serveur et le code de configuration. Le code est un espace réservé.](guide:install-result)
 
-L'adresse illustrée est celle d'une installation locale par défaut. Pour un accès depuis d'autres ordinateurs, configurez un nom d'hôte avec [Installation](/docs/install). Sur un autre ordinateur, `localhost` désigne cet ordinateur, pas votre hôte OpenLDR.
+**Résultat attendu :** L'application de bureau affiche Studio. L'installateur Serveur affiche **OpenLDR is ready** et l'adresse à ouvrir. S'il affiche **OpenLDR is starting**, examinez `docker compose ps` et `docker compose logs` depuis son dossier d'installation avant de continuer.
+
+L'application de bureau s'ouvre uniquement sur son propre ordinateur par défaut. Pour une installation Serveur partagée, configurez un nom d'hôte avec [Installation](/docs/install). Sur un autre appareil, `localhost` désigne cet appareil.
 
 ## Première connexion
 
-Suivez les parcours illustrés dans [Installation](/docs/install). Une installation locale neuve utilise le code de configuration pour créer le premier administrateur. Keycloak utilise les identifiants App sign-in générés. Chaque parcours montre une capture à chaque étape.
+L'application de bureau saisit le code de configuration pour un OpenLDR qu'elle démarre elle-même. Choisissez le nom et le mot de passe du premier administrateur, puis suivez les étapes du premier démarrage de Studio. [Application de bureau](/docs/desktop-app) explique quoi faire si le champ du code est vide.
+
+Pour Serveur ou le lanceur autonome compilé depuis les sources, saisissez le code affiché dans le terminal. Il est valable 30 minutes. [Installation](/docs/install) montre chaque écran de création de l'administrateur. Une installation Serveur utilisant Keycloak emploie les identifiants App sign-in générés.
 
 ## Continuer dans l'application
 

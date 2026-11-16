@@ -15,6 +15,48 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
+  it.each(['en', 'fr', 'pt'])('frames new terminal examples in %s without changing their code', (locale) => {
+    window.localStorage.setItem('openldr.docs.lang', locale);
+    try {
+      renderDocs('/docs/standalone');
+      const blocks = [...document.querySelectorAll('.doc-markdown pre code')];
+      expect(blocks.length).toBeGreaterThan(0);
+      for (const block of blocks) {
+        expect(block.closest('.web-doc-terminal')).not.toBeNull();
+        expect(block.closest('.web-doc-dotted-frame')).not.toBeNull();
+      }
+      const install = blocks.find(block => block.textContent === 'pnpm install --frozen-lockfile\n');
+      expect(install).toBeDefined();
+      expect(install!.closest('.web-doc-terminal')).toHaveAttribute('data-terminal-kind', 'input');
+      const output = blocks.find(block => block.textContent === 'Stopped.\n');
+      expect(output).toBeDefined();
+      expect(output!.closest('.web-doc-terminal')).toHaveAttribute('data-terminal-kind', 'output');
+    } finally {
+      window.localStorage.removeItem('openldr.docs.lang');
+    }
+  });
+
+  it.each(['desktop-app', 'cli-access'])('frames shell examples on %s while keeping JSON separate', (page) => {
+    renderDocs(`/docs/${page}`);
+    const blocks = [...document.querySelectorAll('.doc-markdown pre code')];
+    for (const block of blocks) {
+      expect(Boolean(block.closest('.web-doc-terminal'))).toBe(!block.classList.contains('language-json'));
+    }
+    expect(document.querySelector('.web-doc-terminal')).not.toBeNull();
+  });
+
+  it('keeps the existing v1 terminal illustrations without adding a second frame', () => {
+    renderDocs('/docs/v1-import');
+    const blocks = [...document.querySelectorAll('.doc-markdown pre code')];
+    const copy = blocks.find(block => block.textContent?.includes('openldr import copy start'));
+    expect(copy).toBeDefined();
+    expect(copy!.closest('.web-doc-terminal')).toBeNull();
+    expect(screen.getByRole('img', { name: 'Start a copy and return at once.' })).toBeInTheDocument();
+    const allow = blocks.find(block => block.textContent?.includes('import allow'));
+    expect(allow).toBeDefined();
+    expect(allow!.closest('.web-doc-terminal')).toBeNull();
+  });
+
   it('keeps the restored sign-in crop and theme identical when enlarged', async () => {
     document.documentElement.dataset.theme = 'dark';
     renderDocs('/docs/install');

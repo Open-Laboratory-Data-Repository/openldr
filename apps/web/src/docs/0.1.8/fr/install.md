@@ -1,6 +1,8 @@
 # Installation
 
-Installez OpenLDR sur l'hôte choisi. Ce parcours utilise la base analytique PostgreSQL fournie et une adresse locale. Les données d'exemple ne sont pas nécessaires.
+Installez le **niveau Serveur** sur l'hôte choisi avec des conteneurs Docker. Ce parcours utilise la base analytique PostgreSQL fournie et une adresse locale. Les données d'exemple ne sont pas nécessaires.
+
+Pour **Autonome**, installez l'[application de bureau](/docs/desktop-app). PostgreSQL est fourni et aucun conteneur Docker n'est utilisé. Les développeurs peuvent aussi [compiler le lanceur autonome](/docs/standalone). [Bien démarrer](/docs/getting-started) compare les niveaux. Entreprise reste en développement et en test, sans installateur pour le moment.
 
 <!-- install-platform -->
 

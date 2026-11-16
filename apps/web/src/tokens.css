@@ -178,6 +178,12 @@
 }
 :root[data-theme='dark'] .web-doc-dotted-dots { background-image: radial-gradient(circle, color-mix(in srgb, var(--text-muted) 35%, transparent) 1.25px, transparent 1.5px); }
 
+.web-doc-terminal { display: block; overflow: hidden; border: 1px solid var(--border-2); border-radius: 10px; background: var(--sidebar); }
+.web-doc-terminal-bar { display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--border); padding: 12px 16px; background: var(--table-head); color: var(--text-muted); font-size: 12px; }
+.doc-content .web-doc-terminal pre { margin: 0; border: 0; border-radius: 0; padding: 20px; background: transparent; white-space: pre-wrap; overflow-wrap: anywhere; }
+.doc-content .web-doc-terminal pre code { font-size: 13px; line-height: 1.8; }
+.doc-content .web-doc-terminal[data-terminal-kind='output'] pre code { color: var(--text-muted); }
+
 /* Long setting names and URL examples must fit phone-width guide text. */
 .doc-content :not(pre) > code { overflow-wrap: anywhere; }
 

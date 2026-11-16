@@ -227,7 +227,7 @@ curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/ope
 irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/desktop.ps1 | iex
 ```
 
-Only Linux has been tested. The Windows and macOS packages are new and built on Linux, and nobody has run them on those systems yet. The app is not signed. The web docs page [Desktop app](apps/web/src/docs/0.1.8/en/desktop-app.md) covers the first run, update, removal and what to do when it will not start.
+On 2026-11-15, the operator reported successful desktop runs on Linux, Windows and a Mac mini. These reports cover different steps on each system; the desktop guide lists what was tried and what remains unreported. The app is not signed. The web docs page [Desktop app](apps/web/src/docs/0.1.8/en/desktop-app.md) covers the first run, update, removal and what to do when it will not start.
 
 A developer runs it from a built checkout:
 
@@ -390,7 +390,7 @@ Per-requirement status lives in [`OPENLDR_PRD.md`](OPENLDR_PRD.md).
 
 **Deferred, with the seams left clean**
 
-Oracle target-store adapter · Kafka/Inngest eventing adapters · desktop (Electron/Tauri) wrapper · FHIR R5 · formal WHO-GLASS submission-file export · governed central marketplace catalog.
+Oracle target-store adapter · Kafka/Inngest eventing adapters · FHIR R5 · formal WHO-GLASS submission-file export · governed central marketplace catalog.
 
 **Candidate — Phase 4: Intelligence**
 

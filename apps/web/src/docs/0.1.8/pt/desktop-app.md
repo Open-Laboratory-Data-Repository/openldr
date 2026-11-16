@@ -2,7 +2,7 @@
 
 A aplicação de computador do OpenLDR executa o OpenLDR num único computador, na sua própria janela. Não precisa de Docker nem de terminal. A aplicação inicia a base de dados Postgres incluída e o servidor OpenLDR, mostra o Studio, e para os dois quando sai. Usa o mesmo lançador que [Executar sem Docker](/docs/standalone), com a mesma pasta de dados.
 
-Existem pacotes para Linux x64, macOS em Apple silicon e Windows x64. Só o Linux foi experimentado. Os pacotes para Windows e macOS são novos. São construídos em Linux, e ainda ninguém os executou em Windows ou macOS.
+Existem pacotes para Linux x64, macOS em Apple silicon e Windows x64. São construídos em Linux. Em 2026-11-15, o operador relatou execuções bem-sucedidas nos três sistemas. A secção Testes relatados abaixo indica o alcance e as verificações ainda em falta.
 
 ## Instalar
 
@@ -53,9 +53,9 @@ Num sistema sem esta regra, o instalador não pede nada. A regra está ativa qua
 
 ### A aplicação não está assinada
 
-O macOS e o Windows podem verificar quem fez um programa antes de o abrir. A aplicação OpenLDR não tem a assinatura de nenhum editor nesses dois sistemas. Ainda ninguém a abriu em macOS ou Windows, por isso esta página não diz o que mostram.
+O macOS e o Windows podem verificar quem fez um programa antes de o abrir. A aplicação OpenLDR não tem a assinatura de nenhum editor nesses dois sistemas. O operador abriu-a nos dois sistemas. O registo não descreve os avisos de segurança apresentados.
 
-No macOS, o instalador assina a aplicação no seu Mac com `codesign`, com uma assinatura que não nomeia nenhum editor. Não está provado que o macOS a abra depois.
+No macOS, o instalador assina a aplicação no seu Mac com `codesign`, com uma assinatura que não nomeia nenhum editor. Em 2026-11-15, o operador relatou que a aplicação abriu num Mac mini depois deste passo.
 
 ## O primeiro arranque
 
@@ -192,12 +192,25 @@ Cada arranque escreve `last-version.json` logo antes de o servidor arrancar, por
 
 No Windows, o Postgres incluído pode precisar do runtime Microsoft Visual C++, que o pacote não inclui. Ainda não está confirmado.
 
+## Testes relatados
+
+Estes são relatos do operador de 2026-11-15, com pacotes construídos a partir de `90caabca`. Não provam que todas as verificações de plataforma passaram.
+
+- Linux: instalação, preenchimento automático do código de configuração, passos do primeiro arranque e carregamento de 60 pedidos de exemplo no painel.
+- Windows: instalação, remoção, ícone na área de notificação, preenchimento automático do código, primeiro arranque com 60 pedidos, saída pela área de notificação e regresso à janela existente num segundo lançamento.
+- macOS num Mac mini: o operador relatou que a aplicação abriu e funcionou. O registo não identifica todos os passos experimentados.
+
+Ainda sem relato:
+
+- Windows: recusa de atualização durante a execução, estado do lançador, terminar a aplicação pelo Gestor de Tarefas e arranque sem o runtime Visual C++.
+- macOS: seleção da janela enquanto outra aplicação Electron está aberta, ícone da Dock, arranque no início de sessão e ficheiros deixados após remoção.
+- Os três sistemas: encerramento do computador e fim de sessão enquanto o OpenLDR está em execução.
+
 ## Limites
 
 - Só este computador. A aplicação inicia o OpenLDR em `127.0.0.1`, por isso um telemóvel ou outro computador não lhe chega. [Executar sem Docker](/docs/standalone) mostra como abrir o OpenLDR a outros dispositivos.
 - A aplicação não se atualiza sozinha. Execute de novo a linha de instalação.
 - A aplicação não tem a assinatura de nenhum editor em macOS nem em Windows.
-- Os pacotes para Windows e macOS são construídos em Linux, e ainda ninguém os executou.
 - No macOS, a janela pode abrir quando a aplicação arranca ao entrar na sessão. Não está provado.
 - `desktop.log` cresce sem limite, tal como `server.log` e `postgres.log`. Apague-o depois de selecionar **Sair**.
 - Os limites de [Executar sem Docker](/docs/standalone) também se aplicam, como a falta de TLS e a cópia de segurança feita a copiar a pasta de dados com o OpenLDR parado.

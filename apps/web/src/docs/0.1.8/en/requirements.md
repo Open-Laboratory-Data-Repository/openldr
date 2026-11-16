@@ -2,11 +2,11 @@
 
 Check the computer that will host OpenLDR before running the installer. Other computers and phones connect to Studio in a browser. They do not need Docker or the OpenLDR CLI.
 
-This page covers the packaged installation. A [source checkout for development](/docs/development) has separate requirements. Sample data is optional.
+This page covers the **Server tier**, which uses Docker containers. For **Standalone**, use the [desktop app guide](/docs/desktop-app). It includes PostgreSQL and needs no Docker containers. The desktop packages target Linux x64, Windows x64 and macOS on Apple silicon, and need 2 GB free for installation. A [source checkout for development](/docs/development) has separate requirements. Sample data is optional.
 
 ## Choose a compatible host
 
-OpenLDR runs **Linux containers**. Docker installed in Windows-container mode is not enough.
+The Server tier runs **Linux containers**. Docker installed in Windows-container mode is not enough.
 
 The default image build targets **Linux AMD64**, for 64-bit Intel and AMD processors. The published `openldr-api:latest` image currently contains `linux/amd64`, with no native ARM64 image. Docker support for an ARM computer does not establish OpenLDR image compatibility. Apple Silicon and other ARM hosts need a separate compatibility check before you choose them for this installation.
 
