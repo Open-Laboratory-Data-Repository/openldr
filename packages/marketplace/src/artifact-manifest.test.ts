@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canCopy, canImportOnePass, importSourceSchema, parseArtifactManifest, pluginManifestToArtifact, type ImportSource } from './artifact-manifest';
+import { canCheck, canCopy, canImportOnePass, importSourceSchema, parseArtifactManifest, pluginManifestToArtifact, type ImportSource } from './artifact-manifest';
 
 const fp = 'a'.repeat(64);
 const base = {
@@ -279,6 +279,15 @@ describe('content-pack artifact manifest', () => {
       const m = parseArtifactManifest(exported);
       expect(m.payload.kind === 'plugin' && m.payload.importSource?.entrypoints).toEqual({ copy: 'import_copy' });
     });
+    it('refuses a decode or twin-keys entrypoint the plugin does not export', () => {
+      const checking = { ...importing, payload: { ...importing.payload, entrypoints: ['import_copy'], importSource: { connectorTypes: ['microsoft-sql'], entrypoints: { copy: 'import_copy', decode: 'import_decode', twinKeys: 'import_twin' } } } };
+      expect(() => parseArtifactManifest(checking)).toThrow(/import_decode/);
+      const noTwin = { ...checking, payload: { ...checking.payload, entrypoints: ['import_copy', 'import_decode'] } };
+      expect(() => parseArtifactManifest(noTwin)).toThrow(/import_twin/);
+      const all = { ...checking, payload: { ...checking.payload, entrypoints: ['import_copy', 'import_decode', 'import_twin'] } };
+      const m = parseArtifactManifest(all);
+      expect(m.payload.kind === 'plugin' && m.payload.importSource?.entrypoints).toEqual({ copy: 'import_copy', decode: 'import_decode', twinKeys: 'import_twin' });
+    });
   });
 });
 
@@ -309,6 +318,35 @@ describe('import source entrypoints', () => {
     expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: { queries: 'q', copy: 'c' } })).toThrow(/queries and map/);
     expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: {} })).toThrow(/queries and map, or copy/);
     expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: { checks: 'k' } })).toThrow(/queries and map, or copy/);
+  });
+  it('takes decode with copy, and twinKeys with decode', () => {
+    const decoding: ImportSource = { connectorTypes: ['microsoft-sql'], entrypoints: { copy: 'c', decode: 'd' } };
+    expect(importSourceSchema.parse(decoding)).toEqual(decoding);
+    expect(canCheck(decoding)).toBe(true);
+    const twinned: ImportSource = { connectorTypes: ['microsoft-sql'], entrypoints: { copy: 'c', decode: 'd', twinKeys: 't' } };
+    expect(importSourceSchema.parse(twinned)).toEqual(twinned);
+    expect(canCheck(twinned)).toBe(true);
+    const withQueries: ImportSource = { ...base, entrypoints: { ...base.entrypoints, copy: 'c', decode: 'd' } };
+    expect(importSourceSchema.parse(withQueries)).toEqual(withQueries);
+  });
+  it('canCheck is false without copy or without decode', () => {
+    expect(canCheck({ connectorTypes: ['microsoft-sql'], entrypoints: { copy: 'c' } })).toBe(false);
+    expect(canCheck(base)).toBe(false);
+    // Built past the schema on purpose: canCheck must still need both names.
+    expect(canCheck({ connectorTypes: ['microsoft-sql'], entrypoints: { queries: 'q', map: 'm', decode: 'd' } })).toBe(false);
+  });
+  it('refuses twinKeys without decode', () => {
+    const types = ['microsoft-sql'];
+    expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: { copy: 'c', twinKeys: 't' } })).toThrow(/twinKeys needs decode/);
+  });
+  it('refuses decode without copy', () => {
+    const types = ['microsoft-sql'];
+    expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: { queries: 'q', map: 'm', decode: 'd' } })).toThrow(/decode needs copy/);
+  });
+  it('an entrypoint name must not be empty', () => {
+    const types = ['microsoft-sql'];
+    expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: { copy: 'c', decode: '' } })).toThrow();
+    expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: { copy: 'c', decode: 'd', twinKeys: '' } })).toThrow();
   });
 });
 

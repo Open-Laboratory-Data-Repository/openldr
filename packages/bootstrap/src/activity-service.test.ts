@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { copyForActivity, createActivityService } from './activity-service';
+import { checkForActivity, copyForActivity, createActivityService } from './activity-service';
 
 const runs = [
   { id: 'r1', workflowId: 'w', triggerSource: 'webhook', status: 'completed', startedAt: '2026-07-03T10:00:00Z',
@@ -178,6 +178,66 @@ describe('copies', () => {
     expect((await svc.listRecent({ limit: 2, offset: 0 })).map((p) => p.correlationId)).toEqual(['cp-1', 'imp-1']);
     expect((await svc.listRecent({ limit: 2, offset: 2 })).map((p) => p.correlationId)).toEqual(['A']);
     const broken = createActivityService({ ...deps, importCopies: async () => { throw new Error('gone'); } } as any);
+    expect((await broken.listRecent({ limit: 10, offset: 0 })).map((p) => p.correlationId)).toEqual(['A']);
+  });
+});
+
+// A check run (import-check.ts) saves records without a workflow run. Layer proven: the mapping of a
+// check run to Activity's shape, and the merge, with fake sources. Not proven: the real check
+// service or the context wiring in index.ts.
+const checkRun = (over: Record<string, unknown> = {}) => ({
+  id: 'ck-1', kind: 'check', rev: 4, pluginId: 'openldr-v1-import', pluginVersion: '0.2.0', copyId: 'cp-1', referenceCopyId: null,
+  status: 'completed', options: {}, pageSize: 500, cursor: SECRET_KEY,
+  counts: { read: 900, saved: 850, held: 40, failed: 10, resources: 6800, labels: { passed: 850, secret_label: 50 } },
+  waiting: null, driver: 'proc-1',
+  startedAt: '2026-07-03T12:45:00Z', updatedAt: '2026-07-03T13:10:00Z', finishedAt: '2026-07-03T13:10:00Z', lastError: null, startedBy: 'amina',
+  ...over,
+});
+
+describe('check runs', () => {
+  const withChecks = (runs: ReturnType<typeof checkRun>[]) =>
+    createActivityService({ ...deps, importChecks: async () => runs.map((r) => checkForActivity(r as any)) } as any);
+
+  it('Activity lists a check run as check:<plugin>, with its counts and its state', async () => {
+    const svc = withChecks([checkRun()]);
+    const list = await svc.listRecent({ limit: 10, offset: 0 });
+    expect(list.map((p) => p.correlationId)).toEqual(['ck-1', 'A']);
+    expect(list[0]).toEqual({
+      correlationId: 'ck-1', workflowId: 'check:openldr-v1-import', source: 'check: openldr-v1-import',
+      startedAt: '2026-07-03T12:45:00Z', currentStage: 'persisted', status: 'complete',
+    });
+    expect(await svc.getLifecycle('ck-1')).toEqual({
+      correlationId: 'ck-1', status: 'complete', runIds: [],
+      stages: [
+        { stage: 'received', status: 'ok', at: '2026-07-03T12:45:00Z', detail: 'check: openldr-v1-import 0.2.0, started by amina' },
+        { stage: 'persisted', status: 'ok', at: '2026-07-03T13:10:00Z', detail: '900 read, 850 saved, 40 held back, 10 failed' },
+      ],
+    });
+  });
+
+  it('the start says whether the check carried on or began at the first request', async () => {
+    const detail = async (over: Record<string, unknown>) => (await withChecks([checkRun(over)]).getLifecycle('ck-1'))?.stages[0]?.detail;
+    expect(await detail({ carriedOn: true })).toBe('check: openldr-v1-import 0.2.0, started by amina, carried on from where it stopped');
+    expect(await detail({ carriedOn: false })).toBe('check: openldr-v1-import 0.2.0, started by amina, from the first request');
+    // A run stored before a check could carry on says neither.
+    expect(await detail({})).toBe('check: openldr-v1-import 0.2.0, started by amina');
+    expect(checkForActivity(checkRun({ carriedOn: true }) as any).carriedOn).toBe(true);
+    expect('carriedOn' in checkForActivity(checkRun() as any)).toBe(false);
+  });
+
+  it('names each check status, and keeps neither the cursor nor the labels', async () => {
+    const status = async (s: string) => (await withChecks([checkRun({ status: s, finishedAt: null })]).getLifecycle('ck-1'))?.status;
+    expect(await status('completed')).toBe('complete');
+    expect(await status('failed')).toBe('failed');
+    expect(await status('stopped')).toBe('stopped');
+    for (const s of ['queued', 'running', 'waiting', 'stopping']) expect(await status(s)).toBe('running');
+    const queued = await withChecks([checkRun({ status: 'queued', counts: { read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: {} } })]).getLifecycle('ck-1');
+    expect(queued?.stages.map((s) => s.stage)).toEqual(['received']);
+    const svc = withChecks([checkRun()]);
+    const text = JSON.stringify([checkForActivity(checkRun() as any), await svc.listRecent({ limit: 10, offset: 0 }), await svc.getLifecycle('ck-1')]);
+    expect(text).not.toContain(SECRET_KEY);
+    expect(text).not.toContain('secret_label');
+    const broken = createActivityService({ ...deps, importChecks: async () => { throw new Error('gone'); } } as any);
     expect((await broken.listRecent({ limit: 10, offset: 0 })).map((p) => p.correlationId)).toEqual(['A']);
   });
 });

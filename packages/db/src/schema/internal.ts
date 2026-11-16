@@ -1,4 +1,4 @@
-import type { Generated, JSONColumnType } from 'kysely';
+import type { ColumnType, Generated, JSONColumnType } from 'kysely';
 import type { FhirResource } from '@openldr/fhir';
 
 export interface FhirResourcesTable {
@@ -893,6 +893,20 @@ export interface ImportCopyRowsTable {
   read_at: Generated<Date>;
 }
 
+/** A request a check run held back or could not decode (migration 119). */
+export interface ImportCheckHeldTable {
+  copy_id: string;
+  key: string;
+  run_id: string;
+  reason: string;
+  label: string | null;
+  laboratory: string | null;
+  error: string | null;
+  findings: ColumnType<unknown, string, string>;
+  check: ColumnType<unknown, string, string>;
+  held_at: Generated<Date>;
+}
+
 export interface AppSettingsTable {
   key: string;
   value: string;
@@ -1100,6 +1114,7 @@ export interface InternalSchema {
   registries: RegistriesTable;
   plugin_data: PluginDataTable;
   import_copy_rows: ImportCopyRowsTable;
+  import_check_held: ImportCheckHeldTable;
   app_settings: AppSettingsTable;
   report_designs: ReportDesignsTable;
   report_design_versions: ReportDesignVersionsTable;

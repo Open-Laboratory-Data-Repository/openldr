@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { currentInFlight } from '@openldr/core';
-import { createImportCopyStore, createPluginDataStore } from '@openldr/db';
+import { createImportCheckHeldStore, createImportCopyStore, createPluginDataStore } from '@openldr/db';
 import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
 import { createPluginBroker, buildBrokerOpSchema } from './plugin-broker';
-import { CopySetChangedError, createImportCopyService } from './import-copy';
+import { CopySetChangedError, copySetHashes, copySpecSchema, createImportCopyService } from './import-copy';
+import { checkIdOf, createImportCheckService } from './import-check';
 
 function memData() {
   const m = new Map<string, unknown>();
@@ -38,6 +39,7 @@ function broker(opts: {
   maxDocBytes?: number;
   imports?: any;
   copies?: any;
+  checks?: any;
   diagnoseConnector?: any;
 }) {
   const data = memData();
@@ -60,6 +62,7 @@ function broker(opts: {
     schedules: opts.schedules,
     imports: opts.imports,
     copies: opts.copies,
+    checks: opts.checks,
     diagnoseConnector: opts.diagnoseConnector,
     maxDocBytes: opts.maxDocBytes,
     logger: { warn: (obj: unknown, msg: string) => { logged.push({ obj, msg }); } },
@@ -779,3 +782,408 @@ describe('plugin broker: copies', () => {
   });
 });
 
+
+// Layer under test: the broker's check ops over a faked check service, and in the last tests the
+// real check service over the real plugin_data and held stores on pg-mem. Not covered: a check
+// being driven, the CLI, the route that hands the broker its principal, a real browser page.
+describe('plugin broker: checks', () => {
+  const admin = { id: 'u1', roles: ['lab_admin'], username: 'amina' };
+  const IMPORT_CAPS = [{ kind: 'host:import' }];
+  const actor = { type: 'user', id: 'u1', name: 'amina' };
+  // A source key. It is the run's cursor and must never reach the page.
+  const SECRET_KEY = 'REQ-SECRET-0042';
+  const DRIVER = 'proc-7f3a';
+  const PATIENT = 'Maria Santos';
+  const checkRun = (over: Record<string, unknown> = {}) => ({
+    id: 'ck1', kind: 'check', rev: 6, pluginId: 'p1', pluginVersion: '1.0.0', copyId: 'cp1', referenceCopyId: null, status: 'running',
+    options: { tz: '+02:00' }, pageSize: 500, cursor: SECRET_KEY,
+    counts: { read: 10, saved: 6, held: 3, failed: 1, resources: 12, labels: { passed: 6 } },
+    waiting: null, driver: DRIVER,
+    startedAt: '2026-11-16T08:00:00.000Z', updatedAt: '2026-11-16T08:01:00.000Z', finishedAt: null, lastError: null, startedBy: 'amina',
+    ...over,
+  });
+  const heldRow = { copyId: 'cp1', key: SECRET_KEY, runId: 'ck1', reason: 'held', label: 'odd_age', laboratory: 'LAB-9', error: null, heldAt: '2026-11-16T08:00:30.000Z' };
+  function fakeChecks() {
+    const calls: Array<[string, unknown[]]> = [];
+    const rec = (name: string, result: () => unknown) => async (...args: unknown[]) => { calls.push([name, args]); return result(); };
+    return {
+      calls,
+      api: {
+        start: rec('start', () => checkRun({ status: 'queued', driver: null, cursor: null })),
+        get: rec('get', () => checkRun()),
+        list: rec('list', () => [checkRun(), checkRun({ id: 'ck2', status: 'completed' })]),
+        stop: rec('stop', () => checkRun({ status: 'stopping' })),
+        held: rec('held', () => ({ rows: [heldRow], total: 41 })),
+        heldItem: rec('heldItem', () => ({ ...heldRow, findings: { name: PATIENT }, check: { n: 1 } })),
+        heldItems: rec('heldItems', () => ({ items: [{ ...heldRow, findings: { name: PATIENT }, check: { n: 1 } }], total: 41 })),
+      } as Record<string, (...args: unknown[]) => Promise<unknown>>,
+    };
+  }
+  const ALL_OPS = [
+    { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: {} },
+    { kind: 'import.check.list' },
+    { kind: 'import.check.status', runId: 'ck1' },
+    { kind: 'import.check.stop', runId: 'ck1' },
+    { kind: 'import.check.held', copyId: 'cp1', offset: 0, limit: 50 },
+    { kind: 'import.check.heldItem', copyId: 'cp1', key: SECRET_KEY },
+    { kind: 'import.check.heldItems', copyId: 'cp1', offset: 0, limit: 200 },
+  ];
+
+  it('start passes the caller as the actor, the calling plugin as the plugin, and nothing else from the page', async () => {
+    const checks = fakeChecks();
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    const res = await b.handle('p1', admin, {
+      kind: 'import.check.start', copyId: 'cp1', referenceCopyId: 'cp2', options: { tz: '+02:00' }, pageSize: 200, pluginId: 'p2',
+    });
+    expect(res).toMatchObject({ ok: true, data: { id: 'ck1', status: 'queued' } });
+    expect(checks.calls).toEqual([['start', [{
+      pluginId: 'p1', copyId: 'cp1', referenceCopyId: 'cp2', options: { tz: '+02:00' }, pageSize: 200, actor,
+    }]]]);
+    // referenceCopyId is required, and may be null; the page size is left out when not given.
+    await b.handle('p1', admin, { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: {} });
+    expect(checks.calls[1]).toEqual(['start', [{ pluginId: 'p1', copyId: 'cp1', referenceCopyId: null, options: {}, actor }]]);
+    expect(await b.handle('p1', admin, { kind: 'import.check.start', copyId: 'cp1', options: {} })).toEqual({ ok: false, error: expect.stringMatching(/^invalid operation: referenceCopyId/) });
+  });
+
+  it('list, status, stop, held and heldItem pass through for the calling plugin', async () => {
+    const checks = fakeChecks();
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    expect(await b.handle('p1', admin, { kind: 'import.check.list', pluginId: 'p2' })).toMatchObject({ ok: true, data: [{ id: 'ck1' }, { id: 'ck2' }] });
+    await b.handle('p1', admin, { kind: 'import.check.status', runId: 'ck1', pluginId: 'p2' });
+    await b.handle('p1', admin, { kind: 'import.check.stop', runId: 'ck1', pluginId: 'p2' });
+    const held = await b.handle('p1', admin, { kind: 'import.check.held', copyId: 'cp1', reason: 'held', label: 'odd_age', offset: 20, limit: 10, pluginId: 'p2' });
+    expect(held).toEqual({ ok: true, data: { rows: [heldRow], total: 41 } });
+    const item = await b.handle('p1', admin, { kind: 'import.check.heldItem', copyId: 'cp1', key: SECRET_KEY });
+    expect(item).toEqual({ ok: true, data: { ...heldRow, findings: { name: PATIENT }, check: { n: 1 } } });
+    expect(checks.calls).toEqual([
+      ['list', ['p1']],
+      ['get', ['p1', 'ck1']],
+      ['stop', ['p1', 'ck1', actor]],
+      ['held', ['p1', 'cp1', { reason: 'held', label: 'odd_age', offset: 20, limit: 10 }]],
+      ['heldItem', ['p1', 'cp1', SECRET_KEY]],
+    ]);
+    // Reason and label are left out when the page gives none.
+    await b.handle('p1', admin, { kind: 'import.check.held', copyId: 'cp1', offset: 0, limit: 100 });
+    expect(checks.calls[5]).toEqual(['held', ['p1', 'cp1', { offset: 0, limit: 100 }]]);
+    // A missing run is null, not an error.
+    checks.api.get = async () => null;
+    expect(await b.handle('p1', admin, { kind: 'import.check.status', runId: 'nope' })).toEqual({ ok: true, data: null });
+    checks.api.heldItem = async () => null;
+    expect(await b.handle('p1', admin, { kind: 'import.check.heldItem', copyId: 'cp1', key: 'nope' })).toEqual({ ok: true, data: null });
+  });
+
+  it('a plugin without host:import is denied every check op, and so is a caller below lab_admin', async () => {
+    const checks = fakeChecks();
+    const noCap = broker({ caps: [], checks: checks.api });
+    for (const op of ALL_OPS) {
+      expect(await noCap.b.handle('p1', admin, op)).toEqual({ ok: false, error: expect.stringMatching(/host:import/) });
+    }
+    const withCap = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    for (const op of ALL_OPS) {
+      expect(await withCap.b.handle('p1', { id: 'u2', roles: ['lab_tech'] }, op)).toEqual({ ok: false, error: expect.stringMatching(/lab_admin/) });
+    }
+    expect(checks.calls).toEqual([]);
+    expect(noCap.audited.map((e) => e.outcome)).toEqual(ALL_OPS.map(() => 'denied'));
+  });
+
+  it('refuses a limit above 100 or below 1, a negative offset, a long key and a bad reason, before the service', async () => {
+    const checks = fakeChecks();
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    const held = (over: Record<string, unknown>) => ({ kind: 'import.check.held', copyId: 'cp1', offset: 0, limit: 50, ...over });
+    for (const bad of [{ limit: 101 }, { limit: 0 }, { limit: 1.5 }, { offset: -1 }, { reason: 'other' }, { label: 5 }]) {
+      expect(await b.handle('p1', admin, held(bad))).toEqual({ ok: false, error: expect.stringMatching(/^invalid operation: /) });
+    }
+    const tooLong = 'K'.repeat(201);
+    const refused = await b.handle('p1', admin, { kind: 'import.check.heldItem', copyId: 'cp1', key: tooLong });
+    expect(refused).toEqual({ ok: false, error: expect.stringMatching(/^invalid operation: key/) });
+    expect(JSON.stringify(refused)).not.toContain(tooLong);
+    expect(checks.calls).toEqual([]);
+    expect(await b.handle('p1', admin, held({ limit: 100 }))).toMatchObject({ ok: true });
+    expect(await b.handle('p1', admin, { kind: 'import.check.heldItem', copyId: 'cp1', key: 'K'.repeat(200) })).toMatchObject({ ok: true });
+  });
+
+  it('heldItems passes through for the calling plugin, with the findings and check of each row', async () => {
+    const checks = fakeChecks();
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    const res = await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', reason: 'error', label: 'odd_age', offset: 40, limit: 200, pluginId: 'p2' });
+    expect(res).toEqual({ ok: true, data: { items: [{ ...heldRow, findings: { name: PATIENT }, check: { n: 1 } }], total: 41 } });
+    // Reason and label are left out when the page gives none.
+    await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', offset: 0, limit: 1 });
+    expect(checks.calls).toEqual([
+      ['heldItems', ['p1', 'cp1', { reason: 'error', label: 'odd_age', offset: 40, limit: 200 }]],
+      ['heldItems', ['p1', 'cp1', { offset: 0, limit: 1 }]],
+    ]);
+  });
+
+  it('start passes fromStart when the page gives it, and refuses one that is not true or false', async () => {
+    const checks = fakeChecks();
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    await b.handle('p1', admin, { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: true });
+    await b.handle('p1', admin, { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: false });
+    expect(checks.calls).toEqual([
+      ['start', [{ pluginId: 'p1', copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: true, actor }]],
+      ['start', [{ pluginId: 'p1', copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: false, actor }]],
+    ]);
+    expect(await b.handle('p1', admin, { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: 'yes' }))
+      .toEqual({ ok: false, error: expect.stringMatching(/^invalid operation: fromStart/) });
+    expect(checks.calls).toHaveLength(2);
+  });
+
+  it('a page never sees what a run recorded about its copies, nor how it last started', async () => {
+    const checks = fakeChecks();
+    checks.api.get = async () => checkRun({ copyFinishedAt: { source: '2026-11-16T07:00:00.000Z', reference: null }, carriedOn: true });
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    const res = await b.handle('p1', admin, { kind: 'import.check.status', runId: 'ck1' }) as { ok: true; data: Record<string, unknown> };
+    expect(res.data).not.toHaveProperty('copyFinishedAt');
+    expect(res.data).not.toHaveProperty('carriedOn');
+  });
+
+  it('heldItems reads by after: passes the key or null, drops the offset, and answers next', async () => {
+    const checks = fakeChecks();
+    checks.api.heldItems = async (...args: unknown[]) => { checks.calls.push(['heldItems', args]); return { items: [], total: 41, next: 'K9' }; };
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    expect(await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', after: null, limit: 200 }))
+      .toEqual({ ok: true, data: { items: [], total: 41, next: 'K9' } });
+    await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', reason: 'held', label: 'odd_age', laboratory: 'LAB-9', after: 'K5', offset: 7, limit: 10 });
+    expect(checks.calls).toEqual([
+      ['heldItems', ['p1', 'cp1', { after: null, limit: 200 }]],
+      ['heldItems', ['p1', 'cp1', { reason: 'held', label: 'odd_age', laboratory: 'LAB-9', after: 'K5', limit: 10 }]],
+    ]);
+  });
+
+  it('heldItems needs an offset when it has no after, and refuses a bad after, before the service', async () => {
+    const checks = fakeChecks();
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    expect(await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', limit: 10 }))
+      .toEqual({ ok: false, error: expect.stringMatching(/^invalid operation: offset/) });
+    for (const after of ['', 'K'.repeat(201), 5]) {
+      expect(await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', after, limit: 10 }))
+        .toEqual({ ok: false, error: expect.stringMatching(/^invalid operation: after/) });
+    }
+    expect(checks.calls).toEqual([]);
+  });
+
+  it('heldItems refuses a limit above 200 or below 1, a negative offset and a bad reason, before the service', async () => {
+    const checks = fakeChecks();
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    const items = (over: Record<string, unknown>) => ({ kind: 'import.check.heldItems', copyId: 'cp1', offset: 0, limit: 50, ...over });
+    for (const bad of [{ limit: 201 }, { limit: 0 }, { limit: 1.5 }, { offset: -1 }, { offset: 0.5 }, { reason: 'other' }, { label: '' }, { label: 'L'.repeat(65) }, { copyId: '' }]) {
+      expect(await b.handle('p1', admin, items(bad))).toEqual({ ok: false, error: expect.stringMatching(/^invalid operation: /) });
+    }
+    expect(checks.calls).toEqual([]);
+    expect(await b.handle('p1', admin, items({ limit: 200 }))).toMatchObject({ ok: true });
+    // held keeps its own bound of 100.
+    expect(await b.handle('p1', admin, { kind: 'import.check.held', copyId: 'cp1', offset: 0, limit: 101 })).toMatchObject({ ok: false });
+  });
+
+  it('held and heldItems pass a laboratory through, and refuse a bad one before the service', async () => {
+    const checks = fakeChecks();
+    const { b, audited } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    const code = 'LAB-1.a_' + 'X'.repeat(24);
+    expect(code).toHaveLength(32);
+    await b.handle('p1', admin, { kind: 'import.check.held', copyId: 'cp1', laboratory: code, offset: 0, limit: 10 });
+    await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', reason: 'held', label: 'odd_age', laboratory: 'TZA', offset: 0, limit: 10 });
+    expect(checks.calls).toEqual([
+      ['held', ['p1', 'cp1', { laboratory: code, offset: 0, limit: 10 }]],
+      ['heldItems', ['p1', 'cp1', { reason: 'held', label: 'odd_age', laboratory: 'TZA', offset: 0, limit: 10 }]],
+    ]);
+    // The laboratory is not in the audit row: the operation and the copy only.
+    expect(audited).toEqual([
+      { pluginId: 'p1', op: 'import.check.held:cp1', outcome: 'ok', reason: undefined },
+      { pluginId: 'p1', op: 'import.check.heldItems:cp1', outcome: 'ok', reason: undefined },
+    ]);
+    expect(JSON.stringify(audited)).not.toContain('TZA');
+    for (const kind of ['import.check.held', 'import.check.heldItems']) {
+      for (const laboratory of ['X'.repeat(33), 'has space', '', 'caf\u00e9', 'a/b', 5, null]) {
+        const refused = await b.handle('p1', admin, { kind, copyId: 'cp1', laboratory, offset: 0, limit: 10 });
+        expect(refused).toEqual({ ok: false, error: expect.stringMatching(/^invalid operation: laboratory/) });
+        if (typeof laboratory === 'string' && laboratory.length > 3) expect(JSON.stringify(refused)).not.toContain(laboratory);
+      }
+    }
+    expect(checks.calls).toHaveLength(2);
+  });
+
+  it('a run whose only laboratory entry is the null one shows the page none, and a run with none stored shows none', async () => {
+    const checks = fakeChecks();
+    const onlyNull = [{ code: null, counts: { read: 10, saved: 6, held: 3, failed: 1, labels: { passed: 6 } } }];
+    let run: Record<string, unknown> = checkRun({ laboratories: onlyNull });
+    checks.api.get = async () => run;
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    expect(await b.handle('p1', admin, { kind: 'import.check.status', runId: 'ck1' })).toMatchObject({ ok: true, data: { laboratories: [], counts: { read: 10 } } });
+    run = checkRun({ laboratories: [] });
+    expect(await b.handle('p1', admin, { kind: 'import.check.status', runId: 'ck1' })).toMatchObject({ ok: true, data: { laboratories: [] } });
+    // A record from before laboratories were counted: the page gets no field, so it draws no picker.
+    run = checkRun();
+    const res = await b.handle('p1', admin, { kind: 'import.check.status', runId: 'ck1' }) as { ok: true; data: Record<string, unknown> };
+    expect('laboratories' in res.data).toBe(false);
+  });
+
+  it('a run passes its laboratories to the page as they are', async () => {
+    const checks = fakeChecks();
+    const laboratories = [
+      { code: 'A', counts: { read: 6, saved: 4, held: 2, failed: 0, labels: { passed: 4 } } },
+      { code: null, counts: { read: 4, saved: 2, held: 1, failed: 1, labels: { passed: 2 } } },
+    ];
+    checks.api.get = async () => checkRun({ laboratories });
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    const res = await b.handle('p1', admin, { kind: 'import.check.status', runId: 'ck1' });
+    expect(res).toMatchObject({ ok: true, data: { laboratories } });
+    expect(JSON.stringify(res)).not.toContain(SECRET_KEY);
+  });
+
+  it('heldItems leaves an audit row with the operation and the copy id, never a key, a value or the size', async () => {
+    const checks = fakeChecks();
+    const { b, audited, logged } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', label: 'odd_age', offset: 0, limit: 200 });
+    expect(audited).toEqual([{ pluginId: 'p1', op: 'import.check.heldItems:cp1', outcome: 'ok', reason: undefined }]);
+    const noCap = broker({ caps: [], checks: checks.api });
+    await noCap.b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'cp1', label: 'odd_age', offset: 0, limit: 200 });
+    expect(noCap.audited).toEqual([{ pluginId: 'p1', op: 'import.check.heldItems', outcome: 'denied', reason: expect.stringMatching(/host:import/) }]);
+    for (const text of [JSON.stringify(audited), JSON.stringify(logged), JSON.stringify(noCap.audited), JSON.stringify(noCap.logged)]) {
+      expect(text).not.toContain(SECRET_KEY);
+      expect(text).not.toContain(PATIENT);
+      expect(text).not.toContain('odd_age');
+      expect(text).not.toContain('41');
+    }
+  });
+
+  it('no answer carries the run cursor, the driver, the version, the starter or the kind', async () => {
+    const checks = fakeChecks();
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    const start = await b.handle('p1', admin, ALL_OPS[0]);
+    const list = await b.handle('p1', admin, ALL_OPS[1]);
+    const status = await b.handle('p1', admin, ALL_OPS[2]);
+    const stop = await b.handle('p1', admin, ALL_OPS[3]);
+    for (const a of [start, list, status, stop]) {
+      expect(a.ok).toBe(true);
+      const text = JSON.stringify(a);
+      expect(text).not.toContain(SECRET_KEY);
+      expect(text).not.toContain(DRIVER);
+      expect(text).not.toMatch(/"cursor"|"driver"|"rev"|"kind"|"pluginId"|"pluginVersion"|"startedBy"/);
+    }
+    expect((status as { data: unknown }).data).toEqual({
+      id: 'ck1', copyId: 'cp1', referenceCopyId: null, status: 'running', options: { tz: '+02:00' }, pageSize: 500,
+      counts: { read: 10, saved: 6, held: 3, failed: 1, resources: 12, labels: { passed: 6 } }, waiting: null,
+      startedAt: '2026-11-16T08:00:00.000Z', updatedAt: '2026-11-16T08:01:00.000Z', finishedAt: null, lastError: null,
+    });
+  });
+
+  it('a refused start comes back as a failed operation with the service sentence', async () => {
+    const checks = fakeChecks();
+    const { b } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    for (const sentence of [
+      'copy cp1 is running; a check needs a completed copy',
+      'check ck1 is queued; stop it before starting it again',
+      'copy cp2 not found',
+    ]) {
+      checks.api.start = async () => { throw new Error(sentence); };
+      expect(await b.handle('p1', admin, ALL_OPS[0])).toEqual({ ok: false, error: sentence });
+    }
+  });
+
+  it('says so when checks are not wired', async () => {
+    const { b } = broker({ caps: IMPORT_CAPS });
+    expect(await b.handle('p1', admin, { kind: 'import.check.list' })).toEqual({ ok: false, error: 'checks are unavailable' });
+  });
+
+  it('held and heldItem leave an audit row with the operation and the copy id, never the key or a value', async () => {
+    const checks = fakeChecks();
+    const { b, audited, logged } = broker({ caps: IMPORT_CAPS, checks: checks.api });
+    await b.handle('p1', admin, { kind: 'import.check.held', copyId: 'cp1', label: 'odd_age', offset: 0, limit: 10 });
+    await b.handle('p1', admin, { kind: 'import.check.heldItem', copyId: 'cp1', key: SECRET_KEY });
+    expect(audited).toEqual([
+      { pluginId: 'p1', op: 'import.check.held:cp1', outcome: 'ok', reason: undefined },
+      { pluginId: 'p1', op: 'import.check.heldItem:cp1', outcome: 'ok', reason: undefined },
+    ]);
+    // A refused heldItem (too long a key, then no capability) leaves nothing of the key either.
+    await b.handle('p1', admin, { kind: 'import.check.heldItem', copyId: 'cp1', key: SECRET_KEY.repeat(30) });
+    const noCap = broker({ caps: [], checks: checks.api });
+    await noCap.b.handle('p1', admin, { kind: 'import.check.heldItem', copyId: 'cp1', key: SECRET_KEY });
+    for (const text of [JSON.stringify(audited), JSON.stringify(logged), JSON.stringify(noCap.audited), JSON.stringify(noCap.logged)]) {
+      expect(text).not.toContain(SECRET_KEY);
+      expect(text).not.toContain(PATIENT);
+      expect(text).not.toContain('odd_age');
+    }
+  });
+
+  it('a plugin only reaches its own copies and runs, over the real check service', async () => {
+    const db = await makeMigratedDb();
+    const pluginData = createPluginDataStore(db);
+    const held = createImportCheckHeldStore(db);
+    const manifest = (id: string) => ({
+      schemaVersion: 1, type: 'plugin', id, version: '1.0.0',
+      capabilities: [{ kind: 'host:import' }, { kind: 'emit-fhir', resourceTypes: ['ServiceRequest'] }],
+      payload: { kind: 'plugin', entrypoints: ['c', 'd'], importSource: { connectorTypes: ['microsoft-sql'], sourceSystem: 'x', entrypoints: { copy: 'c', decode: 'd' } } },
+    });
+    // The copy entrypoint names one set, requests. A check start compares it with each copy's setSql.
+    const copySpec = { sets: [{ name: 'requests', keyQuery: { sql: 'SELECT TOP ({{limit}}) [K] FROM [R] WHERE [K] > {{after}} ORDER BY [K]' }, detailQueries: [] }] };
+    const sink = { invoke: async (entrypoint: string) => (entrypoint === 'c' ? copySpec : { groups: [] }) };
+    const plugins = { list: async () => [{ id: 'p1', version: '1.0.0', enabled: true, manifest: manifest('p1') }, { id: 'p2', version: '1.0.0', enabled: true, manifest: manifest('p2') }], loadSink: async () => sink } as any;
+    const copyDoc = (id: string, pluginId: string) => ({
+      id, kind: 'copy', rev: 1, pluginId, pluginVersion: '1.0.0', connectorId: 'c1', status: 'completed', options: {}, pageSize: 500,
+      // A source copy: a check start refuses a copy with no set requests.
+      sets: {}, setOrder: ['requests'], setSql: copySetHashes(copySpecSchema.parse(copySpec).sets), waiting: null, driver: null,
+      startedAt: '2026-11-16T08:00:00.000Z', updatedAt: '2026-11-16T08:00:00.000Z', finishedAt: '2026-11-16T08:00:00.000Z', lastError: null, startedBy: 'amina',
+    });
+    await pluginData.put('p1', '__import-copies', 'mine', copyDoc('mine', 'p1'));
+    await pluginData.put('p1', '__import-copies', 'mine2', copyDoc('mine2', 'p1'));
+    await pluginData.put('p2', '__import-copies', 'theirs', copyDoc('theirs', 'p2'));
+    const audit = async () => {};
+    const copies = createImportCopyService({
+      plugins, connectors: { get: async () => null, getDecryptedConfig: async () => ({}) } as any,
+      secretsKey: 'k', pluginData, store: createImportCopyStore(db), audit, allowed: async () => [], driverId: 'test',
+    });
+    const checks = createImportCheckService({
+      plugins, pluginData, audit, persist: async () => [], copyStore: createImportCopyStore(db), held, copies, driverId: 'test',
+      // Every copy here was made from connector c1, which both plugins may read.
+      allowed: async () => ['c1'],
+    });
+    const theirRun = checkRun({ id: checkIdOf('theirs'), pluginId: 'p2', copyId: 'theirs' });
+    await pluginData.put('p2', '__import-checks', theirRun.id, theirRun);
+    await held.put({ copyId: 'mine', key: SECRET_KEY, runId: 'r', reason: 'held', label: 'odd_age', laboratory: 'LAB-9', error: null, findings: { name: PATIENT }, check: { n: 1 } });
+    await held.put({ copyId: 'theirs', key: 'T1', runId: 'r', reason: 'held', label: null, laboratory: null, error: null, findings: { name: 'Other Person' }, check: null });
+    const { b, audited, logged } = broker({ caps: IMPORT_CAPS, checks });
+
+    // Their copy is not reachable, as the copy or as the reference.
+    const start = (copyId: string, referenceCopyId: string | null) => b.handle('p1', admin, { kind: 'import.check.start', copyId, referenceCopyId, options: {} });
+    expect(await start('theirs', null)).toEqual({ ok: false, error: 'copy theirs not found' });
+    expect(await start('mine', 'theirs')).toEqual({ ok: false, error: 'copy theirs not found' });
+    expect(await b.handle('p1', admin, { kind: 'import.check.held', copyId: 'theirs', offset: 0, limit: 10 })).toEqual({ ok: false, error: 'copy theirs not found' });
+    expect(await b.handle('p1', admin, { kind: 'import.check.heldItem', copyId: 'theirs', key: 'T1' })).toEqual({ ok: false, error: 'copy theirs not found' });
+    expect(await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'theirs', offset: 0, limit: 200 })).toEqual({ ok: false, error: 'copy theirs not found' });
+    // Their run is not listed, not shown and not stopped.
+    expect(await b.handle('p1', admin, { kind: 'import.check.list' })).toEqual({ ok: true, data: [] });
+    expect(await b.handle('p1', admin, { kind: 'import.check.status', runId: theirRun.id })).toEqual({ ok: true, data: null });
+    expect(await b.handle('p1', admin, { kind: 'import.check.stop', runId: theirRun.id })).toEqual({ ok: false, error: `check ${theirRun.id} not found` });
+    expect(await pluginData.get('p2', '__import-checks', theirRun.id)).toMatchObject({ status: 'running', rev: 6 });
+
+    // Its own copy it can check, see, hold-list and stop.
+    const started = await start('mine', null);
+    expect(started).toMatchObject({ ok: true, data: { copyId: 'mine', referenceCopyId: null, status: 'queued' } });
+    expect(JSON.stringify(started)).not.toMatch(/"cursor"|"driver"|"rev"|"startedBy"/);
+    // A second start while it is live is a failed operation with the service's sentence.
+    expect(await start('mine', null)).toEqual({ ok: false, error: `check ${checkIdOf('mine')} is queued; stop it before starting it again` });
+    expect(await start('mine', 'mine2')).toMatchObject({ ok: false });
+    // A reference that is its own copy is refused too.
+    expect(await start('mine2', 'mine2')).toEqual({ ok: false, error: 'the reference copy must be another copy than the source copy' });
+    const heldAnswer = await b.handle('p1', admin, { kind: 'import.check.held', copyId: 'mine', offset: 0, limit: 10 });
+    expect(heldAnswer).toMatchObject({ ok: true, data: { total: 1, rows: [{ key: SECRET_KEY, reason: 'held', label: 'odd_age' }] } });
+    // Through the real store: the row carries its laboratory, and the filter narrows by it.
+    expect(await b.handle('p1', admin, { kind: 'import.check.held', copyId: 'mine', laboratory: 'LAB-9', offset: 0, limit: 10 }))
+      .toMatchObject({ ok: true, data: { total: 1, rows: [{ key: SECRET_KEY, laboratory: 'LAB-9' }] } });
+    expect(await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'mine', laboratory: 'LAB-8', offset: 0, limit: 10 }))
+      .toEqual({ ok: true, data: { total: 0, items: [] } });
+    expect(await b.handle('p1', admin, { kind: 'import.check.heldItem', copyId: 'mine', key: SECRET_KEY })).toMatchObject({ ok: true, data: { findings: { name: PATIENT } } });
+    expect(await b.handle('p1', admin, { kind: 'import.check.heldItems', copyId: 'mine', offset: 0, limit: 200 })).toEqual({
+      ok: true, data: { total: 1, items: [expect.objectContaining({ key: SECRET_KEY, reason: 'held', label: 'odd_age', findings: { name: PATIENT }, check: { n: 1 } })] },
+    });
+    expect(await b.handle('p1', admin, { kind: 'import.check.stop', runId: checkIdOf('mine') })).toMatchObject({ ok: true, data: { status: 'stopped' } });
+
+    // Neither the audit rows nor the logs hold the key or a value.
+    for (const text of [JSON.stringify(audited), JSON.stringify(logged)]) {
+      expect(text).not.toContain(SECRET_KEY);
+      expect(text).not.toContain(PATIENT);
+    }
+    await db.destroy();
+  });
+});

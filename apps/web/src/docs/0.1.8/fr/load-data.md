@@ -178,6 +178,74 @@ Remplacez fichier et PLUGIN_ID. Utilisez les options documentées du plugin. Vé
 
 ![Choisir son identifiant pour importer.](guide:operator-data-plugin-ingest)
 
+## Vérifier une base source copiée
+
+Cette section sert à vérifier avec le CLI une copie terminée d'une base source. La vérification décode chaque demande avec un plugin, enregistre celles qui passent et garde les autres pour que vous les lisiez. Remplacez `<plugin-id>`, `<copy-id>` et `<run-id>` par vos propres valeurs.
+
+### 1. Lancer une vérification
+
+La commande enregistre la demande et rend la main. Le serveur fait la vérification. Ajoutez `--reference <copy-id>` pour comparer avec une copie de fiches de référence. Sans elle, rien n'est comparé.
+
+Une vérification arrêtée ou en échec reprend là où elle s'est arrêtée, avec ses compteurs. Elle repart de la première demande si elle est terminée, si vous ajoutez `--from-start`, si vous changez ses options ou sa référence, ou si la copie a été relue. Si le plugin n'a plus le droit de lire le connecteur de la copie, la vérification échoue à sa page suivante et n'enregistre plus rien.
+
+**`import check start`**
+
+```sh
+openldr import check start --plugin <plugin-id> --copy <copy-id>
+```
+
+**Résultat attendu :** une ligne avec l'identifiant de l'exécution, son statut, l'identifiant de la copie et les compteurs. Une deuxième ligne indique `Carries on from N requests read.` ou `Starts from the first request.`
+
+### 2. La suivre avec status
+
+Lancez-la aussi souvent que vous voulez. Ajoutez `--laboratories` pour une ligne par laboratoire. Une ligne qui commence par `error:` donne la raison de l'échec de la dernière page.
+
+**`import check status`**
+
+```sh
+openldr import check status <plugin-id> <run-id>
+```
+
+**Résultat attendu :** le statut passe de `running` à `completed`, et `saved`, `held` et `failed` s'additionnent pour donner `read`. La ligne affiche `copy=<copy-id>`, l'identifiant dont les commandes `held` ont besoin.
+
+### 3. Lister ce qui a été retenu
+
+Cette commande liste les demandes retenues et en échec, 50 à la fois. Affinez avec `--reason held` ou `--reason error`, `--label` et `--laboratory`. La dernière ligne donne le total.
+
+**`import check held`**
+
+```sh
+openldr import check held <plugin-id> <copy-id> --reason held
+```
+
+**Résultat attendu :** une ligne par demande, puis `total N`. Chaque ligne affiche la clé de la demande, jamais ce que le plugin a trouvé.
+
+### 4. Enregistrer les demandes retenues dans un fichier
+
+Le fichier contient un objet JSON par ligne, avec ce que le plugin a trouvé. Il contient des valeurs de patients, donc vous seul pouvez le lire. Gardez-le en lieu sûr. La commande refuse tant que la vérification tourne, et garde un fichier existant sauf si vous ajoutez `--force`.
+
+**`import check held`**
+
+```sh
+openldr import check held <plugin-id> <copy-id> --export held-requests.jsonl
+```
+
+**Résultat attendu :** la ligne `N requests written to held-requests.jsonl`.
+
+### 5. Arrêter une vérification
+
+Une vérification s'arrête à sa page suivante. Les demandes déjà enregistrées restent. Relancez `start` pour reprendre là où elle s'est arrêtée, ou ajoutez `--from-start` pour repartir de la première demande.
+
+**`import check stop`**
+
+```sh
+openldr import check stop <plugin-id> <run-id>
+```
+
+**Résultat attendu :** le statut est `stopping`, puis `stopped`.
+
+Un plugin qui a sa propre page, comme un importeur de source du Marketplace, y montre la même vérification. Son propre guide explique cette page.
+
 ## Exemples de contenu facultatifs
 
 ### Exemples de contenus

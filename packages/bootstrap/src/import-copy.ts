@@ -108,7 +108,21 @@ export interface ImportCopyServiceDeps
   driverId: string;
   /** Injectable for tests; the page reader's wait between tries. */
   sleep?: (ms: number) => Promise<void>;
+  /** The check runs over a copy (import-check.ts). Given as two functions, so this service does
+   *  not import that one. Without it, a start or a remove does not look for a check. */
+  checks?: {
+    /** The status of a live check that reads this copy, as its source or as its reference, or
+     *  null when no live check reads it. */
+    liveCheckStatus(pluginId: string, copyId: string): Promise<string | null>;
+    /** Delete up to `limit` held rows of the copy. 0 means none left. */
+    deleteHeld(copyId: string, limit: number): Promise<number>;
+    /** Delete the check record whose source is the copy. Called once its held rows are gone. */
+    deleteCheck(pluginId: string, copyId: string): Promise<void>;
+  };
 }
+
+/** Check statuses that hold the copy: a start or a remove is refused while the check is in one of them. */
+const LIVE_CHECK = new Set(['queued', 'running', 'waiting', 'stopping']);
 
 export interface ImportCopyStartInput {
   pluginId: string;
@@ -139,7 +153,9 @@ export interface ImportCopyService {
   release(): Promise<void>;
 }
 
-const copySpecSchema = z.object({
+/** What a plugin's copy entrypoint answers. The check run (import-check.ts) reads the detail names
+ *  of a set from it. */
+export const copySpecSchema = z.object({
   sets: z.array(querySpecSchema.extend({
     name: z.string().regex(NAME),
     detailQueries: querySpecSchema.shape.detailQueries.default([]),
@@ -186,8 +202,15 @@ function setHash(set: CopySet): string {
   return createHash('sha256').update(text).digest('hex');
 }
 
+/** Set name to the SHA-256 of its key and detail SQL, as a copy stores it in `setSql`. The check
+ *  run (import-check.ts) uses it to see that a copy was made from the statements the plugin names
+ *  now. */
+export function copySetHashes(sets: CopySet[]): Record<string, string> {
+  return Object.fromEntries(sets.map((s) => [s.name, setHash(s)]));
+}
+
 /** Sets whose SQL is not the stored SQL: changed, newly named, or no longer named. */
-function changedSets(stored: Record<string, string>, next: Record<string, string>): string[] {
+export function changedSets(stored: Record<string, string>, next: Record<string, string>): string[] {
   const names = new Set([...Object.keys(next), ...Object.keys(stored)]);
   return [...names].filter((n) => stored[n] !== next[n]);
 }
@@ -314,7 +337,7 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
       validateSelectSql(fillKeyQuery(set.keyQuery.sql, null, 1), 'mssql');
       for (const d of set.detailQueries) validateSelectSql(fillDetailQuery(d.sql, ['A']), 'mssql');
     }
-    return { sets: parsed.data.sets, hashes: Object.fromEntries(parsed.data.sets.map((s) => [s.name, setHash(s)])) };
+    return { sets: parsed.data.sets, hashes: copySetHashes(parsed.data.sets) };
   }
 
   /**
@@ -696,6 +719,16 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
         if (gone === 0) { outcome = 'done'; break; }
         if (!(await d.saveKeepingStop())) { outcome = 'lost'; break; }
       }
+      // The held rows of a check on this copy go with it, in batches too.
+      const checks = deps.checks;
+      while (outcome === 'done' && checks) {
+        if (entry.halt) { outcome = entry.halt === 'lost' ? 'lost' : 'release'; break; }
+        const gone = await ownDb('write', () => checks.deleteHeld(run.id, DELETE_BATCH));
+        if (gone === 0) break;
+        if (!(await d.saveKeepingStop())) { outcome = 'lost'; break; }
+      }
+      // Then the check record, so a copy made again on the same connector shows no old run.
+      if (outcome === 'done' && checks) await ownDb('write', () => checks.deleteCheck(run.pluginId, run.id));
       if (outcome === 'done') {
         for (const e of await listSkipped(run.pluginId, run.id)) await dropSkipped(run.pluginId, e);
         // One more compare-and-swap before the record goes, so a drive that lost the run never
@@ -807,6 +840,12 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
       let rereading = 0;
 
       return changeRun(plugin.id, id, async (existing) => {
+        // A start empties or extends the rows a live check reads, so it waits for the check. Asked
+        // first, so a copy that is new to this record, or read again, is refused all the same.
+        const check = deps.checks ? await ownDb('read', () => deps.checks!.liveCheckStatus(plugin.id, id)) : null;
+        if (check !== null && LIVE_CHECK.has(check)) {
+          throw new Error(`copy ${id} has a check that is ${check}; stop it before starting the copy again`);
+        }
         if (!existing) {
           rereading = 0;
           const at = now().toISOString();
@@ -886,6 +925,10 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
       return changeRun(pluginId, copyId, async (stored) => {
         if (!stored) throw new Error(`copy ${copyId} not found`);
         if (!isTerminal(stored.status)) throw new Error(`copy ${copyId} is ${stored.status}; stop it before deleting it`);
+        const check = deps.checks ? await ownDb('read', () => deps.checks!.liveCheckStatus(pluginId, copyId)) : null;
+        if (check !== null && LIVE_CHECK.has(check)) {
+          throw new Error(`copy ${copyId} has a check that is ${check}; stop it before deleting the copy`);
+        }
         return { ...stored, status: 'deleting', driver: null, waiting: null };
       }, (next, stored) => auditOrRefuse(deps.audit, {
         action: 'import.copy.delete', pluginId, connectorId: next.connectorId, runId: copyId, actor, metadata: { status: stored?.status ?? null },

@@ -6,13 +6,16 @@ import type { SecretRef } from '@/api';
 import { isSecretRef } from '@/api';
 import type { WebhookNodeData } from '../../lib/types';
 import { FormField, Select, TextInput } from './shared';
+import { randomId } from '@/lib/random-id';
 
-/** Generate a fresh shared secret. `crypto.randomUUID` is available in all modern browsers. */
+/** Generate a fresh shared secret. This is a secret, so it only uses `crypto`.
+ *  `randomId` draws from crypto whenever getRandomValues exists, which includes plain HTTP.
+ *  With no crypto at all it keeps the old Math.random text; randomId is not used then, because
+ *  its own last resort would be the same weak source. */
 function generateSecret(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    return randomId();
   }
-  // Defensive fallback for non-secure contexts where randomUUID is unavailable.
   return `${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
 }
 

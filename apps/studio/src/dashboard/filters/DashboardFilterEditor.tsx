@@ -17,11 +17,12 @@ import {
 import { MoreHorizontal } from 'lucide-react';
 import type { DashboardFilterDef } from '../../api';
 import { filterTokens } from '../template';
+import { randomId } from '@/lib/random-id';
 
 type FilterType = DashboardFilterDef['type'];
 
 function newId(): string {
-  return `f_${crypto.randomUUID().slice(0, 6)}`;
+  return `f_${randomId().slice(0, 6)}`;
 }
 
 /** Label-left / control-right row, matching `FieldEditorSheet` and AGENTS.md §5. */

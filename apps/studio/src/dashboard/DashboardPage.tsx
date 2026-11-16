@@ -24,6 +24,7 @@ import { WidgetEditorDialog } from './editor/WidgetEditorDialog';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { QueryNameSheet } from '../query/workspace/QueryNameSheet';
+import { randomId } from '@/lib/random-id';
 
 function defaultsFor(filters: DashboardFilterDef[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -96,7 +97,7 @@ export function DashboardPage() {
     setCreatedName(undefined);
     const name = uniqueName(t('dashboard.newDashboard'), all.map((d) => d.name));
     const blank: Dashboard = {
-      id: crypto.randomUUID(),
+      id: randomId(),
       ownerId: null,
       name,
       layout: [],

@@ -5,7 +5,9 @@ import { readGrant, type Capability } from '@openldr/marketplace';
 import type { PluginDataStore } from '@openldr/db';
 import type { PluginPolicy } from './policy';
 import { policyAllows } from './policy';
+import { checkReadOp } from './check-read-audit';
 import { HOST_COLLECTION_PREFIX, type ImportActor, type ImportService } from './import-run';
+import { LABORATORY_CODE, type CheckRun, type ImportCheckService } from './import-check';
 import { CopySetChangedError, type CopyRun, type CopySetProgress, type ImportCopyService } from './import-copy';
 
 /** The caller principal (the authenticated host user forwarding on the plugin's behalf). */
@@ -64,7 +66,16 @@ export type BrokerOp =
   | { kind: 'import.copy.list' }
   | { kind: 'import.copy.status'; copyId: string }
   | { kind: 'import.copy.stop'; copyId: string }
-  | { kind: 'import.copy.delete'; copyId: string; confirm: true };
+  | { kind: 'import.copy.delete'; copyId: string; confirm: true }
+  // Check runs over a finished copy (host:import too). The page names a copy and options.
+  | { kind: 'import.check.start'; copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number; fromStart?: boolean }
+  | { kind: 'import.check.list' }
+  | { kind: 'import.check.status'; runId: string }
+  | { kind: 'import.check.stop'; runId: string }
+  | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }
+  | { kind: 'import.check.heldItem'; copyId: string; key: string }
+  // By offset, or by key with `after` (a key, or null for the start). `offset` is needed only without `after`.
+  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset?: number; after?: string | null; limit: number };
 
 /** A copy as a plugin page sees it: no set's `cursor`, which is a source key, and no `driver`,
  *  which names a server process. */
@@ -78,6 +89,23 @@ export function copyForPage(run: CopyRun): PageCopyRun {
   return { ...rest, sets: shown };
 }
 
+/** A check run as a plugin page sees it: no `cursor`, which is a source key, no `driver`, which
+ *  names a server process, and none of the record's own bookkeeping. A page tells a start that
+ *  carried on by its counts: such a run has requests already read. */
+export type PageCheckRun = Omit<CheckRun, 'driver' | 'rev' | 'kind' | 'pluginId' | 'pluginVersion' | 'cursor' | 'startedBy' | 'copyFinishedAt' | 'carriedOn'>;
+
+/** The one place a check run is cut down for a plugin page. Every check op's answer goes through it.
+ *  A run where no request named a laboratory has only the null entry: the page gets an empty list,
+ *  so it draws no picker. Once one code is named, every entry goes, the null one included. */
+export function checkForPage(run: CheckRun): PageCheckRun {
+  const {
+    driver: _driver, rev: _rev, kind: _kind, pluginId: _pluginId, pluginVersion: _pluginVersion, cursor: _cursor, startedBy: _startedBy,
+    copyFinishedAt: _copyFinishedAt, carriedOn: _carriedOn, laboratories, ...rest
+  } = run;
+  if (laboratories === undefined) return rest;
+  return { ...rest, laboratories: laboratories.some((l) => l.code !== null) ? laboratories : [] };
+}
+
 export type BrokerResult = { ok: true; data: unknown } | { ok: false; error: string };
 
 /** Default cap on the JSON byte size of a persisted/forwarded plugin document. Generous —
@@ -89,6 +117,12 @@ const STR = z.string().min(1).max(256);
 const ID = z.string().min(1).max(256);
 // The import service checks option names and sizes again; this only bounds the wire shape.
 const IMPORT_OPTIONS = z.record(z.string().max(64), z.string().max(1000));
+/** A laboratory filter of the held list: the same rule as a code a group names. */
+const LABORATORY = z.string().regex(LABORATORY_CODE);
+/** The bounds of a page of held requests. The CLI checks its arguments against the same numbers. */
+export const HELD_LABEL_MAX = 64;
+export const HELD_LIST_LIMIT_MAX = 100;
+export const HELD_ITEMS_LIMIT_MAX = 200;
 
 /** Build the discriminated-union op schema. `maxDocBytes` bounds any persisted/forwarded
  *  arbitrary-object payload (doc/mapping/schedule/input) by its serialized byte size. */
@@ -147,7 +181,30 @@ export function buildBrokerOpSchema(maxDocBytes: number) {
     z.object({ kind: z.literal('import.copy.stop'), copyId: ID }),
     // Deleting a copy throws away every row it holds, so the page must say so in the op itself.
     z.object({ kind: z.literal('import.copy.delete'), copyId: ID, confirm: z.literal(true) }),
-  ]);
+    z.object({
+      kind: z.literal('import.check.start'), copyId: ID, referenceCopyId: ID.nullable(), options: IMPORT_OPTIONS,
+      pageSize: z.number().int().positive().optional(), fromStart: z.boolean().optional(),
+    }),
+    z.object({ kind: z.literal('import.check.list') }),
+    z.object({ kind: z.literal('import.check.status'), runId: ID }),
+    z.object({ kind: z.literal('import.check.stop'), runId: ID }),
+    z.object({
+      kind: z.literal('import.check.held'), copyId: ID, reason: z.enum(['held', 'error']).optional(), label: z.string().min(1).max(HELD_LABEL_MAX).optional(),
+      laboratory: LABORATORY.optional(), offset: z.number().int().min(0), limit: z.number().int().min(1).max(HELD_LIST_LIMIT_MAX),
+    }),
+    z.object({ kind: z.literal('import.check.heldItem'), copyId: ID, key: z.string().min(1).max(200) }),
+    // Each item carries its findings and check, so a page reads a batch of up to 200 in one call.
+    // `after` reads by key, as an export must while rows come and go. Without it, `offset` is needed.
+    z.object({
+      kind: z.literal('import.check.heldItems'), copyId: ID, reason: z.enum(['held', 'error']).optional(), label: z.string().min(1).max(HELD_LABEL_MAX).optional(),
+      laboratory: LABORATORY.optional(), offset: z.number().int().min(0).optional(), after: z.string().min(1).max(200).nullable().optional(),
+      limit: z.number().int().min(1).max(HELD_ITEMS_LIMIT_MAX),
+    }),
+  ]).superRefine((op, ctx) => {
+    if (op.kind === 'import.check.heldItems' && op.after === undefined && op.offset === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['offset'], message: 'Required without after' });
+    }
+  });
 }
 
 /** Maps an op to the capability it requires (undefined = private/no capability). */
@@ -160,6 +217,8 @@ function gateFor(op: BrokerOp): string | undefined {
     case 'import.allowed': case 'import.diagnose': case 'import.checks': case 'import.start': case 'import.status':
     case 'import.list': case 'import.failures': case 'import.stop': case 'import.resume':
     case 'import.copy.start': case 'import.copy.list': case 'import.copy.status': case 'import.copy.stop': case 'import.copy.delete':
+    case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop': case 'import.check.held': case 'import.check.heldItem':
+    case 'import.check.heldItems':
       return 'host:import';
     default: return undefined; // storage.*, invoke
   }
@@ -200,6 +259,8 @@ function rolesFor(op: BrokerOp): string[] {
     case 'import.list': case 'import.failures': case 'import.stop': case 'import.resume':
     // Copies read a database connector the same way, so the same rule holds.
     case 'import.copy.start': case 'import.copy.list': case 'import.copy.status': case 'import.copy.stop': case 'import.copy.delete':
+    case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop': case 'import.check.held': case 'import.check.heldItem':
+    case 'import.check.heldItems':
       return ['lab_admin'];
     // storage.*, invoke, reports.*, fhir.* — reports/fhir reads are broadly readable (native routes have no role gate).
     default: return [];
@@ -234,6 +295,8 @@ export interface PluginBrokerDeps {
   imports?: Pick<ImportService, 'allowed' | 'checks' | 'start' | 'get' | 'list' | 'failures' | 'stop' | 'resume'>;
   /** The copy service (import-copy.ts). When absent, copy ops return a structured error. */
   copies?: Pick<ImportCopyService, 'start' | 'get' | 'list' | 'stop' | 'remove'>;
+  /** The check service (import-check.ts). When absent, check ops return a structured error. */
+  checks?: Pick<ImportCheckService, 'start' | 'get' | 'list' | 'stop' | 'held' | 'heldItem' | 'heldItems'>;
   /** Step-by-step check of a host connector (connector-diagnose.ts), by connector id. */
   diagnoseConnector?: (id: string) => Promise<unknown>;
   policy: () => PluginPolicy;
@@ -460,6 +523,57 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
               }
               case 'import.copy.stop': return { ok: true, data: copyForPage(await copies.stop(pluginId, op.copyId, actor)) };
               case 'import.copy.delete': return { ok: true, data: copyForPage(await copies.remove(pluginId, op.copyId, actor)) };
+            }
+            return { ok: false, error: 'unknown operation' };
+          }
+          case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop':
+          case 'import.check.held': case 'import.check.heldItem': case 'import.check.heldItems': {
+            const checks = deps.checks;
+            if (!checks) return { ok: false, error: 'checks are unavailable' };
+            const actor: ImportActor = { type: 'user', id: principal.id, name: principal.username ?? principal.id };
+            switch (op.kind) {
+              case 'import.check.start': return { ok: true, data: checkForPage(await checks.start({
+                pluginId, copyId: op.copyId, referenceCopyId: op.referenceCopyId, options: op.options,
+                ...(op.pageSize !== undefined ? { pageSize: op.pageSize } : {}),
+                ...(op.fromStart !== undefined ? { fromStart: op.fromStart } : {}),
+                actor,
+              })) };
+              case 'import.check.list': return { ok: true, data: (await checks.list(pluginId)).map(checkForPage) };
+              case 'import.check.status': {
+                const run = await checks.get(pluginId, op.runId);
+                return { ok: true, data: run ? checkForPage(run) : null };
+              }
+              case 'import.check.stop': return { ok: true, data: checkForPage(await checks.stop(pluginId, op.runId, actor)) };
+              case 'import.check.held': {
+                const data = await checks.held(pluginId, op.copyId, {
+                  ...(op.reason !== undefined ? { reason: op.reason } : {}),
+                  ...(op.label !== undefined ? { label: op.label } : {}),
+                  ...(op.laboratory !== undefined ? { laboratory: op.laboratory } : {}),
+                  offset: op.offset, limit: op.limit,
+                });
+                // These rows hold real values. The audit row names the operation and the copy, nothing else.
+                await emit(pluginId, principal, checkReadOp('held', op.copyId), 'ok');
+                return { ok: true, data };
+              }
+              case 'import.check.heldItem': {
+                const data = await checks.heldItem(pluginId, op.copyId, op.key);
+                await emit(pluginId, principal, checkReadOp('heldItem', op.copyId), 'ok');
+                return { ok: true, data };
+              }
+              case 'import.check.heldItems': {
+                const filters = {
+                  ...(op.reason !== undefined ? { reason: op.reason } : {}),
+                  ...(op.label !== undefined ? { label: op.label } : {}),
+                  ...(op.laboratory !== undefined ? { laboratory: op.laboratory } : {}),
+                };
+                // By key when the page gives `after`; the schema makes `offset` present otherwise.
+                const data = await checks.heldItems(pluginId, op.copyId, op.after !== undefined
+                  ? { ...filters, after: op.after, limit: op.limit }
+                  : { ...filters, offset: op.offset!, limit: op.limit });
+                // As for heldItem: the operation and the copy, never a key, a value or the size.
+                await emit(pluginId, principal, checkReadOp('heldItems', op.copyId), 'ok');
+                return { ok: true, data };
+              }
             }
             return { ok: false, error: 'unknown operation' };
           }

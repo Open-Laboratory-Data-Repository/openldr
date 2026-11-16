@@ -214,8 +214,8 @@ async function world(requests: string[], facilities: string[] = []) {
     plugins: pluginsDep, connectors, secretsKey: 'k', pluginData, persist: async () => [], audit,
     createDb: () => source.db, now: () => new Date(clock.now),
   });
-  const service = (driverId = 'server-1'): ImportCopyService => createImportCopyService({
-    plugins: pluginsDep, connectors, secretsKey: 'k', pluginData, audit, store,
+  const service = (driverId = 'server-1', checks?: NonNullable<Parameters<typeof createImportCopyService>[0]['checks']>): ImportCopyService => createImportCopyService({
+    plugins: pluginsDep, connectors, secretsKey: 'k', pluginData, audit, store, checks,
     allowed: (pluginId) => imports.allowed(pluginId),
     driverId,
     createDb: () => source.db,
@@ -1025,6 +1025,70 @@ describe('copy: stop, release and delete', () => {
     expect((await w.svc.get(PLUGIN, COPY))!.status).toBe('completed');
     expect((await w.rows()).length).toBe(12);
     expect(actions(w)).not.toContain('import.copy.delete');
+  });
+
+  it('start is refused while a check on the copy is queued, running, waiting or stopping, and allowed otherwise', async () => {
+    const w = await world(keysOf(4));
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, COPY))!.status).toBe('completed');
+    let check: string | null = null;
+    const guarded = w.service('cli-1', { liveCheckStatus: async () => check, deleteHeld: async () => 0, deleteCheck: async () => {} });
+    for (const live of ['queued', 'running', 'waiting', 'stopping']) {
+      check = live;
+      await expect(guarded.start({ ...START, pageSize: 2 })).rejects.toThrow(`copy ${COPY} has a check that is ${live}; stop it before starting the copy again`);
+    }
+    // Refused starts changed nothing: the copy is still completed.
+    expect((await w.svc.get(PLUGIN, COPY))!.status).toBe('completed');
+    for (const ended of [null, 'stopped', 'completed', 'failed']) {
+      check = ended;
+      expect((await guarded.start({ ...START, pageSize: 2 })).id).toBe(COPY);
+      await drive(guarded);
+    }
+  });
+
+  it('start with reread is refused while a check reads the copy, and empties nothing', async () => {
+    const w = await world(keysOf(4));
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    const guarded = w.service('cli-1', { liveCheckStatus: async () => 'running', deleteHeld: async () => 0, deleteCheck: async () => {} });
+    // The option changes the set's SQL, so this start would empty the set and read it again.
+    const reread = { ...START, options: { tz: '+02:00', from: '2024-01-01' }, reread: true };
+    await expect(guarded.start(reread)).rejects.toThrow(`copy ${COPY} has a check that is running; stop it before starting the copy again`);
+    await expect(guarded.start({ ...reread, reread: false })).rejects.toThrow(/has a check that is running/);
+    expect((await w.svc.get(PLUGIN, COPY))!).toMatchObject({ status: 'completed', sets: { requests: { keys: 4 } } });
+    expect((await w.rows()).length).toBe(12);
+  });
+
+  it('a brand-new copy is refused while a live check names it, and no record is made', async () => {
+    const w = await world(keysOf(2));
+    const asked: Array<[string, string]> = [];
+    const guarded = w.service('cli-1', {
+      liveCheckStatus: async (pluginId, copyId) => { asked.push([pluginId, copyId]); return 'queued'; },
+      deleteHeld: async () => 0,
+      deleteCheck: async () => {},
+    });
+    await expect(guarded.start(START)).rejects.toThrow(`copy ${COPY} has a check that is queued; stop it before starting the copy again`);
+    expect(asked).toEqual([[PLUGIN, COPY]]);
+    expect(await w.stored()).toBeNull();
+    expect(actions(w)).not.toContain('import.copy.start');
+  });
+
+  it('remove deletes the held rows of its check, then the check record, then the copy record', async () => {
+    const w = await world(keysOf(2));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const steps: string[] = [];
+    let heldLeft = 2;
+    const guarded = w.service('cli-1', {
+      liveCheckStatus: async () => null,
+      deleteHeld: async (copyId) => { steps.push(`held ${copyId}`); const gone = heldLeft; heldLeft = 0; return gone; },
+      deleteCheck: async (pluginId, copyId) => { steps.push(`check ${pluginId} ${copyId}`); expect(await w.stored()).not.toBeNull(); },
+    });
+    await guarded.remove(PLUGIN, COPY, ADMIN);
+    await drive(guarded);
+    expect(steps).toEqual([`held ${COPY}`, `held ${COPY}`, `check ${PLUGIN} ${COPY}`]);
+    expect(await w.stored()).toBeNull();
   });
 
   it('remove deletes every row in batches, then the run record', async () => {

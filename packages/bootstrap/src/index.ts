@@ -47,7 +47,7 @@ import { checkCustomQueryFile, importCustomQueries } from './custom-query-transf
 import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -62,7 +62,7 @@ import { encodePushBody, advertisesGzip } from './sync-gzip';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
 import { createResultParametersLoader } from './reexpand-value-sets';
 
-import { copyForActivity, createActivityService, type ActivityCopyRun, type ActivityService } from './activity-service';
+import { checkForActivity, copyForActivity, createActivityService, type ActivityCheckRun, type ActivityCopyRun, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
 import { createValidationStrictness, type ValidationStrictness } from './validation-settings';
@@ -83,8 +83,10 @@ import { createPatientIdentifierSystems, type PatientIdentifierSystems } from '.
 import { createPatientIndex, type PatientIndex } from './patient-index';
 import { createPatientDuplicates, type PatientDuplicates } from './patient-duplicates';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
+import { brokerAccessDetails } from './check-read-audit';
 import { createImportService, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
 import { createImportCopyService, type ImportCopyService } from './import-copy';
+import { createImportCheckService, deleteCheckRecord, liveCheckStatus, type ImportCheckService } from './import-check';
 import { startImportDriver } from './import-driver';
 import { diagnoseConnector } from './connector-diagnose';
 import { policyFromConfig } from './policy';
@@ -550,6 +552,9 @@ export interface AppContext {
   /** Copies of a source database's rows to CE's own disk (import-copy.ts). Only a context built
    *  with `runImportDriver` drives them. Any context may start, stop or delete one. */
   importCopies: ImportCopyService;
+  /** Checks of a finished copy (import-check.ts). The CLI reaches the service through here. Only a
+   *  context built with `runImportDriver` drives them. */
+  importChecks: ImportCheckService;
   connectors: ConnectorStore;
   appSettings: AppSettingStore;
   featureFlags: FeatureFlags;
@@ -1006,6 +1011,12 @@ const reporting: ReportingApi = {
     importCopies: async () => {
       const out: ActivityCopyRun[] = [];
       for (const p of await importCopies.copiers()) out.push(...(await importCopies.list(p.id)).map(copyForActivity));
+      return out;
+    },
+    // A check run saves records and starts no workflow run. Counts and states only.
+    importChecks: async () => {
+      const out: ActivityCheckRun[] = [];
+      for (const p of await importChecks.checkers()) out.push(...(await importChecks.list(p.id)).map(checkForActivity));
       return out;
     },
     // `openldr ingest` saves a batch with no workflow run (bug 14). The newest 100, newest first.
@@ -1847,21 +1858,48 @@ const reporting: ReportingApi = {
   });
   // Copies of a source's rows (import-copy.ts). Every context can start, stop and delete one. Only
   // the driver below drives them, and the id here is what each drive writes on the copy it holds.
+  const importCopyStore = createImportCopyStore(internal.db);
+  const importHeld = createImportCheckHeldStore(internal.db);
+  const importDriverId = randomUUID();
   const importCopies = createImportCopyService({
     plugins,
     connectors: connectorStore,
     secretsKey: cfg.SECRETS_ENCRYPTION_KEY,
     pluginData,
-    store: createImportCopyStore(internal.db),
+    store: importCopyStore,
     audit: importAudit,
     allowed: (pluginId) => imports.allowed(pluginId),
-    driverId: randomUUID(),
+    driverId: importDriverId,
+    // A copy that a live check reads, as its source or its reference, is not started again or
+    // removed, and its held rows go with it. Given as two functions, so the copy service never
+    // imports the check service.
+    checks: {
+      liveCheckStatus: (pluginId, copyId) => liveCheckStatus(pluginData, pluginId, copyId),
+      deleteHeld: (copyId, limit) => importHeld.deleteSome(copyId, limit),
+      deleteCheck: (pluginId, copyId) => deleteCheckRecord(pluginData, pluginId, copyId),
+    },
+  });
+  // Check runs over a finished copy (import-check.ts). They read the copy, never the source, so
+  // they open no connector, but they ask the allow list as a copy does. Saves go through the same
+  // path as an import.
+  const importChecks = createImportCheckService({
+    plugins,
+    pluginData,
+    audit: importAudit,
+    persist: workflowPersist,
+    copyStore: importCopyStore,
+    held: importHeld,
+    copies: importCopies,
+    // A check stops when the plugin may no longer read the connector of its source or reference.
+    allowed: (pluginId) => imports.allowed(pluginId),
+    driverId: importDriverId,
   });
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,
     imports,
     copies: importCopies,
+    checks: importChecks,
     // Step-by-step connection check for the import page. The broker only calls this for a
     // connector the admin allowed for the calling plugin.
     diagnoseConnector: async (id: string) => {
@@ -1925,9 +1963,7 @@ const reporting: ReportingApi = {
     // reads (storage/reports/fhir/list) are not emitted. safeRecord is best-effort (never throws).
     audit: (e) => safeRecord(audit, logger, {
       actorType: 'user', actorId: e.principal.id, actorName: e.principal.username ?? e.principal.id,
-      action: e.outcome === 'denied' ? 'plugin.broker.denied' : 'plugin.broker.access',
-      entityType: 'plugin', entityId: e.pluginId,
-      metadata: { op: e.op, outcome: e.outcome, roles: e.principal.roles, ...(e.reason ? { reason: e.reason } : {}) },
+      ...brokerAccessDetails({ pluginId: e.pluginId, op: e.op, outcome: e.outcome, roles: e.principal.roles, reason: e.reason }),
     }),
   });
 
@@ -1938,6 +1974,7 @@ const reporting: ReportingApi = {
     ? startImportDriver({
       copies: importCopies,
       imports,
+      checks: importChecks,
       onError: (err) => {
         const code = (err as { code?: unknown } | null)?.code;
         logger.warn({ code: typeof code === 'string' ? code.slice(0, 40) : null }, 'the import driver could not finish a turn; it tries again in 5 seconds');
@@ -1984,6 +2021,7 @@ const reporting: ReportingApi = {
     pluginBroker,
     imports,
     importCopies,
+    importChecks,
     connectors: connectorStore,
     appSettings,
     labIdentity,
@@ -2042,7 +2080,7 @@ export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
 export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
 export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
-export type { ActivityService, ActivityImportRun, ActivityCopyRun, ActivityLifecycle, RecentPayload } from './activity-service';
+export type { ActivityService, ActivityImportRun, ActivityCopyRun, ActivityCheckRun, ActivityLifecycle, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig, readSigningKeys } from './sync-settings';
 export {
   servePull,
@@ -2177,6 +2215,8 @@ export {
   type ImportService, type ImportRun, type ImportStatus, type ImportActor, type ImportAuditEvent, type ImportStartInput,
 } from './import-run';
 export type { ImportCopyService, CopyRun, CopyStatus, CopySetProgress } from './import-copy';
+export { checkIdOf, isLiveCheck, LABORATORY_CODE } from './import-check';
+export type { ImportCheckService, ImportCheckStartInput, HeldItemsFilter, CheckRun, CheckStatus, CheckCounts, CheckLaboratory } from './import-check';
 export { CopySetChangedError } from './import-copy';
 export {
   runSetupChecks, setupCheckDeps, SETUP_CHECK_TITLE, SETUP_HINT_TEXT,
@@ -2216,6 +2256,8 @@ export * from './crash-loop';
 export * from './policy';
 export { wipeInternalDatabase, clearAuditAndRunHistory, listInternalDataTables, buildTruncateSql } from './danger';
 export { recordAuditEvent } from './record-audit';
+export { checkReadOp, recordCheckRead } from './check-read-audit';
+export type { CheckReadKind } from './check-read-audit';
 export type { AuditActor, AuditDetails } from './record-audit';
 export { copyStorage } from './storage-copy';
 export type { StorageCopyReport } from './storage-copy';

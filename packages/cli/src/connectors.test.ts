@@ -43,7 +43,7 @@ it('offers show and set for a user\'s studio preferences', () => {
 
 it('offers the import commands', () => {
   const imports = buildProgram().commands.find((command) => command.name() === 'import')!;
-  expect(imports.commands.map((command) => command.name())).toEqual(['allow', 'revoke', 'allowed', 'start', 'resume', 'status', 'stop', 'failures', 'copy']);
+  expect(imports.commands.map((command) => command.name())).toEqual(['allow', 'revoke', 'allowed', 'start', 'resume', 'status', 'stop', 'failures', 'copy', 'check']);
   const start = imports.commands.find((command) => command.name() === 'start')!;
   expect(start.options.filter((option) => option.mandatory).map((option) => option.long)).toEqual(['--plugin', '--connector']);
   const copy = imports.commands.find((command) => command.name() === 'copy')!;
@@ -51,6 +51,10 @@ it('offers the import commands', () => {
   const copyStart = copy.commands.find((command) => command.name() === 'start')!;
   expect(copyStart.options.filter((option) => option.mandatory).map((option) => option.long)).toEqual(['--plugin', '--connector']);
   expect(copyStart.options.some((option) => option.long === '--follow')).toBe(false);
+  const check = imports.commands.find((command) => command.name() === 'check')!;
+  expect(check.commands.map((command) => command.name())).toEqual(['start', 'status', 'stop', 'held']);
+  const checkStart = check.commands.find((command) => command.name() === 'start')!;
+  expect(checkStart.options.filter((option) => option.mandatory).map((option) => option.long)).toEqual(['--plugin', '--copy']);
 });
 
 it('adds a connector from a JSON file, and removes one only with --force', () => {

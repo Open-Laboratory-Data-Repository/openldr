@@ -173,6 +173,27 @@ describe('the import driver loop', () => {
     expect(f.copies.tick).not.toHaveBeenCalled();
   });
 
+  it('a turn ticks the checks after the copies, and stop lets the checks go too', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const f = fakes();
+    const checks = {
+      tick: vi.fn(async () => { f.log.push('check tick'); }),
+      idle: vi.fn(async () => { f.log.push('check idle'); }),
+      release: vi.fn(async () => { f.log.push('check release'); }),
+    };
+    const errors: unknown[] = [];
+    // A copy tick that fails does not keep the checks from their turn.
+    f.copies.tick.mockImplementationOnce(async () => { f.log.push('tick'); throw new Error('down'); });
+    const driver = startImportDriver({ copies: f.copies, imports: f.imports, checks, intervalMs: 5_000, onError: (e) => { errors.push(e); } });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.log).toEqual(['adopt', 'tick', 'check tick']);
+    expect(errors).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(f.log).toEqual(['adopt', 'tick', 'check tick', 'adopt', 'tick', 'check tick']);
+    await driver.stop();
+    expect(f.log.slice(6)).toEqual(['release', 'check release', 'idle', 'check idle']);
+  });
+
   it('stop tells an adopt in hand to resume nothing more', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const f = fakes();

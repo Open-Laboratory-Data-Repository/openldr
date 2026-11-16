@@ -7,6 +7,8 @@ export interface PluginInitContext {
   sessionId: string;
   /** Where the host draws this page. Absent means its own page. */
   site?: PluginSiteName;
+  /** The host's theme as `--openldr-*` CSS variables. An older host sends none. */
+  themeTokens?: Record<string, string>;
 }
 
 /** The places a plugin's one ui.html can be drawn in. */
@@ -45,7 +47,24 @@ export type PluginBrokerOp =
   | { kind: 'import.copy.list' }
   | { kind: 'import.copy.status'; copyId: string }
   | { kind: 'import.copy.stop'; copyId: string }
-  | { kind: 'import.copy.delete'; copyId: string; confirm: true };
+  | { kind: 'import.copy.delete'; copyId: string; confirm: true }
+  | { kind: 'import.check.start'; copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number; fromStart?: boolean }
+  | { kind: 'import.check.list' }
+  | { kind: 'import.check.status'; runId: string }
+  | { kind: 'import.check.stop'; runId: string }
+  | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }
+  | { kind: 'import.check.heldItem'; copyId: string; key: string }
+  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset?: number; after?: string | null; limit: number };
+
+/** The types of file a page may ask the host to save. */
+export type PluginDownloadMime = 'text/csv' | 'application/json' | 'text/plain';
+
+/** Operations the studio answers itself. They go over the same port as broker operations, and
+ *  the studio never forwards them to the server. */
+export type PluginHostOp = { kind: 'host.download'; filename: string; mime: PluginDownloadMime; text: string };
+
+/** Everything a page may send over its port. */
+export type PluginOp = PluginBrokerOp | PluginHostOp;
 
 export type PluginCopyStatus = 'queued' | 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed' | 'deleting';
 
@@ -88,6 +107,60 @@ export interface PluginCopyRun {
   startedBy: string;
 }
 
+export type PluginCheckStatus = 'queued' | 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed';
+
+/** A check run as the host shows it to a page (mirror of the broker's PageCheckRun). The host
+ *  never sends the run's position in the copy, nor which server process drives it. */
+export interface PluginCheckRun {
+  id: string;
+  copyId: string;
+  referenceCopyId: string | null;
+  status: PluginCheckStatus;
+  options: Record<string, string>;
+  pageSize: number;
+  /** `labels` counts each label the plugin gave, up to 12 names. Past 12, and for a label that is not
+   *  a code, the request counts under `other`. `other` is a count only and cannot be used as a filter. */
+  counts: { read: number; saved: number; held: number; failed: number; resources: number; labels: Record<string, number> };
+  /** One entry for each laboratory code the plugin named, in the order first met. They add up to
+   *  `counts`. Empty at a start; absent on a run stored before the host counted laboratories. */
+  laboratories?: PluginCheckLaboratory[];
+  waiting: { since: string; attempt: number; error: string } | null;
+  startedAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+  lastError: string | null;
+}
+
+/** The counts of one laboratory on a check. `code` is null for the requests that named none, and
+ *  for those past the 500th code. */
+export interface PluginCheckLaboratory {
+  code: string | null;
+  counts: { read: number; saved: number; held: number; failed: number; labels: Record<string, number> };
+}
+
+/** One request the check kept back, without the plugin's own detail. */
+export interface PluginHeldRow {
+  copyId: string;
+  key: string;
+  runId: string;
+  reason: 'held' | 'error';
+  label: string | null;
+  /** The laboratory code the plugin named for the request, or null. */
+  laboratory: string | null;
+  error: string | null;
+  heldAt: string;
+}
+
+/** The filters of a page of held requests, read by offset or by key (`after`). */
+export type PluginHeldItemsInput = { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; limit: number }
+  & ({ offset: number; after?: undefined } | { after: string | null; offset?: number });
+
+/** A held request with the plugin's own JSON. Only the plugin's page knows what is inside. */
+export interface PluginHeldItem extends PluginHeldRow {
+  findings: unknown;
+  check: unknown;
+}
+
 export type PluginRpcResult = { ok: true; data: unknown } | { ok: false; error: string };
 
 /** The `window.openldr` surface available to plugin code inside the iframe. */
@@ -95,6 +168,9 @@ export interface OpenLdrPluginApi {
   readonly pluginId: string;
   readonly capabilities: readonly string[];
   readonly theme: 'light' | 'dark';
+  /** The host's theme as `--openldr-*` CSS variables, also set on the page's root. Empty when
+   *  the host sends none. Read them in CSS with a fallback: `var(--openldr-bg, #fff)`. */
+  readonly themeTokens: Readonly<Record<string, string>>;
   readonly locale: string;
   /** Where the host drew this page: 'page', 'widget' (dashboard card) or 'panel' (side panel). */
   readonly site: PluginSiteName;
@@ -148,6 +224,34 @@ export interface OpenLdrPluginApi {
       /** Deletes the copy and every row it holds. */
       remove(copyId: string): Promise<PluginCopyRun>;
     };
+    /** A check of a finished copy: the plugin decodes each request, CE saves what passes and keeps
+     *  the rest. One per copy. The held calls return real values; show them to the person, never log them. */
+    check: {
+      /** Records the request and returns. Fails with a sentence when the copy is not finished, a run is live, or a copy is not this plugin's.
+       *  A stopped or failed run carries on from its last page, with its counts and held rows, unless `fromStart` is true, it reads
+       *  other options or another reference, or a copy was read again since it began. The run it answers tells which: a run
+       *  that carried on has requests already read. */
+      start(input: { copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number; fromStart?: boolean }): Promise<PluginCheckRun>;
+      list(): Promise<PluginCheckRun[]>;
+      status(runId: string): Promise<PluginCheckRun | null>;
+      stop(runId: string): Promise<PluginCheckRun>;
+      /** `laboratory` is a code of 1 to 32 of A-Z a-z 0-9 . _ -; the host refuses any other. */
+      held(input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }): Promise<{ rows: PluginHeldRow[]; total: number }>;
+      heldItem(input: { copyId: string; key: string }): Promise<PluginHeldItem | null>;
+      /** The same rows as `held`, in the same order, each with its findings and check. `limit` is 1 to 200.
+       *  Give `after` to read by key, as an export should: null for the first page, then the `next` of the
+       *  page before. `offset` is then ignored, and the answer adds `next`, the last key of the page or null
+       *  when no row is left. A page read by key does not move while a check adds or removes rows. */
+      heldItems(input: PluginHeldItemsInput): Promise<{ items: PluginHeldItem[]; total: number; next?: string | null }>;
+    };
+  };
+  /** Files the studio saves for the page. The page's frame cannot download. */
+  files: {
+    /** The studio saves `text` as a file named `filename` in its own document. Refused when the
+     *  name is not a plain name ending in .csv, .json or .txt to fit the type, when the text is
+     *  over 64 MB in UTF-8, or when the page saved another file less than a second ago. The text
+     *  never goes to the server. */
+    download(input: { filename: string; mime: PluginDownloadMime; text: string }): Promise<void>;
   };
 }
 

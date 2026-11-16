@@ -1,4 +1,4 @@
-import type { PluginBrokerOp, PluginRpcResult } from './types';
+import type { PluginOp, PluginRpcResult } from './types';
 
 /** Minimal MessagePort surface used by the RPC core (works for real ports + test fakes). */
 export interface PortLike {
@@ -8,7 +8,7 @@ export interface PortLike {
 }
 
 /** Promise-based, id-correlated RPC over a MessagePort. The host replies { id, result }. */
-export function makeRpc(port: PortLike): { call(op: PluginBrokerOp): Promise<unknown> } {
+export function makeRpc(port: PortLike): { call(op: PluginOp): Promise<unknown> } {
   let seq = 0;
   const pending = new Map<number, { resolve(v: unknown): void; reject(e: Error): void }>();
   port.onmessage = (ev) => {
@@ -63,6 +63,7 @@ function pluginBootstrapV1(): void {
     pluginId: '',
     capabilities: [] as string[],
     theme: 'light',
+    themeTokens: Object.freeze({}) as Readonly<Record<string, string>>,
     locale: 'en',
     site: 'page',
     ready,
@@ -114,20 +115,63 @@ function pluginBootstrapV1(): void {
         stop: (copyId: string) => call({ kind: 'import.copy.stop', copyId }),
         remove: (copyId: string) => call({ kind: 'import.copy.delete', copyId, confirm: true }),
       },
+      check: {
+        start: (input: { copyId: string; referenceCopyId: string | null; options: Record<string, string>; pageSize?: number; fromStart?: boolean }) =>
+          call({ kind: 'import.check.start', copyId: input.copyId, referenceCopyId: input.referenceCopyId, options: input.options, pageSize: input.pageSize, fromStart: input.fromStart }),
+        list: () => call({ kind: 'import.check.list' }),
+        status: (runId: string) => call({ kind: 'import.check.status', runId }),
+        stop: (runId: string) => call({ kind: 'import.check.stop', runId }),
+        held: (input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }) =>
+          call({ kind: 'import.check.held', copyId: input.copyId, reason: input.reason, label: input.label, laboratory: input.laboratory, offset: input.offset, limit: input.limit }),
+        heldItem: (input: { copyId: string; key: string }) => call({ kind: 'import.check.heldItem', copyId: input.copyId, key: input.key }),
+        heldItems: (input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset?: number; after?: string | null; limit: number }) =>
+          call({ kind: 'import.check.heldItems', copyId: input.copyId, reason: input.reason, label: input.label, laboratory: input.laboratory, offset: input.offset, after: input.after, limit: input.limit }),
+      },
+    },
+    // The studio answers this itself and saves the file in its own document.
+    files: {
+      download: (input: { filename: string; mime: string; text: string }) =>
+        call({ kind: 'host.download', filename: input.filename, mime: input.mime, text: input.text }).then(() => undefined),
     },
   };
   (window as unknown as { openldr: unknown }).openldr = api;
 
-  function applyTheme(theme: string): void {
-    if (theme !== 'light' && theme !== 'dark') return;
-    api.theme = theme;
-    try { document.documentElement.setAttribute('data-openldr-theme', theme); } catch { /* no-op */ }
+  // The theme variables this page set on its root last time, so a name the host no longer
+  // sends can be removed.
+  let setNames: string[] = [];
+
+  /** Stamp light or dark on the root. When the host sends tokens, set each `--openldr-*`
+   *  variable on the root and remove the ones it stopped sending. No tokens (an older host,
+   *  or a message that carries none) leaves the current ones as they are.
+   *  setProperty writes the root's inline style, which beats every stylesheet rule, the page's
+   *  own included. That is on purpose: the host is the source of truth for these tokens. A
+   *  page that wants its own look reads them with a fallback, or does not read them at all. */
+  function applyTheme(theme: string, tokens?: unknown): void {
+    if (theme === 'light' || theme === 'dark') {
+      api.theme = theme;
+      try { document.documentElement.setAttribute('data-openldr-theme', theme); } catch { /* no-op */ }
+    }
+    if (!tokens || typeof tokens !== 'object' || Array.isArray(tokens)) return;
+    const next: Record<string, string> = {};
+    for (const name of Object.keys(tokens)) {
+      const value = (tokens as Record<string, unknown>)[name];
+      if (!/^--openldr-[a-z0-9-]{1,40}$/.test(name)) continue;
+      if (typeof value !== 'string' || value.length > 200 || /[<>{};]/.test(value)) continue;
+      next[name] = value;
+    }
+    try {
+      const style = document.documentElement.style;
+      for (const name of setNames) if (!(name in next)) style.removeProperty(name);
+      for (const name of Object.keys(next)) style.setProperty(name, next[name]);
+    } catch { /* no-op */ }
+    setNames = Object.keys(next);
+    api.themeTokens = Object.freeze(next);
   }
 
   window.addEventListener('message', (ev: MessageEvent) => {
-    const data = ev.data as { type?: string; theme?: string; context?: Record<string, unknown> } | undefined;
+    const data = ev.data as { type?: string; theme?: string; tokens?: unknown; context?: Record<string, unknown> } | undefined;
     // Live host theme changes (the host posts these when the user toggles dark/light).
-    if (data && data.type === 'openldr:theme') { applyTheme(data.theme ?? 'light'); return; }
+    if (data && data.type === 'openldr:theme') { applyTheme(data.theme ?? 'light', data.tokens); return; }
     if (!data || data.type !== 'openldr:init' || port) return;
     port = ev.ports[0];
     if (!port) return;
@@ -141,10 +185,10 @@ function pluginBootstrapV1(): void {
       else w.reject(new Error(m.result?.error ?? 'plugin host call failed'));
     };
     port.start();
-    const ctx = (data.context ?? {}) as { pluginId?: string; capabilities?: string[]; theme?: string; locale?: string; site?: string };
+    const ctx = (data.context ?? {}) as { pluginId?: string; capabilities?: string[]; theme?: string; themeTokens?: unknown; locale?: string; site?: string };
     api.pluginId = ctx.pluginId ?? '';
     api.capabilities = ctx.capabilities ?? [];
-    applyTheme(ctx.theme ?? 'light');
+    applyTheme(ctx.theme ?? 'light', ctx.themeTokens);
     api.locale = ctx.locale ?? 'en';
     // Where the host drew this page: its own page, a dashboard card, or the side panel.
     api.site = ctx.site === 'widget' || ctx.site === 'panel' ? ctx.site : 'page';

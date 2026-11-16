@@ -51,7 +51,8 @@ export type UiContribution = z.infer<typeof uiContributionSchema>;
 
 /** Declares that a plugin can drive an import: CE pages through a host database connector with
  *  SQL from these entrypoints and saves what `map` returns. See packages/bootstrap import-run.ts.
- *  `copy` names the entrypoint that lists what to copy to CE's own disk. A plugin gives
+ *  `copy` names the entrypoint that lists what to copy to CE's own disk. `decode` and `twinKeys`
+ *  are for a check run (see `canCheck`). A plugin gives
  *  `queries` and `map` together, or `copy`, or all three. No field has a default, so a manifest
  *  without `copy` parses to the same object as before and its signature still verifies. */
 export const importSourceSchema = z.object({
@@ -63,11 +64,21 @@ export const importSourceSchema = z.object({
     checks: z.string().min(1).optional(),
     map: z.string().min(1).optional(),
     copy: z.string().min(1).optional(),
+    // `decode` turns a copied page into requests for a check run. `twinKeys` names the keys a
+    // request shares with another. Both need `copy`, and `twinKeys` needs `decode`.
+    decode: z.string().min(1).optional(),
+    twinKeys: z.string().min(1).optional(),
   }).superRefine((e, ctx) => {
     if ((e.queries === undefined) !== (e.map === undefined)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'importSource.entrypoints needs both queries and map, or neither' });
     } else if (e.queries === undefined && e.copy === undefined) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'importSource.entrypoints needs queries and map, or copy' });
+    }
+    if (e.decode !== undefined && e.copy === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'importSource.entrypoints decode needs copy' });
+    }
+    if (e.twinKeys !== undefined && e.decode === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'importSource.entrypoints twinKeys needs decode' });
     }
   }),
   // Stamped on every saved record as its source system. Defaults to the plugin id.
@@ -83,6 +94,11 @@ export function canImportOnePass(source: ImportSource): boolean {
 /** True when the plugin can be copied from: it names a `copy` entrypoint. */
 export function canCopy(source: ImportSource): boolean {
   return source.entrypoints.copy !== undefined;
+}
+
+/** True when the plugin can be checked: it names both `copy` and `decode`. */
+export function canCheck(source: ImportSource): boolean {
+  return source.entrypoints.copy !== undefined && source.entrypoints.decode !== undefined;
 }
 
 const pluginPayload = z.object({
@@ -146,7 +162,7 @@ export function parseArtifactManifest(raw: unknown): ArtifactManifest {
       throw new Error(`artifact ${manifest.id}: payload.importSource requires the host:import capability`);
     }
     const exported = new Set(manifest.payload.entrypoints);
-    for (const name of [entrypoints.queries, entrypoints.checks, entrypoints.map, entrypoints.copy]) {
+    for (const name of [entrypoints.queries, entrypoints.checks, entrypoints.map, entrypoints.copy, entrypoints.decode, entrypoints.twinKeys]) {
       if (name !== undefined && !exported.has(name)) {
         throw new Error(`artifact ${manifest.id}: import entrypoint '${name}' is not in payload.entrypoints`);
       }

@@ -1,0 +1,1576 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  CopySetTooLargeError, createImportCheckHeldStore, createImportCopyStore, createPluginDataStore,
+  type CopyRow, type ImportCheckHeldStore, type ImportCopyStore, type PluginDataStore,
+} from '@openldr/db';
+import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
+import { STALE_MS, type ImportActor, type ImportAuditEvent } from './import-run';
+import { copyIdOf, copySetHashes, copySpecSchema, createImportCopyService, type CopyRun, type ImportCopyService } from './import-copy';
+import { checkIdOf, createImportCheckService, deleteCheckRecord, isLiveCheck, liveCheckStatus, type CheckRun, type ImportCheckService } from './import-check';
+import { checkForPage } from './plugin-broker';
+
+// Layer under test: the check service over the real plugin_data store, the real copy row store and
+// the real held store on pg-mem, with the real copy service for reading and removing a copy. The
+// plugin (wasm), CE's save path and the clock are fakes. Copies are written straight to the store,
+// as a finished copy would leave them. Two services on one database stand for two processes.
+// Not covered here: real wasm and its timeout, real Postgres (jsonb, key order, a full disk), a
+// real FHIR save.
+
+const ADMIN: ImportActor = { type: 'user', id: 'u-admin', name: 'admin' };
+const PLUGIN = 'v1-import';
+const OTHER = 'other-plugin';
+const SRC = copyIdOf(PLUGIN, 'c1');
+const REF = copyIdOf(PLUGIN, 'c2');
+const CHECK = checkIdOf(SRC);
+const SECRET = 'Maria Santos';
+const CAP = 64 * 1024 * 1024;
+
+type Row = Record<string, unknown>;
+type Group = { key: string; held?: boolean; findings?: unknown; check?: unknown; resources?: unknown[]; error?: string; label?: string; laboratory?: unknown };
+interface DecodeInput {
+  options: Record<string, string>; now: string; dictionaries: Record<string, Row[]>; keys: string[];
+  rows: Record<string, Row[]>; twins: Record<string, Row[]>;
+}
+
+const keysOf = (n: number, prefix = 'REQ') => Array.from({ length: n }, (_, i) => `${prefix}${String(i + 1).padStart(4, '0')}`);
+const reqRow = (k: string): Row => ({ RequestID: k, Patient: SECRET });
+const resRows = (k: string): Row[] => [{ RequestID: k, Value: 4.2 }, { RequestID: k, Value: 5.1 }];
+const requestRows = (keys: string[]): CopyRow[] => keys.flatMap((k) => [
+  { detail: 'requests', key: k, seq: 0, row: reqRow(k) },
+  ...resRows(k).map((row, seq) => ({ detail: 'results', key: k, seq, row })),
+]);
+const FACILITIES: CopyRow[] = [
+  { detail: 'facilities', key: 'F1', seq: 0, row: { FacilityCode: 'F1', Name: 'Clinic One' } },
+  { detail: 'facilities', key: 'F2', seq: 0, row: { FacilityCode: 'F2', Name: 'Clinic Two' } },
+];
+const setSpec = (name: string, details: string[]) => ({
+  name, keyQuery: { sql: `SELECT TOP ({{limit}}) [K] FROM [${name}] WHERE [K] > {{after}} ORDER BY [K]` },
+  detailQueries: details.map((d) => ({ name: d, sql: `SELECT [K] AS [__key], * FROM [${d}] WHERE [K] IN ({{keys}})` })),
+});
+const pass = (key: string): Group => ({ key, resources: [{ resourceType: 'ServiceRequest', id: key }], label: 'passed' });
+
+function manifest(entrypoints: Record<string, string>, id = PLUGIN) {
+  return {
+    schemaVersion: 1, type: 'plugin', id, version: '1.2.0',
+    capabilities: [{ kind: 'host:import' }, { kind: 'emit-fhir', resourceTypes: ['ServiceRequest', 'Patient'] }],
+    payload: {
+      kind: 'plugin', entrypoints: Object.values(entrypoints),
+      importSource: { connectorTypes: ['microsoft-sql'], sourceSystem: 'openldr-v1', entrypoints },
+    },
+  };
+}
+const CHECKER = { copy: 'import_copy', decode: 'import_decode', twinKeys: 'import_twin_keys' };
+
+let internalDb: Awaited<ReturnType<typeof makeMigratedDb>>;
+
+async function world(opts: { entrypoints?: Record<string, string> } = {}) {
+  const raw = createPluginDataStore(internalDb);
+  const plainCheckPuts: string[] = [];
+  const runSaves: CheckRun[] = [];
+  const pluginData: PluginDataStore = {
+    ...raw,
+    async put(pluginId, collection, key, doc) {
+      if (collection === '__import-checks') plainCheckPuts.push(key);
+      return raw.put(pluginId, collection, key, doc);
+    },
+    async putIfRev(pluginId, collection, key, doc, expectedRev) {
+      const wrote = await raw.putIfRev(pluginId, collection, key, doc, expectedRev);
+      if (wrote && collection === '__import-checks') runSaves.push(structuredClone(doc) as CheckRun);
+      return wrote;
+    },
+  };
+  const realCopyStore = createImportCopyStore(internalDb);
+  const readSetCalls: Array<{ set: string; maxBytes: number }> = [];
+  let readSetFault: ((set: string, maxBytes: number) => unknown) | null = null;
+  const readCalls: Array<{ copyId: string; set: string; keys: number }> = [];
+  const copyStore: ImportCopyStore = {
+    ...realCopyStore,
+    async read(copyId, setName, keys) {
+      readCalls.push({ copyId, set: setName, keys: keys.length });
+      return realCopyStore.read(copyId, setName, keys);
+    },
+    async readSet(copyId, setName, maxBytes) {
+      readSetCalls.push({ set: setName, maxBytes });
+      if (readSetFault) throw readSetFault(setName, maxBytes);
+      return realCopyStore.readSet(copyId, setName, maxBytes);
+    },
+  };
+  const realHeld = createImportCheckHeldStore(internalDb);
+  let heldPutFaults = 0;
+  const heldPuts: unknown[] = [];
+  const held: ImportCheckHeldStore = {
+    ...realHeld,
+    async put(item) {
+      heldPuts.push(structuredClone(item));
+      if (heldPutFaults > 0) {
+        heldPutFaults -= 1;
+        // What Postgres says on a full disk. Its detail field quotes the row.
+        throw Object.assign(new Error('could not extend file: No space left on device'), { code: '53100', detail: `Failing row contains (${SECRET})` });
+      }
+      return realHeld.put(item);
+    },
+  };
+  const audited: ImportAuditEvent[] = [];
+  const audit = async (e: ImportAuditEvent) => { audited.push(structuredClone(e)); };
+  const plugins: Array<{ id: string; version: string; enabled: boolean; manifest: Record<string, unknown> }> = [
+    { id: PLUGIN, version: '1.2.0', enabled: true, manifest: manifest(opts.entrypoints ?? CHECKER) },
+    { id: OTHER, version: '1.0.0', enabled: true, manifest: manifest({ copy: 'import_copy' }, OTHER) },
+  ];
+  const decodeCalls: DecodeInput[] = [];
+  const twinCalls: Array<{ options: Record<string, string>; keys: string[] }> = [];
+  let decodeFn: (input: DecodeInput) => unknown = (input) => ({ groups: input.keys.map(pass) });
+  let twinFn: (keys: string[]) => unknown = (keys) => ({ keys: keys.map((k) => `T-${k}`) });
+  const copyCalls: Array<Record<string, string>> = [];
+  /** The plugin's copy answer. The source names requests (two details) and one dictionary; a copy
+   *  made with the option role=reference names the set twins. */
+  let copyFn: (options: Record<string, string>) => unknown = (options) => (options.role === 'reference'
+    ? { sets: [setSpec('twins', ['requests', 'results'])] }
+    : { sets: [setSpec('requests', ['requests', 'results']), setSpec('facilities', [])] });
+  const invoke = vi.fn(async (entrypoint: string, input: unknown) => {
+    if (entrypoint === 'import_decode') {
+      const i = structuredClone(input) as DecodeInput;
+      decodeCalls.push(i);
+      return decodeFn(i);
+    }
+    if (entrypoint === 'import_twin_keys') {
+      const i = input as { options: Record<string, string>; keys: string[] };
+      twinCalls.push(structuredClone(i));
+      return twinFn(i.keys);
+    }
+    if (entrypoint === 'import_copy') {
+      const i = input as { options: Record<string, string> };
+      copyCalls.push(structuredClone(i.options));
+      return copyFn(i.options);
+    }
+    throw new Error(`no entrypoint ${entrypoint}`);
+  });
+  const pluginsDep = { list: async () => plugins, loadSink: async () => ({ invoke }) };
+  const persisted: Array<{ resources: unknown[]; batchId: string }> = [];
+  let persistFault: ((resources: unknown[]) => unknown) | null = null;
+  const persist = async (resources: unknown[], provenance: { batchId: string }) => {
+    const fault = persistFault?.(resources);
+    if (fault) throw fault;
+    persisted.push({ resources, batchId: provenance.batchId });
+    return [];
+  };
+  const clock = { now: Date.UTC(2026, 10, 16, 12, 0, 0) };
+  const sleeps: number[] = [];
+  const connectors = { get: async () => null, getDecryptedConfig: async () => ({}) };
+  /** The connectors an admin allowed the plugin to read. Every copy here is made from one of them. */
+  const allowedConnectors = new Set(['c1', 'c2', 'c9']);
+  const allowedCalls: string[] = [];
+  const allowed = async (pluginId: string) => { allowedCalls.push(pluginId); return [...allowedConnectors]; };
+
+  const copies: ImportCopyService = createImportCopyService({
+    plugins: pluginsDep, connectors, secretsKey: 'k', pluginData, audit, store: realCopyStore,
+    allowed: async () => [], driverId: 'server-1', now: () => new Date(clock.now),
+    checks: {
+      liveCheckStatus: (pluginId, copyId) => liveCheckStatus(raw, pluginId, copyId),
+      deleteHeld: (copyId, limit) => realHeld.deleteSome(copyId, limit),
+      deleteCheck: (pluginId, copyId) => deleteCheckRecord(raw, pluginId, copyId),
+    },
+  });
+  const service = (driverId = 'server-1'): ImportCheckService => createImportCheckService({
+    plugins: pluginsDep, pluginData, audit, persist, copyStore, held, copies, driverId, allowed,
+    now: () => new Date(clock.now),
+    sleep: async (ms) => { sleeps.push(ms); },
+  });
+  const svc = service();
+  worlds.push({ plainCheckPuts });
+
+  /** Write a copy as a finished one leaves it: its record and its rows. */
+  async function seedCopy(copyId: string, connectorId: string, status: CopyRun['status'], sets: Record<string, CopyRow[]>, pluginId = PLUGIN) {
+    const at = new Date(clock.now).toISOString();
+    const setOrder = Object.keys(sets);
+    const options: Record<string, string> = copyId === REF ? { role: 'reference' } : {};
+    const setSqlFor = (o: Record<string, string>) => {
+      const spec = copySpecSchema.safeParse(copyFn(o));
+      return spec.success ? copySetHashes(spec.data.sets) : {};
+    };
+    const run: CopyRun = {
+      id: copyId, kind: 'copy', rev: 1, pluginId, pluginVersion: '1.2.0', connectorId, status,
+      options, pageSize: 500,
+      sets: Object.fromEntries(setOrder.map((n) => [n, { cursor: null, keys: 0, rows: sets[n].length, bytes: 0, skipped: 0, done: true }])),
+      // The statements the copy was made from: the plugin's copy answer for its options, as now.
+      setOrder, setSql: setSqlFor(options), waiting: null, driver: null, startedAt: at, updatedAt: at, finishedAt: at, lastError: null, startedBy: 'admin',
+    };
+    await raw.put(pluginId, '__import-copies', copyId, run);
+    for (const [name, rows] of Object.entries(sets)) {
+      await realCopyStore.replaceKeys(copyId, name, [...new Set(rows.map((r) => r.key))], rows);
+    }
+  }
+  const setCopyStatus = async (copyId: string, status: CopyRun['status'], over: Partial<CopyRun> = {}) => {
+    const run = (await raw.get(PLUGIN, '__import-copies', copyId)) as CopyRun;
+    await raw.put(PLUGIN, '__import-copies', copyId, { ...run, status, rev: run.rev + 1, ...over });
+  };
+
+  return {
+    svc, service, copies, raw, audited, runSaves, decodeCalls, twinCalls, invoke, persisted, clock, sleeps, plugins,
+    readSetCalls, readCalls, heldPuts, copyCalls, allowedCalls,
+    revoke: (connectorId: string) => { allowedConnectors.delete(connectorId); },
+    setCopy: (fn: (options: Record<string, string>) => unknown) => { copyFn = fn; }, realHeld, seedCopy, setCopyStatus,
+    setDecode: (fn: (input: DecodeInput) => unknown) => { decodeFn = fn; },
+    setTwinKeys: (fn: (keys: string[]) => unknown) => { twinFn = fn; },
+    failPersist: (fn: ((resources: unknown[]) => unknown) | null) => { persistFault = fn; },
+    failReadSet: (fn: ((set: string, maxBytes: number) => unknown) | null) => { readSetFault = fn; },
+    failHeldPuts: (n: number) => { heldPutFaults = n; },
+    stored: async () => (await raw.get(PLUGIN, '__import-checks', CHECK)) as CheckRun | null,
+    heldAll: async () => realHeld.list(SRC, { offset: 0, limit: 1000 }),
+  };
+}
+type World = Awaited<ReturnType<typeof world>>;
+
+/** A source copy of `n` requests and one dictionary, completed. */
+async function sourceCopy(w: World, keys: string[]) {
+  await w.seedCopy(SRC, 'c1', 'completed', { requests: requestRows(keys), facilities: FACILITIES });
+}
+const START = { pluginId: PLUGIN, copyId: SRC, referenceCopyId: null, options: { site: 'A' }, actor: ADMIN };
+async function drive(svc: ImportCheckService) {
+  await svc.tick();
+  await svc.idle();
+}
+const actions = (w: World) => w.audited.map((e) => e.action).filter((a) => a.startsWith('import.check.'));
+
+let worlds: Array<{ plainCheckPuts: string[] }> = [];
+beforeEach(async () => { internalDb = await makeMigratedDb(); worlds = []; });
+afterEach(async () => {
+  await internalDb.destroy();
+  // A check record is written only by compare-and-swap.
+  for (const w of worlds) expect(w.plainCheckPuts).toEqual([]);
+});
+
+describe('check: starting', () => {
+  it('start_is_refused_until_the_copy_is_completed', async () => {
+    const w = await world();
+    await expect(w.svc.start(START)).rejects.toThrow(`copy ${SRC} not found`);
+    await w.seedCopy(SRC, 'c1', 'running', { requests: requestRows(keysOf(2)) });
+    await expect(w.svc.start(START)).rejects.toThrow(`copy ${SRC} is running; a check needs a completed copy`);
+    await w.setCopyStatus(SRC, 'completed');
+
+    // The reference: another completed copy of the same plugin.
+    await expect(w.svc.start({ ...START, referenceCopyId: SRC })).rejects.toThrow(/reference copy must be another copy/);
+    await expect(w.svc.start({ ...START, referenceCopyId: REF })).rejects.toThrow(`copy ${REF} not found`);
+    await w.seedCopy(REF, 'c2', 'failed', { twins: [] });
+    await expect(w.svc.start({ ...START, referenceCopyId: REF })).rejects.toThrow(`copy ${REF} is failed; a check needs a completed copy`);
+    // A copy of another plugin is not reachable by this one.
+    const foreign = copyIdOf(OTHER, 'c9');
+    await w.seedCopy(foreign, 'c9', 'completed', { twins: [] }, OTHER);
+    await expect(w.svc.start({ ...START, referenceCopyId: foreign })).rejects.toThrow(`copy ${foreign} not found`);
+    // A plugin that cannot be checked.
+    await w.seedCopy(foreign, 'c9', 'completed', { requests: [] }, OTHER);
+    await expect(w.svc.start({ ...START, pluginId: OTHER, copyId: foreign })).rejects.toThrow(/cannot be checked/);
+    // Bad settings.
+    await expect(w.svc.start({ ...START, pageSize: 0 })).rejects.toThrow(/page size must be a whole number from 1 to 2000/);
+    await expect(w.svc.start({ ...START, pageSize: 2001 })).rejects.toThrow(/page size/);
+    await expect(w.svc.start({ ...START, options: { 'bad name': 'x' } })).rejects.toThrow(/invalid option/);
+    expect(w.audited).toEqual([]);
+
+    const run = await w.svc.start(START);
+    expect(run).toMatchObject({
+      id: CHECK, kind: 'check', rev: 1, pluginId: PLUGIN, pluginVersion: '1.2.0', copyId: SRC, referenceCopyId: null,
+      status: 'queued', options: { site: 'A' }, pageSize: 500, cursor: null,
+      counts: { read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: {} },
+      waiting: null, driver: null, finishedAt: null, lastError: null, startedBy: 'admin',
+    });
+    expect(CHECK).toMatch(/^[0-9a-f]{32}$/);
+    expect(w.audited.at(-1)).toEqual({
+      action: 'import.check.start', pluginId: PLUGIN, runId: CHECK, actor: ADMIN,
+      metadata: { copyId: SRC, referenceCopyId: null, pageSize: 500, carriedOn: false },
+    });
+    expect(await w.svc.checkers()).toEqual([{ id: PLUGIN, version: '1.2.0', needsReference: true }]);
+  });
+});
+
+describe('check: one page', () => {
+  it('a_passing_request_is_saved_and_a_held_one_is_kept', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(3));
+    const findings = [{ level: 'error', code: 'specimen_missing', value: SECRET }];
+    const check = { fields: [{ name: 'panel', source: 'FBC', reference: 'FBCD' }] };
+    w.setDecode((input) => ({
+      groups: [
+        pass(input.keys[0]),
+        { key: input.keys[1], held: true, findings, check, label: 'held_by_check', resources: [{ resourceType: 'ServiceRequest' }] },
+        // Held with no findings and no check: they are kept as null.
+        { key: input.keys[2], held: true, label: 'held_by_rules' },
+      ],
+    }));
+    await w.svc.start({ ...START, options: { site: 'A', tz: '+03:00' } });
+    await drive(w.svc);
+
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run).toMatchObject({
+      status: 'completed', cursor: 'REQ0003', driver: null, waiting: null, lastError: null,
+      counts: { read: 3, saved: 1, held: 2, failed: 0, resources: 1, labels: { passed: 1, held_by_check: 1, held_by_rules: 1 } },
+    });
+    expect(run.finishedAt).not.toBeNull();
+    // Only the passing request is saved, through CE's save path, as part of this run's batch.
+    expect(w.persisted).toEqual([{ resources: [{ resourceType: 'ServiceRequest', id: 'REQ0001' }], batchId: CHECK }]);
+
+    // What the plugin was handed.
+    expect(w.decodeCalls).toHaveLength(1);
+    expect(w.decodeCalls[0]).toEqual({
+      options: { site: 'A', tz: '+03:00' }, now: new Date(w.clock.now).toISOString(), keys: keysOf(3),
+      dictionaries: { facilities: FACILITIES.map((r) => r.row) },
+      rows: { requests: keysOf(3).map(reqRow), results: keysOf(3).flatMap(resRows) },
+      twins: { requests: [], results: [] },
+    });
+
+    const list = await w.svc.held(PLUGIN, SRC, { offset: 0, limit: 10 });
+    expect(list.total).toBe(2);
+    expect(list.rows.map((r) => [r.key, r.reason, r.label, r.error, r.runId])).toEqual([
+      ['REQ0002', 'held', 'held_by_check', null, CHECK],
+      ['REQ0003', 'held', 'held_by_rules', null, CHECK],
+    ]);
+    expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0002')).toMatchObject({ key: 'REQ0002', findings, check });
+    expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0003')).toMatchObject({ key: 'REQ0003', findings: null, check: null });
+    expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0001')).toBeNull();
+    expect((await w.svc.held(PLUGIN, SRC, { label: 'held_by_rules', offset: 0, limit: 10 })).rows.map((r) => r.key)).toEqual(['REQ0003']);
+    // In batches: the same rows as held, in the same order, each with its findings and check.
+    const batch = await w.svc.heldItems(PLUGIN, SRC, { offset: 0, limit: 10 });
+    expect(batch.total).toBe(2);
+    expect(batch.items).toEqual([await w.svc.heldItem(PLUGIN, SRC, 'REQ0002'), await w.svc.heldItem(PLUGIN, SRC, 'REQ0003')]);
+    expect(batch.items.map((i) => i.key)).toEqual(list.rows.map((r) => r.key));
+    expect(await w.svc.heldItems(PLUGIN, SRC, { offset: 1, limit: 1 })).toEqual({ items: [batch.items[1]], total: 2 });
+    expect(await w.svc.heldItems(PLUGIN, SRC, { label: 'held_by_check', offset: 0, limit: 10 })).toEqual({ items: [batch.items[0]], total: 1 });
+    expect(await w.svc.heldItems(PLUGIN, SRC, { reason: 'error', offset: 0, limit: 10 })).toEqual({ items: [], total: 0 });
+    // Another plugin cannot read this copy's held rows.
+    await expect(w.svc.held(OTHER, SRC, { offset: 0, limit: 10 })).rejects.toThrow(`copy ${SRC} not found`);
+    await expect(w.svc.heldItem(OTHER, SRC, 'REQ0002')).rejects.toThrow(`copy ${SRC} not found`);
+    await expect(w.svc.heldItems(OTHER, SRC, { offset: 0, limit: 10 })).rejects.toThrow(`copy ${SRC} not found`);
+
+    expect(actions(w)).toEqual(['import.check.start', 'import.check.finish']);
+    expect(w.audited.at(-1)).toEqual({
+      action: 'import.check.finish', pluginId: PLUGIN, runId: CHECK, actor: { type: 'system', id: null, name: 'system' },
+      metadata: { status: 'completed', copyId: SRC, read: 3, saved: 1, held: 2, failed: 0, resources: 1 },
+    });
+  });
+
+  it('a_plugin_error_is_kept_as_a_bare_code', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    w.setDecode((input) => ({
+      groups: [
+        { key: input.keys[0], error: 'BAD_DATE', label: 'passed' },
+        { key: input.keys[1], error: `patient ${SECRET} has no date` },
+        // No group for the third key.
+        { key: input.keys[3], resources: [{ resourceType: 'Observation' }] },
+        { key: input.keys[4], resources: [] },
+        pass(input.keys[5]),
+      ],
+    }));
+    // The sixth key's save fails, with a message that quotes the row.
+    w.failPersist((resources) => ((resources[0] as { id?: string }).id === 'REQ0006'
+      ? Object.assign(new Error(`duplicate key for ${SECRET}`), { code: '23505' }) : null));
+    await w.svc.start(START);
+    await drive(w.svc);
+
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run).toMatchObject({ status: 'completed', counts: { read: 6, saved: 0, held: 0, failed: 6, resources: 0 } });
+    const list = await w.svc.held(PLUGIN, SRC, { reason: 'error', offset: 0, limit: 10 });
+    expect(list.rows.map((r) => [r.key, r.reason, r.error, r.label])).toEqual([
+      ['REQ0001', 'error', 'BAD_DATE', 'passed'],
+      ['REQ0002', 'error', 'MAPPING_FAILED', null],
+      ['REQ0003', 'error', 'NO_GROUP', null],
+      ['REQ0004', 'error', 'RESOURCE_TYPE_NOT_ALLOWED', null],
+      ['REQ0005', 'error', 'NO_RESOURCES', null],
+      ['REQ0006', 'error', 'SAVE_FAILED', 'passed'],
+    ]);
+    expect(JSON.stringify([run, w.audited, list])).not.toContain('Maria');
+  });
+
+  it('a_decode_call_that_throws_saves_nothing_and_halves_the_page', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(14));
+    let calls = 0;
+    w.setDecode((input) => {
+      calls += 1;
+      // The first call throws as the runtime does on a timeout; the groups it would have given are never seen.
+      if (calls === 1) throw new Error(`plugin timed out after 30000ms near ${SECRET}`);
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    // Halved to 2 and read again from the same cursor. After 5 good pages it doubles back to 4.
+    expect(w.decodeCalls.map((c) => c.keys)).toEqual([
+      keysOf(4), keysOf(2), keysOf(4).slice(2), keysOf(6).slice(4), keysOf(8).slice(6), keysOf(10).slice(8), keysOf(14).slice(10),
+    ]);
+    // Nothing of the failed call was saved: each key is saved once.
+    expect(w.persisted.map((p) => (p.resources[0] as { id: string }).id)).toEqual(keysOf(14));
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { read: 14, saved: 14, failed: 0 }, lastError: null });
+    // A decode that returns what is not a list of groups is treated the same way.
+    const v = await world();
+    await internalDb.deleteFrom('import_copy_rows').execute();
+    await sourceCopy(v, keysOf(2));
+    let bad = true;
+    v.setDecode((input) => {
+      if (bad) { bad = false; return { groups: 'nope' }; }
+      return { groups: input.keys.map(pass) };
+    });
+    await v.svc.start({ ...START, pageSize: 2 });
+    await drive(v.svc);
+    expect(v.decodeCalls.map((c) => c.keys.length)).toEqual([2, 1, 1]);
+  });
+
+  it('one_request_that_cannot_be_decoded_is_held_as_DECODE_FAILED', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    w.setDecode((input) => {
+      if (input.keys.includes('REQ0002')) throw new Error(`panic on ${SECRET}`);
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    expect(w.decodeCalls.map((c) => c.keys)).toEqual([
+      keysOf(4), keysOf(2), ['REQ0001'], ['REQ0002'], ['REQ0003'], ['REQ0004'],
+    ]);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
+      status: 'completed', cursor: 'REQ0004', counts: { read: 4, saved: 3, held: 0, failed: 1 },
+    });
+    const list = await w.svc.held(PLUGIN, SRC, { offset: 0, limit: 10 });
+    expect(list.rows.map((r) => [r.key, r.reason, r.error])).toEqual([['REQ0002', 'error', 'DECODE_FAILED']]);
+    expect(JSON.stringify([await w.stored(), w.audited, list])).not.toContain('Maria');
+  });
+
+  it('a_request_that_passes_later_leaves_the_held_store', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(3));
+    w.setDecode((input) => ({ groups: input.keys.map((key) => (key === 'REQ0002' ? { key, held: true, findings: [1] } : pass(key))) }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect((await w.heldAll()).rows.map((r) => r.key)).toEqual(['REQ0002']);
+
+    // The rules changed: the next run passes it, and its held row goes.
+    w.setDecode((input) => ({ groups: input.keys.map(pass) }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(await w.heldAll()).toEqual({ rows: [], total: 0 });
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { read: 3, saved: 3, held: 0 } });
+  });
+});
+
+describe('check: start again, stop, and who drives', () => {
+  it('start_again_begins_at_the_first_key', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    await w.svc.start({ ...START, pageSize: 2 });
+    // A start on a live run is refused.
+    await expect(w.svc.start(START)).rejects.toThrow(`check ${CHECK} is queued; stop it before starting it again`);
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { read: 4, saved: 4 } });
+
+    const again = await w.svc.start({ ...START, pageSize: 3, options: { site: 'B' } });
+    expect(again).toMatchObject({
+      id: CHECK, status: 'queued', cursor: null, pageSize: 3, options: { site: 'B' }, finishedAt: null, driver: null,
+      counts: { read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: {} },
+    });
+    await drive(w.svc);
+    expect(w.decodeCalls.map((c) => c.keys)).toEqual([keysOf(2), keysOf(4).slice(2), keysOf(3), ['REQ0004']]);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { read: 4, saved: 4 } });
+    expect(await w.svc.list(PLUGIN)).toHaveLength(1);
+    expect(actions(w)).toEqual(['import.check.start', 'import.check.finish', 'import.check.start', 'import.check.finish']);
+  });
+
+  it('two_ticks_drive_a_run_once', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    const a = w.service('server-a');
+    const b = w.service('server-b');
+    await a.start({ ...START, pageSize: 2 });
+    await Promise.all([a.tick(), b.tick(), a.tick()]);
+    await Promise.all([a.idle(), b.idle()]);
+    expect(w.decodeCalls.map((c) => c.keys)).toEqual([keysOf(2), keysOf(4).slice(2)]);
+    expect(w.persisted).toHaveLength(4);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { read: 4, saved: 4 } });
+    expect(actions(w)).toEqual(['import.check.start', 'import.check.finish']);
+  });
+
+  it('a_run_left_by_a_dead_server_is_taken_after_two_minutes', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    const started = await w.svc.start({ ...START, pageSize: 2 });
+    const orphan: CheckRun = {
+      ...started, status: 'running', driver: 'server-old', cursor: 'REQ0002',
+      counts: { read: 2, saved: 2, held: 0, failed: 0, resources: 2, labels: { passed: 2 } },
+      updatedAt: new Date(w.clock.now - 60_000).toISOString(),
+    };
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, orphan);
+    await drive(w.svc);
+    expect(await w.stored()).toEqual(orphan);
+    expect(w.decodeCalls).toEqual([]);
+
+    w.clock.now += STALE_MS;
+    await drive(w.svc);
+    expect(w.decodeCalls.map((c) => c.keys)).toEqual([keysOf(4).slice(2)]);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
+      status: 'completed', driver: null, counts: { read: 4, saved: 4, resources: 4, labels: { passed: 4 } },
+    });
+    expect(w.audited.find((e) => e.action === 'import.check.takeover')).toEqual({
+      action: 'import.check.takeover', pluginId: PLUGIN, runId: CHECK, actor: { type: 'system', id: null, name: 'system' },
+      metadata: { status: 'running' },
+    });
+  });
+
+  it('stop_ends_the_run_at_the_next_page', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    let stopped = false;
+    // The stop lands while the first page is being decoded.
+    w.setDecode(async (input) => {
+      if (!stopped) { stopped = true; await w.svc.stop(PLUGIN, CHECK, ADMIN); }
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run).toMatchObject({ status: 'stopped', driver: null, cursor: 'REQ0002', counts: { read: 2, saved: 2 } });
+    expect(run.finishedAt).not.toBeNull();
+    expect(w.runSaves.some((r) => r.status === 'stopping')).toBe(true);
+    expect(w.decodeCalls).toHaveLength(1);
+    await expect(w.svc.stop(PLUGIN, CHECK, ADMIN)).rejects.toThrow(/not running/);
+    await expect(w.svc.stop(PLUGIN, 'missing', ADMIN)).rejects.toThrow(/not found/);
+    expect(actions(w)).toEqual(['import.check.start', 'import.check.stop', 'import.check.finish']);
+    expect(w.audited.at(-1)?.metadata).toMatchObject({ status: 'stopped' });
+
+    // A queued run stops at once.
+    await w.svc.start(START);
+    expect((await w.svc.stop(PLUGIN, CHECK, ADMIN)).status).toBe('stopped');
+  });
+
+  it('a database error on CE side waits and carries on, never failing on the first error', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ key, held: true })) }));
+    w.failHeldPuts(2);
+    await w.svc.start(START);
+    await drive(w.svc);
+    const waits = w.runSaves.filter((r) => r.status === 'waiting');
+    expect(waits.map((r) => [r.waiting?.attempt, r.waiting?.error])).toEqual([
+      [1, "OpenLDR's own database refused a write (53100)"],
+      [2, "OpenLDR's own database refused a write (53100)"],
+    ]);
+    // retryWaitMs: 5 s then 10 s, slept in slices of a second.
+    expect(w.sleeps.reduce((n, ms) => n + ms, 0)).toBe(15_000);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', waiting: null, counts: { read: 2, held: 2 } });
+    expect((await w.heldAll()).total).toBe(2);
+    expect(JSON.stringify(w.runSaves)).not.toContain('Maria');
+  });
+});
+
+describe('check: the reference copy and the dictionaries', () => {
+  it('twins_are_read_from_the_reference_copy_by_the_keys_the_plugin_names', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    const twinRows = (k: string): CopyRow[] => [
+      { detail: 'requests', key: k, seq: 0, row: { RequestID: k, Panel: 'FBC' } },
+      { detail: 'results', key: k, seq: 0, row: { RequestID: k, Value: 12.1 } },
+    ];
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [...twinRows('T-REQ0001'), ...twinRows('T-REQ0002'), ...twinRows('T-UNASKED')] });
+    // The plugin names one key the reference has, and one it does not.
+    w.setTwinKeys((keys) => ({ keys: [`T-${keys[0]}`, 'T-MISSING'] }));
+    await w.svc.start({ ...START, referenceCopyId: REF });
+    await drive(w.svc);
+    expect(w.twinCalls).toEqual([{ options: { site: 'A' }, keys: keysOf(2) }]);
+    expect(w.decodeCalls[0].twins).toEqual({
+      requests: [{ RequestID: 'T-REQ0001', Panel: 'FBC' }],
+      results: [{ RequestID: 'T-REQ0001', Value: 12.1 }],
+    });
+    // The reference copy's sets are not dictionaries of the source.
+    expect(Object.keys(w.decodeCalls[0].dictionaries)).toEqual(['facilities']);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', referenceCopyId: REF, counts: { saved: 2 } });
+  });
+
+  it('with_no_reference_the_decode_gets_empty_twins', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(w.twinCalls).toEqual([]);
+    expect(w.decodeCalls[0].twins).toEqual({ requests: [], results: [] });
+  });
+
+  it('dictionaries_over_the_cap_fail_the_run_with_the_size_and_no_value', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    await w.svc.start(START);
+    w.failReadSet((set, maxBytes) => new CopySetTooLargeError(set, maxBytes + 4321, maxBytes));
+    await drive(w.svc);
+    expect(w.readSetCalls).toEqual([{ set: 'facilities', maxBytes: CAP }]);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run).toMatchObject({
+      status: 'failed', counts: { read: 0 },
+      lastError: `the dictionaries of copy ${SRC} hold more than ${CAP + 4321} bytes of rows; the limit is ${CAP} bytes`,
+    });
+    expect(w.decodeCalls).toEqual([]);
+    expect(w.persisted).toEqual([]);
+    expect(JSON.stringify([run, w.audited])).not.toContain('Clinic');
+    expect(w.audited.at(-1)).toMatchObject({ action: 'import.check.finish', metadata: { status: 'failed' } });
+  });
+
+  it('labels_are_counted_and_capped', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(16));
+    const labelOf = (key: string): string | undefined => {
+      const n = Number(key.slice(3));
+      if (n <= 14) return `l${String(n).padStart(2, '0')}`;
+      return n === 15 ? 'Not A Label' : undefined;
+    };
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ ...pass(key), label: labelOf(key) })) }));
+    await w.svc.start({ ...START, pageSize: 5 });
+    await drive(w.svc);
+    const labels = (await w.svc.get(PLUGIN, CHECK))!.counts.labels;
+    const expected: Record<string, number> = {};
+    for (let n = 1; n <= 12; n++) expected[`l${String(n).padStart(2, '0')}`] = 1;
+    // l13, l14 (past 12 distinct) and one label that is not a code are counted as other. No label counts nothing.
+    expected.other = 3;
+    expect(labels).toEqual(expected);
+  });
+});
+
+describe('check: the copy under it', () => {
+  it('removing_a_copy_empties_its_held_rows', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(3));
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ key, held: true, findings: { why: SECRET } })) }));
+    await w.svc.start(START);
+    // Refused while the check on it is live.
+    await expect(w.copies.remove(PLUGIN, SRC, ADMIN)).rejects.toThrow(`copy ${SRC} has a check that is queued; stop it before deleting the copy`);
+    await drive(w.svc);
+    expect((await w.heldAll()).total).toBe(3);
+
+    await w.copies.remove(PLUGIN, SRC, ADMIN);
+    await w.copies.tick();
+    await w.copies.idle();
+    expect(await w.copies.get(PLUGIN, SRC)).toBeNull();
+    expect(await w.realHeld.list(SRC, { offset: 0, limit: 10 })).toEqual({ rows: [], total: 0 });
+    expect(await internalDb.selectFrom('import_copy_rows').selectAll().where('copy_id', '=', SRC).execute()).toEqual([]);
+  });
+
+  it('a check whose copy was removed or started again before it was driven fails, and reads nothing', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    await w.svc.start(START);
+    await w.setCopyStatus(SRC, 'queued');
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'failed', lastError: `copy ${SRC} is queued; a check needs a completed copy` });
+    expect(w.decodeCalls).toEqual([]);
+  });
+});
+
+describe('check: what may be shown', () => {
+  it('no_row_value_reaches_an_audit_row_or_an_error', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [{ detail: 'requests', key: 'T-REQ0001', seq: 0, row: { Name: SECRET } }] });
+    w.setDecode((input) => {
+      if (input.keys.length > 1) throw new Error(`bad row ${SECRET}`);
+      if (input.keys[0] === 'REQ0001') return { groups: [{ key: 'REQ0001', error: `cannot read ${SECRET}` }] };
+      if (input.keys[0] === 'REQ0002') return { groups: [{ key: 'REQ0002', held: true, findings: [{ value: SECRET }], check: { source: SECRET } }] };
+      if (input.keys[0] === 'REQ0003') throw new Error(`panic: ${SECRET}`);
+      return { groups: [pass('REQ0004')] };
+    });
+    w.failPersist(() => new Error(`invalid resource for ${SECRET}`));
+    w.failHeldPuts(1);
+    await w.svc.start({ ...START, referenceCopyId: REF, pageSize: 2 });
+    await drive(w.svc);
+
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run).toMatchObject({ status: 'completed', counts: { read: 4, held: 1, failed: 3 } });
+    const list = await w.svc.held(PLUGIN, SRC, { offset: 0, limit: 10 });
+    expect(list.rows.map((r) => r.error)).toEqual(['MAPPING_FAILED', null, 'DECODE_FAILED', 'SAVE_FAILED']);
+    // Only the held store's own JSON columns hold values.
+    const shown = JSON.stringify([run, w.runSaves, w.audited, list]);
+    expect(shown).not.toContain('Maria');
+    for (const e of w.audited) expect(JSON.stringify(e)).not.toMatch(/REQ000/);
+    expect((await w.svc.heldItem(PLUGIN, SRC, 'REQ0002'))!.findings).toEqual([{ value: SECRET }]);
+  });
+});
+
+describe('check: fix round 1', () => {
+  const twinRows = (k: string): CopyRow[] => [
+    { detail: 'requests', key: k, seq: 0, row: { RequestID: k } },
+    { detail: 'results', key: k, seq: 0, row: { RequestID: k, Value: 1 } },
+  ];
+
+  it('I1: a live check guards its source and its reference copy against a remove', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: twinRows('T-REQ0001') });
+    await w.svc.start({ ...START, referenceCopyId: REF });
+    expect(await liveCheckStatus(w.raw, PLUGIN, SRC)).toBe('queued');
+    expect(await liveCheckStatus(w.raw, PLUGIN, REF)).toBe('queued');
+    expect(await liveCheckStatus(w.raw, PLUGIN, 'another')).toBeNull();
+    await expect(w.copies.remove(PLUGIN, REF, ADMIN)).rejects.toThrow(`copy ${REF} has a check that is queued; stop it before deleting the copy`);
+    await expect(w.copies.remove(PLUGIN, SRC, ADMIN)).rejects.toThrow(`copy ${SRC} has a check that is queued; stop it before deleting the copy`);
+    await drive(w.svc);
+    expect(await liveCheckStatus(w.raw, PLUGIN, REF)).toBeNull();
+    expect((await w.copies.remove(PLUGIN, REF, ADMIN)).status).toBe('deleting');
+  });
+
+  it('I1: a reference copy that is no longer completed fails the run at the next page', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: twinRows('T-REQ0001') });
+    let flipped = false;
+    w.setDecode(async (input) => {
+      if (!flipped) { flipped = true; await w.setCopyStatus(REF, 'queued'); }
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, referenceCopyId: REF, pageSize: 2 });
+    await drive(w.svc);
+    expect(w.decodeCalls).toHaveLength(1);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
+      status: 'failed', cursor: 'REQ0002', counts: { read: 2, saved: 2 },
+      lastError: `copy ${REF} changed while the check was reading it; start the check again once the copy has completed`,
+    });
+  });
+
+  it('I1: a source copy read again to the end under a running check fails the run, and never completes it', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    let flipped = false;
+    w.setDecode(async (input) => {
+      // Still completed, but a later pass: its finish time moved.
+      if (!flipped) { flipped = true; await w.setCopyStatus(SRC, 'completed', { finishedAt: new Date(w.clock.now + 1000).toISOString() }); }
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
+      status: 'failed', lastError: `copy ${SRC} changed while the check was reading it; start the check again once the copy has completed`,
+    });
+    expect(w.decodeCalls).toHaveLength(1);
+  });
+
+  it('I2: a fault of CE database that never clears fails the run after 5 tries again, with the code and no value', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ key, held: true })) }));
+    w.failHeldPuts(Number.POSITIVE_INFINITY);
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(w.runSaves.filter((r) => r.status === 'waiting').map((r) => r.waiting?.attempt)).toEqual([1, 2, 3, 4, 5]);
+    expect(w.sleeps.reduce((n, ms) => n + ms, 0)).toBe(5_000 + 10_000 + 20_000 + 40_000 + 80_000);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run).toMatchObject({
+      status: 'failed', waiting: null, counts: { read: 0, held: 0 },
+      lastError: "OpenLDR's own database refused a write (53100) on 6 tries of one page in a row, so the check stopped",
+    });
+    expect(w.decodeCalls).toHaveLength(6);
+    expect(JSON.stringify([run, w.audited])).not.toContain('Maria');
+  });
+
+  it('I2: a fault part-way through a page counts each request once', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    w.setDecode((input) => ({ groups: input.keys.map((key) => (key === 'REQ0003' ? { key, held: true } : pass(key))) }));
+    // The held write of REQ0003 fails once, after REQ0001 and REQ0002 were saved.
+    w.failHeldPuts(1);
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    expect(w.persisted.map((p) => (p.resources[0] as { id: string }).id)).toEqual(['REQ0001', 'REQ0002', 'REQ0001', 'REQ0002', 'REQ0004']);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
+      status: 'completed', counts: { read: 4, saved: 3, held: 1, failed: 0, resources: 3, labels: { passed: 3 } },
+    });
+  });
+
+  it('I2: a NUL character in findings or check is replaced before the held store sees it', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(1));
+    w.setDecode(() => ({
+      groups: [{ key: 'REQ0001', held: true, findings: [{ note: 'a\u0000b', ['k\u0000ey']: 'x' }], check: { list: ['\u0000', 3, null] } }],
+    }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const cleaned = { findings: [{ note: 'a�b', ['k�ey']: 'x' }], check: { list: ['�', 3, null] } };
+    expect(w.heldPuts).toEqual([expect.objectContaining(cleaned)]);
+    expect(JSON.stringify(w.heldPuts)).not.toContain('\\u0000');
+    expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0001')).toMatchObject(cleaned);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { held: 1 } });
+  });
+
+  it('I3: a twin-keys answer past 20 keys a request is a failed call, and twin rows are read 500 keys at a time', async () => {
+    const w = await world();
+    const keys = keysOf(60);
+    await sourceCopy(w, keys);
+    await w.seedCopy(REF, 'c2', 'completed', { twins: twinRows('T-REQ0001-0') });
+    let calls = 0;
+    w.setTwinKeys((page) => {
+      calls += 1;
+      const many = page.flatMap((k) => Array.from({ length: 20 }, (_, i) => `T-${k}-${i}`));
+      // The first answer has one key too many. The second repeats every key once more.
+      return { keys: calls === 1 ? [...many, 'T-EXTRA'] : calls === 2 ? [...many, ...many.slice(0, 5)] : many };
+    });
+    await w.svc.start({ ...START, referenceCopyId: REF, pageSize: 60 });
+    await drive(w.svc);
+    // The first page was refused whole and halved. No twin row was read for it.
+    expect(w.decodeCalls.map((c) => c.keys.length)).toEqual([30, 30]);
+    expect(w.readCalls.filter((c) => c.set === 'twins').map((c) => c.keys)).toEqual([500, 100, 500, 100]);
+    expect(w.decodeCalls[0].twins.requests).toEqual([{ RequestID: 'T-REQ0001-0' }]);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { read: 60, saved: 60 } });
+  });
+
+  it('I3: a twin-keys call that throws or gives what is not a list of keys halves the page', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [] });
+    let calls = 0;
+    w.setTwinKeys((page) => {
+      calls += 1;
+      if (calls === 1) throw new Error(`no twin for ${SECRET}`);
+      if (calls === 2) return { keys: [1, 2] };
+      return { keys: page };
+    });
+    await w.svc.start({ ...START, referenceCopyId: REF, pageSize: 2 });
+    await drive(w.svc);
+    // Page of 2 fails, then REQ0001 alone fails at one key, then REQ0002 passes.
+    expect(w.decodeCalls.map((c) => c.keys)).toEqual([['REQ0002']]);
+    const list = await w.svc.held(PLUGIN, SRC, { offset: 0, limit: 10 });
+    expect(list.rows.map((r) => [r.key, r.error])).toEqual([['REQ0001', 'DECODE_FAILED']]);
+  });
+
+  it('I4: two groups for one key fail it as DUPLICATE_GROUP, and nothing of it is saved', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    w.setDecode(() => ({
+      groups: [pass('REQ0001'), { key: 'REQ0001', held: true, findings: [1] }, pass('REQ0002')],
+    }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(w.persisted.map((p) => (p.resources[0] as { id: string }).id)).toEqual(['REQ0002']);
+    const list = await w.svc.held(PLUGIN, SRC, { offset: 0, limit: 10 });
+    expect(list.rows.map((r) => [r.key, r.reason, r.error])).toEqual([['REQ0001', 'error', 'DUPLICATE_GROUP']]);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ counts: { read: 2, saved: 1, failed: 1, held: 0 } });
+  });
+
+  it('I5: start refuses a source copy with no set requests and a reference copy with no set twins', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: twinRows('T-REQ0001') });
+    // The two copies swapped.
+    await expect(w.svc.start({ ...START, copyId: REF, referenceCopyId: SRC })).rejects.toThrow(
+      `copy ${REF} has no set requests, so it cannot be the source of a check; pick the source copy`,
+    );
+    // A second source copy, from another connector, picked as the reference.
+    const other = copyIdOf(PLUGIN, 'c3');
+    await w.seedCopy(other, 'c3', 'completed', { requests: requestRows(keysOf(1)) });
+    await expect(w.svc.start({ ...START, referenceCopyId: other })).rejects.toThrow(
+      `copy ${other} has no set twins, so it cannot be the reference of a check; pick the reference copy, or no reference`,
+    );
+    expect(w.audited).toEqual([]);
+    expect((await w.svc.start({ ...START, referenceCopyId: REF })).status).toBe('queued');
+  });
+});
+
+describe('check: fix round 1, the details the plugin declares (I6)', () => {
+  it('a page where one detail has no rows still decodes, with that detail as an empty list', async () => {
+    const w = await world();
+    // The source names a third detail, taken, and no request of the page has a row of it.
+    w.setCopy(() => ({ sets: [setSpec('requests', ['requests', 'results', 'taken']), setSpec('facilities', [])] }));
+    await sourceCopy(w, keysOf(2));
+    w.setDecode((input) => {
+      // As the real plugin does: every detail of the set must be a list.
+      if (!['requests', 'results', 'taken'].every((n) => Array.isArray(input.rows[n]))) throw new Error('rows must hold the three details');
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(w.decodeCalls).toHaveLength(1);
+    expect(w.decodeCalls[0].rows.taken).toEqual([]);
+    // Asked once at the start and once by the drive.
+    expect(w.copyCalls).toEqual([{}, {}]);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { saved: 2 }, lastError: null });
+  });
+
+  it('a reference page with no result rows hands results as an empty list', async () => {
+    const w = await world();
+    // The reference copy names a third detail too.
+    w.setCopy((options) => (options.role === 'reference'
+      ? { sets: [setSpec('twins', ['requests', 'results', 'specimens'])] }
+      : { sets: [setSpec('requests', ['requests', 'results']), setSpec('facilities', [])] }));
+    await sourceCopy(w, keysOf(1));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [{ detail: 'requests', key: 'T-REQ0001', seq: 0, row: { RequestID: 'T-REQ0001' } }] });
+    await w.svc.start({ ...START, referenceCopyId: REF });
+    await drive(w.svc);
+    expect(w.decodeCalls[0].twins).toEqual({ requests: [{ RequestID: 'T-REQ0001' }], results: [], specimens: [] });
+    // Each copy was asked about with its own options.
+    expect(w.copyCalls).toEqual([{}, { role: 'reference' }, {}, { role: 'reference' }]);
+  });
+
+  it('an empty dictionary set is handed as an empty list, and a set with no detail queries is one detail', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(1));
+    w.setCopy(() => ({ sets: [setSpec('requests', []), setSpec('facilities', []), setSpec('wards', [])] }));
+    await w.seedCopy(SRC, 'c1', 'completed', {
+      requests: [{ detail: 'requests', key: 'REQ0001', seq: 0, row: reqRow('REQ0001') }], facilities: FACILITIES,
+    });
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(w.decodeCalls[0].dictionaries).toEqual({ facilities: FACILITIES.map((r) => r.row), wards: [] });
+    expect(Object.keys(w.decodeCalls[0].rows)).toEqual(['requests']);
+  });
+
+  it('a copy entrypoint that fails, or no longer names the set, fails the run with a fixed sentence', async () => {
+    const w = await world();
+    const good = () => ({ sets: [setSpec('requests', ['requests', 'results']), setSpec('facilities', [])] });
+    w.setCopy(good);
+    await sourceCopy(w, keysOf(1));
+    // Each answer goes wrong between the start and the drive.
+    const runWith = async (bad: () => unknown) => {
+      w.setCopy(good);
+      await w.svc.start(START);
+      w.setCopy(bad);
+      await drive(w.svc);
+      return (await w.svc.get(PLUGIN, CHECK))!;
+    };
+    expect(await runWith(() => { throw new Error(`panic on ${SECRET}`); })).toMatchObject({
+      status: 'failed', lastError: `the plugin's copy entrypoint failed, so the check cannot tell what copy ${SRC} holds`,
+    });
+    // A set no longer named is a change of statements.
+    expect(await runWith(() => ({ sets: [setSpec('facilities', [])] }))).toMatchObject({
+      status: 'failed', lastError: `the plugin's copy statements changed since copy ${SRC} was made; read the copy again, then start the check`,
+    });
+    expect((await runWith(() => ({ sets: 'nope' }))).lastError).toBe(`the plugin's copy entrypoint gave an answer that is not valid for copy ${SRC}`);
+    // At the start, the same sentence, at once.
+    w.setCopy(() => { throw new Error(`panic on ${SECRET}`); });
+    await expect(w.svc.start(START)).rejects.toThrow(`the plugin's copy entrypoint failed, so the check cannot tell what copy ${SRC} holds`);
+    expect(w.decodeCalls).toEqual([]);
+    expect(JSON.stringify(w.runSaves)).not.toContain('Maria');
+  });
+
+  it('a failed decode call says why on the run, in a fixed sentence, until a good page clears it', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    let calls = 0;
+    w.setDecode((input) => {
+      calls += 1;
+      if (calls === 1) throw new Error(`plugin timed out after 30000ms near ${SECRET}`);
+      if (calls === 2) throw new Error(`panic: ${SECRET}`);
+      if (calls === 3) return { groups: 'nope' };
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    const errors = w.runSaves.map((r) => r.lastError).filter((e, i, all) => e !== all[i - 1]);
+    expect(errors).toEqual([
+      null,
+      "the plugin's decode call timed out",
+      'the plugin refused the decode call',
+      "the plugin's decode answer was not valid",
+      null,
+    ]);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', lastError: null });
+    expect(JSON.stringify(w.runSaves)).not.toContain('Maria');
+  });
+});
+
+describe('check: fix round 2, a copy made from other statements (N1)', () => {
+  const CHANGED = `the plugin's copy statements changed since copy ${SRC} was made; read the copy again, then start the check`;
+  const v1 = () => ({ sets: [setSpec('requests', ['requests', 'results']), setSpec('facilities', [])] });
+
+  it('a plugin whose copy answer gained a detail fails the run and saves nothing', async () => {
+    const w = await world();
+    w.setCopy(v1);
+    await sourceCopy(w, keysOf(2));
+    await w.svc.start(START);
+    // Upgraded between the start and the drive: it now names a detail the copy never read.
+    w.setCopy(() => ({ sets: [setSpec('requests', ['requests', 'results', 'specimens']), setSpec('facilities', [])] }));
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'failed', lastError: CHANGED, counts: { read: 0, saved: 0 } });
+    expect(w.decodeCalls).toEqual([]);
+    expect(w.persisted).toEqual([]);
+    // A start is told at once.
+    await expect(w.svc.start(START)).rejects.toThrow(CHANGED);
+  });
+
+  it('a plugin whose SQL text changed fails the run, for the source and for the reference', async () => {
+    const w = await world();
+    const reference = (sql: string) => ({ sets: [{ ...setSpec('twins', ['requests', 'results']), keyQuery: { sql } }] });
+    const KEY_SQL = 'SELECT TOP ({{limit}}) [K] FROM [twins] WHERE [K] > {{after}} ORDER BY [K]';
+    w.setCopy((o) => (o.role === 'reference' ? reference(KEY_SQL) : v1()));
+    await sourceCopy(w, keysOf(1));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [] });
+    await w.svc.start({ ...START, referenceCopyId: REF });
+    // Same set and detail names; one statement's text differs.
+    w.setCopy((o) => (o.role === 'reference' ? reference(`${KEY_SQL} `) : v1()));
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({
+      status: 'failed', lastError: `the plugin's copy statements changed since copy ${REF} was made; read the copy again, then start the check`,
+    });
+    expect(w.decodeCalls).toEqual([]);
+    await expect(w.svc.start({ ...START, referenceCopyId: REF })).rejects.toThrow(`copy ${REF} was made`);
+    // The source alone still starts and runs: its statements did not change.
+    expect((await w.svc.start(START)).status).toBe('queued');
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { saved: 1 } });
+  });
+
+  it('an unchanged answer runs', async () => {
+    const w = await world();
+    w.setCopy(v1);
+    await sourceCopy(w, keysOf(2));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', lastError: null, counts: { read: 2, saved: 2 } });
+  });
+});
+
+describe('check: by laboratory', () => {
+  type Lab = NonNullable<CheckRun['laboratories']>[number];
+  const COUNTED = ['read', 'saved', 'held', 'failed'] as const;
+  /** Every laboratory's counts add up to the run's own, count by count and label by label. */
+  function expectSums(run: Pick<CheckRun, 'counts' | 'laboratories'>): void {
+    const labs = run.laboratories ?? [];
+    for (const k of COUNTED) expect(labs.reduce((n, l) => n + l.counts[k], 0), k).toBe(run.counts[k]);
+    // Summed in a map: a label such as `constructor` must not read a plain object's own function.
+    const labels = new Map<string, number>();
+    for (const l of labs) for (const [name, n] of Object.entries(l.counts.labels)) labels.set(name, (labels.get(name) ?? 0) + n);
+    expect(Object.fromEntries(labels)).toEqual(run.counts.labels);
+    // One entry for each code.
+    expect(new Set(labs.map((l) => l.code)).size).toBe(labs.length);
+  }
+  const lab = (code: string | null, read: number, saved: number, held: number, failed: number, labels: Record<string, number> = {}): Lab =>
+    ({ code, counts: { read, saved, held, failed, labels } });
+  const at = (code: unknown) => ({ code });
+
+  it('a mixed page counts each laboratory as the run counts, and the sums hold', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(9));
+    w.setDecode((input) => {
+      const [k1, k2, k3, k4, k5, k6, k7, k8, k9] = input.keys;
+      return {
+        groups: [
+          { ...pass(k1), laboratory: at('LAB-A') },
+          { key: k2, held: true, findings: [1], label: 'held_x', laboratory: at('LAB-A') },
+          { key: k3, error: 'BAD_DATE', label: 'bad_date', laboratory: at('LAB.B_2') },
+          pass(k4),
+          // A code with a space is no laboratory, and the request is still saved.
+          { ...pass(k5), laboratory: at('has space') },
+          // No group for k6.
+          { ...pass(k7), resources: [{ resourceType: 'Observation' }], laboratory: at('LAB.B_2') },
+          // A code that is not a string is no laboratory, never a bad answer.
+          { ...pass(k8), laboratory: at(5) },
+          { key: k9, held: true, label: 'Not A Label', laboratory: at('LAB.B_2') },
+        ].filter((g) => g.key !== k6),
+      };
+    });
+    await w.svc.start(START);
+    await drive(w.svc);
+
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run).toMatchObject({
+      status: 'completed',
+      counts: { read: 9, saved: 4, held: 2, failed: 3, labels: { passed: 5, held_x: 1, bad_date: 1, other: 1 } },
+    });
+    // In the order each code was first met.
+    expect(run.laboratories).toEqual([
+      lab('LAB-A', 2, 1, 1, 0, { passed: 1, held_x: 1 }),
+      lab('LAB.B_2', 3, 0, 1, 2, { bad_date: 1, passed: 1, other: 1 }),
+      lab(null, 4, 3, 0, 1, { passed: 3 }),
+    ]);
+    expectSums(run);
+    // Every record written along the way holds the sums too.
+    for (const saved of w.runSaves) expectSums(saved);
+
+    // A held request keeps its laboratory, and the held list filters by it.
+    const all = await w.svc.held(PLUGIN, SRC, { offset: 0, limit: 10 });
+    expect(all.rows.map((r) => [r.key, r.laboratory])).toEqual([
+      ['REQ0002', 'LAB-A'], ['REQ0003', 'LAB.B_2'], ['REQ0006', null], ['REQ0007', 'LAB.B_2'], ['REQ0009', 'LAB.B_2'],
+    ]);
+    const b = await w.svc.held(PLUGIN, SRC, { laboratory: 'LAB.B_2', offset: 0, limit: 2 });
+    expect([b.rows.map((r) => r.key), b.total]).toEqual([['REQ0003', 'REQ0007'], 3]);
+    const bHeld = await w.svc.held(PLUGIN, SRC, { laboratory: 'LAB.B_2', reason: 'held', offset: 0, limit: 10 });
+    expect([bHeld.rows.map((r) => r.key), bHeld.total]).toEqual([['REQ0009'], 1]);
+    const bPassed = await w.svc.held(PLUGIN, SRC, { laboratory: 'LAB.B_2', label: 'passed', offset: 0, limit: 10 });
+    expect([bPassed.rows.map((r) => r.key), bPassed.total]).toEqual([['REQ0007'], 1]);
+    const aItems = await w.svc.heldItems(PLUGIN, SRC, { laboratory: 'LAB-A', offset: 0, limit: 10 });
+    expect(aItems).toEqual({ items: [await w.svc.heldItem(PLUGIN, SRC, 'REQ0002')], total: 1 });
+    expect(aItems.items[0]).toMatchObject({ laboratory: 'LAB-A', findings: [1] });
+    expect((await w.svc.heldItems(PLUGIN, SRC, { laboratory: 'LAB-A', reason: 'error', offset: 0, limit: 10 })).total).toBe(0);
+    // A laboratory code never reaches an audit row.
+    expect(JSON.stringify(w.audited)).not.toContain('LAB');
+  });
+
+  it('a page tried again after a fault counts once for each laboratory', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    w.setDecode((input) => ({
+      groups: input.keys.map((key) => (key === 'REQ0003'
+        ? { key, held: true, laboratory: at('B') }
+        : { ...pass(key), laboratory: at('A') })),
+    }));
+    // The held write of REQ0003 fails once, after REQ0001 and REQ0002 were saved.
+    w.failHeldPuts(1);
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    expect(w.persisted).toHaveLength(5);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run).toMatchObject({ status: 'completed', counts: { read: 4, saved: 3, held: 1, failed: 0, labels: { passed: 3 } } });
+    expect(run.laboratories).toEqual([lab('A', 3, 3, 0, 0, { passed: 3 }), lab('B', 1, 0, 1, 0)]);
+    for (const saved of w.runSaves) expectSums(saved);
+  });
+
+  it('the 501st code is counted with the requests that named none', async () => {
+    const w = await world();
+    const keys = keysOf(502);
+    await sourceCopy(w, keys);
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ ...pass(key), laboratory: at(`L${Number(key.slice(3))}`) })) }));
+    // Two pages, so the cap holds across a page end.
+    await w.svc.start({ ...START, pageSize: 300 });
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run.counts).toMatchObject({ read: 502, saved: 502 });
+    const labs = run.laboratories!;
+    expect(labs).toHaveLength(501);
+    expect(labs.slice(0, 500).map((l) => l.code)).toEqual(Array.from({ length: 500 }, (_, i) => `L${i + 1}`));
+    expect(labs[0]).toEqual(lab('L1', 1, 1, 0, 0, { passed: 1 }));
+    expect(labs[500]).toEqual(lab(null, 2, 2, 0, 0, { passed: 2 }));
+    expectSums(run);
+  });
+
+  it('a start, and a start again, begin with no laboratory; a run that names none has one entry with a null code', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ ...pass(key), laboratory: at('A') })) }));
+    const first = await w.svc.start({ ...START, pageSize: 2 });
+    expect(first.laboratories).toEqual([]);
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!.laboratories).toEqual([lab('A', 4, 4, 0, 0, { passed: 4 })]);
+
+    w.setDecode((input) => ({ groups: input.keys.map(pass) }));
+    const again = await w.svc.start(START);
+    expect(again.laboratories).toEqual([]);
+    expect((await w.stored())!.laboratories).toEqual([]);
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!.laboratories).toEqual([lab(null, 4, 4, 0, 0, { passed: 4 })]);
+  });
+
+  it('a bad code is treated as no laboratory, never as an error', async () => {
+    const w = await world();
+    const bad: unknown[] = [
+      at('X'.repeat(33)), at('has space'), at(''), at(5), at(null), 'LAB', null, ['LAB'], {}, at('caf\u00e9'), at('a/b'),
+    ];
+    await sourceCopy(w, keysOf(bad.length + 1));
+    w.setDecode((input) => ({
+      groups: input.keys.map((key, i) => ({ key, held: true, ...(i < bad.length ? { laboratory: bad[i] } : { laboratory: at('X'.repeat(32)) }) })),
+    }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run).toMatchObject({ status: 'completed', lastError: null, counts: { read: bad.length + 1, held: bad.length + 1, failed: 0 } });
+    // 32 characters is still a code.
+    expect(run.laboratories).toEqual([lab(null, bad.length, 0, bad.length, 0), lab('X'.repeat(32), 1, 0, 1, 0)]);
+    const rows = (await w.heldAll()).rows;
+    expect(rows.slice(0, bad.length).every((r) => r.laboratory === null)).toBe(true);
+    expect(rows.at(-1)!.laboratory).toBe('X'.repeat(32));
+  });
+
+  it('labels per laboratory follow the run cap, so the sums hold past 12 labels', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(16));
+    w.setDecode((input) => ({
+      groups: input.keys.map((key) => {
+        const n = Number(key.slice(3));
+        return { ...pass(key), label: `l${String(n).padStart(2, '0')}`, laboratory: at(n % 2 === 0 ? 'EVEN' : 'ODD') };
+      }),
+    }));
+    await w.svc.start({ ...START, pageSize: 5 });
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(Object.keys(run.counts.labels)).toHaveLength(13);
+    expect(run.counts.labels.other).toBe(4);
+    expectSums(run);
+    const even = run.laboratories!.find((l) => l.code === 'EVEN')!;
+    // l14 and l16 are past the run's 12, so they are other here too.
+    expect(even.counts.labels).toMatchObject({ l02: 1, l12: 1, other: 2 });
+    expect(even.counts.labels.l14).toBeUndefined();
+  });
+
+  it('a held request that passes later leaves the store, and its laboratory filter is empty', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(3));
+    w.setDecode((input) => ({
+      groups: input.keys.map((key) => (key === 'REQ0002'
+        ? { key, held: true, findings: [1], laboratory: at('A') } : { ...pass(key), laboratory: at('A') })),
+    }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect((await w.svc.held(PLUGIN, SRC, { laboratory: 'A', offset: 0, limit: 10 })).total).toBe(1);
+
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ ...pass(key), laboratory: at('A') })) }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(await w.heldAll()).toEqual({ rows: [], total: 0 });
+    expect(await w.svc.held(PLUGIN, SRC, { laboratory: 'A', offset: 0, limit: 10 })).toEqual({ rows: [], total: 0 });
+    expect((await w.svc.get(PLUGIN, CHECK))!.laboratories).toEqual([lab('A', 3, 3, 0, 0, { passed: 3 })]);
+  });
+
+  it('a page gets no laboratories when no request named one, and every entry once one did', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    // No codes at all: the record keeps its null entry, the page gets none.
+    await w.svc.start(START);
+    await drive(w.svc);
+    const none = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(none.laboratories).toEqual([lab(null, 4, 4, 0, 0, { passed: 4 })]);
+    expect(checkForPage(none).laboratories).toEqual([]);
+    expect(checkForPage(none).counts).toMatchObject({ read: 4, saved: 4 });
+
+    // One real code and requests that named none: both entries, the null one included.
+    w.setDecode((input) => ({ groups: input.keys.map((key) => (key === 'REQ0001' ? { ...pass(key), laboratory: at('A') } : pass(key))) }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const mixed = checkForPage((await w.svc.get(PLUGIN, CHECK))!);
+    expect(mixed.laboratories).toEqual([lab('A', 1, 1, 0, 0, { passed: 1 }), lab(null, 3, 3, 0, 0, { passed: 3 })]);
+
+    // A start again that names no code: none again.
+    w.setDecode((input) => ({ groups: input.keys.map(pass) }));
+    const again = await w.svc.start(START);
+    expect(checkForPage(again).laboratories).toEqual([]);
+    await drive(w.svc);
+    expect(checkForPage((await w.svc.get(PLUGIN, CHECK))!).laboratories).toEqual([]);
+  });
+
+  it('a label or a code named like a property every object has still counts as itself', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    const codes = ['constructor', 'constructor', '__proto__', 'toString', 'A', 'A'];
+    const labels = ['constructor', 'constructor', 'tostring', 'constructor', 'hasownproperty', 'passed'];
+    w.setDecode((input) => ({
+      groups: input.keys.map((key) => {
+        const i = Number(key.slice(3)) - 1;
+        return { ...pass(key), label: labels[i], laboratory: at(codes[i]) };
+      }),
+    }));
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run.counts.labels).toEqual({ constructor: 3, tostring: 1, hasownproperty: 1, passed: 1 });
+    expect(run.laboratories).toEqual([
+      lab('constructor', 2, 2, 0, 0, { constructor: 2 }),
+      lab('__proto__', 1, 1, 0, 0, { tostring: 1 }),
+      lab('toString', 1, 1, 0, 0, { constructor: 1 }),
+      lab('A', 2, 2, 0, 0, { hasownproperty: 1, passed: 1 }),
+    ]);
+    expectSums(run);
+    // Stored and shown as plain JSON objects of the same shape.
+    const stored = (await w.stored())!;
+    expect(JSON.parse(JSON.stringify(stored))).toEqual(stored);
+    expect(stored.counts.labels).toEqual(run.counts.labels);
+    expect(Object.getPrototypeOf(run.counts.labels)).toBe(Object.prototype);
+    for (const l of run.laboratories!) expect(Object.getPrototypeOf(l.counts.labels)).toBe(Object.prototype);
+    expect(checkForPage(run).laboratories).toEqual(run.laboratories);
+  });
+
+  it('a run stored before laboratories were counted is driven on without them', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    const started = await w.svc.start({ ...START, pageSize: 2 });
+    const { laboratories: _none, ...older } = started;
+    const orphan = {
+      ...older, status: 'running', driver: 'server-old', cursor: 'REQ0002',
+      counts: { read: 2, saved: 2, held: 0, failed: 0, resources: 2, labels: { passed: 2 } },
+      updatedAt: new Date(w.clock.now - STALE_MS - 1000).toISOString(),
+    };
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, orphan);
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ ...pass(key), laboratory: at('A') })) }));
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    // Counting only the pages after the takeover would not add up to the run, so it counts none.
+    expect(run).toMatchObject({ status: 'completed', counts: { read: 4, saved: 4 } });
+    expect('laboratories' in run).toBe(false);
+    expect('laboratories' in (await w.stored())!).toBe(false);
+  });
+});
+
+describe('check: final fix wave, a stopped or failed check carries on (design 11.1)', () => {
+  /** Held, failed and saved requests over three laboratories and three labels, the same every time. */
+  const mixed = (input: DecodeInput) => ({
+    groups: input.keys.map((key): Group => {
+      const n = Number(key.slice(3));
+      const laboratory = { code: `LAB${n % 3}` };
+      if (n % 5 === 0) return { key, held: true, findings: { n }, label: 'held_x', laboratory };
+      if (n % 7 === 0) return { key, error: 'BAD_DATE', label: 'bad_date', laboratory };
+      return { ...pass(key), laboratory, label: n % 2 ? 'odd' : 'even' };
+    }),
+  });
+  /** Decodes with `mixed`, and asks for a stop while page `at` is decoded. */
+  const stopOnPage = (w: World, at: number) => {
+    let pages = 0;
+    w.setDecode(async (input) => {
+      pages += 1;
+      if (pages === at) await w.svc.stop(PLUGIN, CHECK, ADMIN);
+      return mixed(input);
+    });
+  };
+  const startMeta = (w: World) => w.audited.filter((e) => e.action === 'import.check.start').map((e) => e.metadata?.carriedOn);
+  /** The counts and the laboratories of a run that never stopped, read from the first key. */
+  async function wholeRun(w: World) {
+    w.setDecode(mixed);
+    const fresh = await w.svc.start({ ...START, pageSize: 4, fromStart: true });
+    expect(fresh).toMatchObject({ cursor: null, counts: { read: 0 }, laboratories: [] });
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(run.status).toBe('completed');
+    return { counts: run.counts, laboratories: run.laboratories };
+  }
+
+  it('a stopped check carries on from its next page with its counts and held rows, and ends as a run that never stopped', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(20));
+    stopOnPage(w, 2);
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    const stopped = (await w.stored())!;
+    expect(stopped).toMatchObject({ status: 'stopped', cursor: 'REQ0008', counts: { read: 8, saved: 6, held: 1, failed: 1 } });
+    const heldAtStop = await w.heldAll();
+    expect(heldAtStop.rows.map((r) => r.key)).toEqual(['REQ0005', 'REQ0007']);
+
+    w.setDecode(mixed);
+    w.decodeCalls.length = 0;
+    const again = await w.svc.start(START);
+    // The run it gets back has requests already read: that is how a caller tells a carry-on.
+    expect(again).toMatchObject({
+      status: 'queued', cursor: 'REQ0008', pageSize: 4, finishedAt: null, lastError: null,
+      counts: stopped.counts, laboratories: stopped.laboratories,
+    });
+    expect(await w.heldAll()).toEqual(heldAtStop);
+    await drive(w.svc);
+    expect(w.decodeCalls[0]!.keys).toEqual(keysOf(20).slice(8, 12));
+    expect(w.decodeCalls.flatMap((c) => c.keys)).toEqual(keysOf(20).slice(8));
+    const carried = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(carried.status).toBe('completed');
+    // heldAt moves when a row is written again, so the rows are compared without it.
+    const heldShape = async () => (await w.heldAll()).rows.map(({ heldAt: _at, ...r }) => r);
+    const carriedHeld = await heldShape();
+
+    const whole = await wholeRun(w);
+    expect({ counts: carried.counts, laboratories: carried.laboratories }).toEqual(whole);
+    expect(whole.counts).toMatchObject({ read: 20, held: 4, failed: 2 });
+    expect(carriedHeld).toEqual(await heldShape());
+    expect(carriedHeld).toHaveLength(6);
+    // The audit row of each start says which it was.
+    expect(startMeta(w)).toEqual([false, true, false]);
+  });
+
+  it('a failed check carries on from its last page once the fault is gone, and ends as a run that never failed', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(20));
+    w.setDecode(mixed);
+    // REQ0005, on the second page, is held. Its write fails on every try, so the run fails there.
+    w.failHeldPuts(6);
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    const failed = (await w.stored())!;
+    expect(failed).toMatchObject({ status: 'failed', cursor: 'REQ0004', counts: { read: 4 } });
+    expect(failed.lastError).toMatch(/on 6 tries of one page in a row/);
+
+    const again = await w.svc.start(START);
+    expect(again).toMatchObject({ status: 'queued', cursor: 'REQ0004', counts: failed.counts, lastError: null });
+    await drive(w.svc);
+    const carried = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(carried).toMatchObject({ status: 'completed', lastError: null });
+    expect({ counts: carried.counts, laboratories: carried.laboratories }).toEqual(await wholeRun(w));
+    expect(startMeta(w)).toEqual([false, true, false]);
+  });
+
+  it('a run taken over from a dead server carries on, and ends as a run that never stopped', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(20));
+    stopOnPage(w, 2);
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    // The same record as a server that died while running would leave it.
+    const stopped = (await w.stored())!;
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, {
+      ...stopped, status: 'running', driver: 'server-old', finishedAt: null,
+      updatedAt: new Date(w.clock.now - STALE_MS - 1000).toISOString(),
+    });
+    w.setDecode(mixed);
+    w.decodeCalls.length = 0;
+    await drive(w.service('server-b'));
+    expect(w.decodeCalls[0]!.keys).toEqual(keysOf(20).slice(8, 12));
+    expect(actions(w)).toContain('import.check.takeover');
+    const carried = (await w.svc.get(PLUGIN, CHECK))!;
+    expect(carried.status).toBe('completed');
+    expect({ counts: carried.counts, laboratories: carried.laboratories }).toEqual(await wholeRun(w));
+  });
+
+  /** A run stopped after two pages of two, with four requests read. */
+  async function stoppedAtFour(w: World, start: { referenceCopyId?: string | null } = {}) {
+    let pages = 0;
+    w.setDecode(async (input) => {
+      pages += 1;
+      if (pages === 2) await w.svc.stop(PLUGIN, CHECK, ADMIN);
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, ...start, pageSize: 2 });
+    await drive(w.svc);
+    w.setDecode((input) => ({ groups: input.keys.map(pass) }));
+    expect(await w.stored()).toMatchObject({ status: 'stopped', cursor: 'REQ0004', counts: { read: 4, saved: 4 } });
+  }
+  const begunAtFirstKey = { status: 'queued', cursor: null, counts: { read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: {} }, laboratories: [] };
+
+  it('a check begins at the first key when it completed, or when the caller asks', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    await stoppedAtFour(w);
+    expect(await w.svc.start({ ...START, fromStart: true })).toMatchObject(begunAtFirstKey);
+    await drive(w.svc);
+    expect((await w.stored())!).toMatchObject({ status: 'completed', counts: { read: 6 } });
+    // A completed run begins again at the first key, with or without fromStart.
+    expect(await w.svc.start(START)).toMatchObject(begunAtFirstKey);
+    expect(startMeta(w)).toEqual([false, false, false]);
+  });
+
+  it('a check begins at the first key when its options or its reference differ from the run', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [] });
+    await stoppedAtFour(w);
+    expect(await w.svc.start({ ...START, options: { site: 'B' } })).toMatchObject({ ...begunAtFirstKey, options: { site: 'B' } });
+
+    await w.svc.stop(PLUGIN, CHECK, ADMIN);
+    await stoppedAtFour(w);
+    expect(await w.svc.start({ ...START, referenceCopyId: REF })).toMatchObject({ ...begunAtFirstKey, referenceCopyId: REF });
+
+    await w.svc.stop(PLUGIN, CHECK, ADMIN);
+    await stoppedAtFour(w, { referenceCopyId: REF });
+    expect(await w.svc.start(START)).toMatchObject({ ...begunAtFirstKey, referenceCopyId: null });
+
+    // Same options, same reference: it carries on.
+    await w.svc.stop(PLUGIN, CHECK, ADMIN);
+    await stoppedAtFour(w, { referenceCopyId: REF });
+    expect(await w.svc.start({ ...START, referenceCopyId: REF })).toMatchObject({ status: 'queued', cursor: 'REQ0004', counts: { read: 4 } });
+  });
+
+  it('a check begins at the first key when its source or its reference was read again since it began', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [] });
+    const later = (s: number) => new Date(w.clock.now + s * 1000).toISOString();
+
+    await stoppedAtFour(w);
+    await w.setCopyStatus(SRC, 'completed', { finishedAt: later(1) });
+    expect(await w.svc.start(START)).toMatchObject(begunAtFirstKey);
+
+    await w.svc.stop(PLUGIN, CHECK, ADMIN);
+    await stoppedAtFour(w, { referenceCopyId: REF });
+    await w.setCopyStatus(REF, 'completed', { finishedAt: later(2) });
+    expect(await w.svc.start({ ...START, referenceCopyId: REF })).toMatchObject({ ...begunAtFirstKey, referenceCopyId: REF });
+
+    // A record from before a check could carry on does not say which copy it read, so it begins again.
+    await w.svc.stop(PLUGIN, CHECK, ADMIN);
+    await stoppedAtFour(w);
+    const { copyFinishedAt: _gone, ...older } = (await w.stored())! as CheckRun & { copyFinishedAt?: unknown };
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, older);
+    expect(await w.svc.start(START)).toMatchObject(begunAtFirstKey);
+  });
+
+  it('a carry-on keeps the page size unless one is given', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    await stoppedAtFour(w);
+    expect(await w.svc.start(START)).toMatchObject({ cursor: 'REQ0004', pageSize: 2 });
+    await w.svc.stop(PLUGIN, CHECK, ADMIN);
+    expect(await w.svc.start({ ...START, pageSize: 3 })).toMatchObject({ cursor: 'REQ0004', pageSize: 3 });
+  });
+});
+
+describe('check: final fix wave, a revoked connector stops a check (design 11.3)', () => {
+  const NOT_ALLOWED = (copyId: string) => `the plugin is no longer allowed to read the connector of copy ${copyId}`;
+
+  it('start refuses a source or a reference whose connector the plugin may no longer read, and audits nothing', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [] });
+    w.revoke('c2');
+    await expect(w.svc.start({ ...START, referenceCopyId: REF })).rejects.toThrow(NOT_ALLOWED(REF));
+    w.revoke('c1');
+    await expect(w.svc.start(START)).rejects.toThrow(NOT_ALLOWED(SRC));
+    expect(w.audited).toEqual([]);
+    expect(await w.stored()).toBeNull();
+  });
+
+  it('a revoke after the start fails the run with a fixed sentence before it reads or saves anything', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    await w.svc.start(START);
+    w.revoke('c1');
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'failed', lastError: NOT_ALLOWED(SRC), counts: { read: 0 } });
+    expect(w.decodeCalls).toEqual([]);
+    expect(w.persisted).toEqual([]);
+    expect(w.audited.at(-1)).toMatchObject({ action: 'import.check.finish', metadata: { status: 'failed' } });
+  });
+
+  it('a revoke while the check runs saves nothing more after the page in hand', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    let pages = 0;
+    w.setDecode((input) => {
+      pages += 1;
+      if (pages === 1) w.revoke('c1');
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'failed', lastError: NOT_ALLOWED(SRC), cursor: 'REQ0002', counts: { read: 2, saved: 2 } });
+    expect(w.decodeCalls).toHaveLength(1);
+    expect(w.persisted).toHaveLength(2);
+  });
+
+  it('a revoke of the reference connector while the check runs fails it too', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(6));
+    await w.seedCopy(REF, 'c2', 'completed', { twins: [] });
+    let pages = 0;
+    w.setDecode((input) => {
+      pages += 1;
+      if (pages === 1) w.revoke('c2');
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, referenceCopyId: REF, pageSize: 2 });
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'failed', lastError: NOT_ALLOWED(REF), counts: { read: 2 } });
+    expect(w.persisted).toHaveLength(2);
+  });
+});
+
+describe('check: final fix wave, held requests read by key, and the copy remove (design 11.2, 11.4)', () => {
+  it('heldItems reads by after with next, and by offset as before', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(5));
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ key, held: true, findings: { key } })) }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const p1 = await w.svc.heldItems(PLUGIN, SRC, { after: null, limit: 2 });
+    expect([p1.items.map((i) => i.key), p1.total, p1.next]).toEqual([['REQ0001', 'REQ0002'], 5, 'REQ0002']);
+    const p3 = await w.svc.heldItems(PLUGIN, SRC, { after: 'REQ0004', limit: 2 });
+    expect([p3.items.map((i) => i.key), p3.next]).toEqual([['REQ0005'], null]);
+    expect(await w.svc.heldItems(PLUGIN, SRC, { offset: 1, limit: 1 })).toEqual({ items: [await w.svc.heldItem(PLUGIN, SRC, 'REQ0002')], total: 5 });
+    await expect(w.svc.heldItems(PLUGIN, 'nope', { after: null, limit: 2 })).rejects.toThrow('copy nope not found');
+  });
+
+  it('isLiveCheck names the statuses that still add and remove held rows', () => {
+    const live = (['queued', 'running', 'waiting', 'stopping', 'stopped', 'completed', 'failed'] as const).filter(isLiveCheck);
+    expect(live).toEqual(['queued', 'running', 'waiting', 'stopping']);
+  });
+
+  it('removing a copy removes its check record, after its held rows', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(3));
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ key, held: true })) }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect(await w.stored()).not.toBeNull();
+    await w.copies.remove(PLUGIN, SRC, ADMIN);
+    await w.copies.tick();
+    await w.copies.idle();
+    expect(await w.stored()).toBeNull();
+    expect((await w.heldAll()).total).toBe(0);
+    // A copy made again on the same connector shows no old run.
+    await sourceCopy(w, keysOf(3));
+    expect(await w.svc.list(PLUGIN)).toEqual([]);
+  });
+});

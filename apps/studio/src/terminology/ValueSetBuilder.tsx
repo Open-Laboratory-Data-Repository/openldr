@@ -25,6 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
+import { randomId } from '@/lib/random-id';
 
 interface ValueSetBuilderProps {
   valueSet: ValueSet | null;
@@ -41,9 +42,7 @@ const SENTINEL_NO_SYSTEM = '__none__';
 type EditableClause = ValueSetComposeClause & { _key: string };
 
 function randomKey(): string {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
+  return randomId();
 }
 
 function emptyClause(): EditableClause {

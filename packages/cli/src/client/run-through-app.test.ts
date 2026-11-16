@@ -1107,6 +1107,91 @@ describe('output files', () => {
   });
 });
 
+describe('an output file that is private and keeps an existing file', () => {
+  const held = (target: string, ...more: string[]) => ['import', 'check', 'held', 'v1-check', 'c0ffee', '--export', target, ...more];
+  const answerWith = (body: string) => async (call: Call, req: IncomingMessage, res: ServerResponse) => {
+    await readUntilGo(call, req);
+    const ref = start(call).outputs[0]!.ref;
+    stream200(res);
+    send(res, { t: 'run', id: 'r1' }, { t: 'file', ref, rel: '' }, { t: 'data', d: b64(body) }, { t: 'end' }, { t: 'exit', code: 0 });
+    res.end();
+  };
+
+  it('refuses an existing target without --force, and sends no request', async () => {
+    const target = join(dir, 'held.ndjson');
+    await writeFile(target, 'keep me');
+    const srv = await startServer(answerWith('new\n'));
+    const r = await cli(held(target), { OPENLDR_URL: srv.url });
+    expect(r.code).toBe(1);
+    expect(r.err).toBe(`${target} already exists. Run again with --force to write over it.\n`);
+    expect(srv.calls).toHaveLength(0);
+    expect(await readFile(target, 'utf8')).toBe('keep me');
+  });
+
+  it('writes over an existing target with --force', async () => {
+    const target = join(dir, 'held.ndjson');
+    await writeFile(target, 'keep me');
+    const srv = await startServer(answerWith('new\n'));
+    const r = await cli(held(target, '--force'), { OPENLDR_URL: srv.url });
+    expect(r.code).toBe(0);
+    expect(await readFile(target, 'utf8')).toBe('new\n');
+    expect(await readdir(dir)).toEqual(['held.ndjson']);
+  });
+
+  it('refuses a folder and a link as the target, with or without --force, and sends no request', async () => {
+    const folder = join(dir, 'folder');
+    await mkdir(folder);
+    const elsewhere = join(dir, 'elsewhere.txt');
+    await writeFile(elsewhere, 'not yours');
+    const link = join(dir, 'link.ndjson');
+    await symlink(elsewhere, link);
+    const dangling = join(dir, 'dangling.ndjson');
+    await symlink(join(dir, 'nowhere'), dangling);
+    const srv = await startServer(answerWith('new\n'));
+    for (const force of [[], ['--force']]) {
+      const f = await cli(held(folder, ...force), { OPENLDR_URL: srv.url });
+      expect(f.code).toBe(1);
+      expect(f.err).toBe(`${folder} is a folder. Name a file.\n`);
+      for (const l of [link, dangling]) {
+        const r = await cli(held(l, ...force), { OPENLDR_URL: srv.url });
+        expect(r.code).toBe(1);
+        expect(r.err).toBe(`${l} is a link. Name the file itself.\n`);
+      }
+    }
+    expect(srv.calls).toHaveLength(0);
+    expect(await readFile(elsewhere, 'utf8')).toBe('not yours');
+  });
+
+  it('makes the file mode 0600 under a umask of 022', async () => {
+    const old = process.umask(0o022);
+    try {
+      const target = join(dir, 'held.ndjson');
+      const srv = await startServer(answerWith('new\n'));
+      const r = await cli(held(target), { OPENLDR_URL: srv.url });
+      expect(r.code).toBe(0);
+      expect((await stat(target)).mode & 0o777).toBe(0o600);
+      // The same when it is written over.
+      const again = await cli(held(target, '--force'), { OPENLDR_URL: srv.url });
+      expect(again.code).toBe(0);
+      expect((await stat(target)).mode & 0o777).toBe(0o600);
+    } finally { process.umask(old); }
+  });
+
+  it('leaves another command\'s output file as it was: written over with no flag, mode from the umask', async () => {
+    const old = process.umask(0o022);
+    try {
+      const target = join(dir, 'dups.csv');
+      await writeFile(target, 'old');
+      const srv = await startServer(answerWith('new\n'));
+      const r = await cli(['patients', 'duplicates', 'export', '--out', target], { OPENLDR_URL: srv.url });
+      expect(r.code).toBe(0);
+      expect(await readFile(target, 'utf8')).toBe('new\n');
+      expect((await stat(target)).mode & 0o777).toBe(0o644);
+      expect(srv.calls).toHaveLength(1);
+    } finally { process.umask(old); }
+  });
+});
+
 describe('interrupts', () => {
   it('sends an interrupt on the first SIGINT and keeps reading to the exit frame', async () => {
     let interrupt: Call | null = null;

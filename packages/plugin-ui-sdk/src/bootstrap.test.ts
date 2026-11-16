@@ -48,6 +48,80 @@ describe('SDK_BOOTSTRAP_V1', () => {
     ]);
   });
 
+  it('the SDK sends each check call as its op', async () => {
+    let handler: ((ev: unknown) => void) | undefined;
+    const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('window', SDK_BOOTSTRAP_V1)(win);
+    const api = (win as unknown as { openldr: { imports: { check: Record<string, (...a: unknown[]) => Promise<unknown>> } } }).openldr;
+    const sent: Array<{ id: number; op: unknown }> = [];
+    const port = {
+      start: () => {},
+      onmessage: null as null | ((e: { data: unknown }) => void),
+      postMessage(m: { id: number; op: unknown }) { sent.push(m); queueMicrotask(() => port.onmessage?.({ data: { id: m.id, result: { ok: true, data: m.op } } })); },
+    };
+    handler!({ data: { type: 'openldr:init', context: { pluginId: 'p' } }, ports: [port] });
+
+    const check = api.imports.check;
+    await check.start({ copyId: 'cp1', referenceCopyId: null, options: { tz: '+02:00' }, pageSize: 200 });
+    await check.list();
+    await check.status('ck1');
+    await check.stop('ck1');
+    await check.held({ copyId: 'cp1', reason: 'held', label: 'odd_age', laboratory: 'LAB-1', offset: 20, limit: 10 });
+    await check.heldItem({ copyId: 'cp1', key: 'REQ1' });
+    await check.heldItems({ copyId: 'cp1', reason: 'error', label: 'odd_age', laboratory: 'LAB-2', offset: 200, limit: 200 });
+    await check.start({ copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: true });
+    await check.heldItems({ copyId: 'cp1', label: 'odd_age', after: null, limit: 200 });
+    await check.heldItems({ copyId: 'cp1', after: 'REQ9', limit: 200 });
+    expect(sent.map((m) => m.op)).toEqual([
+      { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: { tz: '+02:00' }, pageSize: 200 },
+      { kind: 'import.check.list' },
+      { kind: 'import.check.status', runId: 'ck1' },
+      { kind: 'import.check.stop', runId: 'ck1' },
+      { kind: 'import.check.held', copyId: 'cp1', reason: 'held', label: 'odd_age', laboratory: 'LAB-1', offset: 20, limit: 10 },
+      { kind: 'import.check.heldItem', copyId: 'cp1', key: 'REQ1' },
+      { kind: 'import.check.heldItems', copyId: 'cp1', reason: 'error', label: 'odd_age', laboratory: 'LAB-2', offset: 200, limit: 200 },
+      { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: {}, fromStart: true },
+      { kind: 'import.check.heldItems', copyId: 'cp1', label: 'odd_age', after: null, limit: 200 },
+      { kind: 'import.check.heldItems', copyId: 'cp1', after: 'REQ9', limit: 200 },
+    ]);
+    // After is sent as given, a null included: null asks for the first page.
+    expect(sent.at(-2)!.op).toHaveProperty('after', null);
+  });
+
+  it('files.download sends the host operation and resolves with nothing', async () => {
+    let handler: ((ev: unknown) => void) | undefined;
+    const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('window', SDK_BOOTSTRAP_V1)(win);
+    const api = (win as unknown as { openldr: { files: { download(i: unknown): Promise<unknown> } } }).openldr;
+    const sent: Array<{ id: number; op: unknown }> = [];
+    const port = {
+      start: () => {},
+      onmessage: null as null | ((e: { data: unknown }) => void),
+      // The host answers a download with ok and null data.
+      postMessage(m: { id: number; op: unknown }) { sent.push(m); queueMicrotask(() => port.onmessage?.({ data: { id: m.id, result: { ok: true, data: null } } })); },
+    };
+    handler!({ data: { type: 'openldr:init', context: { pluginId: 'p' } }, ports: [port] });
+    await expect(api.files.download({ filename: 'held.csv', mime: 'text/csv', text: 'a,b\n1,2\n' })).resolves.toBeUndefined();
+    expect(sent.map((m) => m.op)).toEqual([{ kind: 'host.download', filename: 'held.csv', mime: 'text/csv', text: 'a,b\n1,2\n' }]);
+  });
+
+  it('files.download rejects with the host error when the host refuses', async () => {
+    let handler: ((ev: unknown) => void) | undefined;
+    const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('window', SDK_BOOTSTRAP_V1)(win);
+    const api = (win as unknown as { openldr: { files: { download(i: unknown): Promise<unknown> } } }).openldr;
+    const port = {
+      start: () => {},
+      onmessage: null as null | ((e: { data: unknown }) => void),
+      postMessage(m: { id: number }) { queueMicrotask(() => port.onmessage?.({ data: { id: m.id, result: { ok: false, error: 'download refused: bad file name' } } })); },
+    };
+    handler!({ data: { type: 'openldr:init', context: { pluginId: 'p' } }, ports: [port] });
+    await expect(api.files.download({ filename: '../x.csv', mime: 'text/csv', text: '' })).rejects.toThrow('download refused: bad file name');
+  });
+
   it('defines window.openldr SYNCHRONOUSLY (before any openldr:init) so screens never race the injection', () => {
     // Run the bootstrap IIFE against a controlled fake window, capturing the message handler.
     let handler: ((ev: unknown) => void) | undefined;
@@ -115,6 +189,83 @@ describe('SDK_BOOTSTRAP_V1', () => {
     expect(api.theme).toBe('dark');
     handler!({ data: { type: 'openldr:theme', theme: 'light' } });
     expect(api.theme).toBe('light');
+  });
+});
+
+describe('SDK_BOOTSTRAP_V1 theme tokens', () => {
+  // A fake <html> that records what the bootstrap sets on it.
+  function bootWithDocument() {
+    let handler: ((ev: unknown) => void) | undefined;
+    const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+    const props = new Map<string, string>();
+    const attrs = new Map<string, string>();
+    const doc = {
+      documentElement: {
+        setAttribute: (k: string, v: string) => { attrs.set(k, v); },
+        style: {
+          setProperty: (k: string, v: string) => { props.set(k, v); },
+          removeProperty: (k: string) => { props.delete(k); return ''; },
+        },
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('window', 'document', SDK_BOOTSTRAP_V1)(win, doc);
+    const api = (win as unknown as { openldr: { theme: string; themeTokens: Record<string, string> } }).openldr;
+    const send = (data: unknown) => handler!({ data, ports: [{ start: () => {}, postMessage: () => {}, onmessage: null }] });
+    return { api, props, attrs, send };
+  }
+
+  it('applyTheme sets each token on the root, and removes one the host no longer sends', () => {
+    const b = bootWithDocument();
+    expect(b.api.themeTokens).toEqual({});
+    b.send({ type: 'openldr:init', context: { pluginId: 'p', theme: 'dark', themeTokens: { '--openldr-bg': 'rgb(1, 1, 1)', '--openldr-text': 'rgb(2, 2, 2)' } } });
+    expect(b.attrs.get('data-openldr-theme')).toBe('dark');
+    expect(Object.fromEntries(b.props)).toEqual({ '--openldr-bg': 'rgb(1, 1, 1)', '--openldr-text': 'rgb(2, 2, 2)' });
+    expect(b.api.themeTokens).toEqual({ '--openldr-bg': 'rgb(1, 1, 1)', '--openldr-text': 'rgb(2, 2, 2)' });
+
+    b.send({ type: 'openldr:theme', theme: 'light', tokens: { '--openldr-bg': 'rgb(9, 9, 9)' } });
+    expect(b.api.theme).toBe('light');
+    expect(Object.fromEntries(b.props)).toEqual({ '--openldr-bg': 'rgb(9, 9, 9)' });
+    expect(b.api.themeTokens).toEqual({ '--openldr-bg': 'rgb(9, 9, 9)' });
+  });
+
+  it('themeTokens is read-only to the page', () => {
+    const b = bootWithDocument();
+    b.send({ type: 'openldr:init', context: { pluginId: 'p', themeTokens: { '--openldr-bg': 'rgb(1, 1, 1)' } } });
+    expect(Object.isFrozen(b.api.themeTokens)).toBe(true);
+    expect(() => { (b.api.themeTokens as Record<string, string>)['--openldr-bg'] = 'red'; }).toThrow();
+  });
+
+  it('refuses a bad name or a bad value', () => {
+    const b = bootWithDocument();
+    b.send({ type: 'openldr:init', context: { pluginId: 'p', themeTokens: {
+      '--openldr-bg': 'rgb(1, 1, 1)',
+      'color': 'red',
+      '--other-bg': 'red',
+      '--openldr-Bad': 'red',
+      '--openldr-x;y': 'red',
+      [`--openldr-${'a'.repeat(41)}`]: 'red',
+      '--openldr-text': 'red}body{display:none',
+      '--openldr-border': 'a<b',
+      '--openldr-danger': 'x'.repeat(201),
+      '--openldr-success': 42,
+    } } });
+    expect(Object.fromEntries(b.props)).toEqual({ '--openldr-bg': 'rgb(1, 1, 1)' });
+    expect(b.api.themeTokens).toEqual({ '--openldr-bg': 'rgb(1, 1, 1)' });
+  });
+
+  it('an init message without tokens still works, and a theme message without tokens keeps them', async () => {
+    const b = bootWithDocument();
+    b.send({ type: 'openldr:init', context: { pluginId: 'p', theme: 'dark' } });
+    await expect((b.api as unknown as { ready: Promise<void> }).ready).resolves.toBeUndefined();
+    expect(b.api.theme).toBe('dark');
+    expect(b.api.themeTokens).toEqual({});
+    expect(b.props.size).toBe(0);
+
+    b.send({ type: 'openldr:theme', theme: 'light', tokens: { '--openldr-bg': 'rgb(1, 1, 1)' } });
+    b.send({ type: 'openldr:theme', theme: 'dark' });
+    expect(b.api.theme).toBe('dark');
+    expect(Object.fromEntries(b.props)).toEqual({ '--openldr-bg': 'rgb(1, 1, 1)' });
   });
 });
 
