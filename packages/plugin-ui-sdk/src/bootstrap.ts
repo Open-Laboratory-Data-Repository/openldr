@@ -63,6 +63,7 @@ function pluginBootstrapV1(): void {
     pluginId: '',
     capabilities: [] as string[],
     theme: 'light',
+    themeTokens: Object.freeze({}) as Readonly<Record<string, string>>,
     locale: 'en',
     site: 'page',
     ready,
@@ -128,16 +129,39 @@ function pluginBootstrapV1(): void {
   };
   (window as unknown as { openldr: unknown }).openldr = api;
 
-  function applyTheme(theme: string): void {
-    if (theme !== 'light' && theme !== 'dark') return;
-    api.theme = theme;
-    try { document.documentElement.setAttribute('data-openldr-theme', theme); } catch { /* no-op */ }
+  // The theme variables this page set on its root last time, so a name the host no longer
+  // sends can be removed.
+  let setNames: string[] = [];
+
+  /** Stamp light or dark on the root. When the host sends tokens, set each `--openldr-*`
+   *  variable on the root and remove the ones it stopped sending. No tokens (an older host,
+   *  or a message that carries none) leaves the current ones as they are. */
+  function applyTheme(theme: string, tokens?: unknown): void {
+    if (theme === 'light' || theme === 'dark') {
+      api.theme = theme;
+      try { document.documentElement.setAttribute('data-openldr-theme', theme); } catch { /* no-op */ }
+    }
+    if (!tokens || typeof tokens !== 'object' || Array.isArray(tokens)) return;
+    const next: Record<string, string> = {};
+    for (const name of Object.keys(tokens)) {
+      const value = (tokens as Record<string, unknown>)[name];
+      if (!/^--openldr-[a-z0-9-]{1,40}$/.test(name)) continue;
+      if (typeof value !== 'string' || value.length > 200 || /[<>{};]/.test(value)) continue;
+      next[name] = value;
+    }
+    try {
+      const style = document.documentElement.style;
+      for (const name of setNames) if (!(name in next)) style.removeProperty(name);
+      for (const name of Object.keys(next)) style.setProperty(name, next[name]);
+    } catch { /* no-op */ }
+    setNames = Object.keys(next);
+    api.themeTokens = Object.freeze(next);
   }
 
   window.addEventListener('message', (ev: MessageEvent) => {
-    const data = ev.data as { type?: string; theme?: string; context?: Record<string, unknown> } | undefined;
+    const data = ev.data as { type?: string; theme?: string; tokens?: unknown; context?: Record<string, unknown> } | undefined;
     // Live host theme changes (the host posts these when the user toggles dark/light).
-    if (data && data.type === 'openldr:theme') { applyTheme(data.theme ?? 'light'); return; }
+    if (data && data.type === 'openldr:theme') { applyTheme(data.theme ?? 'light', data.tokens); return; }
     if (!data || data.type !== 'openldr:init' || port) return;
     port = ev.ports[0];
     if (!port) return;
@@ -151,10 +175,10 @@ function pluginBootstrapV1(): void {
       else w.reject(new Error(m.result?.error ?? 'plugin host call failed'));
     };
     port.start();
-    const ctx = (data.context ?? {}) as { pluginId?: string; capabilities?: string[]; theme?: string; locale?: string; site?: string };
+    const ctx = (data.context ?? {}) as { pluginId?: string; capabilities?: string[]; theme?: string; themeTokens?: unknown; locale?: string; site?: string };
     api.pluginId = ctx.pluginId ?? '';
     api.capabilities = ctx.capabilities ?? [];
-    applyTheme(ctx.theme ?? 'light');
+    applyTheme(ctx.theme ?? 'light', ctx.themeTokens);
     api.locale = ctx.locale ?? 'en';
     // Where the host drew this page: its own page, a dashboard card, or the side panel.
     api.site = ctx.site === 'widget' || ctx.site === 'panel' ? ctx.site : 'page';

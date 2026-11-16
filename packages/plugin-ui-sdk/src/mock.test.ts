@@ -31,6 +31,11 @@ describe('createMockOpenldr', () => {
     expect(await api.imports.check.held({ copyId: 'cp1', offset: 0, limit: 10 })).toEqual({ rows: [], total: 0 });
     expect(await api.imports.check.heldItem({ copyId: 'cp1', key: 'REQ1' })).toBeNull();
   });
+  it('themeTokens is empty by default and carries what the test passes', () => {
+    expect(createMockOpenldr({ pluginId: 'p1' }).themeTokens).toEqual({});
+    const api = createMockOpenldr({ pluginId: 'p1', themeTokens: { '--openldr-bg': '#000' } });
+    expect(api.themeTokens).toEqual({ '--openldr-bg': '#000' });
+  });
   it('reports.list returns the seeded fixture', async () => {
     const api = createMockOpenldr({ pluginId: 'p1', capabilities: ['host:reports'], reports: [{ id: 'r1' }] });
     expect(await api.reports.list()).toEqual([{ id: 'r1' }]);

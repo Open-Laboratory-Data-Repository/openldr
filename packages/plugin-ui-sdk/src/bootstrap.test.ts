@@ -149,6 +149,83 @@ describe('SDK_BOOTSTRAP_V1', () => {
   });
 });
 
+describe('SDK_BOOTSTRAP_V1 theme tokens', () => {
+  // A fake <html> that records what the bootstrap sets on it.
+  function bootWithDocument() {
+    let handler: ((ev: unknown) => void) | undefined;
+    const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+    const props = new Map<string, string>();
+    const attrs = new Map<string, string>();
+    const doc = {
+      documentElement: {
+        setAttribute: (k: string, v: string) => { attrs.set(k, v); },
+        style: {
+          setProperty: (k: string, v: string) => { props.set(k, v); },
+          removeProperty: (k: string) => { props.delete(k); return ''; },
+        },
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('window', 'document', SDK_BOOTSTRAP_V1)(win, doc);
+    const api = (win as unknown as { openldr: { theme: string; themeTokens: Record<string, string> } }).openldr;
+    const send = (data: unknown) => handler!({ data, ports: [{ start: () => {}, postMessage: () => {}, onmessage: null }] });
+    return { api, props, attrs, send };
+  }
+
+  it('applyTheme sets each token on the root, and removes one the host no longer sends', () => {
+    const b = bootWithDocument();
+    expect(b.api.themeTokens).toEqual({});
+    b.send({ type: 'openldr:init', context: { pluginId: 'p', theme: 'dark', themeTokens: { '--openldr-bg': 'rgb(1, 1, 1)', '--openldr-text': 'rgb(2, 2, 2)' } } });
+    expect(b.attrs.get('data-openldr-theme')).toBe('dark');
+    expect(Object.fromEntries(b.props)).toEqual({ '--openldr-bg': 'rgb(1, 1, 1)', '--openldr-text': 'rgb(2, 2, 2)' });
+    expect(b.api.themeTokens).toEqual({ '--openldr-bg': 'rgb(1, 1, 1)', '--openldr-text': 'rgb(2, 2, 2)' });
+
+    b.send({ type: 'openldr:theme', theme: 'light', tokens: { '--openldr-bg': 'rgb(9, 9, 9)' } });
+    expect(b.api.theme).toBe('light');
+    expect(Object.fromEntries(b.props)).toEqual({ '--openldr-bg': 'rgb(9, 9, 9)' });
+    expect(b.api.themeTokens).toEqual({ '--openldr-bg': 'rgb(9, 9, 9)' });
+  });
+
+  it('themeTokens is read-only to the page', () => {
+    const b = bootWithDocument();
+    b.send({ type: 'openldr:init', context: { pluginId: 'p', themeTokens: { '--openldr-bg': 'rgb(1, 1, 1)' } } });
+    expect(Object.isFrozen(b.api.themeTokens)).toBe(true);
+    expect(() => { (b.api.themeTokens as Record<string, string>)['--openldr-bg'] = 'red'; }).toThrow();
+  });
+
+  it('refuses a bad name or a bad value', () => {
+    const b = bootWithDocument();
+    b.send({ type: 'openldr:init', context: { pluginId: 'p', themeTokens: {
+      '--openldr-bg': 'rgb(1, 1, 1)',
+      'color': 'red',
+      '--other-bg': 'red',
+      '--openldr-Bad': 'red',
+      '--openldr-x;y': 'red',
+      [`--openldr-${'a'.repeat(41)}`]: 'red',
+      '--openldr-text': 'red}body{display:none',
+      '--openldr-border': 'a<b',
+      '--openldr-danger': 'x'.repeat(201),
+      '--openldr-success': 42,
+    } } });
+    expect(Object.fromEntries(b.props)).toEqual({ '--openldr-bg': 'rgb(1, 1, 1)' });
+    expect(b.api.themeTokens).toEqual({ '--openldr-bg': 'rgb(1, 1, 1)' });
+  });
+
+  it('an init message without tokens still works, and a theme message without tokens keeps them', async () => {
+    const b = bootWithDocument();
+    b.send({ type: 'openldr:init', context: { pluginId: 'p', theme: 'dark' } });
+    await expect((b.api as unknown as { ready: Promise<void> }).ready).resolves.toBeUndefined();
+    expect(b.api.theme).toBe('dark');
+    expect(b.api.themeTokens).toEqual({});
+    expect(b.props.size).toBe(0);
+
+    b.send({ type: 'openldr:theme', theme: 'light', tokens: { '--openldr-bg': 'rgb(1, 1, 1)' } });
+    b.send({ type: 'openldr:theme', theme: 'dark' });
+    expect(b.api.theme).toBe('dark');
+    expect(Object.fromEntries(b.props)).toEqual({ '--openldr-bg': 'rgb(1, 1, 1)' });
+  });
+});
+
 describe('makeRpc', () => {
   it('correlates RPC by id and resolves per the host result', async () => {
     const sent: unknown[] = [];

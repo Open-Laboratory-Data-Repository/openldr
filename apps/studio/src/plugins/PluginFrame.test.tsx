@@ -32,6 +32,74 @@ describe('PluginFrame', () => {
     expect(srcdoc).toContain('Content-Security-Policy');
   });
 
+  it('puts the studio theme in a style element in <head>, before the plugin body', async () => {
+    document.documentElement.style.setProperty('--bg', 'rgb(1, 2, 3)');
+    try {
+      const { container } = render(<PluginFrame pluginId="ui-demo" context={{ pluginId: 'ui-demo', capabilities: [], theme: 'light', locale: 'en', sessionId: 's1' }} />);
+      const iframe = await waitFor(() => {
+        const f = container.querySelector('iframe');
+        if (!f || !f.getAttribute('srcdoc')) throw new Error('not ready');
+        return f as HTMLIFrameElement;
+      });
+      const srcdoc = iframe.getAttribute('srcdoc') ?? '';
+      const style = srcdoc.indexOf('<style');
+      expect(style).toBeGreaterThan(-1);
+      expect(srcdoc).toContain('--openldr-bg:rgb(1, 2, 3)');
+      expect(style).toBeGreaterThan(srcdoc.indexOf('Content-Security-Policy'));
+      expect(style).toBeLessThan(srcdoc.indexOf('</head>'));
+      expect(srcdoc.indexOf('</head>')).toBeLessThan(srcdoc.indexOf('<div id="panel">hi</div>'));
+    } finally {
+      document.documentElement.style.removeProperty('--bg');
+    }
+  });
+
+  it('posts the theme and its tokens to the page when data-theme changes, and on init', async () => {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.documentElement.style.setProperty('--bg', 'rgb(1, 2, 3)');
+    try {
+      const { container } = render(<PluginFrame pluginId="ui-demo" context={{ pluginId: 'ui-demo', capabilities: [], theme: 'dark', locale: 'en', sessionId: 's1' }} />);
+      const iframe = await waitFor(() => {
+        const f = container.querySelector('iframe');
+        if (!f || !f.getAttribute('srcdoc')) throw new Error('not ready');
+        return f as HTMLIFrameElement;
+      });
+      const posted: unknown[] = [];
+      Object.defineProperty(iframe, 'contentWindow', { configurable: true, value: { postMessage: (m: unknown) => posted.push(m) } });
+
+      iframe.dispatchEvent(new Event('load'));
+      const init = posted[0] as { type: string; context: { theme: string; themeTokens: Record<string, string> } };
+      expect(init.type).toBe('openldr:init');
+      expect(init.context.themeTokens['--openldr-bg']).toBe('rgb(1, 2, 3)');
+
+      document.documentElement.style.setProperty('--bg', 'rgb(9, 9, 9)');
+      document.documentElement.setAttribute('data-theme', 'light');
+      await waitFor(() => { if (posted.length < 2) throw new Error('no theme message'); });
+      expect(posted[posted.length - 1]).toMatchObject({ type: 'openldr:theme', theme: 'light', tokens: { '--openldr-bg': 'rgb(9, 9, 9)' } });
+    } finally {
+      document.documentElement.style.removeProperty('--bg');
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  });
+
+  it('posts new tokens when the root style changes without a theme switch', async () => {
+    document.documentElement.style.setProperty('--brand', 'rgb(1, 1, 1)');
+    try {
+      const { container } = render(<PluginFrame pluginId="ui-demo" context={{ pluginId: 'ui-demo', capabilities: [], theme: 'dark', locale: 'en', sessionId: 's1' }} />);
+      const iframe = await waitFor(() => {
+        const f = container.querySelector('iframe');
+        if (!f || !f.getAttribute('srcdoc')) throw new Error('not ready');
+        return f as HTMLIFrameElement;
+      });
+      const posted: Array<{ type: string; tokens?: Record<string, string> }> = [];
+      Object.defineProperty(iframe, 'contentWindow', { configurable: true, value: { postMessage: (m: { type: string }) => posted.push(m) } });
+      document.documentElement.style.setProperty('--brand', 'rgb(2, 2, 2)');
+      await waitFor(() => { if (!posted.some((m) => m.type === 'openldr:theme')) throw new Error('no theme message'); });
+      expect(posted.find((m) => m.type === 'openldr:theme')?.tokens?.['--openldr-primary']).toBe('rgb(2, 2, 2)');
+    } finally {
+      document.documentElement.style.removeProperty('--brand');
+    }
+  });
+
   it('uses a hardened CSP: no remote (https) images, plus base-uri/form-action lockdown', async () => {
     const { container } = render(<PluginFrame pluginId="ui-demo" context={{ pluginId: 'ui-demo', capabilities: [], theme: 'light', locale: 'en', sessionId: 's1' }} />);
     const iframe = await waitFor(() => {

@@ -21,6 +21,7 @@ export interface MockOptions {
   pluginId: string;
   capabilities?: string[];
   theme?: 'light' | 'dark';
+  themeTokens?: Record<string, string>;
   locale?: string;
   site?: PluginSiteName;
   reports?: unknown[];
@@ -34,6 +35,7 @@ export function createMockOpenldr(opts: MockOptions): OpenLdrPluginApi {
     pluginId: opts.pluginId,
     capabilities: opts.capabilities ?? [],
     theme: opts.theme ?? 'light',
+    themeTokens: Object.freeze({ ...(opts.themeTokens ?? {}) }),
     locale: opts.locale ?? 'en',
     site: opts.site ?? 'page',
     ready: Promise.resolve(),

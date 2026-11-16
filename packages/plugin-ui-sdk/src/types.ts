@@ -7,6 +7,8 @@ export interface PluginInitContext {
   sessionId: string;
   /** Where the host draws this page. Absent means its own page. */
   site?: PluginSiteName;
+  /** The host's theme as `--openldr-*` CSS variables. An older host sends none. */
+  themeTokens?: Record<string, string>;
 }
 
 /** The places a plugin's one ui.html can be drawn in. */
@@ -137,6 +139,9 @@ export interface OpenLdrPluginApi {
   readonly pluginId: string;
   readonly capabilities: readonly string[];
   readonly theme: 'light' | 'dark';
+  /** The host's theme as `--openldr-*` CSS variables, also set on the page's root. Empty when
+   *  the host sends none. Read them in CSS with a fallback: `var(--openldr-bg, #fff)`. */
+  readonly themeTokens: Readonly<Record<string, string>>;
   readonly locale: string;
   /** Where the host drew this page: 'page', 'widget' (dashboard card) or 'panel' (side panel). */
   readonly site: PluginSiteName;
