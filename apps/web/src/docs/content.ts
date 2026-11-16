@@ -50,18 +50,49 @@ export const DOC_VERSIONS: string[] = Object.keys(BY_VERSION).sort((a, b) =>
 export const DEFAULT_DOC_VERSION: string =
   DOC_VERSIONS.find((version) => version === APP_VERSION) ?? DOC_VERSIONS[0] ?? APP_VERSION;
 
-/** Sidebar structure; `children` render indented under their parent. */
-export const NAV: Array<{ slug: string; children?: string[] }> = [
+interface NavItem { slug: string; children?: string[] }
+
+/** Reading paths, with desktop installation before server and developer guides. */
+export const NAV_SECTIONS: Array<{ id: string; label: Record<DocLocale, string>; items: NavItem[] }> = [
+  {
+    id: 'desktop',
+    label: { en: 'On your computer', fr: 'Sur votre ordinateur', pt: 'No seu computador' },
+    items: [{ slug: 'desktop-app' }],
+  },
+  {
+    id: 'studio',
+    label: { en: 'Using OpenLDR', fr: 'Utiliser OpenLDR', pt: 'Usar o OpenLDR' },
+    items: [{ slug: 'using-studio' }],
+  },
+  {
+    id: 'server',
+    label: { en: 'Running a server', fr: 'Administrer un serveur', pt: 'Administrar um servidor' },
+    items: [
+      { slug: 'requirements' },
+      { slug: 'install', children: ['windows-server'] },
+      { slug: 'upgrading' },
+      { slug: 'environment' },
+      { slug: 'auth-providers' },
+      { slug: 'load-data' },
+      { slug: 'v1-import' },
+      { slug: 'connector-diagnose' },
+    ],
+  },
+  {
+    id: 'tools',
+    label: { en: 'Command line and development', fr: 'Ligne de commande et développement', pt: 'Linha de comandos e desenvolvimento' },
+    items: [
+      { slug: 'cli', children: ['cli-access'] },
+      { slug: 'standalone' },
+      { slug: 'development' },
+    ],
+  },
+];
+
+/** All sidebar pages; `children` render indented under their parent. */
+export const NAV: NavItem[] = [
   { slug: 'getting-started' },
-  { slug: 'requirements' },
-  { slug: 'install', children: ['windows-server', 'standalone', 'desktop-app', 'upgrading'] },
-  { slug: 'environment' },
-  { slug: 'auth-providers' },
-  { slug: 'load-data' },
-  { slug: 'v1-import' },
-  { slug: 'connector-diagnose' },
-  { slug: 'cli', children: ['cli-access'] },
-  { slug: 'development' },
+  ...NAV_SECTIONS.flatMap(section => section.items),
 ];
 
 const SLUGS = new Set(NAV.flatMap((item) => [item.slug, ...(item.children ?? [])]));

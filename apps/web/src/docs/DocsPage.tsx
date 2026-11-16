@@ -13,7 +13,7 @@ import {
   DOC_VERSIONS,
   DEFAULT_DOC_VERSION,
   DOC_LOCALES,
-  NAV,
+  NAV_SECTIONS,
   docPage,
   isDocSlug,
   pageTitle,
@@ -408,12 +408,14 @@ export function DocsPage() {
           </SelectContent>
         </Select>
         <nav aria-label="Public documentation" className="mt-4 space-y-1 border-t border-border pt-4">
-          {NAV.map((item) => (
-            <div key={item.slug} className="space-y-1">
-              <NavLink slug={item.slug} title={pageTitle(item.slug, version, locale)} active={key} />
-              {item.children?.map((child) => (
-                <NavLink key={child} slug={child} title={pageTitle(child, version, locale)} active={key} nested />
-              ))}
+          <NavLink slug="getting-started" title={pageTitle('getting-started', version, locale)} active={key} />
+          {NAV_SECTIONS.map(section => (
+            <div key={section.id} role="group" aria-label={section.label[locale]} className="space-y-1 pt-4">
+              <p aria-hidden="true" className="m-0 px-3 pb-1 text-xs font-semibold text-muted-foreground">{section.label[locale]}</p>
+              {section.items.map(item => <div key={item.slug} className="space-y-1">
+                <NavLink slug={item.slug} title={pageTitle(item.slug, version, locale)} active={key} />
+                {item.children?.map(child => <NavLink key={child} slug={child} title={pageTitle(child, version, locale)} active={key} nested />)}
+              </div>)}
             </div>
           ))}
         </nav>

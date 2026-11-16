@@ -217,6 +217,7 @@ Still unreported:
 
 ## Related guides
 
+- [Using Studio](/docs/using-studio)
 - [Run without Docker](/docs/standalone)
 - [Install](/docs/install)
 - [Getting started](/docs/getting-started)

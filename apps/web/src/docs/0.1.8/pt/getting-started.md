@@ -1,57 +1,41 @@
 # Primeiros passos
 
-Instale o OpenLDR num computador controlado pela sua organização. Use a aplicação de ambiente de trabalho ou abra o Studio num navegador. O OpenLDR recebe dados de laboratório, converte-os para FHIR R4, um formato padrão para dados de saúde, e disponibiliza-os para painéis e relatórios.
+O OpenLDR recebe dados de laboratório e disponibiliza-os para painéis e relatórios. É gratuito. Todos os níveis incluem as mesmas funções da aplicação. Escolha o percurso adequado ao que precisa de fazer.
 
-Estes guias web tratam da instalação, configuração do servidor e resolução de problemas. Os guias dentro do Studio explicam como usar a aplicação. Pode usar os seus próprios dados. Os dados de exemplo são opcionais.
+## Começar pela aplicação de ambiente de trabalho
 
-## Escolher onde executar o OpenLDR
+Escolha a aplicação de ambiente de trabalho para executar o OpenLDR num só computador. Inclui a sua própria base de dados e não precisa de contentores Docker. Existem pacotes para Linux x64, Windows x64 e macOS em Apple silicon.
 
-Escolha o computador que vai guardar os dados e executar o OpenLDR. Deve ficar ligado enquanto as pessoas usam o Studio. Um telemóvel ou outro computador que abre o Studio num navegador não precisa de uma instalação própria.
+1. Siga o [guia da aplicação de ambiente de trabalho](/docs/desktop-app) para o seu sistema.
+2. Abra o OpenLDR no menu de aplicações do computador.
+3. Crie o primeiro administrador e siga os passos do primeiro arranque no Studio. Os dados de exemplo são opcionais.
+4. Continue em [Usar o Studio](/docs/using-studio) para encontrar os guias do trabalho diário.
 
-O OpenLDR é gratuito em todos os níveis. Os níveis descrevem como executar o software.
+O instalador precisa atualmente de um comando de terminal. O guia da aplicação apresenta o comando para o seu sistema. Depois da instalação, use o OpenLDR na sua própria janela.
 
-| Nível | Como funciona | Por onde começar |
-| --- | --- | --- |
-| Autónomo | Um computador, com PostgreSQL incluído e ficheiros numa pasta local. Sem contentores Docker. | A [aplicação de ambiente de trabalho](/docs/desktop-app) instala-se em Linux x64, Windows x64 ou macOS em Apple silicon. Os programadores podem [compilar o lançador autónomo](/docs/standalone) a partir do código-fonte. |
-| Servidor | Um servidor partilhado com contentores Docker, PostgreSQL e armazenamento de ficheiros compatível com S3. As contas locais são a predefinição; Keycloak é opcional. | Leia os [requisitos do servidor](/docs/requirements) e siga [Instalar](/docs/install). No Windows Server, prepare primeiro o ambiente Linux descrito em [Windows Server](/docs/windows-server). |
-| Enterprise | Uma instalação baseada em Servidor, prevista para várias máquinas, distribuição de carga e cópias de segurança redundantes. | Ainda em desenvolvimento e teste. Ainda não existe um instalador Enterprise. Use a [instalação Servidor](/docs/install) para a instalação partilhada disponível. |
+## Usar a instalação do seu laboratório
 
-O [desenvolvimento a partir do código-fonte](/docs/development) usa comandos do projeto. Para uma instalação Servidor existente, siga [Atualizações planeadas](/docs/upgrading). Para uma aplicação de ambiente de trabalho existente, siga os passos de atualização em [Aplicação de ambiente de trabalho](/docs/desktop-app).
+Se o seu laboratório já usa o OpenLDR, peça ao administrador o endereço do Studio e a sua conta. Abra esse endereço num navegador no computador ou no telemóvel.
 
-## Instalar e verificar o resultado
+Não precisa de outra instalação. [Usar o Studio](/docs/using-studio) explica onde encontrar os guias depois de iniciar sessão.
 
-Siga o guia do nível escolhido.
+## Administrar um servidor partilhado
 
-1. Para Autónomo, instale e abra a [aplicação de ambiente de trabalho](/docs/desktop-app). Inicia a base de dados e o servidor, depois mostra o Studio na sua janela.
-2. Para Servidor, siga [Instalar](/docs/install). O instalador cria a configuração, gera palavras-passe e inicia os contentores.
-3. Guarde a pasta de dados e siga as instruções de cópia de segurança do seu guia.
+Este percurso destina-se a quem instala e mantém o OpenLDR para outras pessoas. Os utilizadores abrem o Studio num navegador. O servidor usa contentores Docker.
 
-A ilustração abaixo mostra o **instalador Servidor**. Não descreve o arranque da aplicação de ambiente de trabalho.
+Comece pelos [requisitos do servidor](/docs/requirements) e siga [Instalar](/docs/install). No Windows Server, prepare primeiro o ambiente Linux descrito em [Windows Server](/docs/windows-server).
 
-![Ilustração da saída do instalador. As linhas destacadas mostram o endereço do servidor e o código de configuração. O código é um marcador de posição.](guide:install-result)
+Para manutenção, use [Atualizações planeadas](/docs/upgrading), [Variáveis de ambiente](/docs/environment) e [Fornecedores de autenticação](/docs/auth-providers). As instruções detalhadas de terminal continuam nesses guias.
 
-**Resultado esperado:** A aplicação de ambiente de trabalho mostra o Studio. O instalador Servidor apresenta **OpenLDR is ready** e o endereço a abrir. Se apresentar **OpenLDR is starting**, consulte `docker compose ps` e `docker compose logs` na pasta de instalação antes de continuar.
+## Usar a linha de comandos ou alterar o código
 
-A aplicação de ambiente de trabalho abre apenas no seu computador por predefinição. Para uma instalação Servidor partilhada, configure um nome de anfitrião com [Instalar](/docs/install). Noutro dispositivo, `localhost` refere-se a esse dispositivo.
+Use estes guias para automatizar tarefas, executar comandos de administração ou desenvolver o OpenLDR:
 
-## Primeiro início de sessão
+- [Início de sessão na CLI e chaves de acesso](/docs/cli-access) explica o acesso para pessoas e scripts.
+- [Interface de linha de comandos](/docs/cli) lista os comandos e as tarefas de administração.
+- [Executar sem Docker](/docs/standalone) permite compilar e executar o lançador autónomo a partir das fontes.
+- [Desenvolvimento](/docs/development) prepara um ambiente de desenvolvimento separado.
 
-A aplicação de ambiente de trabalho preenche o código de configuração para um OpenLDR que inicia por si. Escolha o nome e a palavra-passe do primeiro administrador e siga os passos do primeiro arranque do Studio. [Aplicação de ambiente de trabalho](/docs/desktop-app) explica o que fazer se o campo do código estiver vazio.
+## Estado do nível Enterprise
 
-Para Servidor ou o lançador autónomo compilado a partir das fontes, introduza o código apresentado no terminal. É válido durante 30 minutos. [Instalar](/docs/install) mostra cada ecrã de criação do administrador. Uma instalação Servidor com Keycloak usa as credenciais App sign-in geradas.
-
-## Continuar na aplicação
-
-Abra **Documentação** no menu principal do Studio e leia **Comece aqui**. Esse guia explica a CLI instalada e a de desenvolvimento e aponta para os guias ilustrados.
-
-As unidades de saúde, o catálogo de testes e as definições de pacientes são opcionais. O OpenLDR pode receber e processar dados antes de os configurar. Recomendamos que os configure durante a utilização do sistema. Os guias da aplicação **Configurar o seu sistema** começam por Terminologia.
-
-Use os guias dos painéis e relatórios no trabalho diário. Funcionam com os seus próprios dados; os ficheiros de prática são opcionais.
-
-## Escolher a próxima tarefa
-
-- [Carregar e enviar dados](/docs/load-data): importe os primeiros dados de laboratório.
-- [Interface de linha de comandos](/docs/cli): execute comandos no anfitrião OpenLDR.
-- [Fornecedores de autenticação](/docs/auth-providers): configure quem pode iniciar sessão.
-- [Variáveis de ambiente](/docs/environment): altere a configuração do servidor.
-- [Atualizações planeadas](/docs/upgrading): prepare uma cópia de segurança e passe a uma nova versão.
+O Enterprise baseia-se em Servidor, com uma instalação prevista para várias máquinas, distribuição de carga e cópias de segurança redundantes. Continua em desenvolvimento e teste. Ainda não existe um instalador Enterprise. Use a [instalação Servidor](/docs/install) para a instalação partilhada disponível.

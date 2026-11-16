@@ -217,6 +217,7 @@ Pas encore signalé :
 
 ## Guides associés
 
+- [Utiliser Studio](/docs/using-studio)
 - [Exécuter sans Docker](/docs/standalone)
 - [Installation](/docs/install)
 - [Bien démarrer](/docs/getting-started)

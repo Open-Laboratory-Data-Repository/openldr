@@ -15,6 +15,44 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
+  it.each([
+    ['en', ['On your computer', 'Using OpenLDR', 'Running a server', 'Command line and development']],
+    ['fr', ['Sur votre ordinateur', 'Utiliser OpenLDR', 'Administrer un serveur', 'Ligne de commande et développement']],
+    ['pt', ['No seu computador', 'Usar o OpenLDR', 'Administrar um servidor', 'Linha de comandos e desenvolvimento']],
+  ] as const)('separates the reading paths with desktop first in %s', (locale, labels) => {
+    window.localStorage.setItem('openldr.docs.lang', locale);
+    try {
+      renderDocs('/docs');
+      const nav = screen.getByRole('navigation', { name: 'Public documentation' });
+      const groups = within(nav).getAllByRole('group');
+      expect(groups.map(group => group.getAttribute('aria-label'))).toEqual(labels);
+      expect(within(groups[0]).getByRole('link')).toHaveAttribute('href', '/docs/desktop-app');
+      expect(within(groups[1]).getByRole('link')).toHaveAttribute('href', '/docs/using-studio');
+      expect(within(groups[3]).getAllByRole('link').map(link => link.getAttribute('href'))).toEqual([
+        '/docs/cli', '/docs/cli-access', '/docs/standalone', '/docs/development',
+      ]);
+      const article = document.querySelector('.doc-markdown') as HTMLElement;
+      expect(within(article).getAllByRole('link')[0]).toHaveAttribute('href', '/docs/desktop-app');
+      expect(article.querySelector('pre, svg')).toBeNull();
+    } finally {
+      window.localStorage.removeItem('openldr.docs.lang');
+    }
+  });
+
+  it.each(['en', 'fr', 'pt'])('opens the Studio introduction with its user-guide picture in %s', (locale) => {
+    window.localStorage.setItem('openldr.docs.lang', locale);
+    try {
+      renderDocs('/docs/using-studio');
+      const article = document.querySelector('.doc-markdown') as HTMLElement;
+      expect(within(article).getAllByRole('img').length).toBeGreaterThan(0);
+      expect(article.querySelector('pre')).toBeNull();
+      expect(screen.queryByText(/Screenshot unavailable/)).toBeNull();
+      expect(document.querySelector('a[href="/docs/using-studio"][aria-current="page"]')).not.toBeNull();
+    } finally {
+      window.localStorage.removeItem('openldr.docs.lang');
+    }
+  });
+
   it.each(['en', 'fr', 'pt'])('frames new terminal examples in %s without changing their code', (locale) => {
     window.localStorage.setItem('openldr.docs.lang', locale);
     try {
@@ -103,8 +141,8 @@ describe('DocsPage', () => {
   });
 
   it('renders the installer illustration without stripping its media identifier', () => {
-    renderDocs('/docs/getting-started');
-    expect(screen.getByRole('img', { name: /Illustration of installer output/ })).toBeInTheDocument();
+    renderDocs('/docs/install');
+    expect(screen.getByRole('img', { name: 'Illustrated terminal, ready to receive a command.' })).toBeInTheDocument();
     expect(screen.queryByText(/Screenshot unavailable/)).toBeNull();
   });
 

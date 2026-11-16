@@ -46,4 +46,13 @@ describe('website docs content', () => {
   it('has no page outside the sidebar', () => {
     expect(docPage('dashboard', DEFAULT_DOC_VERSION, 'en')).toBeNull();
   });
+
+  it('keeps each existing guide URL available once after grouping the reading paths', () => {
+    expect(new Set(SLUGS).size).toBe(SLUGS.length);
+    expect(SLUGS).toEqual(expect.arrayContaining([
+      'getting-started', 'desktop-app', 'requirements', 'install', 'windows-server', 'upgrading',
+      'environment', 'auth-providers', 'load-data', 'v1-import', 'connector-diagnose',
+      'cli', 'cli-access', 'standalone', 'development',
+    ]));
+  });
 });

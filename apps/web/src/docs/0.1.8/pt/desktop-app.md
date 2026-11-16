@@ -217,6 +217,7 @@ Ainda sem relato:
 
 ## Guias relacionados
 
+- [Usar o Studio](/docs/using-studio)
 - [Executar sem Docker](/docs/standalone)
 - [Instalar](/docs/install)
 - [Primeiros passos](/docs/getting-started)
