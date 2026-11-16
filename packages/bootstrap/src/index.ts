@@ -83,6 +83,7 @@ import { createPatientIdentifierSystems, type PatientIdentifierSystems } from '.
 import { createPatientIndex, type PatientIndex } from './patient-index';
 import { createPatientDuplicates, type PatientDuplicates } from './patient-duplicates';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
+import { brokerAccessDetails } from './check-read-audit';
 import { createImportService, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
 import { createImportCopyService, type ImportCopyService } from './import-copy';
 import { createImportCheckService, liveCheckStatus, type ImportCheckService } from './import-check';
@@ -1958,9 +1959,7 @@ const reporting: ReportingApi = {
     // reads (storage/reports/fhir/list) are not emitted. safeRecord is best-effort (never throws).
     audit: (e) => safeRecord(audit, logger, {
       actorType: 'user', actorId: e.principal.id, actorName: e.principal.username ?? e.principal.id,
-      action: e.outcome === 'denied' ? 'plugin.broker.denied' : 'plugin.broker.access',
-      entityType: 'plugin', entityId: e.pluginId,
-      metadata: { op: e.op, outcome: e.outcome, roles: e.principal.roles, ...(e.reason ? { reason: e.reason } : {}) },
+      ...brokerAccessDetails({ pluginId: e.pluginId, op: e.op, outcome: e.outcome, roles: e.principal.roles, reason: e.reason }),
     }),
   });
 
@@ -2253,6 +2252,8 @@ export * from './crash-loop';
 export * from './policy';
 export { wipeInternalDatabase, clearAuditAndRunHistory, listInternalDataTables, buildTruncateSql } from './danger';
 export { recordAuditEvent } from './record-audit';
+export { checkReadOp, recordCheckRead } from './check-read-audit';
+export type { CheckReadKind } from './check-read-audit';
 export type { AuditActor, AuditDetails } from './record-audit';
 export { copyStorage } from './storage-copy';
 export type { StorageCopyReport } from './storage-copy';

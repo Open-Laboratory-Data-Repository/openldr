@@ -5,6 +5,7 @@ import { readGrant, type Capability } from '@openldr/marketplace';
 import type { PluginDataStore } from '@openldr/db';
 import type { PluginPolicy } from './policy';
 import { policyAllows } from './policy';
+import { checkReadOp } from './check-read-audit';
 import { HOST_COLLECTION_PREFIX, type ImportActor, type ImportService } from './import-run';
 import { LABORATORY_CODE, type CheckRun, type ImportCheckService } from './import-check';
 import { CopySetChangedError, type CopyRun, type CopySetProgress, type ImportCopyService } from './import-copy';
@@ -113,6 +114,10 @@ const ID = z.string().min(1).max(256);
 const IMPORT_OPTIONS = z.record(z.string().max(64), z.string().max(1000));
 /** A laboratory filter of the held list: the same rule as a code a group names. */
 const LABORATORY = z.string().regex(LABORATORY_CODE);
+/** The bounds of a page of held requests. The CLI checks its arguments against the same numbers. */
+export const HELD_LABEL_MAX = 64;
+export const HELD_LIST_LIMIT_MAX = 100;
+export const HELD_ITEMS_LIMIT_MAX = 200;
 
 /** Build the discriminated-union op schema. `maxDocBytes` bounds any persisted/forwarded
  *  arbitrary-object payload (doc/mapping/schedule/input) by its serialized byte size. */
@@ -179,14 +184,14 @@ export function buildBrokerOpSchema(maxDocBytes: number) {
     z.object({ kind: z.literal('import.check.status'), runId: ID }),
     z.object({ kind: z.literal('import.check.stop'), runId: ID }),
     z.object({
-      kind: z.literal('import.check.held'), copyId: ID, reason: z.enum(['held', 'error']).optional(), label: z.string().min(1).max(64).optional(),
-      laboratory: LABORATORY.optional(), offset: z.number().int().min(0), limit: z.number().int().min(1).max(100),
+      kind: z.literal('import.check.held'), copyId: ID, reason: z.enum(['held', 'error']).optional(), label: z.string().min(1).max(HELD_LABEL_MAX).optional(),
+      laboratory: LABORATORY.optional(), offset: z.number().int().min(0), limit: z.number().int().min(1).max(HELD_LIST_LIMIT_MAX),
     }),
     z.object({ kind: z.literal('import.check.heldItem'), copyId: ID, key: z.string().min(1).max(200) }),
     // Each item carries its findings and check, so a page reads a batch of up to 200 in one call.
     z.object({
-      kind: z.literal('import.check.heldItems'), copyId: ID, reason: z.enum(['held', 'error']).optional(), label: z.string().min(1).max(64).optional(),
-      laboratory: LABORATORY.optional(), offset: z.number().int().min(0), limit: z.number().int().min(1).max(200),
+      kind: z.literal('import.check.heldItems'), copyId: ID, reason: z.enum(['held', 'error']).optional(), label: z.string().min(1).max(HELD_LABEL_MAX).optional(),
+      laboratory: LABORATORY.optional(), offset: z.number().int().min(0), limit: z.number().int().min(1).max(HELD_ITEMS_LIMIT_MAX),
     }),
   ]);
 }
@@ -535,12 +540,12 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
                   offset: op.offset, limit: op.limit,
                 });
                 // These rows hold real values. The audit row names the operation and the copy, nothing else.
-                await emit(pluginId, principal, `import.check.held:${op.copyId}`, 'ok');
+                await emit(pluginId, principal, checkReadOp('held', op.copyId), 'ok');
                 return { ok: true, data };
               }
               case 'import.check.heldItem': {
                 const data = await checks.heldItem(pluginId, op.copyId, op.key);
-                await emit(pluginId, principal, `import.check.heldItem:${op.copyId}`, 'ok');
+                await emit(pluginId, principal, checkReadOp('heldItem', op.copyId), 'ok');
                 return { ok: true, data };
               }
               case 'import.check.heldItems': {
@@ -551,7 +556,7 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
                   offset: op.offset, limit: op.limit,
                 });
                 // As for heldItem: the operation and the copy, never a key, a value or the size.
-                await emit(pluginId, principal, `import.check.heldItems:${op.copyId}`, 'ok');
+                await emit(pluginId, principal, checkReadOp('heldItems', op.copyId), 'ok');
                 return { ok: true, data };
               }
             }
