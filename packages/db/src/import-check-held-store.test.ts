@@ -71,6 +71,37 @@ describe('import check held store', () => {
     expect(await store.get('c1', 'nope')).toBeNull();
   });
 
+  it('listItems pages by key with the right total under each filter, and equals list plus get', async () => {
+    await store.put(item('D', { label: 'x' }));
+    await store.put(item('B', { reason: 'error', error: 'E_X', label: 'x', findings: null, check: null }));
+    await store.put(item('A', { label: 'y', findings: { deep: [1, { two: 'A' }] } }));
+    await store.put(item('C', { label: 'x' }));
+    await store.put(item('E', { reason: 'error', error: 'E_Y', label: 'y' }));
+    // Another copy's rows are never in the answer.
+    await store.put(item('A', { copyId: 'c2', label: 'x' }));
+    await store.put(item('Z', { copyId: 'c2', label: 'x' }));
+
+    const filters = [{}, { reason: 'held' as const }, { reason: 'error' as const }, { label: 'x' }, { reason: 'held' as const, label: 'x' }, { label: 'none' }];
+    for (const f of filters) {
+      for (const [offset, limit] of [[0, 2], [2, 2], [4, 2], [0, 10], [9, 3]] as const) {
+        const items = await store.listItems('c1', { ...f, offset, limit });
+        const plain = await store.list('c1', { ...f, offset, limit });
+        expect(items.total).toBe(plain.total);
+        expect(items.rows.map((r) => r.key)).toEqual(plain.rows.map((r) => r.key));
+        const joined = await Promise.all(plain.rows.map((r) => store.get('c1', r.key)));
+        expect(items.rows).toEqual(joined);
+      }
+    }
+    expect((await store.listItems('c1', { offset: 0, limit: 10 })).rows.map((r) => r.key)).toEqual(['A', 'B', 'C', 'D', 'E']);
+    expect((await store.listItems('c1', { offset: 0, limit: 10 })).total).toBe(5);
+    expect((await store.listItems('c1', { label: 'x', offset: 0, limit: 10 })).total).toBe(3);
+    expect((await store.listItems('c1', { reason: 'held', label: 'x', offset: 1, limit: 10 })).rows.map((r) => r.key)).toEqual(['D']);
+    const a = (await store.listItems('c1', { label: 'y', offset: 0, limit: 1 })).rows[0]!;
+    expect(a).toMatchObject({ copyId: 'c1', key: 'A', findings: { deep: [1, { two: 'A' }] }, check: { k: 'A' } });
+    expect((await store.listItems('c1', { reason: 'error', offset: 0, limit: 1 })).rows[0]).toMatchObject({ key: 'B', findings: null, check: null });
+    expect((await store.listItems('c3', { offset: 0, limit: 10 }))).toEqual({ rows: [], total: 0 });
+  });
+
   it('remove deletes the named keys and leaves the rest', async () => {
     for (const k of ['A', 'B', 'C']) await store.put(item(k));
     await store.remove('c1', ['A', 'C', 'missing']);

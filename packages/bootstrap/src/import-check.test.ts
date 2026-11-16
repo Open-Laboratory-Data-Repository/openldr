@@ -319,9 +319,18 @@ describe('check: one page', () => {
     expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0003')).toMatchObject({ key: 'REQ0003', findings: null, check: null });
     expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0001')).toBeNull();
     expect((await w.svc.held(PLUGIN, SRC, { label: 'held_by_rules', offset: 0, limit: 10 })).rows.map((r) => r.key)).toEqual(['REQ0003']);
+    // In batches: the same rows as held, in the same order, each with its findings and check.
+    const batch = await w.svc.heldItems(PLUGIN, SRC, { offset: 0, limit: 10 });
+    expect(batch.total).toBe(2);
+    expect(batch.items).toEqual([await w.svc.heldItem(PLUGIN, SRC, 'REQ0002'), await w.svc.heldItem(PLUGIN, SRC, 'REQ0003')]);
+    expect(batch.items.map((i) => i.key)).toEqual(list.rows.map((r) => r.key));
+    expect(await w.svc.heldItems(PLUGIN, SRC, { offset: 1, limit: 1 })).toEqual({ items: [batch.items[1]], total: 2 });
+    expect(await w.svc.heldItems(PLUGIN, SRC, { label: 'held_by_check', offset: 0, limit: 10 })).toEqual({ items: [batch.items[0]], total: 1 });
+    expect(await w.svc.heldItems(PLUGIN, SRC, { reason: 'error', offset: 0, limit: 10 })).toEqual({ items: [], total: 0 });
     // Another plugin cannot read this copy's held rows.
     await expect(w.svc.held(OTHER, SRC, { offset: 0, limit: 10 })).rejects.toThrow(`copy ${SRC} not found`);
     await expect(w.svc.heldItem(OTHER, SRC, 'REQ0002')).rejects.toThrow(`copy ${SRC} not found`);
+    await expect(w.svc.heldItems(OTHER, SRC, { offset: 0, limit: 10 })).rejects.toThrow(`copy ${SRC} not found`);
 
     expect(actions(w)).toEqual(['import.check.start', 'import.check.finish']);
     expect(w.audited.at(-1)).toEqual({

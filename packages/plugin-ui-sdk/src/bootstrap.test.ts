@@ -69,6 +69,7 @@ describe('SDK_BOOTSTRAP_V1', () => {
     await check.stop('ck1');
     await check.held({ copyId: 'cp1', reason: 'held', label: 'odd_age', offset: 20, limit: 10 });
     await check.heldItem({ copyId: 'cp1', key: 'REQ1' });
+    await check.heldItems({ copyId: 'cp1', reason: 'error', label: 'odd_age', offset: 200, limit: 200 });
     expect(sent.map((m) => m.op)).toEqual([
       { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: { tz: '+02:00' }, pageSize: 200 },
       { kind: 'import.check.list' },
@@ -76,7 +77,41 @@ describe('SDK_BOOTSTRAP_V1', () => {
       { kind: 'import.check.stop', runId: 'ck1' },
       { kind: 'import.check.held', copyId: 'cp1', reason: 'held', label: 'odd_age', offset: 20, limit: 10 },
       { kind: 'import.check.heldItem', copyId: 'cp1', key: 'REQ1' },
+      { kind: 'import.check.heldItems', copyId: 'cp1', reason: 'error', label: 'odd_age', offset: 200, limit: 200 },
     ]);
+  });
+
+  it('files.download sends the host operation and resolves with nothing', async () => {
+    let handler: ((ev: unknown) => void) | undefined;
+    const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('window', SDK_BOOTSTRAP_V1)(win);
+    const api = (win as unknown as { openldr: { files: { download(i: unknown): Promise<unknown> } } }).openldr;
+    const sent: Array<{ id: number; op: unknown }> = [];
+    const port = {
+      start: () => {},
+      onmessage: null as null | ((e: { data: unknown }) => void),
+      // The host answers a download with ok and null data.
+      postMessage(m: { id: number; op: unknown }) { sent.push(m); queueMicrotask(() => port.onmessage?.({ data: { id: m.id, result: { ok: true, data: null } } })); },
+    };
+    handler!({ data: { type: 'openldr:init', context: { pluginId: 'p' } }, ports: [port] });
+    await expect(api.files.download({ filename: 'held.csv', mime: 'text/csv', text: 'a,b\n1,2\n' })).resolves.toBeUndefined();
+    expect(sent.map((m) => m.op)).toEqual([{ kind: 'host.download', filename: 'held.csv', mime: 'text/csv', text: 'a,b\n1,2\n' }]);
+  });
+
+  it('files.download rejects with the host error when the host refuses', async () => {
+    let handler: ((ev: unknown) => void) | undefined;
+    const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('window', SDK_BOOTSTRAP_V1)(win);
+    const api = (win as unknown as { openldr: { files: { download(i: unknown): Promise<unknown> } } }).openldr;
+    const port = {
+      start: () => {},
+      onmessage: null as null | ((e: { data: unknown }) => void),
+      postMessage(m: { id: number }) { queueMicrotask(() => port.onmessage?.({ data: { id: m.id, result: { ok: false, error: 'download refused: bad file name' } } })); },
+    };
+    handler!({ data: { type: 'openldr:init', context: { pluginId: 'p' } }, ports: [port] });
+    await expect(api.files.download({ filename: '../x.csv', mime: 'text/csv', text: '' })).rejects.toThrow('download refused: bad file name');
   });
 
   it('defines window.openldr SYNCHRONOUSLY (before any openldr:init) so screens never race the injection', () => {

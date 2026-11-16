@@ -53,7 +53,18 @@ export type PluginBrokerOp =
   | { kind: 'import.check.status'; runId: string }
   | { kind: 'import.check.stop'; runId: string }
   | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }
-  | { kind: 'import.check.heldItem'; copyId: string; key: string };
+  | { kind: 'import.check.heldItem'; copyId: string; key: string }
+  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number };
+
+/** The types of file a page may ask the host to save. */
+export type PluginDownloadMime = 'text/csv' | 'application/json' | 'text/plain';
+
+/** Operations the studio answers itself. They go over the same port as broker operations, and
+ *  the studio never forwards them to the server. */
+export type PluginHostOp = { kind: 'host.download'; filename: string; mime: PluginDownloadMime; text: string };
+
+/** Everything a page may send over its port. */
+export type PluginOp = PluginBrokerOp | PluginHostOp;
 
 export type PluginCopyStatus = 'queued' | 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed' | 'deleting';
 
@@ -205,7 +216,17 @@ export interface OpenLdrPluginApi {
       stop(runId: string): Promise<PluginCheckRun>;
       held(input: { copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }): Promise<{ rows: PluginHeldRow[]; total: number }>;
       heldItem(input: { copyId: string; key: string }): Promise<PluginHeldItem | null>;
+      /** The same rows as `held`, in the same order, each with its findings and check. `limit` is 1 to 200. */
+      heldItems(input: { copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }): Promise<{ items: PluginHeldItem[]; total: number }>;
     };
+  };
+  /** Files the studio saves for the page. The page's frame cannot download. */
+  files: {
+    /** The studio saves `text` as a file named `filename` in its own document. Refused when the
+     *  name is not a plain name ending in .csv, .json or .txt to fit the type, when the text is
+     *  over 64 MB in UTF-8, or when the page saved another file less than a second ago. The text
+     *  never goes to the server. */
+    download(input: { filename: string; mime: PluginDownloadMime; text: string }): Promise<void>;
   };
 }
 

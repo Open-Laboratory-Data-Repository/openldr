@@ -1,4 +1,5 @@
-import type { OpenLdrPluginApi, PluginCheckRun, PluginCheckStatus, PluginCopyRun, PluginCopyStatus, PluginSiteName } from './types';
+import { checkDownload } from './files';
+import type { OpenLdrPluginApi, PluginCheckRun, PluginDownloadMime, PluginCheckStatus, PluginCopyRun, PluginCopyStatus, PluginSiteName } from './types';
 
 function mockCopy(pluginId: string, connectorId: string, status: PluginCopyStatus): PluginCopyRun {
   const at = new Date(0).toISOString();
@@ -27,9 +28,16 @@ export interface MockOptions {
   reports?: unknown[];
 }
 
+/** The mock, plus what a page's test can read back. */
+export interface MockOpenLdrPluginApi extends OpenLdrPluginApi {
+  /** Each file the page asked to save and the mock accepted, in order. */
+  readonly downloads: Array<{ filename: string; mime: PluginDownloadMime; text: string }>;
+}
+
 /** An in-memory implementation of OpenLdrPluginApi for local plugin development + tests. */
-export function createMockOpenldr(opts: MockOptions): OpenLdrPluginApi {
+export function createMockOpenldr(opts: MockOptions): MockOpenLdrPluginApi {
   const mem = new Map<string, unknown>();
+  const downloads: Array<{ filename: string; mime: PluginDownloadMime; text: string }> = [];
   const k = (c: string, key: string) => `${c} ${key}`;
   return {
     pluginId: opts.pluginId,
@@ -93,7 +101,17 @@ export function createMockOpenldr(opts: MockOptions): OpenLdrPluginApi {
         async stop() { return mockCheck('mock-copy', null, 'stopping'); },
         async held() { return { rows: [], total: 0 }; },
         async heldItem() { return null; },
+        async heldItems() { return { items: [], total: 0 }; },
       },
     },
+    // Refuses what the host refuses, except the one-per-second limit, so a test can save twice.
+    files: {
+      async download(input) {
+        const refused = checkDownload(input);
+        if (refused) throw new Error(refused);
+        downloads.push({ filename: input.filename, mime: input.mime, text: input.text });
+      },
+    },
+    downloads,
   };
 }

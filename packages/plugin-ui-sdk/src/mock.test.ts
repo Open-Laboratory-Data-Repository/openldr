@@ -30,6 +30,23 @@ describe('createMockOpenldr', () => {
     expect(await api.imports.check.stop('mock-check')).toMatchObject({ id: 'mock-check', status: 'stopping' });
     expect(await api.imports.check.held({ copyId: 'cp1', offset: 0, limit: 10 })).toEqual({ rows: [], total: 0 });
     expect(await api.imports.check.heldItem({ copyId: 'cp1', key: 'REQ1' })).toBeNull();
+    expect(await api.imports.check.heldItems({ copyId: 'cp1', offset: 0, limit: 200 })).toEqual({ items: [], total: 0 });
+  });
+  it('files.download records each call so a test can read it', async () => {
+    const api = createMockOpenldr({ pluginId: 'p1' });
+    expect(api.downloads).toEqual([]);
+    await expect(api.files.download({ filename: 'held.csv', mime: 'text/csv', text: 'a,b' })).resolves.toBeUndefined();
+    await api.files.download({ filename: 'held.json', mime: 'application/json', text: '[]' });
+    expect(api.downloads).toEqual([
+      { filename: 'held.csv', mime: 'text/csv', text: 'a,b' },
+      { filename: 'held.json', mime: 'application/json', text: '[]' },
+    ]);
+  });
+  it('files.download refuses what the host refuses, and does not record it', async () => {
+    const api = createMockOpenldr({ pluginId: 'p1' });
+    await expect(api.files.download({ filename: '../held.csv', mime: 'text/csv', text: '' })).rejects.toThrow('download refused: bad file name');
+    await expect(api.files.download({ filename: 'held.csv', mime: 'application/json', text: '' })).rejects.toThrow('download refused: the name does not fit the type');
+    expect(api.downloads).toEqual([]);
   });
   it('themeTokens is empty by default and carries what the test passes', () => {
     expect(createMockOpenldr({ pluginId: 'p1' }).themeTokens).toEqual({});

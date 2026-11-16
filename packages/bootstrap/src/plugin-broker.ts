@@ -72,7 +72,8 @@ export type BrokerOp =
   | { kind: 'import.check.status'; runId: string }
   | { kind: 'import.check.stop'; runId: string }
   | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }
-  | { kind: 'import.check.heldItem'; copyId: string; key: string };
+  | { kind: 'import.check.heldItem'; copyId: string; key: string }
+  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number };
 
 /** A copy as a plugin page sees it: no set's `cursor`, which is a source key, and no `driver`,
  *  which names a server process. */
@@ -177,6 +178,11 @@ export function buildBrokerOpSchema(maxDocBytes: number) {
       offset: z.number().int().min(0), limit: z.number().int().min(1).max(100),
     }),
     z.object({ kind: z.literal('import.check.heldItem'), copyId: ID, key: z.string().min(1).max(200) }),
+    // Each item carries its findings and check, so a page reads a batch of up to 200 in one call.
+    z.object({
+      kind: z.literal('import.check.heldItems'), copyId: ID, reason: z.enum(['held', 'error']).optional(), label: z.string().min(1).max(64).optional(),
+      offset: z.number().int().min(0), limit: z.number().int().min(1).max(200),
+    }),
   ]);
 }
 
@@ -191,6 +197,7 @@ function gateFor(op: BrokerOp): string | undefined {
     case 'import.list': case 'import.failures': case 'import.stop': case 'import.resume':
     case 'import.copy.start': case 'import.copy.list': case 'import.copy.status': case 'import.copy.stop': case 'import.copy.delete':
     case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop': case 'import.check.held': case 'import.check.heldItem':
+    case 'import.check.heldItems':
       return 'host:import';
     default: return undefined; // storage.*, invoke
   }
@@ -232,6 +239,7 @@ function rolesFor(op: BrokerOp): string[] {
     // Copies read a database connector the same way, so the same rule holds.
     case 'import.copy.start': case 'import.copy.list': case 'import.copy.status': case 'import.copy.stop': case 'import.copy.delete':
     case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop': case 'import.check.held': case 'import.check.heldItem':
+    case 'import.check.heldItems':
       return ['lab_admin'];
     // storage.*, invoke, reports.*, fhir.* — reports/fhir reads are broadly readable (native routes have no role gate).
     default: return [];
@@ -267,7 +275,7 @@ export interface PluginBrokerDeps {
   /** The copy service (import-copy.ts). When absent, copy ops return a structured error. */
   copies?: Pick<ImportCopyService, 'start' | 'get' | 'list' | 'stop' | 'remove'>;
   /** The check service (import-check.ts). When absent, check ops return a structured error. */
-  checks?: Pick<ImportCheckService, 'start' | 'get' | 'list' | 'stop' | 'held' | 'heldItem'>;
+  checks?: Pick<ImportCheckService, 'start' | 'get' | 'list' | 'stop' | 'held' | 'heldItem' | 'heldItems'>;
   /** Step-by-step check of a host connector (connector-diagnose.ts), by connector id. */
   diagnoseConnector?: (id: string) => Promise<unknown>;
   policy: () => PluginPolicy;
@@ -498,7 +506,7 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
             return { ok: false, error: 'unknown operation' };
           }
           case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop':
-          case 'import.check.held': case 'import.check.heldItem': {
+          case 'import.check.held': case 'import.check.heldItem': case 'import.check.heldItems': {
             const checks = deps.checks;
             if (!checks) return { ok: false, error: 'checks are unavailable' };
             const actor: ImportActor = { type: 'user', id: principal.id, name: principal.username ?? principal.id };
@@ -527,6 +535,16 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
               case 'import.check.heldItem': {
                 const data = await checks.heldItem(pluginId, op.copyId, op.key);
                 await emit(pluginId, principal, `import.check.heldItem:${op.copyId}`, 'ok');
+                return { ok: true, data };
+              }
+              case 'import.check.heldItems': {
+                const data = await checks.heldItems(pluginId, op.copyId, {
+                  ...(op.reason !== undefined ? { reason: op.reason } : {}),
+                  ...(op.label !== undefined ? { label: op.label } : {}),
+                  offset: op.offset, limit: op.limit,
+                });
+                // As for heldItem: the operation and the copy, never a key, a value or the size.
+                await emit(pluginId, principal, `import.check.heldItems:${op.copyId}`, 'ok');
                 return { ok: true, data };
               }
             }

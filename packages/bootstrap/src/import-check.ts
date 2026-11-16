@@ -98,6 +98,8 @@ export interface ImportCheckService {
   stop(pluginId: string, runId: string, actor: ImportActor): Promise<CheckRun>;
   held(pluginId: string, copyId: string, opts: { reason?: HeldReason; label?: string; offset: number; limit: number }): Promise<{ rows: HeldRow[]; total: number }>;
   heldItem(pluginId: string, copyId: string, key: string): Promise<HeldItem | null>;
+  /** The same rows as `held`, in the same order, each with its findings and check. */
+  heldItems(pluginId: string, copyId: string, opts: { reason?: HeldReason; label?: string; offset: number; limit: number }): Promise<{ items: HeldItem[]; total: number }>;
   /** Server only. Take every run that needs a driver and start driving it. Does not wait. */
   tick(): Promise<void>;
   /** Resolves when this process is driving nothing. */
@@ -792,6 +794,12 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
     async heldItem(pluginId, copyId, key) {
       await ownCopy(pluginId, copyId);
       return ownDb('read', () => deps.held.get(copyId, key));
+    },
+
+    async heldItems(pluginId, copyId, opts) {
+      await ownCopy(pluginId, copyId);
+      const { rows, total } = await ownDb('read', () => deps.held.listItems(copyId, opts));
+      return { items: rows, total };
     },
 
     tick() {

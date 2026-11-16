@@ -16,12 +16,16 @@ export interface HeldRow {
 /** A held request with the plugin's own JSON. CE never reads inside `findings` or `check`. */
 export interface HeldItem extends HeldRow { findings: unknown; check: unknown }
 
+export interface HeldListOptions { reason?: HeldReason; label?: string; offset: number; limit: number }
+
 export interface ImportCheckHeldStore {
   /** Insert or replace by (copyId, key). */
   put(item: Omit<HeldItem, 'heldAt'>): Promise<void>;
   remove(copyId: string, keys: string[]): Promise<void>;
   /** Ordered by key. `total` counts every row that matches the filter, not only the page. */
-  list(copyId: string, opts: { reason?: HeldReason; label?: string; offset: number; limit: number }): Promise<{ rows: HeldRow[]; total: number }>;
+  list(copyId: string, opts: HeldListOptions): Promise<{ rows: HeldRow[]; total: number }>;
+  /** The same rows as `list`, in the same order, each with its `findings` and `check`. */
+  listItems(copyId: string, opts: HeldListOptions): Promise<{ rows: HeldItem[]; total: number }>;
   get(copyId: string, key: string): Promise<HeldItem | null>;
   /** Delete up to `limit` rows of a copy. 0 means none left. */
   deleteSome(copyId: string, limit: number): Promise<number>;
@@ -48,6 +52,27 @@ function toRow(r: Stored): HeldRow {
 }
 
 export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCheckHeldStore {
+  /** The rows of a copy that match the filter. */
+  function matching(copyId: string, opts: HeldListOptions) {
+    let q = db.selectFrom('import_check_held').where('copy_id', '=', copyId);
+    if (opts.reason !== undefined) q = q.where('reason', '=', opts.reason);
+    if (opts.label !== undefined) q = q.where('label', '=', opts.label);
+    return q;
+  }
+
+  /** One page of the matching rows. Within one copy the key is unique, so this order has no tie. */
+  function page<C extends 'copy_id' | 'key' | 'run_id' | 'reason' | 'label' | 'error' | 'held_at' | 'findings' | 'check'>(
+    copyId: string, opts: HeldListOptions, columns: C[],
+  ) {
+    return matching(copyId, opts).select(columns).orderBy('key').limit(opts.limit).offset(opts.offset).execute();
+  }
+
+  /** Every matching row, not only the page. */
+  async function count(copyId: string, opts: HeldListOptions): Promise<number> {
+    const r = await matching(copyId, opts).select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirstOrThrow();
+    return Number(r.n);
+  }
+
   return {
     async put(item) {
       const values = {
@@ -84,24 +109,13 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
     },
 
     async list(copyId, opts) {
-      let rowsQ = db.selectFrom('import_check_held')
-        .select(['copy_id', 'key', 'run_id', 'reason', 'label', 'error', 'held_at'])
-        .where('copy_id', '=', copyId);
-      let countQ = db.selectFrom('import_check_held')
-        .select((eb) => eb.fn.countAll<number>().as('n'))
-        .where('copy_id', '=', copyId);
-      if (opts.reason !== undefined) {
-        rowsQ = rowsQ.where('reason', '=', opts.reason);
-        countQ = countQ.where('reason', '=', opts.reason);
-      }
-      if (opts.label !== undefined) {
-        rowsQ = rowsQ.where('label', '=', opts.label);
-        countQ = countQ.where('label', '=', opts.label);
-      }
-      // Within one copy the key is unique, so this order has no tie.
-      const rows = await rowsQ.orderBy('key').limit(opts.limit).offset(opts.offset).execute();
-      const count = await countQ.executeTakeFirstOrThrow();
-      return { rows: rows.map(toRow), total: Number(count.n) };
+      const rows = await page(copyId, opts, ['copy_id', 'key', 'run_id', 'reason', 'label', 'error', 'held_at']);
+      return { rows: rows.map(toRow), total: await count(copyId, opts) };
+    },
+
+    async listItems(copyId, opts) {
+      const rows = await page(copyId, opts, ['copy_id', 'key', 'run_id', 'reason', 'label', 'error', 'held_at', 'findings', 'check']);
+      return { rows: rows.map((r) => ({ ...toRow(r), findings: r.findings, check: r.check })), total: await count(copyId, opts) };
     },
 
     async get(copyId, key) {

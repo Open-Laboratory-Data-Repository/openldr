@@ -1,4 +1,4 @@
-import type { PluginBrokerOp, PluginRpcResult } from './types';
+import type { PluginOp, PluginRpcResult } from './types';
 
 /** Minimal MessagePort surface used by the RPC core (works for real ports + test fakes). */
 export interface PortLike {
@@ -8,7 +8,7 @@ export interface PortLike {
 }
 
 /** Promise-based, id-correlated RPC over a MessagePort. The host replies { id, result }. */
-export function makeRpc(port: PortLike): { call(op: PluginBrokerOp): Promise<unknown> } {
+export function makeRpc(port: PortLike): { call(op: PluginOp): Promise<unknown> } {
   let seq = 0;
   const pending = new Map<number, { resolve(v: unknown): void; reject(e: Error): void }>();
   port.onmessage = (ev) => {
@@ -124,7 +124,14 @@ function pluginBootstrapV1(): void {
         held: (input: { copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }) =>
           call({ kind: 'import.check.held', copyId: input.copyId, reason: input.reason, label: input.label, offset: input.offset, limit: input.limit }),
         heldItem: (input: { copyId: string; key: string }) => call({ kind: 'import.check.heldItem', copyId: input.copyId, key: input.key }),
+        heldItems: (input: { copyId: string; reason?: 'held' | 'error'; label?: string; offset: number; limit: number }) =>
+          call({ kind: 'import.check.heldItems', copyId: input.copyId, reason: input.reason, label: input.label, offset: input.offset, limit: input.limit }),
       },
+    },
+    // The studio answers this itself and saves the file in its own document.
+    files: {
+      download: (input: { filename: string; mime: string; text: string }) =>
+        call({ kind: 'host.download', filename: input.filename, mime: input.mime, text: input.text }).then(() => undefined),
     },
   };
   (window as unknown as { openldr: unknown }).openldr = api;
