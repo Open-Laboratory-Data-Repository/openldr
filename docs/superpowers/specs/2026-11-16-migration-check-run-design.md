@@ -434,3 +434,59 @@ a setting.
   of section 8 forbids it, so those 154,245 requests are not imported at such a site. This
   joins section 8.3.
 - Retiring `wasm/openldr-v1-import`.
+
+## 11. Decided at the whole-branch review (2026-11-16)
+
+Two whole-branch reviews, one for CE and one for the plugin, found these. Each changes what
+section 5 says.
+
+### 11.1 A stopped or failed check carries on
+
+Section 5.4 said only that a finished run begins at the first key. The code also began at the
+first key after a stop or a failure, and the CLI help and docs said the opposite. On a source
+of about 1.9 million requests at about 23 a second, that repeats up to a day of work. The
+operator chose "Carry on, restart on request".
+
+- Start on a `stopped` or `failed` run carries on from its last page. Its counts and its held
+  rows are kept.
+- It begins at the first key, with fresh counts, in four cases: the run is `completed`; the
+  caller asks for it (`fromStart` on the operation, `--from-start` in the CLI, "Start again
+  from the first request" on a page); the options or the reference differ from the run's; or
+  the source or the reference was read again since the run began.
+- A caller tells the two apart by the run it gets back: a run that carried on has requests
+  already read.
+
+### 11.2 Held requests are read by key for an export
+
+`held` and `heldItems` paged by offset. While a check runs it adds and removes held rows, so
+an export could repeat some requests and miss others. `heldItems` also takes `after`, a key:
+it returns the rows whose key is greater, in key order, and `next`, the last key of the page
+or nothing when there are no more. An export reads by `after`, is refused while a check of
+that source is live, and fails when its row count differs from the total.
+
+### 11.3 A revoked connector stops a check
+
+A copy asks at start and at every drive whether the plugin may read the connector. A check now
+asks the same of its source's connector, and of the reference's. A check whose plugin lost the
+allowance fails with a fixed sentence and saves nothing more.
+
+### 11.4 A removed source takes its check with it
+
+Removing a copy already removed its held rows. It now removes the check record too, so a copy
+made again on the same connector does not show an old run's counts.
+
+### 11.5 The dates rule of an OpenLDR v1 source
+
+Counted on the real run of 14,986 requests: 65 were held, with 120 bad pairs. 115 of the pairs
+are a timed specimen against a received value at midnight, 118 of 120 on the same day, and 60
+of the 65 requests have only such pairs. A v1 value at midnight is a date with no time. The
+rule now reads v1's dates as the check against v1 does, by day when there is no time, and
+skips a placeholder date.
+
+### 11.6 Left for the operator
+
+- Uninstalling a plugin leaves its copies and its held rows in the database, with no way to
+  reach them from a page or the CLI. Either an uninstall is refused while the plugin has
+  copies, or it removes both.
+- Eight other commands that write a file through a server replace an existing file and leave
+  its mode to the shell. `import check held --export` no longer does.
