@@ -37,7 +37,7 @@ days at 417 to 418, little-endian.
   date in its place where there is no specimen date, all but 54 are explained.
 - Where a request has no birth row, the days are a round number of years
   (years x 365, or floor(years x 365.25)) on 314,717 of 850,585 twins. Someone typed an age
-  in years. Where a request has a birth row, that is so on 1,541 of 889,000, which is what
+  in years. Where a request has a birth row, that is so on 1,541 of 888,937, which is what
   chance gives (about 1 in 365).
 
 **Fault 2, two birth dates.** 328 requests hold two or more different birth dates. Of the
