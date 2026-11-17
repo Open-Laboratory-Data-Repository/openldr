@@ -3,6 +3,7 @@ import {
   applyMapping,
   classify,
   mapTargetById,
+  pinnedListOf,
   SavedMappingSchema,
   type Classification,
   type ClassifyForm,
@@ -271,19 +272,60 @@ function isBlank(v: unknown): boolean {
   return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
 }
 
+/** For each list, by its FHIR path, the sets of element names a target field pins an entry by. */
+type PinSets = Map<string, string[][]>;
+
+function pinSetsOf(target: MapTarget): PinSets {
+  const sets: PinSets = new Map();
+  for (const f of target.fields) {
+    const pin = pinnedListOf(f.path);
+    if (!pin) continue;
+    const list = sets.get(pin.list) ?? [];
+    if (!list.some((els) => els.join('\n') === pin.els.join('\n'))) list.push(pin.els);
+    sets.set(pin.list, list);
+  }
+  return sets;
+}
+
+function readDotted(v: unknown, path: string): unknown {
+  let cur = v;
+  for (const seg of path.split('.')) cur = isPlainObject(cur) ? cur[seg] : undefined;
+  return cur;
+}
+
 /**
- * Fill what `base` lacks from `extra`. A non-empty value in `base` wins. Objects merge key by key,
- * lists index by index.
+ * Fill what `base` lacks from `extra`. A non-empty value in `base` wins. Objects merge key by key.
+ * A list entry that holds every element of a set the target pins by is matched on those values,
+ * and added when `base` has no such entry: the writer puts a pinned entry at the next free slot,
+ * so its index differs from row to row. Other entries merge index by index. `path` is the FHIR
+ * path of `base`, with no list indexes.
  */
-function fillMissing(base: Res | unknown[], extra: Res | unknown[]): void {
-  const keys = Array.isArray(extra) ? extra.map((_, i) => i) : Object.keys(extra);
-  for (const k of keys) {
-    const b = (base as Record<string | number, unknown>)[k];
-    const e = (extra as Record<string | number, unknown>)[k];
+function fillMissing(base: Res | unknown[], extra: Res | unknown[], path: string, pins: PinSets): void {
+  if (Array.isArray(base) && Array.isArray(extra)) {
+    const sets = pins.get(path) ?? [];
+    extra.forEach((e, i) => {
+      if (isBlank(e)) return;
+      const els = isPlainObject(e) ? sets.find((s) => s.every((el) => !isBlank(readDotted(e, el)))) : undefined;
+      if (els) {
+        const same = base.find((b) => isPlainObject(b) && els.every((el) => readDotted(b, el) === readDotted(e, el)));
+        if (same) fillMissing(same as Res, e as Res, path, pins);
+        else base.push(structuredClone(e));
+        return;
+      }
+      const b = base[i];
+      if (isBlank(b)) base[i] = structuredClone(e);
+      else if (isPlainObject(b) && isPlainObject(e)) fillMissing(b, e, path, pins);
+      else if (Array.isArray(b) && Array.isArray(e)) fillMissing(b, e, path, pins);
+    });
+    return;
+  }
+  if (Array.isArray(base) || Array.isArray(extra)) return;
+  for (const k of Object.keys(extra)) {
+    const b = base[k];
+    const e = extra[k];
     if (isBlank(e)) continue;
-    if (isBlank(b)) (base as Record<string | number, unknown>)[k] = structuredClone(e);
-    else if (isPlainObject(b) && isPlainObject(e)) fillMissing(b, e);
-    else if (Array.isArray(b) && Array.isArray(e)) fillMissing(b, e);
+    if (isBlank(b)) base[k] = structuredClone(e);
+    else if ((isPlainObject(b) && isPlainObject(e)) || (Array.isArray(b) && Array.isArray(e))) fillMissing(b as Res, e as Res, `${path}.${k}`, pins);
   }
 }
 
@@ -432,6 +474,7 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): MapToFhirSer
     // first; a held item adds nothing.
     const out: WorkflowItem[] = [];
     const emitted = new Map<string, Res>();
+    const pins: PinSets = target ? pinSetsOf(target) : new Map();
     const held: WorkflowItem[] = [];
     const heldIndexes: number[] = [];
     const meta = { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [] as string[] };
@@ -452,7 +495,7 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): MapToFhirSer
         const key = `${String(r.resourceType)}/${String(r.id)}`;
         const first = emitted.get(key);
         if (first) {
-          fillMissing(first, r);
+          fillMissing(first, r, String(r.resourceType), pins);
           continue;
         }
         const copy = structuredClone(r);

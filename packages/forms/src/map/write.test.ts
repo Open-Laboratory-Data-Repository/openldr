@@ -1,6 +1,6 @@
 import { validateResource } from '@openldr/fhir';
 import { describe, it, expect } from 'vitest';
-import { canWriteFromCell, writeValue } from './write';
+import { canWriteFromCell, pinnedListOf, writeValue } from './write';
 
 function rec(resourceType: string): Record<string, unknown> {
   return { resourceType, id: 'r1' };
@@ -214,5 +214,17 @@ describe('canWriteFromCell', () => {
       const r = writeValue({ resourceType: key.split('.')[0] }, key, 'x');
       expect(r.ok, key).toBe(canWriteFromCell(key));
     }
+  });
+});
+
+describe('pinnedListOf', () => {
+  it('names the list whose entry takes the pinned values, and the pinned elements', () => {
+    expect(pinnedListOf('Patient.identifier.value?system=urn:test:a')).toEqual({ list: 'Patient.identifier', els: ['system'] });
+    expect(pinnedListOf('Patient.name.given?use=official')).toEqual({ list: 'Patient.name', els: ['use'] });
+  });
+
+  it('gives null for a key that pins nothing, and for a single pinned object', () => {
+    expect(pinnedListOf('Patient.identifier.value')).toBeNull();
+    expect(pinnedListOf('ServiceRequest.requester?type=Practitioner')).toBeNull();
   });
 });

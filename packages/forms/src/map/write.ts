@@ -86,6 +86,30 @@ export function canWriteFromCell(key: string): boolean {
   return leaf !== null && CELL_LEAVES.has(leaf.leafType);
 }
 
+/**
+ * For a key with pinned values, the FHIR table path of the list whose entry takes them (as
+ * `writeValue` picks it) and the pinned element names. Null when the key pins nothing, or pins a
+ * single object rather than a list entry.
+ */
+export function pinnedListOf(key: string): { list: string; els: string[] } | null {
+  const parsed = parseTargetPath(key);
+  if (!parsed || Object.keys(parsed.where).length === 0) return null;
+  const segs = parsed.path.split('.');
+  const leaf = lookupFhirPath(segs.filter((s) => !isIndex(s)).join('.'));
+  if (!leaf) return null;
+  let cumulative = segs[0];
+  for (let i = 1; i < segs.length; i++) {
+    if (isIndex(segs[i])) continue;
+    cumulative += `.${segs[i]}`;
+    const info = lookupFhirPath(cumulative);
+    if (!info) return null;
+    if (!info.ownArray || isIndex(segs[i + 1] ?? '')) continue;
+    if (i === segs.length - 1 && PRIMITIVE_LEAVES.has(leaf.leafType)) return null;
+    return { list: cumulative, els: Object.keys(parsed.where).sort() };
+  }
+  return null;
+}
+
 export function writeValue(resource: Record<string, unknown>, key: string, value: WriteValue): WriteResult {
   const parsed = parseTargetPath(key);
   if (!parsed) return { ok: false, reason: `the target path ${key} is malformed` };

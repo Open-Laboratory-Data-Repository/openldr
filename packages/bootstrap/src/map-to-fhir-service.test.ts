@@ -646,3 +646,43 @@ describe('a file with one column per test, end to end through the real pieces', 
     expect((orders[1].code as { coding: { code: string }[] }).coding.map((c) => c.code)).toEqual(['AMP', 'GEN']);
   });
 });
+
+describe('the within-run merge of a list with two pinned entries', () => {
+  // A Patient pack with two pinned identifiers on one list, built here: the shipped packs have none.
+  const pinned = (ord: number, system: string, label: string) => ({
+    ord, fhirPath: 'Patient.identifier.value', label, apiProperty: null, fieldType: 'text' as const, fhirValueField: null,
+    required: false, locked: false, defaultOn: true, discriminator: { system }, boundValueSet: null,
+    referenceTarget: null, referenceMultiple: false, rationale: 'test',
+  });
+  const packs = PACKS.map((p) => (p.id === 'pack-patient'
+    ? { ...p, entries: [...p.entries, pinned(900, 'urn:test:id-a', 'Number A'), pinned(901, 'urn:test:id-b', 'Number B')] }
+    : p));
+  const two = { pid: 'T-0201', coll: '2026-11-05', t: 'TA', a: '', b: '' };
+  const twoMapping: SavedMapping = {
+    shapeHash: 'h2', fieldNames: Object.keys(two).sort(), targetId: 'lab-result',
+    rows: [
+      { targetPath: 'Patient.identifier.value', from: { field: 'pid' } },
+      { targetPath: 'Patient.identifier.value?system=urn:test:id-a', from: { field: 'a' } },
+      { targetPath: 'Patient.identifier.value?system=urn:test:id-b', from: { field: 'b' } },
+      { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'coll' } },
+      { targetPath: 'Observation.code', from: { field: 't' } },
+    ],
+  };
+
+  it('merges the entries by their pinned values and adds the one the first row lacks', async () => {
+    const svc = createMapToFhirService(deps({ packs: async () => packs }));
+    // Row one has no number A, so its number B sits at the slot number A takes in row two.
+    const res = await svc({
+      items: [{ json: { ...two, b: 'QZX-B1' } }, { json: { ...two, a: 'QZX-A2', b: 'QZX-B1', t: 'TB' } }],
+      config: { targetId: 'lab-result', formIds: [], mappings: [twoMapping] },
+    });
+    expect(res.held).toEqual([]);
+    const patients = res.out.filter((i) => i.json.resourceType === 'Patient');
+    expect(patients).toHaveLength(1);
+    expect(patients[0].json.identifier).toEqual([
+      { value: 'T-0201' },
+      { value: 'QZX-B1', system: 'urn:test:id-b' },
+      { value: 'QZX-A2', system: 'urn:test:id-a' },
+    ]);
+  });
+});
