@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "3ee847ae",
+          "type": "feat",
+          "scope": "workflows",
+          "title": "The webhook reads FHIR XML"
+        },
+        {
           "hash": "90db503a",
           "type": "fix",
           "scope": "studio",
