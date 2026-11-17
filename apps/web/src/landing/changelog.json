@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "adf4b7c1",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "An age too large to store exactly is kept as text, never rounded"
+        },
+        {
+          "hash": "222d9065",
+          "type": "feat",
+          "scope": "workflows",
+          "title": "Map to FHIR reads the age at request, keeps it as sent, and marks estimated days"
+        },
+        {
           "hash": "6a457e9a",
           "type": "fix",
           "scope": "workflows",
