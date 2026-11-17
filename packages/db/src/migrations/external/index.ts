@@ -26,6 +26,7 @@ import * as m023 from './023_test_map';
 import * as m024 from './024_lab_result_status';
 import * as m025 from './025_patient_identifiers';
 import * as m026 from './026_patient_match_key';
+import * as m027 from './027_lab_request_age_estimate';
 
 export function externalMigrations(engine: TargetEngine): Record<string, Migration> {
   return {
@@ -55,5 +56,6 @@ export function externalMigrations(engine: TargetEngine): Record<string, Migrati
     '024_lab_result_status': { up: (db) => m024.up(db, engine), down: m024.down },
     '025_patient_identifiers': { up: (db) => m025.up(db, engine), down: m025.down },
     '026_patient_match_key': { up: (db) => m026.up(db, engine), down: (db) => m026.down(db, engine) },
+    '027_lab_request_age_estimate': { up: (db) => m027.up(db, engine), down: m027.down },
   };
 }

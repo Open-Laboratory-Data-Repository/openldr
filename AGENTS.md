@@ -232,7 +232,9 @@ OBX, ORC, PID or SPM field). A fact from one system or country is a row in
 sets and registers written for one system (for example DISA) are content: they ship as export
 files kept in `packs/`, never in the repo. One exception: `lab_requests.age_years` and `age_days`
 stay typed, because the source's stored age is more reliable than one worked out from the date of
-birth. The operator decided this on 2026-09-30.
+birth. The operator decided this on 2026-09-30. `lab_requests.age_days_estimated` is typed too: it
+marks `age_days` as an estimate from months or years, so an analyst can tell it from a sent day
+count. The operator decided this on 2026-11-17.
 
 ---
 

@@ -88,6 +88,23 @@ function localise(target: MapTarget, locale: string): MapTarget {
   return { ...target, name: labels.$name ?? target.name, fields: target.fields.map((f) => ({ ...f, label: labels[f.path] ?? f.label })) };
 }
 
+// The age at request (spec 2026-11-17-mapping-review.md). Not FHIR element paths: `applyMapping`
+// writes the `age-at-request` extension the warehouse reads (`age.ts`, `request-facts.ts`).
+export const AGE_FIELD = 'ServiceRequest.extension:age-at-request';
+export const AGE_UNIT_FIELD = 'ServiceRequest.extension:age-at-request.unit';
+const LAB_RESULT_AGE: MapTarget['fields'] = [
+  { path: AGE_FIELD, label: 'Age', required: false, repeats: false, valueSet: null },
+  { path: AGE_UNIT_FIELD, label: 'Age unit', required: false, repeats: false, valueSet: null },
+];
+
+/** The fields with the age fields placed after the order's own. */
+function withAge(target: MapTarget): MapTarget {
+  const last = target.fields.map((f) => f.path.split('.')[0]).lastIndexOf('ServiceRequest');
+  const fields = [...target.fields];
+  fields.splice(last + 1, 0, ...LAB_RESULT_AGE);
+  return { ...target, fields, age: { record: 'ServiceRequest', value: AGE_FIELD, unit: AGE_UNIT_FIELD } };
+}
+
 export function labResultTarget(packs: readonly MapTargetPack[], locale = 'en'): MapTarget {
   const parts = LAB_RESULT_PACKS.map(({ id, repeats }) => {
     const pack = packs.find((p) => p.id === id);
@@ -103,7 +120,7 @@ export function labResultTarget(packs: readonly MapTargetPack[], locale = 'en'):
     derived: LAB_RESULT_DERIVED,
     needsValue: LAB_RESULT_NEEDS_VALUE,
   });
-  return localise(target, locale);
+  return localise(withAge(target), locale);
 }
 
 export function listMapTargets(packs: readonly MapTargetPack[], locale = 'en'): MapTarget[] {

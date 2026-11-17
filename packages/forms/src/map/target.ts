@@ -35,6 +35,11 @@ export interface MapTarget {
    */
   derived?: { path: string; from: string }[];
   /**
+   * The age at request: two field keys that are not FHIR element paths. `applyMapping` reads their
+   * values with `readAge` and writes the `age-at-request` extension on `record` (`age.ts`).
+   */
+  age?: { record: string; value: string; unit: string };
+  /**
    * Repeating record types made only when they hold a result value (a `value[x]`): a test whose
    * result is blank gives no result record, and the run notes it. Its code still reaches `derived`.
    */

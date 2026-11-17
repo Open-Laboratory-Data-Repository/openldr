@@ -41,7 +41,7 @@ function obrSetId(r: Json): number | null {
 export type RequestFacts = Pick<
   LabRequestsTable,
   | 'obr_set_id' | 'analysis_at' | 'point_of_care' | 'request_type' | 'registered_by' | 'tested_by'
-  | 'requester_practitioner' | 'age_years' | 'age_days' | 'clinical_info' | 'analyzer_code'
+  | 'requester_practitioner' | 'age_years' | 'age_days' | 'age_days_estimated' | 'clinical_info' | 'analyzer_code'
   | 'rejection_code' | 'rejection_reason'
 >;
 
@@ -52,6 +52,9 @@ export function requestFacts(r: Json): RequestFacts {
   const note = (r['note'] as Json[] | undefined)?.[0];
   const ageYears = subValue(ageExt, 'years', 'Integer');
   const ageDays = subValue(ageExt, 'days', 'Integer');
+  const ageDaysKnown = typeof ageDays === 'number' && Number.isInteger(ageDays);
+  // The mark Map to FHIR writes beside an average-month or average-year conversion (forms map/age.ts).
+  const ageDaysEstimated = subValue(ageExt, 'daysEstimated', 'Boolean') === true;
   const rejectionCode = subValue(rejectionExt, 'code', 'Code');
   const rejectionReason = subValue(rejectionExt, 'reason', 'String');
   return {
@@ -63,7 +66,8 @@ export function requestFacts(r: Json): RequestFacts {
     tested_by: str(extension(r, 'tested-by')?.['valueString']),
     requester_practitioner: requesterPractitionerDisplay(r),
     age_years: typeof ageYears === 'number' && Number.isInteger(ageYears) ? ageYears : null,
-    age_days: typeof ageDays === 'number' && Number.isInteger(ageDays) ? ageDays : null,
+    age_days: ageDaysKnown ? (ageDays as number) : null,
+    age_days_estimated: ageDaysKnown ? ageDaysEstimated : null,
     clinical_info: str(note?.['text']),
     analyzer_code: str(extension(r, 'analyzer')?.['valueCode']),
     rejection_code: str(rejectionCode),

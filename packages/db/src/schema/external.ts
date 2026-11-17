@@ -53,6 +53,8 @@ export interface LabRequestsTable extends ProvenanceColumns {
   obr_set_id: number | null;
   age_years: number | null;
   age_days: number | null;
+  /** True when age_days is an average-month or average-year estimate, false when not, null with no age_days (027). */
+  age_days_estimated: boolean | null;
   clinical_info: string | null;
   analyzer_code: string | null;
   rejection_code: string | null;

@@ -23,5 +23,7 @@
   "Observation.effectiveDateTime": ["result_date", "date_resulted", "test_date", "analysis_date"],
   "Observation.interpretation": ["flag", "abnormal_flag", "interpretation", "result_flag"],
   "!Patient.name.given?use=official": ["name", "full_name", "fullname", "patient_name", "client_name"],
-  "!Patient.name.family?use=official": ["name", "full_name", "fullname", "patient_name", "client_name"]
+  "!Patient.name.family?use=official": ["name", "full_name", "fullname", "patient_name", "client_name"],
+  "ServiceRequest.extension:age-at-request": ["age", "age_years", "patient_age", "age_at_request", "age_value"],
+  "ServiceRequest.extension:age-at-request.unit": ["age_unit", "age_units", "age_type"]
 }

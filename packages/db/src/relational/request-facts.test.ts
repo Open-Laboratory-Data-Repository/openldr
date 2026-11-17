@@ -32,7 +32,7 @@ describe('requestFacts', () => {
     expect(requestFacts(fullRequest)).toEqual({
       obr_set_id: 2, analysis_at: '2018-06-01T10:00:00+03:00', point_of_care: 'KCMC~Medical Ward 2',
       request_type: 'D', registered_by: 'AB', tested_by: 'CD', requester_practitioner: 'Dr Mushi',
-      age_years: 34, age_days: 12418, clinical_info: 'fever', analyzer_code: 'ALINK',
+      age_years: 34, age_days: 12418, age_days_estimated: false, clinical_info: 'fever', analyzer_code: 'ALINK',
       rejection_code: 'R01', rejection_reason: 'Haemolysed',
     });
   });
@@ -40,7 +40,17 @@ describe('requestFacts', () => {
   it('gives NULL for every absent fact', () => {
     const facts = requestFacts({ resourceType: 'ServiceRequest', id: 'sr-2' });
     expect(Object.values(facts).every((v) => v === null)).toBe(true);
-    expect(Object.keys(facts)).toHaveLength(13);
+    expect(Object.keys(facts)).toHaveLength(14);
+  });
+
+  const ageOf = (extension: unknown[]) =>
+    requestFacts({ resourceType: 'ServiceRequest', id: 'sr-3', extension: [ext('age-at-request', { extension })] });
+
+  it('marks an estimated day age true, a plain one false, and no day age null', () => {
+    expect(ageOf([{ url: 'years', valueInteger: 2 }, { url: 'days', valueInteger: 730 }, { url: 'daysEstimated', valueBoolean: true }]))
+      .toMatchObject({ age_years: 2, age_days: 730, age_days_estimated: true });
+    expect(ageOf([{ url: 'days', valueInteger: 3 }])).toMatchObject({ age_days: 3, age_days_estimated: false });
+    expect(ageOf([{ url: 'text', valueString: 'newborn' }])).toMatchObject({ age_years: null, age_days: null, age_days_estimated: null });
   });
 
   it('ignores a non-numeric OBR set id instead of guessing', () => {

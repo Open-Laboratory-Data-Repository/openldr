@@ -171,6 +171,8 @@ describe('a fully mapped made-up row', () => {
     res_date_b: '2026-11-04',
     flag_a: 'flag-x',
     flag_b: 'flag-y',
+    age: '3',
+    age_unit: 'weeks',
   };
 
   // Every field of the target but one. Referring Facility shares ServiceRequest.requester with
@@ -193,6 +195,8 @@ describe('a fully mapped made-up row', () => {
     { targetPath: 'ServiceRequest.requester?type=Practitioner', from: { field: 'clinician' } },
     { targetPath: 'ServiceRequest.identifier.value?system=urn:openldr:order:requisition', from: { field: 'req_no' } },
     { targetPath: 'ServiceRequest.note.0.text', from: { field: 'notes' } },
+    { targetPath: 'ServiceRequest.extension:age-at-request', from: { field: 'age' } },
+    { targetPath: 'ServiceRequest.extension:age-at-request.unit', from: { field: 'age_unit' } },
     { targetPath: 'Observation.code', from: { fields: ['test_a', 'test_b'] }, rule: { kind: 'codeList', conceptMapUrl: 'urn:test:map' } },
     { targetPath: 'Observation.valueQuantity.value', from: { fields: ['num_a', 'num_b'] } },
     { targetPath: 'Observation.valueString', from: { fields: ['text_a', 'text_b'] } },
@@ -222,6 +226,16 @@ describe('a fully mapped made-up row', () => {
   it('covers every field but Referring Facility', () => {
     const mapped = new Set(rows.map((r) => r.targetPath));
     expect(target.fields.filter((f) => !mapped.has(f.path)).map((f) => f.label)).toEqual(['Referring Facility']);
+  });
+
+  it('writes the age at request on the order, from the Age and Age unit fields', async () => {
+    const res = await applyMapping(mapping(rows), target, row, deps());
+    if (!res.ok) throw new Error(res.reason);
+    const order = res.resources.find((r) => r.resourceType === 'ServiceRequest') as unknown as { extension?: { url: string; extension: unknown[] }[] };
+    expect(order.extension?.find((e) => e.url === 'urn:openldr:ext:age-at-request')?.extension).toEqual([
+      { url: 'days', valueInteger: 21 },
+      { url: 'source', valueAge: { value: 3, unit: 'weeks', system: 'http://unitsofmeasure.org', code: 'wk' } },
+    ]);
   });
 
   it('puts the patient ID system and value in one identifier entry', async () => {

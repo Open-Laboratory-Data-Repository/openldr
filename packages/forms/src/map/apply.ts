@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { applyRule, MapRuleSchema, type MapValue, type RuleDeps } from './rules';
 import { parseTargetPath, type IdentityPart, type MapTarget } from './target';
 import { writeValue, type WriteValue } from './write';
+import { ageExtension, readAge } from './age';
 
 /**
  * Turn one item (one row of a lab's data) into linked FHIR records through a saved mapping.
@@ -375,6 +376,10 @@ export async function applyMapping(
     if (f) return f;
   }
 
+  // The age fields are not FHIR paths: `fill` builds their extension instead of writing them.
+  const ageKeys = new Set(target.age ? [target.age.value, target.age.unit] : []);
+  const valueAt = (r: ResolvedRow | undefined, index: number) => (r ? (r.values.length === 1 ? r.values[0] : r.values[index]) : null);
+
   const fill = (resource: Resource, rows: ResolvedRow[], index: number): Failure | null => {
     for (const d of target.defaults) {
       if (d.path.split('.')[0] !== resource.resourceType) continue;
@@ -383,6 +388,7 @@ export async function applyMapping(
     }
     for (const r of rows) {
       const value = r.values.length === 1 ? r.values[0] : r.values[index];
+      if (ageKeys.has(r.row.targetPath)) continue;
       if (value === null) {
         if (r.required) {
           const f = missing(r.row.targetPath, r.label);
@@ -414,6 +420,18 @@ export async function applyMapping(
       delete resource[key];
       const by = rows.find((x) => plainPath(x.row.targetPath).startsWith(`${resource.resourceType}.${key}.`));
       notes.add(`${by ? by.label : `${resource.resourceType}.${key}`}: no number in this row, so the unit was not stored`);
+    }
+    if (target.age && resource.resourceType === target.age.record) {
+      const ageRow = rows.find((x) => x.row.targetPath === target.age!.value);
+      const sent = valueAt(ageRow, index);
+      if (ageRow && sent !== null && sent !== undefined) {
+        const unit = valueAt(rows.find((x) => x.row.targetPath === target.age!.unit), index);
+        const asText = (v: MapValue) => (typeof v === 'object' ? (v.code ?? '') : typeof v === 'boolean' ? String(v) : v);
+        const age = readAge(asText(sent), unit === null || unit === undefined ? undefined : String(asText(unit)));
+        if (age.unread) notes.add(`${ageRow.label}: not read as an age, so only the text was stored`);
+        const existing = Array.isArray(resource.extension) ? (resource.extension as unknown[]) : [];
+        resource.extension = [...existing, ageExtension(age)];
+      }
     }
     for (const link of target.links) {
       if (link.from !== resource.resourceType) continue;

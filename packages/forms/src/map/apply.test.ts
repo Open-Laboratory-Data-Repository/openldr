@@ -831,3 +831,57 @@ describe('chunk 4: Number or text', () => {
     expect(res.ok).toBe(false);
   });
 });
+
+describe('chunk 6: age at request', () => {
+  const AGE = 'ServiceRequest.extension:age-at-request';
+  const UNIT = 'ServiceRequest.extension:age-at-request.unit';
+  const aged: MapTarget = {
+    ...target,
+    fields: [
+      ...target.fields,
+      { path: AGE, label: 'Age', required: false, repeats: false, valueSet: null },
+      { path: UNIT, label: 'Age unit', required: false, repeats: false, valueSet: null },
+    ],
+    age: { record: 'ServiceRequest', value: AGE, unit: UNIT },
+  };
+  const requestOf = (res: Awaited<ReturnType<typeof applyMapping>>) => {
+    if (!res.ok) throw new Error(res.reason);
+    return res.resources.find((r) => r.resourceType === 'ServiceRequest') as ServiceRequest;
+  };
+  const ageExt = (sr: ServiceRequest) => sr.extension?.find((e) => e.url === 'urn:openldr:ext:age-at-request');
+
+  it('writes a written age on the order, keeping the text, and invents no birth date', async () => {
+    const res = await applyMapping(mapping([...baseRows.filter((r) => r.targetPath !== 'Patient.birthDate'), { targetPath: AGE, from: { field: 'age' } }]),
+      aged, { ...row, age: '3 days' }, deps());
+    expect(ageExt(requestOf(res))).toEqual({
+      url: 'urn:openldr:ext:age-at-request',
+      extension: [
+        { url: 'days', valueInteger: 3 },
+        { url: 'source', valueAge: { value: 3, unit: 'days', system: 'http://unitsofmeasure.org', code: 'd' } },
+        { url: 'text', valueString: '3 days' },
+      ],
+    });
+    const patient = (res.ok ? res.resources : []).find((r) => r.resourceType === 'Patient') as Patient;
+    expect(patient.birthDate).toBeUndefined();
+  });
+
+  it('reads a number with the Age unit field', async () => {
+    const res = await applyMapping(mapping([...baseRows, { targetPath: AGE, from: { field: 'age' } }, { targetPath: UNIT, from: { field: 'age_unit' } }]),
+      aged, { ...row, age: 6, age_unit: 'weeks' }, deps());
+    expect(ageExt(requestOf(res))?.extension).toEqual([
+      { url: 'days', valueInteger: 42 },
+      { url: 'source', valueAge: { value: 6, unit: 'weeks', system: 'http://unitsofmeasure.org', code: 'wk' } },
+    ]);
+  });
+
+  it('keeps an age it cannot read as text, notes it, and still stores the row', async () => {
+    const res = await applyMapping(mapping([...baseRows, { targetPath: AGE, from: { field: 'age' } }]), aged, { ...row, age: 'newborn' }, deps());
+    expect(ageExt(requestOf(res))?.extension).toEqual([{ url: 'text', valueString: 'newborn' }]);
+    expect(res.ok && res.notes).toEqual(['Age: not read as an age, so only the text was stored']);
+  });
+
+  it('writes no age extension when the age is blank', async () => {
+    const res = await applyMapping(mapping([...baseRows, { targetPath: AGE, from: { field: 'age' } }]), aged, { ...row, age: '' }, deps());
+    expect(ageExt(requestOf(res))).toBeUndefined();
+  });
+});

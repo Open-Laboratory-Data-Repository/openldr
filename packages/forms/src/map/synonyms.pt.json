@@ -23,5 +23,7 @@
   "Observation.effectiveDateTime": ["data_resultado", "data_do_resultado", "data_analise", "data_validacao"],
   "Observation.interpretation": ["interpretacao", "interpretação", "sinal", "anomalia"],
   "!Patient.name.given?use=official": ["nome_completo", "nome_do_paciente", "nome_paciente"],
-  "!Patient.name.family?use=official": ["nome_completo", "nome_do_paciente", "nome_paciente"]
+  "!Patient.name.family?use=official": ["nome_completo", "nome_do_paciente", "nome_paciente"],
+  "ServiceRequest.extension:age-at-request": ["idade", "idade_paciente"],
+  "ServiceRequest.extension:age-at-request.unit": ["unidade_idade", "tipo_idade"]
 }
