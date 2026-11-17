@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import * as api from '@/api';
 import { MapToFhirForm } from './map-to-fhir-form';
+import { useWorkflowStore } from '../../hooks/use-workflow-store';
 import { TEST_TARGET } from '../map/test-fixtures';
 
 const OTHER_TARGET = { ...TEST_TARGET, id: 'other-target', name: 'Other target' };
@@ -113,5 +114,29 @@ describe('MapToFhirForm', () => {
     expect(update).not.toHaveBeenCalled();
     expect((screen.getByRole('combobox', { name: 'Target' }) as HTMLSelectElement).value).toBe('test-target');
   });
-});
 
+  describe('the hint about Extract from File', () => {
+    const HINT = "Extract from File is changing this file's values: a number with a comma and a code with leading zeros do not arrive as written. Open that node and turn on 'Read every cell as text'.";
+    const feed = (config: Record<string, unknown>) =>
+      useWorkflowStore.setState({
+        nodes: [{ id: 'ex1', type: 'action', position: { x: 0, y: 0 }, data: { label: 'Extract', action: 'extract-from-file', config } }] as never,
+        edges: [{ id: 'e1', source: 'ex1', target: 'map1' }] as never,
+      });
+
+    it('shows when the feeding Extract from File reads CSV with the option off', () => {
+      feed({ format: 'csv', sourceField: 'file' });
+      render(<MapToFhirForm node={mkNode({})} update={vi.fn()} />);
+      expect(screen.getByText(HINT)).toBeInTheDocument();
+    });
+
+    it('does not show with the option on, or for a JSON file', () => {
+      feed({ format: 'csv', cellsAsText: true });
+      const { unmount } = render(<MapToFhirForm node={mkNode({})} update={vi.fn()} />);
+      expect(screen.queryByText(HINT)).toBeNull();
+      unmount();
+      feed({ format: 'json' });
+      render(<MapToFhirForm node={mkNode({})} update={vi.fn()} />);
+      expect(screen.queryByText(HINT)).toBeNull();
+    });
+  });
+});

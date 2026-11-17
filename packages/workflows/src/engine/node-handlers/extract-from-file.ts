@@ -9,6 +9,7 @@ export const extractFromFileHandler: NodeHandler = async (node, ctx, input) => {
   const format = String(config.format ?? 'json');
   const sourceField = (config.sourceField as string) || 'file';
   const outputField = (config.outputField as string) || 'data';
+  const cellsAsText = config.cellsAsText === true;
 
   const out: WorkflowItem[] = [];
   for (const item of input) {
@@ -16,7 +17,7 @@ export const extractFromFileHandler: NodeHandler = async (node, ctx, input) => {
     if (!ref) throw new Error(`Extract from File: no file on the input item (field '${sourceField}')`);
     const bytes = await ctx.services.readBinary(ref.objectKey);
     if (format === 'csv') {
-      for (const row of fileToRows(bytes)) out.push({ json: row });
+      for (const row of fileToRows(bytes, { cellsAsText })) out.push({ json: row });
     } else if (format === 'text') {
       out.push({ json: { [outputField]: new TextDecoder().decode(bytes) } });
     } else {

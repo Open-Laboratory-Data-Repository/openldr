@@ -2476,6 +2476,7 @@ export const en = {
     secretWriteOnlyHelp: "For security, a saved secret can't be viewed — only replaced.",
     mapToFhir: {
       webhookHint: "The node before this one is a webhook, so the rows are under body. Set the source path to body.",
+      extractTextHint: "Extract from File is changing this file's values: a number with a comma and a code with leading zeros do not arrive as written. Open that node and turn on 'Read every cell as text'.",
       portOut: "out",
       portHeld: "held",
       form: {

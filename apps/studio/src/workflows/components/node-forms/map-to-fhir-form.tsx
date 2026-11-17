@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { NodeFormProps } from './index';
 import { MapToFhirSheet } from '../map/MapToFhirSheet';
-import { useFeedsFromWebhook } from '../map/useMapHelpers';
+import { useFeedsFromExtractGuessing, useFeedsFromWebhook } from '../map/useMapHelpers';
 
 /** The Map to FHIR node's form: source path, target, allowed forms, and the mapping sheet. */
 export function MapToFhirForm({ node, update }: NodeFormProps) {
@@ -27,6 +27,7 @@ export function MapToFhirForm({ node, update }: NodeFormProps) {
   /** A target the person picked while saved mappings belong to another; it waits for a confirm. */
   const [pendingTarget, setPendingTarget] = useState<string | null>(null);
   const feedsFromWebhook = useFeedsFromWebhook(node.id);
+  const extractGuessing = useFeedsFromExtractGuessing(node.id);
   const mappings = Array.isArray(config.mappings) ? (config.mappings as unknown[]) : [];
   const targetOf = (m: unknown) => (m && typeof m === 'object' ? (m as { targetId?: unknown }).targetId : undefined);
   const otherCount = (id: string) => mappings.filter((m) => targetOf(m) !== id).length;
@@ -98,6 +99,7 @@ export function MapToFhirForm({ node, update }: NodeFormProps) {
           {feedsFromWebhook && String(config.sourcePath ?? '').trim() === '' && (
             <p className="mt-1 text-[11px] leading-snug text-amber-500">{t(`${p}.webhookHint`)}</p>
           )}
+          {extractGuessing && <p className="mt-1 text-[11px] leading-snug text-amber-500">{t(`${p}.extractTextHint`)}</p>}
         </div>
 
         <Label className="whitespace-nowrap">{t(`${p}.form.target`)}</Label>

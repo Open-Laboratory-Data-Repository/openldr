@@ -107,6 +107,18 @@ describe('applyRule: codeList', () => {
   });
 });
 
+describe('applyRule: number, for a CSV cell read as text', () => {
+  it('takes the text 12.5 with a decimal point', async () => {
+    expect(await run({ kind: 'number', decimal: '.' }, '12.5')).toEqual({ ok: true, value: 12.5 });
+  });
+  it('takes the number 12.5', async () => {
+    expect(await run({ kind: 'number', decimal: '.' }, 12.5)).toEqual({ ok: true, value: 12.5 });
+  });
+  it('takes the text 12,5 with a decimal comma', async () => {
+    expect(await run({ kind: 'number', decimal: ',' }, '12,5')).toEqual({ ok: true, value: 12.5 });
+  });
+});
+
 describe('applyRule: split', () => {
   it('takes the last part', async () => {
     expect(await run({ kind: 'split', by: ' ', take: 'last' }, 'BANDA Mary')).toEqual({ ok: true, value: 'Mary' });

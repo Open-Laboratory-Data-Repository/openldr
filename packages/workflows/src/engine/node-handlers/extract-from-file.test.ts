@@ -26,6 +26,18 @@ describe('extractFromFileHandler', () => {
     const result = await extractFromFileHandler(node({ format: 'csv', sourceField: 'file' }), ctx, [{ json: {}, binary: { file: ref('k2') } }]);
     expect(result).toEqual([{ json: { a: 1, b: 'x' } }, { json: { a: 2, b: 'y' } }]);
   });
+  it('with cellsAsText, a CSV cell keeps its leading zeros, decimal comma and date text', async () => {
+    const bytes = new TextEncoder().encode('id,val,dob,d2\n00123,"12,5",1990-04-12,01/12/2024\n');
+    const ctx = fakeCtxWith('k6', bytes);
+    const result = await extractFromFileHandler(node({ format: 'csv', sourceField: 'file', cellsAsText: true }), ctx, [{ json: {}, binary: { file: ref('k6') } }]);
+    expect(result).toEqual([{ json: { id: '00123', val: '12,5', dob: '1990-04-12', d2: '01/12/2024' } }]);
+  });
+  it('without cellsAsText, a CSV cell is read as today (pinned)', async () => {
+    const bytes = new TextEncoder().encode('id,val,dob,d2\n00123,"12,5",1990-04-12,01/12/2024\n');
+    const ctx = fakeCtxWith('k7', bytes);
+    const result = await extractFromFileHandler(node({ format: 'csv', sourceField: 'file' }), ctx, [{ json: {}, binary: { file: ref('k7') } }]);
+    expect(result).toEqual([{ json: { id: 123, val: 125, dob: 32975, d2: 45303 } }]);
+  });
   it('wraps text content under a field', async () => {
     const bytes = new TextEncoder().encode('hello world');
     const ctx = fakeCtxWith('k3', bytes);

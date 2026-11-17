@@ -107,3 +107,20 @@ export function useFeedsFromWebhook(nodeId: string): boolean {
     });
   });
 }
+
+/**
+ * Whether an Extract from File node on this node's incoming edge reads CSV with "Read every cell
+ * as text" off. Then xlsx guesses types, so leading zeros, decimal commas and dates change.
+ */
+export function useFeedsFromExtractGuessing(nodeId: string): boolean {
+  return useWorkflowStore((s) => {
+    const feeders = new Set(s.edges.filter((e) => e.target === nodeId).map((e) => e.source));
+    return s.nodes.some((n) => {
+      if (!feeders.has(n.id)) return false;
+      const d = n.data as { templateId?: unknown; action?: unknown; config?: Record<string, unknown> };
+      if (d.action !== 'extract-from-file' && d.templateId !== 'extract-from-file') return false;
+      const config = d.config ?? {};
+      return config.format === 'csv' && config.cellsAsText !== true;
+    });
+  });
+}

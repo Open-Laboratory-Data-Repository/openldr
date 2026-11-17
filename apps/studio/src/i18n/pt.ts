@@ -2358,6 +2358,7 @@ export const pt: EnShape = {
     secretWriteOnlyHelp: 'Por segurança, um segredo guardado não pode ser visualizado, apenas substituído.',
     mapToFhir: {
       webhookHint: "O nó anterior é um webhook, por isso as linhas estão em body. Defina body como caminho de origem.",
+      extractTextHint: "O nó «Extract from File» está a alterar os valores deste ficheiro: um número com vírgula e um código com zeros à esquerda não chegam como foram escritos. Abra esse nó e ative «Read every cell as text».",
       portOut: "saída",
       portHeld: "retidos",
       form: {

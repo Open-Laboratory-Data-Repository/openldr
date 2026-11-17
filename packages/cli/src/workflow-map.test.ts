@@ -21,6 +21,9 @@ vi.mock('@openldr/bootstrap', async () => {
   };
 });
 import { buildProgram } from './program';
+import { readMapTestRows } from './workflow-map';
+// The CLI does not depend on @openldr/workflows, so Extract from File's reader is read by path.
+import { fileToRows } from '../../workflows/src/engine/node-handlers/file-codecs';
 
 const node = (over: Record<string, unknown> = {}) => ({
   id: 'n1', type: 'action',
@@ -155,5 +158,23 @@ describe('workflows map-test', () => {
     await run('wf-1', 'n1', file('rows.json', '[{"a":"QZX"}]'));
     expect(process.exitCode).toBe(1);
     expect(out + err).not.toContain('QZX');
+  });
+});
+
+describe('a CSV file read by map-test and by Extract from File with Read every cell as text', () => {
+  it('gives the same rows, except that map-test cuts the spaces around a header or a cell', () => {
+    const text = 'id, name ,dec,blank,big,when\n007, QZX 1 ,"12,5",,12345678901234567890,03/11/2026\nQZX-2,QZX 3,12.5,,1,2026-11-03\n';
+    const cli = readMapTestRows(file('rows.csv', text));
+    const node = fileToRows(new TextEncoder().encode(text), { cellsAsText: true });
+    const trimmed = node.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.trim(), String(v).trim()]).filter(([, v]) => v !== '')));
+    expect(cli).toEqual(trimmed);
+    expect(cli[0]).toEqual({ id: '007', name: 'QZX 1', dec: '12,5', big: '12345678901234567890', when: '03/11/2026' });
+    expect(node[0][' name ']).toBe(' QZX 1 ');
+  });
+
+  it('says so in the help', () => {
+    const help = buildProgram().commands.find((c) => c.name() === 'workflows')!.commands.find((c) => c.name() === 'map-test')!.description();
+    expect(help).toContain("A CSV cell is read as text with the spaces around it cut, and a blank cell is left out.");
+    expect(help).toContain("Extract from File with 'Read every cell as text' on gives the same rows but keeps those spaces.");
   });
 });

@@ -98,7 +98,7 @@ export function buildProgram(): Command {
 
   const workflows = program.command('workflows').description('Inspect workflows');
   workflows.command('map-test <workflowId> <nodeId> <file>')
-    .description('Run a Map to FHIR node\'s saved mapping on a .json list or .csv file. Prints counts and reasons, no row values. A CSV cell is text and a blank cell is left out, so a CSV run can differ from the same file read by Extract from File.')
+    .description('Run a Map to FHIR node\'s saved mapping on a .json list or .csv file. Prints counts and reasons, no row values. A CSV cell is read as text with the spaces around it cut, and a blank cell is left out. Extract from File with \'Read every cell as text\' on gives the same rows but keeps those spaces.')
     .option('--json', 'emit the full per-row results, records included', false)
     .action(async (workflowId: string, nodeId: string, file: string, opts: { json: boolean }) => {
       try { process.exitCode = await runWorkflowMapTest(workflowId, nodeId, file, opts); }

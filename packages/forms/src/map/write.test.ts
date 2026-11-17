@@ -44,6 +44,12 @@ describe('writeValue', () => {
     expect(s.type).toEqual({ text: 'blood-x' });
   });
 
+  it('writes the text 12.5 with no rule to a number leaf as a number', () => {
+    const r = rec('Observation');
+    expect(writeValue(r, 'Observation.valueQuantity.value', '12.5')).toEqual({ ok: true });
+    expect(r.valueQuantity).toEqual({ value: 12.5 });
+  });
+
   it('keeps a coding for a Coding leaf and fails a string', () => {
     const r = rec('Observation');
     expect(writeValue(r, 'Observation.code.coding', { system: 'urn:test:codes', code: 'T1' })).toEqual({ ok: true });
