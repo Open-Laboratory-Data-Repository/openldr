@@ -614,6 +614,14 @@ describe('MapToFhirSheet rule suggestions, status and results', () => {
     for (const v of [...MARKERS, ...FORM_EXAMPLES]) expect(text).not.toContain(v);
   });
 
+  it('starts a Number rule picked by hand with the decimal mark the sample shows', async () => {
+    await mapForm();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Result (number)' }), { target: { value: 'number' } });
+    expect((await screen.findByRole('combobox', { name: 'Decimal mark: Result (number)' }) as HTMLSelectElement).value).toBe(',');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Patient ID' }), { target: { value: 'number' } });
+    expect((await screen.findByRole('combobox', { name: 'Decimal mark: Patient ID' }) as HTMLSelectElement).value).toBe('.');
+  });
+
   it('says when day and month cannot be told apart', async () => {
     setRun([{ pid: 'QZX-1', t: 'QZX-2', dob: '03/04/2025' }]);
     renderSheet();

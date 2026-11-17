@@ -68,6 +68,9 @@ La commande se termine avec 0 quand chaque ligne passe, et avec 1 quand une lign
 - Un texte simple dans un champ codé est stocké comme le code propre au laboratoire, sans système. Une règle **Liste de codes** stocke un code standard, et un code choisi dans une règle **Valeurs** est stocké avec son système. La liste de codes du laboratoire demande un système source sur la règle ; sans lui, aucun code ne correspond.
 - La règle **Date** lit une date seule, sans heure.
 - Un nombre entier envoyé sans guillemets et trop long pour être gardé exactement, au-delà de 9 007 199 254 740 991, comme un numéro d'échantillon à 19 chiffres, garde tous ses chiffres : le webhook le lit comme du texte et nomme le champ sous `notes` dans l'entrée du webhook de l'exécution. Un champ texte comme **Numéro d'échantillon** le stocke tel qu'envoyé. **Résultat (nombre)** le refuse et retient la ligne, car un nombre ne peut pas garder autant de chiffres exactement. Demandez à l'émetteur de mettre ces identifiants entre guillemets.
+- Un motif de mise en attente sur une entrée d'une colonne de liste, comme `results.value`, dit laquelle, par exemple `(entry 2 of 4)`. Il ne montre jamais la valeur.
+- Deux résultats d'une ligne avec le même test sont mis en attente, car ils feraient un seul enregistrement de résultat. Le motif nomme les deux entrées de la liste, comme `entries 1 and 3 of 4 in results.code`, ou les deux colonnes. Quand **Date du résultat** n'est pas mappée, il dit de la mapper : deux résultats d'un test avec des dates de résultat différentes restent séparés.
+- Sur **Résultat (nombre)**, un `<`, `<=`, `>=`, `>`, `≤` ou `≥` au début est gardé comme comparateur. `≤` et `≥` sont stockés comme `<=` et `>=`.
 - Le nœud ne lit pas les messages HL7 v2.
 - Les raisons sont en anglais.
 

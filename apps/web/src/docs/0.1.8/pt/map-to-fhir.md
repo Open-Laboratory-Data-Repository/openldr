@@ -68,6 +68,9 @@ O comando termina com 0 quando todas as linhas passam e com 1 quando alguma linh
 - Um texto simples num campo codificado é guardado como o código do próprio laboratório, sem sistema. Uma regra **Lista de códigos** guarda um código padrão, e um código escolhido numa regra **Valores** é guardado com o seu sistema. A lista de códigos do próprio laboratório precisa de um sistema de origem na regra; sem ele, nenhum código corresponde.
 - A regra **Data** lê apenas uma data, sem hora.
 - Um número inteiro enviado sem aspas e demasiado longo para ser guardado exatamente, acima de 9 007 199 254 740 991, como um número de amostra com 19 dígitos, mantém todos os dígitos: o webhook lê-o como texto e nomeia o campo em `notes` na entrada do webhook da execução. Um campo de texto como **Número da amostra** guarda-o tal como foi enviado. **Resultado (número)** recusa-o e retém a linha, porque um número não consegue guardar tantos dígitos exatamente. Peça ao emissor que envie esses identificadores entre aspas.
+- Um motivo de retenção sobre uma entrada de uma coluna de lista, como `results.value`, diz qual, por exemplo `(entry 2 of 4)`. Nunca mostra o valor.
+- Dois resultados de uma linha com o mesmo teste ficam retidos, porque dariam um só registo de resultado. O motivo nomeia as duas entradas da lista, como `entries 1 and 3 of 4 in results.code`, ou as duas colunas. Quando **Data do resultado** não está mapeada, diz para a mapear: dois resultados de um teste com datas de resultado diferentes ficam separados.
+- Em **Resultado (número)**, um `<`, `<=`, `>=`, `>`, `≤` ou `≥` no início fica como comparador. `≤` e `≥` são guardados como `<=` e `>=`.
 - O nó não lê mensagens HL7 v2.
 - Os motivos estão em inglês.
 

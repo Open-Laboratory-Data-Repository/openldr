@@ -71,6 +71,22 @@ export function examplesOf(draft: RowDraft, rows: SampleRow[]): string[] {
   return out;
 }
 
+/** A value with a leading comparator cut off, as the mapping reads a result: `≤0,5` gives `0,5`. */
+function withoutComparator(value: string): string {
+  return value.replace(/^\s*(<=|>=|≤|≥|<|>)\s*/, '');
+}
+
+/**
+ * The decimal mark the sample's values show: a comma when some have a decimal comma and none a
+ * decimal point, a point the other way round, and null with no decimals, both marks, or text.
+ */
+export function decimalMarkOf(examples: string[]): ',' | '.' | null {
+  const numbers = examples.map(withoutComparator);
+  const comma = numbers.some((e) => /^[+-]?\d+,\d+$/.test(e));
+  const point = numbers.some((e) => /^[+-]?\d+\.\d+$/.test(e));
+  return comma === point ? null : comma ? ',' : '.';
+}
+
 /** The most lines an accepted values suggestion opens with. */
 export const MAX_VALUE_LINES = 20;
 
@@ -159,7 +175,7 @@ export function suggestRuleFor(draft: RowDraft, rows: SampleRow[], codes: Set<st
   if (examples.length === 0) return null;
 
   if (leafTypeOf(draft.targetPath) === 'number') {
-    const ok = examples.every((e) => /^[+-]?\d+(,\d+)?$/.test(e)) && examples.some((e) => e.includes(','));
+    const ok = examples.every((e) => /^[+-]?\d+(,\d+)?$/.test(withoutComparator(e))) && decimalMarkOf(examples) === ',';
     return ok ? { kind: 'numberComma', rule: { kind: 'number', decimal: ',' } } : null;
   }
   if (isDateKey(draft.targetPath)) {

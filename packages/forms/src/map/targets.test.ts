@@ -264,7 +264,7 @@ describe('a fully mapped made-up row', () => {
       { targetPath: 'Observation.valueString', from: { fields: ['res_a', 'res_b'] } },
     ];
     const res = await applyMapping({ shapeHash: 'h', fieldNames: Object.keys(wide).sort(), targetId: target.id, rows: perColumn }, target, wide, deps());
-    expect(res).toEqual({ ok: false, reason: 'Test: two Observation records in this row have the same value, so they would share one id', field: 'test' });
+    expect(res).toEqual({ ok: false, reason: 'Test: the same for res_a and res_b, so they would be one Observation record. Map Result date if the source has one, so each gets its own id.', field: 'test' });
   });
 
   it('gives a result with no result date mapped an empty date part', async () => {
@@ -483,7 +483,7 @@ describe('a file with one column per test', () => {
 
   it('fails two columns with the same test, as two results with one id', async () => {
     const res = await applyMapping(mapping(perColumn({ from: { fixedList: ['AMP', 'AMP', 'GEN'] } })), target, wide, deps());
-    expect(res).toEqual({ ok: false, reason: 'Test: two Observation records in this row have the same value, so they would share one id', field: 'Observation.code' });
+    expect(res).toEqual({ ok: false, reason: 'Test: the same for AMP and CIP, so they would be one Observation record. Map Result date if the source has one, so each gets its own id.', field: 'Observation.code' });
   });
 
   it('runs a Code list rule on the test row over each test', async () => {

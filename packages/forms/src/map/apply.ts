@@ -67,6 +67,10 @@ interface ResolvedRow {
   required: boolean;
   /** The source field names, for reasons. */
   sources: string[];
+  /** The source field of each value, by position. */
+  entryFields: string[];
+  /** True when the values are the entries of one list column, so a reason names the entry. */
+  list: boolean;
   /** One entry per value; null where the source is missing or empty. */
   values: (MapValue | null)[];
   /**
@@ -87,7 +91,14 @@ function isEmpty(v: unknown): boolean {
   return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
 }
 
-const COMPARATOR = /^\s*(<=|>=|<|>)\s*([\s\S]*)$/;
+const COMPARATOR = /^\s*(<=|>=|≤|≥|<|>)\s*([\s\S]*)$/;
+/** A comparator written as one character, as FHIR codes it. */
+const COMPARATOR_CODE: Record<string, string> = { '≤': '<=', '≥': '>=' };
+
+/** The entry a reason is about, for a value from a list column: ` (entry 2 of 4)`. */
+function entryOf(index: number, count: number): string {
+  return `entry ${index + 1} of ${count}`;
+}
 
 /** The key of the comparator beside a Quantity's value, or null when FHIR has none there. */
 function comparatorKeyOf(key: string): string | null {
@@ -118,25 +129,27 @@ async function resolveRow(
   const values: (MapValue | null)[] = [];
   const reads = !('fixed' in row.from) && !('fixedList' in row.from) && comparatorKeyOf(row.targetPath) !== null;
   const comparators: (string | null)[] = [];
-  for (const s of sources) {
+  const list = 'field' in row.from && Array.isArray(json[row.from.field]) && sources.length > 1;
+  const at = (i: number) => (list ? ` (${entryOf(i, sources.length)})` : '');
+  for (const [i, s] of sources.entries()) {
     if (isEmpty(s.value)) {
       values.push(null);
       comparators.push(null);
       continue;
     }
     if (typeof s.value !== 'string' && typeof s.value !== 'number' && typeof s.value !== 'boolean') {
-      return { ok: false, reason: `${s.field}: expected a single value, not a list or an object`, field: s.field };
+      return { ok: false, reason: `${s.field}: expected a single value, not a list or an object${at(i)}`, field: s.field };
     }
     let value: string | number | boolean = s.value;
     const m = reads && typeof value === 'string' ? COMPARATOR.exec(value) : null;
-    comparators.push(m ? m[1] : null);
+    comparators.push(m ? (COMPARATOR_CODE[m[1]] ?? m[1]) : null);
     if (m) value = m[2];
     if (!row.rule || 'fixedList' in row.from) {
       values.push(value);
       continue;
     }
     const r = await applyRule(row.rule, value, s.field, deps);
-    if (!r.ok) return r;
+    if (!r.ok) return { ...r, reason: `${r.reason}${at(i)}` };
     values.push(r.value);
   }
   return {
@@ -144,6 +157,8 @@ async function resolveRow(
     label: field?.label ?? row.targetPath,
     required: field?.required ?? false,
     sources: [...new Set(sources.map((s) => s.field))],
+    entryFields: sources.map((s) => s.field),
+    list,
     values,
     fixed: 'fixed' in row.from || 'fixedList' in row.from,
     ...(comparators.some((c) => c !== null) ? { comparators } : {}),
@@ -310,12 +325,15 @@ export async function applyMapping(
         if (r.required) return missing(r.row.targetPath, r.label);
         continue;
       }
+      // A writer reason names the target path; for a list entry, add the column and the entry.
+      const where = (f: Failure): Failure =>
+        r.list && r.values.length > 1 ? { ...f, reason: `${f.reason} (${r.sources[0]}, ${entryOf(index, r.values.length)})` } : f;
       const f = write(resource, r.row.targetPath, value);
-      if (f) return f;
+      if (f) return where(f);
       const comparator = r.comparators?.[r.values.length === 1 ? 0 : index];
       if (comparator) {
         const c = write(resource, comparatorKeyOf(r.row.targetPath)!, comparator);
-        if (c) return c;
+        if (c) return where(c);
       }
     }
     // A unit, system or code describes a number. With no number in this row, there is nothing to
@@ -366,7 +384,8 @@ export async function applyMapping(
       const key = unpaired.row.targetPath;
       return { ok: false, reason: `${key}: a list of fixed values needs a field of the same record that reads as many columns`, field: key };
     }
-    const taken = new Set<string>();
+    // Each id made so far, with the position that made it.
+    const taken = new Map<string, number>();
     for (let i = 0; i < n; i++) {
       if (multi.length > 0 && multi.every((r) => r.values[i] === null)) continue;
       for (const r of rows) {
@@ -380,15 +399,29 @@ export async function applyMapping(
       }
       const got = await idFor(record.type, i);
       if ('ok' in got) return got;
-      if (taken.has(got.id)) {
+      const first = taken.get(got.id);
+      if (first !== undefined) {
         // Name the source field of the first id part that changes from record to record.
         const key = got.parts.find((p): p is { field: string } => 'field' in p && (rowOf.get(p.field)?.values.length ?? 0) > 1)?.field
           ?? got.parts.find((p): p is { field: string } => 'field' in p)?.field ?? record.type;
         const r = rowOf.get(key);
-        const field = r ? (r.sources[i] ?? r.sources[0]) : key;
-        return { ok: false, reason: `${labelOf(key)}: two ${record.type} records in this row have the same value, so they would share one id`, field };
+        const field = r ? (r.entryFields[i] ?? r.entryFields[0]) : key;
+        // Which two entries or columns, by position or by name, never by value. A key that is one
+        // value or a fixed list names the data columns that made the two records.
+        const by = r && !r.fixed && r.values.length > 1 ? r : multi[0];
+        const which = !by
+          ? `two ${record.type} records in this row`
+          : by.list
+            ? `entries ${first + 1} and ${i + 1} of ${by.values.length} in ${by.sources[0]}`
+            : `${by.entryFields[first]} and ${by.entryFields[i]}`;
+        // An optional identity field that is not mapped would tell them apart, such as a result date.
+        const unmapped = (identityOf.get(record.type)?.parts ?? [])
+          .filter((p): p is { field: string; optional?: boolean } => 'field' in p && p.optional === true && !rowOf.has(p.field))
+          .map((p) => labelOf(p.field));
+        const hint = unmapped.length > 0 ? ` Map ${unmapped.join(' or ')} if the source has one, so each gets its own id.` : '';
+        return { ok: false, reason: `${labelOf(key)}: the same for ${which}, so they would be one ${record.type} record.${hint}`, field };
       }
-      taken.add(got.id);
+      taken.set(got.id, i);
       const resource: Resource = { resourceType: record.type, id: got.id };
       const f = fill(resource, rows, i);
       if (f) return f;

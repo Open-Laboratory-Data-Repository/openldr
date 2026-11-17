@@ -635,3 +635,85 @@ describe('a blank result gives no result record', () => {
     expect(typesOf(res)).toEqual(['Patient', 'Specimen', 'ServiceRequest', 'Observation', 'Observation']);
   });
 });
+
+describe('chunk 2: comparators written as one character, and list entries in reasons', () => {
+  const listRows = (rule?: FieldMapping['rule']): FieldMapping[] => [
+    ...baseRows,
+    { targetPath: 'Observation.code', from: { field: 'tests' } },
+    { targetPath: 'Observation.valueQuantity.value', from: { field: 'results' }, ...(rule ? { rule } : {}) },
+  ];
+
+  it('reads ≤ and ≥ as <= and >=, and stores the FHIR comparator', async () => {
+    const cases: [string, string, number][] = [['≤0,5', '<=', 0.5], ['≥ 12,5', '>=', 12.5]];
+    for (const [cell, comparator, value] of cases) {
+      const res = await applyMapping(mapping([...baseRows, {
+        targetPath: 'Observation.valueQuantity.value', from: { field: 'result_a' }, rule: { kind: 'number', decimal: ',' },
+      }]), target, { ...row, result_a: cell }, deps());
+      if (!res.ok) throw new Error(res.reason);
+      const obs = res.resources.find((r) => r.resourceType === 'Observation') as Observation;
+      expect(obs.valueQuantity).toEqual({ comparator, value });
+    }
+  });
+
+  it('names the list entry a rule refuses, and never its value', async () => {
+    const res = await applyMapping(mapping(listRows({ kind: 'number', decimal: '.' })), target,
+      { ...row, tests: ['T1', 'T2', 'T3'], results: ['1', 'QZX7', '3'] }, deps());
+    expect(res).toMatchObject({ ok: false, field: 'results' });
+    if (res.ok) return;
+    expect(res.reason).toBe('results: expected a number with a point as the decimal mark (entry 2 of 3)');
+  });
+
+  it('names the list entry that is not a single value', async () => {
+    const res = await applyMapping(mapping(listRows()), target,
+      { ...row, tests: ['T1', 'T2'], results: ['1', ['QZX7']] }, deps());
+    expect(res).toMatchObject({ ok: false, field: 'results' });
+    if (!res.ok) expect(res.reason).toBe('results: expected a single value, not a list or an object (entry 2 of 2)');
+  });
+
+  it('names the column and the entry when the writer refuses a list entry', async () => {
+    const res = await applyMapping(mapping(listRows()), target,
+      { ...row, tests: ['T1', 'T2', 'T3'], results: ['1', '2', '>'] }, deps());
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.reason).toMatch(/^Observation\.valueQuantity\.value .* \(results, entry 3 of 3\)$/);
+    expect(res.reason).not.toContain('>');
+  });
+
+  it('keeps a one-column reason as it was', async () => {
+    const res = await applyMapping(mapping([...baseRows, {
+      targetPath: 'Observation.valueQuantity.value', from: { field: 'result_a' }, rule: { kind: 'number', decimal: '.' },
+    }]), target, { ...row, result_a: 'QZX7' }, deps());
+    if (!res.ok) expect(res.reason).toBe('result_a: expected a number with a point as the decimal mark');
+    else throw new Error('expected a failure');
+  });
+
+  // The target's own optional identity part tells two results of one test apart.
+  const dated: MapTarget = {
+    ...target,
+    fields: [...target.fields, { path: 'Observation.effectiveDateTime', label: 'Result date', required: false, repeats: true, valueSet: null }],
+    identity: target.identity.map((i) => i.record === 'Observation'
+      ? { ...i, parts: [...i.parts, { field: 'Observation.effectiveDateTime', optional: true }] }
+      : i),
+  };
+
+  it('names the two list entries that give one result, and the field that would tell them apart', async () => {
+    const res = await applyMapping(mapping(listRows()), dated,
+      { ...row, tests: ['T1', 'T2', 'T1'], results: ['1', '2', '3'] }, deps());
+    expect(res).toMatchObject({ ok: false, field: 'tests' });
+    if (res.ok) return;
+    expect(res.reason).toBe(
+      'Test: the same for entries 1 and 3 of 3 in tests, so they would be one Observation record. Map Result date if the source has one, so each gets its own id.',
+    );
+  });
+
+  it('names two columns that give one result, and gives no hint once the date is mapped', async () => {
+    const twoCols: FieldMapping[] = [
+      { targetPath: 'Observation.code', from: { fields: ['test_a', 'test_b'] } },
+      { targetPath: 'Observation.valueQuantity.value', from: { fields: ['result_a', 'result_b'] }, rule: { kind: 'number', decimal: ',' } },
+      { targetPath: 'Observation.effectiveDateTime', from: { fixed: '2026-11-17' } },
+    ];
+    const res = await applyMapping(mapping([...baseRows, ...twoCols]), dated, { ...row, test_b: 'TA' }, deps());
+    expect(res).toMatchObject({ ok: false, field: 'test_b' });
+    if (!res.ok) expect(res.reason).toBe('Test: the same for test_a and test_b, so they would be one Observation record.');
+  });
+});

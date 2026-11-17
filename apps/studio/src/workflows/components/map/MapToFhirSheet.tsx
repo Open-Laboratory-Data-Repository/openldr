@@ -18,7 +18,7 @@ import { TestResults, type TestState } from './TestResults';
 import { classify, type SavedMapping } from '@openldr/forms/pure';
 import { buildMapping, columnTestPlans, hasSource, narrowerCount, testFieldsOf, unusedFields, withMapping, type BuildResult, type RowDraft, type RuleDraft } from './rows';
 import { useCodeLists, useCodeSets, useFeedsFromWebhook, useSuggestions } from './useMapHelpers';
-import { codeListUrlOf, fhirListCodes, suggestRuleFor, valueLinesFor, type RuleSuggestion } from './ruleSuggest';
+import { codeListUrlOf, decimalMarkOf, examplesOf, fhirListCodes, suggestRuleFor, valueLinesFor, type RuleSuggestion } from './ruleSuggest';
 import { useMappingDraft } from './useMappingDraft';
 import { useSamples } from './useSamples';
 
@@ -97,6 +97,11 @@ export function MapToFhirSheet({
     const pairs = accepted ? lines.map(({ suggested: _s, ...p }) => p) : lines;
     return { kind: 'values', pairs: pairs.length > 0 ? pairs : [{ from: '', to: '' }] };
   };
+  /** A Number rule picked by hand takes the decimal mark the sample shows, and a point without one. */
+  const numberRuleFor = (d: RowDraft): RuleDraft => ({
+    kind: 'number',
+    decimal: (columns ? decimalMarkOf(examplesOf(d, columns.rows)) : null) ?? '.',
+  });
   const testFields = target ? testFieldsOf(target) : [];
   const plans = columnTestPlans(drafts, testFields);
 
@@ -297,7 +302,7 @@ export function MapToFhirSheet({
               }
               rule={
                 <div className="flex min-w-0 flex-col gap-1">
-                  <RuleKindSelect rule={d.rule} label={d.label} onChange={(rule) => edit(i, { rule: rule.kind === 'values' ? valuesRuleFor(d, false) : rule })} />
+                  <RuleKindSelect rule={d.rule} label={d.label} onChange={(rule) => edit(i, { rule: rule.kind === 'values' ? valuesRuleFor(d, false) : rule.kind === 'number' ? numberRuleFor(d) : rule })} />
                   {(() => {
                     // A test set per column takes no suggestion from a column it does not read.
                     const rs = asTest ? null : ruleSuggestionOf(d);

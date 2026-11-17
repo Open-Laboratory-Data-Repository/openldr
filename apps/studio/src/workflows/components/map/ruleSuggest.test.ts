@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { codeNamedBy, dateFormatOf, isDateKey, looksLikeExcelDates, suggestRuleFor, codeListUrlOf } from './ruleSuggest';
+import { codeNamedBy, dateFormatOf, decimalMarkOf, isDateKey, looksLikeExcelDates, suggestRuleFor, codeListUrlOf } from './ruleSuggest';
 import type { RowDraft } from './rows';
 
 const draft = (targetPath: string, field = 'c', extra: Partial<RowDraft> = {}): RowDraft => ({
@@ -92,5 +92,26 @@ describe('codeNamedBy', () => {
   it('never matches part of a display', () => {
     expect(codeNamedBy('Blo', codes)).toBeNull();
     expect(codeNamedBy('serum', codes)).toBeNull();
+  });
+});
+
+describe('decimalMarkOf', () => {
+  it('gives a comma when only comma decimals appear, past a leading comparator', () => {
+    expect(decimalMarkOf(['7,25', '3', '≤0,5', '>= 1,5'])).toBe(',');
+  });
+  it('gives a point when only point decimals appear', () => {
+    expect(decimalMarkOf(['7.25', '3', '<0.5'])).toBe('.');
+  });
+  it('gives null with no decimals, with both marks, or with text', () => {
+    expect(decimalMarkOf(['3', '12'])).toBeNull();
+    expect(decimalMarkOf(['7,25', '7.25'])).toBeNull();
+    expect(decimalMarkOf(['1:320', 'positive'])).toBeNull();
+    expect(decimalMarkOf([])).toBeNull();
+  });
+});
+
+describe('suggestRuleFor with a comparator', () => {
+  it('suggests a decimal comma when the values start with ≤ or >', () => {
+    expect(suggestRuleFor(draft('Observation.valueQuantity.value'), rows('≤0,5', '>12,5'), null)).toMatchObject({ kind: 'numberComma' });
   });
 });
