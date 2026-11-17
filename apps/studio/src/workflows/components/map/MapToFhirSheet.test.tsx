@@ -16,6 +16,7 @@ vi.mock('@/api', async (orig) => ({
   fetchWorkflowRun: vi.fn(),
   findValueSetByUrl: vi.fn(),
   storedValueSetCodes: vi.fn(),
+  expandValueSetByUrl: vi.fn(),
 }));
 
 const m = <T,>(f: T) => f as unknown as ReturnType<typeof vi.fn>;
@@ -54,6 +55,7 @@ beforeEach(() => {
   m(api.suggestMapping).mockResolvedValue([]);
   m(api.testMapping).mockResolvedValue([]);
   m(api.fetchMapCodeLists).mockResolvedValue([]);
+  m(api.expandValueSetByUrl).mockResolvedValue([]);
 });
 
 describe('MapToFhirSheet', () => {
@@ -77,8 +79,10 @@ describe('MapToFhirSheet', () => {
     const { update } = renderSheet({ targetId: 'test-target', mappings: [narrow, wide, other] });
     await waitFor(() => expect(sourceSelect('Test').value).toBe('test_a'));
     expect(screen.getByTestId('map-no-sample')).toHaveTextContent('Save the workflow first');
-    // Every column is marked as not in a sample, and no example shows.
-    expect([...sourceSelect('Sex').options].map((o) => o.textContent)).toContain('zz_ward (not in this sample)');
+    // With no sample loaded, no column is marked as missing from one, and no example shows.
+    const names = [...sourceSelect('Sex').options].map((o) => o.textContent);
+    expect(names).toContain('zz_ward');
+    expect(names.some((x) => x?.includes('not in this sample'))).toBe(false);
     const pick = screen.getByRole('combobox', { name: 'Saved mapping' }) as HTMLSelectElement;
     expect([...pick.options].map((o) => o.textContent).filter((x) => x !== '-')).toEqual(['pat_no, test_a, zz_ward', 'pat_no']);
     fireEvent.change(sourceSelect('Sex'), { target: { value: 'zz_ward' } });
@@ -213,7 +217,8 @@ describe('MapToFhirSheet', () => {
     await screen.findByTestId('map-row-Patient.identifier.value');
     fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
     fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Add another column: Test' }), { target: { value: 'test_b' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add another column: Test' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'test_b' }));
     openMenuAndClick('Save');
     const row = update.mock.calls[0][0].config.mappings[0].rows.find((r: { targetPath: string }) => r.targetPath === 'Observation.code');
     expect(row.from).toEqual({ fields: ['test_a', 'test_b'] });
@@ -505,7 +510,8 @@ describe('MapToFhirSheet rule suggestions, status and results', () => {
     openMenuAndClick('Save');
     const config = update.mock.calls[0][0].config;
     const gender = config.mappings[0].rows.find((r: { targetPath: string }) => r.targetPath === 'Patient.gender');
-    expect(gender.rule).toEqual({ kind: 'values', map: { 'QZX-2': 'female' } });
+    // The code is saved with its system, so a coded field keeps it.
+    expect(gender.rule).toEqual({ kind: 'values', map: { 'QZX-2': { system: 'urn:test:sys', code: 'female' } } });
     expect(JSON.stringify(config)).not.toContain('QZX-5');
   });
 
@@ -689,14 +695,16 @@ describe('MapToFhirSheet fix round 1', () => {
     fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
     fireEvent.change(sourceSelect('Sex'), { target: { value: 'sex' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Sex' }), { target: { value: 'values' } });
-    // The codes load first, so the inputs show after the loader.
-    fireEvent.change(await screen.findByRole('textbox', { name: 'From 1: Sex' }), { target: { value: 'm' } });
+    // The codes load first, so the inputs show after the loader. The lines open on the sample's values.
+    const from1 = (await screen.findByRole('textbox', { name: 'From 1: Sex' })) as HTMLInputElement;
+    expect(from1.value).toBe('QZX-2');
+    fireEvent.change(from1, { target: { value: 'm' } });
     const to = (await screen.findByRole('combobox', { name: 'To 1: Sex' })) as HTMLSelectElement;
     expect([...to.options].map((o) => o.value)).toEqual(['', 'urn:test:a|male', 'urn:test:b|male']);
     fireEvent.change(to, { target: { value: 'urn:test:b|male' } });
     openMenuAndClick('Save');
     const row = update.mock.calls[0][0].config.mappings[0].rows.find((r: { targetPath: string }) => r.targetPath === 'Patient.gender');
-    expect(row.rule).toEqual({ kind: 'values', map: { m: 'male' } });
+    expect(row.rule).toEqual({ kind: 'values', map: { m: { system: 'urn:test:b', code: 'male' } } });
   });
 });
 
@@ -768,3 +776,175 @@ describe('MapToFhirSheet fix round 2', () => {
   });
 });
 
+
+describe('MapToFhirSheet one column per test', () => {
+  const ROWS_WIDE = [
+    { pid: 'QZX-1', AMP: 'QZX-2', CIP: 'QZX-3', GEN: 'QZX-4' },
+    { pid: 'QZX-5', AMP: 'QZX-6', GEN: 'QZX-2' },
+  ];
+  const rowsOf = (update: ReturnType<typeof vi.fn>) => update.mock.calls[0][0].config.mappings[0].rows as { targetPath: string; from: unknown }[];
+  const testInput = (column: string) => screen.getByRole('textbox', { name: `Test: ${column}` }) as HTMLInputElement;
+
+  async function addThree() {
+    setRun(ROWS_WIDE);
+    const ui = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pid' } });
+    fireEvent.change(sourceSelect('Result (text)'), { target: { value: 'AMP' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add another column: Result (text)' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'CIP' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'GEN' }));
+    return ui;
+  }
+
+  it('shows a test input per column, filled with the column name, and the test row says it is set per column', async () => {
+    await addThree();
+    expect(['AMP', 'CIP', 'GEN'].map((c) => testInput(c).value)).toEqual(['AMP', 'CIP', 'GEN']);
+    expect(screen.getByTestId('map-per-column-Observation.code')).toHaveTextContent('Set for each column on Result (text)');
+    expect(screen.queryByRole('combobox', { name: 'From your data: Test' })).toBeNull();
+    // The example is the first column's.
+    expect(within(screen.getByTestId('map-row-Observation.valueString')).getByText('QZX-2')).toBeInTheDocument();
+  });
+
+  it('saves the columns and their tests as two rows in the same order, with the typed test, and no sample value', async () => {
+    const { update } = await addThree();
+    fireEvent.change(testInput('CIP'), { target: { value: 'typed-test' } });
+    openMenuAndClick('Save');
+    const rows = rowsOf(update);
+    expect(rows.find((r) => r.targetPath === 'Observation.valueString')!.from).toEqual({ fields: ['AMP', 'CIP', 'GEN'] });
+    expect(rows.find((r) => r.targetPath === 'Observation.code')!.from).toEqual({ fixedList: ['AMP', 'typed-test', 'GEN'] });
+    const text = JSON.stringify(update.mock.calls[0][0].config);
+    for (const v of MARKERS) expect(text).not.toContain(v);
+  });
+
+  it('sends the two rows to Test', async () => {
+    await addThree();
+    openMenuAndClick('Test');
+    await screen.findByTestId('map-test-footer');
+    const sent = m(api.testMapping).mock.calls[0][0].config.mappings[0].rows;
+    expect(sent.find((r: { targetPath: string }) => r.targetPath === 'Observation.code').from).toEqual({ fixedList: ['AMP', 'CIP', 'GEN'] });
+  });
+
+  it('refuses Save while two columns have the same test, or a test is empty, naming the columns', async () => {
+    const { update } = await addThree();
+    fireEvent.change(testInput('GEN'), { target: { value: ' AMP ' } });
+    openMenuAndClick('Save');
+    expect(screen.getByRole('alert')).toHaveTextContent('These columns have the same test: AMP, GEN. Give each column its own test.');
+    fireEvent.change(testInput('GEN'), { target: { value: '  ' } });
+    openMenuAndClick('Save');
+    expect(screen.getByRole('alert')).toHaveTextContent('Each column needs a test. Fill in the test for GEN.');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('opens a saved mapping with its columns and their tests', async () => {
+    setRun(ROWS_WIDE);
+    const saved = {
+      shapeHash: 'w', fieldNames: ['AMP', 'CIP', 'GEN', 'pid'], targetId: 'test-target',
+      rows: [
+        { targetPath: 'Patient.identifier.value', from: { field: 'pid' } },
+        { targetPath: 'Observation.code', from: { fixedList: ['amp-t', 'cip-t', 'gen-t'] } },
+        { targetPath: 'Observation.valueString', from: { fields: ['AMP', 'CIP', 'GEN'] } },
+      ],
+    };
+    renderSheet({ targetId: 'test-target', mappings: [saved] });
+    await waitFor(() => expect(testInput('AMP').value).toBe('amp-t'));
+    expect(testInput('CIP').value).toBe('cip-t');
+    expect(testInput('GEN').value).toBe('gen-t');
+    expect(screen.getByTestId('map-per-column-Observation.code')).toBeInTheDocument();
+  });
+
+  it('makes the test row an ordinary row again when the columns go back to one', async () => {
+    await addThree();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove CIP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove GEN' }));
+    expect(screen.queryByTestId('map-per-column-Observation.code')).toBeNull();
+    expect(sourceSelect('Test')).toBeInTheDocument();
+  });
+
+  it('filters the columns and selects every one shown', async () => {
+    setRun([{ pid: 'QZX-1', AMP: 'QZX-2', AMX: 'QZX-3', GEN: 'QZX-4' }]);
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Result (text)'), { target: { value: 'GEN' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add another column: Result (text)' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Filter columns: Result (text)' }), { target: { value: 'am' } });
+    expect(screen.queryByRole('checkbox', { name: 'pid' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Select all shown' }));
+    expect(['GEN', 'AMP', 'AMX'].map((c) => testInput(c).value)).toEqual(['GEN', 'AMP', 'AMX']);
+  });
+
+  it('refuses Save when a second result field has another number of columns', async () => {
+    const { update } = await addThree();
+    fireEvent.change(sourceSelect('Result (number)'), { target: { value: 'AMP' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add another column: Result (number)' }));
+    fireEvent.click(within(screen.getByTestId('map-column-picker-Result (number)')).getByRole('checkbox', { name: 'CIP' }));
+    expect(screen.getByText('Each column takes the test on the same line of Result (text).')).toBeInTheDocument();
+    openMenuAndClick('Save');
+    expect(screen.getByRole('alert')).toHaveTextContent('Result (number) has 2 columns and Result (text) has 3.');
+    expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe('MapToFhirSheet Excel dates and coded values', () => {
+  it('suggests the Excel date rule for day numbers, and saves it once accepted', async () => {
+    setRun([{ pid: 'QZX-1', t: 'QZX-2', dob: '45000' }, { pid: 'QZX-3', t: 'QZX-4', dob: 45001.5 }]);
+    const { update } = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pid' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 't' } });
+    fireEvent.change(sourceSelect('Date of birth'), { target: { value: 'dob' } });
+    expect(screen.getByTestId('map-rule-suggestion-Patient.birthDate')).toHaveTextContent('Suggested rule: date, Excel date cell');
+    fireEvent.click(screen.getByRole('button', { name: 'Accept: Rule: Date of birth' }));
+    expect((screen.getByRole('combobox', { name: 'Date is: Date of birth' }) as HTMLSelectElement).value).toBe('excel');
+    expect(screen.queryByRole('textbox', { name: 'Format: Date of birth' })).toBeNull();
+    openMenuAndClick('Save');
+    const rows = update.mock.calls[0][0].config.mappings[0].rows;
+    expect(rows.find((r: { targetPath: string }) => r.targetPath === 'Patient.birthDate').rule).toEqual({ kind: 'date', format: 'excel' });
+  });
+
+  it('switches the date rule between a written date, with a format, and an Excel date cell, without one', async () => {
+    setRun([{ pid: 'QZX-1', dob: 'QZX-2' }]);
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Date of birth'), { target: { value: 'dob' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Date of birth' }), { target: { value: 'date' } });
+    expect((screen.getByRole('combobox', { name: 'Date is: Date of birth' }) as HTMLSelectElement).value).toBe('written');
+    expect(screen.getByRole('textbox', { name: 'Format: Date of birth' })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Date is: Date of birth' }), { target: { value: 'excel' } });
+    expect(screen.queryByRole('textbox', { name: 'Format: Date of birth' })).toBeNull();
+  });
+
+  it('gives Sex its FHIR list: the sample values on From, a code picker on To, and the code a value names picked', async () => {
+    // Sex has no value set of its own. Its FHIR binding takes a whole code system, so nothing is
+    // stored and the codes come from the live expansion, as the forms read them.
+    m(api.findValueSetByUrl).mockImplementation(async (url: string) => ({ id: 'vs-g', url }));
+    m(api.storedValueSetCodes).mockResolvedValue([]);
+    m(api.expandValueSetByUrl).mockResolvedValue([
+      { system: 'urn:test:g', code: 'female', display: 'Female' },
+      { system: 'urn:test:g', code: 'male', display: 'Male' },
+    ]);
+    setRun([
+      { pid: 'QZX-1', t: 'QZX-2', sx: 'QZX-F' },
+      { pid: 'QZX-3', t: 'QZX-4', sx: ' MALE ' },
+      { pid: 'QZX-5', t: 'QZX-6', sx: 'Fem' },
+    ]);
+    const { update } = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pid' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 't' } });
+    fireEvent.change(sourceSelect('Sex'), { target: { value: 'sx' } });
+    await screen.findByTestId('map-rule-suggestion-Patient.gender');
+    fireEvent.click(screen.getByRole('button', { name: 'Accept: Rule: Sex' }));
+    expect((await screen.findByRole('textbox', { name: 'From 1: Sex' }) as HTMLInputElement).value).toBe('QZX-F');
+    expect((screen.getByRole('textbox', { name: 'From 2: Sex' }) as HTMLInputElement).value).toBe('MALE');
+    // A value equal to a code's display, ignoring case and spaces, has that code picked. Part of a
+    // display is no match.
+    expect((await screen.findByRole('combobox', { name: 'To 1: Sex' }) as HTMLSelectElement).value).toBe('');
+    expect((screen.getByRole('combobox', { name: 'To 2: Sex' }) as HTMLSelectElement).value).toBe('urn:test:g|male');
+    expect((screen.getByRole('combobox', { name: 'To 3: Sex' }) as HTMLSelectElement).value).toBe('');
+    openMenuAndClick('Save');
+    const gender = update.mock.calls[0][0].config.mappings[0].rows.find((r: { targetPath: string }) => r.targetPath === 'Patient.gender');
+    expect(gender.rule).toEqual({ kind: 'values', map: { MALE: { system: 'urn:test:g', code: 'male' } } });
+    expect(JSON.stringify(update.mock.calls[0][0].config)).not.toContain('QZX-F');
+  });
+});

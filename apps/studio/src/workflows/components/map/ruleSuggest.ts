@@ -1,6 +1,7 @@
 import { lookupBinding, lookupFhirPath } from '@openldr/fhir/paths';
-import { parseTargetPath } from '@openldr/forms/pure';
-import { hasSource, type RowDraft, type RuleDraft, type SampleRow } from './rows';
+import { EXCEL_DATE_FORMAT, parseTargetPath } from '@openldr/forms/pure';
+import type { ExpandedCode } from '@/api';
+import { hasSource, type RowDraft, type RuleDraft, type SampleRow, type ValuePair } from './rows';
 
 /**
  * A rule to suggest for a row, worked out from the form of the sample's values only: digits and
@@ -10,6 +11,7 @@ import { hasSource, type RowDraft, type RuleDraft, type SampleRow } from './rows
 export type RuleSuggestion =
   | { kind: 'numberComma'; rule: RuleDraft }
   | { kind: 'date'; format: string; dayFirstGuess: boolean; rule: RuleDraft }
+  | { kind: 'dateExcel'; rule: RuleDraft }
   | { kind: 'values'; rule: RuleDraft };
 
 /** The FHIR table path of a target key: pinned values and list indexes dropped. */
@@ -59,12 +61,37 @@ export function examplesOf(draft: RowDraft, rows: SampleRow[]): string[] {
 export const MAX_VALUE_LINES = 20;
 
 /**
- * The lines an accepted values suggestion opens with: one per distinct sample value on the From
- * side, at most `MAX_VALUE_LINES`, and an empty To side. They live on screen only: a line is saved
- * once its To side is filled, so an untouched sample value never reaches the config.
+ * The code a sample value names: the one code whose code or display equals it, ignoring case and
+ * the spaces around it. Never a match on part of a display. Null for none, or for more than one.
  */
-export function valueLinesFor(draft: RowDraft, rows: SampleRow[]): { from: string; to: string }[] {
-  return [...new Set(examplesOf(draft, rows))].slice(0, MAX_VALUE_LINES).map((from) => ({ from, to: '' }));
+export function codeNamedBy(value: string, codes: ExpandedCode[]): ExpandedCode | null {
+  const v = value.trim().toLowerCase();
+  const hits = codes.filter((c) => c.code.trim().toLowerCase() === v || (c.display ?? '').trim().toLowerCase() === v);
+  return hits.length === 1 ? hits[0] : null;
+}
+
+/**
+ * The lines an accepted values suggestion opens with: one per distinct sample value on the From
+ * side, at most `MAX_VALUE_LINES`. The To side holds the code the value names, when one does, and
+ * is empty otherwise. They live on screen only: a line is saved once its To side is filled, so an
+ * untouched sample value never reaches the config.
+ */
+export function valueLinesFor(draft: RowDraft, rows: SampleRow[], codes: ExpandedCode[] | null = null): ValuePair[] {
+  return [...new Set(examplesOf(draft, rows))].slice(0, MAX_VALUE_LINES).map((from) => {
+    const hit = codes ? codeNamedBy(from, codes) : null;
+    return hit ? { from, to: hit.code, ...(hit.system ? { system: hit.system } : {}) } : { from, to: '' };
+  });
+}
+
+const DAY_MS = 86_400_000;
+/** The Excel 1900-system day number of a date from 1 March 1900 on. */
+const excelSerial = (y: number, m: number, d: number) => (Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / DAY_MS;
+const EXCEL_FROM = excelSerial(1950, 1, 1);
+const EXCEL_TO = excelSerial(2100, 1, 1);
+
+/** Whether every example is a plain number between the Excel day numbers of 1950-01-01 and 2100-01-01. */
+export function looksLikeExcelDates(examples: string[]): boolean {
+  return examples.length > 0 && examples.every((e) => /^\d+(?:\.\d+)?$/.test(e) && Number(e) >= EXCEL_FROM && Number(e) <= EXCEL_TO);
 }
 
 const DATE_RE = /^(\d{1,4})([/.-])(\d{1,2})([/.-])(\d{1,4})$/;
@@ -122,6 +149,7 @@ export function suggestRuleFor(draft: RowDraft, rows: SampleRow[], codes: Set<st
     return ok ? { kind: 'numberComma', rule: { kind: 'number', decimal: ',' } } : null;
   }
   if (isDateKey(draft.targetPath)) {
+    if (looksLikeExcelDates(examples)) return { kind: 'dateExcel', rule: { kind: 'date', format: EXCEL_DATE_FORMAT } };
     const d = dateFormatOf(examples);
     return d ? { kind: 'date', format: d.format, dayFirstGuess: d.dayFirstGuess, rule: { kind: 'date', format: d.format } } : null;
   }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { fetchMapCodeLists, findValueSetByUrl, storedValueSetCodes, suggestMapping } from '@/api';
+import { expandValueSetByUrl, fetchMapCodeLists, findValueSetByUrl, storedValueSetCodes, suggestMapping, type ExpandedCode } from '@/api';
 import { hasSource, type RowDraft } from './rows';
 import { useWorkflowStore } from '../../hooks/use-workflow-store';
 import type { CodeListsState } from './RuleEditor';
@@ -66,11 +66,25 @@ export function useCodeLists(needed: boolean): CodeListsState {
 }
 
 /**
- * The codes of each value set URL, for rule suggestions: a Set once loaded, null while loading or
- * when the install does not hold that value set. Each URL is loaded once per sheet.
+ * The codes of a value set by URL: its stored codes, else its live expansion, as the forms read a
+ * FHIR list such as Sex that takes a whole code system and so keeps no stored codes. Null when
+ * the install holds no such set and the expansion gives none.
  */
-export function useCodeSets(urls: string[]): Record<string, Set<string> | null> {
-  const [sets, setSets] = useState<Record<string, Set<string> | null>>({});
+export async function loadValueSetCodes(url: string): Promise<ExpandedCode[] | null> {
+  const held = await findValueSetByUrl(url);
+  const stored = held ? await storedValueSetCodes(held.id) : [];
+  if (stored.length > 0) return stored;
+  const live = await expandValueSetByUrl(url).catch(() => [] as ExpandedCode[]);
+  if (live.length > 0) return live;
+  return held ? [] : null;
+}
+
+/**
+ * The codes of each value set URL, for rule suggestions and their lines: the list once loaded,
+ * null while loading or when the install has no codes for it. Each URL is loaded once per sheet.
+ */
+export function useCodeSets(urls: string[]): Record<string, ExpandedCode[] | null> {
+  const [sets, setSets] = useState<Record<string, ExpandedCode[] | null>>({});
   const started = useRef(new Set<string>());
   const mounted = useRef(true);
   useEffect(() => {
@@ -84,11 +98,9 @@ export function useCodeSets(urls: string[]): Record<string, Set<string> | null> 
     for (const url of key ? key.split('\n') : []) {
       if (started.current.has(url)) continue;
       started.current.add(url);
-      (async () => {
-        const held = await findValueSetByUrl(url);
-        const codes = held ? await storedValueSetCodes(held.id) : null;
-        if (mounted.current) setSets((s) => ({ ...s, [url]: codes ? new Set(codes.map((c) => c.code)) : null }));
-      })().catch(() => {
+      loadValueSetCodes(url).then((codes) => {
+        if (mounted.current) setSets((s) => ({ ...s, [url]: codes }));
+      }).catch(() => {
         if (mounted.current) setSets((s) => ({ ...s, [url]: null }));
       });
     }

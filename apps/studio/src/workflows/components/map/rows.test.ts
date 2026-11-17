@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildMapping, columnSet, draftsFor, exampleFor, exampleText, ruleOf, rowsFromItems, sampleFromItems, savedMappingFor, withMapping, MAX_SAMPLE_ROWS } from './rows';
+import { buildMapping, columnSet, draftsFor, exampleFor, exampleText, ruleOf, rowsFromItems, sampleFromItems, savedMappingFor, testFieldsOf, withMapping, MAX_SAMPLE_ROWS } from './rows';
 import { shapeOf } from '@openldr/forms/pure';
 import { TEST_TARGET, ROWS_A, ROWS_B, asItems } from './test-fixtures';
 
@@ -146,5 +146,22 @@ describe('withMapping', () => {
     const wide = { shapeHash: 'w', fieldNames: ['x', 'y'], targetId: 't', rows: [] };
     expect(withMapping([narrow, overlap], wide)).toEqual([overlap, wide]);
     expect(narrowerCount([narrow, overlap, wide], ['x', 'y'])).toBe(1);
+  });
+});
+
+describe('testFieldsOf and per-column tests', () => {
+  it('reads the test field of each repeating record from its identity', () => {
+    expect(testFieldsOf(TEST_TARGET)).toEqual(['Observation.code']);
+  });
+
+  it('builds a list of tests on the test field from the result field\'s columns, in their order', () => {
+    const drafts = draftsFor(TEST_TARGET, null).map((d) => {
+      if (d.targetPath === 'Patient.identifier.value') return { ...d, source: { kind: 'field' as const, fields: ['pid'] } };
+      if (d.targetPath === 'Observation.valueString') return { ...d, source: { kind: 'field' as const, fields: ['B', 'A'] }, columnTests: { A: ' typed ' } };
+      return d;
+    });
+    const built = buildMapping(drafts, { hash: 'h', fieldNames: ['A', 'B', 'pid'] }, TEST_TARGET.id, { requireAll: true, testFields: ['Observation.code'] });
+    if (!built.ok) throw new Error(built.problem);
+    expect(built.mapping.rows.find((r) => r.targetPath === 'Observation.code')!.from).toEqual({ fixedList: ['B', 'typed'] });
   });
 });

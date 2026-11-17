@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
-import { findValueSetByUrl, storedValueSetCodes, type ExpandedCode, type MapCodeList } from '@/api';
+import type { ExpandedCode, MapCodeList } from '@/api';
+import { EXCEL_DATE_FORMAT } from '@openldr/forms/pure';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +10,7 @@ import { LoadingState } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { emptyRule, RULE_KINDS, type RuleDraft, type RuleKind, type SplitTake } from './rows';
+import { loadValueSetCodes } from './useMapHelpers';
 
 const P = 'workflows.mapToFhir.rule';
 
@@ -56,15 +58,36 @@ export function RuleInputs({
     case 'none':
     case 'trim':
       return null;
-    case 'date':
+    case 'date': {
+      const excel = rule.format === EXCEL_DATE_FORMAT;
       return (
         <div className={grid}>
-          <Label className="whitespace-nowrap">{t(`${P}.format`)}</Label>
-          <Input aria-label={named(t(`${P}.format`))} value={rule.format} placeholder="dd/MM/yyyy" onChange={(e) => onChange({ ...rule, format: e.target.value })} />
-          <span />
-          <p className="text-[11px] text-muted-foreground">{t(`${P}.formatHint`)}</p>
+          <Label className="whitespace-nowrap">{t(`${P}.dateIs`)}</Label>
+          <Select value={excel ? 'excel' : 'written'} onValueChange={(v) => onChange({ ...rule, format: v === 'excel' ? EXCEL_DATE_FORMAT : '' })}>
+            <SelectTrigger aria-label={named(t(`${P}.dateIs`))} className="w-full min-w-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="written">{t(`${P}.dateWritten`)}</SelectItem>
+              <SelectItem value="excel">{t(`${P}.dateExcel`)}</SelectItem>
+            </SelectContent>
+          </Select>
+          {excel ? (
+            <>
+              <span />
+              <p className="text-[11px] text-muted-foreground">{t(`${P}.dateExcelHint`)}</p>
+            </>
+          ) : (
+            <>
+              <Label className="whitespace-nowrap">{t(`${P}.format`)}</Label>
+              <Input aria-label={named(t(`${P}.format`))} value={rule.format} placeholder="dd/MM/yyyy" onChange={(e) => onChange({ ...rule, format: e.target.value })} />
+              <span />
+              <p className="text-[11px] text-muted-foreground">{t(`${P}.formatHint`)}</p>
+            </>
+          )}
         </div>
       );
+    }
     case 'number':
       return (
         <div className={grid}>
@@ -180,11 +203,9 @@ function useValueSetCodes(url: string | null): ExpandedCode[] | null {
     }
     let live = true;
     setCodes(null);
-    (async () => {
-      const held = await findValueSetByUrl(url);
-      const list = held ? await storedValueSetCodes(held.id) : [];
-      if (live) setCodes(list);
-    })().catch(() => live && setCodes([]));
+    loadValueSetCodes(url)
+      .then((list) => live && setCodes(list ?? []))
+      .catch(() => live && setCodes([]));
     return () => {
       live = false;
     };
@@ -209,9 +230,7 @@ function ValuesInputs({
 }) {
   const { t } = useTranslation();
   const codes = useValueSetCodes(valueSet);
-  // The system picked per line, so a code found in two systems shows the one the person chose.
-  const [picked, setPicked] = useState<Record<number, string>>({});
-  const setPair = (i: number, patch: Partial<{ from: string; to: string }>) =>
+  const setPair = (i: number, patch: Partial<{ from: string; to: string; system: string }>) =>
     onChange({ ...rule, pairs: rule.pairs.map((pr, j) => (j === i ? { ...pr, ...patch } : pr)) });
   const add = () => onChange({ ...rule, pairs: [...rule.pairs, { from: '', to: '' }] });
   const remove = (i: number) => {
@@ -245,17 +264,15 @@ function ValuesInputs({
           <span className="sm:hidden" />
           <Label className="whitespace-nowrap">{t(`${P}.to`)}</Label>
           {codes && codes.length > 0 ? (
-            // Keyed by system and code, since one code can come from two systems; the code is saved.
+            // Keyed by system and code, since one code can come from two systems. Both are saved.
             <Select
               value={(() => {
-                const mine = picked[i];
-                if (mine && codes.some((x) => `${x.system}|${x.code}` === mine && x.code === pr.to)) return mine;
-                const c = codes.find((x) => x.code === pr.to);
+                const c = codes.find((x) => x.code === pr.to && (pr.system === undefined || x.system === pr.system));
                 return c ? `${c.system}|${c.code}` : undefined;
               })()}
               onValueChange={(v) => {
-                setPicked((p) => ({ ...p, [i]: v }));
-                setPair(i, { to: codes.find((x) => `${x.system}|${x.code}` === v)?.code ?? '' });
+                const c = codes.find((x) => `${x.system}|${x.code}` === v);
+                setPair(i, { to: c?.code ?? '', system: c?.system || undefined });
               }}
             >
               <SelectTrigger aria-label={`${t(`${P}.to`)} ${i + 1}: ${label}`} className="w-full min-w-0">

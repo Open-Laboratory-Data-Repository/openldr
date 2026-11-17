@@ -153,11 +153,18 @@ export type SplitTake = 'first' | 'last' | 'part';
 export type RuleDraft =
   | { kind: 'none' }
   | { kind: 'date'; format: string }
-  | { kind: 'values'; pairs: { from: string; to: string }[] }
+  /** `system` is set when To is a code picked from a value set: it is saved with the code. */
+  | { kind: 'values'; pairs: ValuePair[] }
   | { kind: 'codeList'; conceptMapUrl: string; sourceSystem: string }
   | { kind: 'split'; by: string; take: SplitTake; part: string }
   | { kind: 'trim' }
   | { kind: 'number'; decimal: ',' | '.' };
+
+export interface ValuePair {
+  from: string;
+  to: string;
+  system?: string;
+}
 
 export type RuleKind = RuleDraft['kind'];
 export const RULE_KINDS: RuleKind[] = ['none', 'date', 'values', 'codeList', 'split', 'trim', 'number'];
@@ -173,6 +180,11 @@ export interface RowDraft {
   added: boolean;
   source: SourceDraft;
   rule: RuleDraft;
+  /**
+   * On a result field of a repeating record with several columns: the test each column gives, by
+   * column name. A column with no entry takes its own name. Config only, never a sample value.
+   */
+  columnTests?: Record<string, string>;
 }
 
 export function emptyRule(kind: RuleKind): RuleDraft {
@@ -200,7 +212,10 @@ function ruleDraftOf(rule: MapRule | undefined): RuleDraft {
     case 'date':
       return { kind: 'date', format: rule.format };
     case 'values':
-      return { kind: 'values', pairs: Object.entries(rule.map).map(([from, to]) => ({ from, to })) };
+      return {
+        kind: 'values',
+        pairs: Object.entries(rule.map).map(([from, to]) => (typeof to === 'string' ? { from, to } : { from, to: to.code, system: to.system })),
+      };
     case 'codeList':
       return { kind: 'codeList', conceptMapUrl: rule.conceptMapUrl, sourceSystem: rule.sourceSystem ?? '' };
     case 'split':
@@ -216,6 +231,8 @@ function ruleDraftOf(rule: MapRule | undefined): RuleDraft {
 
 function sourceDraftOf(from: FieldMapping['from']): SourceDraft {
   if ('fixed' in from) return { kind: 'fixed', value: from.fixed };
+  // A list of tests is shown on the result field whose columns it pairs with (`draftsFor`).
+  if ('fixedList' in from) return { kind: 'none' };
   if ('fields' in from) return { kind: 'field', fields: [...from.fields] };
   return { kind: 'field', fields: [from.field] };
 }
@@ -236,6 +253,16 @@ export function draftsFor(target: MapTarget, saved: SavedMapping | null): RowDra
       rule: ruleDraftOf(s?.rule),
     };
   });
+  // A saved list of tests goes back onto the result field with as many columns, by position.
+  for (const testKey of testFieldsOf(target)) {
+    const list = byPath.get(testKey)?.from;
+    if (!list || !('fixedList' in list)) continue;
+    const owner = rows.find((d) => isResultOf(d, testKey) && d.source.kind === 'field' && d.source.fields.length === list.fixedList.length);
+    if (owner && owner.source.kind === 'field') {
+      const cols = owner.source.fields;
+      owner.columnTests = Object.fromEntries(cols.map((c, i) => [c, list.fixedList[i]]));
+    }
+  }
   const known = new Set(target.fields.map((f) => f.path));
   for (const s of saved?.rows ?? []) {
     if (known.has(s.targetPath)) continue;
@@ -251,6 +278,57 @@ export function draftsFor(target: MapTarget, saved: SavedMapping | null): RowDra
     });
   }
   return rows;
+}
+
+const recordOf = (key: string) => key.split(/[.?]/)[0];
+
+/**
+ * The test field of each repeating record: the first part of its identity that is a field and not
+ * optional. Read from the target, so no path is written here.
+ */
+export function testFieldsOf(target: Pick<MapTarget, 'records' | 'identity'>): string[] {
+  const out: string[] = [];
+  for (const r of target.records) {
+    if (!r.repeats) continue;
+    const part = target.identity.find((i) => i.record === r.type)?.parts.find((p) => 'field' in p && !p.optional);
+    if (part && 'field' in part) out.push(part.field);
+  }
+  return out;
+}
+
+/** Whether a draft is a result field of the test field's record: repeating, and not the test. */
+function isResultOf(d: RowDraft, testKey: string): boolean {
+  return d.repeats && !d.added && d.targetPath !== testKey && recordOf(d.targetPath) === recordOf(testKey);
+}
+
+const multiColumn = (d: RowDraft) => d.source.kind === 'field' && d.source.fields.length > 1;
+
+/** One column's test: what the person typed, else the column's name. Untrimmed, as on screen. */
+export function columnTest(d: RowDraft, column: string): string {
+  return d.columnTests?.[column] ?? column;
+}
+
+/**
+ * Per-column tests on a record: the test field, the result field that carries them (the first
+ * result field with several columns, while the test field itself has one column or none), and the
+ * other result fields with several columns, which share the same tests by position.
+ */
+export interface ColumnTestPlan {
+  testIndex: number;
+  ownerIndex: number;
+  others: number[];
+}
+
+export function columnTestPlans(drafts: RowDraft[], testFields: string[]): ColumnTestPlan[] {
+  const plans: ColumnTestPlan[] = [];
+  for (const testKey of testFields) {
+    const testIndex = drafts.findIndex((d) => d.targetPath === testKey);
+    if (testIndex === -1 || multiColumn(drafts[testIndex])) continue;
+    const results = drafts.map((d, i) => (isResultOf(d, testKey) && multiColumn(d) ? i : -1)).filter((i) => i !== -1);
+    if (results.length === 0) continue;
+    plans.push({ testIndex, ownerIndex: results[0], others: results.slice(1) });
+  }
+  return plans;
 }
 
 /** Whether a draft has a source: a column, or a fixed value that is not blank. */
@@ -270,9 +348,12 @@ export function ruleOf(rule: RuleDraft): MapRule | null | 'incomplete' {
       candidate = { kind: 'date', format: rule.format.trim() };
       break;
     case 'values': {
-      const map: Record<string, string> = {};
       // A line counts only when both sides are filled.
-      for (const p of rule.pairs) if (p.from.trim() !== '' && p.to.trim() !== '') map[p.from.trim()] = p.to;
+      const map: Record<string, string | { system: string; code: string }> = {};
+      for (const p of rule.pairs) {
+        if (p.from.trim() === '' || p.to.trim() === '') continue;
+        map[p.from.trim()] = p.system ? { system: p.system, code: p.to } : p.to;
+      }
       if (Object.keys(map).length === 0) return 'incomplete';
       candidate = { kind: 'values', map };
       break;
@@ -306,7 +387,11 @@ export function ruleOf(rule: RuleDraft): MapRule | null | 'incomplete' {
 
 export type BuildResult =
   | { ok: true; mapping: SavedMapping }
-  | { ok: false; problem: 'required' | 'rule' | 'sourceSystem'; label: string };
+  | { ok: false; problem: 'required' | 'rule' | 'sourceSystem'; label: string }
+  /** `columns`: the columns whose test is empty, or that share one test. */
+  | { ok: false; problem: 'testEmpty' | 'testDuplicate'; columns: string[] }
+  /** A second result field whose column count differs from the one that carries the tests. */
+  | { ok: false; problem: 'testCount'; label: string; count: number; owner: string; ownerCount: number };
 
 /**
  * The saved mapping for one shape from the drafts. Rows with no source are left out. With
@@ -317,15 +402,33 @@ export function buildMapping(
   drafts: RowDraft[],
   shape: { hash: string; fieldNames: string[] },
   targetId: string,
-  opts: { requireAll: boolean; localCodeList?: string | null },
+  opts: { requireAll: boolean; localCodeList?: string | null; testFields?: string[] },
 ): BuildResult {
+  const plans = columnTestPlans(drafts, opts.testFields ?? []);
+  const testsOf = new Map<number, string[]>();
+  for (const plan of plans) {
+    const owner = drafts[plan.ownerIndex];
+    const cols = owner.source.kind === 'field' ? owner.source.fields : [];
+    const tests = cols.map((c) => columnTest(owner, c).trim());
+    const empty = cols.filter((_, i) => tests[i] === '');
+    if (empty.length > 0) return { ok: false, problem: 'testEmpty', columns: empty };
+    const dup = cols.filter((_, i) => tests.indexOf(tests[i]) !== i || tests.lastIndexOf(tests[i]) !== i);
+    if (dup.length > 0) return { ok: false, problem: 'testDuplicate', columns: dup };
+    for (const i of plan.others) {
+      const other = drafts[i];
+      const count = other.source.kind === 'field' ? other.source.fields.length : 0;
+      if (count !== cols.length) return { ok: false, problem: 'testCount', label: other.label, count, owner: owner.label, ownerCount: cols.length };
+    }
+    testsOf.set(plan.testIndex, tests);
+  }
+  const sourced = (d: RowDraft, i: number) => testsOf.has(i) || hasSource(d);
   if (opts.requireAll) {
-    const missing = drafts.find((d) => d.required && !hasSource(d));
+    const missing = drafts.find((d, i) => d.required && !sourced(d, i));
     if (missing) return { ok: false, problem: 'required', label: missing.label };
   }
   const rows: FieldMapping[] = [];
-  for (const d of drafts) {
-    if (!hasSource(d)) continue;
+  for (const [i, d] of drafts.entries()) {
+    if (!sourced(d, i)) continue;
     const rule = ruleOf(d.rule);
     if (rule === 'incomplete') return { ok: false, problem: 'rule', label: d.label };
     // The lab's own code list holds every source system's rows, so the node needs one named.
@@ -333,7 +436,10 @@ export function buildMapping(
       return { ok: false, problem: 'sourceSystem', label: d.label };
     }
     let from: FieldMapping['from'];
-    if (d.source.kind === 'fixed') from = { fixed: d.source.value };
+    const tests = testsOf.get(i);
+    // The tests in the order of the result field's columns, so the two rows pair by position.
+    if (tests) from = { fixedList: tests };
+    else if (d.source.kind === 'fixed') from = { fixed: d.source.value };
     else if (d.source.kind === 'field' && d.source.fields.length > 1) from = { fields: [...d.source.fields] };
     else if (d.source.kind === 'field') from = { field: d.source.fields[0] };
     else continue;

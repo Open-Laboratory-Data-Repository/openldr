@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dateFormatOf, isDateKey, suggestRuleFor, codeListUrlOf } from './ruleSuggest';
+import { codeNamedBy, dateFormatOf, isDateKey, looksLikeExcelDates, suggestRuleFor, codeListUrlOf } from './ruleSuggest';
 import type { RowDraft } from './rows';
 
 const draft = (targetPath: string, field = 'c', extra: Partial<RowDraft> = {}): RowDraft => ({
@@ -64,5 +64,33 @@ describe('suggestRuleFor', () => {
     expect(codeListUrlOf(draft('Observation.valueString', 'c', { valueSet: 'urn:test:vs' }))).toBe('urn:test:vs');
     expect(codeListUrlOf(draft('Patient.gender'))).toBe('http://hl7.org/fhir/ValueSet/administrative-gender');
     expect(codeListUrlOf(draft('Specimen.type'))).toBeNull();
+  });
+});
+
+describe('looksLikeExcelDates', () => {
+  // 18264 is 1950-01-01 and 73051 is 2100-01-01 in Excel's 1900 system.
+  it('takes day numbers between 1950 and 2100, as numbers or plain-number texts', () => {
+    expect(looksLikeExcelDates(['18264', '45000.75', '73051'])).toBe(true);
+  });
+  it('refuses a day number outside that range, a written date, and no examples', () => {
+    expect(looksLikeExcelDates(['18263'])).toBe(false);
+    expect(looksLikeExcelDates(['73052'])).toBe(false);
+    expect(looksLikeExcelDates(['45000', '12/03/2023'])).toBe(false);
+    expect(looksLikeExcelDates([])).toBe(false);
+  });
+});
+
+describe('codeNamedBy', () => {
+  const codes = [
+    { system: 'urn:test:s', code: 'bld', display: 'Blood' },
+    { system: 'urn:test:s', code: 'ser', display: 'Blood serum' },
+  ];
+  it('matches a code or a display, ignoring case and the spaces around it', () => {
+    expect(codeNamedBy(' blood ', codes)?.code).toBe('bld');
+    expect(codeNamedBy('SER', codes)?.code).toBe('ser');
+  });
+  it('never matches part of a display', () => {
+    expect(codeNamedBy('Blo', codes)).toBeNull();
+    expect(codeNamedBy('serum', codes)).toBeNull();
   });
 });

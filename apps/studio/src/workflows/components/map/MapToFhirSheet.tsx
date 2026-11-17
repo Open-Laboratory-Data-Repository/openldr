@@ -15,7 +15,7 @@ import { MappingRow } from './MappingRow';
 import { RuleInputs, RuleKindSelect } from './RuleEditor';
 import { TestResults, type TestState } from './TestResults';
 import { classify, type SavedMapping } from '@openldr/forms/pure';
-import { buildMapping, hasSource, narrowerCount, unusedFields, withMapping, type BuildResult, type RowDraft } from './rows';
+import { buildMapping, columnTestPlans, hasSource, narrowerCount, testFieldsOf, unusedFields, withMapping, type BuildResult, type RowDraft, type RuleDraft } from './rows';
 import { useCodeLists, useCodeSets, useFeedsFromWebhook, useSuggestions } from './useMapHelpers';
 import { codeListUrlOf, suggestRuleFor, valueLinesFor, type RuleSuggestion } from './ruleSuggest';
 import { useMappingDraft } from './useMappingDraft';
@@ -58,17 +58,34 @@ export function MapToFhirSheet({
   const localCodeList = Array.isArray(codeLists) ? (codeLists.find((c) => c.local)?.url ?? null) : null;
   const codeUrlOf = (d: RowDraft) => (hasSource(d) && d.rule.kind === 'none' ? codeListUrlOf(d) : null);
   const codeSets = useCodeSets(drafts.map(codeUrlOf).filter((u): u is string => u !== null));
+  const codesOf = (d: RowDraft) => {
+    const url = codeListUrlOf(d);
+    return url ? (codeSets[url] ?? null) : null;
+  };
   const ruleSuggestionOf = (d: RowDraft): RuleSuggestion | null => {
     if (!columns) return null;
     const url = codeUrlOf(d);
-    return suggestRuleFor(d, columns.rows, url ? (codeSets[url] ?? null) : null);
+    const codes = url ? (codeSets[url] ?? null) : null;
+    return suggestRuleFor(d, columns.rows, codes ? new Set(codes.map((c) => c.code)) : null);
   };
   const describeRule = (r: RuleSuggestion) =>
     r.kind === 'numberComma'
       ? t(`${P}.rule.suggest.numberComma`)
       : r.kind === 'values'
         ? t(`${P}.rule.suggest.values`)
-        : t(r.dayFirstGuess ? `${P}.rule.suggest.dateDayFirst` : `${P}.rule.suggest.date`, { format: r.format });
+        : r.kind === 'dateExcel'
+          ? t(`${P}.rule.suggest.dateExcel`)
+          : t(r.dayFirstGuess ? `${P}.rule.suggest.dateDayFirst` : `${P}.rule.suggest.date`, { format: r.format });
+  /**
+   * A Values rule on a field with a code list opens with one line per sample value, on screen only,
+   * and with the code a value names already picked. A line is saved once its To is filled.
+   */
+  const valuesRuleFor = (d: RowDraft): RuleDraft => {
+    const pairs = columns && codeListUrlOf(d) ? valueLinesFor(d, columns.rows, codesOf(d)) : [];
+    return { kind: 'values', pairs: pairs.length > 0 ? pairs : [{ from: '', to: '' }] };
+  };
+  const testFields = target ? testFieldsOf(target) : [];
+  const plans = columnTestPlans(drafts, testFields);
 
   // Opening the sheet loads the editor's last run when it holds one.
   useEffect(() => {
@@ -88,16 +105,23 @@ export function MapToFhirSheet({
     setNotice(null);
   };
 
-  const problem = (built: Extract<BuildResult, { ok: false }>) =>
-    setNotice({
-      tone: 'error',
-      text:
-        built.problem === 'required'
-          ? t(`${P}.sheet.saveMissing`, { label: built.label })
-          : built.problem === 'sourceSystem'
-            ? t(`${P}.sheet.sourceSystemMissing`, { label: built.label })
-            : t(`${P}.sheet.ruleIncomplete`, { label: built.label }),
-    });
+  const problemText = (built: Extract<BuildResult, { ok: false }>): string => {
+    switch (built.problem) {
+      case 'required':
+        return t(`${P}.sheet.saveMissing`, { label: built.label });
+      case 'sourceSystem':
+        return t(`${P}.sheet.sourceSystemMissing`, { label: built.label });
+      case 'rule':
+        return t(`${P}.sheet.ruleIncomplete`, { label: built.label });
+      case 'testEmpty':
+        return t(`${P}.sheet.testEmpty`, { columns: built.columns.join(', ') });
+      case 'testDuplicate':
+        return t(`${P}.sheet.testDuplicate`, { columns: built.columns.join(', ') });
+      case 'testCount':
+        return t(`${P}.sheet.testCount`, { label: built.label, count: built.count, owner: built.owner, ownerCount: built.ownerCount });
+    }
+  };
+  const problem = (built: Extract<BuildResult, { ok: false }>) => setNotice({ tone: 'error', text: problemText(built) });
 
   // A column set that edits a wider saved mapping keeps that mapping's field names and hash, so the node
   // never holds two mappings where one's columns contain the other's.
@@ -108,26 +132,28 @@ export function MapToFhirSheet({
   const replacesNarrower = saveShape ? narrowerCount(sameTarget, saveShape.fieldNames) : 0;
   const feedsFromWebhook = useFeedsFromWebhook(node.id);
 
-  // The columns offered: the sample's, plus a wider saved mapping's that this sample lacks. With no
-  // sample, every column of the saved mapping on screen is one the sample lacks.
+  // The columns offered: the sample's, plus a wider saved mapping's that this sample lacks. A column
+  // is marked as missing only when a sample is loaded; with none, there is nothing to miss it from.
   const offered = saveShape ? saveShape.fieldNames : [];
   const sampleNames = columns && !m.fromSaved ? columns.fieldNames : [];
-  const absent = offered.filter((f) => !sampleNames.includes(f));
+  const absent = m.fromSaved ? [] : offered.filter((f) => !sampleNames.includes(f));
+  const columnNames = m.fromSaved ? offered : [...sampleNames, ...absent];
 
   // What the node will hold after Save, with the mapping on screen in place of its saved version.
   // A row that more than one of them fits is held by the node, so the sheet says so first.
   const ambiguous = useMemo(() => {
     if (!columns || !saveShape || !m.targetId) return false;
-    const built = buildMapping(drafts, saveShape, m.targetId, { requireAll: false, localCodeList });
+    const built = buildMapping(drafts, saveShape, m.targetId, { requireAll: false, localCodeList, testFields });
     const savedHere = m.saved.filter((x) => x.targetId === m.targetId);
     const after = (built.ok ? withMapping(savedHere, built.mapping) : savedHere) as SavedMapping[];
     return columns.rows.some((row) => classify(row, [], after).kind === 'ambiguous');
-  }, [columns, saveShape, drafts, m.saved, m.targetId, localCodeList]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns, saveShape, drafts, m.saved, m.targetId, localCodeList, testFields.join('\n')]);
   const showWebhookHint = feedsFromWebhook && String(config.sourcePath ?? '').trim() === '';
 
   const save = () => {
     if (!target || !columns || !saveShape) return;
-    const built = buildMapping(drafts, saveShape, target.id, { requireAll: true, localCodeList });
+    const built = buildMapping(drafts, saveShape, target.id, { requireAll: true, localCodeList, testFields });
     if (!built.ok) return problem(built);
     // A node runs one target, so mappings made for another target are dropped.
     const kept = mappingsOf(config).filter((x) => targetIdOf(x) === target.id);
@@ -137,7 +163,7 @@ export function MapToFhirSheet({
 
   const runTest = async () => {
     if (!target || !columns || !saveShape) return;
-    const built = buildMapping(drafts, saveShape, target.id, { requireAll: false, localCodeList });
+    const built = buildMapping(drafts, saveShape, target.id, { requireAll: false, localCodeList, testFields });
     if (!built.ok) return problem(built);
     const others = mappingsOf(config).filter((x) => targetIdOf(x) === target.id);
     const formIds = Array.isArray(config.formIds) ? (config.formIds as string[]) : [];
@@ -162,7 +188,9 @@ export function MapToFhirSheet({
   };
 
   const taken = useMemo(() => new Set(drafts.map((d) => d.targetPath)), [drafts]);
+  const setPerColumn = new Set(plans.map((p) => p.testIndex));
   const required = drafts.filter((d) => d.required);
+  const requiredDone = drafts.filter((d, i) => d.required && (hasSource(d) || setPerColumn.has(i))).length;
   const unused = columns ? unusedFields(columns.fieldNames, drafts) : [];
   const listening = samples.status === 'listening';
   const otherTargetCount = mappingsOf(config).filter((x) => targetIdOf(x) !== m.targetId).length;
@@ -204,13 +232,23 @@ export function MapToFhirSheet({
         </div>
         {drafts.map((d, i) => {
           const s = suggestions[d.targetPath];
-          const showSuggestion = s && !hasSource(d) && sampleNames.includes(s);
+          const owner = plans.find((p) => p.ownerIndex === i);
+          const asTest = plans.find((p) => p.testIndex === i);
+          const sharing = plans.find((p) => p.others.includes(i));
+          const showSuggestion = s && !hasSource(d) && !asTest && sampleNames.includes(s);
           return (
             <MappingRow
               key={d.targetPath}
               draft={d}
-              fieldNames={[...sampleNames, ...absent]}
+              fieldNames={columnNames}
               absent={absent}
+              columnTests={
+                owner
+                  ? { testLabel: drafts[owner.testIndex].label, onChange: (column, test) => edit(i, { columnTests: { ...d.columnTests, [column]: test } }) }
+                  : undefined
+              }
+              setPerColumnOn={asTest ? drafts[asTest.ownerIndex].label : undefined}
+              sharesTestsOf={sharing ? drafts[sharing.ownerIndex].label : undefined}
               rows={columns.rows}
               onChange={(source) => edit(i, { source })}
               suggestion={
@@ -232,9 +270,10 @@ export function MapToFhirSheet({
               }
               rule={
                 <div className="flex min-w-0 flex-col gap-1">
-                  <RuleKindSelect rule={d.rule} label={d.label} onChange={(rule) => edit(i, { rule })} />
+                  <RuleKindSelect rule={d.rule} label={d.label} onChange={(rule) => edit(i, { rule: rule.kind === 'values' ? valuesRuleFor(d) : rule })} />
                   {(() => {
-                    const rs = ruleSuggestionOf(d);
+                    // A test set per column takes no suggestion from a column it does not read.
+                    const rs = asTest ? null : ruleSuggestionOf(d);
                     if (!rs) return null;
                     return (
                       <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted-foreground" data-testid={`map-rule-suggestion-${d.targetPath}`}>
@@ -246,7 +285,7 @@ export function MapToFhirSheet({
                           className="h-6 shrink-0 px-2 text-xs text-violet-500"
                           aria-label={`${t(`${P}.sheet.accept`)}: ${t(`${P}.sheet.colRule`)}: ${d.label}`}
                           onClick={() =>
-                            edit(i, { rule: rs.kind === 'values' && columns ? { kind: 'values', pairs: valueLinesFor(d, columns.rows) } : rs.rule })
+                            edit(i, { rule: rs.kind === 'values' ? valuesRuleFor(d) : rs.rule })
                           }
                         >
                           {t(`${P}.sheet.accept`)}
@@ -282,7 +321,7 @@ export function MapToFhirSheet({
         })}
         <div className="space-y-1 px-6 py-3 text-xs text-muted-foreground">
           <p data-testid="map-required-summary">
-            {t(`${P}.sheet.requiredSummary`, { done: required.filter(hasSource).length, count: required.length })}
+            {t(`${P}.sheet.requiredSummary`, { done: requiredDone, count: required.length })}
           </p>
           {unused.length > 0 && <p className="break-words">{t(`${P}.sheet.unused`, { fields: unused.join(', ') })}</p>}
         </div>
