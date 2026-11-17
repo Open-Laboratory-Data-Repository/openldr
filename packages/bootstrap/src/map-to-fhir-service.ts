@@ -185,8 +185,17 @@ function ruleTarget(expression: string, records: Res[]): { index: number; rest: 
  * One issue as `record <n> (<Type>) <path>: <text>`. A structural issue has its record's position.
  * A rule issue is placed by `ruleTarget`; when no record matches, only the text is given.
  */
+export const CODED_VALUE_TEXT = 'this value is not one the field accepts';
+
+/** Whether a structural issue is a value outside the codes a `code` leaf takes. */
+function isCodedValueIssue(issue: OperationOutcomeIssue, type: string | null, path: string): boolean {
+  if (issue.code !== 'invalid' || !type || !path) return false;
+  const plain = path.split('.').filter((s) => !/^\d+$/.test(s)).join('.');
+  return lookupFhirPath(`${type}.${plain}`)?.leafType === 'code';
+}
+
 function describeIssue(issue: OperationOutcomeIssue, records: Res[], position: number | null): string {
-  const text = issueText(issue);
+  let text = issueText(issue);
   const expression = issue.expression?.[0] ?? '';
   let at: number;
   let path: string;
@@ -200,6 +209,7 @@ function describeIssue(issue: OperationOutcomeIssue, records: Res[], position: n
     path = target.rest;
   }
   const type = knownType(records[at]?.resourceType);
+  if (position !== null && isCodedValueIssue(issue, type, path)) text = CODED_VALUE_TEXT;
   const where = [`record ${at + 1}`, type ? `(${type})` : null, safePath(type, path) || null].filter(Boolean).join(' ');
   return `${where}: ${text}`;
 }

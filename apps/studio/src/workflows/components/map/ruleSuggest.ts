@@ -55,6 +55,18 @@ export function examplesOf(draft: RowDraft, rows: SampleRow[]): string[] {
   return out;
 }
 
+/** The most lines an accepted values suggestion opens with. */
+export const MAX_VALUE_LINES = 20;
+
+/**
+ * The lines an accepted values suggestion opens with: one per distinct sample value on the From
+ * side, at most `MAX_VALUE_LINES`, and an empty To side. They live on screen only: a line is saved
+ * once its To side is filled, so an untouched sample value never reaches the config.
+ */
+export function valueLinesFor(draft: RowDraft, rows: SampleRow[]): { from: string; to: string }[] {
+  return [...new Set(examplesOf(draft, rows))].slice(0, MAX_VALUE_LINES).map((from) => ({ from, to: '' }));
+}
+
 const DATE_RE = /^(\d{1,4})([/.-])(\d{1,2})([/.-])(\d{1,4})$/;
 
 /**
@@ -114,7 +126,7 @@ export function suggestRuleFor(draft: RowDraft, rows: SampleRow[], codes: Set<st
     return d ? { kind: 'date', format: d.format, dayFirstGuess: d.dayFirstGuess, rule: { kind: 'date', format: d.format } } : null;
   }
   if (codes && codes.size > 0 && examples.some((e) => !codes.has(e))) {
-    // No lines: a line per sample value would put sample values into the mapping.
+    // No lines here. The sheet fills them on Accept, on screen only (`valueLinesFor`).
     return { kind: 'values', rule: { kind: 'values', pairs: [] } };
   }
   return null;

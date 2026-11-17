@@ -324,7 +324,7 @@ describe('held reasons hold no value', () => {
     const svc = createMapToFhirService(deps());
     const res = await svc({ items: [{ json: { resourceType: 'Patient', id: 'p-9', gender: 'QZX' } }, { json: { resourceType: 'QZXType', id: 'x' } }], config });
     expect(res.held).toHaveLength(2);
-    expect(res.held[0].json.reason).toBe('record 1 (Patient) gender: failed the invalid check');
+    expect(res.held[0].json.reason).toBe('record 1 (Patient) gender: this value is not one the field accepts');
     expect(res.held[1].json.reason).toBe('record 1 resourceType: unsupported resourceType');
     for (const h of res.held) expect(String(h.json.reason)).not.toContain('QZX');
   });

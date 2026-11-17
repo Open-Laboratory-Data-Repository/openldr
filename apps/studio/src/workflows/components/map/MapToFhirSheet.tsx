@@ -17,7 +17,7 @@ import { TestResults, type TestState } from './TestResults';
 import { classify, type SavedMapping } from '@openldr/forms/pure';
 import { buildMapping, hasSource, narrowerCount, unusedFields, withMapping, type BuildResult, type RowDraft } from './rows';
 import { useCodeLists, useCodeSets, useFeedsFromWebhook, useSuggestions } from './useMapHelpers';
-import { codeListUrlOf, suggestRuleFor, type RuleSuggestion } from './ruleSuggest';
+import { codeListUrlOf, suggestRuleFor, valueLinesFor, type RuleSuggestion } from './ruleSuggest';
 import { useMappingDraft } from './useMappingDraft';
 import { useSamples } from './useSamples';
 
@@ -108,9 +108,11 @@ export function MapToFhirSheet({
   const replacesNarrower = saveShape ? narrowerCount(sameTarget, saveShape.fieldNames) : 0;
   const feedsFromWebhook = useFeedsFromWebhook(node.id);
 
-  // The columns offered: the sample's, plus a wider saved mapping's that this sample lacks.
+  // The columns offered: the sample's, plus a wider saved mapping's that this sample lacks. With no
+  // sample, every column of the saved mapping on screen is one the sample lacks.
   const offered = saveShape ? saveShape.fieldNames : [];
-  const absent = columns ? offered.filter((f) => !columns.fieldNames.includes(f)) : [];
+  const sampleNames = columns && !m.fromSaved ? columns.fieldNames : [];
+  const absent = offered.filter((f) => !sampleNames.includes(f));
 
   // What the node will hold after Save, with the mapping on screen in place of its saved version.
   // A row that more than one of them fits is held by the node, so the sheet says so first.
@@ -170,16 +172,21 @@ export function MapToFhirSheet({
   if (m.targets === null) {
     body = <LoadingState label={t(`${P}.loadingTargets`)} className="min-h-[16rem] flex-1" />;
   } else if (m.targetsFailed || m.targets.length === 0) {
-    body = <StripedEmpty className="min-h-[16rem] flex-1">{t(m.targetsFailed ? `${P}.targetsFailed` : `${P}.noTargets`)}</StripedEmpty>;
+    body = <StripedEmpty className="min-h-[16rem] flex-1 px-6 text-center">{t(m.targetsFailed ? `${P}.targetsFailed` : `${P}.noTargets`)}</StripedEmpty>;
   } else if (listening && !ready) {
     body = <LoadingState label={t(`${P}.sheet.listening`)} className="min-h-[16rem] flex-1" />;
   } else if (samples.status === 'loadingStored') {
     body = <LoadingState label={t(`${P}.sheet.loadingStored`)} className="min-h-[16rem] flex-1" />;
   } else if (!ready || !columns || !target) {
-    body = <StripedEmpty className="min-h-[16rem] flex-1">{t(samples.canListen ? `${P}.sheet.empty` : `${P}.sheet.emptyUnsaved`)}</StripedEmpty>;
+    body = <StripedEmpty className="min-h-[16rem] flex-1 px-6 text-center">{t(samples.canListen ? `${P}.sheet.empty` : `${P}.sheet.emptyUnsaved`)}</StripedEmpty>;
   } else {
     body = (
       <div className="flex min-w-0 flex-col">
+        {m.fromSaved && (
+          <p className="px-6 pb-2 text-xs text-muted-foreground" data-testid="map-no-sample">
+            {t(samples.canListen ? `${P}.sheet.empty` : `${P}.sheet.emptyUnsaved`)}
+          </p>
+        )}
         {adding && (
           <AddPathPanel
             recordTypes={target.records.map((r) => r.type)}
@@ -197,12 +204,12 @@ export function MapToFhirSheet({
         </div>
         {drafts.map((d, i) => {
           const s = suggestions[d.targetPath];
-          const showSuggestion = s && !hasSource(d) && columns.fieldNames.includes(s);
+          const showSuggestion = s && !hasSource(d) && sampleNames.includes(s);
           return (
             <MappingRow
               key={d.targetPath}
               draft={d}
-              fieldNames={[...columns.fieldNames, ...absent]}
+              fieldNames={[...sampleNames, ...absent]}
               absent={absent}
               rows={columns.rows}
               onChange={(source) => edit(i, { source })}
@@ -238,7 +245,9 @@ export function MapToFhirSheet({
                           size="sm"
                           className="h-6 shrink-0 px-2 text-xs text-violet-500"
                           aria-label={`${t(`${P}.sheet.accept`)}: ${t(`${P}.sheet.colRule`)}: ${d.label}`}
-                          onClick={() => edit(i, { rule: rs.rule })}
+                          onClick={() =>
+                            edit(i, { rule: rs.kind === 'values' && columns ? { kind: 'values', pairs: valueLinesFor(d, columns.rows) } : rs.rule })
+                          }
                         >
                           {t(`${P}.sheet.accept`)}
                         </Button>
@@ -249,7 +258,7 @@ export function MapToFhirSheet({
               }
               ruleInputs={
                 d.rule.kind === 'none' || d.rule.kind === 'trim' ? undefined : (
-                  <RuleInputs rule={d.rule} label={d.label} valueSet={d.valueSet} codeLists={codeLists} onChange={(rule) => edit(i, { rule })} />
+                  <RuleInputs rule={d.rule} label={d.label} valueSet={codeListUrlOf(d)} codeLists={codeLists} onChange={(rule) => edit(i, { rule })} />
                 )
               }
               actions={
@@ -283,115 +292,137 @@ export function MapToFhirSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full max-w-full gap-0 overflow-x-hidden overflow-y-auto p-0 sm:w-[52rem] sm:max-w-[92vw]">
-        <SheetHeader className="border-b border-border px-6 py-4 pr-12">
+      {/* The sheet does not scroll. The area under the header scrolls on its own, and the test result
+          block sits below it, outside the scroll, so it stays in view without position: sticky. */}
+      <SheetContent className="w-full max-w-full gap-0 overflow-hidden p-0 sm:w-[52rem] sm:max-w-[92vw]">
+        <SheetHeader className="shrink-0 border-b border-border px-6 py-4 pr-12">
           <SheetTitle>{t(`${P}.sheet.title`)}</SheetTitle>
           <SheetDescription>{t(`${P}.sheet.description`)}</SheetDescription>
         </SheetHeader>
 
-        <div className="flex items-center justify-between gap-2 px-6 py-3">
-          <div className="min-w-0 text-xs text-muted-foreground">
-            {!samples.canListen && <p>{t(`${P}.sheet.unsavedListen`)}</p>}
-            {samples.status === 'timedOut' && <p>{t(`${P}.sheet.listenTimedOut`)}</p>}
-            {samples.status === 'noStoredRun' && <p>{t(`${P}.sheet.noStoredRun`)}</p>}
-            {samples.status === 'failed' && <p className="text-destructive">{t(`${P}.sheet.listenFailed`)}</p>}
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t(`${P}.sheet.actions`)}>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {samples.canListen &&
-                (listening ? (
-                  <DropdownMenuItem onClick={samples.stopListening}>{t(`${P}.sheet.stopListening`)}</DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem onClick={samples.startListening}>{t(`${P}.sheet.listen`)}</DropdownMenuItem>
-                ))}
-              {samples.canListen && (
-                <DropdownMenuItem disabled={samples.status === 'loadingStored'} onClick={() => void samples.loadLatestStoredRun()}>
-                  {t(`${P}.sheet.useLatestStored`)}
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem disabled={!samples.hasLastRun} onClick={samples.loadLastRun}>
-                {t(`${P}.sheet.useLastRun`)}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={!ready || test.kind === 'running'} onClick={() => void runTest()}>
-                {t(`${P}.sheet.test`)}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={!ready} onClick={() => setAdding(true)}>
-                {t(`${P}.sheet.addPath`)}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={!ready} onClick={save}>
-                {t(`${P}.sheet.save`)}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        <div className="border-t border-border" />
-
-        {m.targets && m.targets.length > 0 && (
-          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-6 py-4">
-            <Label className="whitespace-nowrap">{t(`${P}.sheet.target`)}</Label>
-            <Select value={m.targetId || undefined} onValueChange={m.setTargetId}>
-              <SelectTrigger aria-label={t(`${P}.sheet.target`)} className="w-full min-w-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {m.targets.map((x) => (
-                  <SelectItem key={x.id} value={x.id}>
-                    {x.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {otherTargetCount > 0 && m.targetId && m.targetId !== m.savedTargetId && (
-          <p className="px-6 pb-2 text-xs text-amber-500">{t(`${P}.sheet.targetChange`, { count: otherTargetCount })}</p>
-        )}
-        {m.targets && m.targets.length > 0 && (
-          <div className="flex min-h-6 items-center gap-2 px-6 pb-2 text-xs text-muted-foreground" data-testid="map-status">
-            {listening ? (
-              <>
-                <Spinner className="shrink-0" />
-                <span>{t(`${P}.sheet.listeningStatus`)}</span>
-              </>
-            ) : (
-              <>
-                {columns && <span>{t(`${P}.sheet.sampleRows`, { count: columns.rows.length })}</span>}
-                {test.kind === 'done' && (
-                  <span>{t(`${P}.sheet.testSummary`, { count: test.results.filter((r) => r.ok).length, total: test.results.length })}</span>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden" data-testid="map-scroll">
+          <div className="flex items-center justify-between gap-2 px-6 py-3">
+            <div className="min-w-0 text-xs text-muted-foreground">
+              {!samples.canListen && <p>{t(`${P}.sheet.unsavedListen`)}</p>}
+              {samples.status === 'timedOut' && <p>{t(`${P}.sheet.listenTimedOut`)}</p>}
+              {samples.status === 'noStoredRun' && <p>{t(`${P}.sheet.noStoredRun`)}</p>}
+              {samples.status === 'failed' && <p className="text-destructive">{t(`${P}.sheet.listenFailed`)}</p>}
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t(`${P}.sheet.actions`)}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {samples.canListen &&
+                  (listening ? (
+                    <DropdownMenuItem onClick={samples.stopListening}>{t(`${P}.sheet.stopListening`)}</DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={samples.startListening}>{t(`${P}.sheet.listen`)}</DropdownMenuItem>
+                  ))}
+                {samples.canListen && (
+                  <DropdownMenuItem disabled={samples.status === 'loadingStored'} onClick={() => void samples.loadLatestStoredRun()}>
+                    {t(`${P}.sheet.useLatestStored`)}
+                  </DropdownMenuItem>
                 )}
-              </>
-            )}
+                <DropdownMenuItem disabled={!samples.hasLastRun} onClick={samples.loadLastRun}>
+                  {t(`${P}.sheet.useLastRun`)}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!ready || test.kind === 'running' || !columns || columns.rows.length === 0} onClick={() => void runTest()}>
+                  {t(`${P}.sheet.test`)}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!ready} onClick={() => setAdding(true)}>
+                  {t(`${P}.sheet.addPath`)}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!ready} onClick={save}>
+                  {t(`${P}.sheet.save`)}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        )}
-        {replacesNarrower > 0 && ready && (
-          <p className="px-6 pb-2 text-xs text-amber-500" data-testid="map-replaces-narrower">
-            {t(`${P}.sheet.replacesNarrower`, { count: replacesNarrower })}
-          </p>
-        )}
-        {ambiguous && ready && (
-          <p className="px-6 pb-2 text-xs text-amber-500" data-testid="map-ambiguous">
-            {t(`${P}.sheet.ambiguous`)}
-          </p>
-        )}
-        {showWebhookHint && <p className="px-6 pb-2 text-xs text-amber-500">{t(`${P}.webhookHint`)}</p>}
-        {notice && (
-          <p
-            role={notice.tone === 'error' ? 'alert' : 'status'}
-            className={`px-6 pb-2 text-xs ${notice.tone === 'error' ? 'text-destructive' : 'text-emerald-500'}`}
-          >
-            {notice.text}
-          </p>
-        )}
+          <div className="border-t border-border" />
 
-        <div className="flex min-h-[16rem] min-w-0 flex-1 flex-col">{body}</div>
+          {m.targets && m.targets.length > 0 && (
+            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-6 py-4">
+              <Label className="whitespace-nowrap">{t(`${P}.sheet.target`)}</Label>
+              <Select value={m.targetId || undefined} onValueChange={m.setTargetId}>
+                <SelectTrigger aria-label={t(`${P}.sheet.target`)} className="w-full min-w-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {m.targets.map((x) => (
+                    <SelectItem key={x.id} value={x.id}>
+                      {x.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {m.fromSaved && m.savedChoices.length > 1 && (
+                <>
+                  <Label className="whitespace-nowrap">{t(`${P}.sheet.savedMapping`)}</Label>
+                  <Select value={m.savedPick || undefined} onValueChange={m.setSavedPick}>
+                    <SelectTrigger aria-label={t(`${P}.sheet.savedMapping`)} className="w-full min-w-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {m.savedChoices.map((x) => (
+                        <SelectItem key={x.shapeHash} value={x.shapeHash}>
+                          {x.fieldNames.join(', ')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
+            </div>
+          )}
+
+          {otherTargetCount > 0 && m.targetId && m.targetId !== m.savedTargetId && (
+            <p className="px-6 pb-2 text-xs text-amber-500">{t(`${P}.sheet.targetChange`, { count: otherTargetCount })}</p>
+          )}
+          {m.targets && m.targets.length > 0 && (
+            <div className="flex min-h-6 items-center gap-2 px-6 pb-2 text-xs text-muted-foreground" data-testid="map-status">
+              {listening ? (
+                <>
+                  <Spinner className="shrink-0" />
+                  <span>{t(`${P}.sheet.listeningStatus`)}</span>
+                </>
+              ) : (
+                <>
+                  {columns && !m.fromSaved && <span>{t(`${P}.sheet.sampleRows`, { count: columns.rows.length })}</span>}
+                  {test.kind === 'done' && (
+                    <span>{t(`${P}.sheet.testSummary`, { count: test.results.filter((r) => r.ok).length, total: test.results.length })}</span>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+          {replacesNarrower > 0 && ready && (
+            <p className="px-6 pb-2 text-xs text-amber-500" data-testid="map-replaces-narrower">
+              {t(`${P}.sheet.replacesNarrower`, { count: replacesNarrower })}
+            </p>
+          )}
+          {ambiguous && ready && (
+            <p className="px-6 pb-2 text-xs text-amber-500" data-testid="map-ambiguous">
+              {t(`${P}.sheet.ambiguous`)}
+            </p>
+          )}
+          {showWebhookHint && <p className="px-6 pb-2 text-xs text-amber-500">{t(`${P}.webhookHint`)}</p>}
+          {notice && (
+            <p
+              role={notice.tone === 'error' ? 'alert' : 'status'}
+              className={`px-6 pb-2 text-xs ${notice.tone === 'error' ? 'text-destructive' : 'text-emerald-500'}`}
+            >
+              {notice.text}
+            </p>
+          )}
+
+          {/* grow, never shrink: a flex child with a set min height would shrink below its rows. */}
+          <div className="flex min-h-[16rem] min-w-0 shrink-0 grow flex-col">{body}</div>
+        </div>
         {test.kind !== 'idle' && (
-          <div className="sticky bottom-0 z-10 max-h-[40dvh] shrink-0 overflow-y-auto border-t border-border bg-background" data-testid="map-test-footer">
+          <div className="max-h-[40dvh] shrink-0 overflow-y-auto border-t border-border bg-background" data-testid="map-test-footer">
             <TestResults state={test} drafts={drafts} />
           </div>
         )}

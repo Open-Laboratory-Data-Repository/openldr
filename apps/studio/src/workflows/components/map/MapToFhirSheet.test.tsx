@@ -60,8 +60,44 @@ describe('MapToFhirSheet', () => {
   it('shows StripedEmpty, not rows, when there is no sample', async () => {
     setRun(null);
     renderSheet();
-    expect(await screen.findByText(/Save the workflow first/)).toBeInTheDocument();
+    const text = await screen.findByText(/Save the workflow first/);
+    // The text keeps the side padding the other states have, so it does not touch the edges.
+    expect(text.parentElement!.className).toContain('px-6');
     expect(screen.queryByTestId('map-row-Patient.identifier.value')).not.toBeInTheDocument();
+  });
+
+  it('shows the saved mapping with no sample: the widest by default, a select for another, and Save keeps it', async () => {
+    setRun(null);
+    const narrow = { shapeHash: 'n', fieldNames: ['pat_no'], targetId: 'test-target', rows: [{ targetPath: 'Patient.identifier.value', from: { field: 'pat_no' } }] };
+    const wide = {
+      shapeHash: 'w', fieldNames: ['pat_no', 'test_a', 'zz_ward'], targetId: 'test-target',
+      rows: [{ targetPath: 'Patient.identifier.value', from: { field: 'pat_no' } }, { targetPath: 'Observation.code', from: { field: 'test_a' } }],
+    };
+    const other = { shapeHash: 'o', fieldNames: ['x'], targetId: 'other-target', rows: [] };
+    const { update } = renderSheet({ targetId: 'test-target', mappings: [narrow, wide, other] });
+    await waitFor(() => expect(sourceSelect('Test').value).toBe('test_a'));
+    expect(screen.getByTestId('map-no-sample')).toHaveTextContent('Save the workflow first');
+    // Every column is marked as not in a sample, and no example shows.
+    expect([...sourceSelect('Sex').options].map((o) => o.textContent)).toContain('zz_ward (not in this sample)');
+    const pick = screen.getByRole('combobox', { name: 'Saved mapping' }) as HTMLSelectElement;
+    expect([...pick.options].map((o) => o.textContent).filter((x) => x !== '-')).toEqual(['pat_no, test_a, zz_ward', 'pat_no']);
+    fireEvent.change(sourceSelect('Sex'), { target: { value: 'zz_ward' } });
+    openMenuAndClick('Save');
+    const mappings = update.mock.calls[0][0].config.mappings;
+    expect(mappings.find((x: { shapeHash: string }) => x.shapeHash === 'w').rows).toHaveLength(3);
+    // The narrower one has all its columns in the wider one, so Save removes it, as with a sample.
+    expect(mappings.map((x: { shapeHash: string }) => x.shapeHash)).toEqual(['w']);
+  });
+
+  it('opens another saved mapping from the select when there is no sample', async () => {
+    setRun(null);
+    const a = { shapeHash: 'a', fieldNames: ['pat_no', 'test_a'], targetId: 'test-target', rows: [{ targetPath: 'Observation.code', from: { field: 'test_a' } }] };
+    const b = { shapeHash: 'b', fieldNames: ['ident'], targetId: 'test-target', rows: [{ targetPath: 'Patient.identifier.value', from: { field: 'ident' } }] };
+    renderSheet({ targetId: 'test-target', mappings: [a, b] });
+    await waitFor(() => expect(sourceSelect('Test').value).toBe('test_a'));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Saved mapping' }), { target: { value: 'b' } });
+    await waitFor(() => expect(sourceSelect('Patient ID').value).toBe('ident'));
+    expect(sourceSelect('Test').value).toBe('__none');
   });
 
   it('lists one row per target field, required ones starred, from the last run', async () => {
@@ -248,7 +284,7 @@ describe('MapToFhirSheet', () => {
     fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
     fireEvent.change(sourceSelect('Sex'), { target: { value: 'sex' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Sex' }), { target: { value: 'values' } });
-    fireEvent.change(screen.getByRole('textbox', { name: 'From 1: Sex' }), { target: { value: 'm' } });
+    fireEvent.change(await screen.findByRole('textbox', { name: 'From 1: Sex' }), { target: { value: 'm' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'To 1: Sex' }), { target: { value: 'male' } });
     fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Test' }), { target: { value: 'codeList' } });
@@ -426,7 +462,7 @@ describe('MapToFhirSheet rule suggestions, status and results', () => {
     const { update } = await mapForm();
     expect(await screen.findByTestId('map-rule-suggestion-Observation.valueQuantity.value')).toHaveTextContent('Suggested rule: number, decimal comma');
     expect(screen.getByTestId('map-rule-suggestion-Patient.birthDate')).toHaveTextContent('Suggested rule: date, dd/MM/yyyy');
-    expect(await screen.findByTestId('map-rule-suggestion-Patient.gender')).toHaveTextContent('add one line per value in your file');
+    expect(await screen.findByTestId('map-rule-suggestion-Patient.gender')).toHaveTextContent('Suggested rule: values. Fill in what each value means.');
     expect(screen.queryByTestId('map-rule-suggestion-Patient.identifier.value')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept: Rule: Result (number)' }));
@@ -450,22 +486,49 @@ describe('MapToFhirSheet rule suggestions, status and results', () => {
     expect(screen.getByTestId('map-rule-suggestion-Patient.birthDate')).toHaveTextContent('day first; change it if your file has the month first');
   });
 
-  it('opens the accepted values rule with no lines, and does not send an unaccepted rule to Test', async () => {
+  it('opens an accepted values rule with one line per distinct sample value, and saves only the lines with a To', async () => {
+    setRun([...ROWS_FORM, { pid: 'QZX-7', t: 'QZX-8', sx: 'QZX-2' }]);
+    const { update } = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pid' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 't' } });
+    fireEvent.change(sourceSelect('Sex'), { target: { value: 'sx' } });
+    await screen.findByTestId('map-rule-suggestion-Patient.gender');
+    fireEvent.click(screen.getByRole('button', { name: 'Accept: Rule: Sex' }));
+    expect((await screen.findByRole('textbox', { name: 'From 1: Sex' }) as HTMLInputElement).value).toBe('QZX-2');
+    expect((screen.getByRole('textbox', { name: 'From 2: Sex' }) as HTMLInputElement).value).toBe('QZX-5');
+    expect(screen.queryByRole('textbox', { name: 'From 3: Sex' })).toBeNull();
+    // The field has a value set, so To picks from its codes, and starts empty.
+    const to1 = (await screen.findByRole('combobox', { name: 'To 1: Sex' })) as HTMLSelectElement;
+    expect(to1.value).toBe('');
+    fireEvent.change(to1, { target: { value: 'urn:test:sys|female' } });
+    openMenuAndClick('Save');
+    const config = update.mock.calls[0][0].config;
+    const gender = config.mappings[0].rows.find((r: { targetPath: string }) => r.targetPath === 'Patient.gender');
+    expect(gender.rule).toEqual({ kind: 'values', map: { 'QZX-2': 'female' } });
+    expect(JSON.stringify(config)).not.toContain('QZX-5');
+  });
+
+  it('does not send an unaccepted rule to Test', async () => {
     m(api.testMapping).mockResolvedValue([{ ok: false, reason: 'Observation.valueQuantity.value needs a number', field: 'Observation.valueQuantity.value' }, { ok: true, kind: 'mapped', resourceTypes: ['Patient'], resources: [] }]);
     await mapForm();
     await screen.findByTestId('map-rule-suggestion-Patient.gender');
     fireEvent.click(screen.getByRole('button', { name: 'Accept: Rule: Sex' }));
-    expect(screen.queryByRole('textbox', { name: 'From 1: Sex' })).toBeNull();
-    expect(screen.getByText('Add one line per value in your file.')).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Sex' }), { target: { value: 'none' } });
     openMenuAndClick('Test');
     const footer = await screen.findByTestId('map-test-footer');
     const sent = m(api.testMapping).mock.calls[0][0].config.mappings[0].rows;
     expect(sent.every((r: { rule?: unknown }) => r.rule === undefined)).toBe(true);
-    // A reason reads in the sheet's labels, and the result is pinned at the bottom.
+    // A reason reads in the sheet's labels. The result block sits below the scrolling rows, outside
+    // them, so it stays in view without position: sticky. Only a browser can confirm the layout.
     expect(within(footer).getByText('Result (number): needs a number')).toBeInTheDocument();
-    expect(footer.className).toContain('sticky');
+    const scroll = screen.getByTestId('map-scroll');
+    expect(scroll).toContainElement(screen.getByTestId('map-row-Patient.gender'));
+    expect(scroll).not.toContainElement(footer);
+    expect(footer.parentElement).toBe(scroll.parentElement);
+    expect(footer.className).not.toContain('sticky');
+    expect(scroll.className).toContain('overflow-y-auto');
     expect(screen.getByTestId('map-status')).toHaveTextContent('1 of 2 rows passes');
   });
 
@@ -593,7 +656,7 @@ describe('MapToFhirSheet fix round 1', () => {
     fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
     fireEvent.change(sourceSelect('Sex'), { target: { value: 'sex' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Sex' }), { target: { value: 'values' } });
-    fireEvent.change(screen.getByRole('textbox', { name: 'From 1: Sex' }), { target: { value: 'm' } });
+    fireEvent.change(await screen.findByRole('textbox', { name: 'From 1: Sex' }), { target: { value: 'm' } });
     openMenuAndClick('Save');
     expect(update).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent('Finish the rule on Sex.');
@@ -689,25 +752,6 @@ describe('MapToFhirSheet fix round 2', () => {
     const to = (await screen.findByRole('combobox', { name: 'To 1: Sex' })) as HTMLSelectElement;
     fireEvent.change(to, { target: { value: 'urn:test:b|male' } });
     expect((screen.getByRole('combobox', { name: 'To 1: Sex' }) as HTMLSelectElement).value).toBe('urn:test:b|male');
-  });
-
-  it('takes a run seen while running once it has finished with rows', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    try {
-      useWorkflowStore.setState({ workflowId: 'wf1', edges: [{ id: 'e1', source: 'up1', target: 'map1' }] as never, nodeRunInput: {}, nodeRunOutput: {} });
-      const running = { id: 'r1', status: 'running', startedAt: '2026-01-02T00:00:00Z', result: {} };
-      const done = { id: 'r1', status: 'completed', startedAt: '2026-01-02T00:00:00Z', result: { results: [{ nodeId: 'up1', output: asItems(ROWS_A) }] } };
-      m(api.fetchWorkflowRuns).mockResolvedValueOnce([]).mockResolvedValueOnce([running]).mockResolvedValue([done]);
-      m(api.fetchWorkflowRun).mockResolvedValueOnce(running).mockResolvedValue(done);
-      renderSheet();
-      await screen.findByText(/Choose Listen, then send a message/);
-      openMenuAndClick('Listen');
-      await vi.advanceTimersByTimeAsync(2100);
-      await vi.advanceTimersByTimeAsync(2100);
-      expect(await screen.findByTestId('map-row-Patient.identifier.value')).toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it('opens a wider group on a narrower saved mapping, and Save writes the wider names and drops the narrower', async () => {

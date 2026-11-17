@@ -30,7 +30,7 @@ export function TestResults({ state, drafts }: { state: TestState; drafts: RowDr
           )}
           <span className="shrink-0 font-medium text-foreground">{t(`${P}.testRow`, { n: i + 1 })}</span>
           <span className="min-w-0 break-words text-muted-foreground">
-            {r.ok ? `${r.resourceTypes.join(', ')} ${t(`${P}.passes`)}` : reasonText(r.reason, r.field, drafts)}
+            {r.ok ? `${r.resourceTypes.join(', ')} ${t(`${P}.passes`)}` : reasonText(r.reason, r.field, drafts, t(`${P}.addValuesRule`))}
           </span>
         </li>
       ))}

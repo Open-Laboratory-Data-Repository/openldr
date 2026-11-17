@@ -192,7 +192,10 @@ function useValueSetCodes(url: string | null): ExpandedCode[] | null {
   return codes;
 }
 
-/** Rows of "from" and "to". The person types each "from"; it is never filled from the sample. */
+/**
+ * Rows of "from" and "to". An accepted values suggestion fills "from" with the sample's values, on
+ * screen only; a line is saved once its "to" is filled.
+ */
 function ValuesInputs({
   rule,
   label,

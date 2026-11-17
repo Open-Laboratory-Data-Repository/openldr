@@ -21,4 +21,26 @@ describe('reasonText', () => {
   it('does not swap a key inside a longer path', () => {
     expect(reasonText('Observation.code.text is long', undefined, drafts)).toBe('Observation.code.text is long');
   });
+
+  describe('a reason that names a record and a path', () => {
+    const coded = [
+      d('Patient.gender', 'Sex', ['sx']),
+      d('Patient.identifier.value?system=urn:test:pid', 'Patient ID', ['pid']),
+      { ...d('Specimen.type', 'Specimen type', ['st']), rule: { kind: 'values', pairs: [] } } as RowDraft,
+    ];
+    const ADD = 'Add a Values rule.';
+    it('leads with the row label, and says to add a Values rule when the row has none', () => {
+      expect(reasonText('record 1 (Patient) gender: this value is not one the field accepts', undefined, coded, ADD)).toBe(
+        'Sex: this value is not one the field accepts. Add a Values rule.',
+      );
+    });
+    it('matches a key with pins and a path with an index', () => {
+      expect(reasonText('record 1 (Patient) identifier.0.value: failed the invalid check', undefined, coded, ADD)).toBe('Patient ID: failed the invalid check');
+    });
+    it('does not ask for a Values rule the row already has, and keeps a path with no row', () => {
+      expect(reasonText('record 2 (Specimen) type: this value is not one the field accepts; record 3 (Observation) status: Required', undefined, coded, ADD)).toBe(
+        'Specimen type: this value is not one the field accepts; record 3 (Observation) status: Required',
+      );
+    });
+  });
 });

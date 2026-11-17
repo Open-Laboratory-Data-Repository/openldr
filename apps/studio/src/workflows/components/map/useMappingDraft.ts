@@ -24,6 +24,8 @@ export function useMappingDraft({
   const [targetsFailed, setTargetsFailed] = useState(false);
   const [targetId, setTargetId] = useState(savedTargetId);
   const [state, setState] = useState<{ key: string; drafts: RowDraft[] }>({ key: '', drafts: [] });
+  /** With no sample: the saved mapping the person picked, by its hash. Empty means the widest. */
+  const [savedPick, setSavedPick] = useState('');
 
   // Targets for the current language, loaded when the sheet opens.
   useEffect(() => {
@@ -52,7 +54,16 @@ export function useMappingDraft({
 
   const saved = useMemo(() => savedMappingsOf(config), [config]);
   const target = targets?.find((x) => x.id === targetId) ?? null;
-  const columns: ColumnSet | null = useMemo(() => columnSet(sample), [sample]);
+  const sampleColumns: ColumnSet | null = useMemo(() => columnSet(sample), [sample]);
+  /** The target's saved mappings, widest first. With no sample the sheet shows one of them. */
+  const savedChoices = useMemo(
+    () => saved.filter((m) => m.targetId === targetId).sort((a, b) => b.fieldNames.length - a.fieldNames.length),
+    [saved, targetId],
+  );
+  const fromSaved = sampleColumns === null && savedChoices.length > 0;
+  const shown = fromSaved ? (savedChoices.find((m) => m.shapeHash === savedPick) ?? savedChoices[0]) : null;
+  // With no sample, the saved mapping's own columns, with no rows: every column is out of the sample.
+  const columns: ColumnSet | null = sampleColumns ?? (shown ? { hash: shown.shapeHash, fieldNames: [...shown.fieldNames], rows: [] } : null);
 
   const key = target && columns ? `${target.id}|${columns.hash}` : '';
   /** The saved mapping the column set edits: same names, else one holding them all, else the widest inside. */
@@ -79,6 +90,11 @@ export function useMappingDraft({
     targetId,
     setTargetId,
     columns,
+    /** True when there is no sample and the columns are a saved mapping's. */
+    fromSaved,
+    savedChoices,
+    savedPick: shown?.shapeHash ?? '',
+    setSavedPick,
     saved,
     loaded,
     savedTargetId,
