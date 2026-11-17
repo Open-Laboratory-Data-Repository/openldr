@@ -6,7 +6,7 @@ Use os seus registos e consultas de relatório. Não precisa de dados de exemplo
 
 **View workflows** abre definições e execuções. **Edit workflows** cria e altera. **Run workflows** inicia execuções manuais. **Manage workflow secrets** altera as credenciais webhook.
 
-O workflow fornecido **Ingest** também trata submissões Forms. Mantenha-o ativado. Editá-lo afeta todos os emissores que usam o webhook. Substitua um segredo apenas quando estiver preparado para atualizar esses emissores.
+O workflow fornecido **Ingest** também trata submissões Forms. Numa instalação nova, passa o que recebe por [Map to FHIR](/docs/map-to-fhir). Mantenha-o ativado. Editá-lo afeta todos os emissores que usam o webhook. Substitua um segredo apenas quando estiver preparado para atualizar esses emissores.
 
 ## Encontrar um workflow
 
@@ -98,7 +98,7 @@ Em **Runs**, selecione a linha correspondente à origem e à hora pretendidas.
 
 ### 3. Ler o resultado
 
-Verifique Completed ou Failed e depois o estado de cada nó. Neste exemplo Bundle, Form Validate é ignorado porque o ramo FHIR tratou a entrada.
+Verifique Completed ou Failed e depois o estado de cada nó. As imagens vêm de uma instalação criada antes de Map to FHIR. Aí, Form Validate é ignorado porque o ramo FHIR tratou o Bundle. Numa instalação nova, o Bundle passa antes por **Map to FHIR**.
 
 ![A execução concluída mostra o ramo que tratou este Bundle.](workflows-guide-run-result.png)
 
@@ -316,6 +316,8 @@ curl -X POST https://your-host/api/workflows/hooks/ingest \
 
 Uma resposta concluída contém `ok`, `runId` e `correlationId`. Uma resposta 202 significa aceite, com identificador do pedido e URL de consulta. Siga esse URL com o token atual. Respeite Retry-After. Reutilize a mesma chave de idempotência e uma entrada idêntica para repetir. Entrada diferente com a mesma chave devolve 409.
 
+Uma execução concluída pode ainda ter linhas retidas. Numa instalação nova, **Map to FHIR** envia uma linha que não consegue mapear para o nó Log **Held: not mapped**, e a resposta não o indica. Consulte esse nó em History.
+
 ## Ficheiros fictícios opcionais de prática
 
 Use apenas numa instalação de teste. [Descarregue um Bundle com um paciente fictício](https://openldr.online/docs-samples/user-guide/workflows/example-patient.json) para praticar o webhook. Guarde como `data/your-payload.json` na pasta da instalação, por exemplo `~/Downloads/openldr_ce` ou `C:\openldr_ce`. Use o comando acima com o anfitrião e token de teste.
@@ -345,6 +347,12 @@ Use `./openldr` na pasta instalada em Linux ou macOS, `.\openldr.ps1` em Windows
 ./openldr workflows receipts show REQUEST_ID --json
 ```
 
+Para experimentar os mapeamentos guardados de um nó Map to FHIR num ficheiro, execute `workflows map-test`. O comando não guarda nada. Guarde primeiro o workflow, porque o comando lê o nó guardado. No workflow fornecido Ingest, o identificador do nó é `map-1`.
+
+```shell
+./openldr workflows map-test wf-ingest map-1 data/your-rows.csv
+```
+
 ## Restaurar um workflow fornecido
 
 Os workflows de sistema oferecem **Reset to default** em vez de Delete. Repor descarta o grafo personalizado e exige confirmação. Exporte primeiro a definição atual se precisar de a guardar.
@@ -365,4 +373,4 @@ A reposição normalmente mantém o segredo webhook existente. Se o aviso indica
 
 ## Guias relacionados
 
-[Atividade](/docs/activity) acompanha o ciclo do conteúdo. [Relatórios agendados](/docs/report-pipeline) cria dados guardados e saída em livros Excel. [Conectores](/docs/connectors) configura sistemas externos.
+[Atividade](/docs/activity) acompanha o ciclo do conteúdo. [Relatórios agendados](/docs/report-pipeline) cria dados guardados e saída em livros Excel. [Conectores](/docs/connectors) configura sistemas externos. [Map to FHIR](/docs/map-to-fhir) mapeia as linhas próprias de um laboratório.

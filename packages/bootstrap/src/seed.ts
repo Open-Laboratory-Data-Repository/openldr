@@ -197,11 +197,11 @@ async function upsertPublishedForms(
 
 // Seed the default workflows — the unified inbound ingestion workflow (wf-ingest) + its
 // reactive companion, seeded once each (idempotent by stable id) so a fresh install ships a
-// real, runnable example. The ingest workflow's Form Validate branch is bound to the seeded
+// real, runnable example. The ingest workflow's Map to FHIR node allows the seeded
 // "Lab order" form's actual id, and the webhook secret is generated per-install (so no secret
 // is committed and reseeds never rotate it). Matched by id, not name, so operator-edited copies
-// are never re-created. No-op (with a warning) when the order form is absent, since the form
-// branch can't be bound without it.
+// are never re-created. No-op (with a warning) when the order form is absent, since the node
+// can't be bound to it without it.
 async function seedDefaultWorkflowsFor(app: EssentialSeedTarget, orderFormId: string | null): Promise<number> {
   if (!orderFormId) {
     console.warn(`[seed] "${ORDER_FORM_NAME}" form not found — skipping default workflow seed`);
@@ -254,9 +254,9 @@ async function enableIngestWorkflow(app: EssentialSeedTarget, existing: Workflow
 // form, the Lab order form, the unified ingestion workflow (+ its reactive companion) bound to it,
 // and the default target-warehouse connector. These are NOT optional demo data — the Users page
 // can't render without a published 'users'-targeted form, the Facilities page likewise needs a
-// published 'facilities'-targeted form, the ingest workflow's form branch can't validate without
-// the "Lab order" form, and the Query page can't run without a connector — so a fresh install with
-// SEED_ON_START=false must still get them. Deliberately mirrors the unconditional
+// published 'facilities'-targeted form, the ingest workflow's Map to FHIR node can't allow the
+// "Lab order" form without it, and the Query page can't run without a connector. So a fresh
+// install with SEED_ON_START=false must still get them. Deliberately mirrors the unconditional
 // `roles.seedSystemRoles()` boot-time seed (see createAppContext): idempotent (forms deduped by
 // name, workflows by id, connector by name), so it's safe to run on every boot and re-run
 // alongside the full seed.

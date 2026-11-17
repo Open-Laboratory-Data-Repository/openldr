@@ -48,10 +48,50 @@ describe('rebuildSystemWorkflow', () => {
     expect(secretPreserved).toBe(true);
   });
 
-  it('preserves the existing form binding', () => {
+  it('restores webhook, Map to FHIR, Persist store and the two Log nodes', () => {
     const { workflow } = rebuildSystemWorkflow(existing as never);
-    const fv = workflow.definition.nodes.find((n: any) => n.data?.templateId === 'form-validate');
-    expect((fv as any).data.config.formId).toBe('form-sample-order');
+    expect(workflow.definition.nodes.map((n: any) => n.id).sort()).toEqual(['log-1', 'log-held-1', 'map-1', 'persist-1', 'trigger-1']);
+  });
+
+  // An install seeded before Map to FHIR has a Form Validate node. Its form carries over.
+  it('carries the form of an old Form Validate node into the Map to FHIR node', () => {
+    const old = {
+      ...existing,
+      definition: {
+        nodes: [
+          existing.definition.nodes[0],
+          { id: 'form-validate-1', type: 'action', data: { templateId: 'form-validate', config: { formId: 'form-site-order', sourcePath: 'body' } } },
+        ],
+        edges: [],
+      },
+    };
+    const { workflow } = rebuildSystemWorkflow(old as never);
+    const map = workflow.definition.nodes.find((n: any) => n.data?.templateId === 'map-to-fhir');
+    expect(map.data.config.formIds).toEqual(['form-site-order']);
+    expect(workflow.definition.nodes.some((n: any) => n.data?.templateId === 'form-validate')).toBe(false);
+  });
+
+  it('carries the first allowed form of a Map to FHIR node', () => {
+    const current = {
+      ...existing,
+      definition: {
+        nodes: [
+          existing.definition.nodes[0],
+          { id: 'map-1', type: 'action', data: { templateId: 'map-to-fhir', config: { sourcePath: 'body', targetId: 'lab-result', formIds: ['form-site-order'], mappings: [] } } },
+        ],
+        edges: [],
+      },
+    };
+    const { workflow } = rebuildSystemWorkflow(current as never);
+    const map = workflow.definition.nodes.find((n: any) => n.data?.templateId === 'map-to-fhir');
+    expect(map.data.config.formIds).toEqual(['form-site-order']);
+  });
+
+  it('binds the seeded order form when the stored graph has no form', () => {
+    const gutted = { id: 'wf-ingest', name: 'x', definition: { nodes: [], edges: [] } };
+    const { workflow } = rebuildSystemWorkflow(gutted as never);
+    const map = workflow.definition.nodes.find((n: any) => n.data?.templateId === 'map-to-fhir');
+    expect(map.data.config.formIds).toEqual(['form-sample-order']);
   });
 
   // secretPreserved means exactly one thing: NO external sender's webhook token changed.

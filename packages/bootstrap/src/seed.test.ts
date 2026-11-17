@@ -166,13 +166,13 @@ describe('seedDatabase — default workflows', () => {
     expect(workflows.map((w) => w.id).sort()).toEqual(['wf-ingest', 'wf-sample-reactive']);
   });
 
-  it('injects the seeded "Lab order" form id into the Ingest Form Validate node', async () => {
+  it('injects the seeded "Lab order" form id into the Ingest Map to FHIR node', async () => {
     const { app, workflows } = fakeApp();
     await seedDatabase(fakeDb, app);
     const ingest = workflows.find((w) => w.id === 'wf-ingest');
-    const def = ingest?.definition as { nodes: { data: { action?: string; config?: { formId?: string } } }[] };
-    const fv = def.nodes.find((n) => n.data.action === 'form-validate');
-    expect(fv?.data.config?.formId).toBe(ORDER_FORM_ID);
+    const def = ingest?.definition as { nodes: { data: { action?: string; config?: { formIds?: string[] } } }[] };
+    const map = def.nodes.find((n) => n.data.action === 'map-to-fhir');
+    expect(map?.data.config?.formIds).toEqual([ORDER_FORM_ID]);
   });
 
   it('is idempotent — re-running seeds nothing new', async () => {
@@ -285,9 +285,9 @@ describe('seedEssentials — always-seeded minimum (SEED_ON_START off)', () => {
     expect(res.connectorsSeeded).toBe(0);
     expect(workflows.map((w) => w.id).sort()).toEqual(['wf-ingest', 'wf-sample-reactive']);
     const ingest = workflows.find((w) => w.id === 'wf-ingest');
-    const def = ingest?.definition as { nodes: { data: { action?: string; config?: { formId?: string } } }[] };
+    const def = ingest?.definition as { nodes: { data: { action?: string; config?: { formIds?: string[] } } }[] };
     const orderForm = forms.find((f) => f.name === 'Lab order')!;
-    expect(def.nodes.find((n) => n.data.action === 'form-validate')?.data.config?.formId).toBe(orderForm.id);
+    expect(def.nodes.find((n) => n.data.action === 'map-to-fhir')?.data.config?.formIds).toEqual([orderForm.id]);
   });
 
   it('is idempotent — re-running seeds nothing new', async () => {

@@ -9,7 +9,7 @@ export interface OperatorExample {
 const files = import.meta.glob('./operator-examples/*.json', { eager: true, import: 'default' }) as Record<string, Record<string, OperatorExample>>;
 const examples: Record<string, OperatorExample> = Object.assign({}, ...Object.values(files));
 export const OPERATOR_PLATFORM_MARKER = '<!-- operator-platform -->';
-export const OPERATOR_PAGES = ['upgrading', 'environment', 'auth-providers', 'load-data', 'v1-import', 'connector-diagnose', 'cli', 'development'];
+export const OPERATOR_PAGES = ['upgrading', 'environment', 'auth-providers', 'load-data', 'map-to-fhir', 'v1-import', 'connector-diagnose', 'cli', 'development'];
 
 export function operatorExample(src: string): OperatorExample | null {
   return src.startsWith('guide:operator-') ? examples[src.slice('guide:operator-'.length)] ?? null : null;

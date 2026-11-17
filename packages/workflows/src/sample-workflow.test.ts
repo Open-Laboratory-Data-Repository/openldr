@@ -6,6 +6,7 @@ describe('buildDefaultWorkflows', () => {
     orderFormId: 'form-xyz',
     webhookSecret: 'ingest-secret',
   });
+  const nodeIds = () => ingest.definition.nodes.map((n) => n.id).sort();
 
   it('returns exactly the Ingest + reactive workflows with stable ids', () => {
     expect(buildDefaultWorkflows({ orderFormId: 'form-xyz', webhookSecret: 's' })).toHaveLength(2);
@@ -24,44 +25,52 @@ describe('buildDefaultWorkflows', () => {
 
   it('injects the secret + path onto the single webhook node', () => {
     const hook = ingest.definition.nodes.find((n) => n.type === 'webhook');
+    expect(hook?.id).toBe('trigger-1');
     expect(hook?.data).toMatchObject({ secret: 'ingest-secret', path: 'ingest', method: 'POST' });
   });
 
-  it('routes with a Switch: fhir rule + form fallback', () => {
-    const route = ingest.definition.nodes.find((n) => n.type === 'condition');
-    expect(route?.id).toBe('route-1');
-    expect(route?.data.templateId).toBe('switch');
-    expect(route?.data.fallbackOutput).toBe('form');
-    const rules = route?.data.rules as Array<{ name: string; condition: string }>;
-    expect(rules).toHaveLength(1);
-    expect(rules[0].name).toBe('fhir');
-    expect(rules[0].condition).toBe(
-      "Array.isArray($json.body) || (!!$json.body && $json.body.resourceType === 'Bundle')",
-    );
+  it('is webhook, Map to FHIR, Persist store and two Log nodes, with no Switch, Unwrap or Form Validate', () => {
+    expect(nodeIds()).toEqual(['log-1', 'log-held-1', 'map-1', 'persist-1', 'trigger-1']);
+    const actions = ingest.definition.nodes.map((n) => n.data.action ?? n.data.templateId);
+    expect(actions).not.toContain('unwrap-bundle');
+    expect(actions).not.toContain('form-validate');
+    expect(ingest.definition.nodes.some((n) => n.type === 'condition')).toBe(false);
   });
 
-  it('has both branch nodes reading body, bound to the form id', () => {
-    const unwrap = ingest.definition.nodes.find((n) => n.data.action === 'unwrap-bundle');
-    expect(unwrap?.data.config).toMatchObject({ sourcePath: 'body' });
-    const fv = ingest.definition.nodes.find((n) => n.data.action === 'form-validate');
-    expect(fv?.data.config).toMatchObject({ formId: 'form-xyz', sourcePath: 'body' });
+  it('configures Map to FHIR to read body, target Lab result and allow the order form, with no mapping', () => {
+    const map = ingest.definition.nodes.find((n) => n.id === 'map-1');
+    expect(map?.type).toBe('action');
+    expect(map?.data).toMatchObject({ action: 'map-to-fhir', templateId: 'map-to-fhir', iconName: 'ArrowRightLeft' });
+    expect(map?.data.config).toEqual({ sourcePath: 'body', targetId: 'lab-result', formIds: ['form-xyz'], mappings: [] });
   });
 
   it('wires one persist source; the reactive listens to it', () => {
     const persist = ingest.definition.nodes.find((n) => n.data.action === 'persist-store');
+    expect(persist?.id).toBe('persist-1');
     expect(persist?.data.config).toMatchObject({ source: 'webhook-ingest' });
     const evt = reactive.definition.nodes.find((n) => n.data.triggerType === 'event');
     expect(evt?.data.config).toMatchObject({ source: 'webhook-ingest' });
   });
 
-  it('branch edges carry sourceHandle and both converge on persist', () => {
-    const edges = ingest.definition.edges;
-    const toUnwrap = edges.find((e) => e.target === 'unwrap-1');
-    const toForm = edges.find((e) => e.target === 'form-validate-1');
-    expect(toUnwrap).toMatchObject({ source: 'route-1', sourceHandle: 'fhir' });
-    expect(toForm).toMatchObject({ source: 'route-1', sourceHandle: 'form' });
-    const intoPersist = edges.filter((e) => e.target === 'persist-1').map((e) => e.source).sort();
-    expect(intoPersist).toEqual(['form-validate-1', 'unwrap-1']);
-    expect(edges.some((e) => e.source === 'persist-1' && e.target === 'log-1')).toBe(true);
+  it('sends out to Persist then Log, and held to its own Log', () => {
+    const edges = ingest.definition.edges.map((e) => [e.source, e.sourceHandle ?? null, e.target]);
+    expect(edges).toEqual([
+      ['trigger-1', null, 'map-1'],
+      ['map-1', 'out', 'persist-1'],
+      ['map-1', 'held', 'log-held-1'],
+      ['persist-1', null, 'log-1'],
+    ]);
+  });
+
+  it('labels the held Log so a person knows what it is, and logs only the reason', () => {
+    const held = ingest.definition.nodes.find((n) => n.id === 'log-held-1');
+    expect(held?.data).toMatchObject({ label: 'Held: not mapped', action: 'log', templateId: 'log' });
+    // A held item carries the original row. Only the reason, which holds no value, is logged.
+    expect(held?.data.message).toBe('Held: {{ $json.reason }}');
+  });
+
+  it('describes the new graph, not the old Switch', () => {
+    expect(ingest.description).toMatch(/Map to FHIR/);
+    expect(ingest.description).not.toMatch(/Switch/);
   });
 });

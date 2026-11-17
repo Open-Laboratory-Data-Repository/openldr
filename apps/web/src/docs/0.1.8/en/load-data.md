@@ -323,18 +323,23 @@ preview a mapping in the app before saving it as `mapping.json`.
 
 ### Post pre-built FHIR (the CDR toolchain)
 
-The **Ingest** workflow's FHIR branch is the front door for a system that already emits FHIR
+The **Ingest** workflow is the front door for a system that already emits FHIR
 resources — most notably the **CDR toolchain**, which posts a **FHIR transaction Bundle**. Current
 CDR toolchain versions **default** their target path (`OPENLDR_CE_HOOK_PATH`) to the unified
 webhook (`/api/workflows/hooks/ingest`), so no path config is needed out of the box. An **older
 toolchain — or one whose `.env` still pins the retired `cdr-ingest` path** — must set
 `OPENLDR_CE_HOOK_PATH=/api/workflows/hooks/ingest` (the **full** path, not bare `ingest`) to target
-it. The pipeline is **Webhook → Switch → Unwrap FHIR Bundle → Persist / Store → Log**:
+it. On a new install the pipeline is **Webhook → Map to FHIR → Persist store → Log**, with
+Map to FHIR's **held** output going to a second Log node, **Held: not mapped**. An install set up
+before this release keeps the older Switch and Unwrap FHIR Bundle graph until you reset it.
 
-- The request body is a **FHIR transaction Bundle** (or a bare array of FHIR resources). **Unwrap
-  FHIR Bundle** resolves internal references and unwraps it into **one item per resource**,
-  because **Persist / Store persists one FHIR resource per input item** — the same write path
-  (and **validation strictness gate**) the CLI uses.
+- The request body is a **FHIR transaction Bundle** or a bare array of FHIR resources. **Map to
+  FHIR** resolves internal references and unwraps it into **one item per resource**, because
+  **Persist store persists one FHIR resource per input item**. It is the same write path, and the
+  same **validation strictness gate**, the CLI uses.
+- **Map to FHIR checks each Bundle at that level before Persist store.** A Bundle that fails goes
+  to the held Log with a reason, and the webhook still answers `ok: true` for the run. Read the
+  held Log node in History to find it. See [Map to FHIR](/docs/map-to-fhir).
 - **One webhook handles tests and questionnaires together.** Persist stores every resource, and the
   projection routes each by `resourceType` (`Observation` → `lab_results`, `ServiceRequest` →
   `lab_requests`, `QuestionnaireResponse` → `questionnaire_responses`, …).
@@ -355,7 +360,7 @@ with no zone, so an omitted offset would silently shift every clinical timestamp
 deployment's country (Tanzania `+03:00`; Mozambique/Zambia `+02:00`).
 
 > **A Bundle or array is what the webhook wants — but not what the CLI wants.** The `ingest`
-> webhook's FHIR branch accepts a transaction **Bundle** or a bare **array** of resources. The
+> webhook accepts a transaction **Bundle** or a bare **array** of resources. The
 > `openldr ingest` **CLI** below is narrower: it takes a FHIR **Bundle** (or one bare resource),
 > not an array. Send each payload to the path that matches its shape.
 
