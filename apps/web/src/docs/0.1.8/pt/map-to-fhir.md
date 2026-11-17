@@ -20,6 +20,18 @@ O guia da aplicação **Map to FHIR** mostra passo a passo como mapear um fichei
 
 Use um nó Map to FHIR por cada ficheiro do laboratório. Uma linha só é mapeada quando exatamente um mapeamento guardado do nó conhece todas as suas colunas. Quando dois mapeamentos guardados servem para uma linha, o nó retém-na.
 
+## Um ficheiro com uma coluna por análise
+
+Uma folha de laboratório ou uma exportação WHONET tem muitas vezes uma coluna por análise, por exemplo uma coluna por antibiótico. Para o mapear:
+
+1. No painel de mapeamento, escolha a primeira coluna de análise no campo de resultado.
+2. Selecione **Adicionar outra coluna** e marque as outras colunas de análise.
+3. Confira a análise ao lado de cada coluna. Começa com o nome da coluna.
+4. Para transformar as análises em códigos padrão, junte uma regra **Lista de códigos** em **Análise**.
+5. Guarde o mapeamento, e depois o workflow.
+
+Cada linha dá então um resultado por cada coluna de análise com valor, ligado ao paciente, à amostra e ao pedido da linha. Uma célula vazia não dá resultado. O mapeamento guarda a análise de cada coluna como configuração, nunca um valor de uma linha.
+
 ## O que o emissor vê
 
 O webhook responde pela execução inteira. O workflow predefinido **Ingest** recusa uma mensagem inteira quando alguma parte dela não pode ser guardada. Como nada está ligado a **retidos**, uma única linha retida faz falhar o nó e a execução, e o Persist store não corre. Nada dessa mensagem é guardado. O emissor recebe HTTP 500 com `ok: false`, o identificador da execução e o erro `workflow execution failed; inspect the recorded run before resubmitting`. Os motivos não vêm na resposta. Estão na execução, no nó Map to FHIR, em **History**.
@@ -38,18 +50,18 @@ Alguns laboratórios querem guardar as linhas boas de uma mensagem e pôr as má
 
 ![Experimentar os mapeamentos guardados de um nó Map to FHIR num ficheiro.](guide:operator-data-map-test)
 
-O comando termina com 0 quando todas as linhas passam e com 1 quando alguma linha fica retida. Com `--json`, mostra o resultado de cada linha, com os registos, e portanto com os valores da linha. Uma execução sobre um CSV lê cada célula como texto, sem os espaços à volta, e deixa de fora as células vazias. **Extract from File** com **Read every cell as text** ativo dá as mesmas linhas, mas mantém esses espaços.
+O comando termina com 0 quando todas as linhas passam e com 1 quando alguma linha fica retida. Verifica cada linha sozinha, como **Testar** no studio. Duas linhas que dão o mesmo resultado com outros valores passam ambas aí, enquanto uma execução retém a segunda. Com `--json`, mostra o resultado de cada linha, com os registos, e portanto com os valores da linha. Uma execução sobre um CSV lê cada célula como texto, sem os espaços à volta, e deixa de fora as células vazias. **Extract from File** com **Read every cell as text** ativo dá as mesmas linhas, mas mantém esses espaços.
 
 ## Limites
 
 - Uma linha sem número do paciente fica retida.
-- A mesma linha enviada duas vezes dá os mesmos registos, não cópias. Cada identificador de registo vem dos identificadores da própria linha. O do paciente usa o número do paciente e o seu sistema. O da amostra junta o número da amostra ou, na falta dele, a data de colheita. O do pedido junta o código de análise quando mapeado. O do resultado junta a análise e, quando mapeada, a data do resultado.
-- Numa mesma execução, as linhas que dão o mesmo paciente, a mesma amostra ou o mesmo pedido fazem um só registo, e uma linha seguinte só preenche o que uma anterior deixou vazio. Um ficheiro mais pobre enviado numa execução seguinte ainda substitui o registo guardado. Uma segunda linha da mesma execução que dá o mesmo resultado com outros valores é retida: `this row gives a result that an earlier row of this run already gave, with other values`.
+- A mesma linha enviada duas vezes dá os mesmos registos, não cópias. Cada identificador de registo vem dos identificadores da própria linha. O do paciente usa o número do paciente e o seu sistema. O da amostra junta o número da amostra ou, na falta dele, a data de colheita. O do pedido junta o código de análise quando mapeado. O do resultado junta a análise e, quando mapeada, a data do resultado. Quando o campo Análises pedidas do pedido não está mapeado, o pedido recebe os códigos de análise dos seus resultados, e o seu identificador não muda.
+- Numa mesma execução, as linhas que dão o mesmo paciente, a mesma amostra ou o mesmo pedido fazem um só registo, e uma linha seguinte só preenche o que uma anterior deixou vazio. Um ficheiro com menos colunas enviado numa execução seguinte substitui o registo guardado, e os campos que não tem ficam vazios. History guarda a versão antiga. Uma segunda linha da mesma execução que dá o mesmo resultado com outros valores é retida: `this row gives a result that an earlier row of this run already gave, with other values`.
+- Um paciente já guardado com outro identificador e o mesmo número do paciente, por exemplo a partir de um formulário, fica com um segundo registo Patient. Nada procura um paciente pelo número antes de guardar.
 - Se um ficheiro mapear o sistema do número do paciente e outro não, o mesmo paciente fica com dois registos Patient. Mapeie-o da mesma forma em todos os ficheiros, por exemplo como valor fixo. Sem ele, a deteção de duplicados não consegue comparar pacientes pelo número.
 - Ative **Read every cell as text** em **Extract from File** antes de um nó Map to FHIR. Cada célula CSV chega então como o texto do ficheiro, e as regras **Número** e **Data** leem-na. Um nó adicionado a partir da biblioteca de nós tem a opção ativa, e um nó guardado antes desta versão tem-na desativada. Sem ela, `12,5` chega como 125, `007` como 7, e uma data como `01/12/2024` como um número de dia, que a regra **Data** retém.
-- Num ficheiro Excel, uma célula de data chega como um número de dia, com a opção ativa ou não, e a regra **Data** retém a linha. Guarde a folha como CSV, ou formate as células de data como texto.
-- Um texto simples num campo codificado é guardado como o código do próprio laboratório, sem sistema. Uma regra **Lista de códigos** guarda um código padrão. A lista de códigos do próprio laboratório precisa de um sistema de origem na regra; sem ele, nenhum código corresponde.
-- Um ficheiro com uma coluna por análise, por exemplo uma coluna por antibiótico, não pode ser mapeado tal como está. Várias colunas num mesmo campo repetido precisam de um código de análise para cada uma, e um único código partilhado é recusado com `Test: two Observation records in this row have the same value, so they would share one id`.
+- Num ficheiro Excel, uma célula de data chega como um número de dia. A regra **Data** lê-o com **Uma célula de data do Excel**, só no sistema de datas 1900 habitual do Excel. Um livro guardado no sistema de datas 1904, num Mac antigo, dá datas quatro anos e um dia mais cedo.
+- Um texto simples num campo codificado é guardado como o código do próprio laboratório, sem sistema. Uma regra **Lista de códigos** guarda um código padrão, e um código escolhido numa regra **Valores** é guardado com o seu sistema. A lista de códigos do próprio laboratório precisa de um sistema de origem na regra; sem ele, nenhum código corresponde.
 - A regra **Data** lê apenas uma data, sem hora.
 - O nó não lê mensagens HL7 v2.
 - Os motivos estão em inglês.

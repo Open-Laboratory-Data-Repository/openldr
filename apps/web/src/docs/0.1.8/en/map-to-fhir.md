@@ -20,6 +20,18 @@ The in-app guide **Map to FHIR** shows how to map a file, step by step.
 
 Use one Map to FHIR node for each lab file. A row is mapped only when exactly one saved mapping of the node knows all its columns. When two saved mappings fit a row, the node holds it.
 
+## A file with one column per test
+
+A lab sheet or a WHONET export often has one column per test, for example one column per antibiotic. To map it:
+
+1. In the mapping panel, pick the first test column on the result field.
+2. Select **Add another column** and tick the other test columns.
+3. Check the test beside each column. It starts as the column's name.
+4. To turn the tests into standard codes, add a **Code list** rule on **Test**.
+5. Save the mapping, then the workflow.
+
+Each row then gives one result for each test column with a value, linked to the row's patient, specimen and order. A blank cell gives no result. The mapping holds each column's test as config, never a value from a row.
+
 ## What a sender sees
 
 The webhook answers for the whole run. The default **Ingest** workflow refuses a whole message when any part of it cannot be stored. With nothing connected to **held**, one held row fails the node and the run, and Persist store does not run. Nothing from that message is stored. The sender gets HTTP 500 with `ok: false`, the run id and the error `workflow execution failed; inspect the recorded run before resubmitting`. The held reasons are not in the response. They are in the run, on the Map to FHIR node, in **History**.
@@ -38,18 +50,18 @@ Some labs want the good rows of a message stored and the bad ones set aside. For
 
 ![Try the saved mappings of a Map to FHIR node on a file.](guide:operator-data-map-test)
 
-The command exits with 0 when every row passes and 1 when any row is held. With `--json`, it prints each row's result, records included, so the output holds the row's values. A CSV run reads every cell as text, with the spaces around it cut, and leaves out blank cells. **Extract from File** with **Read every cell as text** on gives the same rows but keeps those spaces.
+The command exits with 0 when every row passes and 1 when any row is held. It checks each row alone, as **Test** in the studio does. Two rows that give the same result with other values both pass there, while a run holds the second. With `--json`, it prints each row's result, records included, so the output holds the row's values. A CSV run reads every cell as text, with the spaces around it cut, and leaves out blank cells. **Extract from File** with **Read every cell as text** on gives the same rows but keeps those spaces.
 
 ## Limits
 
 - A row with no Patient ID is held.
-- The same row sent twice gives the same records, not copies. Each record id comes from the row's own identifiers. The patient's uses the Patient ID and its system. The specimen's adds the specimen number or, without one, the collected date. The order's adds its test code when mapped. The result's adds the test and, when mapped, the result date.
-- In one run, rows that give the same patient, specimen or order make one record, and a later row fills only what an earlier one left empty. A thin file sent in a later run still replaces the stored record. A second row of one run that gives the same result with other values is held: `this row gives a result that an earlier row of this run already gave, with other values`.
+- The same row sent twice gives the same records, not copies. Each record id comes from the row's own identifiers. The patient's uses the Patient ID and its system. The specimen's adds the specimen number or, without one, the collected date. The order's adds its test code when mapped. The result's adds the test and, when mapped, the result date. When the order's Tests field is not mapped, the order takes the test codes of its results, and its id does not change.
+- In one run, rows that give the same patient, specimen or order make one record, and a later row fills only what an earlier one left empty. A file with fewer columns sent in a later run replaces the stored record, and the fields it does not have become empty. History keeps the old version. A second row of one run that gives the same result with other values is held: `this row gives a result that an earlier row of this run already gave, with other values`.
+- A patient already stored under another id with the same Patient ID, for example from a form, gets a second Patient record. Nothing looks a patient up by Patient ID before saving.
 - If one file maps the Patient ID system and another does not, one patient gets two Patient records. Map it the same way in every file, for example as a fixed value. Without it, duplicate-patient detection cannot compare patients by Patient ID.
 - Turn on **Read every cell as text** on **Extract from File** before a Map to FHIR node. Then each CSV cell arrives as the text in the file, and the **Number** and **Date** rules read it. A node added from the Node library has it on, and a node saved before this release has it off. With it off, `12,5` arrives as 125, `007` as 7, and a date such as `01/12/2024` as a day number, which the **Date** rule holds.
-- In an Excel file, a date cell arrives as a day number, with the option on or off, and the **Date** rule holds the row. Save the sheet as CSV, or format the date cells as text.
-- A plain text in a coded field is stored as the lab's own code, with no system. A **Code list** rule stores a standard code. The lab's own code list needs a source system on the rule; without one, no code matches.
-- A file with one column per test, for example one column per antibiotic, cannot be mapped as it is. Several columns on one repeating field need a test code for each, and one shared code is refused with `Test: two Observation records in this row have the same value, so they would share one id`.
+- In an Excel file, a date cell arrives as a day number. The **Date** rule reads it with **Excel date cell**, in Excel's usual 1900 date system only. A workbook saved in the 1904 date system, from an old Mac, gives dates four years and a day early.
+- A plain text in a coded field is stored as the lab's own code, with no system. A **Code list** rule stores a standard code, and a code picked in a **Values** rule is stored with its system. The lab's own code list needs a source system on the rule; without one, no code matches.
 - The **Date** rule reads a date only, not a time.
 - The node does not read HL7 v2 messages.
 - Held reasons are in English.

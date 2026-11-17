@@ -35,7 +35,7 @@ To use a run that already came in, select **Use the latest stored run** instead 
 
 The panel keeps the first 20 rows of the sample. It lists every column found in the sample's rows, also a column that is filled only after the 20th row. Such a column shows no example.
 
-With no sample, the panel shows the node's saved mapping, the widest one when there are several. A **Saved mapping** select picks another. Every column is marked as not in this sample, and no example shows. You can change the mapping and save it. **Test** needs a sample.
+With no sample, the panel shows the node's saved mapping, the widest one when there are several. A **Saved mapping** select picks another. No example shows, and no column is marked as missing, since there is no sample to miss it from. You can change the mapping and save it. **Test** needs a sample.
 
 ## Pick a column for each field
 
@@ -44,12 +44,26 @@ Each line of the panel is one field of the target. A star marks a required field
 1. On a field's line, open the select under **From your data** and choose the column that fills it.
 2. Choose **Fixed value** instead when every row has the same value, then type it.
 3. Leave **Not mapped** on a field your file does not have.
-4. For a field that repeats, select **Add another column** to add a second column.
+4. For a field that repeats, select **Add another column**, then tick each column to add. Type in **Filter columns** to narrow a long list. **Select all shown** ticks every column the list shows.
 5. When a grey **Suggested** line shows a column, select **Accept** to use it.
 
 **Expected result:** the panel counts the required fields you mapped, and shows an example from the sample beside each column you picked.
 
 A suggestion shows only on a field with no column. The field stays without one until you select **Accept**.
+
+## Map a file with one column per test
+
+A lab sheet or a WHONET export often has one column per test, for example `AMP`, `CIP` and `GEN`. Each cell holds that test's result.
+
+1. On **Result (text)**, or on the result field your values fit, pick the first test column under **From your data**.
+2. Select **Add another column** and tick the other test columns.
+3. Check the test beside each column. It starts as the column's name. Type another test when the name is not the code you want.
+4. Leave **Test** as it is. It reads **Set for each column on Result (text)**, with the real field's name.
+5. To turn the tests into standard codes, add a **Code list** rule on **Test**. It runs on each column's test.
+
+**Expected result:** each column shows on its own line, with its test beside it. A row then gives one result for each test column with a value, all linked to the row's patient, specimen and order. A blank cell gives no result.
+
+A rule on the result field runs on every column. The panel refuses to save while a test is empty, or while two columns have the same test. Only one result field carries the tests. Another result field with several columns takes the tests of the same lines, so it needs the same number of columns. When you remove columns back to one, **Test** gets its own column select again.
 
 Map **Patient ID system** the same way in every file, for example as a **Fixed value** with the same text each time. When you leave it out, the Patient record's id comes from the Patient ID alone, and duplicate-patient detection cannot compare these patients by Patient ID.
 
@@ -66,7 +80,7 @@ Use a rule when the cell does not hold the value as FHIR needs it.
 
 The kinds of rule are these.
 
-- **Date** reads a date in the **Format** you type, for example `dd/MM/yyyy`.
+- **Date** reads a date in the **Format** you type, for example `dd/MM/yyyy`. For a date column of an Excel file, set **Date is** to **Excel date cell**. Excel keeps a date as a day number, and this reads it.
 - **Values** translates each value in your file to a code, one line per value.
 - **Code list** looks the value up in a code list. **This lab's own code list** holds the mappings added on a term's **Mappings** tab in Terminology. It holds codes from several systems, so pick its **Source system** too. The panel refuses to save without one. The other code lists are the ConceptMap resources stored in OpenLDR.
 - **Split** keeps one part of the cell.
@@ -75,9 +89,9 @@ The kinds of rule are these.
 
 The panel suggests a rule from the form of the example values, such as a decimal comma or a date format. Check a date suggestion when the day and the month can both be 12 or less.
 
-When a coded field's values are not its codes, the panel suggests **Values**. **Accept** opens the rule with one line per distinct value of the sample, at most 20, and an empty **To** side. Fill in what each value means. A line is saved only once its **To** side is filled.
+When a coded field's values are not its codes, the panel suggests **Values**. **Accept** opens the rule with one line per distinct value of the sample, at most 20. When a value is a code, or a code's name, ignoring case, that code is already picked on the **To** side. Fill in what the other values mean. A line is saved only once its **To** side is filled. A field with FHIR's own list, such as **Sex**, picks from that list. When every example of a date column is a day number, the panel suggests the Excel date cell.
 
-A plain text in a coded field, such as **Test**, is stored as the lab's own code, with no system. A **Code list** rule stores a standard code instead.
+A plain text in a coded field, such as **Test**, is stored as the lab's own code, with no system. A **Code list** rule stores a standard code instead. A code picked on the **To** side of a **Values** rule is stored with its system.
 
 ## Add a field the target does not show
 
@@ -99,7 +113,7 @@ A plain text in a coded field, such as **Test**, is stored as the lab's own code
 
 **Expected result:** every row of the sample passes, or you know why a row does not.
 
-Test sends the sample rows, at most 20. The reasons are in English.
+Test sends the sample rows, at most 20. The reasons are in English. Test checks each row alone. Two rows that give the same result with other values both pass in Test, while a run holds the second.
 
 ## Save the mapping
 
@@ -111,7 +125,7 @@ Test sends the sample rows, at most 20. The reasons are in English.
 
 **Expected result:** **Saved mappings** in the node settings counts the new mapping.
 
-The panel refuses to save while a required field has no column or fixed value, or while a rule is not finished. Saving replaces a saved mapping of the same node whose columns are all in the new one. When that mapping has fewer columns than the new one, the panel says so before you save.
+The panel refuses to save while a required field has no column or fixed value, while a rule is not finished, or while a column's test is empty or repeated. Saving replaces a saved mapping of the same node whose columns are all in the new one. When that mapping has fewer columns than the new one, the panel says so before you save.
 
 ## Wire the held output
 
@@ -133,8 +147,10 @@ The Map to FHIR node's result in **History** lists up to 20 held reasons. Log th
 
 - A row matches a saved mapping when every column of the row is one the mapping knows. **Extract from File** leaves out blank cells, so a blank cell there does not count. In a JSON post, a key counts even when its value is empty. When two saved mappings of one node fit a row, the node holds it. Use one Map to FHIR node for each lab file.
 - A row with no Patient ID is held.
-- The same row sent twice gives the same records, not copies. Each record id comes from the row's own identifiers. The patient's uses the Patient ID and its system. The specimen's adds the specimen number or, without one, the collected date. The order's adds its test code when mapped. The result's adds the test and, when mapped, the result date.
-- In one run, rows that give the same patient, specimen or order make one record. A later row fills only what an earlier one left empty. A thin file sent in a later run still replaces the stored record.
+- The same row sent twice gives the same records, not copies. Each record id comes from the row's own identifiers. The patient's uses the Patient ID and its system. The specimen's adds the specimen number or, without one, the collected date. The order's adds its test code when mapped. The result's adds the test and, when mapped, the result date. When the order's **Tests** field is not mapped, the order takes the test codes of its results, and its id does not change.
+- In one run, rows that give the same patient, specimen or order make one record. A later row fills only what an earlier one left empty.
+- A file with fewer columns sent after a fuller one replaces the stored patient. The fields the thinner file does not have become empty. **History** keeps the old version.
+- A patient already stored under another id with the same Patient ID, for example from a form, gets a second Patient record. Nothing looks a patient up by Patient ID before saving.
 - In one run, a second row that gives the same result with other values is held, with the reason `this row gives a result that an earlier row of this run already gave, with other values`.
 - If one file maps **Patient ID system** and another does not, one patient gets two Patient records.
 - Duplicate-patient detection compares Patient IDs only when **Patient ID system** is mapped. It compares names and dates of birth only when the patient has a family name, a given name and a date of birth. A patient with neither is stored, and never found as a duplicate.
@@ -143,8 +159,7 @@ The Map to FHIR node's result in **History** lists up to 20 held reasons. Log th
 - OpenLDR never saves sample values in the workflow. The panel forgets the sample when you close it.
 - The **Date** rule reads a date only. A cell with a time after the date does not match the format, and the row is held.
 - Turn on **Read every cell as text** on **Extract from File** before a Map to FHIR node. Then each CSV cell arrives as the text in the file, so `12,5`, `007` and `03/11/2026` arrive as written. Use the **Number** and **Date** rules to read them. A node added from the Node library has it on. A node saved before this release has it off. With it off, `12,5` arrives as the number 125, `007` as 7, and a date such as `01/12/2024` as a day number, which the **Date** rule holds. The Map to FHIR settings warn when the node before it has the option off.
-- In an Excel file, a date cell arrives as a day number, with the option on or off. The **Date** rule holds such a row. Save the sheet as CSV, or format the date cells as text.
-- A file with one column per test, for example one column per antibiotic, cannot be mapped as it is. Several columns on one repeating field need a test code for each column, and one shared code is refused with `Test: two Observation records in this row have the same value, so they would share one id`.
+- In an Excel file, a date cell arrives as a day number. Use the **Date** rule with **Excel date cell**. It reads Excel's usual 1900 date system only. A workbook saved in the 1904 date system, from an old Mac, gives dates four years and a day early.
 - **This lab's own code list** needs a **Source system**. Without one, no code matches. When a code gives two targets, the row is held with `more than one match in the code list`.
 - This node does not read HL7 v2 messages.
 

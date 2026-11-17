@@ -243,6 +243,15 @@ The default Ingest workflow's fork becomes one Map to FHIR node feeding Persist 
 - **Rows of one run that give one patient, specimen or order make one record** (fix wave). The
   first non-empty value of each path wins, and the record goes out once, at the first row. Across
   runs, a thin row still replaces the stored record.
+- **A file with one column per test can be mapped** (Task 8c; ruled by the parent session on the
+  operator's behalf, 2026-11-17: "Build this one, it is not optional"). A row of a repeating record
+  can take `from: { fixedList: string[] }`, one fixed value per position, paired with the result
+  field's `{ fields }`. A fixed value never keeps a position alive, so a blank cell gives no result.
+  On the sheet, each column of a result field shows with its test, which starts as the column's
+  name. Also in Task 8c, by the same source: the Date rule reads an Excel date cell
+  (`format: 'excel'`, 1900 system only); an order with no mapped Tests field takes its results'
+  test codes (`derived` on the target, outside every id); a Values rule's To can be a code with
+  its system; the within-run merge matches pinned list entries by their pinned values.
 
 ## 9. Still not checked
 

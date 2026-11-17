@@ -20,6 +20,18 @@ Le guide intégré **Map to FHIR** montre pas à pas comment mapper un fichier.
 
 Utilisez un nœud Map to FHIR par fichier de laboratoire. Une ligne n'est mappée que si un seul mappage enregistré du nœud connaît toutes ses colonnes. Quand deux mappages enregistrés conviennent à une ligne, le nœud la retient.
 
+## Un fichier avec une colonne par examen
+
+Une feuille de laboratoire ou un export WHONET a souvent une colonne par examen, par exemple une colonne par antibiotique. Pour le mapper :
+
+1. Dans le panneau de mappage, choisissez la première colonne d'examen sur le champ de résultat.
+2. Sélectionnez **Ajouter une autre colonne** et cochez les autres colonnes d'examen.
+3. Vérifiez l'examen à côté de chaque colonne. Il commence par le nom de la colonne.
+4. Pour changer les examens en codes standard, ajoutez une règle **Liste de codes** sur **Examen**.
+5. Enregistrez le mappage, puis le workflow.
+
+Chaque ligne donne alors un résultat pour chaque colonne d'examen qui a une valeur, lié au patient, à l'échantillon et à la demande de la ligne. Une cellule vide ne donne pas de résultat. Le mappage garde l'examen de chaque colonne comme configuration, jamais une valeur d'une ligne.
+
 ## Ce que voit l'émetteur
 
 Le webhook répond pour l'exécution entière. Le workflow par défaut **Ingest** refuse un message entier dès qu'une partie ne peut pas être stockée. Comme rien n'est relié à **retenus**, une seule ligne retenue fait échouer le nœud et l'exécution, et Persist store ne s'exécute pas. Rien de ce message n'est stocké. L'émetteur reçoit HTTP 500 avec `ok: false`, l'identifiant de l'exécution et l'erreur `workflow execution failed; inspect the recorded run before resubmitting`. Les raisons ne sont pas dans la réponse. Elles sont dans l'exécution, sur le nœud Map to FHIR, dans **History**.
@@ -38,18 +50,18 @@ Certains laboratoires veulent stocker les bonnes lignes d'un message et mettre l
 
 ![Essayer les mappages enregistrés d'un nœud Map to FHIR sur un fichier.](guide:operator-data-map-test)
 
-La commande se termine avec 0 quand chaque ligne passe, et avec 1 quand une ligne est retenue. Avec `--json`, elle affiche le résultat de chaque ligne, enregistrements compris, donc avec les valeurs de la ligne. Une exécution sur un CSV lit chaque cellule comme du texte, sans les espaces autour, et laisse de côté les cellules vides. **Extract from File** avec **Read every cell as text** activé donne les mêmes lignes, mais garde ces espaces.
+La commande se termine avec 0 quand chaque ligne passe, et avec 1 quand une ligne est retenue. Elle vérifie chaque ligne seule, comme **Tester** dans le studio. Deux lignes qui donnent le même résultat avec d'autres valeurs y réussissent toutes deux, alors qu'une exécution retient la seconde. Avec `--json`, elle affiche le résultat de chaque ligne, enregistrements compris, donc avec les valeurs de la ligne. Une exécution sur un CSV lit chaque cellule comme du texte, sans les espaces autour, et laisse de côté les cellules vides. **Extract from File** avec **Read every cell as text** activé donne les mêmes lignes, mais garde ces espaces.
 
 ## Limites
 
 - Une ligne sans identifiant patient est retenue.
-- La même ligne envoyée deux fois donne les mêmes enregistrements, pas des copies. Chaque identifiant d'enregistrement vient des identifiants de la ligne. Celui du patient utilise l'identifiant patient et son système. Celui de l'échantillon ajoute le numéro d'échantillon ou, à défaut, la date de prélèvement. Celui de la demande ajoute son code d'examen s'il est mappé. Celui du résultat ajoute l'examen et, si elle est mappée, la date du résultat.
-- Dans une même exécution, les lignes qui donnent le même patient, le même échantillon ou la même demande font un seul enregistrement, et une ligne suivante ne remplit que ce qu'une ligne précédente a laissé vide. Un fichier plus pauvre envoyé lors d'une exécution suivante remplace encore l'enregistrement stocké. Une deuxième ligne d'une même exécution qui donne le même résultat avec d'autres valeurs est retenue : `this row gives a result that an earlier row of this run already gave, with other values`.
+- La même ligne envoyée deux fois donne les mêmes enregistrements, pas des copies. Chaque identifiant d'enregistrement vient des identifiants de la ligne. Celui du patient utilise l'identifiant patient et son système. Celui de l'échantillon ajoute le numéro d'échantillon ou, à défaut, la date de prélèvement. Celui de la demande ajoute son code d'examen s'il est mappé. Celui du résultat ajoute l'examen et, si elle est mappée, la date du résultat. Quand le champ Examens demandés de la demande n'est pas mappé, la demande prend les codes d'examen de ses résultats, et son identifiant ne change pas.
+- Dans une même exécution, les lignes qui donnent le même patient, le même échantillon ou la même demande font un seul enregistrement, et une ligne suivante ne remplit que ce qu'une ligne précédente a laissé vide. Un fichier avec moins de colonnes envoyé lors d'une exécution suivante remplace l'enregistrement stocké, et les champs qu'il n'a pas deviennent vides. History garde l'ancienne version. Une deuxième ligne d'une même exécution qui donne le même résultat avec d'autres valeurs est retenue : `this row gives a result that an earlier row of this run already gave, with other values`.
+- Un patient déjà stocké sous un autre identifiant avec le même identifiant patient, par exemple depuis un formulaire, reçoit un deuxième enregistrement Patient. Rien ne cherche un patient par son identifiant patient avant l'enregistrement.
 - Si un fichier mappe le système de l'identifiant patient et un autre non, un même patient reçoit deux enregistrements Patient. Mappez-le de la même façon dans chaque fichier, par exemple en valeur fixe. Sans lui, la détection des doublons ne peut pas comparer les patients par leur identifiant.
 - Activez **Read every cell as text** sur **Extract from File** avant un nœud Map to FHIR. Chaque cellule CSV arrive alors comme le texte du fichier, et les règles **Nombre** et **Date** la lisent. Un nœud ajouté depuis la bibliothèque de nœuds a l'option activée, et un nœud enregistré avant cette version l'a désactivée. Sans elle, `12,5` arrive comme 125, `007` comme 7, et une date comme `01/12/2024` comme un numéro de jour, que la règle **Date** retient.
-- Dans un fichier Excel, une cellule de date arrive comme un numéro de jour, que l'option soit activée ou non, et la règle **Date** retient la ligne. Enregistrez la feuille en CSV, ou mettez les cellules de date au format texte.
-- Un texte simple dans un champ codé est stocké comme le code propre au laboratoire, sans système. Une règle **Liste de codes** stocke un code standard. La liste de codes du laboratoire demande un système source sur la règle ; sans lui, aucun code ne correspond.
-- Un fichier avec une colonne par examen, par exemple une colonne par antibiotique, ne peut pas être mappé tel quel. Plusieurs colonnes sur un même champ répété demandent un code d'examen pour chacune, et un code unique partagé est refusé avec `Test: two Observation records in this row have the same value, so they would share one id`.
+- Dans un fichier Excel, une cellule de date arrive comme un numéro de jour. La règle **Date** le lit avec **Une cellule de date Excel**, dans le système de dates 1900 habituel d'Excel seulement. Un classeur enregistré dans le système de dates 1904, sur un ancien Mac, donne des dates quatre ans et un jour trop tôt.
+- Un texte simple dans un champ codé est stocké comme le code propre au laboratoire, sans système. Une règle **Liste de codes** stocke un code standard, et un code choisi dans une règle **Valeurs** est stocké avec son système. La liste de codes du laboratoire demande un système source sur la règle ; sans lui, aucun code ne correspond.
 - La règle **Date** lit une date seule, sans heure.
 - Le nœud ne lit pas les messages HL7 v2.
 - Les raisons sont en anglais.

@@ -35,7 +35,7 @@ Pour utiliser une exécution déjà reçue, sélectionnez **Utiliser la dernièr
 
 Le panneau garde les 20 premières lignes de l'échantillon. Il liste toutes les colonnes trouvées dans les lignes de l'échantillon, même une colonne remplie seulement après la 20e ligne. Une telle colonne n'a pas d'exemple.
 
-Sans échantillon, le panneau montre le mappage enregistré du nœud, le plus large s'il y en a plusieurs. La liste **Mappage enregistré** en choisit un autre. Chaque colonne est marquée comme absente de l'échantillon, et aucun exemple ne s'affiche. Vous pouvez modifier le mappage et l'enregistrer. **Tester** demande un échantillon.
+Sans échantillon, le panneau montre le mappage enregistré du nœud, le plus large s'il y en a plusieurs. La liste **Mappage enregistré** en choisit un autre. Aucun exemple ne s'affiche, et aucune colonne n'est marquée comme absente, puisqu'il n'y a pas d'échantillon. Vous pouvez modifier le mappage et l'enregistrer. **Tester** demande un échantillon.
 
 ## Choisir une colonne pour chaque champ
 
@@ -44,12 +44,26 @@ Chaque ligne du panneau est un champ de la cible. Une étoile marque un champ ob
 1. Sur la ligne d'un champ, ouvrez la liste sous **Depuis vos données** et choisissez la colonne qui le remplit.
 2. Choisissez plutôt **Valeur fixe** quand toutes les lignes ont la même valeur, puis saisissez-la.
 3. Laissez **Non mappé** sur un champ absent de votre fichier.
-4. Pour un champ qui se répète, sélectionnez **Ajouter une autre colonne** pour ajouter une deuxième colonne.
+4. Pour un champ qui se répète, sélectionnez **Ajouter une autre colonne**, puis cochez chaque colonne à ajouter. Tapez dans **Filtrer les colonnes** pour réduire une longue liste. **Sélectionner toutes les colonnes affichées** coche chaque colonne de la liste.
 5. Quand une ligne grise **Suggestion** propose une colonne, sélectionnez **Accepter** pour l'utiliser.
 
 **Résultat attendu :** le panneau compte les champs obligatoires mappés et montre un exemple de l'échantillon à côté de chaque colonne choisie.
 
 Une suggestion n'apparaît que sur un champ sans colonne. Le champ reste sans colonne tant que vous n'avez pas sélectionné **Accepter**.
+
+## Mapper un fichier avec une colonne par examen
+
+Une feuille de laboratoire ou un export WHONET a souvent une colonne par examen, par exemple `AMP`, `CIP` et `GEN`. Chaque cellule contient le résultat de cet examen.
+
+1. Sur **Résultat (texte)**, ou sur le champ de résultat qui convient à vos valeurs, choisissez la première colonne d'examen sous **Depuis vos données**.
+2. Sélectionnez **Ajouter une autre colonne** et cochez les autres colonnes d'examen.
+3. Vérifiez l'examen à côté de chaque colonne. Il commence par le nom de la colonne. Tapez un autre examen quand le nom n'est pas le code voulu.
+4. Laissez **Examen** tel quel. Il affiche **Défini pour chaque colonne sur Résultat (texte)**, avec le nom du vrai champ.
+5. Pour changer les examens en codes standard, ajoutez une règle **Liste de codes** sur **Examen**. Elle s'applique à l'examen de chaque colonne.
+
+**Résultat attendu :** chaque colonne apparaît sur sa propre ligne, avec son examen à côté. Une ligne donne alors un résultat pour chaque colonne d'examen qui a une valeur, tous liés au patient, à l'échantillon et à la demande de la ligne. Une cellule vide ne donne pas de résultat.
+
+Une règle sur le champ de résultat s'applique à chaque colonne. Le panneau refuse d'enregistrer tant qu'un examen est vide, ou que deux colonnes ont le même examen. Un seul champ de résultat porte les examens. Un autre champ de résultat à plusieurs colonnes prend les examens des mêmes lignes, il lui faut donc le même nombre de colonnes. Quand vous revenez à une seule colonne, **Examen** retrouve sa propre liste de colonnes.
 
 Mappez **Système de l'identifiant patient** de la même façon dans chaque fichier, par exemple en **Valeur fixe** avec le même texte à chaque fois. Sans lui, l'identifiant de l'enregistrement Patient ne vient que de l'identifiant patient. La détection des doublons ne peut pas non plus comparer ces patients par leur identifiant.
 
@@ -66,7 +80,7 @@ Utilisez une règle quand la cellule ne contient pas la valeur sous la forme att
 
 Voici les types de règle.
 
-- **Date** lit une date selon le **Format** saisi, par exemple `dd/MM/yyyy`.
+- **Date** lit une date selon le **Format** saisi, par exemple `dd/MM/yyyy`. Pour une colonne de date d'un fichier Excel, mettez **La date est** sur **Une cellule de date Excel**. Excel garde une date sous forme de numéro de jour, et cette règle le lit.
 - **Valeurs** traduit chaque valeur de votre fichier en un code, une ligne par valeur.
 - **Liste de codes** cherche la valeur dans une liste de codes. **La liste de codes du laboratoire** contient les correspondances ajoutées dans l'onglet **Mappings** d'un terme, dans Terminologie. Elle contient des codes de plusieurs systèmes : choisissez aussi son **Système source**. Le panneau refuse d'enregistrer sans lui. Les autres listes sont les ressources ConceptMap stockées dans OpenLDR.
 - **Découper** garde une partie de la cellule.
@@ -75,9 +89,9 @@ Voici les types de règle.
 
 Le panneau suggère une règle d'après la forme des valeurs d'exemple, par exemple une virgule décimale ou un format de date. Vérifiez une date suggérée quand le jour et le mois peuvent tous deux valoir 12 ou moins.
 
-Quand les valeurs d'un champ codé ne sont pas ses codes, le panneau suggère **Valeurs**. **Accepter** ouvre la règle avec une ligne par valeur distincte de l'échantillon, 20 au plus, et un côté **Vers** vide. Indiquez ce que veut dire chaque valeur. Une ligne n'est enregistrée qu'une fois son côté **Vers** rempli.
+Quand les valeurs d'un champ codé ne sont pas ses codes, le panneau suggère **Valeurs**. **Accepter** ouvre la règle avec une ligne par valeur distincte de l'échantillon, 20 au plus. Quand une valeur est un code, ou le nom d'un code, sans tenir compte des majuscules, ce code est déjà choisi côté **Vers**. Indiquez ce que veulent dire les autres valeurs. Une ligne n'est enregistrée qu'une fois son côté **Vers** rempli. Un champ avec la liste propre de FHIR, comme **Sexe**, choisit dans cette liste. Quand chaque exemple d'une colonne de date est un numéro de jour, le panneau suggère la cellule de date Excel.
 
-Un texte simple dans un champ codé, comme **Examen**, est stocké comme le code propre au laboratoire, sans système. Une règle **Liste de codes** stocke à la place un code standard.
+Un texte simple dans un champ codé, comme **Examen**, est stocké comme le code propre au laboratoire, sans système. Une règle **Liste de codes** stocke à la place un code standard. Un code choisi côté **Vers** d'une règle **Valeurs** est stocké avec son système.
 
 ## Ajouter un champ que la cible n'affiche pas
 
@@ -99,7 +113,7 @@ Un texte simple dans un champ codé, comme **Examen**, est stocké comme le code
 
 **Résultat attendu :** chaque ligne de l'échantillon réussit, ou vous savez pourquoi elle échoue.
 
-Le test envoie les lignes de l'échantillon, 20 au plus. Les raisons sont en anglais.
+Le test envoie les lignes de l'échantillon, 20 au plus. Les raisons sont en anglais. Le test vérifie chaque ligne seule. Deux lignes qui donnent le même résultat avec d'autres valeurs réussissent toutes deux au test, alors qu'une exécution retient la seconde.
 
 ## Enregistrer le mappage
 
@@ -111,7 +125,7 @@ Le test envoie les lignes de l'échantillon, 20 au plus. Les raisons sont en ang
 
 **Résultat attendu :** **Mappages enregistrés**, dans les paramètres du nœud, compte le nouveau mappage.
 
-Le panneau refuse d'enregistrer tant qu'un champ obligatoire n'a ni colonne ni valeur fixe, ou qu'une règle n'est pas terminée. L'enregistrement remplace un mappage enregistré du même nœud dont toutes les colonnes figurent dans le nouveau. Quand ce mappage a moins de colonnes que le nouveau, le panneau le signale avant l'enregistrement.
+Le panneau refuse d'enregistrer tant qu'un champ obligatoire n'a ni colonne ni valeur fixe, qu'une règle n'est pas terminée, ou que l'examen d'une colonne est vide ou répété. L'enregistrement remplace un mappage enregistré du même nœud dont toutes les colonnes figurent dans le nouveau. Quand ce mappage a moins de colonnes que le nouveau, le panneau le signale avant l'enregistrement.
 
 ## Relier la sortie des lignes retenues
 
@@ -133,8 +147,10 @@ Dans **History**, le résultat du nœud Map to FHIR liste jusqu'à 20 raisons. N
 
 - Une ligne correspond à un mappage enregistré quand chacune de ses colonnes est connue du mappage. **Extract from File** laisse de côté les cellules vides, qui ne comptent donc pas. Dans un envoi JSON, une clé compte même si sa valeur est vide. Quand deux mappages enregistrés d'un même nœud conviennent à une ligne, le nœud la retient. Utilisez un nœud Map to FHIR par fichier de laboratoire.
 - Une ligne sans identifiant patient est retenue.
-- La même ligne envoyée deux fois donne les mêmes enregistrements, pas des copies. Chaque identifiant d'enregistrement vient des identifiants de la ligne. Celui du patient utilise l'identifiant patient et son système. Celui de l'échantillon ajoute le numéro d'échantillon ou, à défaut, la date de prélèvement. Celui de la demande ajoute son code d'examen s'il est mappé. Celui du résultat ajoute l'examen et, si elle est mappée, la date du résultat.
-- Dans une même exécution, les lignes qui donnent le même patient, le même échantillon ou la même demande font un seul enregistrement. Une ligne suivante ne remplit que ce qu'une ligne précédente a laissé vide. Un fichier plus pauvre envoyé lors d'une exécution suivante remplace encore l'enregistrement stocké.
+- La même ligne envoyée deux fois donne les mêmes enregistrements, pas des copies. Chaque identifiant d'enregistrement vient des identifiants de la ligne. Celui du patient utilise l'identifiant patient et son système. Celui de l'échantillon ajoute le numéro d'échantillon ou, à défaut, la date de prélèvement. Celui de la demande ajoute son code d'examen s'il est mappé. Celui du résultat ajoute l'examen et, si elle est mappée, la date du résultat. Quand le champ **Examens demandés** de la demande n'est pas mappé, la demande prend les codes d'examen de ses résultats, et son identifiant ne change pas.
+- Dans une même exécution, les lignes qui donnent le même patient, le même échantillon ou la même demande font un seul enregistrement. Une ligne suivante ne remplit que ce qu'une ligne précédente a laissé vide.
+- Un fichier avec moins de colonnes envoyé après un fichier plus complet remplace le patient stocké. Les champs que le fichier plus pauvre n'a pas deviennent vides. **History** garde l'ancienne version.
+- Un patient déjà stocké sous un autre identifiant avec le même identifiant patient, par exemple depuis un formulaire, reçoit un deuxième enregistrement Patient. Rien ne cherche un patient par son identifiant patient avant l'enregistrement.
 - Dans une même exécution, une deuxième ligne qui donne le même résultat avec d'autres valeurs est retenue, avec la raison `this row gives a result that an earlier row of this run already gave, with other values`.
 - Si un fichier mappe **Système de l'identifiant patient** et un autre non, un même patient reçoit deux enregistrements Patient.
 - La détection des doublons de patients ne compare les identifiants patient que si **Système de l'identifiant patient** est mappé. Elle ne compare les noms et dates de naissance que si le patient a un nom de famille, un prénom et une date de naissance. Un patient qui n'a ni l'un ni l'autre est stocké, mais jamais signalé comme doublon.
@@ -143,8 +159,7 @@ Dans **History**, le résultat du nœud Map to FHIR liste jusqu'à 20 raisons. N
 - OpenLDR n'enregistre jamais de valeur d'échantillon dans le workflow. Le panneau oublie l'échantillon quand vous le fermez.
 - La règle **Date** lit une date seule. Une cellule avec une heure après la date ne correspond pas au format, et la ligne est retenue.
 - Activez **Read every cell as text** sur **Extract from File** avant un nœud Map to FHIR. Chaque cellule CSV arrive alors comme le texte du fichier : `12,5`, `007` et `03/11/2026` arrivent tels qu'écrits. Lisez-les avec les règles **Nombre** et **Date**. Un nœud ajouté depuis la bibliothèque de nœuds a l'option activée. Un nœud enregistré avant cette version l'a désactivée. Sans elle, `12,5` arrive comme le nombre 125, `007` comme 7, et une date comme `01/12/2024` comme un numéro de jour, que la règle **Date** retient. Les réglages de Map to FHIR avertissent quand le nœud précédent a l'option désactivée.
-- Dans un fichier Excel, une cellule de date arrive comme un numéro de jour, que l'option soit activée ou non. La règle **Date** retient une telle ligne. Enregistrez la feuille en CSV, ou mettez les cellules de date au format texte.
-- Un fichier avec une colonne par examen, par exemple une colonne par antibiotique, ne peut pas être mappé tel quel. Plusieurs colonnes sur un même champ répété demandent un code d'examen pour chaque colonne, et un code unique partagé est refusé avec `Test: two Observation records in this row have the same value, so they would share one id`.
+- Dans un fichier Excel, une cellule de date arrive comme un numéro de jour. Utilisez la règle **Date** avec **Une cellule de date Excel**. Elle ne lit que le système de dates 1900 habituel d'Excel. Un classeur enregistré dans le système de dates 1904, sur un ancien Mac, donne des dates quatre ans et un jour trop tôt.
 - **La liste de codes du laboratoire** demande un **Système source**. Sans lui, aucun code ne correspond. Quand un code donne deux cibles, la ligne est retenue avec `more than one match in the code list`.
 - Ce nœud ne lit pas les messages HL7 v2.
 
