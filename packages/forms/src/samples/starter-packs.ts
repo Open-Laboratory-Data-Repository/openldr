@@ -7,8 +7,8 @@ import { sampleForms } from './forms';
 /**
  * The seeded starter packs. The first four are built from the form OpenLDR itself ships for that
  * resource type (`./forms.ts`), so a pack cannot drift from its form. Specimen and Observation have
- * no sample form, so their packs are written out below (`LITERAL_PACKS`). Corlix's packs use its own code systems
- * and API property names, which CE's pages would not save (spec S5).
+ * no sample form, so their packs are written out below (`LITERAL_PACKS`). Corlix's packs use its
+ * own code systems and API property names, which CE's pages would not save (spec S5).
  *
  * A pack stores no codes (AGENTS.md §8). A coded select takes its options from the FHIR element's own
  * list when the studio turns the entry into a field.

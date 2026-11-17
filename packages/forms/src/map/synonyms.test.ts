@@ -25,6 +25,27 @@ describe('synonym lists', () => {
   }
 });
 
+describe('synonym coverage', () => {
+  it('gives every field of the Lab result target at least one English column name', () => {
+    for (const f of target.fields) expect(synonymsEn[f.path as keyof typeof synonymsEn]?.length ?? 0, f.path).toBeGreaterThan(0);
+  });
+
+  for (const [locale, file] of Object.entries(files)) {
+    it(`lists no ${locale} column name under two fields`, () => {
+      const seen = new Map<string, string>();
+      const twice: string[] = [];
+      for (const [key, names] of Object.entries(file)) {
+        for (const n of names) {
+          const at = seen.get(n.toLowerCase());
+          if (at && at !== key) twice.push(`${n}: ${at} and ${key}`);
+          seen.set(n.toLowerCase(), key);
+        }
+      }
+      expect(twice).toEqual([]);
+    });
+  }
+});
+
 describe('mapSynonyms', () => {
   it('gives the English list for en and for an unknown locale', () => {
     expect(mapSynonyms('en')).toEqual(synonymsEn);

@@ -1,7 +1,7 @@
 import type { FhirResource } from 'fhir/r4';
 import { z } from 'zod';
 import { applyRule, MapRuleSchema, type MapValue, type RuleDeps } from './rules';
-import { parseTargetPath, type MapTarget } from './target';
+import { parseTargetPath, type IdentityPart, type MapTarget } from './target';
 import { writeValue, type WriteValue } from './write';
 
 /**
@@ -30,8 +30,16 @@ export const SavedMappingSchema = z.object({
 export type SavedMapping = z.infer<typeof SavedMappingSchema>;
 
 export interface ApplyDeps extends RuleDeps {
-  newId(): string;
+  /**
+   * A record's id from its type and identity values, so the same row always gives the same ids.
+   * It must hash, so no row value shows in an id, and give a FHIR id (letters, digits, `-`, `.`,
+   * at most 64). It must join the parts in a way that cannot be confused, for example sha256 hex
+   * of `JSON.stringify(parts)`: a plain separator could occur inside a value.
+   */
+  hashId(parts: string[]): string | Promise<string>;
 }
+
+const FHIR_ID = /^[A-Za-z0-9.-]{1,64}$/;
 
 export type ApplyResult = { ok: true; resources: FhirResource[] } | { ok: false; reason: string; field?: string };
 type Failure = Extract<ApplyResult, { ok: false }>;
@@ -99,6 +107,11 @@ function missing(key: string, label: string): Failure {
   return { ok: false, reason: `${label} is required and has no value`, field: key };
 }
 
+/** An identity part's value as text. A coding gives `system|code`. */
+function partText(v: MapValue): string {
+  return typeof v === 'object' ? `${v.system ?? ''}|${v.code}` : String(v);
+}
+
 function write(resource: Resource, key: string, value: WriteValue): Failure | null {
   const r = writeValue(resource, key, value);
   return r.ok ? null : { ok: false, reason: r.reason, field: key };
@@ -140,7 +153,78 @@ export async function applyMapping(
     rowsOf.set(type, [...(rowsOf.get(type) ?? []), resolved]);
   }
 
+  const rowOf = new Map<string, ResolvedRow>();
+  for (const rows of rowsOf.values()) for (const r of rows) if (!rowOf.has(r.row.targetPath)) rowOf.set(r.row.targetPath, r);
+  const identityOf = new Map(target.identity.map((i) => [i.record, i]));
   const ids = new Map<string, string>();
+
+  /** The values of one list of parts, or the first part with no value. */
+  const collect = (parts: IdentityPart[], index: number): { values: string[] } | { missing: string } => {
+    const values: string[] = [];
+    for (const part of parts) {
+      if ('record' in part) {
+        const got = ids.get(part.record);
+        if (got === undefined) throw new Error(`map target ${target.id}: the identity names ${part.record}, which has no id yet`);
+        values.push(got);
+        continue;
+      }
+      const r = rowOf.get(part.field);
+      const v = r ? (r.values.length === 1 ? r.values[0] : r.values[index]) : null;
+      if (v === null || v === undefined) {
+        if (!part.optional) return { missing: part.field };
+        values.push('');
+      } else values.push(partText(v));
+    }
+    return { values };
+  };
+
+  const labelOf = (key: string) => target.fields.find((f) => f.path === key)?.label ?? key;
+
+  const idFor = async (type: string, index: number): Promise<{ id: string; parts: IdentityPart[] } | Failure> => {
+    const ident = identityOf.get(type);
+    if (!ident) throw new Error(`map target ${target.id}: ${type} has no identity`);
+    let used = ident.parts;
+    let got = collect(ident.parts, index);
+    if ('missing' in got && ident.fallback) {
+      const alt = collect(ident.fallback, index);
+      if ('values' in alt) {
+        got = alt;
+        used = ident.fallback;
+      }
+    }
+    if ('missing' in got) {
+      return { ok: false, reason: `${labelOf(got.missing)} is needed to tell one ${type} record from another, and has no value`, field: got.missing };
+    }
+    const id = await deps.hashId([type, ...got.values]);
+    if (typeof id !== 'string' || !FHIR_ID.test(id)) {
+      throw new Error(`map target ${target.id}: hashId gave a ${type} id FHIR does not allow`);
+    }
+    return { id, parts: used };
+  };
+
+  // Single records first, each after the records its identity names.
+  const singleId = async (type: string, seen: string[]): Promise<Failure | null> => {
+    if (ids.has(type)) return null;
+    if (seen.includes(type)) throw new Error(`map target ${target.id}: the identities form a cycle through ${type}`);
+    const ident = identityOf.get(type);
+    for (const part of [...(ident?.parts ?? []), ...(ident?.fallback ?? [])]) {
+      if (!('record' in part)) continue;
+      const to = recordOf.get(part.record);
+      if (!to || to.repeats) throw new Error(`map target ${target.id}: the identity of ${type} names ${part.record}, which is not one record`);
+      const f = await singleId(part.record, [...seen, type]);
+      if (f) return f;
+    }
+    const r = await idFor(type, 0);
+    if ('ok' in r) return r;
+    ids.set(type, r.id);
+    return null;
+  };
+  for (const record of target.records) {
+    if (record.repeats) continue;
+    const f = await singleId(record.type, []);
+    if (f) return f;
+  }
+
   const fill = (resource: Resource, rows: ResolvedRow[], index: number): Failure | null => {
     for (const d of target.defaults) {
       if (d.path.split('.')[0] !== resource.resourceType) continue;
@@ -167,9 +251,7 @@ export async function applyMapping(
   const single: Resource[] = [];
   for (const record of target.records) {
     if (record.repeats) continue;
-    const resource: Resource = { resourceType: record.type, id: deps.newId() };
-    ids.set(record.type, resource.id);
-    single.push(resource);
+    single.push({ resourceType: record.type, id: ids.get(record.type)! });
   }
   for (const resource of single) {
     const f = fill(resource, rowsOf.get(resource.resourceType) ?? [], 0);
@@ -186,9 +268,21 @@ export async function applyMapping(
       return { ok: false, reason: `${bad.sources.join(', ')}: ${bad.values.length} values where the other rows give ${n}`, field: bad.sources[0] };
     }
     const multi = rows.filter((r) => r.values.length === n && n > 1);
+    const taken = new Set<string>();
     for (let i = 0; i < n; i++) {
       if (multi.length > 0 && multi.every((r) => r.values[i] === null)) continue;
-      const resource: Resource = { resourceType: record.type, id: deps.newId() };
+      const got = await idFor(record.type, i);
+      if ('ok' in got) return got;
+      if (taken.has(got.id)) {
+        // Name the source field of the first id part that changes from record to record.
+        const key = got.parts.find((p): p is { field: string } => 'field' in p && (rowOf.get(p.field)?.values.length ?? 0) > 1)?.field
+          ?? got.parts.find((p): p is { field: string } => 'field' in p)?.field ?? record.type;
+        const r = rowOf.get(key);
+        const field = r ? (r.sources[i] ?? r.sources[0]) : key;
+        return { ok: false, reason: `${labelOf(key)}: two ${record.type} records in this row have the same value, so they would share one id`, field };
+      }
+      taken.add(got.id);
+      const resource: Resource = { resourceType: record.type, id: got.id };
       const f = fill(resource, rows, i);
       if (f) return f;
       repeated.push(resource);

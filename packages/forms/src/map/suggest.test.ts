@@ -15,6 +15,7 @@ const target: MapTarget = {
     { path: 'Patient.birthDate', label: 'Date of birth', required: false, repeats: false, valueSet: null },
     { path: 'Patient.gender', label: 'Sex', required: false, repeats: false, valueSet: null },
   ],
+  identity: [{ record: 'Patient', parts: [{ field: ID }] }],
 };
 
 const synonyms = { [ID]: ['pat no', 'patient id'], 'Patient.birthDate': ['dob'] };

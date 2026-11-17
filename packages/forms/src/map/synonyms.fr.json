@@ -1,5 +1,6 @@
 {
   "Patient.identifier.value": ["id_patient", "num_patient", "numero_patient", "no_patient", "n_patient", "ipp", "num_dossier"],
+  "Patient.identifier.system": ["systeme_identifiant", "type_identifiant"],
   "Patient.name.given?use=official": ["prenom", "prénom"],
   "Patient.name.family?use=official": ["nom", "nom_famille", "nom_de_famille"],
   "Patient.birthDate": ["date_naissance", "date_de_naissance", "ddn", "naissance"],

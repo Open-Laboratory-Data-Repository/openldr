@@ -1,5 +1,6 @@
 {
   "Patient.identifier.value": "Identifiant patient",
+  "Patient.identifier.system": "Système de l'identifiant patient",
   "Patient.name.given?use=official": "Prénom",
   "Patient.name.family?use=official": "Nom de famille",
   "Patient.birthDate": "Date de naissance",
@@ -15,7 +16,6 @@
   "ServiceRequest.identifier.value?system=urn:openldr:order:requisition": "Numéro de demande",
   "ServiceRequest.note.0.text": "Renseignements cliniques",
   "ServiceRequest.requester?type=Organization": "Établissement demandeur",
-  "ServiceRequest.extension?url=urn:openldr:ext:rejection": "Motif de rejet de la demande",
   "Observation.code": "Examen",
   "Observation.valueQuantity.value": "Résultat (nombre)",
   "Observation.valueString": "Résultat (texte)",

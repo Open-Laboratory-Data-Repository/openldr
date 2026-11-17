@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Coding } from 'fhir/r4';
-import { validateResource } from '@openldr/fhir';
+import { validateBatch, validateResource, type StrictnessLevel } from '@openldr/fhir';
 import { seededStarterPacks } from '../samples/starter-packs';
 import { applyMapping, type ApplyDeps, type FieldMapping } from './apply';
 import { parseTargetPath } from './target';
@@ -36,31 +36,48 @@ describe('labResultTarget', () => {
     ]);
   });
 
-  it('fills the status values FHIR requires, as form extraction does', () => {
+  it('fills the status values FHIR requires, as form extraction does, and marks results as laboratory', () => {
     expect(target.defaults).toEqual([
       { path: 'ServiceRequest.status', value: 'active' },
       { path: 'ServiceRequest.intent', value: 'order' },
       { path: 'Observation.status', value: 'final' },
+      { path: 'Observation.category', value: { system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' } },
     ]);
   });
 
-  it('makes every required entry of the four packs a required field', () => {
-    const linkPaths = new Set(target.links.map((l) => l.path));
-    for (const p of packs.filter((x) => LAB_PACKS.includes(x.id))) {
-      for (const e of p.entries) {
-        if (!e.required || !e.fhirPath || linkPaths.has(e.fhirPath)) continue;
-        const f = target.fields.find((x) => parseTargetPath(x.path)?.path === e.fhirPath && x.label === e.label);
-        expect(f, `${p.id}: ${e.label}`).toBeDefined();
-        expect(f!.required, `${p.id}: ${e.label}`).toBe(true);
-      }
-    }
+  it('requires only the short list, whatever the packs mark', () => {
+    expect(target.fields.filter((f) => f.required).map((f) => f.path)).toEqual([
+      'Patient.identifier.value', 'Specimen.collection.collectedDateTime', 'Observation.code',
+    ]);
+    // The packs keep their own flags for forms.
+    const sr = packs.find((p) => p.id === 'pack-service-request')!;
+    expect(sr.entries.find((e) => e.fhirPath === 'ServiceRequest.priority')?.required).toBe(true);
+    expect(target.fields.every((f) => parseTargetPath(f.path) !== null)).toBe(true);
   });
 
-  it('adds the patient identifier, which no pack holds, first and not required', () => {
-    expect(target.fields[0]).toEqual({
-      path: 'Patient.identifier.value', label: 'Patient ID', required: false, repeats: false, valueSet: null,
-    });
-    expect(packs.find((p) => p.id === 'pack-patient')!.entries.some((e) => e.fhirPath === 'Patient.identifier.value')).toBe(false);
+  it('adds the patient identifier and its system, which no pack holds, first; the identifier is required', () => {
+    expect(target.fields.slice(0, 2)).toEqual([
+      { path: 'Patient.identifier.value', label: 'Patient ID', required: true, repeats: false, valueSet: null },
+      { path: 'Patient.identifier.system', label: 'Patient ID system', required: false, repeats: false, valueSet: null },
+    ]);
+    expect(packs.find((p) => p.id === 'pack-patient')!.entries.some((e) => e.fhirPath?.startsWith('Patient.identifier'))).toBe(false);
+  });
+
+  it('identifies each record from the row, as the operator ruled', () => {
+    expect(target.identity).toEqual([
+      { record: 'Patient', parts: [{ field: 'Patient.identifier.system', optional: true }, { field: 'Patient.identifier.value' }] },
+      {
+        record: 'Specimen',
+        parts: [{ record: 'Patient' }, { field: 'Specimen.accessionIdentifier.value' }],
+        fallback: [{ record: 'Patient' }, { field: 'Specimen.collection.collectedDateTime' }],
+      },
+      { record: 'ServiceRequest', parts: [{ record: 'Specimen' }, { field: 'ServiceRequest.code' }], fallback: [{ record: 'Specimen' }] },
+      { record: 'Observation', parts: [{ record: 'ServiceRequest' }, { field: 'Observation.code' }] },
+    ]);
+  });
+
+  it('leaves out Order rejection, which no single cell can fill', () => {
+    expect(target.fields.map((f) => f.path)).not.toContain('ServiceRequest.extension?url=urn:openldr:ext:rejection');
   });
 
   it('throws naming the pack when one is missing', () => {
@@ -144,11 +161,12 @@ describe('a fully mapped made-up row', () => {
     flag_b: 'flag-y',
   };
 
-  // Every field of the target but two. Order rejection's leaf is an Extension, which no single cell
-  // can fill. Referring Facility shares ServiceRequest.requester with Requesting Clinician, and an
-  // order has one requester, so a row maps one of the two. The writer refuses both cases (see below).
+  // Every field of the target but one. Referring Facility shares ServiceRequest.requester with
+  // Requesting Clinician, and an order has one requester, so a row maps one of the two. The writer
+  // refuses both at once (see below).
   const rows: FieldMapping[] = [
     { targetPath: 'Patient.identifier.value', from: { field: 'pat_no' } },
+    { targetPath: 'Patient.identifier.system', from: { fixed: 'urn:test:patient-id' } },
     { targetPath: 'Patient.name.given?use=official', from: { field: 'first' } },
     { targetPath: 'Patient.name.family?use=official', from: { field: 'last' } },
     { targetPath: 'Patient.birthDate', from: { field: 'dob' } },
@@ -173,18 +191,62 @@ describe('a fully mapped made-up row', () => {
 
   const mapping = (r: FieldMapping[]) => ({ shapeHash: 'h', fieldNames: Object.keys(row).sort(), targetId: target.id, rows: r });
 
+    // A tiny stable hash (FNV-1a 64), so ids are valid FHIR ids and hold no row value.
+  function fnv(text: string): string {
+    let h = 0xcbf29ce484222325n;
+    for (const b of new TextEncoder().encode(text)) h = ((h ^ BigInt(b)) * 0x100000001b3n) & 0xffffffffffffffffn;
+    return h.toString(16).padStart(16, '0');
+  }
+  const hash = (parts: string[]) => fnv(JSON.stringify(parts));
+
   function deps(): ApplyDeps {
-    let n = 0;
     return {
-      newId: () => `id-${++n}`,
+      hashId: hash,
       translateCode: async (_url, value): Promise<Coding | null> =>
         value === 'TA' || value === 'TB' ? { system: 'urn:test:codes', code: value.toLowerCase() } : null,
     };
   }
 
-  it('covers every field but Referring Facility and Order rejection', () => {
+  it('covers every field but Referring Facility', () => {
     const mapped = new Set(rows.map((r) => r.targetPath));
-    expect(target.fields.filter((f) => !mapped.has(f.path)).map((f) => f.label)).toEqual(['Referring Facility', 'Order rejection']);
+    expect(target.fields.filter((f) => !mapped.has(f.path)).map((f) => f.label)).toEqual(['Referring Facility']);
+  });
+
+  it('puts the patient ID system and value in one identifier entry', async () => {
+    const res = await applyMapping(mapping(rows), target, row, deps());
+    if (!res.ok) throw new Error(res.reason);
+    expect((res.resources[0] as unknown as Record<string, unknown>).identifier).toEqual([{ system: 'urn:test:patient-id', value: 'T-0001' }]);
+  });
+
+  it('gives ids from the row: the same row twice gives the same ids, and the parts are the ruled ones', async () => {
+    const a = await applyMapping(mapping(rows), target, row, deps());
+    const b = await applyMapping(mapping(rows), target, { ...row }, deps());
+    if (!a.ok || !b.ok) throw new Error('not ok');
+    expect(b.resources.map((r) => r.id)).toEqual(a.resources.map((r) => r.id));
+    const P = hash(['Patient', 'urn:test:patient-id', 'T-0001']);
+    const S = hash(['Specimen', P, 'S-0001']);
+    const R = hash(['ServiceRequest', S, 'test-panel-x']);
+    expect(a.resources.map((r) => r.id)).toEqual([
+      P, S, R, hash(['Observation', R, 'urn:test:codes|ta']), hash(['Observation', R, 'urn:test:codes|tb']),
+    ]);
+  });
+
+  it('identifies the specimen by its collected date when the row has no specimen number', async () => {
+    const res = await applyMapping(mapping(rows), target, { ...row, spec_no: '' }, deps());
+    if (!res.ok) throw new Error(res.reason);
+    const P = hash(['Patient', 'urn:test:patient-id', 'T-0001']);
+    expect(res.resources[1].id).toBe(hash(['Specimen', P, '2026-11-03T08:30:00Z']));
+  });
+
+  it('gives the order the specimen\'s id parts when the row has no order test code', async () => {
+    const res = await applyMapping(mapping(rows.filter((r) => r.targetPath !== 'ServiceRequest.code')), target, row, deps());
+    if (!res.ok) throw new Error(res.reason);
+    expect(res.resources[2].id).toBe(hash(['ServiceRequest', res.resources[1].id!]));
+  });
+
+  it('holds a row with no patient ID, naming the field', async () => {
+    const res = await applyMapping(mapping(rows), target, { ...row, pat_no: '' }, deps());
+    expect(res).toMatchObject({ ok: false, field: 'Patient.identifier.value' });
   });
 
   it('refuses Referring Facility beside Requesting Clinician, and passes it alone', async () => {
@@ -219,6 +281,42 @@ describe('a fully mapped made-up row', () => {
     });
   });
 
+  const LEVELS: StrictnessLevel[] = ['low', 'medium', 'high'];
+  const batchOpts = (level: StrictnessLevel) => ({ level, resolveServiceRequest: async () => false });
+  const shortRows: FieldMapping[] = [
+    { targetPath: 'Patient.identifier.value', from: { field: 'pat_no' } },
+    { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'collected' } },
+    { targetPath: 'Observation.code', from: { field: 'test_a' }, rule: { kind: 'codeList', conceptMapUrl: 'urn:test:map' } },
+    { targetPath: 'Observation.valueQuantity.value', from: { field: 'num_a' } },
+  ];
+
+  it('maps a row with only patient ID, collected date, a test and a result, and the batch passes at every level', async () => {
+    const res = await applyMapping(mapping(shortRows), target, row, deps());
+    if (!res.ok) throw new Error(res.reason);
+    expect(res.resources.map((r) => r.resourceType)).toEqual(['Patient', 'Specimen', 'ServiceRequest', 'Observation']);
+    for (const r of res.resources) expect(validateResource(r).ok, `${r.resourceType}/${r.id}`).toBe(true);
+    for (const level of LEVELS) {
+      const v = await validateBatch(res.resources, batchOpts(level));
+      expect(v.ok ? 'ok' : JSON.stringify(v.outcome), level).toBe('ok');
+    }
+  });
+
+  it('marks a mapped result as laboratory, so the order rule runs on it, and fails it with no order link', async () => {
+    const res = await applyMapping(mapping(shortRows), target, row, deps());
+    if (!res.ok) throw new Error(res.reason);
+    const obs = res.resources[3] as unknown as Record<string, unknown>;
+    expect(obs.category).toEqual([{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' }] }]);
+    const { basedOn: _gone, ...unlinked } = obs;
+    for (const level of ['medium', 'high'] as const) {
+      expect((await validateBatch(res.resources, batchOpts(level))).ok, level).toBe(true);
+      const v = await validateBatch([...res.resources.slice(0, 3), unlinked], batchOpts(level));
+      expect(v.ok, level).toBe(false);
+      if (!v.ok) expect(JSON.stringify(v.outcome), level).toContain('basedOn');
+    }
+    // At low the rule does not run.
+    expect((await validateBatch([...res.resources.slice(0, 3), unlinked], batchOpts('low'))).ok).toBe(true);
+  });
+
   it('passes validateResource with only the required fields mapped', async () => {
     const required = new Set(target.fields.filter((f) => f.required).map((f) => f.path));
     const res = await applyMapping(mapping(rows.filter((r) => required.has(r.targetPath))), target, row, deps());
@@ -229,7 +327,7 @@ describe('a fully mapped made-up row', () => {
     }
   });
 
-  it('refuses a cell sent to Order rejection rather than write a broken extension', async () => {
+  it('refuses a cell a person sends to the Order rejection path rather than write a broken extension', async () => {
     const res = await applyMapping(mapping([
       ...rows,
       { targetPath: 'ServiceRequest.extension?url=urn:openldr:ext:rejection', from: { field: 'notes' } },

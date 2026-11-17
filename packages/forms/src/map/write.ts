@@ -16,6 +16,8 @@ export type WriteValue = MapValue | { reference: string };
 export type WriteResult = { ok: true } | { ok: false; reason: string };
 
 const PRIMITIVE_LEAVES = new Set(['string', 'code', 'number', 'boolean']);
+/** Every leaf type `wrap` fills from one value. `canWriteFromCell` reads the same set. */
+const CELL_LEAVES = new Set([...PRIMITIVE_LEAVES, 'CodeableConcept', 'Coding', 'Reference']);
 const PLAIN_NUMBER = /^[+-]?\d+(?:\.\d+)?$/;
 const isIndex = (s: string) => /^\d+$/.test(s);
 
@@ -35,6 +37,8 @@ const isReference = (v: unknown): v is { reference: string } => isObject(v) && t
  */
 function wrap(leafType: string, value: WriteValue, path: string): Wrapped {
   const no = (expected: string): Wrapped => ({ ok: false, reason: `${path} needs ${expected}` });
+  const complex: Wrapped = { ok: false, reason: `${path} is a ${leafType}, which takes no single value: pick a more specific path under it` };
+  if (!CELL_LEAVES.has(leafType)) return complex;
   const primitive = !isObject(value);
   switch (leafType) {
     case 'string':
@@ -59,8 +63,25 @@ function wrap(leafType: string, value: WriteValue, path: string): Wrapped {
       if (typeof value === 'string') return { ok: true, value: { display: value } };
       return isReference(value) ? { ok: true, value } : no('text or a link');
     default:
-      return { ok: false, reason: `${path} is a ${leafType}, which takes no single value: pick a more specific path under it` };
+      return complex;
   }
+}
+
+/** The FHIR path table form of a key: no pinned values, no list indices. Null for a bad key. */
+function tablePathOf(key: string): string | null {
+  const parsed = parseTargetPath(key);
+  if (!parsed) return null;
+  return parsed.path.split('.').filter((s) => !isIndex(s)).join('.');
+}
+
+/**
+ * Whether the writer can fill this key from one value, judged by its leaf type alone. False for a
+ * malformed key, a path the table does not know, and a complex leaf such as an Extension.
+ */
+export function canWriteFromCell(key: string): boolean {
+  const tablePath = tablePathOf(key);
+  const leaf = tablePath ? lookupFhirPath(tablePath) : null;
+  return leaf !== null && CELL_LEAVES.has(leaf.leafType);
 }
 
 export function writeValue(resource: Record<string, unknown>, key: string, value: WriteValue): WriteResult {

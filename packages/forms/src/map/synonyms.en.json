@@ -1,5 +1,6 @@
 {
   "Patient.identifier.value": ["pat_no", "patient_id", "patient_no", "patient_number", "pid", "mrn", "hospital_no", "unique_id"],
+  "Patient.identifier.system": ["patient_id_system", "id_system", "id_type", "identifier_type"],
   "Patient.name.given?use=official": ["first_name", "firstname", "given_name", "forename", "fname"],
   "Patient.name.family?use=official": ["last_name", "lastname", "surname", "family_name", "lname"],
   "Patient.birthDate": ["dob", "date_of_birth", "birth_date", "birthdate"],

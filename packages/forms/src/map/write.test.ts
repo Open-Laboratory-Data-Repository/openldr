@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { writeValue } from './write';
+import { canWriteFromCell, writeValue } from './write';
 
 function rec(resourceType: string): Record<string, unknown> {
   return { resourceType, id: 'r1' };
@@ -176,5 +176,28 @@ describe('writeValue', () => {
 
   it('fails a pinned value on a leaf that is not an object', () => {
     expect(writeValue(rec('Patient'), 'Patient.birthDate?use=official', '2026-01-01').ok).toBe(false);
+  });
+});
+
+describe('canWriteFromCell', () => {
+  it('says yes for a leaf the writer fills from one value', () => {
+    for (const key of [
+      'Patient.birthDate', 'Patient.gender', 'Patient.identifier.value', 'Patient.name.given?use=official',
+      'Observation.valueQuantity.value', 'Observation.code', 'Observation.interpretation', 'ServiceRequest.requester?type=Practitioner',
+      'ServiceRequest.note.0.text', 'Patient.active',
+    ]) expect(canWriteFromCell(key), key).toBe(true);
+  });
+
+  it('says no for a complex leaf, an unknown path and a malformed key', () => {
+    for (const key of [
+      'ServiceRequest.extension?url=urn:test:ext', 'Patient.identifier', 'Specimen.collection', 'Patient.shoeSize', 'Patient.gender?use=%zz',
+    ]) expect(canWriteFromCell(key), key).toBe(false);
+  });
+
+  it('agrees with the writer on every key it accepts or refuses', () => {
+    for (const key of ['Patient.identifier.value', 'Patient.identifier', 'ServiceRequest.extension?url=urn:test:ext', 'Observation.valueString']) {
+      const r = writeValue({ resourceType: key.split('.')[0] }, key, 'x');
+      expect(r.ok, key).toBe(canWriteFromCell(key));
+    }
   });
 });

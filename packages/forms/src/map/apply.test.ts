@@ -36,7 +36,26 @@ const target: MapTarget = {
     { path: 'Observation.code', label: 'Test', required: false, repeats: true, valueSet: null },
     { path: 'Observation.valueQuantity.value', label: 'Result', required: false, repeats: true, valueSet: null },
   ],
+  // The specimen number is not a field of this target: a row a person adds for it still counts.
+  identity: [
+    { record: 'Patient', parts: [{ field: 'Patient.identifier.value?system=urn:test:patient' }] },
+    {
+      record: 'Specimen',
+      parts: [{ record: 'Patient' }, { field: 'Specimen.accessionIdentifier.value' }],
+      fallback: [{ record: 'Patient' }, { field: 'Specimen.type' }],
+    },
+    { record: 'ServiceRequest', parts: [{ record: 'Specimen' }, { field: 'ServiceRequest.code', optional: true }] },
+    { record: 'Observation', parts: [{ record: 'ServiceRequest' }, { field: 'Observation.code', optional: true }] },
+  ],
 };
+
+// A real hash, so a test can show no id holds a value from the row. FNV-1a 64, 16 hex digits.
+function fnv(text: string): string {
+  let h = 0xcbf29ce484222325n;
+  for (const b of new TextEncoder().encode(text)) h = ((h ^ BigInt(b)) * 0x100000001b3n) & 0xffffffffffffffffn;
+  return h.toString(16).padStart(16, '0');
+}
+const hash = (parts: string[]) => fnv(JSON.stringify(parts));
 
 const row = {
   pat_no: 'T-001',
@@ -65,9 +84,8 @@ function mapping(rows: FieldMapping[]): SavedMapping {
 }
 
 function deps(): ApplyDeps {
-  let n = 0;
   return {
-    newId: () => `id-${++n}`,
+    hashId: hash,
     translateCode: async (_url, value): Promise<Coding | null> =>
       value === 'TA' || value === 'TB' ? { system: 'urn:test:codes', code: value.toLowerCase() } : null,
     now: new Date(Date.UTC(2026, 10, 17)),
@@ -84,25 +102,30 @@ describe('applyMapping', () => {
     if (!res.ok) return;
     expect(res.resources.map((r) => r.resourceType)).toEqual(['Patient', 'Specimen', 'ServiceRequest', 'Observation']);
     const [patient, specimen, request, obs] = res.resources as [Patient, Specimen, ServiceRequest, Observation];
+    // No specimen number, so the Specimen id falls back to the patient and the specimen type.
+    const P = hash(['Patient', 'T-001']);
+    const S = hash(['Specimen', P, 'blood-x']);
+    const R = hash(['ServiceRequest', S, '']);
+    const O = hash(['Observation', R, '']);
 
     expect(patient).toEqual({
       resourceType: 'Patient',
-      id: 'id-1',
+      id: P,
       identifier: [{ system: 'urn:test:patient', value: 'T-001' }],
       name: [{ use: 'official', family: 'TESTER', given: ['Ann'] }],
       birthDate: '2026-11-03',
       gender: 'female',
     });
-    expect(specimen).toEqual({ resourceType: 'Specimen', id: 'id-2', type: { text: 'blood-x' }, subject: { reference: 'Patient/id-1' } });
-    expect(request).toEqual({ resourceType: 'ServiceRequest', id: 'id-3', status: 'active', intent: 'order', subject: { reference: 'Patient/id-1' } });
+    expect(specimen).toEqual({ resourceType: 'Specimen', id: S, type: { text: 'blood-x' }, subject: { reference: `Patient/${P}` } });
+    expect(request).toEqual({ resourceType: 'ServiceRequest', id: R, status: 'active', intent: 'order', subject: { reference: `Patient/${P}` } });
     expect(obs).toEqual({
       resourceType: 'Observation',
-      id: 'id-4',
+      id: O,
       status: 'final',
       valueQuantity: { value: 12.5 },
-      subject: { reference: 'Patient/id-1' },
-      specimen: { reference: 'Specimen/id-2' },
-      basedOn: [{ reference: 'ServiceRequest/id-3' }],
+      subject: { reference: `Patient/${P}` },
+      specimen: { reference: `Specimen/${S}` },
+      basedOn: [{ reference: `ServiceRequest/${R}` }],
     });
   });
 
@@ -127,16 +150,19 @@ describe('applyMapping', () => {
   });
 
   it('gives a list source field its elements, and applies a one-value row to every record', async () => {
+    // The codes are a list too: one fixed code for every result would give every result one id.
     const res = await applyMapping(mapping([
       ...baseRows,
-      { targetPath: 'Observation.code', from: { fixed: 'Glucose' } },
+      { targetPath: 'Observation.code', from: { field: 'tests' } },
       { targetPath: 'Observation.valueQuantity.value', from: { field: 'results' } },
-    ]), target, { ...row, results: [1, 2, 3] }, deps());
+      { targetPath: 'Observation.valueQuantity.unit', from: { fixed: 'u-x' } },
+    ]), target, { ...row, tests: ['T1', 'T2', 'T3'], results: [1, 2, 3] }, deps());
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const obs = res.resources.filter((r) => r.resourceType === 'Observation') as Observation[];
     expect(obs.map((o) => o.valueQuantity?.value)).toEqual([1, 2, 3]);
-    for (const o of obs) expect(o.code).toEqual({ text: 'Glucose' });
+    expect(obs.map((o) => o.code)).toEqual([{ text: 'T1' }, { text: 'T2' }, { text: 'T3' }]);
+    for (const o of obs) expect(o.valueQuantity?.unit).toBe('u-x');
   });
 
   it('skips an index where every multi-value row is empty', async () => {
@@ -198,7 +224,7 @@ describe('applyMapping', () => {
     if (!res.ok) return;
     expect(res.resources[0]).toEqual({
       resourceType: 'Patient',
-      id: 'id-1',
+      id: hash(['Patient', 'T-001']),
       identifier: [{ system: 'urn:test:patient', value: 'T-001' }],
       name: [{ use: 'official', given: ['Ann'] }],
       birthDate: '2026-11-03',
@@ -265,6 +291,102 @@ describe('applyMapping', () => {
   it('fails a path the table does not know', async () => {
     const res = await applyMapping(mapping([...baseRows, { targetPath: 'Patient.shoeSize', from: { field: 'given' } }]), target, row, deps());
     expect(res).toMatchObject({ ok: false, field: 'Patient.shoeSize' });
+  });
+});
+
+describe('record ids come from the row', () => {
+  const specNo: FieldMapping = { targetPath: 'Specimen.accessionIdentifier.value', from: { field: 'spec_no' } };
+  const twoResults: FieldMapping[] = [
+    { targetPath: 'Observation.code', from: { fields: ['test_a', 'test_b'] }, rule: { kind: 'codeList', conceptMapUrl: 'urn:test:map' } },
+    { targetPath: 'Observation.valueQuantity.value', from: { fields: ['result_a', 'result_b'] }, rule: { kind: 'number', decimal: ',' } },
+  ];
+  const ids = (res: Awaited<ReturnType<typeof applyMapping>>) => {
+    if (!res.ok) throw new Error(res.reason);
+    return res.resources.map((r) => `${r.resourceType}/${r.id}`);
+  };
+  const idOf = (res: Awaited<ReturnType<typeof applyMapping>>, type: string) => {
+    if (!res.ok) throw new Error(res.reason);
+    return res.resources.find((r) => r.resourceType === type)!.id;
+  };
+
+  it('gives the same ids for the same row twice', async () => {
+    const m = mapping([...baseRows, specNo, ...twoResults]);
+    const item = { ...row, spec_no: 'S-1' };
+    const a = ids(await applyMapping(m, target, item, deps()));
+    const b = ids(await applyMapping(m, target, { ...item }, deps()));
+    expect(a).toHaveLength(5);
+    expect(new Set(a).size).toBe(5);
+    expect(b).toEqual(a);
+  });
+
+  it('gives one Patient id for one patient ID, and a Specimen id per specimen number', async () => {
+    const m = mapping([...baseRows, specNo]);
+    const a = await applyMapping(m, target, { ...row, spec_no: 'S-1' }, deps());
+    const b = await applyMapping(m, target, { ...row, spec_no: 'S-2', given: 'Bea', dob: '04/11/26', sex: 'M' }, deps());
+    expect(idOf(b, 'Patient')).toBe(idOf(a, 'Patient'));
+    expect(idOf(b, 'Specimen')).not.toBe(idOf(a, 'Specimen'));
+  });
+
+  it('gives different Patient ids for different patient IDs', async () => {
+    const m = mapping(baseRows);
+    const a = await applyMapping(m, target, row, deps());
+    const b = await applyMapping(m, target, { ...row, pat_no: 'T-002' }, deps());
+    expect(idOf(b, 'Patient')).not.toBe(idOf(a, 'Patient'));
+  });
+
+  it('fails a row with no patient identifier, naming the field and not the value', async () => {
+    const loose: MapTarget = { ...target, fields: target.fields.map((f) => ({ ...f, required: false })) };
+    const res = await applyMapping(mapping(baseRows), loose, { ...row, pat_no: '' }, deps());
+    expect(res).toMatchObject({ ok: false, field: 'Patient.identifier.value?system=urn:test:patient' });
+    if (!res.ok) {
+      expect(res.reason).toContain('Patient number');
+      expect(res.reason).not.toContain('TESTER');
+    }
+  });
+
+  it('uses the specimen number when there is one, and the fallback when there is not', async () => {
+    const m = mapping([...baseRows, specNo]);
+    const P = hash(['Patient', 'T-001']);
+    expect(idOf(await applyMapping(m, target, { ...row, spec_no: 'S-1' }, deps()), 'Specimen')).toBe(hash(['Specimen', P, 'S-1']));
+    expect(idOf(await applyMapping(m, target, { ...row, spec_no: ' ' }, deps()), 'Specimen')).toBe(hash(['Specimen', P, 'blood-x']));
+  });
+
+  it('fails naming the missing part when neither the parts nor the fallback are there', async () => {
+    const res = await applyMapping(mapping([...baseRows.filter((r) => r.targetPath !== 'Specimen.type'), specNo]), target, row, deps());
+    expect(res).toMatchObject({ ok: false, field: 'Specimen.accessionIdentifier.value' });
+  });
+
+  it('turns a coding into system and code for an id part', async () => {
+    const res = await applyMapping(mapping([...baseRows, ...twoResults]), target, row, deps());
+    if (!res.ok) throw new Error(res.reason);
+    const R = res.resources.find((r) => r.resourceType === 'ServiceRequest')!.id!;
+    const obs = res.resources.filter((r) => r.resourceType === 'Observation').map((r) => r.id);
+    expect(obs).toEqual([hash(['Observation', R, 'urn:test:codes|ta']), hash(['Observation', R, 'urn:test:codes|tb'])]);
+  });
+
+  it('fails two results in one row with the same code, naming the source field', async () => {
+    const res = await applyMapping(mapping([...baseRows, ...twoResults]), target, { ...row, test_b: 'TA' }, deps());
+    expect(res).toMatchObject({ ok: false, field: 'test_b' });
+    if (!res.ok) expect(res.reason).not.toContain('TA');
+  });
+
+  it('puts no identifier value in any id', async () => {
+    const res = await applyMapping(mapping([...baseRows, specNo]), target, { ...row, pat_no: 'QZX-P1', spec_no: 'QZX-S1' }, deps());
+    if (!res.ok) throw new Error(res.reason);
+    for (const r of res.resources) expect(r.id).not.toContain('QZX');
+  });
+
+  it('takes an async hashId, and throws on an id FHIR does not allow', async () => {
+    const asyncDeps = { ...deps(), hashId: async (parts: string[]) => hash(parts) };
+    expect(ids(await applyMapping(mapping(baseRows), target, row, asyncDeps))).toEqual(ids(await applyMapping(mapping(baseRows), target, row, deps())));
+    for (const bad of ['has space', 'a'.repeat(65), '', 'a/b']) {
+      await expect(applyMapping(mapping(baseRows), target, row, { ...deps(), hashId: () => bad })).rejects.toThrow('hashId');
+    }
+  });
+
+  it('throws on a target with no identity for a record', async () => {
+    const broken: MapTarget = { ...target, identity: target.identity.filter((i) => i.record !== 'Specimen') };
+    await expect(applyMapping(mapping(baseRows), broken, row, deps())).rejects.toThrow('Specimen');
   });
 });
 

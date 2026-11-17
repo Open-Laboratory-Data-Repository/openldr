@@ -36,15 +36,37 @@ const LAB_RESULT_LINKS: MapTarget['links'] = [
 ];
 
 // The status values form extraction writes (`extract/extract.ts`). FHIR requires them.
+// The laboratory category is the one `result-requires-request` looks for (`isLabResult` in
+// packages/fhir/src/rules/result-requires-request.ts), so CE's order rule sees a mapped result.
 const LAB_RESULT_DEFAULTS: MapTarget['defaults'] = [
   { path: 'ServiceRequest.status', value: 'active' },
   { path: 'ServiceRequest.intent', value: 'order' },
   { path: 'Observation.status', value: 'final' },
+  { path: 'Observation.category', value: { system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' } },
 ];
 
-// The patient's identifier. No pack holds it, and a results file nearly always does.
+// The patient's identifier and its system. No pack holds them, and a results file nearly always
+// has the identifier.
 const LAB_RESULT_EXTRA: MapTarget['fields'] = [
-  { path: 'Patient.identifier.value', label: 'Patient ID', required: false, repeats: false, valueSet: null },
+  { path: 'Patient.identifier.value', label: 'Patient ID', required: true, repeats: false, valueSet: null },
+  { path: 'Patient.identifier.system', label: 'Patient ID system', required: false, repeats: false, valueSet: null },
+];
+
+// The operator's short list (2026-11-17). The packs keep their own required flags for forms.
+const LAB_RESULT_REQUIRED = ['Patient.identifier.value', 'Specimen.collection.collectedDateTime', 'Observation.code'];
+
+// Ids come from the row's own identifiers (operator ruling, 2026-11-17), so the same row twice
+// gives the same records.
+const LAB_RESULT_IDENTITY: MapTarget['identity'] = [
+  { record: 'Patient', parts: [{ field: 'Patient.identifier.system', optional: true }, { field: 'Patient.identifier.value' }] },
+  {
+    record: 'Specimen',
+    parts: [{ record: 'Patient' }, { field: 'Specimen.accessionIdentifier.value' }],
+    fallback: [{ record: 'Patient' }, { field: 'Specimen.collection.collectedDateTime' }],
+  },
+  // The order's own test code is optional, so an order without one is the specimen's order.
+  { record: 'ServiceRequest', parts: [{ record: 'Specimen' }, { field: 'ServiceRequest.code' }], fallback: [{ record: 'Specimen' }] },
+  { record: 'Observation', parts: [{ record: 'ServiceRequest' }, { field: 'Observation.code' }] },
 ];
 
 function localise(target: MapTarget, locale: string): MapTarget {
@@ -62,7 +84,9 @@ export function labResultTarget(packs: readonly MapTargetPack[], locale = 'en'):
   const target = buildTarget('lab-result', 'Lab result', parts, {
     links: LAB_RESULT_LINKS,
     defaults: LAB_RESULT_DEFAULTS,
+    identity: LAB_RESULT_IDENTITY,
     extra: LAB_RESULT_EXTRA,
+    required: LAB_RESULT_REQUIRED,
   });
   return localise(target, locale);
 }

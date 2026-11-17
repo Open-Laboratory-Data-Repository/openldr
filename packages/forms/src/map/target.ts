@@ -1,5 +1,13 @@
+import type { Coding } from 'fhir/r4';
 import { normalizeDiscriminator } from '../discriminator';
 import type { StarterPackEntry } from '../starter-pack';
+import { canWriteFromCell } from './write';
+
+/**
+ * One part of a record's id: the value the row wrote for a target path key (after its rule), or
+ * the id of another record of the target, which is worked out first.
+ */
+export type IdentityPart = { field: string; optional?: boolean } | { record: string };
 
 /**
  * What a mapping writes into: the records it makes, how they link, FHIR's own required status
@@ -11,10 +19,15 @@ export interface MapTarget {
   records: { type: string; packId: string; repeats: boolean }[];
   /** For example from 'Observation', path 'Observation.subject', to 'Patient'. */
   links: { from: string; path: string; to: string }[];
-  /** FHIR's own required status fields. */
-  defaults: { path: string; value: string }[];
+  /** Values every record of a type gets: FHIR's required status fields, and the like. */
+  defaults: { path: string; value: string | Coding }[];
   /** `path` is the field's key: see `targetPathKey`. */
   fields: { path: string; label: string; required: boolean; repeats: boolean; valueSet: string | null }[];
+  /**
+   * How each record's id is made from the row, one entry per record type. `fallback` is used when a
+   * part of `parts` that is not optional has no value. See `applyMapping`.
+   */
+  identity: { record: string; parts: IdentityPart[]; fallback?: IdentityPart[] }[];
 }
 
 // Only these characters are escaped, so a key stays readable: `Patient.name.given?use=official`.
@@ -72,8 +85,17 @@ export function buildTarget(
   id: string,
   name: string,
   packs: { pack: { id: string; resourceType: string }; entries: StarterPackEntry[]; repeats?: boolean }[],
-  /** `extra`: fields no pack holds. Each goes first among its record's fields and takes its repeats. */
-  opts: { links: MapTarget['links']; defaults: MapTarget['defaults']; extra?: MapTarget['fields'] },
+  /**
+   * `extra`: fields no pack holds. Each goes first among its record's fields and takes its repeats.
+   * `required`: when given, a field is required exactly when its key is listed, whatever the pack says.
+   */
+  opts: {
+    links: MapTarget['links'];
+    defaults: MapTarget['defaults'];
+    identity: MapTarget['identity'];
+    extra?: MapTarget['fields'];
+    required?: string[];
+  },
 ): MapTarget {
   const linkPaths = new Set(opts.links.map((l) => l.path));
   const records: MapTarget['records'] = [];
@@ -94,6 +116,7 @@ export function buildTarget(
       if (linkPaths.has(parseTargetPath(f.path)?.path ?? f.path)) {
         throw new Error(`map target ${id}: the extra field ${f.path} is a link the target writes`);
       }
+      if (!canWriteFromCell(f.path)) throw new Error(`map target ${id}: no single cell can fill the extra field ${f.path}`);
       if (keys.has(f.path)) throw new Error(`map target ${id}: two entries share the key ${f.path}`);
       keys.add(f.path);
       fields.push({ ...f, repeats });
@@ -104,6 +127,11 @@ export function buildTarget(
       const where = pinnedValues(entry);
       if (!where) continue;
       const key = targetPathKey(entry.fhirPath, where);
+      // An Extension or another complex leaf cannot take one cell, so it is not offered.
+      if (!canWriteFromCell(key)) {
+        if (entry.required) throw new Error(`map target ${id}: the required entry ${key} cannot be filled from one cell`);
+        continue;
+      }
       if (keys.has(key)) throw new Error(`map target ${id}: two entries share the key ${key}`);
       keys.add(key);
       fields.push({ path: key, label: entry.label, required: entry.required, repeats, valueSet: entry.boundValueSet });
@@ -116,5 +144,55 @@ export function buildTarget(
     }
   }
 
-  return { id, name, records, links: opts.links, defaults: opts.defaults, fields };
+  if (opts.required) {
+    const listed = new Set(opts.required);
+    for (const key of listed) if (!keys.has(key)) throw new Error(`map target ${id}: the required key ${key} is not a field`);
+    for (const f of fields) f.required = listed.has(f.path);
+  }
+
+  checkIdentity(id, records, fields, opts.identity);
+  return { id, name, records, links: opts.links, defaults: opts.defaults, fields, identity: opts.identity };
+}
+
+function checkIdentity(id: string, records: MapTarget['records'], fields: MapTarget['fields'], identity: MapTarget['identity']): void {
+  const recordOf = new Map(records.map((r) => [r.type, r]));
+  const fieldOf = new Map(fields.map((f) => [f.path, f]));
+  const byRecord = new Map<string, MapTarget['identity'][number]>();
+  for (const ident of identity) {
+    if (!recordOf.has(ident.record)) throw new Error(`map target ${id}: an identity names ${ident.record}, which is not a record`);
+    if (byRecord.has(ident.record)) throw new Error(`map target ${id}: two identities for ${ident.record}`);
+    byRecord.set(ident.record, ident);
+  }
+  for (const record of records) {
+    const ident = byRecord.get(record.type);
+    if (!ident) throw new Error(`map target ${id}: ${record.type} has no identity`);
+    for (const parts of [ident.parts, ident.fallback]) {
+      if (!parts) continue;
+      if (parts.length === 0) throw new Error(`map target ${id}: the identity of ${record.type} has no parts`);
+      for (const part of parts) {
+        if ('record' in part) {
+          const to = recordOf.get(part.record);
+          if (!to) throw new Error(`map target ${id}: the identity of ${record.type} names ${part.record}, which is not a record`);
+          if (to.repeats) throw new Error(`map target ${id}: the identity of ${record.type} names ${part.record}, which repeats`);
+        } else {
+          const f = fieldOf.get(part.field);
+          if (!f) throw new Error(`map target ${id}: the identity of ${record.type} names ${part.field}, which is not a field`);
+          if (f.repeats && !record.repeats) {
+            throw new Error(`map target ${id}: the identity of ${record.type} reads ${part.field}, which repeats`);
+          }
+        }
+      }
+    }
+  }
+  // A record part means "work that record out first", so the parts must not loop.
+  const state = new Map<string, 'open' | 'done'>();
+  const visit = (type: string, path: string[]): void => {
+    if (state.get(type) === 'done') return;
+    if (state.get(type) === 'open') throw new Error(`map target ${id}: the identities form a cycle: ${[...path, type].join(' -> ')}`);
+    state.set(type, 'open');
+    const ident = byRecord.get(type)!;
+    for (const part of [...ident.parts, ...(ident.fallback ?? [])]) if ('record' in part) visit(part.record, [...path, type]);
+    state.set(type, 'done');
+  };
+  for (const record of records) visit(record.type, []);
 }

@@ -1,5 +1,6 @@
 {
   "Patient.identifier.value": "Número do paciente",
+  "Patient.identifier.system": "Sistema do número do paciente",
   "Patient.name.given?use=official": "Nome próprio",
   "Patient.name.family?use=official": "Apelido",
   "Patient.birthDate": "Data de nascimento",
@@ -15,7 +16,6 @@
   "ServiceRequest.identifier.value?system=urn:openldr:order:requisition": "Número da requisição",
   "ServiceRequest.note.0.text": "Informação clínica",
   "ServiceRequest.requester?type=Organization": "Unidade requisitante",
-  "ServiceRequest.extension?url=urn:openldr:ext:rejection": "Motivo de rejeição do pedido",
   "Observation.code": "Análise",
   "Observation.valueQuantity.value": "Resultado (número)",
   "Observation.valueString": "Resultado (texto)",
