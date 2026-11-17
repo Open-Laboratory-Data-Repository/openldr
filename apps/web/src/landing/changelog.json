@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "7d474728",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Number or text refuses a fixed value, which has a known type"
+        },
+        {
+          "hash": "9a7f37cf",
+          "type": "feat",
+          "scope": "workflows",
+          "title": "A Number or text rule keeps titres beside numbers, and no suggestion gives a result two values"
+        },
+        {
           "hash": "ef9fbaca",
           "type": "fix",
           "scope": "workflows",
