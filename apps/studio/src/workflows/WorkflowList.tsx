@@ -102,7 +102,7 @@ export function WorkflowList() {
     try {
       // The copy starts disabled with a fresh webhook secret, so it never takes the original's path.
       await duplicateWorkflow(w.id);
-      toast.success(`Duplicated ${w.name}. The copy is disabled until you change its webhook path and enable it.`);
+      toast.success(`Duplicated ${w.name}. The copy is disabled. Change its webhook path and save it to turn it on.`);
       await load();
     } catch (e) { toast.error(`Duplicate failed: ${e instanceof Error ? e.message : String(e)}`); }
   }, [load]);

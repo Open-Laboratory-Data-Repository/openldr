@@ -59,7 +59,7 @@ describe('WorkflowList', () => {
     fireEvent.click(await openMenuItem(/actions for amr sync/i, 'duplicate-wf_1'));
     await waitFor(() => expect(api.duplicateWorkflow).toHaveBeenCalledWith('wf_1'));
     expect(api.createWorkflow).not.toHaveBeenCalled();
-    expect(toast.success).toHaveBeenCalledWith('Duplicated AMR sync. The copy is disabled until you change its webhook path and enable it.');
+    expect(toast.success).toHaveBeenCalledWith('Duplicated AMR sync. The copy is disabled. Change its webhook path and save it to turn it on.');
   });
   it('deletes a workflow after confirm', async () => {
     (api.deleteWorkflow as any).mockResolvedValue(undefined);

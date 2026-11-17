@@ -238,7 +238,7 @@ Ouvrez les points à côté du workflow à copier.
 
 Sélectionnez **Duplicate**. Une nouvelle ligne se termine par **(copy)**. Ouvrez-la avant de modifier.
 
-La copie démarre **Disabled**, avec un nouveau secret de webhook, et ne reçoit donc jamais les messages de l'original. Pour l'utiliser, changez son chemin de webhook, enregistrez, puis activez-la. Deux workflows activés ne peuvent pas partager un chemin de webhook : l'enregistrement du second est refusé, et le message nomme le premier.
+La copie démarre **Disabled**, avec un nouveau secret de webhook, et ne reçoit donc jamais les messages de l'original. Pour l'utiliser, changez son chemin de webhook et enregistrez : l'enregistrement l'active. Deux workflows activés ne peuvent pas partager un chemin de webhook : l'enregistrement du second est refusé, et le message nomme le premier.
 
 ![Duplicate crée une copie distincte du workflow.](workflows-guide-duplicate.png)
 
