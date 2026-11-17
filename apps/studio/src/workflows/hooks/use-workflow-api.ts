@@ -91,29 +91,32 @@ export function useWorkflowApi() {
   const [lastExecution, setLastExecution] = useState<ExecuteResponse | null>(null);
   const store = useWorkflowStore();
 
-  const save = useCallback(async () => {
+  // Reads the editor's state when it runs, not when this hook last rendered: a node that changes
+  // itself and asks for a save straight away (the Map to FHIR sheet) must have that change stored.
+  const save = useCallback(async (opts?: { successMessage?: string }) => {
     setSaving(true);
     try {
-      if (store.workflowId) {
+      const s = useWorkflowStore.getState();
+      if (s.workflowId) {
         await updateWorkflow(
-          store.workflowId,
-          buildBody({ id: store.workflowId, name: store.workflowName, nodes: store.nodes, edges: store.edges }),
+          s.workflowId,
+          buildBody({ id: s.workflowId, name: s.workflowName, nodes: s.nodes, edges: s.edges }),
         );
       } else {
         const id = newWorkflowId();
         const result = await createWorkflow(
-          buildBody({ id, name: store.workflowName, nodes: store.nodes, edges: store.edges }),
+          buildBody({ id, name: s.workflowName, nodes: s.nodes, edges: s.edges }),
         );
-        store.setWorkflow(result.id, result.name, store.nodes, store.edges);
+        s.setWorkflow(result.id, result.name, s.nodes, s.edges);
       }
-      toast.success('Workflow saved');
+      toast.success(opts?.successMessage ?? 'Workflow saved');
     } catch (err) {
       toast.error(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
       throw err;
     } finally {
       setSaving(false);
     }
-  }, [store]);
+  }, []);
 
   /**
    * Save or create the workflow, returning a guaranteed-valid workflow ID.

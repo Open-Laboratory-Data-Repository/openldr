@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import * as api from '@/api';
 import { useWorkflowStore } from '../../hooks/use-workflow-store';
 import { MapToFhirSheet } from './MapToFhirSheet';
+import { SaveRequestContext } from '../../hooks/save-request';
 import { labResultTarget, SavedMappingSchema, seededStarterPacks } from '@openldr/forms/pure';
 import { TEST_TARGET, MARKERS, ROWS_A, ROWS_B, ROWS_FORM, FORM_EXAMPLES, asItems } from './test-fixtures';
 
@@ -115,6 +116,52 @@ describe('MapToFhirSheet', () => {
     // The example is the first sample's value, shown only on screen.
     fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
     expect(within(screen.getByTestId('map-row-Patient.identifier.value')).getByText('QZX-1')).toBeInTheDocument();
+  });
+
+  it('inside the workflow page, Save puts the mapping in the node, then asks the page to store the workflow', async () => {
+    setRun(ROWS_A);
+    const update = vi.fn();
+    const requestSave = vi.fn();
+    render(
+      <SaveRequestContext.Provider value={requestSave}>
+        <MapToFhirSheet open onOpenChange={() => {}} node={mkNode({})} update={update} />
+      </SaveRequestContext.Provider>,
+    );
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
+    openMenuAndClick('Save');
+
+    expect(update).toHaveBeenCalledOnce();
+    expect(requestSave).toHaveBeenCalledOnce();
+    expect(requestSave).toHaveBeenCalledWith({ successMessage: 'Mapping saved' });
+    // The node changes first, so the save that follows stores the new mapping.
+    expect(update.mock.invocationCallOrder[0]).toBeLessThan(requestSave.mock.invocationCallOrder[0]);
+    expect(screen.queryByText(/Save the workflow to keep it/)).toBeNull();
+  });
+
+  it('outside the workflow page, Save keeps the mapping in the node and says to save the workflow', async () => {
+    setRun(ROWS_A);
+    const { update } = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
+    openMenuAndClick('Save');
+    expect(update).toHaveBeenCalledOnce();
+    expect(screen.getByText(/Save the workflow to keep it/)).toBeInTheDocument();
+  });
+
+  it('a Save the sheet refuses asks the page for nothing', async () => {
+    setRun(ROWS_A);
+    const requestSave = vi.fn();
+    render(
+      <SaveRequestContext.Provider value={requestSave}>
+        <MapToFhirSheet open onOpenChange={() => {}} node={mkNode({})} update={vi.fn()} />
+      </SaveRequestContext.Provider>,
+    );
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    openMenuAndClick('Save');
+    expect(requestSave).not.toHaveBeenCalled();
   });
 
   it('saves the mapping, and the saved config holds no sample value', async () => {

@@ -12,6 +12,7 @@ import { RunHistoryDrawer } from './components/panels/run-history-drawer';
 import { DatasetsDrawer } from './components/panels/datasets-drawer';
 import { useWorkflowStore } from './hooks/use-workflow-store';
 import { useWorkflowApi } from './hooks/use-workflow-api';
+import { SaveRequestContext, type SaveRequest } from './hooks/save-request';
 import { fetchWorkflow } from '@/api';
 import type { WorkflowNode, WorkflowEdge } from './lib/types';
 
@@ -25,7 +26,8 @@ export function Workflows() {
   // protected, treat it as protected so an in-flight fetch can never let an
   // unconfirmed save through (see the effect below for the id-transition case).
   const [isProtected, setIsProtected] = useState(true);
-  const [pendingProtectedSave, setPendingProtectedSave] = useState(false);
+  // The options of the save waiting on the confirm, or null when none waits.
+  const [pendingProtectedSave, setPendingProtectedSave] = useState<Parameters<SaveRequest>[0] | null>(null);
 
   const { id } = useParams();
   const setWorkflow = useWorkflowStore((s) => s.setWorkflow);
@@ -58,20 +60,22 @@ export function Workflows() {
 
   // Protected workflows carry form capture AND automated ingest. A broken edit stops
   // clerks saving data, so make the operator acknowledge it rather than discover it.
-  const requestSave = useCallback(() => {
-    if (isProtected) setPendingProtectedSave(true);
-    else void save();
+  // A save a node asks for (the Map to FHIR sheet) goes through the same confirm.
+  const requestSave = useCallback<SaveRequest>((opts) => {
+    if (isProtected) setPendingProtectedSave(opts ?? {});
+    else void save(opts);
   }, [isProtected, save]);
 
   return (
     <AppShell title="Workflows" fullBleed>
       <ReactFlowProvider>
+      <SaveRequestContext.Provider value={requestSave}>
         <div className="flex h-full flex-col">
           <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
             <Link to="/workflows" className="text-xs text-muted-foreground hover:text-foreground hover:underline" data-testid="back-to-workflows">← Workflows</Link>
           </div>
           <Toolbar
-            onSave={requestSave}
+            onSave={() => requestSave()}
             onRun={execute}
             onHistory={() => setHistoryOpen(true)}
             onDatasets={() => setDatasetsOpen(true)}
@@ -98,13 +102,14 @@ export function Workflows() {
         )}
         <DatasetsDrawer open={datasetsOpen} onClose={() => setDatasetsOpen(false)} />
         <ConfirmDialog
-          open={pendingProtectedSave}
-          onOpenChange={(o) => { if (!o) setPendingProtectedSave(false); }}
+          open={pendingProtectedSave !== null}
+          onOpenChange={(o) => { if (!o) setPendingProtectedSave(null); }}
           title="Save changes to a system workflow?"
           description="Form capture and automated ingest both run through this workflow. If your changes break it, clerks will not be able to save data and incoming data will stop being stored. You can restore the default from the workflow list."
           confirmLabel="Save anyway"
-          onConfirm={() => { setPendingProtectedSave(false); void save(); }}
+          onConfirm={() => { const opts = pendingProtectedSave ?? undefined; setPendingProtectedSave(null); void save(opts); }}
         />
+      </SaveRequestContext.Provider>
       </ReactFlowProvider>
     </AppShell>
   );

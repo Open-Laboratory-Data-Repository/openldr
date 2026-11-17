@@ -2424,6 +2424,7 @@ export const pt: EnShape = {
         rowInvalid: "O nó não conseguiria ler a linha {{label}} tal como está. Mude a sua coluna ou a sua regra e guarde de novo.",
         sourceSystemMissing: "Escolha o sistema de origem de {{label}}. A lista de códigos do próprio laboratório exige um.",
         saved: "O mapeamento está no nó. Guarde o fluxo de trabalho para o manter.",
+        savedToast: "Mapeamento guardado",
         testing: "A testar a amostra",
         testRow: "Linha {{n}}",
         passes: "passa",

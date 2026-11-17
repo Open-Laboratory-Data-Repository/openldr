@@ -2542,6 +2542,7 @@ export const en = {
         rowInvalid: "The node could not read the row {{label}} as it is. Change its column or its rule, then save again.",
         sourceSystemMissing: "Pick the source system for {{label}}. The lab's own code list needs one.",
         saved: "The mapping is in the node. Save the workflow to keep it.",
+        savedToast: "Mapping saved",
         testing: "Testing the sample",
         testRow: "Row {{n}}",
         passes: "passes",

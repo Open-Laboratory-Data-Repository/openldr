@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { WorkflowNode, WorkflowNodeData } from '../../lib/types';
+import { useSaveRequest } from '../../hooks/save-request';
 import { AddPathPanel } from './AddPathPanel';
 import { MappingRow } from './MappingRow';
 import { RuleInputs, RuleKindSelect } from './RuleEditor';
@@ -50,6 +51,7 @@ export function MapToFhirSheet({
   const { target, columns, drafts } = m;
 
   const [notice, setNotice] = useState<Notice>(null);
+  const requestSave = useSaveRequest();
   const [test, setTest] = useState<TestState>({ kind: 'idle' });
   const [adding, setAdding] = useState(false);
 
@@ -165,7 +167,14 @@ export function MapToFhirSheet({
     // A node runs one target, so mappings made for another target are dropped.
     const kept = mappingsOf(config).filter((x) => targetIdOf(x) === target.id);
     update({ config: { ...config, targetId: target.id, mappings: withMapping(kept, built.mapping) } } as never);
-    setNotice({ tone: 'ok', text: t(`${P}.sheet.saved`) });
+    // On the workflow page, Save stores the whole workflow, so one press keeps the mapping.
+    // Elsewhere only the node changes, so say the workflow still needs saving.
+    if (requestSave) {
+      setNotice(null);
+      requestSave({ successMessage: t(`${P}.sheet.savedToast`) });
+    } else {
+      setNotice({ tone: 'ok', text: t(`${P}.sheet.saved`) });
+    }
   };
 
   const runTest = async () => {

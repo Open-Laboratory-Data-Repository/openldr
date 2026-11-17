@@ -2424,6 +2424,7 @@ export const fr: EnShape = {
         rowInvalid: "Le nœud ne pourrait pas lire la ligne {{label}} telle quelle. Changez sa colonne ou sa règle, puis enregistrez de nouveau.",
         sourceSystemMissing: "Choisissez le système source de {{label}}. La liste de codes du laboratoire en exige un.",
         saved: "Le mappage est dans le nœud. Enregistrez le workflow pour le garder.",
+        savedToast: "Mappage enregistré",
         testing: "Test de l'échantillon",
         testRow: "Ligne {{n}}",
         passes: "réussit",
