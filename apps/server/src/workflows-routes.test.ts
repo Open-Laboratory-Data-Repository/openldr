@@ -1402,7 +1402,7 @@ describe('map to fhir routes', () => {
     const { app } = build(VIEWER);
     const res = await app.inject({ method: 'GET', url: '/api/workflows/map/code-lists' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ codeLists: [{ url: 'urn:openldr:terminology:local-map', name: 'Lab mapping' }, { url: 'urn:test:codes', name: 'Test codes' }] });
+    expect(res.json()).toEqual({ codeLists: [{ url: 'urn:openldr:terminology:local-map', name: '', local: true }, { url: 'urn:test:codes', name: 'Test codes', local: false }] });
   });
 
   it('POST suggest answers { suggestions }', async () => {
@@ -1488,5 +1488,23 @@ describe('map to fhir routes', () => {
     expect((await post(tech.app, '/api/workflows/map/test', { config: cfg, items: [{ a: 1 }] })).statusCode).toBe(403);
     const anon = build(null);
     expect((await anon.app.inject({ method: 'GET', url: '/api/workflows/map/targets' })).statusCode).toBe(401);
+  });
+
+  it('an invalid JSON body answers 400 with fixed text and keeps the body out of the log', async () => {
+    const lines: string[] = [];
+    const stream = { write: (l: string) => { lines.push(l); } };
+    const ctx = fakeCtx();
+    const app = Fastify({ logger: { level: 'trace', stream } });
+    registerErrorHandler(app as any);
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    registerWorkflowRoutes(app, ctx);
+    for (const url of ['/api/workflows/map/test', '/api/workflows/map/suggest']) {
+      const res = await app.inject({ method: 'POST', url, headers: { 'content-type': 'application/json' }, payload: '{"items":[{"name":"QZX-1"' });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({ error: 'request body is not valid JSON' });
+      expect(res.body).not.toContain('QZX');
+    }
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.join('')).not.toContain('QZX');
   });
 });

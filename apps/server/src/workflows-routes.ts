@@ -190,6 +190,17 @@ export function registerWorkflowRoutes(
     }));
   });
 
+  // Fastify's parse error quotes the start of a bad body, and the central handler logs the message.
+  // On the two map routes that error is replaced here, so the body reaches neither reply nor log.
+  // Any other error goes to the central handler as before.
+  const MAP_BODY_ROUTE = {
+    ...EDIT,
+    errorHandler: (err: Error & { code?: string }, req: FastifyRequest, reply: FastifyReply) => {
+      if (err.code === 'FST_ERR_CTP_INVALID_JSON_BODY') return reply.code(400).send({ error: 'request body is not valid JSON' });
+      return app.errorHandler(err, req, reply);
+    },
+  };
+
   // Map to FHIR sheet. Bodies hold column names and sample rows, so nothing from a body is logged,
   // audited or echoed in an error: every message below is fixed text. The logic is in
   // ctx.workflows.mapToFhir, the same code the CLI runs.
@@ -202,7 +213,7 @@ export function registerWorkflowRoutes(
     return reply.send({ codeLists: await ctx.workflows.mapToFhir.codeLists() });
   });
 
-  app.post('/api/workflows/map/suggest', EDIT, async (req, reply) => {
+  app.post('/api/workflows/map/suggest', MAP_BODY_ROUTE, async (req, reply) => {
     const parsed = MapSuggestBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'targetId and up to 500 field names of up to 200 characters are required' });
     const suggestions = await ctx.workflows.mapToFhir.suggest(parsed.data);
@@ -210,7 +221,7 @@ export function registerWorkflowRoutes(
     return reply.send({ suggestions });
   });
 
-  app.post('/api/workflows/map/test', EDIT, async (req, reply) => {
+  app.post('/api/workflows/map/test', MAP_BODY_ROUTE, async (req, reply) => {
     const parsed = MapTestBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: `config and 1 to ${MAP_TEST_MAX_ITEMS} items are required` });
     if (parsed.data.items.length > MAP_TEST_MAX_ITEMS) return reply.code(400).send({ error: `a test takes at most ${MAP_TEST_MAX_ITEMS} items` });

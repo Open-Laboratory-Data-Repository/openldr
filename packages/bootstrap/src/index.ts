@@ -1431,13 +1431,15 @@ const reporting: ReportingApi = {
   });
   // The stored Lab result packs: one reader for the node's service and for the mapping api.
   const readStoredMapPacks = () => loadStoredPacks(starterPacks, seededStarterPacks().map((p) => p.id));
+  // listByType defaults to 500 and sets no ceiling. The newest maps come first, so above this the oldest are left out.
+  const STORED_CONCEPT_MAP_LIMIT = 10_000;
   const mapToFhirApi = createMapToFhirApi({
     mapToFhir: (input) => {
       if (!workflowServices.mapToFhir) throw new Error('Map to FHIR service is not set');
       return workflowServices.mapToFhir(input);
     },
     packs: readStoredMapPacks,
-    conceptMaps: async () => (await canonicalFhirStore.listByType('ConceptMap')).map((r) => r.resource as { url?: string; name?: string; title?: string }),
+    conceptMaps: async () => (await canonicalFhirStore.listByType('ConceptMap', STORED_CONCEPT_MAP_LIMIT)).map((r) => r.resource as { url?: string; name?: string; title?: string }),
   });
   const workflows = { mapToFhir: mapToFhirApi, store: workflowStore, runs: workflowRuns, receipts: workflowReceipts, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners, secretStore: workflowSecrets };
 

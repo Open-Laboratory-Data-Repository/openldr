@@ -11,9 +11,6 @@ import type { RunMapToFhirInput, RunMapToFhirOutput } from '@openldr/workflows';
 /** The most items one test run takes. The route and the CLI both read this. */
 export const MAP_TEST_MAX_ITEMS = 20;
 
-/** The name shown for the lab's own map in a list of code lists. */
-export const LOCAL_MAP_NAME = 'Lab mapping';
-
 /** A fault in the config the caller sent. Its message names config only, never an item value. */
 export class MapConfigError extends Error {
   constructor(message: string) {
@@ -39,7 +36,8 @@ export interface MapToFhirApi {
   suggest(input: { targetId: string; fieldNames: string[]; locale?: string }): Promise<MapSuggestionResult[] | null>;
   /** One result per item, in item order. Throws MapConfigError for a config fault. */
   test(input: MapTestInput): Promise<MapTestResult[]>;
-  codeLists(): Promise<{ url: string; name: string }[]>;
+  /** The lab's own map comes first with `local: true` and an empty name; the caller words it. */
+  codeLists(): Promise<{ url: string; name: string; local: boolean }[]>;
 }
 
 export interface MapToFhirApiDeps {
@@ -94,9 +92,9 @@ export function createMapToFhirApi(deps: MapToFhirApiDeps): MapToFhirApi {
     async codeLists() {
       const stored = (await deps.conceptMaps())
         .filter((m): m is { url: string; name?: string; title?: string } => typeof m.url === 'string' && m.url !== '' && m.url !== LOCAL_MAP_URL)
-        .map((m) => ({ url: m.url, name: m.title || m.name || m.url }))
+        .map((m) => ({ url: m.url, name: m.name || m.title || m.url, local: false }))
         .sort((a, b) => a.name.localeCompare(b.name) || a.url.localeCompare(b.url));
-      return [{ url: LOCAL_MAP_URL, name: LOCAL_MAP_NAME }, ...stored];
+      return [{ url: LOCAL_MAP_URL, name: '', local: true }, ...stored];
     },
   };
 }

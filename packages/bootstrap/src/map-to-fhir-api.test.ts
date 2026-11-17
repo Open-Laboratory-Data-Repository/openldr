@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { seededStarterPacks } from '@openldr/forms';
 import type { RunMapToFhirInput, RunMapToFhirOutput } from '@openldr/workflows';
-import { createMapToFhirApi, MAP_TEST_MAX_ITEMS, MapConfigError, LOCAL_MAP_NAME } from './map-to-fhir-api';
+import { createMapToFhirApi, MAP_TEST_MAX_ITEMS, MapConfigError } from './map-to-fhir-api';
 
 // Made-up values only.
 
@@ -93,18 +93,22 @@ describe('test', () => {
 });
 
 describe('codeLists', () => {
-  it('puts the lab map first and then stored maps by name', async () => {
+  it('puts the lab map first, unnamed, and then stored maps by name', async () => {
     const a = api({ conceptMaps: async () => [{ url: 'urn:test:b', name: 'Beta' }, { url: 'urn:test:a', title: 'Alpha title' }, { url: 'urn:test:c' }, { name: 'no url' }] });
     const res = await a.codeLists();
-    expect(res[0]).toEqual({ url: 'urn:openldr:terminology:local-map', name: LOCAL_MAP_NAME });
+    expect(res[0]).toEqual({ url: 'urn:openldr:terminology:local-map', name: '', local: true });
     expect(res.slice(1)).toEqual([
-      { url: 'urn:test:a', name: 'Alpha title' },
-      { url: 'urn:test:b', name: 'Beta' },
-      { url: 'urn:test:c', name: 'urn:test:c' },
+      { url: 'urn:test:a', name: 'Alpha title', local: false },
+      { url: 'urn:test:b', name: 'Beta', local: false },
+      { url: 'urn:test:c', name: 'urn:test:c', local: false },
     ]);
+  });
+  it('prefers the name over the title', async () => {
+    const a = api({ conceptMaps: async () => [{ url: 'urn:test:a', name: 'Named', title: 'Titled' }] });
+    expect((await a.codeLists())[1]).toEqual({ url: 'urn:test:a', name: 'Named', local: false });
   });
   it('does not list the lab map twice', async () => {
     const a = api({ conceptMaps: async () => [{ url: 'urn:openldr:terminology:local-map', name: 'x' }] });
-    expect(await a.codeLists()).toEqual([{ url: 'urn:openldr:terminology:local-map', name: LOCAL_MAP_NAME }]);
+    expect(await a.codeLists()).toEqual([{ url: 'urn:openldr:terminology:local-map', name: '', local: true }]);
   });
 });
