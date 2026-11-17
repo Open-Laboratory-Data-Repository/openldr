@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "624bf406",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A workflow opens fitted to the screen"
+        },
+        {
           "hash": "80e79a64",
           "type": "fix",
           "scope": "studio",
