@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "6a457e9a",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "A column's parent breaks a suggestion tie, and column order never decides one"
+        },
+        {
+          "hash": "b228c32c",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Map to FHIR suggestions read nested names, leave ties to the person, and never offer a full name as a name part"
+        },
+        {
           "hash": "7d474728",
           "type": "fix",
           "scope": "workflows",
