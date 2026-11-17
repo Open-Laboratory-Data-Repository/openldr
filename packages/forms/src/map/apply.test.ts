@@ -155,9 +155,9 @@ describe('applyMapping', () => {
       ...baseRows,
       { targetPath: 'Observation.code', from: { fields: ['test_a', 'test_b', 'test_a'] } },
       { targetPath: 'Observation.valueQuantity.value', from: { fields: ['result_a', 'result_b'] } },
-    ]), target, row, deps());
-    expect(res).toMatchObject({ ok: false });
-    if (!res.ok) expect(res.field).toBeDefined();
+    ]), target, { ...row, result_a: 'QZX7', result_b: 'QZX8' }, deps());
+    expect(res).toMatchObject({ ok: false, field: 'result_a' });
+    if (!res.ok) expect(res.reason).not.toContain('QZX');
   });
 
   it('makes one record of a repeating type when no repeating row is mapped', async () => {
@@ -196,7 +196,53 @@ describe('applyMapping', () => {
     const res = await applyMapping(mapping(baseRows), target, rest, deps());
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect((res.resources[0] as Patient).name).toEqual([{ use: 'official', given: ['Ann'] }]);
+    expect(res.resources[0]).toEqual({
+      resourceType: 'Patient',
+      id: 'id-1',
+      identifier: [{ system: 'urn:test:patient', value: 'T-001' }],
+      name: [{ use: 'official', given: ['Ann'] }],
+      birthDate: '2026-11-03',
+      gender: 'female',
+    });
+  });
+
+  it('fails two pinned keys on one single Reference, naming the second key', async () => {
+    const res = await applyMapping(mapping([
+      ...baseRows,
+      { targetPath: 'ServiceRequest.requester?type=Practitioner', from: { field: 'given' } },
+      { targetPath: 'ServiceRequest.requester?type=Organization', from: { field: 'surname' } },
+    ]), target, row, deps());
+    expect(res).toMatchObject({ ok: false, field: 'ServiceRequest.requester?type=Organization' });
+    if (!res.ok) {
+      expect(res.reason).toContain('only one');
+      expect(res.reason).not.toContain('TESTER');
+    }
+  });
+
+  it('writes either pinned requester key alone', async () => {
+    const res = await applyMapping(mapping([
+      ...baseRows,
+      { targetPath: 'ServiceRequest.requester?type=Organization', from: { field: 'surname' } },
+    ]), target, row, deps());
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect((res.resources[2] as ServiceRequest).requester).toEqual({ display: 'TESTER', type: 'Organization' });
+  });
+
+  it('fails a malformed key without throwing, naming the key', async () => {
+    for (const key of ['Patient.identifier.value?system=%zz', 'Patient.identifier.value?system']) {
+      const res = await applyMapping(mapping([...baseRows, { targetPath: key, from: { field: 'pat_no' } }]), target, row, deps());
+      expect(res).toMatchObject({ ok: false, field: key });
+    }
+  });
+
+  it('fails a string sent to a complex leaf instead of writing a bad shape', async () => {
+    const res = await applyMapping(mapping([...baseRows, { targetPath: 'Patient.identifier', from: { field: 'pat_no' } }]), target, row, deps());
+    expect(res).toMatchObject({ ok: false, field: 'Patient.identifier' });
+    if (!res.ok) {
+      expect(res.reason).toContain('more specific');
+      expect(res.reason).not.toContain('T-001');
+    }
   });
 
   it('fails a date that does not fit the format, naming the source field', async () => {

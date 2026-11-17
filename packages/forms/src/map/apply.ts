@@ -126,7 +126,9 @@ export async function applyMapping(
   // Resolve every row first, grouped by the record type it writes.
   const rowsOf = new Map<string, ResolvedRow[]>();
   for (const row of mapping.rows) {
-    const type = parseTargetPath(row.targetPath).path.split('.')[0];
+    const parsed = parseTargetPath(row.targetPath);
+    if (!parsed) return { ok: false, reason: `the target path ${row.targetPath} is malformed`, field: row.targetPath };
+    const type = parsed.path.split('.')[0];
     const record = recordOf.get(type);
     if (!record) return { ok: false, reason: `the target has no ${type} record`, field: row.targetPath };
     const resolved = await resolveRow(row, target, json, deps);

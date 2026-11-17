@@ -29,14 +29,27 @@ export function targetPathKey(path: string, where: Record<string, string>): stri
   return `${path}?${els.map((el) => `${escape(el)}=${escape(where[el])}`).join('&')}`;
 }
 
-export function parseTargetPath(key: string): { path: string; where: Record<string, string> } {
+/**
+ * The FHIR path and pinned values of a key. Null for a malformed key: a bad escape, a pair with no
+ * `=` or no element, or one element twice. A key is config, so the caller reports it by name.
+ */
+export function parseTargetPath(key: string): { path: string; where: Record<string, string> } | null {
   const q = key.indexOf('?');
   if (q === -1) return { path: key, where: {} };
   const where: Record<string, string> = {};
   for (const pair of key.slice(q + 1).split('&')) {
     const eq = pair.indexOf('=');
-    if (eq === -1) continue;
-    where[decodeURIComponent(pair.slice(0, eq))] = decodeURIComponent(pair.slice(eq + 1));
+    if (eq <= 0) return null;
+    let el: string;
+    let val: string;
+    try {
+      el = decodeURIComponent(pair.slice(0, eq));
+      val = decodeURIComponent(pair.slice(eq + 1));
+    } catch {
+      return null; // a stray % is not an escape this file wrote
+    }
+    if (Object.hasOwn(where, el)) return null;
+    where[el] = val;
   }
   return { path: key.slice(0, q), where };
 }

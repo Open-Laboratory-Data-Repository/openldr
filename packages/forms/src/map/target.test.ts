@@ -44,6 +44,14 @@ describe('targetPathKey and parseTargetPath', () => {
   });
 });
 
+describe('parseTargetPath on a malformed key', () => {
+  it('gives null for a bad escape, a pair with no value sign, an empty pair and a repeated element', () => {
+    for (const key of ['Patient.gender?use=%zz', 'Patient.gender?use', 'Patient.gender?', 'Patient.gender?a=1&&b=2', 'Patient.gender?a=1&a=2', 'Patient.gender?=x']) {
+      expect(parseTargetPath(key)).toBeNull();
+    }
+  });
+});
+
 describe('buildTarget', () => {
   const patient = { id: 'pack-p', resourceType: 'Patient' };
   const observation = { id: 'pack-o', resourceType: 'Observation' };

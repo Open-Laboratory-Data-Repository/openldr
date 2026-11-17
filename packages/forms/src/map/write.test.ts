@@ -93,6 +93,87 @@ describe('writeValue', () => {
     expect(writeValue(rec('Patient'), 'Observation.status', 'final').ok).toBe(false);
   });
 
+  it('fails a second pinned key on one single Reference and keeps the first', () => {
+    const r = rec('ServiceRequest');
+    expect(writeValue(r, 'ServiceRequest.requester?type=Practitioner', 'Dr Test')).toEqual({ ok: true });
+    const res = writeValue(r, 'ServiceRequest.requester?type=Organization', 'QZX Clinic');
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.reason).toContain('only one');
+      expect(res.reason).not.toContain('QZX');
+    }
+    expect(r.requester).toEqual({ display: 'Dr Test', type: 'Practitioner' });
+  });
+
+  it('lets the same pinned key write again', () => {
+    const r = rec('ServiceRequest');
+    writeValue(r, 'ServiceRequest.requester?type=Practitioner', 'Dr Test');
+    expect(writeValue(r, 'ServiceRequest.requester?type=Practitioner', 'Dr Other')).toEqual({ ok: true });
+    expect(r.requester).toEqual({ display: 'Dr Other', type: 'Practitioner' });
+  });
+
+  it('turns a number, a boolean or a coding into text for string and code leaves', () => {
+    const r = rec('Patient');
+    expect(writeValue(r, 'Patient.birthDate', 2026)).toEqual({ ok: true });
+    expect(r.birthDate).toBe('2026');
+    expect(writeValue(r, 'Patient.gender', { system: 'urn:test:sex', code: 'female' })).toEqual({ ok: true });
+    expect(r.gender).toBe('female');
+    expect(writeValue(r, 'Patient.name.family', true)).toEqual({ ok: true });
+    expect(r.name).toEqual([{ family: 'true' }]);
+  });
+
+  it('fails a reference object for string and code leaves', () => {
+    expect(writeValue(rec('Patient'), 'Patient.gender', { reference: 'Patient/QZX' }).ok).toBe(false);
+  });
+
+  it('converts true and false for a boolean leaf and fails anything else', () => {
+    const r = rec('Patient');
+    expect(writeValue(r, 'Patient.active', ' TRUE ')).toEqual({ ok: true });
+    expect(r.active).toBe(true);
+    expect(writeValue(r, 'Patient.active', 'false')).toEqual({ ok: true });
+    expect(r.active).toBe(false);
+    expect(writeValue(r, 'Patient.active', false)).toEqual({ ok: true });
+    for (const v of ['QZX-yes', 1, { system: 'urn:test', code: 'y' }] as const) {
+      const res = writeValue(rec('Patient'), 'Patient.active', v);
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.reason).not.toContain('QZX');
+    }
+  });
+
+  it('fails a reference object for a Coding leaf', () => {
+    expect(writeValue(rec('Observation'), 'Observation.code.coding', { reference: 'Patient/p1' }).ok).toBe(false);
+  });
+
+  it('fails a coding and a number for a Reference leaf', () => {
+    expect(writeValue(rec('Observation'), 'Observation.subject', { system: 'urn:test', code: 'x' }).ok).toBe(false);
+  });
+
+  it('fails a reference object for a CodeableConcept leaf', () => {
+    expect(writeValue(rec('Observation'), 'Observation.code', { reference: 'Patient/p1' }).ok).toBe(false);
+  });
+
+  it('fails a primitive or an object for another complex leaf, asking for a more specific path', () => {
+    for (const [key, v] of [
+      ['Patient.identifier', 'QZX-1'],
+      ['Observation.valueQuantity', 4],
+      ['Patient.name', { system: 'urn:test', code: 'x' }],
+    ] as const) {
+      const r = rec(key.split('.')[0]);
+      const res = writeValue(r, key, v);
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.reason).toContain(key);
+        expect(res.reason).toContain('more specific');
+        expect(res.reason).not.toContain('QZX');
+      }
+      expect(Object.keys(r)).toEqual(['resourceType', 'id']);
+    }
+  });
+
+  it('fails a malformed key without throwing', () => {
+    expect(writeValue(rec('Patient'), 'Patient.gender?use=%zz', 'female').ok).toBe(false);
+  });
+
   it('fails a pinned value on a leaf that is not an object', () => {
     expect(writeValue(rec('Patient'), 'Patient.birthDate?use=official', '2026-01-01').ok).toBe(false);
   });

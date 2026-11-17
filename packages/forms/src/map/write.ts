@@ -25,26 +25,48 @@ function isObject(v: unknown): v is Record<string, unknown> {
 
 type Wrapped = { ok: true; value: unknown } | { ok: false; reason: string };
 
+const isCoding = (v: unknown): v is { code: string } =>
+  isObject(v) && typeof v.code === 'string' && !('reference' in v);
+const isReference = (v: unknown): v is { reference: string } => isObject(v) && typeof v.reference === 'string';
+
+/**
+ * The value in the shape the leaf's FHIR type holds, or a failure. Never writes a shape FHIR does
+ * not allow for the leaf.
+ */
 function wrap(leafType: string, value: WriteValue, path: string): Wrapped {
-  const text = isObject(value) ? null : String(value);
+  const no = (expected: string): Wrapped => ({ ok: false, reason: `${path} needs ${expected}` });
+  const primitive = !isObject(value);
   switch (leafType) {
-    case 'CodeableConcept':
-      return { ok: true, value: isObject(value) ? { coding: [value] } : { text } };
-    case 'Coding':
-      return isObject(value) ? { ok: true, value } : { ok: false, reason: `${path} needs a code from a code list` };
-    case 'Reference':
-      return { ok: true, value: isObject(value) ? value : { display: text } };
+    case 'string':
+    case 'code':
+      if (primitive) return { ok: true, value: String(value) };
+      return isCoding(value) ? { ok: true, value: value.code } : no('text');
+    case 'boolean': {
+      if (typeof value === 'boolean') return { ok: true, value };
+      const t = typeof value === 'string' ? value.trim().toLowerCase() : '';
+      return t === 'true' || t === 'false' ? { ok: true, value: t === 'true' } : no('true or false');
+    }
     case 'number':
       if (typeof value === 'number') return { ok: true, value };
-      if (text !== null && PLAIN_NUMBER.test(text.trim())) return { ok: true, value: Number(text.trim()) };
-      return { ok: false, reason: `${path} needs a number` };
+      if (typeof value === 'string' && PLAIN_NUMBER.test(value.trim())) return { ok: true, value: Number(value.trim()) };
+      return no('a number');
+    case 'CodeableConcept':
+      if (primitive) return { ok: true, value: { text: String(value) } };
+      return isCoding(value) ? { ok: true, value: { coding: [value] } } : no('text or a code from a code list');
+    case 'Coding':
+      return isCoding(value) ? { ok: true, value } : no('a code from a code list');
+    case 'Reference':
+      if (typeof value === 'string') return { ok: true, value: { display: value } };
+      return isReference(value) ? { ok: true, value } : no('text or a link');
     default:
-      return { ok: true, value };
+      return { ok: false, reason: `${path} is a ${leafType}, which takes no single value: pick a more specific path under it` };
   }
 }
 
 export function writeValue(resource: Record<string, unknown>, key: string, value: WriteValue): WriteResult {
-  const { path, where } = parseTargetPath(key);
+  const parsed = parseTargetPath(key);
+  if (!parsed) return { ok: false, reason: `the target path ${key} is malformed` };
+  const { path, where } = parsed;
   const [type, ...rest] = path.split('.');
   if (type !== resource.resourceType || rest.length === 0) {
     return { ok: false, reason: `${path} is not a path on a ${String(resource.resourceType)} record` };
@@ -94,6 +116,12 @@ export function writeValue(resource: Record<string, unknown>, key: string, value
   const finalValue = listLeaf ? [wrapped.value] : wrapped.value;
   if (whereAt === fullPath && !isObject(finalValue)) {
     return { ok: false, reason: `${path} cannot hold the pinned values ${Object.keys(where).sort().join(', ')}` };
+  }
+  // A single object already pinned another way: `requester` is one Reference, so it can be the
+  // Practitioner or the Organization, not both. A list entry was matched on `where`, so it agrees.
+  const existing = cur;
+  if (whereAt === fullPath && isObject(existing) && Object.entries(where).some(([el, val]) => existing[el] !== undefined && existing[el] !== val)) {
+    return { ok: false, reason: `the record can hold only one ${path}, and another pinned one is already written` };
   }
 
   setPath(resource, fullPath, finalValue);
