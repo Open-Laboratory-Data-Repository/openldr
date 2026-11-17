@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import {
   applyMapping,
   classify,
+  flattenRow,
   mapTargetById,
   parseTargetPath,
   pinnedListOf,
@@ -446,7 +447,14 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): MapToFhirSer
     const entries: Entry[] = [];
     for (const item of items) {
       const original = item.json;
-      const kind = classify(original, forms, mappings);
+      // A row of the lab's own JSON, flattened so a mapping can read nested fields
+      // (`patient.number`, `results.code`). FHIR is never flattened; forms match the row as sent.
+      const flat = typeof original.resourceType === 'string' ? null : flattenRow(original);
+      if (flat && !flat.ok) {
+        entries.push({ original, kind: 'unknown', records: null, held: heldJson(original, flat.reason, { field: flat.field }), derived: new Set(), notes: [] });
+        continue;
+      }
+      const kind = classify(original, forms, mappings, flat?.row);
       const entry: Entry = { original, kind: kind.kind, records: null, held: null, derived: new Set(), notes: [] };
       if (kind.kind === 'mapped' && target) {
         const mapped = new Set(kind.mapping.rows.map((r) => (parseTargetPath(r.targetPath)?.path ?? r.targetPath).split('.').filter((x) => !/^\d+$/.test(x)).join('.')));
@@ -469,7 +477,7 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): MapToFhirSer
         } else entry.records = res.items.map((i) => i.json);
       } else if (kind.kind === 'mapped') {
         // A mapping exists only with a target; the checks above make sure of it.
-        const res = await applyMapping(kind.mapping, target as MapTarget, original, { translateCode, hashId });
+        const res = await applyMapping(kind.mapping, target as MapTarget, flat?.row ?? original, { translateCode, hashId });
         if (res.ok) {
           entry.records = res.resources as unknown as Res[];
           entry.notes = res.notes ?? [];

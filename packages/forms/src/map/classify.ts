@@ -41,7 +41,19 @@ function isResource(v: unknown): boolean {
   return isPlainObject(v) && typeof v.resourceType === 'string';
 }
 
-export function classify(json: unknown, forms: ClassifyForm[], mappings: SavedMapping[]): Classification {
+/**
+ * A mapping knows a column when it lists it, or lists an outer name the column was flattened from:
+ * a mapping saved with `culture` covers `culture.status`, so it keeps matching once rows flatten.
+ */
+function knows(m: SavedMapping, column: string): boolean {
+  return m.fieldNames.includes(column) || m.fieldNames.some((f) => column.startsWith(`${f}.`));
+}
+
+/**
+ * `flat` is the row as `flattenRow` gives it. Forms match the row as sent; mappings match `flat`.
+ * Without `flat`, mappings match the row as sent.
+ */
+export function classify(json: unknown, forms: ClassifyForm[], mappings: SavedMapping[], flat?: Record<string, unknown>): Classification {
   if (isResource(json)) return { kind: 'fhir' };
   if (Array.isArray(json) && json.length > 0 && json.every(isResource)) return { kind: 'fhir' };
   if (!isPlainObject(json)) return { kind: 'unknown', shape: shapeOf({}) };
@@ -54,11 +66,13 @@ export function classify(json: unknown, forms: ClassifyForm[], mappings: SavedMa
     if (form) return { kind: 'form', formId: form.id };
   }
 
-  if (keys.length > 0) {
-    const fits = mappings.filter((m) => keys.every((k) => m.fieldNames.includes(k)));
+  const flatShape = flat ? shapeOf(flat) : shape;
+  const flatKeys = flatShape.fields.map((f) => f.name);
+  if (flatKeys.length > 0) {
+    const fits = mappings.filter((m) => flatKeys.every((k) => knows(m, k)));
     if (fits.length === 1) return { kind: 'mapped', mapping: fits[0] };
-    if (fits.length > 1) return { kind: 'ambiguous', shape };
+    if (fits.length > 1) return { kind: 'ambiguous', shape: flatShape };
   }
 
-  return { kind: 'unknown', shape };
+  return { kind: 'unknown', shape: flatShape };
 }

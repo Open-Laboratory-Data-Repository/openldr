@@ -794,13 +794,14 @@ describe('a mapping as the panel saves it, run as a saved workflow runs it', () 
 
 describe('notes on what a mapped row held that was not stored', () => {
   it('lists a nested column once in meta.notes, by name, and still stores the rows', async () => {
-    const nested = (pat_no: string) => ({ ...row, pat_no, culture: { isolates: [{ organism: 'Escherichia coli' }] } });
+    // A list inside a list entry: the one kind of nested data flattening leaves, so it is noted.
+    const nested = (pat_no: string) => ({ ...row, pat_no, culture: { isolates: [{ organism: 'Escherichia coli', ast: [{ antibiotic: 'AMP' }] }] } });
     const wide: SavedMapping = { ...mapping, shapeHash: shapeOf(nested('x')).hash, fieldNames: Object.keys(nested('x')).sort() };
     const svc = createMapToFhirService(deps());
     const res = await svc({ items: [{ json: nested('T-0001') }, { json: nested('T-0002') }], config: { ...config, mappings: [wide] } });
     expect(res.held).toEqual([]);
     expect(res.meta.mapped).toBe(2);
-    expect(res.meta.notes).toEqual(['culture: holds nested data no mapping reads, so it was not stored']);
+    expect(res.meta.notes).toEqual(['culture.isolates.ast: holds nested data no mapping reads, so it was not stored']);
     expect(JSON.stringify(res.meta)).not.toContain('coli');
   });
 });
@@ -820,5 +821,53 @@ describe('one result value per result record', () => {
     const reason = String(res.meta.heldReasons[0]);
     expect(reason).toBe('record 4 (Observation) valueString: holds more than one result value');
     expect(reason).not.toContain('see note');
+  });
+});
+
+describe('a lab row of nested JSON', () => {
+  const nested = {
+    patient: { number: 'T-0009' },
+    specimen: { collected: '2026-11-03T08:30:00Z' },
+    results: [{ code: 'TA', value: '14.9' }, { code: 'TB', value: '6.2' }],
+  };
+  const flatNames = ['patient.number', 'results.code', 'results.value', 'specimen.collected'];
+  const byFlat: SavedMapping = {
+    shapeHash: 'any',
+    fieldNames: flatNames,
+    targetId: 'lab-result',
+    rows: [
+      { targetPath: 'Patient.identifier.value', from: { field: 'patient.number' } },
+      { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'specimen.collected' } },
+      { targetPath: 'Observation.code', from: { field: 'results.code' } },
+      { targetPath: 'Observation.valueQuantity.value', from: { field: 'results.value' } },
+    ],
+  };
+
+  it('maps flattened names and gives one result per entry of the list', async () => {
+    const res = await createMapToFhirService(deps())({ items: [{ json: nested }], config: { ...config, mappings: [byFlat] } });
+    expect(res.held).toEqual([]);
+    expect(res.out.map((i) => i.json.resourceType)).toEqual(['Patient', 'Specimen', 'ServiceRequest', 'Observation', 'Observation']);
+    const values = res.out.filter((i) => i.json.resourceType === 'Observation').map((i) => (i.json.valueQuantity as { value: number }).value);
+    expect(values).toEqual([14.9, 6.2]);
+  });
+
+  it('still matches a mapping saved with the outer name, and stores what it read before', async () => {
+    const old: SavedMapping = { ...mapping, fieldNames: [...mapping.fieldNames, 'culture'] };
+    const r = { ...row, culture: { status: 'Final' } };
+    const res = await createMapToFhirService(deps())({ items: [{ json: r }], config: { ...config, mappings: [old] } });
+    expect(res.held).toEqual([]);
+    expect(res.meta.mapped).toBe(1);
+  });
+
+  it('holds a row whose columns clash once flattened, naming the column', async () => {
+    const clash = { ...nested, 'patient.number': 'T-0010' };
+    const res = await createMapToFhirService(deps())({ items: [{ json: clash }], config: { ...config, mappings: [byFlat] } });
+    expect(res.out).toEqual([]);
+    expect(res.meta.heldReasons).toEqual(['patient.number: two columns have this name once flattened']);
+  });
+
+  it('never flattens FHIR', async () => {
+    const res = await createMapToFhirService(deps())({ items: [{ json: fhirPatient }], config });
+    expect(res.out.map((i) => i.json)).toEqual([fhirPatient]);
   });
 });

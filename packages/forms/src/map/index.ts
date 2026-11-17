@@ -5,6 +5,7 @@ export * from './target';
 export * from './write';
 export * from './apply';
 export * from './classify';
+export * from './flatten';
 export * from './suggest';
 export * from './targets';
 export * from './synonyms';

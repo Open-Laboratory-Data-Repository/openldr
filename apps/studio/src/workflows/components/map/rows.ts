@@ -1,4 +1,5 @@
 import {
+  flattenRow,
   MapRuleSchema,
   SavedMappingSchema,
   shapeOf,
@@ -48,14 +49,23 @@ function itemJsons(raw: unknown): unknown[] {
 }
 
 /** Every row the items give, read the way the node reads them. No cut. */
+/**
+ * A row as the node reads it: nested fields flattened to `patient.number`, a list of objects to one
+ * list column per key. A row whose names clash once flattened stays as sent; the node holds it.
+ */
+function flat(row: SampleRow): SampleRow {
+  const res = flattenRow(row);
+  return res.ok ? (res.row as SampleRow) : row;
+}
+
 function allRowsFromItems(raw: unknown, sourcePath: string): SampleRow[] {
   const rows: SampleRow[] = [];
   for (const json of itemJsons(raw)) {
     const v = readPath(json, sourcePath.trim());
     if (isObject(v)) {
-      if (!isResource(v)) rows.push(v);
+      if (!isResource(v)) rows.push(flat(v));
     } else if (Array.isArray(v) && !(v.length > 0 && v.every(isResource))) {
-      for (const el of v) if (isObject(el) && !isResource(el)) rows.push(el);
+      for (const el of v) if (isObject(el) && !isResource(el)) rows.push(flat(el));
     }
   }
   return rows;

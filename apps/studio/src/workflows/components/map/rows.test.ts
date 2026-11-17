@@ -15,7 +15,8 @@ describe('rowsFromItems', () => {
 
   it('leaves out FHIR and scalars', () => {
     const fhir = { resourceType: 'Patient', id: 'x' };
-    expect(rowsFromItems([{ json: fhir }, { json: { body: [fhir] } }, { json: { body: 'QZX-1' } }], '')).toEqual([{ body: [fhir] }, { body: 'QZX-1' }]);
+    // A lab row holding a list of objects is flattened like any other, whatever the objects hold.
+    expect(rowsFromItems([{ json: fhir }, { json: { body: [fhir] } }, { json: { body: 'QZX-1' } }], '')).toEqual([{ 'body.resourceType': ['Patient'], 'body.id': ['x'] }, { body: 'QZX-1' }]);
     expect(rowsFromItems([{ json: fhir }, { json: { body: [fhir] } }, { json: { body: 'QZX-1' } }], 'body')).toEqual([]);
   });
 
@@ -173,5 +174,19 @@ describe('buildMapping refuses what the node would refuse', () => {
       d.targetPath === 'Patient.identifier.value' ? { ...d, targetPath: '', label: 'Patient ID', source: { kind: 'fixed' as const, value: 'x' } } : d,
     );
     expect(buildMapping(drafts, { hash: 'h', fieldNames: ['a'] }, TEST_TARGET.id, { requireAll: false })).toEqual({ ok: false, problem: 'invalid', label: 'Patient ID' });
+  });
+});
+
+describe('nested rows, as the node reads them', () => {
+  it('flattens nested fields and a list of objects into the sample', () => {
+    const items = asItems([{ patient: { number: 'P-1' }, results: [{ code: 'HB', value: '14.9' }, { code: 'WBC', value: '6.2' }] }]);
+    const sample = sampleFromItems(items, '');
+    expect(sample.fieldNames).toEqual(['patient.number', 'results.code', 'results.value']);
+    expect(sample.rows[0]).toEqual({ 'patient.number': 'P-1', 'results.code': ['HB', 'WBC'], 'results.value': ['14.9', '6.2'] });
+  });
+
+  it('keeps a row whose names clash once flattened as it came', () => {
+    const row = { 'patient.number': 'P-1', patient: { number: 'P-2' } };
+    expect(rowsFromItems(asItems([row]), '')).toEqual([row]);
   });
 });

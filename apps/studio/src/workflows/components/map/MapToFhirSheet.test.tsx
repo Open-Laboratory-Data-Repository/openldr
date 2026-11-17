@@ -164,6 +164,23 @@ describe('MapToFhirSheet', () => {
     expect(requestSave).not.toHaveBeenCalled();
   });
 
+  it('offers the flattened columns of a nested row, and saves a pick of a nested field', async () => {
+    setRun([{ patient: { number: 'P-1' }, results: [{ code: 'HB', value: '14.9' }, { code: 'WBC', value: '6.2' }] }]);
+    const { update } = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    const names = [...sourceSelect('Patient ID').options].map((o) => o.value);
+    expect(names).toEqual(expect.arrayContaining(['patient.number', 'results.code', 'results.value']));
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'patient.number' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 'results.code' } });
+    openMenuAndClick('Save');
+    const saved = update.mock.calls[0][0].config.mappings[0];
+    expect(saved.fieldNames).toEqual(['patient.number', 'results.code', 'results.value']);
+    expect(saved.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ targetPath: 'Patient.identifier.value', from: { field: 'patient.number' } }),
+      expect.objectContaining({ targetPath: 'Observation.code', from: { field: 'results.code' } }),
+    ]));
+  });
+
   it('saves the mapping, and the saved config holds no sample value', async () => {
     setRun(ROWS_A);
     const { update } = renderSheet();
