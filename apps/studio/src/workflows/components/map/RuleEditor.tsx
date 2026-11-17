@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
 import type { ExpandedCode, MapCodeList } from '@/api';
-import { EXCEL_DATE_FORMAT } from '@openldr/forms/pure';
+import { EXCEL_DATE_FORMAT, textKeyOf } from '@openldr/forms/pure';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,16 +14,20 @@ import { loadValueSetCodes } from './useMapHelpers';
 
 const P = 'workflows.mapToFhir.rule';
 
-/** The rule kind for one row. Changing it starts that kind's inputs empty. */
-export function RuleKindSelect({ rule, label, onChange }: { rule: RuleDraft; label: string; onChange: (r: RuleDraft) => void }) {
+/**
+ * The rule kind for one row. Changing it starts that kind's inputs empty. Number or text is offered
+ * only on a field that has a text form to keep a non-number in (`textKeyOf`).
+ */
+export function RuleKindSelect({ rule, label, targetPath, onChange }: { rule: RuleDraft; label: string; targetPath: string; onChange: (r: RuleDraft) => void }) {
   const { t } = useTranslation();
+  const kinds = RULE_KINDS.filter((k) => k !== 'numberOrText' || textKeyOf(targetPath) !== null || rule.kind === k);
   return (
     <Select value={rule.kind} onValueChange={(k) => onChange(emptyRule(k as RuleKind))}>
       <SelectTrigger aria-label={`${t('workflows.mapToFhir.sheet.colRule')}: ${label}`} className="w-full min-w-0">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {RULE_KINDS.map((k) => (
+        {kinds.map((k) => (
           <SelectItem key={k} value={k}>
             {t(`${P}.kinds.${k}`)}
           </SelectItem>
@@ -92,6 +96,7 @@ export function RuleInputs({
       );
     }
     case 'number':
+    case 'numberOrText':
       return (
         <div className={grid}>
           <Label className="whitespace-nowrap">{t(`${P}.decimal`)}</Label>

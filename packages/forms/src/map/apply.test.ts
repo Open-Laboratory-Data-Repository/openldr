@@ -748,3 +748,72 @@ describe('chunk 2: comparators written as one character, and list entries in rea
     if (!res.ok) expect(res.reason).toBe('Test: the same for test_a and test_b, so they would be one Observation record.');
   });
 });
+
+describe('chunk 4: Number or text', () => {
+  const listRows = (extra: FieldMapping[] = []): FieldMapping[] => [
+    ...baseRows,
+    { targetPath: 'Observation.code', from: { field: 'tests' } },
+    { targetPath: 'Observation.valueQuantity.value', from: { field: 'results' }, rule: { kind: 'numberOrText', decimal: ',' } },
+    ...extra,
+  ];
+  const obsOf = (res: Awaited<ReturnType<typeof applyMapping>>) => {
+    if (!res.ok) throw new Error(res.reason);
+    return res.resources.filter((r) => r.resourceType === 'Observation') as Observation[];
+  };
+
+  it('stores a number as a number with its comparator, and anything else as text, as sent', async () => {
+    const res = await applyMapping(mapping(listRows()), target,
+      { ...row, tests: ['T1', 'T2', 'T3', 'T4'], results: ['1:320', '≥1:1280', '<0,01', '≥ 200'] }, deps());
+    const obs = obsOf(res);
+    expect(obs.map((o) => [o.valueString, o.valueQuantity])).toEqual([
+      ['1:320', undefined],
+      ['≥1:1280', undefined],
+      [undefined, { comparator: '<', value: 0.01 }],
+      [undefined, { comparator: '>=', value: 200 }],
+    ]);
+  });
+
+  it('keeps every digit of a whole number too long for a number, as text', async () => {
+    const res = await applyMapping(mapping(listRows()), target,
+      { ...row, tests: ['T1'], results: ['4471200000000000123'] }, deps());
+    expect(obsOf(res)[0].valueString).toBe('4471200000000000123');
+  });
+
+  it('keeps the unit with a number only, and notes a unit beside a text result', async () => {
+    const res = await applyMapping(mapping(listRows([{ targetPath: 'Observation.valueQuantity.unit', from: { fixed: 'titre' } }])), target,
+      { ...row, tests: ['T1', 'T2'], results: ['1:320', '7,5'] }, deps());
+    const obs = obsOf(res);
+    expect(obs[0].valueString).toBe('1:320');
+    expect(obs[0].valueQuantity).toBeUndefined();
+    expect(obs[1].valueQuantity).toEqual({ value: 7.5, unit: 'titre' });
+    expect(res.ok && res.notes).toEqual(['Result: no number in this row, so the unit was not stored']);
+  });
+
+  it('refuses Number or text beside a mapped Result (text), which would replace one value with the other', async () => {
+    const res = await applyMapping(mapping(listRows([{ targetPath: 'Observation.valueString', from: { fixed: 'x' } }])), target,
+      { ...row, tests: ['T1'], results: ['1:320'] }, deps());
+    expect(res).toEqual({
+      ok: false,
+      reason: 'Result: Number or text writes text to Observation.valueString, which is also mapped. Map only one of them.',
+      field: 'Observation.valueQuantity.value',
+    });
+  });
+
+  it('refuses Number or text on a field that has no text form', async () => {
+    const res = await applyMapping(mapping([...baseRows.slice(1),
+      { targetPath: 'Patient.identifier.value?system=urn:test:patient', from: { field: 'pat_no' }, rule: { kind: 'numberOrText', decimal: '.' } },
+    ]), target, row, deps());
+    expect(res).toEqual({
+      ok: false,
+      reason: 'Patient.identifier.value?system=urn:test:patient: Number or text needs a result field that also has a text form',
+      field: 'Patient.identifier.value?system=urn:test:patient',
+    });
+  });
+
+  it('keeps Number strict: a text value still holds the row', async () => {
+    const res = await applyMapping(mapping([...baseRows,
+      { targetPath: 'Observation.valueQuantity.value', from: { field: 'result_a' }, rule: { kind: 'number', decimal: ',' } },
+    ]), target, { ...row, result_a: '1:320' }, deps());
+    expect(res.ok).toBe(false);
+  });
+});

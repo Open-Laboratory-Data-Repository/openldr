@@ -15,7 +15,7 @@ import { AddPathPanel } from './AddPathPanel';
 import { MappingRow } from './MappingRow';
 import { RuleInputs, RuleKindSelect } from './RuleEditor';
 import { TestResults, type TestState } from './TestResults';
-import { classify, type SavedMapping } from '@openldr/forms/pure';
+import { classify, resultRecordOf, type SavedMapping } from '@openldr/forms/pure';
 import { buildMapping, columnTestPlans, hasSource, narrowerCount, testFieldsOf, unusedFields, withMapping, type BuildResult, type RowDraft, type RuleDraft } from './rows';
 import { useCodeLists, useCodeSets, useFeedsFromWebhook, useSuggestions } from './useMapHelpers';
 import { codeListUrlOf, decimalMarkOf, examplesOf, fhirListCodes, suggestRuleFor, valueLinesFor, type RuleSuggestion } from './ruleSuggest';
@@ -98,8 +98,8 @@ export function MapToFhirSheet({
     return { kind: 'values', pairs: pairs.length > 0 ? pairs : [{ from: '', to: '' }] };
   };
   /** A Number rule picked by hand takes the decimal mark the sample shows, and a point without one. */
-  const numberRuleFor = (d: RowDraft): RuleDraft => ({
-    kind: 'number',
+  const numberRuleFor = (d: RowDraft, kind: 'number' | 'numberOrText'): RuleDraft => ({
+    kind,
     decimal: (columns ? decimalMarkOf(examplesOf(d, columns.rows)) : null) ?? '.',
   });
   const testFields = target ? testFieldsOf(target) : [];
@@ -267,7 +267,10 @@ export function MapToFhirSheet({
           const owner = plans.find((p) => p.ownerIndex === i);
           const asTest = plans.find((p) => p.testIndex === i);
           const sharing = plans.find((p) => p.others.includes(i));
-          const showSuggestion = s && !hasSource(d) && !asTest && sampleNames.includes(s);
+          // A second result field of a record with one already mapped would give it two values.
+          const record = resultRecordOf(d.targetPath);
+          const otherResult = record !== null && drafts.some((o) => o !== d && hasSource(o) && resultRecordOf(o.targetPath) === record);
+          const showSuggestion = s && !hasSource(d) && !asTest && !otherResult && sampleNames.includes(s);
           return (
             <MappingRow
               key={d.targetPath}
@@ -302,7 +305,14 @@ export function MapToFhirSheet({
               }
               rule={
                 <div className="flex min-w-0 flex-col gap-1">
-                  <RuleKindSelect rule={d.rule} label={d.label} onChange={(rule) => edit(i, { rule: rule.kind === 'values' ? valuesRuleFor(d, false) : rule.kind === 'number' ? numberRuleFor(d) : rule })} />
+                  <RuleKindSelect
+                    rule={d.rule}
+                    label={d.label}
+                    targetPath={d.targetPath}
+                    onChange={(rule) =>
+                      edit(i, { rule: rule.kind === 'values' ? valuesRuleFor(d, false) : rule.kind === 'number' || rule.kind === 'numberOrText' ? numberRuleFor(d, rule.kind) : rule })
+                    }
+                  />
                   {(() => {
                     // A test set per column takes no suggestion from a column it does not read.
                     const rs = asTest ? null : ruleSuggestionOf(d);

@@ -88,6 +88,7 @@ The kinds of rule are these.
 - **Split** keeps one part of the cell.
 - **Trim spaces** removes spaces at both ends.
 - **Number** reads a number with the **Decimal mark** you choose. On **Result (number)**, a leading `<`, `<=`, `>=` or `>` is kept as the comparator, so `>100000` is stored as more than 100000. `≤` and `≥` mean the same as `<=` and `>=`, and are stored as `<=` and `>=`. This works with or without the rule. When you pick **Number**, **Decimal mark** starts as the one the sample shows: a comma when the examples have decimal commas and no decimal points, and a point otherwise. Change it if it is wrong.
+- **Number or text**, on **Result (number)** only, stores a value that reads as a number as a number, with its comparator, and stores anything else as text, exactly as sent, in **Result (text)**. Use it when a column mixes numbers and titres such as `1:320`. Nothing is held for a value that is not a number. A unit is stored only with a number. A whole number too long to keep exactly is stored as text with every digit. Do not also map **Result (text)**: the row is held, because both would fill the one text result.
 
 The panel suggests a rule from the form of the example values, such as a decimal comma or a date format. Check a date suggestion when the day and the month can both be 12 or less.
 
@@ -164,6 +165,8 @@ The Map to FHIR node's result in **History** lists up to 20 held reasons. Log th
 - A row with no Patient ID is held.
 - A unit is stored only with a number. When a row has a unit but no number, for example a text result, the result is stored without the unit, and the run notes it.
 - A whole number sent without quotes that is too long to keep exactly, above 9,007,199,254,740,991, such as a 19-digit specimen number, keeps every digit. The webhook reads it as text, and the trigger's output in **History** names the field under `notes`. Map it to a text field such as **Specimen number**. **Result (number)** refuses it and holds the row, because a number cannot hold that many digits exactly. Ask the lab to send such IDs in quotes.
+- A column that mixes numbers and text, such as `12,5` beside `1:320`, needs the **Number or text** rule on **Result (number)**. **Number** alone holds a row whose value is not a number. **Number or text** stores the number as a number and anything else as text, exactly as sent. A unit is stored only with a number.
+- When a result field already has a column, the panel gives no suggestion for the record's other result field, because a result record holds one value.
 - A held reason about one entry of a list column, such as `results.value`, says which entry, for example `(entry 2 of 4)`. It never shows the value.
 - Two results in one row with the same test are held, because they would be one result record. The reason names the two list entries, such as `entries 1 and 3 of 4 in results.code`, or the two columns. When **Result date** is not mapped, it says to map it: two results of one test with different result dates are kept apart.
 - A test with a blank result, empty, null or missing, gives no result record. The order still lists the test, and the run notes it. A zero is a result and is kept.

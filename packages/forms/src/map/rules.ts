@@ -30,6 +30,11 @@ export const MapRuleSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('trim') }),
   z.object({ kind: z.literal('number'), decimal: z.enum([',', '.']) }),
+  /**
+   * A number when the Number rule reads it, else the value as sent, as text. Only on a result
+   * field that also has a text form; the mapping writes the text there (`textKeyOf` in apply.ts).
+   */
+  z.object({ kind: z.literal('numberOrText'), decimal: z.enum([',', '.']) }),
 ]);
 export type MapRule = z.infer<typeof MapRuleSchema>;
 
@@ -179,6 +184,7 @@ export async function applyRule(
     case 'trim':
       return { ok: true, value: text.trim() };
     case 'number':
+    case 'numberOrText':
       return applyNumber(rule.decimal, value, field);
   }
 }

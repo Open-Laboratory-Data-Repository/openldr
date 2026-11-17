@@ -622,6 +622,32 @@ describe('MapToFhirSheet rule suggestions, status and results', () => {
     expect((await screen.findByRole('combobox', { name: 'Decimal mark: Patient ID' }) as HTMLSelectElement).value).toBe('.');
   });
 
+  it('offers Number or text only on a result field with a text form, starts it with the sample decimal mark, and saves it', async () => {
+    const { update } = await mapForm();
+    const opts = (name: string) => within(screen.getByRole('combobox', { name })).queryAllByRole('option').map((o) => o.textContent);
+    expect(opts('Rule: Result (number)')).toContain('Number or text');
+    expect(opts('Rule: Patient ID')).not.toContain('Number or text');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Result (number)' }), { target: { value: 'numberOrText' } });
+    expect((await screen.findByRole('combobox', { name: 'Decimal mark: Result (number)' }) as HTMLSelectElement).value).toBe(',');
+    openMenuAndClick('Save');
+    const rows = update.mock.calls[0][0].config.mappings[0].rows;
+    expect(rows.find((r: { targetPath: string }) => r.targetPath === 'Observation.valueQuantity.value').rule).toEqual({ kind: 'numberOrText', decimal: ',' });
+  });
+
+  it('gives no suggestion for a second result field once a record has one', async () => {
+    setRun(ROWS_FORM);
+    m(api.suggestMapping).mockResolvedValue([
+      { targetPath: 'Observation.valueQuantity.value', field: 'res', score: 0.9 },
+      { targetPath: 'Observation.valueString', field: 'res', score: 0.8 },
+    ]);
+    renderSheet();
+    await screen.findByTestId('map-suggestion-Observation.valueQuantity.value');
+    expect(screen.getByTestId('map-suggestion-Observation.valueString')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Accept: Result (number)' }));
+    // Result (number) now has a column, so Result (text) would give the record a second value.
+    expect(screen.queryByTestId('map-suggestion-Observation.valueString')).toBeNull();
+  });
+
   it('says when day and month cannot be told apart', async () => {
     setRun([{ pid: 'QZX-1', t: 'QZX-2', dob: '03/04/2025' }]);
     renderSheet();

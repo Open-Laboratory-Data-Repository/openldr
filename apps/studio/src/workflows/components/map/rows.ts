@@ -168,7 +168,9 @@ export type RuleDraft =
   | { kind: 'codeList'; conceptMapUrl: string; sourceSystem: string }
   | { kind: 'split'; by: string; take: SplitTake; part: string }
   | { kind: 'trim' }
-  | { kind: 'number'; decimal: ',' | '.' };
+  | { kind: 'number'; decimal: ',' | '.' }
+  /** A number when it reads as one, else the value as sent, in the field's text form. */
+  | { kind: 'numberOrText'; decimal: ',' | '.' };
 
 export interface ValuePair {
   from: string;
@@ -179,7 +181,7 @@ export interface ValuePair {
 }
 
 export type RuleKind = RuleDraft['kind'];
-export const RULE_KINDS: RuleKind[] = ['none', 'date', 'values', 'codeList', 'split', 'trim', 'number'];
+export const RULE_KINDS: RuleKind[] = ['none', 'date', 'values', 'codeList', 'split', 'trim', 'number', 'numberOrText'];
 
 export interface RowDraft {
   targetPath: string;
@@ -215,6 +217,8 @@ export function emptyRule(kind: RuleKind): RuleDraft {
       return { kind: 'trim' };
     case 'number':
       return { kind: 'number', decimal: '.' };
+    case 'numberOrText':
+      return { kind: 'numberOrText', decimal: '.' };
   }
 }
 
@@ -238,6 +242,8 @@ function ruleDraftOf(rule: MapRule | undefined): RuleDraft {
       return { kind: 'trim' };
     case 'number':
       return { kind: 'number', decimal: rule.decimal };
+    case 'numberOrText':
+      return { kind: 'numberOrText', decimal: rule.decimal };
   }
 }
 
@@ -391,6 +397,9 @@ export function ruleOf(rule: RuleDraft): MapRule | null | 'incomplete' {
       break;
     case 'number':
       candidate = { kind: 'number', decimal: rule.decimal };
+      break;
+    case 'numberOrText':
+      candidate = { kind: 'numberOrText', decimal: rule.decimal };
       break;
   }
   const parsed = MapRuleSchema.safeParse(candidate);

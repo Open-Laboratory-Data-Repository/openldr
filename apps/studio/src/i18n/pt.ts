@@ -2483,6 +2483,7 @@ export const pt: EnShape = {
           split: "Dividir",
           trim: "Retirar espaços",
           number: "Número",
+          numberOrText: "Número ou texto",
         },
         format: "Formato",
         formatHint: "Use d, dd, M, MM, yy e yyyy. Por exemplo dd/MM/yyyy.",

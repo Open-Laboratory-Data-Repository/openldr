@@ -258,3 +258,10 @@ describe('applyRule: number, with a whole number too long to hold exactly', () =
     expect(await applyRule({ kind: 'number', decimal: '.' }, '9007199254740991', 'x', {} as RuleDeps)).toEqual({ ok: true, value: 9007199254740991 });
   });
 });
+
+describe('MapRuleSchema: numberOrText', () => {
+  it('takes a decimal mark like number, and refuses any other', () => {
+    expect(MapRuleSchema.safeParse({ kind: 'numberOrText', decimal: ',' }).success).toBe(true);
+    expect(MapRuleSchema.safeParse({ kind: 'numberOrText', decimal: ';' }).success).toBe(false);
+  });
+});

@@ -78,6 +78,8 @@ interface ResolvedRow {
    * whose FHIR Quantity has a comparator, so `>100000` is stored as the comparator and 100000.
    */
   comparators?: (string | null)[];
+  /** Positions a Number or text rule did not read as a number: written as text, as sent. */
+  asText?: boolean[];
   /** True for a fixed value or a list of them. A fixed value never keeps a position alive. */
   fixed: boolean;
   /**
@@ -98,6 +100,26 @@ const COMPARATOR_CODE: Record<string, string> = { '≤': '<=', '≥': '>=' };
 /** The entry a reason is about, for a value from a list column: ` (entry 2 of 4)`. */
 function entryOf(index: number, count: number): string {
   return `entry ${index + 1} of ${count}`;
+}
+
+/**
+ * The text form of a result field: `Observation.valueString` for `Observation.valueQuantity.value`.
+ * Null when the key is not a Quantity's value, or FHIR gives that record no string value.
+ */
+export function textKeyOf(key: string): string | null {
+  const m = /^([A-Z][A-Za-z]*)\.valueQuantity\.value$/.exec(plainPath(key));
+  return m && lookupFhirPath(`${m[1]}.valueString`) ? `${m[1]}.valueString` : null;
+}
+
+/**
+ * The record a result field gives its value to: `Observation` for `Observation.valueString` or
+ * `Observation.valueQuantity.value`. FHIR allows a record one `value[x]`. Null for any other field,
+ * including a Quantity's unit.
+ */
+export function resultRecordOf(key: string): string | null {
+  const m = /^([A-Z][A-Za-z]*)\.(value[A-Z][A-Za-z]*)(\.value)?$/.exec(plainPath(key));
+  if (!m) return null;
+  return m[3] ? (m[2] === 'valueQuantity' ? m[1] : null) : m[2] === 'valueQuantity' ? null : m[1];
 }
 
 /** The key of the comparator beside a Quantity's value, or null when FHIR has none there. */
@@ -129,6 +151,7 @@ async function resolveRow(
   const values: (MapValue | null)[] = [];
   const reads = !('fixed' in row.from) && !('fixedList' in row.from) && comparatorKeyOf(row.targetPath) !== null;
   const comparators: (string | null)[] = [];
+  const asText: boolean[] = [];
   const list = 'field' in row.from && Array.isArray(json[row.from.field]) && sources.length > 1;
   const at = (i: number) => (list ? ` (${entryOf(i, sources.length)})` : '');
   for (const [i, s] of sources.entries()) {
@@ -149,6 +172,13 @@ async function resolveRow(
       continue;
     }
     const r = await applyRule(row.rule, value, s.field, deps);
+    if (!r.ok && row.rule.kind === 'numberOrText') {
+      // Not a number: kept as sent, comparator and all, for the text form of the field.
+      values.push(String(s.value));
+      comparators[comparators.length - 1] = null;
+      asText[i] = true;
+      continue;
+    }
     if (!r.ok) return { ...r, reason: `${r.reason}${at(i)}` };
     values.push(r.value);
   }
@@ -162,6 +192,7 @@ async function resolveRow(
     values,
     fixed: 'fixed' in row.from || 'fixedList' in row.from,
     ...(comparators.some((c) => c !== null) ? { comparators } : {}),
+    ...(asText.some(Boolean) ? { asText } : {}),
     ...('fixedList' in row.from && row.rule ? { deferred: new Set<number>() } : {}),
   };
 }
@@ -228,6 +259,21 @@ export async function applyMapping(
     if (!record) return { ok: false, reason: `the target has no ${type} record`, field: row.targetPath };
     if ('fixedList' in row.from && !record.repeats) {
       return { ok: false, reason: `${row.targetPath}: a list of fixed values is allowed only on a field of a repeating record`, field: row.targetPath };
+    }
+    if (row.rule?.kind === 'numberOrText') {
+      const textKey = textKeyOf(row.targetPath);
+      if (!textKey) {
+        return { ok: false, reason: `${row.targetPath}: Number or text needs a result field that also has a text form`, field: row.targetPath };
+      }
+      // Both would write the one text result, and the second would replace the first.
+      if (mapping.rows.some((o) => plainPath(o.targetPath) === textKey)) {
+        const label = (k: string) => target.fields.find((f) => plainPath(f.path) === k)?.label ?? k;
+        return {
+          ok: false,
+          reason: `${label(plainPath(row.targetPath))}: Number or text writes text to ${label(textKey)}, which is also mapped. Map only one of them.`,
+          field: row.targetPath,
+        };
+      }
     }
     const resolved = await resolveRow(row, target, json, deps);
     if ('ok' in resolved) return resolved;
@@ -336,6 +382,12 @@ export async function applyMapping(
       }
       // A writer reason names the target path; for a list entry, add the column and the entry.
       const where = (f: Failure): Failure => ({ ...f, reason: `${f.reason}${listEntry(r, index)}` });
+      const at = r.values.length === 1 ? 0 : index;
+      if (r.asText?.[at]) {
+        const t = write(resource, textKeyOf(r.row.targetPath)!, value);
+        if (t) return where(t);
+        continue;
+      }
       const f = write(resource, r.row.targetPath, value);
       if (f) return where(f);
       const comparator = r.comparators?.[r.values.length === 1 ? 0 : index];

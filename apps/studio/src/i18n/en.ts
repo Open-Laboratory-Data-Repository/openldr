@@ -2601,6 +2601,7 @@ export const en = {
           split: "Split",
           trim: "Trim spaces",
           number: "Number",
+          numberOrText: "Number or text",
         },
         format: "Format",
         formatHint: "Use d, dd, M, MM, yy and yyyy. For example dd/MM/yyyy.",
