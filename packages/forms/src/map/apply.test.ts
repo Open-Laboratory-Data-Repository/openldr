@@ -810,6 +810,20 @@ describe('chunk 4: Number or text', () => {
     });
   });
 
+  it('refuses Number or text on a fixed value or a list of them, which are typed, not read from data', async () => {
+    // The made-up target has no label for the text field, so its path stands in.
+    const reason = 'Result: Number or text reads values from your data. For a fixed value, map Result or Observation.valueString instead.';
+    const fixed = await applyMapping(mapping([...baseRows,
+      { targetPath: 'Observation.valueQuantity.value', from: { fixed: '<0,01' }, rule: { kind: 'numberOrText', decimal: ',' } },
+    ]), target, row, deps());
+    expect(fixed).toEqual({ ok: false, reason, field: 'Observation.valueQuantity.value' });
+    const list = await applyMapping(mapping([...baseRows,
+      { targetPath: 'Observation.code', from: { fields: ['test_a', 'test_b'] } },
+      { targetPath: 'Observation.valueQuantity.value', from: { fixedList: ['1:320', '≥1:1280'] }, rule: { kind: 'numberOrText', decimal: ',' } },
+    ]), target, row, deps());
+    expect(list).toEqual({ ok: false, reason, field: 'Observation.valueQuantity.value' });
+  });
+
   it('keeps Number strict: a text value still holds the row', async () => {
     const res = await applyMapping(mapping([...baseRows,
       { targetPath: 'Observation.valueQuantity.value', from: { field: 'result_a' }, rule: { kind: 'number', decimal: ',' } },

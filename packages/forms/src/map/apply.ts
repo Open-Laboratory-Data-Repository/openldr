@@ -265,9 +265,19 @@ export async function applyMapping(
       if (!textKey) {
         return { ok: false, reason: `${row.targetPath}: Number or text needs a result field that also has a text form`, field: row.targetPath };
       }
+      const label = (k: string) => target.fields.find((f) => plainPath(f.path) === k)?.label ?? k;
+      // A typed value has a known type, so it goes to the number or the text field itself
+      // (operator, 2026-11-17, C4-1).
+      if ('fixed' in row.from || 'fixedList' in row.from) {
+        const own = label(plainPath(row.targetPath));
+        return {
+          ok: false,
+          reason: `${own}: Number or text reads values from your data. For a fixed value, map ${own} or ${label(textKey)} instead.`,
+          field: row.targetPath,
+        };
+      }
       // Both would write the one text result, and the second would replace the first.
       if (mapping.rows.some((o) => plainPath(o.targetPath) === textKey)) {
-        const label = (k: string) => target.fields.find((f) => plainPath(f.path) === k)?.label ?? k;
         return {
           ok: false,
           reason: `${label(plainPath(row.targetPath))}: Number or text writes text to ${label(textKey)}, which is also mapped. Map only one of them.`,

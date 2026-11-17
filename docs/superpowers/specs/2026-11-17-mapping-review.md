@@ -785,3 +785,25 @@ C3-8 refuted at `run-workflow.ts:347`, `:349`, `:355`, `:244`; replays kept part
 failed pass, a failing Map to FHIR step, the item limit, a failed inner loop, and a later persist failure.
 C3-6 and C3-7 stay follow-ups. Codex's HONEST NON-PROOF: no full gate, browser, phone, PostgreSQL or
 warehouse rerun; persisted counts are the service's reported count; no fresh loop run seen in History.
+
+### Codex, 2026-11-17: chunk 4 review (relayed by Claude)
+
+4 review checks: 1 confirmed, 3 refuted, 0 convention-conflict, 0 deferred. Reviewed `e1996058..9a7f37cf`.
+
+| ID | Finding | Verdict | Proof |
+| --- | --- | --- | --- |
+| C4-1 | Number or text holds text from a fixed list; a fixed `<0,01` stays text. | CONFIRMED | `apply.ts:170` skips the rule for a fixed list and `:455` runs Number later; `:152` skips comparators on fixed values. |
+| C4-2 | Column values lose text, comparators, digits or units. | REFUTED | `apply.ts:167-179`, `:386-389`. |
+| C4-3 | Number or text overwrites a mapped text result. | REFUTED | `apply.ts:269-275` refuses it first. |
+| C4-4 | A competing result suggestion stays visible. | REFUTED | `MapToFhirSheet.tsx:271-273`. |
+
+### Operator, 2026-11-17 (relayed by Claude)
+
+C4-1: "Refuse on fixed". Number or text reads values from data only. On a fixed value or a fixed
+list the row is held, with a reason naming the number and text fields to map instead.
+
+### Claude, 2026-11-17: response
+
+C4-1 fixed: `applyMapping` refuses Number or text on a `fixed` or `fixedList` source before any
+value is read. The older Number path for fixed values is unchanged. Test covers a fixed value
+and a fixed list; it failed before the fix. The in-app guide says so in en, fr and pt.
