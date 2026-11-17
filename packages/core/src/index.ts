@@ -11,3 +11,4 @@ export * from './canonical-hash';
 export * from './param-format';
 export * from './semver';
 export * from './release-manifest';
+export * from './similarity';

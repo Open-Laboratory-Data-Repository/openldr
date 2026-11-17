@@ -1,0 +1,151 @@
+import { describe, it, expect } from 'vitest';
+import type { Coding } from 'fhir/r4';
+import { applyRule, MapRuleSchema, type MapRule, type RuleDeps } from './rules';
+
+const NOW = new Date(Date.UTC(2026, 10, 17));
+const noCodes: RuleDeps = { translateCode: async () => null, now: NOW };
+
+async function run(rule: MapRule, value: string | number, field = 'col_x', deps: RuleDeps = noCodes) {
+  return applyRule(rule, value, field, deps);
+}
+
+describe('applyRule: date', () => {
+  it('reads dd/MM/yy as a full date', async () => {
+    expect(await run({ kind: 'date', format: 'dd/MM/yy' }, '03/11/26')).toEqual({ ok: true, value: '2026-11-03' });
+  });
+
+  it('reads one-digit day and month tokens', async () => {
+    expect(await run({ kind: 'date', format: 'd.M.yyyy' }, '3.1.2024')).toEqual({ ok: true, value: '2024-01-03' });
+  });
+
+  it('puts a two-digit year no more than one year after now', async () => {
+    expect(await run({ kind: 'date', format: 'dd/MM/yy' }, '01/01/27')).toEqual({ ok: true, value: '2027-01-01' });
+    expect(await run({ kind: 'date', format: 'dd/MM/yy' }, '01/01/28')).toEqual({ ok: true, value: '1928-01-01' });
+  });
+
+  it('fails a date that does not fit the format, naming the field', async () => {
+    const r = await run({ kind: 'date', format: 'dd/MM/yy' }, '2026-11-03', 'dob');
+    expect(r).toMatchObject({ ok: false, field: 'dob' });
+  });
+
+  it('fails an impossible date', async () => {
+    const r = await run({ kind: 'date', format: 'dd/MM/yyyy' }, '31/02/2024', 'dob');
+    expect(r).toMatchObject({ ok: false, field: 'dob' });
+  });
+
+  it('fails a format with an unsupported token', async () => {
+    const r = await run({ kind: 'date', format: 'dd/MMM/yy' }, '03/Nov/26', 'dob');
+    expect(r).toMatchObject({ ok: false, field: 'dob' });
+    if (!r.ok) expect(r.reason).toContain('unsupported date format');
+  });
+
+  it('fails a format with no year', async () => {
+    const r = await run({ kind: 'date', format: 'dd/MM' }, '03/11', 'dob');
+    expect(r).toMatchObject({ ok: false, field: 'dob' });
+    if (!r.ok) expect(r.reason).toContain('unsupported date format');
+  });
+});
+
+describe('applyRule: values', () => {
+  it('translates a listed value', async () => {
+    expect(await run({ kind: 'values', map: { M: 'male' } }, 'M')).toEqual({ ok: true, value: 'male' });
+  });
+
+  it('matches after trimming', async () => {
+    expect(await run({ kind: 'values', map: { M: 'male' } }, ' M ')).toEqual({ ok: true, value: 'male' });
+  });
+
+  it('fails an unmapped value naming the field, not the value', async () => {
+    const r = await run({ kind: 'values', map: { M: 'male' } }, 'QZX', 'sex');
+    expect(r).toMatchObject({ ok: false, field: 'sex' });
+    if (!r.ok) {
+      expect(r.reason).toContain('sex');
+      expect(r.reason).not.toContain('QZX');
+    }
+  });
+});
+
+describe('applyRule: codeList', () => {
+  const coding: Coding = { system: 'urn:test:codes', code: 'T1', display: 'Test one' };
+
+  it('gives the coding the concept map returns', async () => {
+    const calls: [string, string][] = [];
+    const deps: RuleDeps = {
+      translateCode: async (url, value) => {
+        calls.push([url, value]);
+        return coding;
+      },
+    };
+    expect(await run({ kind: 'codeList', conceptMapUrl: 'urn:test:map' }, ' t1 ', 'test', deps)).toEqual({ ok: true, value: coding });
+    expect(calls).toEqual([['urn:test:map', 't1']]);
+  });
+
+  it('fails when the concept map has no match', async () => {
+    const r = await run({ kind: 'codeList', conceptMapUrl: 'urn:test:map' }, 'QZX', 'test');
+    expect(r).toMatchObject({ ok: false, field: 'test' });
+  });
+});
+
+describe('applyRule: split', () => {
+  it('takes the last part', async () => {
+    expect(await run({ kind: 'split', by: ' ', take: 'last' }, 'BANDA Mary')).toEqual({ ok: true, value: 'Mary' });
+  });
+
+  it('takes the first part', async () => {
+    expect(await run({ kind: 'split', by: ' ', take: 'first' }, 'BANDA Mary')).toEqual({ ok: true, value: 'BANDA' });
+  });
+
+  it('takes a zero-based index', async () => {
+    expect(await run({ kind: 'split', by: '-', take: 1 }, 'a-b-c')).toEqual({ ok: true, value: 'b' });
+  });
+
+  it('fails an index out of range', async () => {
+    expect(await run({ kind: 'split', by: '-', take: 5 }, 'a-b', 'code')).toMatchObject({ ok: false, field: 'code' });
+  });
+});
+
+describe('applyRule: trim', () => {
+  it('trims', async () => {
+    expect(await run({ kind: 'trim' }, '  T-1 ')).toEqual({ ok: true, value: 'T-1' });
+  });
+});
+
+describe('applyRule: number', () => {
+  it('reads a comma decimal', async () => {
+    expect(await run({ kind: 'number', decimal: ',' }, '12,5')).toEqual({ ok: true, value: 12.5 });
+  });
+
+  it('reads a point decimal and a sign', async () => {
+    expect(await run({ kind: 'number', decimal: '.' }, '-0.25')).toEqual({ ok: true, value: -0.25 });
+  });
+
+  it('keeps a JSON number', async () => {
+    expect(await run({ kind: 'number', decimal: ',' }, 7)).toEqual({ ok: true, value: 7 });
+  });
+
+  it('fails the other decimal mark, thousands marks and text', async () => {
+    for (const v of ['12.5', '1.200,5', '12,5,1', 'abc', '']) {
+      expect(await run({ kind: 'number', decimal: ',' }, v, 'result')).toMatchObject({ ok: false, field: 'result' });
+    }
+  });
+});
+
+describe('MapRuleSchema', () => {
+  it('accepts every rule kind', () => {
+    const rules: MapRule[] = [
+      { kind: 'date', format: 'dd/MM/yy' },
+      { kind: 'values', map: { M: 'male' } },
+      { kind: 'codeList', conceptMapUrl: 'urn:test:map' },
+      { kind: 'split', by: ' ', take: 2 },
+      { kind: 'trim' },
+      { kind: 'number', decimal: ',' },
+    ];
+    for (const r of rules) expect(MapRuleSchema.parse(r)).toEqual(r);
+  });
+
+  it('rejects an unknown kind and a bad take', () => {
+    expect(MapRuleSchema.safeParse({ kind: 'upper' }).success).toBe(false);
+    expect(MapRuleSchema.safeParse({ kind: 'split', by: ' ', take: 'middle' }).success).toBe(false);
+    expect(MapRuleSchema.safeParse({ kind: 'split', by: ' ', take: -1 }).success).toBe(false);
+  });
+});
