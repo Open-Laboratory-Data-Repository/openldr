@@ -80,6 +80,16 @@ describe('createMapToFhirService', () => {
     expect(res.meta).toEqual({ fhir: 1, form: 1, mapped: 1, held: 1, heldReasons: ['no mapping for this shape'] });
   });
 
+  it('holds a row that two saved mappings fit, with the shape, and counts it under held', async () => {
+    const wider: SavedMapping = { ...mapping, fieldNames: [...mapping.fieldNames, 'ward'] };
+    const svc = createMapToFhirService(deps());
+    const res = await svc({ items: [{ json: row }], config: { ...config, mappings: [mapping, wider] } });
+    expect(res.out).toEqual([]);
+    expect(res.held).toEqual([{ json: { item: row, reason: 'more than one saved mapping fits this row', shape: shapeOf(row) } }]);
+    expect(res.heldIndexes).toEqual([0]);
+    expect(res.meta).toEqual({ fhir: 0, form: 0, mapped: 0, held: 1, heldReasons: ['more than one saved mapping fits this row'] });
+  });
+
   it('holds a mapped item whose records fail the clinical rules, with the rule message', async () => {
     const validate = vi.fn(async () => ({
       ok: false as const,

@@ -3,13 +3,19 @@ import { shapeOf, type Shape } from './shape';
 
 /**
  * What kind of item this is: FHIR already, a match for one of CE's forms, a row a saved mapping
- * knows, or a new shape a person has to map. Checked in that order. Never throws.
+ * knows, a row more than one saved mapping knows, or a new shape a person has to map. Checked in
+ * that order. Never throws.
  *
  * A saved mapping knows a row when every key of the row is one of the mapping's `fieldNames`. A
  * file reader drops blank cells and reads number-like cells as numbers, so rows of one file differ
  * in keys and types; a missing column is empty to `applyMapping`, which fails a required one by
  * name. Types and `shapeHash` play no part (the hash names the sample the mapping was made from).
  * A row with a key the mapping never saw is a new shape. A row with no keys matches nothing.
+ *
+ * A row is `mapped` only when exactly one mapping knows it. When two do, the row is `ambiguous`
+ * and is held: a row of a file whose blank cell was dropped can have exactly another file's
+ * columns, and the same column name can mean a different thing there. Picking one would put
+ * values in the wrong fields with no error.
  */
 
 export interface ClassifyForm {
@@ -22,6 +28,7 @@ export type Classification =
   | { kind: 'fhir' }
   | { kind: 'form'; formId: string }
   | { kind: 'mapped'; mapping: SavedMapping }
+  | { kind: 'ambiguous'; shape: Shape }
   | { kind: 'unknown'; shape: Shape };
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -47,15 +54,11 @@ export function classify(json: unknown, forms: ClassifyForm[], mappings: SavedMa
     if (form) return { kind: 'form', formId: form.id };
   }
 
-  // The tightest fit wins: the fewest field names, and the first in the list on a tie.
-  let mapping: SavedMapping | null = null;
   if (keys.length > 0) {
-    for (const m of mappings) {
-      if (!keys.every((k) => m.fieldNames.includes(k))) continue;
-      if (!mapping || m.fieldNames.length < mapping.fieldNames.length) mapping = m;
-    }
+    const fits = mappings.filter((m) => keys.every((k) => m.fieldNames.includes(k)));
+    if (fits.length === 1) return { kind: 'mapped', mapping: fits[0] };
+    if (fits.length > 1) return { kind: 'ambiguous', shape };
   }
-  if (mapping) return { kind: 'mapped', mapping };
 
   return { kind: 'unknown', shape };
 }

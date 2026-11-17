@@ -290,6 +290,8 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): (input: RunM
         const res = await applyMapping(kind.mapping, target as MapTarget, original, { translateCode: deps.translateCode, hashId });
         if (res.ok) entry.records = res.resources as unknown as Res[];
         else entry.held = heldJson(original, res.reason, { field: res.field });
+      } else if (kind.kind === 'ambiguous') {
+        entry.held = heldJson(original, 'more than one saved mapping fits this row', { shape: kind.shape });
       } else {
         entry.held = heldJson(original, 'no mapping for this shape', { shape: kind.shape });
       }
@@ -336,7 +338,8 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): (input: RunM
       }
       // The records go on as made; Persist Store runs the same check again before it stores them.
       for (const r of e.records as Res[]) out.push({ json: r });
-      if (e.kind !== 'unknown') meta[e.kind] += 1;
+      // An unknown or ambiguous item is always held, so only these three reach here.
+      if (e.kind === 'fhir' || e.kind === 'form' || e.kind === 'mapped') meta[e.kind] += 1;
     });
 
     return { out, held, heldIndexes, meta };

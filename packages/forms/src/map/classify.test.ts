@@ -74,12 +74,40 @@ describe('classify', () => {
     expect(classify({ gone: undefined }, forms, [forEmpty, saved]).kind).toBe('unknown');
   });
 
-  it('picks the mapping with the fewest field names, and the first on a tie', () => {
+  it('calls a row mapped when exactly one saved mapping knows its columns', () => {
+    const other: SavedMapping = { ...saved, fieldNames: ['ward', 'bed'], targetId: 'other' };
+    expect(classify({ lab_no: 'L-2' }, forms, [other, saved])).toEqual({ kind: 'mapped', mapping: saved });
+  });
+
+  it('calls a row that two nested mappings fit ambiguous', () => {
     const wide: SavedMapping = { ...saved, fieldNames: [...saved.fieldNames, 'ward'], targetId: 'wide' };
-    const tieA: SavedMapping = { ...saved, targetId: 'tie-a' };
-    const tieB: SavedMapping = { ...saved, targetId: 'tie-b' };
-    expect(classify({ lab_no: 'L-2' }, forms, [wide, tieA, tieB])).toEqual({ kind: 'mapped', mapping: tieA });
-    expect(classify({ lab_no: 'L-2', ward: 'W-1' }, forms, [tieA, wide])).toEqual({ kind: 'mapped', mapping: wide });
+    const row = { lab_no: 'L-2', result: 3 };
+    expect(classify(row, forms, [wide, saved])).toEqual({ kind: 'ambiguous', shape: shapeOf(row) });
+  });
+
+  it('calls a row that two overlapping mappings fit ambiguous', () => {
+    const left: SavedMapping = { ...saved, fieldNames: ['lab_no', 'result', 'ward'], targetId: 'left' };
+    const right: SavedMapping = { ...saved, fieldNames: ['lab_no', 'result', 'bed'], targetId: 'right' };
+    const row = { lab_no: 'L-2', result: 3 };
+    expect(classify(row, forms, [left, right])).toEqual({ kind: 'ambiguous', shape: shapeOf(row) });
+    expect(classify({ ...row, ward: 'W-1' }, forms, [left, right])).toEqual({ kind: 'mapped', mapping: left });
+  });
+
+  it('calls two copies of one mapping ambiguous, and counts a repeated name once', () => {
+    expect(classify({ lab_no: 'L-2' }, forms, [saved, { ...saved }]).kind).toBe('ambiguous');
+    const repeated: SavedMapping = { ...saved, fieldNames: ['lab_no', 'lab_no', 'result'] };
+    expect(classify({ lab_no: 'L-2' }, forms, [repeated])).toEqual({ kind: 'mapped', mapping: repeated });
+  });
+
+  it('does not guess between file A with a ward and file B without one', () => {
+    const fileA: SavedMapping = { shapeHash: 'a', fieldNames: ['id', 'date', 'result', 'ward'], targetId: 'test-target', rows: [] };
+    const fileB: SavedMapping = { shapeHash: 'b', fieldNames: ['id', 'date', 'result'], targetId: 'test-target', rows: [] };
+    const trimmedA = { id: 'A-1', date: '01/02/26', result: 4 }; // a row of A whose blank ward was dropped
+    const fullB = { id: 'B-1', date: '03/04/90', result: '5' };
+    const fullA = { ...trimmedA, ward: 'W-1' };
+    expect(classify(trimmedA, forms, [fileA, fileB])).toEqual({ kind: 'ambiguous', shape: shapeOf(trimmedA) });
+    expect(classify(fullB, forms, [fileA, fileB])).toEqual({ kind: 'ambiguous', shape: shapeOf(fullB) });
+    expect(classify(fullA, forms, [fileA, fileB])).toEqual({ kind: 'mapped', mapping: fileA });
   });
 
   it('calls a row that fits a form a form, even when a mapping also knows its columns', () => {
