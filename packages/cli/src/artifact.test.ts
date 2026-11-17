@@ -81,6 +81,49 @@ describe('artifact pack', () => {
   });
 });
 
+describe('artifact pack, a plugin with a page', () => {
+  /** A scaffolded plugin whose manifest declares a page, `ui.html`, with the sha of `page`. */
+  async function projectWithPage(page: Uint8Array, entry = 'ui.html'): Promise<string> {
+    await runArtifactKeygen({ out: dir, json: true, force: false });
+    await runArtifactNew('plugin', 'demo', { out: dir, json: true });
+    const proj = join(dir, 'demo');
+    await writeFile(join(proj, 'plugin.wasm'), new Uint8Array([1, 2, 3]));
+    const manifest = JSON.parse(await readFile(join(proj, 'manifest.json'), 'utf8'));
+    manifest.payload.ui = { entry, sha256: createHash('sha256').update(page).digest('hex'), nav: { label: 'Demo' } };
+    await writeFile(join(proj, 'manifest.json'), JSON.stringify(manifest));
+    return proj;
+  }
+
+  it('packs the page beside the payload, and the bundle verifies', async () => {
+    const page = new TextEncoder().encode('<div id="app"></div>');
+    const proj = await projectWithPage(page);
+    await writeFile(join(proj, 'ui.html'), page);
+    const out = join(dir, 'bundle');
+    expect(await runArtifactPack(proj, { key: join(dir, 'publisher.priv'), out, json: true })).toBe(0);
+    const bundle = await readBundle(out);
+    expect(verifyBundle(bundle).valid).toBe(true);
+    expect(Buffer.from(bundle.ui!).toString('utf8')).toBe('<div id="app"></div>');
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('fails and writes no bundle when the declared page file is missing', async () => {
+    const proj = await projectWithPage(new TextEncoder().encode('x'));
+    const out = join(dir, 'bundle');
+    expect(await runArtifactPack(proj, { key: join(dir, 'publisher.priv'), out, json: true })).toBe(1);
+    await expect(readdir(out)).rejects.toThrow();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('refuses a page entry that is not a plain file name, and reads nothing outside the project', async () => {
+    const proj = await projectWithPage(new TextEncoder().encode('x'), '../outside.html');
+    await writeFile(join(dir, 'outside.html'), 'x');
+    const out = join(dir, 'bundle');
+    expect(await runArtifactPack(proj, { key: join(dir, 'publisher.priv'), out, json: true })).toBe(1);
+    await expect(readdir(out)).rejects.toThrow();
+    await rm(dir, { recursive: true, force: true });
+  });
+});
+
 describe('artifact pack content-pack', () => {
   it('packs pack.json and records packSha256', async () => {
     await runArtifactKeygen({ out: dir, json: true, force: false });

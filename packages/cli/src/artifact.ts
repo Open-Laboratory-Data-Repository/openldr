@@ -1,5 +1,5 @@
 import { mkdir, writeFile, readFile, access, cp } from 'node:fs/promises';
-import { join, resolve, sep } from 'node:path';
+import { basename, join, resolve, sep } from 'node:path';
 import { createHash, createPublicKey } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import {
@@ -137,11 +137,20 @@ export async function runArtifactPack(
     const payloadFile = PAYLOAD_FILE[payloadKind];
     if (!payloadFile) throw new Error(`unsupported payload kind: ${payloadKind}`);
     const payload = new Uint8Array(await readFile(join(dir, payloadFile)));
+    // A plugin with a page declares it as payload.ui.entry, one file beside the manifest. The
+    // packer needs its bytes. The entry must be a plain file name, as readBundle requires, so a
+    // manifest cannot make this read a file outside the project.
+    const uiEntry = (manifestRaw.payload as { ui?: { entry?: unknown } } | null)?.ui?.entry;
+    if (uiEntry !== undefined && (typeof uiEntry !== 'string' || uiEntry === '' || uiEntry !== basename(uiEntry))) {
+      throw new Error(`invalid ui entry '${String(uiEntry)}': must be a plain filename inside the project`);
+    }
+    const ui = uiEntry ? new Uint8Array(await readFile(join(dir, uiEntry))) : undefined;
     const { privateKeyDer, publicKeyDer } = await readKeyPair(opts.key);
     const outDir = opts.out ?? join(dir, 'dist');
     const result = await packBundle({
       manifest: manifestRaw,
       payload,
+      ...(ui ? { ui } : {}),
       outDir,
       privateKeyDer,
       publicKeyDer,
