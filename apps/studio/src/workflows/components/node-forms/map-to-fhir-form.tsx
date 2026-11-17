@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { NodeFormProps } from './index';
 import { MapToFhirSheet } from '../map/MapToFhirSheet';
+import { useFeedsFromWebhook } from '../map/useMapHelpers';
 
 /** The Map to FHIR node's form: source path, target, allowed forms, and the mapping sheet. */
 export function MapToFhirForm({ node, update }: NodeFormProps) {
@@ -18,12 +19,17 @@ export function MapToFhirForm({ node, update }: NodeFormProps) {
   const data = node.data as { label?: string; config?: Record<string, unknown> };
   const config = data.config ?? {};
   const formIds = Array.isArray(config.formIds) ? (config.formIds as string[]) : [];
-  const mappingCount = Array.isArray(config.mappings) ? config.mappings.length : 0;
 
   const [targets, setTargets] = useState<MapTarget[] | null>(null);
   const [targetsFailed, setTargetsFailed] = useState(false);
   const [forms, setForms] = useState<WorkflowNodeOption[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
+  /** A target the person picked while saved mappings belong to another; it waits for a confirm. */
+  const [pendingTarget, setPendingTarget] = useState<string | null>(null);
+  const feedsFromWebhook = useFeedsFromWebhook(node.id);
+  const mappings = Array.isArray(config.mappings) ? (config.mappings as unknown[]) : [];
+  const targetOf = (m: unknown) => (m && typeof m === 'object' ? (m as { targetId?: unknown }).targetId : undefined);
+  const otherCount = (id: string) => mappings.filter((m) => targetOf(m) !== id).length;
 
   useEffect(() => {
     let live = true;
@@ -45,6 +51,20 @@ export function MapToFhirForm({ node, update }: NodeFormProps) {
   }, []);
 
   const setConfig = (patch: Record<string, unknown>) => update({ config: { ...config, ...patch } } as never);
+
+  // A node runs one target, so a new target drops the mappings made for another, once confirmed.
+  const pickTarget = (id: string) => {
+    if (otherCount(id) > 0) setPendingTarget(id);
+    else {
+      setPendingTarget(null);
+      setConfig({ targetId: id });
+    }
+  };
+  const confirmTarget = () => {
+    if (!pendingTarget) return;
+    setConfig({ targetId: pendingTarget, mappings: mappings.filter((m) => targetOf(m) === pendingTarget) });
+    setPendingTarget(null);
+  };
   const p = 'workflows.mapToFhir';
 
   return (
@@ -75,13 +95,16 @@ export function MapToFhirForm({ node, update }: NodeFormProps) {
             onChange={(e) => setConfig({ sourcePath: e.target.value })}
           />
           <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{t(`${p}.form.sourcePathHint`)}</p>
+          {feedsFromWebhook && String(config.sourcePath ?? '').trim() === '' && (
+            <p className="mt-1 text-[11px] leading-snug text-amber-500">{t(`${p}.webhookHint`)}</p>
+          )}
         </div>
 
         <Label className="whitespace-nowrap">{t(`${p}.form.target`)}</Label>
         <div className="min-w-0">
           <Select
-            value={typeof config.targetId === 'string' && config.targetId ? config.targetId : undefined}
-            onValueChange={(v) => setConfig({ targetId: v })}
+            value={pendingTarget ?? (typeof config.targetId === 'string' && config.targetId ? config.targetId : undefined)}
+            onValueChange={pickTarget}
             disabled={targets === null}
           >
             <SelectTrigger aria-label={t(`${p}.form.target`)} className="w-full min-w-0">
@@ -96,6 +119,22 @@ export function MapToFhirForm({ node, update }: NodeFormProps) {
             </SelectContent>
           </Select>
           {targetsFailed && <p className="mt-1 text-[11px] text-destructive">{t(`${p}.targetsFailed`)}</p>}
+          {pendingTarget && (
+            <div className="mt-1.5 flex items-start justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5" data-testid="mtf-target-change">
+              <p className="text-[11px] leading-snug text-amber-500">{t(`${p}.form.targetChange`, { count: otherCount(pendingTarget) })}</p>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" aria-label={t(`${p}.form.targetChangeActions`)}>
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={confirmTarget}>{t(`${p}.form.changeTarget`)}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setPendingTarget(null)}>{t(`${p}.form.keepTarget`)}</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
 
         <Label className="self-start whitespace-nowrap pt-2">{t(`${p}.form.allowedForms`)}</Label>
@@ -113,7 +152,7 @@ export function MapToFhirForm({ node, update }: NodeFormProps) {
         )}
 
         <span className="text-sm font-medium leading-none">{t(`${p}.form.mappings`)}</span>
-        <span className="text-sm text-foreground" data-testid="mtf-mapping-count">{mappingCount}</span>
+        <span className="text-sm text-foreground" data-testid="mtf-mapping-count">{mappings.length}</span>
       </div>
 
       <MapToFhirSheet open={sheetOpen} onOpenChange={setSheetOpen} node={node} update={update} />

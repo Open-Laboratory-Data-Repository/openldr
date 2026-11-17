@@ -93,22 +93,26 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
     }
   };
 
-  /** Poll for runs that start after the press, and stop at the first whose feeding node gave rows. */
+  /**
+   * Poll for runs that were not there at the press, and stop at the first whose feeding node gave
+   * rows. The runs seen at the press are the baseline, so the browser's clock plays no part.
+   */
   const startListening = () => {
     if (!workflowId) return;
     stopTimers();
     const mine = token.current;
-    const since = Date.now();
     const seen = new Set<string>();
+    let ready = false;
     const feederIds = [...feeders];
     setStatus('listening');
 
     const tick = async () => {
+      if (!ready) return;
       try {
         const runs = newestFirst(await fetchWorkflowRuns(workflowId, { limit: STORED_RUNS_LOOKED_AT }));
         for (const run of runs) {
           if (token.current !== mine) return;
-          if (seen.has(run.id) || Date.parse(run.startedAt) < since) continue;
+          if (seen.has(run.id)) continue;
           seen.add(run.id);
           const found = await rowsOfRun(run.id, feederIds);
           if (token.current !== mine) return;
@@ -126,6 +130,17 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
       }
     };
 
+    fetchWorkflowRuns(workflowId, { limit: STORED_RUNS_LOOKED_AT })
+      .then((runs) => {
+        if (token.current !== mine) return;
+        for (const r of runs) seen.add(r.id);
+        ready = true;
+      })
+      .catch(() => {
+        if (token.current !== mine) return;
+        stopTimers();
+        setStatus('failed');
+      });
     timers.current.poll = setInterval(() => void tick(), LISTEN_POLL_MS);
     timers.current.stop = setTimeout(() => {
       if (token.current !== mine) return;

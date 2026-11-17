@@ -215,13 +215,20 @@ function ValuesInputs({
           <span className="sm:hidden" />
           <Label className="whitespace-nowrap">{t(`${P}.to`)}</Label>
           {codes && codes.length > 0 ? (
-            <Select value={pr.to || undefined} onValueChange={(v) => setPair(i, { to: v })}>
+            // Keyed by system and code, since one code can come from two systems; the code is saved.
+            <Select
+              value={(() => {
+                const c = codes.find((x) => x.code === pr.to);
+                return c ? `${c.system}|${c.code}` : undefined;
+              })()}
+              onValueChange={(v) => setPair(i, { to: codes.find((x) => `${x.system}|${x.code}` === v)?.code ?? '' })}
+            >
               <SelectTrigger aria-label={`${t(`${P}.to`)} ${i + 1}: ${label}`} className="w-full min-w-0">
                 <SelectValue placeholder={t(`${P}.toPlaceholder`)} />
               </SelectTrigger>
               <SelectContent>
                 {codes.map((c) => (
-                  <SelectItem key={`${c.system}|${c.code}`} value={c.code}>
+                  <SelectItem key={`${c.system}|${c.code}`} value={`${c.system}|${c.code}`}>
                     {c.display ? `${c.display} (${c.code})` : c.code}
                   </SelectItem>
                 ))}

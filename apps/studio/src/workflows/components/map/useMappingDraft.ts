@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { MapTarget } from '@openldr/forms/pure';
 import { fetchMapTargets } from '@/api';
-import { draftsFor, groupByShape, savedMappingsOf, type RowDraft, type SampleRow, type ShapeGroup } from './rows';
+import { draftsFor, groupRows, savedMappingFor, savedMappingsOf, type RowDraft, type SampleRow, type ShapeGroup } from './rows';
 
 /**
  * The sheet's working state: the targets, the chosen target and shape, and the row drafts for
@@ -36,7 +36,8 @@ export function useMappingDraft({
       .then((list) => {
         if (!live) return;
         setTargets(list);
-        setTargetId((cur) => (cur && list.some((x) => x.id === cur) ? cur : savedTargetId || list[0]?.id || ''));
+        // Each opening starts from the node's own target, which the node form may have changed.
+        setTargetId(savedTargetId && list.some((x) => x.id === savedTargetId) ? savedTargetId : list[0]?.id || '');
       })
       .catch(() => {
         if (!live) return;
@@ -46,24 +47,26 @@ export function useMappingDraft({
     return () => {
       live = false;
     };
-    // The saved target is read once per opening on purpose.
+    // The node's target is read once per opening on purpose.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, locale]);
 
-  const groups = useMemo(() => groupByShape(rows), [rows]);
+  const groups = useMemo(() => groupRows(rows), [rows]);
   const saved = useMemo(() => savedMappingsOf(config), [config]);
   const target = targets?.find((x) => x.id === targetId) ?? null;
 
   // Keep the current shape, else one with a saved mapping, else the first.
   useEffect(() => {
     if (groups.some((g) => g.hash === shapeHash)) return;
-    const withSaved = groups.find((g) => saved.some((m) => m.shapeHash === g.hash));
+    const withSaved = groups.find((g) => savedMappingFor(g, saved) !== null);
     setShapeHash((withSaved ?? groups[0])?.hash ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups]);
 
   const group: ShapeGroup | null = groups.find((g) => g.hash === shapeHash) ?? null;
   const key = target && group ? `${target.id}|${group.hash}` : '';
+  /** The saved mapping this group edits: same field names, else one holding all of them. */
+  const loaded = target && group ? savedMappingFor(group, saved.filter((m) => m.targetId === target.id)) : null;
 
   // New drafts when the target or the shape changes, from the saved mapping for that shape.
   useEffect(() => {
@@ -71,8 +74,7 @@ export function useMappingDraft({
       setState({ key: '', drafts: [] });
       return;
     }
-    const s = saved.find((m) => m.shapeHash === group.hash && m.targetId === target.id) ?? null;
-    setState({ key, drafts: draftsFor(target, s) });
+    setState({ key, drafts: draftsFor(target, loaded) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
@@ -91,6 +93,7 @@ export function useMappingDraft({
     shapeHash,
     setShapeHash,
     saved,
+    loaded,
     savedTargetId,
     drafts,
     draftsKey: key && state.key === key ? key : '',

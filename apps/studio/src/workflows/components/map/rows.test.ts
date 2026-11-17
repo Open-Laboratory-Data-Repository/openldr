@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildMapping, draftsFor, exampleText, groupByShape, ruleOf, rowsFromItems, withMapping, MAX_SAMPLE_ROWS } from './rows';
+import { buildMapping, draftsFor, exampleFor, exampleText, groupRows, ruleOf, rowsFromItems, savedMappingFor, withMapping, MAX_SAMPLE_ROWS } from './rows';
+import { shapeOf } from '@openldr/forms/pure';
 import { TEST_TARGET, ROWS_A, ROWS_B, asItems } from './test-fixtures';
 
 describe('rowsFromItems', () => {
@@ -24,13 +25,49 @@ describe('rowsFromItems', () => {
   });
 });
 
-describe('groupByShape', () => {
-  it('groups rows by shape, field names sorted', () => {
-    const g = groupByShape([...ROWS_A, ...ROWS_B]);
+describe('groupRows', () => {
+  it('puts rows that lack a column into the group of the row that has it', () => {
+    const full = { a: 'QZX-1', b: 'QZX-2', c: 'QZX-3' };
+    const rows = [{ a: 'QZX-1', b: 2 }, full, { b: 'QZX-2', c: 'QZX-3' }];
+    const g = groupRows(rows);
+    expect(g).toHaveLength(1);
+    expect(g[0].fieldNames).toEqual(['a', 'b', 'c']);
+    expect(g[0].rows).toEqual(rows);
+    expect(g[0].hash).toBe(shapeOf(full).hash);
+  });
+
+  it('starts a second group for a row with a column the others lack', () => {
+    const g = groupRows([{ a: 1, b: 2 }, { a: 1 }, { a: 1, z: 2 }]);
+    expect(g.map((x) => [x.fieldNames, x.rows.length])).toEqual([
+      [['a', 'b'], 2],
+      [['a', 'z'], 1],
+    ]);
+  });
+
+  it('keeps two different shapes apart', () => {
+    const g = groupRows([...ROWS_A, ...ROWS_B]);
     expect(g.map((x) => [x.fieldNames, x.rows.length])).toEqual([
       [['pat_no', 'sex', 'test_a', 'test_b'], 2],
       [['ident', 'result'], 1],
     ]);
+  });
+});
+
+describe('savedMappingFor', () => {
+  const mk = (fieldNames: string[], shapeHash = 'h') => ({ shapeHash, fieldNames, targetId: 't', rows: [] });
+  it('takes the mapping with the same field set, else one that holds every field', () => {
+    const wide = mk(['a', 'b', 'c']);
+    const same = mk(['b', 'a']);
+    expect(savedMappingFor({ fieldNames: ['a', 'b'] }, [wide, same])).toBe(same);
+    expect(savedMappingFor({ fieldNames: ['a', 'b'] }, [wide])).toBe(wide);
+    expect(savedMappingFor({ fieldNames: ['a', 'x'] }, [wide, same])).toBeNull();
+  });
+});
+
+describe('exampleFor', () => {
+  it('takes the first row of the group that has a value for the column', () => {
+    expect(exampleFor('b', [{ a: 1 }, { a: 1, b: '' }, { a: 1, b: 'QZX-9' }])).toBe('QZX-9');
+    expect(exampleFor('q', [{ a: 1 }])).toBeUndefined();
   });
 });
 
@@ -48,6 +85,8 @@ describe('ruleOf', () => {
     expect(ruleOf({ kind: 'split', by: ' ', take: 'part', part: '2' })).toEqual({ kind: 'split', by: ' ', take: 1 });
     expect(ruleOf({ kind: 'split', by: ' ', take: 'part', part: '0' })).toBe('incomplete');
     expect(ruleOf({ kind: 'values', pairs: [{ from: '', to: 'x' }] })).toBe('incomplete');
+    expect(ruleOf({ kind: 'values', pairs: [{ from: 'm', to: '' }] })).toBe('incomplete');
+    expect(ruleOf({ kind: 'values', pairs: [{ from: 'm', to: 'male' }, { from: 'f', to: '' }] })).toEqual({ kind: 'values', map: { m: 'male' } });
     expect(ruleOf({ kind: 'codeList', conceptMapUrl: '', sourceSystem: '' })).toBe('incomplete');
     expect(ruleOf({ kind: 'codeList', conceptMapUrl: 'urn:a', sourceSystem: ' urn:s ' })).toEqual({ kind: 'codeList', conceptMapUrl: 'urn:a', sourceSystem: 'urn:s' });
     expect(ruleOf({ kind: 'none' })).toBeNull();
@@ -93,10 +132,19 @@ describe('buildMapping and draftsFor', () => {
 });
 
 describe('withMapping', () => {
-  it('replaces the mapping with the same shape hash and keeps the rest', () => {
-    const a = { shapeHash: 'a', fieldNames: [], targetId: 't', rows: [] };
-    const b = { shapeHash: 'b', fieldNames: [], targetId: 't', rows: [] };
-    const b2 = { ...b, fieldNames: ['x'] };
+  it('replaces the mapping with the same field set, whatever its hash, and keeps the rest', () => {
+    const a = { shapeHash: 'a', fieldNames: ['x'], targetId: 't', rows: [] };
+    const b = { shapeHash: 'b', fieldNames: ['y', 'z'], targetId: 't', rows: [] };
+    const b2 = { shapeHash: 'other', fieldNames: ['z', 'y'], targetId: 't', rows: [] };
     expect(withMapping([a, b], b2)).toEqual([a, b2]);
+  });
+
+  it('removes a narrower mapping and keeps one that only overlaps', async () => {
+    const { narrowerCount } = await import('./rows');
+    const narrow = { shapeHash: 'n', fieldNames: ['x'], targetId: 't', rows: [] };
+    const overlap = { shapeHash: 'o', fieldNames: ['x', 'q'], targetId: 't', rows: [] };
+    const wide = { shapeHash: 'w', fieldNames: ['x', 'y'], targetId: 't', rows: [] };
+    expect(withMapping([narrow, overlap], wide)).toEqual([overlap, wide]);
+    expect(narrowerCount([narrow, overlap, wide], ['x', 'y'])).toBe(1);
   });
 });

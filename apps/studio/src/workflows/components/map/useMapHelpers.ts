@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchMapCodeLists, findValueSetByUrl, storedValueSetCodes, suggestMapping } from '@/api';
 import { hasSource, type RowDraft } from './rows';
+import { useWorkflowStore } from '../../hooks/use-workflow-store';
 import type { CodeListsState } from './RuleEditor';
 
 /**
@@ -93,4 +94,16 @@ export function useCodeSets(urls: string[]): Record<string, Set<string> | null> 
     }
   }, [key]);
   return sets;
+}
+
+/** Whether a node on this node's incoming edge is a webhook trigger, whose rows sit under `body`. */
+export function useFeedsFromWebhook(nodeId: string): boolean {
+  return useWorkflowStore((s) => {
+    const feeders = new Set(s.edges.filter((e) => e.target === nodeId).map((e) => e.source));
+    return s.nodes.some((n) => {
+      if (!feeders.has(n.id)) return false;
+      const d = n.data as { templateId?: unknown; triggerType?: unknown };
+      return n.type === 'webhook' || d.templateId === 'webhook-trigger' || d.triggerType === 'webhook';
+    });
+  });
 }

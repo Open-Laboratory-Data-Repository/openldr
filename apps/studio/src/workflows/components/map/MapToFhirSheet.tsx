@@ -4,7 +4,7 @@ import { MoreHorizontal } from 'lucide-react';
 import { testMapping } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { LoadingState } from '@/components/ui/spinner';
+import { LoadingState, Spinner } from '@/components/ui/spinner';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -14,8 +14,8 @@ import { AddPathPanel } from './AddPathPanel';
 import { MappingRow } from './MappingRow';
 import { RuleInputs, RuleKindSelect } from './RuleEditor';
 import { TestResults, type TestState } from './TestResults';
-import { buildMapping, hasSource, unusedFields, withMapping, type BuildResult, type RowDraft } from './rows';
-import { useCodeLists, useCodeSets, useSuggestions } from './useMapHelpers';
+import { buildMapping, hasSource, narrowerCount, unusedFields, withMapping, type BuildResult, type RowDraft } from './rows';
+import { useCodeLists, useCodeSets, useFeedsFromWebhook, useSuggestions } from './useMapHelpers';
 import { codeListUrlOf, suggestRuleFor, type RuleSuggestion } from './ruleSuggest';
 import { useMappingDraft } from './useMappingDraft';
 import { useSamples } from './useSamples';
@@ -92,9 +92,19 @@ export function MapToFhirSheet({
       text: built.problem === 'required' ? t(`${P}.sheet.saveMissing`, { label: built.label }) : t(`${P}.sheet.ruleIncomplete`, { label: built.label }),
     });
 
+  // A group that edits a wider saved mapping keeps that mapping's field names and hash, so the node
+  // never holds two mappings where one's columns contain the other's.
+  const saveShape = group && m.loaded && m.loaded.fieldNames.length > group.fieldNames.length
+    ? { hash: m.loaded.shapeHash, fieldNames: m.loaded.fieldNames }
+    : group;
+  const sameTarget = mappingsOf(config).filter((x) => targetIdOf(x) === m.targetId);
+  const replacesNarrower = saveShape ? narrowerCount(sameTarget, saveShape.fieldNames) : 0;
+  const feedsFromWebhook = useFeedsFromWebhook(node.id);
+  const showWebhookHint = feedsFromWebhook && String(config.sourcePath ?? '').trim() === '';
+
   const save = () => {
-    if (!target || !group) return;
-    const built = buildMapping(drafts, group, target.id, { requireAll: true });
+    if (!target || !group || !saveShape) return;
+    const built = buildMapping(drafts, saveShape, target.id, { requireAll: true });
     if (!built.ok) return problem(built);
     // A node runs one target, so mappings made for another target are dropped.
     const kept = mappingsOf(config).filter((x) => targetIdOf(x) === target.id);
@@ -103,8 +113,8 @@ export function MapToFhirSheet({
   };
 
   const runTest = async () => {
-    if (!target || !group) return;
-    const built = buildMapping(drafts, group, target.id, { requireAll: false });
+    if (!target || !group || !saveShape) return;
+    const built = buildMapping(drafts, saveShape, target.id, { requireAll: false });
     if (!built.ok) return problem(built);
     const others = mappingsOf(config).filter((x) => targetIdOf(x) === target.id);
     const formIds = Array.isArray(config.formIds) ? (config.formIds as string[]) : [];
@@ -145,7 +155,7 @@ export function MapToFhirSheet({
   } else if (samples.status === 'loadingStored') {
     body = <LoadingState label={t(`${P}.sheet.loadingStored`)} className="min-h-[16rem] flex-1" />;
   } else if (!ready || !group || !target) {
-    body = <StripedEmpty className="min-h-[16rem] flex-1">{t(`${P}.sheet.empty`)}</StripedEmpty>;
+    body = <StripedEmpty className="min-h-[16rem] flex-1">{t(samples.canListen ? `${P}.sheet.empty` : `${P}.sheet.emptyUnsaved`)}</StripedEmpty>;
   } else {
     body = (
       <div className="flex min-w-0 flex-col">
@@ -166,7 +176,7 @@ export function MapToFhirSheet({
               key={d.targetPath}
               draft={d}
               fieldNames={group.fieldNames}
-              sample={group.rows[0]}
+              rows={group.rows}
               onChange={(source) => edit(i, { source })}
               suggestion={
                 showSuggestion ? (
@@ -235,7 +245,7 @@ export function MapToFhirSheet({
         })}
         <div className="space-y-1 px-6 py-3 text-xs text-muted-foreground">
           <p data-testid="map-required-summary">
-            {t(`${P}.sheet.requiredSummary`, { done: required.filter(hasSource).length, total: required.length })}
+            {t(`${P}.sheet.requiredSummary`, { done: required.filter(hasSource).length, count: required.length })}
           </p>
           {unused.length > 0 && <p className="break-words">{t(`${P}.sheet.unused`, { fields: unused.join(', ') })}</p>}
         </div>
@@ -318,7 +328,7 @@ export function MapToFhirSheet({
                   <SelectContent>
                     {m.groups.map((g) => (
                       <SelectItem key={g.hash} value={g.hash}>
-                        {t(`${P}.sheet.shapeOption`, { fields: g.fieldNames.length, rows: g.rows.length })}
+                        {t(`${P}.sheet.shapeOption`, { fields: t(`${P}.sheet.fieldCount`, { count: g.fieldNames.length }), rows: t(`${P}.sheet.rowCount`, { count: g.rows.length }) })}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -335,19 +345,25 @@ export function MapToFhirSheet({
           <div className="flex min-h-6 items-center gap-2 px-6 pb-2 text-xs text-muted-foreground" data-testid="map-status">
             {listening ? (
               <>
-                <LoadingState className="h-6 w-8 shrink-0 rounded" />
+                <Spinner className="shrink-0" />
                 <span>{t(`${P}.sheet.listeningStatus`)}</span>
               </>
             ) : (
               <>
-                {samples.rows.length > 0 && <span>{t(`${P}.sheet.samplesHeld`, { count: samples.rows.length })}</span>}
+                {group && <span>{t(`${P}.sheet.sampleRows`, { count: group.rows.length })}</span>}
                 {test.kind === 'done' && (
-                  <span>{t(`${P}.sheet.testSummary`, { pass: test.results.filter((r) => r.ok).length, total: test.results.length })}</span>
+                  <span>{t(`${P}.sheet.testSummary`, { count: test.results.filter((r) => r.ok).length, total: test.results.length })}</span>
                 )}
               </>
             )}
           </div>
         )}
+        {replacesNarrower > 0 && ready && (
+          <p className="px-6 pb-2 text-xs text-amber-500" data-testid="map-replaces-narrower">
+            {t(`${P}.sheet.replacesNarrower`, { count: replacesNarrower })}
+          </p>
+        )}
+        {showWebhookHint && <p className="px-6 pb-2 text-xs text-amber-500">{t(`${P}.webhookHint`)}</p>}
         {notice && (
           <p
             role={notice.tone === 'error' ? 'alert' : 'status'}

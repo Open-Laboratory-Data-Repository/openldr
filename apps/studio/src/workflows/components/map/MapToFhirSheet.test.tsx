@@ -60,7 +60,7 @@ describe('MapToFhirSheet', () => {
   it('shows StripedEmpty, not rows, when there is no sample', async () => {
     setRun(null);
     renderSheet();
-    expect(await screen.findByText(/Choose Listen, then send a message/)).toBeInTheDocument();
+    expect(await screen.findByText(/Save the workflow first/)).toBeInTheDocument();
     expect(screen.queryByTestId('map-row-Patient.identifier.value')).not.toBeInTheDocument();
   });
 
@@ -193,7 +193,7 @@ describe('MapToFhirSheet', () => {
     const shape = (await screen.findByRole('combobox', { name: 'Sample shape' })) as HTMLSelectElement;
     const labels = [...shape.options].map((o) => o.textContent);
     expect(labels).toContain('4 fields, 2 rows');
-    expect(labels).toContain('2 fields, 1 rows');
+    expect(labels).toContain('2 fields, 1 row');
     for (const v of MARKERS) expect(labels.join(' ')).not.toContain(v);
 
     fireEvent.change(shape, { target: { value: hashB } });
@@ -276,7 +276,8 @@ describe('MapToFhirSheet Listen', () => {
       expect(await screen.findByText('Listening for a new run')).toBeInTheDocument();
       expect(screen.getByTestId('map-status')).toHaveTextContent('Listening for a message...');
       await vi.advanceTimersByTimeAsync(2100);
-      expect(m(api.fetchWorkflowRuns)).toHaveBeenCalledTimes(1);
+      // One call for the baseline at the press, one for the first poll.
+      expect(m(api.fetchWorkflowRuns)).toHaveBeenCalledTimes(2);
 
       rerender(ui(false));
       const calls = m(api.fetchWorkflowRuns).mock.calls.length;
@@ -292,7 +293,7 @@ describe('MapToFhirSheet Listen', () => {
     try {
       useWorkflowStore.setState({ workflowId: 'wf1', edges: [{ id: 'e1', source: 'up1', target: 'map1' }] as never, nodeRunInput: {}, nodeRunOutput: {} });
       const later = new Date(Date.now() + 60000).toISOString();
-      m(api.fetchWorkflowRuns).mockResolvedValue([{ id: 'r1', startedAt: later }]);
+      m(api.fetchWorkflowRuns).mockResolvedValueOnce([]).mockResolvedValue([{ id: 'r1', startedAt: later }]);
       m(api.fetchWorkflowRun).mockResolvedValue({ id: 'r1', startedAt: later, result: { results: [{ nodeId: 'up1', output: asItems(ROWS_A) }] } });
       renderSheet();
       await screen.findByText(/Choose Listen, then send a message/);
@@ -314,8 +315,8 @@ describe('MapToFhirSheet Listen', () => {
     expect(await screen.findByText('Save the workflow to listen for new runs.')).toBeInTheDocument();
     const trigger = screen.getByRole('button', { name: 'Mapping actions' });
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-    if (!screen.queryByRole('menuitem', { name: 'Use last run' })) fireEvent.keyDown(trigger, { key: 'Enter' });
-    expect(screen.getByRole('menuitem', { name: 'Use last run' })).toBeInTheDocument();
+    if (!screen.queryByRole('menuitem', { name: "Use this editor's last run" })) fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(screen.getByRole('menuitem', { name: "Use this editor's last run" })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Listen' })).toBeNull();
   });
 });
@@ -425,21 +426,174 @@ describe('MapToFhirSheet rule suggestions, status and results', () => {
     // A reason reads in the sheet's labels, and the result is pinned at the bottom.
     expect(within(footer).getByText('Result (number): needs a number')).toBeInTheDocument();
     expect(footer.className).toContain('sticky');
-    expect(screen.getByTestId('map-status')).toHaveTextContent('1 of 2 rows pass');
+    expect(screen.getByTestId('map-status')).toHaveTextContent('1 row of 2 passes');
   });
 
-  it('says how many messages are held, and that it is listening', async () => {
+  it('counts the sample rows of the group on screen', async () => {
     setRun(ROWS_A);
     renderSheet();
     await screen.findByTestId('map-row-Patient.identifier.value');
-    expect(screen.getByTestId('map-status')).toHaveTextContent('2 messages held as sample');
+    expect(screen.getByTestId('map-status')).toHaveTextContent('2 sample rows');
   });
 
-  it('uses the singular for one message', async () => {
+  it('uses the singular for one sample row', async () => {
     setRun(ROWS_B);
     renderSheet();
     await screen.findByTestId('map-row-Patient.identifier.value');
-    expect(screen.getByTestId('map-status')).toHaveTextContent('1 message held as sample');
+    expect(screen.getByTestId('map-status')).toHaveTextContent('1 sample row');
+  });
+});
+
+describe('MapToFhirSheet fix round 1', () => {
+  const saved = () =>
+    useWorkflowStore.setState({ workflowId: 'wf1', edges: [{ id: 'e1', source: 'up1', target: 'map1' }] as never, nodeRunInput: {}, nodeRunOutput: {} });
+
+  it('keeps listening past a new run with no rows, and takes the next one that has rows', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      saved();
+      const old = { id: 'old', startedAt: '2026-01-01T00:00:00Z' };
+      const empty = { id: 'empty', startedAt: '2026-01-02T00:00:00Z', result: { results: [{ nodeId: 'up1', output: [{ json: { resourceType: 'Patient', id: 'p' } }] }] } };
+      const full = { id: 'full', startedAt: '2026-01-03T00:00:00Z', result: { results: [{ nodeId: 'up1', output: asItems(ROWS_A) }] } };
+      m(api.fetchWorkflowRuns)
+        .mockResolvedValueOnce([old])
+        .mockResolvedValueOnce([empty, old])
+        .mockResolvedValue([full, empty, old]);
+      m(api.fetchWorkflowRun).mockImplementation(async (id: string) => (id === 'empty' ? empty : full));
+      renderSheet();
+      await screen.findByText(/Choose Listen, then send a message/);
+      openMenuAndClick('Listen');
+      await vi.advanceTimersByTimeAsync(2100);
+      expect(screen.getByText('Listening for a new run')).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(2100);
+      expect(await screen.findByTestId('map-row-Patient.identifier.value')).toBeInTheDocument();
+      // The run there at the press is never read.
+      expect(m(api.fetchWorkflowRun).mock.calls.map((c) => c[0])).toEqual(['empty', 'full']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('groups rows that lack a column with the row that has it, and takes the example from the first row with a value', async () => {
+    setRun([{ pat_no: 'QZX-1', test_a: 'QZX-3' }, { pat_no: 'QZX-5', sex: 'QZX-6', test_a: 'QZX-4' }, { sex: 'QZX-2', test_a: 'QZX-3' }]);
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    expect(screen.queryByRole('combobox', { name: 'Sample shape' })).toBeNull();
+    expect(screen.getByTestId('map-status')).toHaveTextContent('3 sample rows');
+    fireEvent.change(sourceSelect('Sex'), { target: { value: 'sex' } });
+    expect(within(screen.getByTestId('map-row-Patient.gender')).getByText('QZX-6')).toBeInTheDocument();
+  });
+
+  it('replaces the saved mapping with the same field set on Save, whatever its hash', async () => {
+    setRun(ROWS_B);
+    const old = { shapeHash: 'from-another-sample', fieldNames: ['result', 'ident'], targetId: 'test-target', rows: [{ targetPath: 'Patient.identifier.value', from: { field: 'ident' } }] };
+    const { update } = renderSheet({ targetId: 'test-target', mappings: [old] });
+    await waitFor(() => expect(sourceSelect('Patient ID').value).toBe('ident'));
+    fireEvent.change(sourceSelect('Test'), { target: { value: 'result' } });
+    openMenuAndClick('Save');
+    const mappings = update.mock.calls[0][0].config.mappings;
+    expect(mappings).toHaveLength(1);
+    expect(mappings[0].rows).toHaveLength(2);
+  });
+
+  it('removes a narrower saved mapping when it saves a wider one, and says so first', async () => {
+    setRun(ROWS_A);
+    const narrow = { shapeHash: 'n', fieldNames: ['pat_no', 'test_a'], targetId: 'test-target', rows: [] };
+    const other = { shapeHash: 'o', fieldNames: ['pat_no', 'zz'], targetId: 'test-target', rows: [] };
+    const { update } = renderSheet({ targetId: 'test-target', mappings: [narrow, other] });
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    expect(screen.getByTestId('map-replaces-narrower')).toHaveTextContent('This replaces 1 saved mapping that covers fewer columns.');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
+    openMenuAndClick('Save');
+    const names = update.mock.calls[0][0].config.mappings.map((x: { fieldNames: string[] }) => x.fieldNames);
+    // The overlapping one that is not contained stays.
+    expect(names).toEqual([['pat_no', 'zz'], ['pat_no', 'sex', 'test_a', 'test_b']]);
+  });
+
+  it('opens a narrower group on the wider saved mapping, and Save keeps one mapping with the wider names', async () => {
+    setRun([{ ident: 'QZX-1' }]);
+    const wide = { shapeHash: 'w', fieldNames: ['ident', 'result'], targetId: 'test-target', rows: [{ targetPath: 'Patient.identifier.value', from: { field: 'ident' } }] };
+    const { update } = renderSheet({ targetId: 'test-target', mappings: [wide] });
+    await waitFor(() => expect(sourceSelect('Patient ID').value).toBe('ident'));
+    expect(screen.queryByTestId('map-replaces-narrower')).toBeNull();
+    fireEvent.change(sourceSelect('Test'), { target: { value: '__fixed' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Fixed value: Test' }), { target: { value: 'typed' } });
+    openMenuAndClick('Save');
+    const mappings = update.mock.calls[0][0].config.mappings;
+    expect(mappings).toHaveLength(1);
+    expect(mappings[0]).toMatchObject({ shapeHash: 'w', fieldNames: ['ident', 'result'] });
+  });
+
+  it('keeps two saved mappings that overlap without one holding the other', async () => {
+    setRun([{ a: 'QZX-1', b: 'QZX-2' }]);
+    const other = { shapeHash: 'o', fieldNames: ['b', 'c'], targetId: 'test-target', rows: [] };
+    const { update } = renderSheet({ targetId: 'test-target', mappings: [other] });
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'a' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 'b' } });
+    openMenuAndClick('Save');
+    const names = update.mock.calls[0][0].config.mappings.map((x: { fieldNames: string[] }) => x.fieldNames);
+    expect(names).toEqual([['b', 'c'], ['a', 'b']]);
+  });
+
+  it('does not offer a column with an empty name', async () => {
+    setRun([{ '': 'QZX-1', pat_no: 'QZX-2' }]);
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    const values = [...sourceSelect('Patient ID').options].map((o) => o.value);
+    expect(values).toEqual(['', '__none', '__fixed', 'pat_no']);
+  });
+
+  it('refuses Save while a values rule has no line with both sides filled', async () => {
+    setRun(ROWS_A);
+    const { update } = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
+    fireEvent.change(sourceSelect('Sex'), { target: { value: 'sex' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Sex' }), { target: { value: 'values' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'From 1: Sex' }), { target: { value: 'm' } });
+    openMenuAndClick('Save');
+    expect(update).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Finish the rule on Sex.');
+  });
+
+  it('says the rows are under body when a webhook feeds the node and the source path is blank', async () => {
+    setRun(ROWS_A);
+    useWorkflowStore.setState({ nodes: [{ id: 'up1', type: 'webhook', position: { x: 0, y: 0 }, data: { label: 'Hook' } }] as never });
+    const first = renderSheet();
+    expect(await screen.findByText(/the rows are under body/)).toBeInTheDocument();
+    first.unmount();
+    renderSheet({ sourcePath: 'body' });
+    await screen.findByText(/Pick the column that fills/);
+    expect(screen.queryByText(/the rows are under body/)).toBeNull();
+  });
+
+  it('keys value set codes by system and code, and saves the code', async () => {
+    setRun(ROWS_A);
+    m(api.fetchMapTargets).mockResolvedValue([
+      { ...TEST_TARGET, fields: TEST_TARGET.fields.map((f) => (f.path === 'Patient.gender' ? { ...f, valueSet: 'urn:test:vs' } : f)) },
+    ]);
+    m(api.findValueSetByUrl).mockResolvedValue({ id: 'vs1', url: 'urn:test:vs' });
+    m(api.storedValueSetCodes).mockResolvedValue([
+      { system: 'urn:test:a', code: 'male', display: 'A' },
+      { system: 'urn:test:b', code: 'male', display: 'B' },
+    ]);
+    const { update } = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
+    fireEvent.change(sourceSelect('Sex'), { target: { value: 'sex' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Sex' }), { target: { value: 'values' } });
+    // The codes load first, so the inputs show after the loader.
+    fireEvent.change(await screen.findByRole('textbox', { name: 'From 1: Sex' }), { target: { value: 'm' } });
+    const to = (await screen.findByRole('combobox', { name: 'To 1: Sex' })) as HTMLSelectElement;
+    expect([...to.options].map((o) => o.value)).toEqual(['', 'urn:test:a|male', 'urn:test:b|male']);
+    fireEvent.change(to, { target: { value: 'urn:test:b|male' } });
+    openMenuAndClick('Save');
+    const row = update.mock.calls[0][0].config.mappings[0].rows.find((r: { targetPath: string }) => r.targetPath === 'Patient.gender');
+    expect(row.rule).toEqual({ kind: 'values', map: { m: 'male' } });
   });
 });
 

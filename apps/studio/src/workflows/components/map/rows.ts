@@ -66,21 +66,60 @@ export function rowsFromItems(raw: unknown, sourcePath: string): SampleRow[] {
 }
 
 export interface ShapeGroup {
+  /** `shapeOf` of the group's largest row: the sample the mapping is made from. */
   hash: string;
+  /** The largest row's field names, sorted. Every row of the group has only names from this list. */
   fieldNames: string[];
+  /** The group's rows, in sample order. */
   rows: SampleRow[];
 }
 
-/** Rows grouped by `shapeOf(row).hash`, in first-seen order. */
-export function groupByShape(rows: SampleRow[]): ShapeGroup[] {
-  const groups = new Map<string, ShapeGroup>();
-  for (const row of rows) {
-    const shape = shapeOf(row);
-    const g = groups.get(shape.hash);
-    if (g) g.rows.push(row);
-    else groups.set(shape.hash, { hash: shape.hash, fieldNames: shape.fields.map((f) => f.name), rows: [row] });
+/** A row's field names as `shapeOf` sees them, sorted. */
+function namesOf(row: SampleRow): string[] {
+  return shapeOf(row).fields.map((f) => f.name);
+}
+
+/**
+ * Rows grouped the way the node matches a saved mapping: a row belongs with rows whose field list
+ * holds all of its fields, since a file reader drops blank cells. Rows are taken largest field list
+ * first; a row joins the first group whose fields contain all of its own, or starts a new group.
+ */
+export function groupRows(rows: SampleRow[]): ShapeGroup[] {
+  const order = rows.map((row, i) => ({ row, i, names: namesOf(row) }));
+  order.sort((x, y) => y.names.length - x.names.length || x.i - y.i);
+  const groups: { hash: string; fieldNames: string[]; members: { row: SampleRow; i: number }[] }[] = [];
+  for (const r of order) {
+    const g = groups.find((x) => r.names.every((n) => x.fieldNames.includes(n)));
+    if (g) g.members.push(r);
+    else groups.push({ hash: shapeOf(r.row).hash, fieldNames: r.names, members: [r] });
   }
-  return [...groups.values()];
+  return groups.map((g) => ({
+    hash: g.hash,
+    fieldNames: g.fieldNames,
+    rows: g.members.sort((x, y) => x.i - y.i).map((m) => m.row),
+  }));
+}
+
+const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+const within = (inner: string[], outer: string[]) => inner.every((x) => outer.includes(x));
+
+/** The saved mapping for a group: the one with the same field names, else one holding all of them. */
+export function savedMappingFor(group: { fieldNames: string[] }, saved: SavedMapping[]): SavedMapping | null {
+  return (
+    saved.find((m) => sameSet(m.fieldNames, group.fieldNames)) ??
+    saved.find((m) => within(group.fieldNames, m.fieldNames)) ??
+    null
+  );
+}
+
+/** The first value the group's rows give for a column, skipping rows with no value. */
+export function exampleFor(field: string, rows: SampleRow[]): unknown {
+  for (const row of rows) {
+    const v = row[field];
+    if (v === undefined || v === null || (typeof v === 'string' && v.trim() === '')) continue;
+    return v;
+  }
+  return undefined;
 }
 
 /** A sample value as text for the Example column, cut to `EXAMPLE_MAX` characters. */
@@ -218,7 +257,8 @@ export function ruleOf(rule: RuleDraft): MapRule | null | 'incomplete' {
       break;
     case 'values': {
       const map: Record<string, string> = {};
-      for (const p of rule.pairs) if (p.from.trim() !== '') map[p.from.trim()] = p.to;
+      // A line counts only when both sides are filled.
+      for (const p of rule.pairs) if (p.from.trim() !== '' && p.to.trim() !== '') map[p.from.trim()] = p.to;
       if (Object.keys(map).length === 0) return 'incomplete';
       candidate = { kind: 'values', map };
       break;
@@ -296,10 +336,30 @@ export function savedMappingsOf(config: Record<string, unknown>): SavedMapping[]
   return out;
 }
 
-/** The node's mappings with `mapping` put in place of any with the same shape hash. */
+function fieldNamesOf(m: unknown): string[] | null {
+  return isObject(m) && Array.isArray(m.fieldNames) ? m.fieldNames.map(String) : null;
+}
+
+/**
+ * The node's mappings with `mapping` written in. Every saved mapping whose field names are all in
+ * `mapping`'s is removed: one with the same set is replaced, and a narrower one is covered by the
+ * wider one, since the node maps a row only when exactly one mapping knows all its columns.
+ * Mappings that overlap without one holding the other are kept.
+ */
 export function withMapping(existing: unknown[], mapping: SavedMapping): unknown[] {
-  const rest = existing.filter((m) => !(isObject(m) && m.shapeHash === mapping.shapeHash));
+  const rest = existing.filter((m) => {
+    const names = fieldNamesOf(m);
+    return !(names && within(names, mapping.fieldNames));
+  });
   return [...rest, mapping];
+}
+
+/** How many saved mappings a mapping with these field names would replace because they cover fewer columns. */
+export function narrowerCount(existing: unknown[], fieldNames: string[]): number {
+  return existing.filter((m) => {
+    const names = fieldNamesOf(m);
+    return names !== null && within(names, fieldNames) && !sameSet(names, fieldNames);
+  }).length;
 }
 
 /** Field names that no draft reads. */

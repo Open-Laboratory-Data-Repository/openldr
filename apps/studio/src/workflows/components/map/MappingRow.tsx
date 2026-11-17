@@ -4,7 +4,7 @@ import { MultiSelect } from '@/components/ui/multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TruncatedText } from '@/components/ui/truncated-text';
-import { exampleText, type RowDraft, type SampleRow, type SourceDraft } from './rows';
+import { exampleFor, exampleText, type RowDraft, type SampleRow, type SourceDraft } from './rows';
 import type { ReactNode } from 'react';
 
 const NONE = '__none';
@@ -17,7 +17,7 @@ const FIXED = '__fixed';
 export function MappingRow({
   draft,
   fieldNames,
-  sample,
+  rows,
   onChange,
   suggestion,
   rule,
@@ -26,8 +26,8 @@ export function MappingRow({
 }: {
   draft: RowDraft;
   fieldNames: string[];
-  /** The first sample row, for the Example column. Shown only here, never saved. */
-  sample: SampleRow | undefined;
+  /** The group's sample rows, for the Example column. Shown only here, never saved. */
+  rows: SampleRow[];
   onChange: (source: SourceDraft) => void;
   /** Grey suggestion text and its Accept action, when there is one. */
   suggestion?: ReactNode;
@@ -43,7 +43,9 @@ export function MappingRow({
   const src = draft.source;
   const first = src.kind === 'field' ? src.fields[0] : undefined;
   const selectValue = src.kind === 'fixed' ? FIXED : src.kind === 'field' && first ? first : NONE;
-  const example = src.kind === 'field' && sample ? src.fields.map((f) => exampleText(sample[f])).filter(Boolean).join(', ') : '';
+  // A Radix SelectItem cannot have an empty value, so a column named '' is not offered.
+  const names = fieldNames.filter((f) => f !== '');
+  const example = src.kind === 'field' ? src.fields.map((f) => exampleText(exampleFor(f, rows))).filter(Boolean).join(', ') : '';
 
   const pick = (v: string) => {
     if (v === NONE) onChange({ kind: 'none' });
@@ -83,7 +85,7 @@ export function MappingRow({
           <SelectContent>
             <SelectItem value={NONE}>{t(`${p}.notMapped`)}</SelectItem>
             <SelectItem value={FIXED}>{t(`${p}.fixedValue`)}</SelectItem>
-            {fieldNames.map((f) => (
+            {names.map((f) => (
               <SelectItem key={f} value={f}>
                 {f}
               </SelectItem>
@@ -101,7 +103,7 @@ export function MappingRow({
         {draft.repeats && src.kind === 'field' && first && (
           <MultiSelect
             aria-label={t(`${p}.alsoFrom`) + ': ' + draft.label}
-            options={fieldNames.filter((f) => f !== first).map((f) => ({ value: f, label: f }))}
+            options={names.filter((f) => f !== first).map((f) => ({ value: f, label: f }))}
             value={src.fields.slice(1)}
             onChange={(more) => onChange({ kind: 'field', fields: [first, ...more] })}
             placeholder={t(`${p}.alsoFrom`)}
