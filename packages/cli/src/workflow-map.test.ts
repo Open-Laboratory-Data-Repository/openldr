@@ -184,3 +184,40 @@ describe('a CSV file read by map-test and by Extract from File with Read every c
     expect(help).toContain("Extract from File with 'Read every cell as text' on gives the same rows but keeps those spaces.");
   });
 });
+
+describe('workflows map-test on a mapping as the panel saves it', () => {
+  it('parses the saved config the same way, through the real api and service', async () => {
+    const real = await vi.importActual<typeof import('@openldr/bootstrap')>('@openldr/bootstrap');
+    const { seededStarterPacks } = await import('@openldr/forms');
+    const packs = seededStarterPacks().map((p) => ({ id: p.id, resourceType: p.resourceType, entries: p.entries }));
+    // The bootstrap index exports the api but not the service, so the service is read by path.
+    const { createMapToFhirService } = await import('../../bootstrap/src/map-to-fhir-service');
+    const service = createMapToFhirService({
+      forms: { get: async () => null },
+      validateForm: async () => ({ items: [], meta: { formId: 'f', validated: 0, invalid: [] } }),
+      packs: async () => packs,
+      translateCode: async () => null,
+      validate: async () => ({ ok: true }) as never,
+    });
+    const api = real.createMapToFhirApi({ mapToFhir: service, packs: async () => packs, conceptMaps: async () => [], localSourceSystems: async () => [] });
+    ctx.workflows.mapToFhir.test.mockImplementation((input: Parameters<typeof api.test>[0]) => api.test(input));
+    // Made up, in the shape the panel saves: tests per column, a coded Values rule, an Excel date.
+    const mapping = {
+      shapeHash: 'h-isolate', fieldNames: ['AMP', 'CIP', 'GEN', 'coll_dt', 'dob', 'pat_no', 'sample_type'], targetId: 'lab-result',
+      rows: [
+        { targetPath: 'Patient.identifier.value', from: { field: 'pat_no' } },
+        { targetPath: 'Patient.birthDate', from: { field: 'dob' }, rule: { kind: 'date', format: 'excel' } },
+        { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'coll_dt' } },
+        { targetPath: 'Specimen.type', from: { field: 'sample_type' }, rule: { kind: 'values', map: { Urine: { system: 'urn:test:specimen', code: 'UR' } } } },
+        { targetPath: 'Observation.code', from: { fixedList: ['AMP', 'CIP', 'GEN'] } },
+        { targetPath: 'Observation.valueString', from: { fields: ['AMP', 'CIP', 'GEN'] } },
+      ],
+    };
+    const saved = JSON.parse(JSON.stringify(node({ config: { targetId: 'lab-result', formIds: [], mappings: [mapping] } })));
+    ctx.workflows.store.get.mockResolvedValue(workflow([saved]));
+    await run('wf-1', 'n1', file('rows.csv', 'pat_no,dob,coll_dt,sample_type,AMP,CIP,GEN\nT-0401,45000,2026-11-05,Urine,R,S,\n'));
+    expect(err).toBe('');
+    expect(out).toContain('Passed: 1 (mapped 1)');
+    expect(process.exitCode).toBe(0);
+  });
+});

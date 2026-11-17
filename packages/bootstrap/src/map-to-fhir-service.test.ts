@@ -1,9 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { classify, seededStarterPacks, shapeOf, type FormField, type FormSchema, type SavedMapping } from '@openldr/forms';
+import { classify, SavedMappingSchema, seededStarterPacks, shapeOf, type FormField, type FormSchema, type SavedMapping } from '@openldr/forms';
 import { validateBatch } from '@openldr/fhir';
 import { runWorkflow, type RunFormValidateInput, type RunFormValidateOutput, type WorkflowItem, type WorkflowServices } from '@openldr/workflows';
 // The CLI test reads the file codec the same way: the package index does not export it.
 import { fileToRows } from '../../workflows/src/engine/node-handlers/file-codecs';
+import { mapToFhirHandler } from '../../workflows/src/engine/node-handlers/map-to-fhir';
+import { createContext } from '../../workflows/src/engine/execution-context';
 import { codingFromMapRows, createMapToFhirService, KNOWN_ISSUE_TEXTS, loadStoredPacks, type MapToFhirServiceDeps } from './map-to-fhir-service';
 
 // Made-up values only. QZX marks a value that must never reach a reason.
@@ -737,5 +739,53 @@ describe('the within-run merge of an order whose codes come from its results', (
     const svc = createMapToFhirService(deps({ translateCode: plainCode }));
     const res = await svc({ items: [{ json: { ...base, panel: 'P1', t: 'HB' } }, { json: { ...base, panel: 'P1', t: 'WBC' } }], config: { targetId: 'lab-result', formIds: [], mappings: [m] } });
     expect(res.out.find((i) => i.json.resourceType === 'ServiceRequest')!.json.code).toEqual({ text: 'P1', coding: [{ code: 'P1' }] });
+  });
+});
+
+// The shape the mapping panel saves for a file with one column per test, with a coded Values rule
+// and an Excel date rule (`MapToFhirSheet.test.tsx` checks the panel writes this shape). Made up.
+const SAVED_ISOLATE_MAPPING = {
+  shapeHash: 'h-isolate',
+  fieldNames: ['AMP', 'CIP', 'GEN', 'coll_dt', 'dob', 'gender', 'organism', 'pat_no', 'sample_no', 'sample_type'],
+  targetId: 'lab-result',
+  rows: [
+    { targetPath: 'Patient.identifier.value', from: { field: 'pat_no' } },
+    { targetPath: 'Patient.birthDate', from: { field: 'dob' }, rule: { kind: 'date', format: 'excel' } },
+    { targetPath: 'Patient.gender', from: { field: 'gender' }, rule: { kind: 'values', map: { M: 'male' } } },
+    { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'coll_dt' } },
+    { targetPath: 'Specimen.type', from: { field: 'sample_type' }, rule: { kind: 'values', map: { Urine: { system: 'urn:test:specimen', code: 'UR' } } } },
+    { targetPath: 'Specimen.accessionIdentifier.value', from: { field: 'sample_no' } },
+    { targetPath: 'Observation.code', from: { fixedList: ['AMP', 'CIP', 'GEN'] } },
+    { targetPath: 'Observation.valueString', from: { fields: ['AMP', 'CIP', 'GEN'] } },
+  ],
+};
+const ISOLATE_ROW = { pat_no: 'T-0401', gender: 'M', dob: '45000', sample_no: 'S-0401', sample_type: 'Urine', coll_dt: '2026-11-05', organism: 'QZX-ORG', AMP: 'R', CIP: 'S', GEN: '' };
+
+describe('a mapping as the panel saves it, run as a saved workflow runs it', () => {
+  it('passes the schema after a JSON round trip', () => {
+    const back = JSON.parse(JSON.stringify(SAVED_ISOLATE_MAPPING));
+    const parsed = SavedMappingSchema.safeParse(back);
+    expect(parsed.success ? [] : parsed.error.issues).toEqual([]);
+  });
+
+  it('runs through the node handler and the real service: records come out, a blank GEN gives no result', async () => {
+    const svc = createMapToFhirService(deps({ translateCode: async () => null }));
+    const ctx = createContext(undefined, () => {}, [{ id: 'e1', source: 'm', target: 'a', sourceHandle: 'out' }], undefined, { mapToFhir: svc } as unknown as WorkflowServices);
+    const config = JSON.parse(JSON.stringify({ targetId: 'lab-result', formIds: [], mappings: [SAVED_ISOLATE_MAPPING] }));
+    const out = await mapToFhirHandler({ id: 'm', type: 'action', data: { action: 'map-to-fhir', config } }, ctx, [{ json: ISOLATE_ROW }]);
+    const recs = out.map((i) => i.json as Record<string, unknown>);
+    expect(recs.map((r) => r.resourceType)).toEqual(['Patient', 'Specimen', 'ServiceRequest', 'Observation', 'Observation']);
+    expect(recs[0]).toMatchObject({ gender: 'male', birthDate: '2023-03-15' });
+    expect(recs[1].type).toEqual({ coding: [{ system: 'urn:test:specimen', code: 'UR' }] });
+    expect(recs.slice(3).map((o) => (o.code as { text: string }).text)).toEqual(['AMP', 'CIP']);
+  });
+
+  it('names the row and the key when a saved mapping does not parse, never a value', async () => {
+    const bad = { ...SAVED_ISOLATE_MAPPING, rows: SAVED_ISOLATE_MAPPING.rows.map((r) => (r.targetPath === 'Specimen.type' ? { ...r, rule: { kind: 'values', map: { Urine: { code: 'UR' } } } } : r)) };
+    const svc = createMapToFhirService(deps());
+    const run = svc({ items: [{ json: ISOLATE_ROW }], config: { targetId: 'lab-result', formIds: [], mappings: [bad] } });
+    // A values rule's keys are the person's From values, so the path stops at the map.
+    await expect(run).rejects.toThrow('Map to FHIR node config: mapping 0 is not a saved mapping: row 4 (Specimen.type), rule.map');
+    await expect(run.catch((e: Error) => e.message)).resolves.not.toContain('Urine');
   });
 });

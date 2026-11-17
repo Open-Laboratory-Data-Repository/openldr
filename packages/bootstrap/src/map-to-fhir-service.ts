@@ -245,10 +245,25 @@ function unwrap(json: unknown): Res[] | null {
   }
 }
 
+/**
+ * Where a saved mapping fails the schema: the row number and its target key, then the key path
+ * in that row. A values rule's own keys are the person's From values, so the path stops at `map`.
+ * Config only, never a value of a row.
+ */
+function configFault(mapping: unknown, path: (string | number)[]): string {
+  const cut = path.indexOf('map');
+  const keys = cut === -1 ? path : path.slice(0, cut + 1);
+  if (keys[0] !== 'rows' || typeof keys[1] !== 'number') return keys.join('.') || 'the mapping';
+  const rows = isPlainObject(mapping) && Array.isArray(mapping.rows) ? mapping.rows : [];
+  const row = rows[keys[1]];
+  const target = isPlainObject(row) && typeof row.targetPath === 'string' ? ` (${row.targetPath})` : '';
+  return `row ${keys[1]}${target}${keys.length > 2 ? `, ${keys.slice(2).join('.')}` : ''}`;
+}
+
 function parseMappings(raw: unknown[], targetId: string): SavedMapping[] {
   return raw.map((m, i) => {
     const parsed = SavedMappingSchema.safeParse(m);
-    if (!parsed.success) throw new Error(`Map to FHIR node config: mapping ${i} is not a saved mapping`);
+    if (!parsed.success) throw new Error(`Map to FHIR node config: mapping ${i} is not a saved mapping: ${configFault(m, parsed.error.issues[0]?.path ?? [])}`);
     if (parsed.data.targetId !== targetId) throw new Error(`Map to FHIR node config: mapping ${i} is for target ${parsed.data.targetId}, not ${targetId}`);
     return parsed.data;
   });
