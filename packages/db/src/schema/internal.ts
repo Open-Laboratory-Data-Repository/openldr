@@ -1101,6 +1101,8 @@ export interface InternalSchema {
   report_schedule_runs: ReportScheduleRunsTable;
   workflows: WorkflowsTable;
   workflow_webhook_paths: { workflow_id: string; path: string };
+  /** One row per webhook path an ENABLED workflow uses. The path is the key, so two cannot both hold it. */
+  workflow_webhook_claims: { path: string; workflow_id: string };
   workflow_runs: WorkflowRunsTable;
   workflow_webhook_receipts: WorkflowWebhookReceiptsTable;
   workflow_schedules: WorkflowSchedulesTable;

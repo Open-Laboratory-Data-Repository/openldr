@@ -4,7 +4,7 @@ import Fastify from 'fastify';
 import { ConfigError } from '@openldr/core';
 import { createWorkflowSecretStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { createSharedWebhookResolver } from '@openldr/workflows';
+import { createSharedWebhookResolver, WebhookPathClaimedError } from '@openldr/workflows';
 import { seededStarterPacks } from '@openldr/forms';
 import { createMapToFhirApi } from '@openldr/bootstrap';
 import { registerWorkflowRoutes } from './workflows-routes';
@@ -1587,6 +1587,14 @@ describe('one enabled workflow per webhook path', () => {
     expect((await post(hook('wf-c', 'Lab A copy', 'lab-a', false))).statusCode).toBe(200);
     expect((await put(hook('wf-c', 'Lab A copy', 'lab-a', true))).statusCode).toBe(409);
     expect((await put(hook('wf-c', 'Lab A copy', 'lab-c', true))).statusCode).toBe(200);
+  });
+
+  it('answers 409 when the database refuses the claim because another save took the path at the same moment', async () => {
+    const { ctx, post } = await setup();
+    ctx.workflows.store.create = async () => { throw new WebhookPathClaimedError('lab-a', 'Lab A results'); };
+    const r = await post(hook('wf-b', 'Lab A copy', 'lab-a', true));
+    expect(r.statusCode).toBe(409);
+    expect(r.json().error).toBe('The webhook path "lab-a" is already used by the enabled workflow "Lab A results". Change this workflow\'s webhook path, or disable one of them.');
   });
 
   it('lets a workflow save again on its own path', async () => {

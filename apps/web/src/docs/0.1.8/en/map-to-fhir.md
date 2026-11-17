@@ -67,6 +67,7 @@ The command exits with 0 when every row passes and 1 when any row is held. It ch
 - In an Excel file, a date cell arrives as a day number. The **Date** rule reads it with **Excel date cell**, in Excel's usual 1900 date system only. A workbook saved in the 1904 date system, from an old Mac, gives dates four years and a day early.
 - A plain text in a coded field is stored as the lab's own code, with no system. A **Code list** rule stores a standard code, and a code picked in a **Values** rule is stored with its system. The lab's own code list needs a source system on the rule; without one, no code matches.
 - The **Date** rule reads a date only, not a time.
+- A whole number sent without quotes that is too long to keep exactly, above 9,007,199,254,740,991, such as a 19-digit specimen number, keeps every digit: the webhook reads it as text and lists the field under `notes` in the run's webhook input. A text field such as **Specimen number** stores it as sent. **Result (number)** refuses it and holds the row, because a number cannot hold that many digits exactly. Ask the sender to put such IDs in quotes.
 - The node does not read HL7 v2 messages.
 - Held reasons are in English.
 

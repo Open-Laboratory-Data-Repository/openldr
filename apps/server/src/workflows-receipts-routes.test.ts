@@ -182,6 +182,8 @@ describe('long whole numbers at the webhook', () => {
     try {
       expect((await post(app, '{"__proto__": {"x": 1}}')).statusCode).toBe(400);
       expect((await post(app, '{"a": 1,')).statusCode).toBe(400);
+      // A long number in a key's place is not JSON: the scan must not turn it into a valid key.
+      expect((await post(app, '{4471200000000000123: 1}')).statusCode).toBe(400);
       expect(receipts.accept).not.toHaveBeenCalled();
     } finally { await app.close(); }
   });

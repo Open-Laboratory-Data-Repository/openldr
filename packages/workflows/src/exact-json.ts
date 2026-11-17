@@ -15,6 +15,8 @@
 const MAX = BigInt(Number.MAX_SAFE_INTEGER);
 // JSON's number grammar. A leading zero is matched alone, so "00071" still fails the parse.
 const NUMBER = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
+// Whitespace then ':' right after a number: the number is in a key's place.
+const KEY_COLON = /\s*:/y;
 
 function keyText(raw: string): string {
   try {
@@ -74,7 +76,11 @@ export function quoteLongIntegers(text: string): { text: string; keptAsText: str
       }
       const token = m[0];
       const whole = !/[.eE]/.test(token);
-      if (whole) {
+      // A number followed by ':' sits where a key belongs. JSON forbids that, so leave it unquoted
+      // and let the parse refuse it, as it would without this scan.
+      KEY_COLON.lastIndex = i + token.length;
+      const asKey = KEY_COLON.test(text);
+      if (whole && !asKey) {
         const n = BigInt(token);
         if (n > MAX || n < -MAX) {
           out += `${text.slice(copied, i)}"${token}"`;

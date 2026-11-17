@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseJsonKeepingLongIntegers } from './exact-json';
+import { parseJsonKeepingLongIntegers, quoteLongIntegers } from './exact-json';
 
 describe('parseJsonKeepingLongIntegers', () => {
   it('keeps a whole number too long for a JSON number as its exact digits, and names the field', () => {
@@ -35,6 +35,12 @@ describe('parseJsonKeepingLongIntegers', () => {
 
   it('keeps a top-level long whole number', () => {
     expect(parseJsonKeepingLongIntegers('4471200000000000123')).toEqual({ value: '4471200000000000123', keptAsText: ['(value)'] });
+  });
+
+  it('never turns a bare number used as a key into a valid key', () => {
+    expect(() => parseJsonKeepingLongIntegers('{4471200000000000123: 1}')).toThrow(SyntaxError);
+    expect(() => parseJsonKeepingLongIntegers('{"a": 1, 4471200000000000123 : 2}')).toThrow(SyntaxError);
+    expect(quoteLongIntegers('{4471200000000000123: 1}').keptAsText).toEqual([]);
   });
 
   it('still refuses text that is not JSON, including a leading zero', () => {

@@ -67,6 +67,7 @@ O comando termina com 0 quando todas as linhas passam e com 1 quando alguma linh
 - Num ficheiro Excel, uma célula de data chega como um número de dia. A regra **Data** lê-o com **Uma célula de data do Excel**, só no sistema de datas 1900 habitual do Excel. Um livro guardado no sistema de datas 1904, num Mac antigo, dá datas quatro anos e um dia mais cedo.
 - Um texto simples num campo codificado é guardado como o código do próprio laboratório, sem sistema. Uma regra **Lista de códigos** guarda um código padrão, e um código escolhido numa regra **Valores** é guardado com o seu sistema. A lista de códigos do próprio laboratório precisa de um sistema de origem na regra; sem ele, nenhum código corresponde.
 - A regra **Data** lê apenas uma data, sem hora.
+- Um número inteiro enviado sem aspas e demasiado longo para ser guardado exatamente, acima de 9 007 199 254 740 991, como um número de amostra com 19 dígitos, mantém todos os dígitos: o webhook lê-o como texto e nomeia o campo em `notes` na entrada do webhook da execução. Um campo de texto como **Número da amostra** guarda-o tal como foi enviado. **Resultado (número)** recusa-o e retém a linha, porque um número não consegue guardar tantos dígitos exatamente. Peça ao emissor que envie esses identificadores entre aspas.
 - O nó não lê mensagens HL7 v2.
 - Os motivos estão em inglês.
 

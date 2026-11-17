@@ -36,6 +36,14 @@ export async function findWebhookPathClaims(
   return claims;
 }
 
+/** A save refused because another enabled workflow holds one of its webhook paths. Names only. */
+export class WebhookPathClaimedError extends Error {
+  constructor(readonly path: string, readonly workflowName: string) {
+    super(`The webhook path "${path}" is already used by the enabled workflow "${workflowName}". Change this workflow's webhook path, or disable one of them.`);
+    this.name = 'WebhookPathClaimedError';
+  }
+}
+
 export class WebhookPathConflictError extends Error {
   constructor() { super('Webhook path has multiple enabled triggers'); this.name = 'WebhookPathConflictError'; }
 }

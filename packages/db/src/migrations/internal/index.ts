@@ -118,6 +118,7 @@ import * as m116 from './116_local_sign_in';
 import * as m117 from './117_access_keys';
 import * as m118 from './118_import_copy_rows';
 import * as m119 from './119_import_check_held';
+import * as m120 from './120_workflow_webhook_claims';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -240,4 +241,5 @@ export const internalMigrations: Record<string, Migration> = {
   '117_access_keys': { up: m117.up, down: m117.down },
   '118_import_copy_rows': { up: m118.up, down: m118.down },
   '119_import_check_held': { up: m119.up, down: m119.down },
+  '120_workflow_webhook_claims': { up: m120.up, down: m120.down },
 };

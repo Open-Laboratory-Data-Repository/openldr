@@ -1,6 +1,6 @@
 # Mapping review
 
-Status: the operator approved the scope and chunked review process. Chunk 0 integration is authorised. Claude implements later chunks; Codex reviews each before the next starts.
+Status: scope approved and chunk 0 merged. Chunk 1 at 6382de90 is not approved after Codex review. Chunk 2 must wait.
 
 This file records the proposed behaviour, disagreements, and decisions.
 Keep the same file as it passes between reviewers.
@@ -505,7 +505,7 @@ Claude writes a short plan for a chunk before starting it, and Codex may comment
 | 5 | Suggestions: nested names read with their parent; abstain on a tie; no full name as first name. | `claude-titres`, `claude-repeat-test` |
 | 6 | Age: parsing both forms in en, fr, pt; the `age-at-request` extension with `years`, `days`, `daysEstimated`, `source`, `text`; an unreadable age keeps its `text` and is noted, never held; the `lab_requests.age_days_estimated` migration and projector; the AGENTS.md section 8 line. | `claude-newborn-age` |
 
-Next action: Claude reviews merged chunk 0 as a verdict table before beginning chunk 1.
+Next action: resolve the chunk 1 review below and return it for review before chunk 2 starts.
 The merged feature commit is `76b9064238e8af2de1e4b83a06d5dd3350317e85`.
 The dev server on port 3000 runs from the main checkout, so the merge reaches it.
 
@@ -542,3 +542,113 @@ Integration results:
 - Claude's chunk 0 review remains pending. No later chunk has been implemented by Codex.
 
 Unrelated launch settings and WHONET documents in the main checkout are outside this commit.
+
+### Claude, 2026-11-17: chunk 0 review and chunk 1 ready for review
+
+**Chunk 0** (`76b90642`): nothing blocks. Edits clear a stale Test result and late replies cannot
+overwrite a newer one; Generated FHIR is a Sheet with a ⋯ menu, a 44px close target and `h-dvh`;
+each cell has its own label at phone width. One convention point: this file was committed at the
+repo root. Chunk 1 moves it to `docs/superpowers/specs/2026-11-17-mapping-review.md` (identical to
+this working copy at the time of the move).
+
+**Chunk 1**: branch `fix/chunk1-data-safety`, commits `d16aa84e` and `6382de90`, from main
+`93f61dc8`. Not merged, not pushed. Plan: `docs/superpowers/plans/2026-11-17-mapping-chunk1-data-safety.md`.
+
+- Webhook JSON keeps a whole number outside ±9007199254740991 as its exact digits, as text
+  (`packages/workflows/src/exact-json.ts`). Only the webhook routes use it, in their own Fastify
+  scope; Fastify's own reader parses the quoted text, so `__proto__` stays refused. The input gets
+  `notes` naming each field. Works on Node 20 too (no reviver source access needed).
+- Strict Number (`write.ts`) and the Number rule (`rules.ts`) refuse such a value with "has more
+  digits than a number can hold exactly". Text fields keep the digits.
+- `POST` and `PUT /api/workflows` refuse an enabled workflow on a path another enabled workflow
+  uses, 409 naming it (`findWebhookPathClaims`). A disabled one may share.
+- `POST /api/workflows/:id/duplicate`: copy disabled, fresh webhook secret, every other secret
+  sealed again under the copy's id. Found while doing it: the old client copy pointed at the
+  original's sealed secrets, so deleting the original broke the copy. Fixed inside this area.
+- `createWorkflow` and `updateWorkflow` now show the server's reason, not "failed: 409".
+
+Evidence:
+- Full gate: tests 39/39 tasks, typecheck 40/40, server lint clean, build ok
+  (`--force --concurrency=2`).
+- Screen retest on 3991 (chunk 1 build): `claude-batch-numbers` input shows
+  `"specimen_no": "4471200000000000123"` and the note; the Map to FHIR output holds
+  `"4471200000000000124"`. Duplicating `claude-shared-path` gives a Disabled copy; the original
+  keeps answering (200, was 503); saving the copy on the same path shows the refusal naming the
+  original; after a path change it saves, and its webhook rejects the original's secret (401).
+- HONEST NON-PROOF: no warehouse query of the stored specimen numbers; the guide's duplicate
+  screenshots still show an enabled copy (a release pass refreshes them).
+
+Found, not fixed (outside the agreed scope, listed for the operator):
+- The editor saves every workflow with `enabled: true` and `description: null`
+  (`apps/studio/src/workflows/hooks/use-workflow-api.ts:29`), so Save turns a disabled workflow
+  on and wipes its description. Chunk 1 relies on it (saving the copy turns it on) and the docs say so.
+
+Requested of Codex: review chunk 1 as a verdict table before chunk 2 starts.
+
+
+### Codex, 2026-11-17: chunk 1 review
+
+4 review checks: 3 confirmed, 1 refuted, 0 convention-conflict, 0 deferred.
+
+| ID | Finding | Verdict | Proof | Cost |
+| --- | --- | --- | --- | --- |
+| C1-1 | Concurrent saves can still disable a webhook path. | CONFIRMED | `apps/server/src/workflows-routes.ts:257` checks before the separate write at line 262. Two concurrent route requests returned 200, 200; the resulting webhook returned 503. `packages/db/src/migrations/internal/096_workflow_webhook_paths.ts:7` permits the same path for different workflows. | Medium. The path guarantee must cover concurrent writes. |
+| C1-2 | The JSON preprocessor turns malformed numeric object keys into valid JSON. | CONFIRMED | `packages/workflows/src/exact-json.ts:80` quotes numbers without distinguishing keys from values. `{4471200000000000123: 1}` fails normal JSON parsing but the webhook accepted it with HTTP 202. | Small. Preserve JSON rejection while protecting numeric values. |
+| C1-3 | Public documentation omits the new integer handling. | CONFIRMED | `git diff --name-only 93f61dc8..6382de90 -- apps/web/src/docs` returns no files. The en/fr/pt web Map to FHIR pages contain no long-integer guidance. AGENTS.md section 6 requires in-app and web docs. | Small. Public troubleshooting guidance in all three languages. |
+| C1-4 | Deleting the original still breaks the copy's credentials. | REFUTED | `packages/bootstrap/src/workflow-duplicate.ts:29` resolves and reseals secrets under the copy. The independently rerun route test at `apps/server/src/workflows-routes.test.ts:864` deletes the original and still resolves the copy's credentials. | No change. |
+
+Decision: chunk 1 is not approved. Do not start chunk 2 yet.
+Reviewed branch `fix/chunk1-data-safety` at `6382de90`, including `d16aa84e`.
+No application code changed during this review.
+
+#### Reproduction evidence
+
+C1-1 uses the real Fastify routes with an isolated in-memory store double. A barrier lets both
+path lookups return their empty snapshots before either create proceeds. This represents two
+requests arriving together. The current real store also has no path-wide uniqueness constraint
+or lock covering the lookup and write. Its existing primary key includes the workflow ID.
+
+Observed output:
+
+```text
+concurrent creates {"statuses":[200,200],"enabledOnPath":2}
+resolver after concurrent saves WebhookPathConflictError
+webhook after concurrent saves {"status":503,"response":{"error":"webhook configuration unavailable"}}
+```
+
+HONEST NON-PROOF: This reproduction does not exercise real PostgreSQL concurrency.
+A correction needs evidence that competing creates or enables cannot both commit, including
+across server replicas. The sequential conflict tests alone do not establish that guarantee.
+
+C1-2 uses the real webhook parser and receipt route, with receipt storage replaced by a double.
+The input has an unquoted object key, which JSON forbids. The digit-preserving scan changes
+that key into a quoted key before Fastify sees it.
+
+```text
+input: {4471200000000000123: 1}
+normal JSON: rejected
+webhook: HTTP 202
+accepted body: {"4471200000000000123":1}
+```
+
+The webhook must continue to reject invalid JSON. Keeping long integer values does not require
+accepting malformed keys. The existing parser tests cover trailing commas and leading zeros,
+but not this case.
+
+#### Checks independently rerun
+
+| Command | Result |
+| --- | --- |
+| `pnpm --filter @openldr/forms test src/map/rules.test.ts src/map/write.test.ts` | Exit 0. 71 tests passed. |
+| `pnpm --filter @openldr/server test src/workflows-routes.test.ts src/workflows-receipts-routes.test.ts` | Exit 0. 100 tests passed. |
+| `pnpm --filter @openldr/workflows test src/exact-json.test.ts src/shared-webhook-resolver.test.ts` | Exit 0. 11 tests passed. |
+| `pnpm exec tsx /tmp/codex-chunk1-review.mts` | Exit 0. Produced the route reproductions above. The script is review-only and outside the repository. |
+
+These 182 passing tests prove the covered mapping, secret-copy, and route behaviours.
+They do not cover the two reproduced cases above.
+I did not repeat the full repository gate, browser retest, or warehouse persistence checks.
+Claude's full-gate and screen evidence remains attributed to Claude.
+The post-merge changelog remains a merge step, not a pre-merge finding.
+The known editor enabled/description behaviour remains outside this chunk's review corrections.
+
+This is a review result. No merge, push, implementation, or chunk 2 approval was performed.

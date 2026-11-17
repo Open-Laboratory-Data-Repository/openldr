@@ -6,7 +6,7 @@ import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, c
 import { ConfigError, appError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
 import { fhirXmlToJson } from '@openldr/fhir/xml';
-import { findWebhookPathClaims, quoteLongIntegers } from '@openldr/workflows';
+import { findWebhookPathClaims, quoteLongIntegers, WebhookPathClaimedError } from '@openldr/workflows';
 
 /** The content types the webhook reads as XML. Only FHIR XML gets through; see `fhirXmlToJson`. */
 const XML_TYPES = new Set(['application/fhir+xml', 'application/xml']);
@@ -709,12 +709,13 @@ async function pathClash(ctx: AppContext, w: { id: string; enabled: boolean; def
     (path) => ctx.workflows.store.findByWebhookPath(path),
   );
   const c = claims[0];
-  if (!c) return null;
-  return `The webhook path "${c.path}" is already used by the enabled workflow "${c.name}". Change this workflow's webhook path, or disable one of them.`;
+  return c ? new WebhookPathClaimedError(c.path, c.name).message : null;
 }
 
 function mapError(err: unknown, reply: FastifyReply): { error: string } {
   if (err instanceof ZodError) { reply.code(400); return { error: 'invalid payload' }; }
+  // The database refused a webhook path claim: another enabled workflow holds it (store.ts).
+  if (err instanceof WebhookPathClaimedError) { reply.code(409); return { error: err.message }; }
   // SEC-06 fail-closed: saving a workflow that carries a secret without
   // SECRETS_ENCRYPTION_KEY set throws ConfigError from the secret store. This is a
   // SERVER-config fault (the client's payload was valid), so map to 503 — consistent
