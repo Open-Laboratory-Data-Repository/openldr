@@ -254,6 +254,18 @@ describe('a fully mapped made-up row', () => {
     expect(evening.resources[3].id).not.toBe(morning.resources[3].id);
   });
 
+  it('refuses one column per test with one shared test code, as the docs say', async () => {
+    const wide = { pat_no: 'T-0001', collected: '2026-11-03T08:30:00Z', test: 'TA', res_a: '1', res_b: '2' };
+    const perColumn: FieldMapping[] = [
+      { targetPath: 'Patient.identifier.value', from: { field: 'pat_no' } },
+      { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'collected' } },
+      { targetPath: 'Observation.code', from: { field: 'test' }, rule: { kind: 'codeList', conceptMapUrl: 'urn:test:map' } },
+      { targetPath: 'Observation.valueString', from: { fields: ['res_a', 'res_b'] } },
+    ];
+    const res = await applyMapping({ shapeHash: 'h', fieldNames: Object.keys(wide).sort(), targetId: target.id, rows: perColumn }, target, wide, deps());
+    expect(res).toEqual({ ok: false, reason: 'Test: two Observation records in this row have the same value, so they would share one id', field: 'test' });
+  });
+
   it('gives a result with no result date mapped an empty date part', async () => {
     const res = await applyMapping(mapping(rows.filter((r) => r.targetPath !== 'Observation.effectiveDateTime')), target, row, deps());
     if (!res.ok) throw new Error(res.reason);

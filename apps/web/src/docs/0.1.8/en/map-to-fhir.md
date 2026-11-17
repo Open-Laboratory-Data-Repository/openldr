@@ -38,14 +38,18 @@ Some labs want the good rows of a message stored and the bad ones set aside. For
 
 ![Try the saved mappings of a Map to FHIR node on a file.](guide:operator-data-map-test)
 
-The command exits with 0 when every row passes and 1 when any row is held. With `--json`, it prints each row's result, records included, so the output holds the row's values. A CSV run reads every cell as text and leaves out blank cells. So it can differ from the same file read by **Extract from File**.
+The command exits with 0 when every row passes and 1 when any row is held. With `--json`, it prints each row's result, records included, so the output holds the row's values. A CSV run reads every cell as text, with the spaces around it cut, and leaves out blank cells. **Extract from File** with **Read every cell as text** on gives the same rows but keeps those spaces.
 
 ## Limits
 
 - A row with no Patient ID is held.
-- The same row sent twice gives the same records, not copies. Each record id comes from the row's own identifiers. The patient's uses the Patient ID and its system. The specimen's adds the specimen number or, without one, the collected date. The order's adds its test code when mapped, and the result's adds the test.
+- The same row sent twice gives the same records, not copies. Each record id comes from the row's own identifiers. The patient's uses the Patient ID and its system. The specimen's adds the specimen number or, without one, the collected date. The order's adds its test code when mapped. The result's adds the test and, when mapped, the result date.
+- In one run, rows that give the same patient, specimen or order make one record, and a later row fills only what an earlier one left empty. A thin file sent in a later run still replaces the stored record. A second row of one run that gives the same result with other values is held: `this row gives a result that an earlier row of this run already gave, with other values`.
 - If one file maps the Patient ID system and another does not, one patient gets two Patient records. Map it the same way in every file, for example as a fixed value. Without it, duplicate-patient detection cannot compare patients by Patient ID.
-- **Extract from File** reads a CSV cell such as `12,5` as the number 125, and the **Number** rule keeps 125. It also reads some CSV dates, such as `01/12/2024` and `2025-04-23`, as numbers, and the **Date** rule then holds the row. Post such data to a webhook as JSON instead. There `"12,5"` stays text.
+- Turn on **Read every cell as text** on **Extract from File** before a Map to FHIR node. Then each CSV cell arrives as the text in the file, and the **Number** and **Date** rules read it. A node added from the Node library has it on, and a node saved before this release has it off. With it off, `12,5` arrives as 125, `007` as 7, and a date such as `01/12/2024` as a day number, which the **Date** rule holds.
+- In an Excel file, a date cell arrives as a day number, with the option on or off, and the **Date** rule holds the row. Save the sheet as CSV, or format the date cells as text.
+- A plain text in a coded field is stored as the lab's own code, with no system. A **Code list** rule stores a standard code. The lab's own code list needs a source system on the rule; without one, no code matches.
+- A file with one column per test, for example one column per antibiotic, cannot be mapped as it is. Several columns on one repeating field need a test code for each, and one shared code is refused with `Test: two Observation records in this row have the same value, so they would share one id`.
 - The **Date** rule reads a date only, not a time.
 - The node does not read HL7 v2 messages.
 - Held reasons are in English.
@@ -59,10 +63,11 @@ These are the held reasons a person meets most often. A rule's reason starts wit
 - **Patient ID is required and has no value.** The row's Patient ID cell is empty. The label in the reason names the field.
 - **expected a date in the format dd/MM/yyyy.** The cell does not match the **Date** rule's format. The reason gives the format you set.
 - **value is not in the translation list.** A **Values** rule has no line for this value. Add one.
-- **value has no match in the code list.** The **Code list** rule found no single match for the value.
+- **value has no match in the code list.** The **Code list** rule found no match for the value. With the lab's own code list, check that the rule names a source system.
+- **more than one match in the code list.** The code gives two targets in the code list.
 - **not a FHIR Bundle this node can unwrap.** The body looks like FHIR but cannot be unwrapped.
 - **laboratory result must reference a ServiceRequest (basedOn).** A FHIR lab result came with no order. Send the order in the same post.
 - **basedOn ServiceRequest not found in batch or store.** A FHIR lab result names an order that is neither in the same run nor stored.
-- **nothing at body.** The item has nothing under `body`. After Extract from File, leave the source path blank. After a webhook, check that the sender posts a body.
+- **nothing at body.** The item has nothing under `body`, or only an empty list or a single value. After Extract from File, leave the source path blank. After a webhook, check that the sender posts a body.
 - **not a row.** The list under the source path holds something that is not a row, such as a number or a text.
 - **held port is not connected.** This is a run failure, not a held reason. The error lists up to five reasons. In **Ingest** it is how a message that cannot be stored is refused. In your own workflow, connect **held** to a Log node to keep the good rows.

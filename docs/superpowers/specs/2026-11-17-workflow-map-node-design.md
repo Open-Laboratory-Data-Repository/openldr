@@ -226,8 +226,23 @@ The default Ingest workflow's fork becomes one Map to FHIR node feeding Persist 
   the sample a mapping was made from.
 - **Starter pack labels are English only.** The Lab result target takes its fr and pt labels from
   two content files keyed by target field.
-- **A loop body that ends in the Map node loses its `held` items.** A loop collects each
-  iteration's `out` items only. This stays a known limit and the in-app guide says so.
+- **A loop passes on what the last nodes of its body give** (`extractTerminalItems`,
+  `run-workflow.ts:309`). A Map node with nothing after it in the body is a last node, and its
+  output is its `out` items. Its `held` items go on only through a node connected to `held` inside
+  the body. The in-app guide says to connect both.
+- **A plain text in a coded field is the lab's own code** (ruling R35, fix wave). The writer gives
+  `{ text, coding: [{ code }] }` with no system, so the warehouse finds the code. A code list
+  rule gives a standard coding.
+- **The sheet works on one set of columns per sample** (fix wave). It takes the columns of every
+  row the feeding node gave, before the cut to 20 rows. There is no shape select.
+- **Extract from File has `cellsAsText`** (fix wave, the operator's ruling). With it on, a CSV
+  cell reaches the workflow as the text in the file. Saved nodes have it off and behave as before;
+  a node dropped from the sidebar has it on. An Excel cell keeps its type.
+- **A result id that two rows of one run give with other values is a clash** (fix wave). The
+  later row is held. A result's identity also takes the result date, when mapped.
+- **Rows of one run that give one patient, specimen or order make one record** (fix wave). The
+  first non-empty value of each path wins, and the record goes out once, at the first row. Across
+  runs, a thin row still replaces the stored record.
 
 ## 9. Still not checked
 

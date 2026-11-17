@@ -31,9 +31,11 @@ O painel mapeia as colunas de uma amostra real. Obtenha uma antes de escolher as
 
 Para usar uma execução que já chegou, selecione **Usar a última execução guardada** em vez dos passos 4 e 5. Quando o editor tem uma execução própria, o painel carrega-a como amostra ao abrir. **Usar a última execução deste editor** volta a carregá-la.
 
-**Escutar** para na primeira execução nova que dê linhas a este nó, ou ao fim de um minuto. Para enviar uma mensagem, envie-a para o endereço do webhook do workflow, como mostra o guia Workflows. Para enviar um ficheiro, envie-o com o cabeçalho `Content-Type: application/octet-stream` para um workflow que comece por um **Webhook** e **Extract from File**. Nesse caso, defina o formato de Extract from File como `csv`. Num workflow com webhook, uma execução iniciada no editor não tem corpo, por isso não dá linhas.
+**Escutar** para na primeira execução nova que dê linhas a este nó, ou ao fim de um minuto. Para enviar uma mensagem, envie-a para o endereço do webhook do workflow, como mostra o guia Workflows. Para enviar um ficheiro, envie-o com o cabeçalho `Content-Type: application/octet-stream` para um workflow que comece por um **Webhook** e **Extract from File**. Nesse caso, defina o formato de Extract from File como `csv` e ative **Read every cell as text**. Num workflow com webhook, uma execução iniciada no editor não tem corpo, por isso não dá linhas.
 
-O painel guarda as primeiras 20 linhas da amostra. Essas linhas nem sempre têm as mesmas colunas. A lista **Forma da amostra** mostra então cada grupo de linhas com o seu número de campos e de linhas. Escolha o grupo a mapear.
+O painel guarda as primeiras 20 linhas da amostra. Lista todas as colunas encontradas nas linhas da amostra, mesmo uma coluna preenchida só depois da 20.ª linha. Essa coluna não tem exemplo.
+
+Sem amostra, o painel mostra o mapeamento guardado do nó, o mais largo quando há vários. A lista **Mapeamento guardado** escolhe outro. Cada coluna aparece marcada como fora da amostra, e não aparece nenhum exemplo. Pode alterar o mapeamento e guardá-lo. **Testar** precisa de uma amostra.
 
 ## Escolher uma coluna para cada campo
 
@@ -66,12 +68,16 @@ Estes são os tipos de regra.
 
 - **Data** lê uma data no **Formato** que escrever, por exemplo `dd/MM/yyyy`.
 - **Valores** traduz cada valor do seu ficheiro num código, uma linha por valor.
-- **Lista de códigos** procura o valor numa lista de códigos. **A lista de códigos do próprio laboratório** contém os mapeamentos adicionados no separador **Mappings** de um termo, em Terminology. As outras listas são os recursos ConceptMap guardados no OpenLDR.
+- **Lista de códigos** procura o valor numa lista de códigos. **A lista de códigos do próprio laboratório** contém os mapeamentos adicionados no separador **Mappings** de um termo, em Terminologia. Tem códigos de vários sistemas, por isso escolha também o seu **Sistema de origem**. O painel recusa guardar sem ele. As outras listas são os recursos ConceptMap guardados no OpenLDR.
 - **Dividir** mantém uma parte da célula.
 - **Retirar espaços** tira os espaços do início e do fim.
 - **Número** lê um número com o **Separador decimal** que escolher.
 
 O painel sugere uma regra a partir da forma dos valores de exemplo, por exemplo uma vírgula decimal ou um formato de data. Confirme uma data sugerida quando o dia e o mês podem ambos ser 12 ou menos.
+
+Quando os valores de um campo codificado não são os seus códigos, o painel sugere **Valores**. **Aceitar** abre a regra com uma linha por cada valor distinto da amostra, no máximo 20, e o lado **Para** vazio. Indique o que quer dizer cada valor. Uma linha só é guardada quando o seu lado **Para** está preenchido.
+
+Um texto simples num campo codificado, como **Análise**, é guardado como o código do próprio laboratório, sem sistema. Uma regra **Lista de códigos** guarda antes um código padrão.
 
 ## Adicionar um campo que o destino não mostra
 
@@ -88,12 +94,12 @@ O painel sugere uma regra a partir da forma dos valores de exemplo, por exemplo 
 1. Abra o menu de pontos **Ações do mapeamento**.
 2. Selecione **Testar**.
 3. Leia os resultados no bloco ao fundo do painel, uma linha por cada linha da amostra: **Linha 1**, **Linha 2** e assim por diante.
-4. Uma linha que termina em **passa** dá registos que cumprem as verificações do OpenLDR. Nas outras, leia o motivo. Indica o campo sempre que consegue.
+4. Uma linha que termina em **passa** dá registos que cumprem as verificações do OpenLDR. Nas outras, leia o motivo. Indica o campo sempre que consegue. Quando um valor não é um dos que um campo codificado aceita, e o campo não tem regra **Valores** nem **Lista de códigos**, a linha pede para adicionar uma regra Valores.
 5. Corrija a coluna ou a regra desse campo e selecione de novo **Testar**.
 
 **Resultado esperado:** todas as linhas da amostra passam, ou sabe porque é que uma linha não passa.
 
-O teste envia as linhas da amostra do grupo que está no ecrã, no máximo 20. Os motivos estão em inglês.
+O teste envia as linhas da amostra, no máximo 20. Os motivos estão em inglês.
 
 ## Guardar o mapeamento
 
@@ -105,7 +111,7 @@ O teste envia as linhas da amostra do grupo que está no ecrã, no máximo 20. O
 
 **Resultado esperado:** **Mapeamentos guardados**, nas definições do nó, conta o novo mapeamento.
 
-O painel recusa guardar enquanto um campo obrigatório não tiver coluna nem valor fixo, ou enquanto uma regra não estiver concluída. Guardar substitui um mapeamento guardado do mesmo nó cujas colunas estão todas no novo. O painel avisa antes de guardar.
+O painel recusa guardar enquanto um campo obrigatório não tiver coluna nem valor fixo, ou enquanto uma regra não estiver concluída. Guardar substitui um mapeamento guardado do mesmo nó cujas colunas estão todas no novo. Quando esse mapeamento tem menos colunas do que o novo, o painel avisa antes de guardar.
 
 ## Ligar a saída dos retidos
 
@@ -127,15 +133,19 @@ Em **History**, o resultado do nó Map to FHIR lista até 20 motivos. Registe ap
 
 - Uma linha corresponde a um mapeamento guardado quando todas as suas colunas são conhecidas do mapeamento. **Extract from File** deixa de fora as células vazias, que por isso não contam. Num envio JSON, uma chave conta mesmo quando o valor está vazio. Quando dois mapeamentos guardados do mesmo nó servem para uma linha, o nó retém-na. Use um nó Map to FHIR por cada ficheiro do laboratório.
 - Uma linha sem número do paciente fica retida.
-- A mesma linha enviada duas vezes dá os mesmos registos, não cópias. Cada identificador de registo vem dos identificadores da própria linha. O do paciente usa o número do paciente e o seu sistema. O da amostra junta o número da amostra ou, na falta dele, a data de colheita. O do pedido junta o código de análise quando mapeado, e o do resultado junta a análise.
+- A mesma linha enviada duas vezes dá os mesmos registos, não cópias. Cada identificador de registo vem dos identificadores da própria linha. O do paciente usa o número do paciente e o seu sistema. O da amostra junta o número da amostra ou, na falta dele, a data de colheita. O do pedido junta o código de análise quando mapeado. O do resultado junta a análise e, quando mapeada, a data do resultado.
+- Numa mesma execução, as linhas que dão o mesmo paciente, a mesma amostra ou o mesmo pedido fazem um só registo. Uma linha seguinte só preenche o que uma linha anterior deixou vazio. Um ficheiro mais pobre enviado numa execução seguinte ainda substitui o registo guardado.
+- Numa mesma execução, uma segunda linha que dá o mesmo resultado com outros valores é retida, com o motivo `this row gives a result that an earlier row of this run already gave, with other values`.
 - Se um ficheiro mapear **Sistema do número do paciente** e outro não, o mesmo paciente fica com dois registos Patient.
-- A deteção de pacientes duplicados só compara números de paciente quando **Sistema do número do paciente** está mapeado. Só compara nomes e datas de nascimento quando o paciente tem apelido, nome próprio e data de nascimento. Um paciente sem uma coisa nem outra é guardado, mas nunca aparece como duplicado.
+- A deteção de pacientes duplicados só compara números de paciente quando **Sistema do número do paciente** está mapeado. Só compara nomes e datas de nascimento quando o paciente tem apelido, nome próprio e data de nascimento. Um paciente sem nenhuma das duas é guardado, mas nunca aparece como duplicado.
 - Sem nada ligado a **retidos**, uma única linha retida faz falhar o nó e a execução. Os passos seguintes não correm.
 - Dentro de um ciclo, o ciclo só passa adiante o que os últimos nós do seu corpo dão. Ligue **saída** e **retidos** cada um a um nó dentro do corpo do ciclo.
 - O OpenLDR nunca grava valores da amostra no workflow. O painel esquece a amostra quando o fecha.
 - A regra **Data** lê apenas uma data. Uma célula com uma hora depois da data não corresponde ao formato, e a linha fica retida.
-- **Extract from File** lê a célula CSV `12,5` como o número 125. A regra **Número** mantém então 125. Envie antes estes dados em JSON para um webhook. Aí `"12,5"` continua a ser texto, e a regra **Número** com vírgula lê 12,5.
-- **Extract from File** também lê algumas datas CSV como números, por exemplo `01/12/2024` e `2025-04-23`. A regra **Data** retém então a linha.
+- Ative **Read every cell as text** em **Extract from File** antes de um nó Map to FHIR. Cada célula CSV chega então como o texto do ficheiro: `12,5`, `007` e `03/11/2026` chegam como foram escritos. Leia-os com as regras **Número** e **Data**. Um nó adicionado a partir da biblioteca de nós tem a opção ativa. Um nó guardado antes desta versão tem-na desativada. Sem ela, `12,5` chega como o número 125, `007` como 7, e uma data como `01/12/2024` como um número de dia, que a regra **Data** retém. As definições de Map to FHIR avisam quando o nó anterior tem a opção desativada.
+- Num ficheiro Excel, uma célula de data chega como um número de dia, com a opção ativa ou não. A regra **Data** retém essa linha. Guarde a folha como CSV, ou formate as células de data como texto.
+- Um ficheiro com uma coluna por análise, por exemplo uma coluna por antibiótico, não pode ser mapeado tal como está. Várias colunas num mesmo campo repetido precisam de um código de análise para cada coluna, e um único código partilhado é recusado com `Test: two Observation records in this row have the same value, so they would share one id`.
+- **A lista de códigos do próprio laboratório** precisa de um **Sistema de origem**. Sem ele, nenhum código corresponde. Quando um código dá dois destinos, a linha é retida com `more than one match in the code list`.
 - Este nó não lê mensagens HL7 v2.
 
 ## Resolução de problemas
@@ -143,7 +153,7 @@ Em **History**, o resultado do nó Map to FHIR lista até 20 motivos. Registe ap
 - **no mapping for this shape.** A linha tem uma coluna que nenhum mapeamento guardado do nó conhece. Obtenha uma amostra com essa linha e guarde um mapeamento para ela.
 - **more than one saved mapping fits this row.** Dois mapeamentos guardados conhecem todas as suas colunas. Mantenha um mapeamento por ficheiro, ou use um nó por ficheiro.
 - **A execução falha com "held port is not connected".** No **Ingest**, é assim que uma mensagem que não pode ser guardada é recusada. O erro indica os primeiros motivos. Corrija os dados ou o mapeamento e envie de novo. No seu próprio workflow, ligue **retidos** a um nó Log para guardar as linhas boas e pôr as más de parte.
-- **nothing at body.** O item não tem nada em `body`. Depois de **Extract from File**, deixe **Caminho de origem** em branco. Depois de um webhook, confirme que o emissor envia um corpo.
+- **nothing at body.** O item não tem nada em `body`, ou só uma lista vazia ou um valor único. Depois de **Extract from File**, deixe **Caminho de origem** em branco. Depois de um webhook, confirme que o emissor envia um corpo.
 - **not a row.** A lista no caminho de origem contém algo que não é uma linha, como um número ou um texto. Cada elemento da lista tem de ser um objeto com colunas.
 - **Escutar não encontra nada.** Guarde primeiro o workflow. Depois selecione **Escutar** e envie a mensagem dentro de um minuto.
 

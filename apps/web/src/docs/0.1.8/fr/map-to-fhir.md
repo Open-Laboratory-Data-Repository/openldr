@@ -38,14 +38,18 @@ Certains laboratoires veulent stocker les bonnes lignes d'un message et mettre l
 
 ![Essayer les mappages enregistrés d'un nœud Map to FHIR sur un fichier.](guide:operator-data-map-test)
 
-La commande se termine avec 0 quand chaque ligne passe, et avec 1 quand une ligne est retenue. Avec `--json`, elle affiche le résultat de chaque ligne, enregistrements compris, donc avec les valeurs de la ligne. Une exécution sur un CSV lit chaque cellule comme du texte et laisse de côté les cellules vides. Elle peut donc différer du même fichier lu par **Extract from File**.
+La commande se termine avec 0 quand chaque ligne passe, et avec 1 quand une ligne est retenue. Avec `--json`, elle affiche le résultat de chaque ligne, enregistrements compris, donc avec les valeurs de la ligne. Une exécution sur un CSV lit chaque cellule comme du texte, sans les espaces autour, et laisse de côté les cellules vides. **Extract from File** avec **Read every cell as text** activé donne les mêmes lignes, mais garde ces espaces.
 
 ## Limites
 
 - Une ligne sans identifiant patient est retenue.
-- La même ligne envoyée deux fois donne les mêmes enregistrements, pas des copies. Chaque identifiant d'enregistrement vient des identifiants de la ligne. Celui du patient utilise l'identifiant patient et son système. Celui de l'échantillon ajoute le numéro d'échantillon ou, à défaut, la date de prélèvement. Celui de la demande ajoute son code d'examen s'il est mappé, et celui du résultat ajoute l'examen.
+- La même ligne envoyée deux fois donne les mêmes enregistrements, pas des copies. Chaque identifiant d'enregistrement vient des identifiants de la ligne. Celui du patient utilise l'identifiant patient et son système. Celui de l'échantillon ajoute le numéro d'échantillon ou, à défaut, la date de prélèvement. Celui de la demande ajoute son code d'examen s'il est mappé. Celui du résultat ajoute l'examen et, si elle est mappée, la date du résultat.
+- Dans une même exécution, les lignes qui donnent le même patient, le même échantillon ou la même demande font un seul enregistrement, et une ligne suivante ne remplit que ce qu'une ligne précédente a laissé vide. Un fichier plus pauvre envoyé lors d'une exécution suivante remplace encore l'enregistrement stocké. Une deuxième ligne d'une même exécution qui donne le même résultat avec d'autres valeurs est retenue : `this row gives a result that an earlier row of this run already gave, with other values`.
 - Si un fichier mappe le système de l'identifiant patient et un autre non, un même patient reçoit deux enregistrements Patient. Mappez-le de la même façon dans chaque fichier, par exemple en valeur fixe. Sans lui, la détection des doublons ne peut pas comparer les patients par leur identifiant.
-- **Extract from File** lit la cellule CSV `12,5` comme le nombre 125, et la règle **Nombre** garde 125. Il lit aussi certaines dates CSV comme des nombres, par exemple `01/12/2024` et `2025-04-23`, et la règle **Date** retient alors la ligne. Envoyez plutôt ces données en JSON à un webhook. Là, `"12,5"` reste du texte.
+- Activez **Read every cell as text** sur **Extract from File** avant un nœud Map to FHIR. Chaque cellule CSV arrive alors comme le texte du fichier, et les règles **Nombre** et **Date** la lisent. Un nœud ajouté depuis la bibliothèque de nœuds a l'option activée, et un nœud enregistré avant cette version l'a désactivée. Sans elle, `12,5` arrive comme 125, `007` comme 7, et une date comme `01/12/2024` comme un numéro de jour, que la règle **Date** retient.
+- Dans un fichier Excel, une cellule de date arrive comme un numéro de jour, que l'option soit activée ou non, et la règle **Date** retient la ligne. Enregistrez la feuille en CSV, ou mettez les cellules de date au format texte.
+- Un texte simple dans un champ codé est stocké comme le code propre au laboratoire, sans système. Une règle **Liste de codes** stocke un code standard. La liste de codes du laboratoire demande un système source sur la règle ; sans lui, aucun code ne correspond.
+- Un fichier avec une colonne par examen, par exemple une colonne par antibiotique, ne peut pas être mappé tel quel. Plusieurs colonnes sur un même champ répété demandent un code d'examen pour chacune, et un code unique partagé est refusé avec `Test: two Observation records in this row have the same value, so they would share one id`.
 - La règle **Date** lit une date seule, sans heure.
 - Le nœud ne lit pas les messages HL7 v2.
 - Les raisons sont en anglais.
@@ -59,10 +63,11 @@ Voici les raisons de rétention les plus fréquentes. La raison d'une règle com
 - **Patient ID is required and has no value.** La cellule de l'identifiant patient est vide. Le libellé dans la raison nomme le champ.
 - **expected a date in the format dd/MM/yyyy.** La cellule ne suit pas le format de la règle **Date**. La raison donne le format que vous avez saisi.
 - **value is not in the translation list.** Une règle **Valeurs** n'a pas de ligne pour cette valeur. Ajoutez-en une.
-- **value has no match in the code list.** La règle **Liste de codes** n'a trouvé aucune correspondance unique pour la valeur.
+- **value has no match in the code list.** La règle **Liste de codes** n'a trouvé aucune correspondance pour la valeur. Avec la liste de codes du laboratoire, vérifiez que la règle nomme un système source.
+- **more than one match in the code list.** Le code donne deux cibles dans la liste de codes.
 - **not a FHIR Bundle this node can unwrap.** Le corps ressemble à du FHIR mais ne peut pas être découpé.
 - **laboratory result must reference a ServiceRequest (basedOn).** Un résultat de laboratoire FHIR est arrivé sans demande. Envoyez la demande dans la même requête.
 - **basedOn ServiceRequest not found in batch or store.** Un résultat de laboratoire FHIR nomme une demande introuvable. Elle n'est ni dans la même exécution, ni stockée.
-- **nothing at body.** L'élément ne contient rien sous `body`. Après Extract from File, laissez le chemin source vide. Après un webhook, vérifiez que l'émetteur envoie bien un corps.
+- **nothing at body.** L'élément ne contient rien sous `body`, ou seulement une liste vide ou une valeur unique. Après Extract from File, laissez le chemin source vide. Après un webhook, vérifiez que l'émetteur envoie bien un corps.
 - **not a row.** La liste sous le chemin source contient autre chose qu'une ligne, par exemple un nombre ou un texte.
 - **held port is not connected.** C'est un échec de l'exécution, pas une raison de rétention. L'erreur donne jusqu'à cinq raisons. Dans **Ingest**, c'est ainsi qu'un message impossible à stocker est refusé. Dans votre propre workflow, reliez **retenus** à un nœud Log pour garder les bonnes lignes.

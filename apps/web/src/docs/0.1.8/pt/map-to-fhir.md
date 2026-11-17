@@ -38,14 +38,18 @@ Alguns laboratórios querem guardar as linhas boas de uma mensagem e pôr as má
 
 ![Experimentar os mapeamentos guardados de um nó Map to FHIR num ficheiro.](guide:operator-data-map-test)
 
-O comando termina com 0 quando todas as linhas passam e com 1 quando alguma linha fica retida. Com `--json`, mostra o resultado de cada linha, com os registos, e portanto com os valores da linha. Uma execução sobre um CSV lê cada célula como texto e deixa de fora as células vazias. Por isso pode dar um resultado diferente do mesmo ficheiro lido por **Extract from File**.
+O comando termina com 0 quando todas as linhas passam e com 1 quando alguma linha fica retida. Com `--json`, mostra o resultado de cada linha, com os registos, e portanto com os valores da linha. Uma execução sobre um CSV lê cada célula como texto, sem os espaços à volta, e deixa de fora as células vazias. **Extract from File** com **Read every cell as text** ativo dá as mesmas linhas, mas mantém esses espaços.
 
 ## Limites
 
 - Uma linha sem número do paciente fica retida.
-- A mesma linha enviada duas vezes dá os mesmos registos, não cópias. Cada identificador de registo vem dos identificadores da própria linha. O do paciente usa o número do paciente e o seu sistema. O da amostra junta o número da amostra ou, na falta dele, a data de colheita. O do pedido junta o código de análise quando mapeado, e o do resultado junta a análise.
+- A mesma linha enviada duas vezes dá os mesmos registos, não cópias. Cada identificador de registo vem dos identificadores da própria linha. O do paciente usa o número do paciente e o seu sistema. O da amostra junta o número da amostra ou, na falta dele, a data de colheita. O do pedido junta o código de análise quando mapeado. O do resultado junta a análise e, quando mapeada, a data do resultado.
+- Numa mesma execução, as linhas que dão o mesmo paciente, a mesma amostra ou o mesmo pedido fazem um só registo, e uma linha seguinte só preenche o que uma anterior deixou vazio. Um ficheiro mais pobre enviado numa execução seguinte ainda substitui o registo guardado. Uma segunda linha da mesma execução que dá o mesmo resultado com outros valores é retida: `this row gives a result that an earlier row of this run already gave, with other values`.
 - Se um ficheiro mapear o sistema do número do paciente e outro não, o mesmo paciente fica com dois registos Patient. Mapeie-o da mesma forma em todos os ficheiros, por exemplo como valor fixo. Sem ele, a deteção de duplicados não consegue comparar pacientes pelo número.
-- **Extract from File** lê a célula CSV `12,5` como o número 125, e a regra **Número** mantém 125. Também lê algumas datas CSV como números, por exemplo `01/12/2024` e `2025-04-23`, e a regra **Data** retém então a linha. Envie antes estes dados em JSON para um webhook. Aí `"12,5"` continua a ser texto.
+- Ative **Read every cell as text** em **Extract from File** antes de um nó Map to FHIR. Cada célula CSV chega então como o texto do ficheiro, e as regras **Número** e **Data** leem-na. Um nó adicionado a partir da biblioteca de nós tem a opção ativa, e um nó guardado antes desta versão tem-na desativada. Sem ela, `12,5` chega como 125, `007` como 7, e uma data como `01/12/2024` como um número de dia, que a regra **Data** retém.
+- Num ficheiro Excel, uma célula de data chega como um número de dia, com a opção ativa ou não, e a regra **Data** retém a linha. Guarde a folha como CSV, ou formate as células de data como texto.
+- Um texto simples num campo codificado é guardado como o código do próprio laboratório, sem sistema. Uma regra **Lista de códigos** guarda um código padrão. A lista de códigos do próprio laboratório precisa de um sistema de origem na regra; sem ele, nenhum código corresponde.
+- Um ficheiro com uma coluna por análise, por exemplo uma coluna por antibiótico, não pode ser mapeado tal como está. Várias colunas num mesmo campo repetido precisam de um código de análise para cada uma, e um único código partilhado é recusado com `Test: two Observation records in this row have the same value, so they would share one id`.
 - A regra **Data** lê apenas uma data, sem hora.
 - O nó não lê mensagens HL7 v2.
 - Os motivos estão em inglês.
@@ -59,10 +63,11 @@ Estes são os motivos de retenção mais frequentes. O motivo de uma regra come�
 - **Patient ID is required and has no value.** A célula do número do paciente está vazia. A etiqueta no motivo indica o campo.
 - **expected a date in the format dd/MM/yyyy.** A célula não segue o formato da regra **Data**. O motivo indica o formato que definiu.
 - **value is not in the translation list.** Uma regra **Valores** não tem linha para este valor. Acrescente uma.
-- **value has no match in the code list.** A regra **Lista de códigos** não encontrou uma única correspondência para o valor.
+- **value has no match in the code list.** A regra **Lista de códigos** não encontrou correspondência para o valor. Com a lista de códigos do próprio laboratório, confirme que a regra indica um sistema de origem.
+- **more than one match in the code list.** O código dá dois destinos na lista de códigos.
 - **not a FHIR Bundle this node can unwrap.** O corpo parece FHIR mas não pode ser dividido.
 - **laboratory result must reference a ServiceRequest (basedOn).** Um resultado de laboratório FHIR chegou sem pedido. Envie o pedido na mesma mensagem.
 - **basedOn ServiceRequest not found in batch or store.** Um resultado de laboratório FHIR indica um pedido que não está na mesma execução nem guardado.
-- **nothing at body.** O item não tem nada em `body`. Depois de Extract from File, deixe o caminho de origem em branco. Depois de um webhook, confirme que o emissor envia um corpo.
+- **nothing at body.** O item não tem nada em `body`, ou só uma lista vazia ou um valor único. Depois de Extract from File, deixe o caminho de origem em branco. Depois de um webhook, confirme que o emissor envia um corpo.
 - **not a row.** A lista no caminho de origem contém algo que não é uma linha, como um número ou um texto.
 - **held port is not connected.** É uma falha da execução, não um motivo de retenção. O erro indica até cinco motivos. No **Ingest**, é assim que uma mensagem que não pode ser guardada é recusada. No seu próprio workflow, ligue **retidos** a um nó Log para manter as linhas boas.

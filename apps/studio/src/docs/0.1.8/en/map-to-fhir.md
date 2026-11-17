@@ -31,9 +31,11 @@ The panel maps the columns of a real sample. Get one before you pick columns.
 
 To use a run that already came in, select **Use the latest stored run** instead of steps 4 and 5. When the editor holds a run of its own, the panel loads it as the sample when it opens. **Use this editor's last run** loads it again.
 
-**Listen** stops at the first new run that gives rows for this node, or after a minute. To send a message, post it to the workflow's webhook address, as the Workflows guide shows. To send a file, use a workflow that starts with a **Webhook** and **Extract from File**, with Extract from File's format set to `csv`. Post the file to its webhook with the header `Content-Type: application/octet-stream`. On a webhook workflow, a run started in the editor has no body, so it gives no rows.
+**Listen** stops at the first new run that gives rows for this node, or after a minute. To send a message, post it to the workflow's webhook address, as the Workflows guide shows. To send a file, use a workflow that starts with a **Webhook** and **Extract from File**, with Extract from File's format set to `csv` and **Read every cell as text** on. Post the file to its webhook with the header `Content-Type: application/octet-stream`. On a webhook workflow, a run started in the editor has no body, so it gives no rows.
 
-The panel keeps the first 20 rows of the sample. When those rows have different columns, the **Sample shape** select lists each group of rows with its count of fields and rows. Pick the group to map.
+The panel keeps the first 20 rows of the sample. It lists every column found in the sample's rows, also a column that is filled only after the 20th row. Such a column shows no example.
+
+With no sample, the panel shows the node's saved mapping, the widest one when there are several. A **Saved mapping** select picks another. Every column is marked as not in this sample, and no example shows. You can change the mapping and save it. **Test** needs a sample.
 
 ## Pick a column for each field
 
@@ -66,12 +68,16 @@ The kinds of rule are these.
 
 - **Date** reads a date in the **Format** you type, for example `dd/MM/yyyy`.
 - **Values** translates each value in your file to a code, one line per value.
-- **Code list** looks the value up in a code list. **This lab's own code list** holds the mappings added on a term's **Mappings** tab in Terminology. The other code lists are the ConceptMap resources stored in OpenLDR.
+- **Code list** looks the value up in a code list. **This lab's own code list** holds the mappings added on a term's **Mappings** tab in Terminology. It holds codes from several systems, so pick its **Source system** too. The panel refuses to save without one. The other code lists are the ConceptMap resources stored in OpenLDR.
 - **Split** keeps one part of the cell.
 - **Trim spaces** removes spaces at both ends.
 - **Number** reads a number with the **Decimal mark** you choose.
 
 The panel suggests a rule from the form of the example values, such as a decimal comma or a date format. Check a date suggestion when the day and the month can both be 12 or less.
+
+When a coded field's values are not its codes, the panel suggests **Values**. **Accept** opens the rule with one line per distinct value of the sample, at most 20, and an empty **To** side. Fill in what each value means. A line is saved only once its **To** side is filled.
+
+A plain text in a coded field, such as **Test**, is stored as the lab's own code, with no system. A **Code list** rule stores a standard code instead.
 
 ## Add a field the target does not show
 
@@ -88,12 +94,12 @@ The panel suggests a rule from the form of the example values, such as a decimal
 1. Open the dots menu labelled **Mapping actions**.
 2. Select **Test**.
 3. Read the results in the block at the bottom of the panel, one line for each row, **Row 1**, **Row 2** and so on.
-4. A row that ends in **passes** gives records that pass OpenLDR's checks. For any other row, read the reason. It names the field when it can.
+4. A row that ends in **passes** gives records that pass OpenLDR's checks. For any other row, read the reason. It names the field when it can. When a value is not one a coded field accepts, and the field has no **Values** or **Code list** rule, the line says to add a Values rule.
 5. Fix that field's column or rule, then select **Test** again.
 
 **Expected result:** every row of the sample passes, or you know why a row does not.
 
-Test sends the sample rows of the group on screen, at most 20. The reasons are in English.
+Test sends the sample rows, at most 20. The reasons are in English.
 
 ## Save the mapping
 
@@ -105,7 +111,7 @@ Test sends the sample rows of the group on screen, at most 20. The reasons are i
 
 **Expected result:** **Saved mappings** in the node settings counts the new mapping.
 
-The panel refuses to save while a required field has no column or fixed value, or while a rule is not finished. Saving replaces a saved mapping of the same node whose columns are all in the new one. The panel says so before you save.
+The panel refuses to save while a required field has no column or fixed value, or while a rule is not finished. Saving replaces a saved mapping of the same node whose columns are all in the new one. When that mapping has fewer columns than the new one, the panel says so before you save.
 
 ## Wire the held output
 
@@ -127,15 +133,19 @@ The Map to FHIR node's result in **History** lists up to 20 held reasons. Log th
 
 - A row matches a saved mapping when every column of the row is one the mapping knows. **Extract from File** leaves out blank cells, so a blank cell there does not count. In a JSON post, a key counts even when its value is empty. When two saved mappings of one node fit a row, the node holds it. Use one Map to FHIR node for each lab file.
 - A row with no Patient ID is held.
-- The same row sent twice gives the same records, not copies. Each record id comes from the row's own identifiers. The patient's uses the Patient ID and its system. The specimen's adds the specimen number or, without one, the collected date. The order's adds its test code when mapped, and the result's adds the test.
+- The same row sent twice gives the same records, not copies. Each record id comes from the row's own identifiers. The patient's uses the Patient ID and its system. The specimen's adds the specimen number or, without one, the collected date. The order's adds its test code when mapped. The result's adds the test and, when mapped, the result date.
+- In one run, rows that give the same patient, specimen or order make one record. A later row fills only what an earlier one left empty. A thin file sent in a later run still replaces the stored record.
+- In one run, a second row that gives the same result with other values is held, with the reason `this row gives a result that an earlier row of this run already gave, with other values`.
 - If one file maps **Patient ID system** and another does not, one patient gets two Patient records.
 - Duplicate-patient detection compares Patient IDs only when **Patient ID system** is mapped. It compares names and dates of birth only when the patient has a family name, a given name and a date of birth. A patient with neither is stored, and never found as a duplicate.
 - With nothing on **held**, one held row fails the node and the run. The steps after it do not run.
 - Inside a loop, the loop passes on only what the last nodes of its body give. Connect **out** and **held** each to a node inside the loop body.
 - OpenLDR never saves sample values in the workflow. The panel forgets the sample when you close it.
 - The **Date** rule reads a date only. A cell with a time after the date does not match the format, and the row is held.
-- **Extract from File** reads a CSV cell such as `12,5` as the number 125. The **Number** rule then keeps 125. Post such data as JSON to a webhook instead. There `"12,5"` stays text, and the **Number** rule with a comma reads 12.5.
-- **Extract from File** also reads some CSV dates as numbers, for example `01/12/2024` and `2025-04-23`. The **Date** rule then holds the row.
+- Turn on **Read every cell as text** on **Extract from File** before a Map to FHIR node. Then each CSV cell arrives as the text in the file, so `12,5`, `007` and `03/11/2026` arrive as written. Use the **Number** and **Date** rules to read them. A node added from the Node library has it on. A node saved before this release has it off. With it off, `12,5` arrives as the number 125, `007` as 7, and a date such as `01/12/2024` as a day number, which the **Date** rule holds. The Map to FHIR settings warn when the node before it has the option off.
+- In an Excel file, a date cell arrives as a day number, with the option on or off. The **Date** rule holds such a row. Save the sheet as CSV, or format the date cells as text.
+- A file with one column per test, for example one column per antibiotic, cannot be mapped as it is. Several columns on one repeating field need a test code for each column, and one shared code is refused with `Test: two Observation records in this row have the same value, so they would share one id`.
+- **This lab's own code list** needs a **Source system**. Without one, no code matches. When a code gives two targets, the row is held with `more than one match in the code list`.
 - This node does not read HL7 v2 messages.
 
 ## Troubleshooting
@@ -143,7 +153,7 @@ The Map to FHIR node's result in **History** lists up to 20 held reasons. Log th
 - **no mapping for this shape.** The row has a column that no saved mapping of the node knows. Get a sample with that row and save a mapping for it.
 - **more than one saved mapping fits this row.** Two saved mappings know all of its columns. Keep one mapping per file, or use one node per file.
 - **The run fails with "held port is not connected".** In **Ingest** this is how a message that cannot be stored is refused. The error lists the first reasons. Fix the data or the mapping and send it again. In your own workflow, connect **held** to a Log node to store the good rows and set the bad ones aside.
-- **nothing at body.** The item has nothing under `body`. After **Extract from File**, leave **Source path** blank. After a webhook, check that the sender posts a body.
+- **nothing at body.** The item has nothing under `body`, or only an empty list or a single value. After **Extract from File**, leave **Source path** blank. After a webhook, check that the sender posts a body.
 - **not a row.** The list under the source path holds something that is not a row, such as a number or a text. Each item of the list must be an object with columns.
 - **Listen finds nothing.** Save the workflow first. Then select **Listen** and send the message within a minute.
 
