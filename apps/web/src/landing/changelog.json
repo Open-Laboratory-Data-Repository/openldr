@@ -6,6 +6,24 @@
       "version": null,
       "entries": [
         {
+          "hash": "ef9fbaca",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "A failed loop keeps the counts of the passes that ran"
+        },
+        {
+          "hash": "1f4be824",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Rows held inside a loop count in the run, and Completed means no step failed"
+        },
+        {
+          "hash": "e23ec282",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "The run list shows held rows, skipped steps keep their names, loading has no stripes"
+        },
+        {
           "hash": "525c0e83",
           "type": "fix",
           "scope": "workflows",
