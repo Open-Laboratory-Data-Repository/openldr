@@ -195,6 +195,25 @@ The default Ingest workflow's fork becomes one Map to FHIR node feeding Persist 
   port needs the runner to carry items per output port. That is a small engine change and the
   plan's first task.
 
+- **Record ids come from the row's own identifiers** (the operator, 2026-11-17, during the build:
+  "From the row's identifiers"). A random id per row would make a second Patient, Specimen and
+  order each time a row is sent again.
+  - Patient: the mapped patient identifier, its system when mapped plus its value.
+  - Specimen: the mapped specimen number, scoped by the patient. With no specimen number, the
+    patient plus the collected date.
+  - ServiceRequest: the specimen plus the order's test code.
+  - Observation: the order plus the result's own code, so two results of one order stay two.
+  - The id is a hash of those parts, so no raw identifier value appears in an id.
+  - The same row sent twice gives the same ids. Two rows with one patient ID give one Patient id.
+  - A row with no patient identifier goes to `held`, with a reason naming the field. The Lab
+    result target marks the patient identifier required.
+  - A target declares each record's identity, as it declares its links. The mapping core knows no
+    resource type.
+- **Starter pack labels are English only.** The Lab result target takes its fr and pt labels from
+  two content files keyed by target field.
+- **A loop body that ends in the Map node loses its `held` items.** A loop collects each
+  iteration's `out` items only. This stays a known limit and the in-app guide says so.
+
 ## 9. Still not checked
 
 - How good name suggestions are on real lab files. No real file has been tried.
