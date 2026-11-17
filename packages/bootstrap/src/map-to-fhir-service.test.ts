@@ -271,9 +271,9 @@ describe('codingFromMapRows', () => {
     expect(codingFromMapRows([r('T1'), r('T1', null)])).toEqual({ system: 'urn:test:tgt', code: 'T1' });
   });
 
-  it('gives null for two different targets', () => {
-    expect(codingFromMapRows([r('T1'), r('T2')])).toBeNull();
-    expect(codingFromMapRows([r('T1'), r('T1', 'equivalent', 'urn:test:other')])).toBeNull();
+  it('gives several for two different targets', () => {
+    expect(codingFromMapRows([r('T1'), r('T2')])).toBe('several');
+    expect(codingFromMapRows([r('T1'), r('T1', 'equivalent', 'urn:test:other')])).toBe('several');
   });
 
   it('ignores an unmatched or disjoint row beside a real one', () => {
@@ -471,5 +471,124 @@ describe('an order in the same run counts', () => {
     }));
     const res = await svc({ items: [{ json: result('o-1', 'sr-stored') }], config });
     expect(res.held).toEqual([]);
+  });
+});
+
+describe('one run, several rows', () => {
+  const wide = { pat_no: 'T-0001', first: '', collected: '2026-11-03T08:30:00Z', test_a: 'TA', num_a: '' };
+  const wideMapping: SavedMapping = {
+    shapeHash: shapeOf(wide).hash,
+    fieldNames: Object.keys(wide).sort(),
+    targetId: 'lab-result',
+    rows: [
+      { targetPath: 'Patient.identifier.value', from: { field: 'pat_no' } },
+      { targetPath: 'Patient.name.given?use=official', from: { field: 'first' } },
+      { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'collected' } },
+      { targetPath: 'Observation.code', from: { field: 'test_a' }, rule: { kind: 'codeList', conceptMapUrl: 'urn:test:map' } },
+      { targetPath: 'Observation.valueString', from: { field: 'num_a' } },
+    ],
+  };
+  const cfg = { targetId: 'lab-result', formIds: [], mappings: [wideMapping] as unknown[] };
+  const types = (res: { out: WorkflowItem[] }) => res.out.map((i) => i.json.resourceType);
+  const anyCode: MapToFhirServiceDeps['translateCode'] = async (_url, value) => ({ system: 'urn:test:codes', code: String(value).toLowerCase() });
+
+  it('sends the first of two rows that give one result with other values, and holds the second with a fixed reason', async () => {
+    const svc = createMapToFhirService(deps({ translateCode: anyCode }));
+    const res = await svc({ items: [{ json: { ...wide, num_a: 'QZX-1' } }, { json: { ...wide, num_a: 'QZX-2' } }], config: cfg });
+    expect(types(res)).toEqual(['Patient', 'Specimen', 'ServiceRequest', 'Observation']);
+    expect(res.out[3].json.valueString).toBe('QZX-1');
+    expect(res.heldIndexes).toEqual([1]);
+    expect(res.held[0].json.reason).toBe('this row gives a result that an earlier row of this run already gave, with other values');
+    expect(JSON.stringify(res.meta)).not.toContain('QZX');
+  });
+
+  it('sends one set of records for two identical rows', async () => {
+    const svc = createMapToFhirService(deps({ translateCode: anyCode }));
+    const res = await svc({ items: [{ json: { ...wide, num_a: 'QZX-1' } }, { json: { ...wide, num_a: 'QZX-1' } }], config: cfg });
+    expect(types(res)).toEqual(['Patient', 'Specimen', 'ServiceRequest', 'Observation']);
+    expect(res.held).toEqual([]);
+    expect(res.meta).toMatchObject({ mapped: 2, held: 0 });
+  });
+
+  it('merges one patient from two rows: the second fills the name the first lacks', async () => {
+    const svc = createMapToFhirService(deps({ translateCode: anyCode }));
+    const res = await svc({
+      items: [{ json: { ...wide, test_a: 'TA', num_a: 'QZX-1' } }, { json: { ...wide, first: 'QZX-NAME', test_a: 'TB', num_a: 'QZX-2' } }],
+      config: cfg,
+    });
+    const patients = res.out.filter((i) => i.json.resourceType === 'Patient');
+    expect(patients).toHaveLength(1);
+    expect(patients[0].json.name).toEqual([{ use: 'official', given: ['QZX-NAME'] }]);
+    expect(res.out[0].json.resourceType).toBe('Patient');
+  });
+
+  it('keeps the first value and does not let a thin row empty a full one', async () => {
+    const svc = createMapToFhirService(deps({ translateCode: anyCode }));
+    const res = await svc({
+      items: [{ json: { ...wide, first: 'QZX-A', num_a: 'QZX-1' } }, { json: { ...wide, first: '', test_a: 'TB', num_a: 'QZX-2' } }, { json: { ...wide, first: 'QZX-B', test_a: 'TC', num_a: 'QZX-3' } }],
+      config: cfg,
+    });
+    const patients = res.out.filter((i) => i.json.resourceType === 'Patient');
+    expect(patients).toHaveLength(1);
+    expect(patients[0].json.name).toEqual([{ use: 'official', given: ['QZX-A'] }]);
+  });
+
+  it('sends one Patient for 50 rows of one patient, and every result link resolves', async () => {
+    const svc = createMapToFhirService(deps({ translateCode: anyCode }));
+    const items = Array.from({ length: 50 }, (_, i) => ({ json: { ...wide, test_a: `T${i}`, num_a: `QZX-${i}` } }));
+    const res = await svc({ items, config: cfg });
+    expect(res.held).toEqual([]);
+    expect(types(res).filter((t) => t === 'Patient')).toHaveLength(1);
+    expect(types(res).filter((t) => t === 'Specimen')).toHaveLength(1);
+    expect(types(res).filter((t) => t === 'ServiceRequest')).toHaveLength(1);
+    expect(types(res).filter((t) => t === 'Observation')).toHaveLength(50);
+    const ids = new Set(res.out.map((i) => `${i.json.resourceType}/${i.json.id}`));
+    for (const o of res.out.filter((i) => i.json.resourceType === 'Observation')) {
+      for (const key of ['subject', 'specimen']) expect(ids.has((o.json[key] as { reference: string }).reference)).toBe(true);
+      expect(ids.has((o.json.basedOn as { reference: string }[])[0].reference)).toBe(true);
+    }
+  });
+
+  it('takes nothing into the merge from a held row', async () => {
+    const validate: MapToFhirServiceDeps['validate'] = async (resources, known) => {
+      const p = resources.find((r) => (r as { resourceType?: string }).resourceType === 'Patient') as { name?: unknown } | undefined;
+      if (p?.name) return { ok: false, outcome: { resourceType: 'OperationOutcome', issue: [{ severity: 'error', code: 'business-rule', diagnostics: 'x' }] } };
+      return validateBatch(resources, { level: 'high', resolveServiceRequest: async (id) => known.has(id) });
+    };
+    const svc = createMapToFhirService(deps({ validate, translateCode: anyCode }));
+    const res = await svc({ items: [{ json: { ...wide, num_a: 'QZX-1' } }, { json: { ...wide, first: 'QZX-NAME', test_a: 'TB', num_a: 'QZX-2' } }], config: cfg });
+    expect(res.heldIndexes).toEqual([1]);
+    const patients = res.out.filter((i) => i.json.resourceType === 'Patient');
+    expect(patients).toHaveLength(1);
+    expect(patients[0].json.name).toBeUndefined();
+  });
+});
+
+describe('the lab\'s own code list', () => {
+  const LOCAL = 'urn:openldr:terminology:local-map';
+  const localRow = (sourceSystem?: string): SavedMapping => ({
+    ...mapping,
+    rows: [
+      mapping.rows[0],
+      mapping.rows[1],
+      { targetPath: 'Observation.code', from: { field: 'test_a' }, rule: { kind: 'codeList', conceptMapUrl: LOCAL, ...(sourceSystem ? { sourceSystem } : {}) } },
+    ],
+  });
+
+  it('gives no match without a source system, and never asks the store', async () => {
+    const translateCode = vi.fn(async () => ({ system: 'urn:test:codes', code: 'ta' }));
+    const svc = createMapToFhirService(deps({ translateCode }));
+    const res = await svc({ items: [{ json: row }], config: { ...config, mappings: [localRow()] } });
+    expect(res.out).toEqual([]);
+    expect(res.held[0].json.reason).toBe('test_a: value has no match in the code list');
+    expect(translateCode).not.toHaveBeenCalled();
+  });
+
+  it('looks up the code with the source system the rule names', async () => {
+    const translateCode = vi.fn(async () => ({ system: 'urn:test:codes', code: 'ta' }));
+    const svc = createMapToFhirService(deps({ translateCode }));
+    const res = await svc({ items: [{ json: row }], config: { ...config, mappings: [localRow('urn:test:src')] } });
+    expect(res.held).toEqual([]);
+    expect(translateCode).toHaveBeenCalledWith(LOCAL, 'TA', 'urn:test:src');
   });
 });

@@ -1,3 +1,4 @@
+import { validateResource } from '@openldr/fhir';
 import { describe, it, expect } from 'vitest';
 import { canWriteFromCell, writeValue } from './write';
 
@@ -41,7 +42,15 @@ describe('writeValue', () => {
     expect(r.code).toEqual({ coding: [{ system: 'urn:test:codes', code: 'T1' }] });
     const s = rec('Specimen');
     writeValue(s, 'Specimen.type', 'blood-x');
-    expect(s.type).toEqual({ text: 'blood-x' });
+    expect(s.type).toEqual({ text: 'blood-x', coding: [{ code: 'blood-x' }] });
+  });
+
+  it('stores a plain text in a CodeableConcept as the lab\'s own code with no system, and it passes validateResource', () => {
+    const r = rec('Observation');
+    r.status = 'final';
+    writeValue(r, 'Observation.code', 'QZX-T1');
+    expect(r.code).toEqual({ text: 'QZX-T1', coding: [{ code: 'QZX-T1' }] });
+    expect(validateResource(r).ok).toBe(true);
   });
 
   it('writes the text 12.5 with no rule to a number leaf as a number', () => {

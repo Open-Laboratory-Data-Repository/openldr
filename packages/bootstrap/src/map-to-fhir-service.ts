@@ -22,6 +22,7 @@ import {
   type RunMapToFhirOutput,
   type WorkflowItem,
 } from '@openldr/workflows';
+import { LOCAL_MAP_URL } from '@openldr/db';
 
 /**
  * The Map to FHIR node's service. Each item is FHIR already, a known form's answers, a row a saved
@@ -30,7 +31,7 @@ import {
  * from text this file controls.
  */
 
-type Coding = NonNullable<Awaited<ReturnType<RuleDeps['translateCode']>>>;
+type Coding = Exclude<Awaited<ReturnType<RuleDeps['translateCode']>>, null | 'several'>;
 
 export interface MapToFhirServiceDeps {
   forms: { get(id: string): Promise<{ schema: FormSchema } | null> };
@@ -53,13 +54,14 @@ export interface MapToFhirServiceDeps {
  */
 const MATCH_EQUIVALENCES = new Set(['equivalent', 'equal', 'SAME-AS']);
 
-/** The one coding a code list gives, or null for none or more than one distinct target. */
-export function codingFromMapRows(rows: { targetSystem: string; targetCode: string; equivalence: string | null }[]): Coding | null {
+/** The one coding a code list gives; null for none, `'several'` for more than one distinct target. */
+export function codingFromMapRows(rows: { targetSystem: string; targetCode: string; equivalence: string | null }[]): Coding | null | 'several' {
   const targets = new Map<string, Coding>();
   for (const r of rows) {
     if (r.equivalence !== null && !MATCH_EQUIVALENCES.has(r.equivalence)) continue;
     targets.set(JSON.stringify([r.targetSystem, r.targetCode]), { system: r.targetSystem, code: r.targetCode });
   }
+  if (targets.size > 1) return 'several';
   return targets.size === 1 ? [...targets.values()][0] : null;
 }
 
@@ -238,6 +240,39 @@ function parseMappings(raw: unknown[], targetId: string): SavedMapping[] {
 
 const MAX_HELD_REASONS = 20;
 
+export const RESULT_CLASH_REASON = 'this row gives a result that an earlier row of this run already gave, with other values';
+
+function isPlainObject(v: unknown): v is Res {
+  return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+/** JSON with object keys sorted, so two records with the same content compare equal. */
+function canonical(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(',')}]`;
+  if (isPlainObject(v)) return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}`;
+  return JSON.stringify(v) ?? 'null';
+}
+
+function isBlank(v: unknown): boolean {
+  return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+}
+
+/**
+ * Fill what `base` lacks from `extra`. A non-empty value in `base` wins. Objects merge key by key,
+ * lists index by index.
+ */
+function fillMissing(base: Res | unknown[], extra: Res | unknown[]): void {
+  const keys = Array.isArray(extra) ? extra.map((_, i) => i) : Object.keys(extra);
+  for (const k of keys) {
+    const b = (base as Record<string | number, unknown>)[k];
+    const e = (extra as Record<string | number, unknown>)[k];
+    if (isBlank(e)) continue;
+    if (isBlank(b)) (base as Record<string | number, unknown>)[k] = structuredClone(e);
+    else if (isPlainObject(b) && isPlainObject(e)) fillMissing(b, e);
+    else if (Array.isArray(b) && Array.isArray(e)) fillMissing(b, e);
+  }
+}
+
 interface Entry {
   original: Record<string, unknown>;
   kind: Exclude<Classification['kind'], 'unknown'> | 'unknown';
@@ -246,6 +281,11 @@ interface Entry {
 }
 
 export function createMapToFhirService(deps: MapToFhirServiceDeps): (input: RunMapToFhirInput) => Promise<RunMapToFhirOutput> {
+  // The lab's own map holds rows of every source system, so a code looked up there without one
+  // could come from another domain. With no source system it gives no match.
+  const translateCode: RuleDeps['translateCode'] = async (url, value, sourceSystem) =>
+    url === LOCAL_MAP_URL && !sourceSystem ? null : deps.translateCode(url, value, sourceSystem);
+
   return async ({ items, config }) => {
     const targetId = config.targetId.trim();
     if (config.mappings.length > 0 && !targetId) throw new Error('Map to FHIR node config: targetId is required when the node has mappings');
@@ -289,7 +329,7 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): (input: RunM
         } else entry.records = res.items.map((i) => i.json);
       } else if (kind.kind === 'mapped') {
         // A mapping exists only with a target; the checks above make sure of it.
-        const res = await applyMapping(kind.mapping, target as MapTarget, original, { translateCode: deps.translateCode, hashId });
+        const res = await applyMapping(kind.mapping, target as MapTarget, original, { translateCode, hashId });
         if (res.ok) entry.records = res.resources as unknown as Res[];
         else entry.held = heldJson(original, res.reason, { field: res.field });
       } else if (kind.kind === 'ambiguous') {
@@ -307,7 +347,30 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): (input: RunM
       }
     }
 
-    // 2. The rule check, per item, with every order of the items still standing. A held item's
+    // 2. Within this call, a result id that an earlier mapped item already gave with other content
+    // is a clash: the later item is held. The same content is no clash; its copy is dropped in 3.
+    if (target) {
+      const repeats = new Set(target.records.filter((r) => r.repeats).map((r) => r.type));
+      const firstResult = new Map<string, string>();
+      for (const e of entries) {
+        if (e.kind !== 'mapped' || !e.records || e.held) continue;
+        const mine = e.records.filter((r) => repeats.has(String(r.resourceType)));
+        const clash = mine.some((r) => {
+          const seen = firstResult.get(`${String(r.resourceType)}/${String(r.id)}`);
+          return seen !== undefined && seen !== canonical(r);
+        });
+        if (clash) {
+          e.held = heldJson(e.original, RESULT_CLASH_REASON);
+          continue;
+        }
+        for (const r of mine) {
+          const key = `${String(r.resourceType)}/${String(r.id)}`;
+          if (!firstResult.has(key)) firstResult.set(key, canonical(r));
+        }
+      }
+    }
+
+    // 3. The rule check, per item, with every order of the items still standing. A held item's
     // orders stop counting, so check again until no further item is held.
     for (let pass = 0; pass <= entries.length; pass++) {
       const standing = entries.filter((e) => e.records && !e.held);
@@ -325,8 +388,11 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): (input: RunM
       if (!heldThisPass) break;
     }
 
-    // 3. Out and held, in input order.
+    // 4. Out and held, in input order. A mapped record id goes out once. A record that does not
+    // repeat (Patient, Specimen, order) is merged from every item that gives it and goes out at the
+    // first; a held item adds nothing.
     const out: WorkflowItem[] = [];
+    const emitted = new Map<string, Res>();
     const held: WorkflowItem[] = [];
     const heldIndexes: number[] = [];
     const meta = { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [] as string[] };
@@ -339,7 +405,21 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): (input: RunM
         return;
       }
       // The records go on as made; Persist Store runs the same check again before it stores them.
-      for (const r of e.records as Res[]) out.push({ json: r });
+      for (const r of e.records as Res[]) {
+        if (e.kind !== 'mapped') {
+          out.push({ json: r });
+          continue;
+        }
+        const key = `${String(r.resourceType)}/${String(r.id)}`;
+        const first = emitted.get(key);
+        if (first) {
+          fillMissing(first, r);
+          continue;
+        }
+        const copy = structuredClone(r);
+        emitted.set(key, copy);
+        out.push({ json: copy });
+      }
       // An unknown or ambiguous item is always held, so only these three reach here.
       if (e.kind === 'fhir' || e.kind === 'form' || e.kind === 'mapped') meta[e.kind] += 1;
     });

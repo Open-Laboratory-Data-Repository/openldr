@@ -112,3 +112,18 @@ describe('mapTargets', () => {
     expect(await s.mapTargets({ mapUrl: 'urn:test:map-b', code: 'X2' })).toEqual([]);
   });
 });
+
+describe('mapSourceSystems', () => {
+  it('lists the distinct source systems of one map, sorted', async () => {
+    const db = await makeMigratedDb();
+    const store = createTerminologyStore(db as never, createFhirStore(db as never));
+    await store.upsertMapElements([
+      { mapUrl: 'urn:test:map-a', sourceSystem: 'urn:test:src-2', sourceCode: 'X1', targetSystem: 'urn:test:tgt', targetCode: 'T1', equivalence: null },
+      { mapUrl: 'urn:test:map-a', sourceSystem: 'urn:test:src-1', sourceCode: 'X1', targetSystem: 'urn:test:tgt', targetCode: 'T2', equivalence: null },
+      { mapUrl: 'urn:test:map-a', sourceSystem: 'urn:test:src-1', sourceCode: 'X2', targetSystem: 'urn:test:tgt', targetCode: 'T3', equivalence: null },
+      { mapUrl: 'urn:test:map-b', sourceSystem: 'urn:test:src-9', sourceCode: 'X1', targetSystem: 'urn:test:tgt', targetCode: 'T9', equivalence: null },
+    ]);
+    expect(await store.mapSourceSystems('urn:test:map-a')).toEqual(['urn:test:src-1', 'urn:test:src-2']);
+    expect(await store.mapSourceSystems('urn:test:none')).toEqual([]);
+  });
+});

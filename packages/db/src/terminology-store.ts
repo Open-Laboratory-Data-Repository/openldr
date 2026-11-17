@@ -67,6 +67,8 @@ export interface TerminologyStore {
    * it every source system in the map counts, so the caller decides what two rows mean.
    */
   mapTargets(q: { mapUrl: string; code: string; system?: string }): Promise<MapElement[]>;
+  /** The distinct source systems of one map's rows, sorted. */
+  mapSourceSystems(mapUrl: string): Promise<string[]>;
 }
 
 export function createTerminologyStore(db: Kysely<InternalSchema>, fhirStore: FhirStore): TerminologyStore {
@@ -197,6 +199,10 @@ export function createTerminologyStore(db: Kysely<InternalSchema>, fhirStore: Fh
       if (q.system) qb = qb.where('source_system', '=', q.system);
       const rows = await qb.execute();
       return rows.map((r) => ({ mapUrl: r.map_url, sourceSystem: r.source_system, sourceCode: r.source_code, targetSystem: r.target_system, targetCode: r.target_code, equivalence: r.equivalence }));
+    },
+    async mapSourceSystems(mapUrl) {
+      const rows = await db.selectFrom('concept_map_elements').select('source_system').distinct().where('map_url', '=', mapUrl).execute();
+      return rows.map((r) => r.source_system).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     },
   };
 }

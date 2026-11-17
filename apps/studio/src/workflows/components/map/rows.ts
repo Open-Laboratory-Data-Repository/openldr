@@ -300,7 +300,7 @@ export function ruleOf(rule: RuleDraft): MapRule | null | 'incomplete' {
 
 export type BuildResult =
   | { ok: true; mapping: SavedMapping }
-  | { ok: false; problem: 'required' | 'rule'; label: string };
+  | { ok: false; problem: 'required' | 'rule' | 'sourceSystem'; label: string };
 
 /**
  * The saved mapping for one shape from the drafts. Rows with no source are left out. With
@@ -311,7 +311,7 @@ export function buildMapping(
   drafts: RowDraft[],
   shape: { hash: string; fieldNames: string[] },
   targetId: string,
-  opts: { requireAll: boolean },
+  opts: { requireAll: boolean; localCodeList?: string | null },
 ): BuildResult {
   if (opts.requireAll) {
     const missing = drafts.find((d) => d.required && !hasSource(d));
@@ -322,6 +322,10 @@ export function buildMapping(
     if (!hasSource(d)) continue;
     const rule = ruleOf(d.rule);
     if (rule === 'incomplete') return { ok: false, problem: 'rule', label: d.label };
+    // The lab's own code list holds every source system's rows, so the node needs one named.
+    if (rule?.kind === 'codeList' && opts.localCodeList && rule.conceptMapUrl === opts.localCodeList && !rule.sourceSystem) {
+      return { ok: false, problem: 'sourceSystem', label: d.label };
+    }
     let from: FieldMapping['from'];
     if (d.source.kind === 'fixed') from = { fixed: d.source.value };
     else if (d.source.kind === 'field' && d.source.fields.length > 1) from = { fields: [...d.source.fields] };

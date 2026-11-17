@@ -8,11 +8,12 @@ import { createMapToFhirApi, MAP_TEST_MAX_ITEMS, MapConfigError } from './map-to
 const PACKS = seededStarterPacks().map((p) => ({ id: p.id, resourceType: p.resourceType, entries: p.entries }));
 const config = { targetId: 'lab-result', formIds: [] as string[], mappings: [] as unknown[] };
 
-function api(over: { mapToFhir?: (i: RunMapToFhirInput) => Promise<RunMapToFhirOutput>; conceptMaps?: () => Promise<{ url?: string; name?: string; title?: string }[]> } = {}) {
+function api(over: { mapToFhir?: (i: RunMapToFhirInput) => Promise<RunMapToFhirOutput>; conceptMaps?: () => Promise<{ url?: string; name?: string; title?: string }[]>; localSourceSystems?: () => Promise<string[]> } = {}) {
   return createMapToFhirApi({
     mapToFhir: over.mapToFhir ?? (async () => ({ out: [], held: [], heldIndexes: [], meta: { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [] } })),
     packs: async () => PACKS,
     conceptMaps: over.conceptMaps ?? (async () => []),
+    localSourceSystems: over.localSourceSystems ?? (async () => []),
   });
 }
 
@@ -96,19 +97,26 @@ describe('codeLists', () => {
   it('puts the lab map first, unnamed, and then stored maps by name', async () => {
     const a = api({ conceptMaps: async () => [{ url: 'urn:test:b', name: 'Beta' }, { url: 'urn:test:a', title: 'Alpha title' }, { url: 'urn:test:c' }, { name: 'no url' }] });
     const res = await a.codeLists();
-    expect(res[0]).toEqual({ url: 'urn:openldr:terminology:local-map', name: '', local: true });
+    expect(res[0]).toEqual({ url: 'urn:openldr:terminology:local-map', name: '', local: true, sourceSystems: [] });
     expect(res.slice(1)).toEqual([
-      { url: 'urn:test:a', name: 'Alpha title', local: false },
-      { url: 'urn:test:b', name: 'Beta', local: false },
-      { url: 'urn:test:c', name: 'urn:test:c', local: false },
+      { url: 'urn:test:a', name: 'Alpha title', local: false, sourceSystems: [] },
+      { url: 'urn:test:b', name: 'Beta', local: false, sourceSystems: [] },
+      { url: 'urn:test:c', name: 'urn:test:c', local: false, sourceSystems: [] },
     ]);
   });
   it('prefers the name over the title', async () => {
     const a = api({ conceptMaps: async () => [{ url: 'urn:test:a', name: 'Named', title: 'Titled' }] });
-    expect((await a.codeLists())[1]).toEqual({ url: 'urn:test:a', name: 'Named', local: false });
+    expect((await a.codeLists())[1]).toEqual({ url: 'urn:test:a', name: 'Named', local: false, sourceSystems: [] });
+  });
+  it('gives the lab map the source systems of its rows, and other maps none', async () => {
+    const a = api({ conceptMaps: async () => [{ url: 'urn:test:a', name: 'A' }], localSourceSystems: async () => ['urn:test:src-1', 'urn:test:src-2'] });
+    expect(await a.codeLists()).toEqual([
+      { url: 'urn:openldr:terminology:local-map', name: '', local: true, sourceSystems: ['urn:test:src-1', 'urn:test:src-2'] },
+      { url: 'urn:test:a', name: 'A', local: false, sourceSystems: [] },
+    ]);
   });
   it('does not list the lab map twice', async () => {
     const a = api({ conceptMaps: async () => [{ url: 'urn:openldr:terminology:local-map', name: 'x' }] });
-    expect(await a.codeLists()).toEqual([{ url: 'urn:openldr:terminology:local-map', name: '', local: true }]);
+    expect(await a.codeLists()).toEqual([{ url: 'urn:openldr:terminology:local-map', name: '', local: true, sourceSystems: [] }]);
   });
 });

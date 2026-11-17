@@ -10,7 +10,7 @@ import { createBlobFromConfig } from './s3-config';
 import { requireOidcIssuer, type Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
-import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, LOCAL_MAP_URL, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -1440,6 +1440,7 @@ const reporting: ReportingApi = {
     },
     packs: readStoredMapPacks,
     conceptMaps: async () => (await canonicalFhirStore.listByType('ConceptMap', STORED_CONCEPT_MAP_LIMIT)).map((r) => r.resource as { url?: string; name?: string; title?: string }),
+    localSourceSystems: () => termStore.mapSourceSystems(LOCAL_MAP_URL),
   });
   const workflows = { mapToFhir: mapToFhirApi, store: workflowStore, runs: workflowRuns, receipts: workflowReceipts, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners, secretStore: workflowSecrets };
 

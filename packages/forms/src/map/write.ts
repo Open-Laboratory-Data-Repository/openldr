@@ -55,7 +55,9 @@ function wrap(leafType: string, value: WriteValue, path: string): Wrapped {
       if (typeof value === 'string' && PLAIN_NUMBER.test(value.trim())) return { ok: true, value: Number(value.trim()) };
       return no('a number');
     case 'CodeableConcept':
-      if (primitive) return { ok: true, value: { text: String(value) } };
+      // A plain text is the lab's own code with no system (ruling R35), so the warehouse, which
+      // reads coding[0].code, finds it. A code list rule gives a standard Coding instead.
+      if (primitive) return { ok: true, value: { text: String(value), coding: [{ code: String(value) }] } };
       return isCoding(value) ? { ok: true, value: { coding: [value] } } : no('text or a code from a code list');
     case 'Coding':
       return isCoding(value) ? { ok: true, value } : no('a code from a code list');

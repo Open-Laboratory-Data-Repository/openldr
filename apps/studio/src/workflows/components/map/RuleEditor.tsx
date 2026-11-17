@@ -135,9 +135,34 @@ export function RuleInputs({
             </Select>
           )}
           <Label className="whitespace-nowrap">{t(`${P}.sourceSystem`)}</Label>
-          <Input aria-label={named(t(`${P}.sourceSystem`))} value={rule.sourceSystem} onChange={(e) => onChange({ ...rule, sourceSystem: e.target.value })} />
+          {(() => {
+            // The lab's own list holds rows of every source system, so it needs one, picked from its rows.
+            const local = Array.isArray(codeLists) ? codeLists.find((c) => c.local && c.url === rule.conceptMapUrl) : undefined;
+            if (!local) {
+              return (
+                <Input aria-label={named(t(`${P}.sourceSystem`))} value={rule.sourceSystem} onChange={(e) => onChange({ ...rule, sourceSystem: e.target.value })} />
+              );
+            }
+            if (local.sourceSystems.length === 0) return <p className="text-xs text-muted-foreground">{t(`${P}.sourceSystemsEmpty`)}</p>;
+            return (
+              <Select value={rule.sourceSystem || undefined} onValueChange={(v) => onChange({ ...rule, sourceSystem: v })}>
+                <SelectTrigger aria-label={named(t(`${P}.sourceSystem`))} className="w-full min-w-0">
+                  <SelectValue placeholder={t(`${P}.sourceSystemPlaceholder`)} />
+                </SelectTrigger>
+                <SelectContent>
+                  {local.sourceSystems.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            );
+          })()}
           <span />
-          <p className="text-[11px] text-muted-foreground">{t(`${P}.sourceSystemHint`)}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {t(Array.isArray(codeLists) && codeLists.some((c) => c.local && c.url === rule.conceptMapUrl) ? `${P}.sourceSystemLocalHint` : `${P}.sourceSystemHint`)}
+          </p>
         </div>
       );
     case 'values':

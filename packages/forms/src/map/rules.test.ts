@@ -103,7 +103,12 @@ describe('applyRule: codeList', () => {
 
   it('fails when the concept map has no match', async () => {
     const r = await run({ kind: 'codeList', conceptMapUrl: 'urn:test:map' }, 'QZX', 'test');
-    expect(r).toMatchObject({ ok: false, field: 'test' });
+    expect(r).toEqual({ ok: false, reason: 'test: value has no match in the code list', field: 'test' });
+  });
+
+  it('says so when the code list gives more than one match, with no value', async () => {
+    const r = await run({ kind: 'codeList', conceptMapUrl: 'urn:test:map' }, 'QZX', 'test', { translateCode: async () => 'several', now: NOW });
+    expect(r).toEqual({ ok: false, reason: 'test: more than one match in the code list', field: 'test' });
   });
 });
 

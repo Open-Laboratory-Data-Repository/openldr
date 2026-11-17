@@ -72,7 +72,10 @@ describe('labResultTarget', () => {
         fallback: [{ record: 'Patient' }, { field: 'Specimen.collection.collectedDateTime' }],
       },
       { record: 'ServiceRequest', parts: [{ record: 'Specimen' }, { field: 'ServiceRequest.code' }], fallback: [{ record: 'Specimen' }] },
-      { record: 'Observation', parts: [{ record: 'ServiceRequest' }, { field: 'Observation.code' }] },
+      {
+        record: 'Observation',
+        parts: [{ record: 'ServiceRequest' }, { field: 'Observation.code' }, { field: 'Observation.effectiveDateTime', optional: true }],
+      },
     ]);
   });
 
@@ -228,8 +231,25 @@ describe('a fully mapped made-up row', () => {
     const S = hash(['Specimen', P, 't:S-0001']);
     const R = hash(['ServiceRequest', S, 't:test-panel-x']);
     expect(a.resources.map((r) => r.id)).toEqual([
-      P, S, R, hash(['Observation', R, 'c:["urn:test:codes","ta"]']), hash(['Observation', R, 'c:["urn:test:codes","tb"]']),
+      P, S, R,
+      hash(['Observation', R, 'c:["urn:test:codes","ta"]', 't:2026-11-04']),
+      hash(['Observation', R, 'c:["urn:test:codes","tb"]', 't:2026-11-04']),
     ]);
+  });
+
+  it('gives two results of one test on one order different ids when their result dates differ', async () => {
+    const noSpec = { ...row, spec_no: '' };
+    const morning = await applyMapping(mapping(rows), target, { ...noSpec, res_date_a: '2026-11-04T08:00:00Z' }, deps());
+    const evening = await applyMapping(mapping(rows), target, { ...noSpec, res_date_a: '2026-11-04T18:00:00Z' }, deps());
+    if (!morning.ok || !evening.ok) throw new Error('not ok');
+    expect(evening.resources[2].id).toBe(morning.resources[2].id);
+    expect(evening.resources[3].id).not.toBe(morning.resources[3].id);
+  });
+
+  it('gives a result with no result date mapped an empty date part', async () => {
+    const res = await applyMapping(mapping(rows.filter((r) => r.targetPath !== 'Observation.effectiveDateTime')), target, row, deps());
+    if (!res.ok) throw new Error(res.reason);
+    expect(res.resources[3].id).toBe(hash(['Observation', res.resources[2].id!, 'c:["urn:test:codes","ta"]', '']));
   });
 
   it('identifies the specimen by its collected date when the row has no specimen number', async () => {
@@ -300,7 +320,7 @@ describe('a fully mapped made-up row', () => {
       specimen: { reference: `Specimen/${specimen.id}` },
       basedOn: [{ reference: `ServiceRequest/${order.id}` }],
       valueQuantity: { value: 12.5, unit: 'u-a' },
-      interpretation: [{ text: 'flag-x' }],
+      interpretation: [{ text: 'flag-x', coding: [{ code: 'flag-x' }] }],
     });
   });
 

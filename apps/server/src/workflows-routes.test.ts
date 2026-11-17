@@ -1374,6 +1374,7 @@ describe('map to fhir routes', () => {
       },
       packs: async () => PACKS,
       conceptMaps: async () => [{ url: 'urn:test:codes', name: 'Test codes' }],
+      localSourceSystems: async () => ['urn:test:src'],
     });
     const app = Fastify();
     registerErrorHandler(app as any);
@@ -1402,7 +1403,12 @@ describe('map to fhir routes', () => {
     const { app } = build(VIEWER);
     const res = await app.inject({ method: 'GET', url: '/api/workflows/map/code-lists' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ codeLists: [{ url: 'urn:openldr:terminology:local-map', name: '', local: true }, { url: 'urn:test:codes', name: 'Test codes', local: false }] });
+    expect(res.json()).toEqual({
+      codeLists: [
+        { url: 'urn:openldr:terminology:local-map', name: '', local: true, sourceSystems: ['urn:test:src'] },
+        { url: 'urn:test:codes', name: 'Test codes', local: false, sourceSystems: [] },
+      ],
+    });
   });
 
   it('POST suggest answers { suggestions }', async () => {

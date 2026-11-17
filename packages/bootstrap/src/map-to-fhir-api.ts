@@ -36,8 +36,11 @@ export interface MapToFhirApi {
   suggest(input: { targetId: string; fieldNames: string[]; locale?: string }): Promise<MapSuggestionResult[] | null>;
   /** One result per item, in item order. Throws MapConfigError for a config fault. */
   test(input: MapTestInput): Promise<MapTestResult[]>;
-  /** The lab's own map comes first with `local: true` and an empty name; the caller words it. */
-  codeLists(): Promise<{ url: string; name: string; local: boolean }[]>;
+  /**
+   * The lab's own map comes first with `local: true` and an empty name; the caller words it. Its
+   * `sourceSystems` are the distinct source systems of its rows; another map's list is empty.
+   */
+  codeLists(): Promise<{ url: string; name: string; local: boolean; sourceSystems: string[] }[]>;
 }
 
 export interface MapToFhirApiDeps {
@@ -45,6 +48,8 @@ export interface MapToFhirApiDeps {
   packs(): Promise<MapTargetPack[]>;
   /** Stored ConceptMap resources. */
   conceptMaps(): Promise<{ url?: string; name?: string; title?: string }[]>;
+  /** The distinct source systems of the lab's own map's rows. */
+  localSourceSystems(): Promise<string[]>;
 }
 
 // The service starts every config fault message with this text.
@@ -92,9 +97,9 @@ export function createMapToFhirApi(deps: MapToFhirApiDeps): MapToFhirApi {
     async codeLists() {
       const stored = (await deps.conceptMaps())
         .filter((m): m is { url: string; name?: string; title?: string } => typeof m.url === 'string' && m.url !== '' && m.url !== LOCAL_MAP_URL)
-        .map((m) => ({ url: m.url, name: m.name || m.title || m.url, local: false }))
+        .map((m) => ({ url: m.url, name: m.name || m.title || m.url, local: false, sourceSystems: [] as string[] }))
         .sort((a, b) => a.name.localeCompare(b.name) || a.url.localeCompare(b.url));
-      return [{ url: LOCAL_MAP_URL, name: '', local: true }, ...stored];
+      return [{ url: LOCAL_MAP_URL, name: '', local: true, sourceSystems: await deps.localSourceSystems() }, ...stored];
     },
   };
 }

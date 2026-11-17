@@ -66,7 +66,12 @@ const LAB_RESULT_IDENTITY: MapTarget['identity'] = [
   },
   // The order's own test code is optional, so an order without one is the specimen's order.
   { record: 'ServiceRequest', parts: [{ record: 'Specimen' }, { field: 'ServiceRequest.code' }], fallback: [{ record: 'Specimen' }] },
-  { record: 'Observation', parts: [{ record: 'ServiceRequest' }, { field: 'Observation.code' }] },
+  // The result date tells a morning and an evening result of one test apart. With no result
+  // date mapped, or an empty one, the part is empty.
+  {
+    record: 'Observation',
+    parts: [{ record: 'ServiceRequest' }, { field: 'Observation.code' }, { field: 'Observation.effectiveDateTime', optional: true }],
+  },
 ];
 
 function localise(target: MapTarget, locale: string): MapTarget {

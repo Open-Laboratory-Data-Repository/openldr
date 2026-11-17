@@ -226,8 +226,8 @@ describe('MapToFhirSheet', () => {
   it('saves a values rule the person typed, and a code list picked from the list', async () => {
     setRun(ROWS_A);
     m(api.fetchMapCodeLists).mockResolvedValue([
-      { url: 'urn:test:own-map', name: '', local: true },
-      { url: 'urn:test:map', name: 'Local tests', local: false },
+      { url: 'urn:test:own-map', name: '', local: true, sourceSystems: [] },
+      { url: 'urn:test:map', name: 'Local tests', local: false, sourceSystems: [] },
     ]);
     const { update } = renderSheet();
     await screen.findByTestId('map-row-Patient.identifier.value');
@@ -247,6 +247,32 @@ describe('MapToFhirSheet', () => {
     const rows = update.mock.calls[0][0].config.mappings[0].rows;
     expect(rows.find((r: { targetPath: string }) => r.targetPath === 'Patient.gender').rule).toEqual({ kind: 'values', map: { m: 'male' } });
     expect(rows.find((r: { targetPath: string }) => r.targetPath === 'Observation.code').rule).toEqual({ kind: 'codeList', conceptMapUrl: 'urn:test:map' });
+  });
+
+  it('asks for a source system from a list on the lab\'s own code list, and refuses Save while it is empty', async () => {
+    setRun(ROWS_A);
+    m(api.fetchMapCodeLists).mockResolvedValue([
+      { url: 'urn:test:own-map', name: '', local: true, sourceSystems: ['urn:test:src-1', 'urn:test:src-2'] },
+      { url: 'urn:test:map', name: 'Local tests', local: false, sourceSystems: [] },
+    ]);
+    const { update } = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Test' }), { target: { value: 'codeList' } });
+    // Another list keeps the optional text input.
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Code list: Test' }), { target: { value: 'urn:test:map' } });
+    expect(screen.getByRole('textbox', { name: 'Source system: Test' })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Code list: Test' }), { target: { value: 'urn:test:own-map' } });
+    const systems = screen.getByRole('combobox', { name: 'Source system: Test' }) as HTMLSelectElement;
+    expect([...systems.options].map((o) => o.value)).toEqual(['', 'urn:test:src-1', 'urn:test:src-2']);
+    openMenuAndClick('Save');
+    expect(update).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent("Pick the source system for Test. The lab's own code list needs one.");
+    fireEvent.change(systems, { target: { value: 'urn:test:src-2' } });
+    openMenuAndClick('Save');
+    const rows = update.mock.calls[0][0].config.mappings[0].rows;
+    expect(rows.find((r: { targetPath: string }) => r.targetPath === 'Observation.code').rule).toEqual({ kind: 'codeList', conceptMapUrl: 'urn:test:own-map', sourceSystem: 'urn:test:src-2' });
   });
 
   it('refuses Save while a chosen rule is not finished', async () => {

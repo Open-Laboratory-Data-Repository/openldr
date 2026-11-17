@@ -118,7 +118,7 @@ describe('applyMapping', () => {
       birthDate: '2026-11-03',
       gender: 'female',
     });
-    expect(specimen).toEqual({ resourceType: 'Specimen', id: S, type: { text: 'blood-x' }, subject: { reference: `Patient/${P}` } });
+    expect(specimen).toEqual({ resourceType: 'Specimen', id: S, type: { text: 'blood-x', coding: [{ code: 'blood-x' }] }, subject: { reference: `Patient/${P}` } });
     expect(request).toEqual({ resourceType: 'ServiceRequest', id: R, status: 'active', intent: 'order', subject: { reference: `Patient/${P}` } });
     expect(obs).toEqual({
       resourceType: 'Observation',
@@ -163,7 +163,7 @@ describe('applyMapping', () => {
     if (!res.ok) return;
     const obs = res.resources.filter((r) => r.resourceType === 'Observation') as Observation[];
     expect(obs.map((o) => o.valueQuantity?.value)).toEqual([1, 2, 3]);
-    expect(obs.map((o) => o.code)).toEqual([{ text: 'T1' }, { text: 'T2' }, { text: 'T3' }]);
+    expect(obs.map((o) => o.code)).toEqual([{ text: 'T1', coding: [{ code: 'T1' }] }, { text: 'T2', coding: [{ code: 'T2' }] }, { text: 'T3', coding: [{ code: 'T3' }] }]);
     for (const o of obs) expect(o.valueQuantity?.unit).toBe('u-x');
   });
 

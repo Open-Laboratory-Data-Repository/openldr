@@ -31,8 +31,8 @@ export type MapValue = string | number | boolean | Coding;
 export type RuleResult = { ok: true; value: MapValue } | { ok: false; reason: string; field: string };
 
 export interface RuleDeps {
-  /** The coding a code list gives for a value, or null for no match or more than one. */
-  translateCode(conceptMapUrl: string, value: string, sourceSystem?: string): Promise<Coding | null>;
+  /** The coding a code list gives for a value; null for no match, `'several'` for more than one. */
+  translateCode(conceptMapUrl: string, value: string, sourceSystem?: string): Promise<Coding | null | 'several'>;
   /** Today, for two-digit years. Defaults to the current date. */
   now?: Date;
 }
@@ -117,6 +117,7 @@ export async function applyRule(
     }
     case 'codeList': {
       const coding = await deps.translateCode(rule.conceptMapUrl, text.trim(), rule.sourceSystem);
+      if (coding === 'several') return fail(field, 'more than one match in the code list');
       return coding ? { ok: true, value: coding } : fail(field, 'value has no match in the code list');
     }
     case 'split': {

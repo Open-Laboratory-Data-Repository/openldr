@@ -55,6 +55,7 @@ export function MapToFhirSheet({
 
   const suggestions = useSuggestions({ open, draftsKey: m.draftsKey, targetId: m.targetId, shape: group, drafts, locale: i18n.language });
   const codeLists = useCodeLists(drafts.some((d) => d.rule.kind === 'codeList'));
+  const localCodeList = Array.isArray(codeLists) ? (codeLists.find((c) => c.local)?.url ?? null) : null;
   const codeUrlOf = (d: RowDraft) => (hasSource(d) && d.rule.kind === 'none' ? codeListUrlOf(d) : null);
   const codeSets = useCodeSets(drafts.map(codeUrlOf).filter((u): u is string => u !== null));
   const ruleSuggestionOf = (d: RowDraft): RuleSuggestion | null => {
@@ -90,7 +91,12 @@ export function MapToFhirSheet({
   const problem = (built: Extract<BuildResult, { ok: false }>) =>
     setNotice({
       tone: 'error',
-      text: built.problem === 'required' ? t(`${P}.sheet.saveMissing`, { label: built.label }) : t(`${P}.sheet.ruleIncomplete`, { label: built.label }),
+      text:
+        built.problem === 'required'
+          ? t(`${P}.sheet.saveMissing`, { label: built.label })
+          : built.problem === 'sourceSystem'
+            ? t(`${P}.sheet.sourceSystemMissing`, { label: built.label })
+            : t(`${P}.sheet.ruleIncomplete`, { label: built.label }),
     });
 
   // A group that edits a wider saved mapping keeps that mapping's field names and hash, so the node
@@ -110,16 +116,16 @@ export function MapToFhirSheet({
   // A row that more than one of them fits is held by the node, so the sheet says so first.
   const ambiguous = useMemo(() => {
     if (!group || !saveShape || !m.targetId) return false;
-    const built = buildMapping(drafts, saveShape, m.targetId, { requireAll: false });
+    const built = buildMapping(drafts, saveShape, m.targetId, { requireAll: false, localCodeList });
     const savedHere = m.saved.filter((x) => x.targetId === m.targetId);
     const after = (built.ok ? withMapping(savedHere, built.mapping) : savedHere) as SavedMapping[];
     return group.rows.some((row) => classify(row, [], after).kind === 'ambiguous');
-  }, [group, saveShape, drafts, m.saved, m.targetId]);
+  }, [group, saveShape, drafts, m.saved, m.targetId, localCodeList]);
   const showWebhookHint = feedsFromWebhook && String(config.sourcePath ?? '').trim() === '';
 
   const save = () => {
     if (!target || !group || !saveShape) return;
-    const built = buildMapping(drafts, saveShape, target.id, { requireAll: true });
+    const built = buildMapping(drafts, saveShape, target.id, { requireAll: true, localCodeList });
     if (!built.ok) return problem(built);
     // A node runs one target, so mappings made for another target are dropped.
     const kept = mappingsOf(config).filter((x) => targetIdOf(x) === target.id);
@@ -129,7 +135,7 @@ export function MapToFhirSheet({
 
   const runTest = async () => {
     if (!target || !group || !saveShape) return;
-    const built = buildMapping(drafts, saveShape, target.id, { requireAll: false });
+    const built = buildMapping(drafts, saveShape, target.id, { requireAll: false, localCodeList });
     if (!built.ok) return problem(built);
     const others = mappingsOf(config).filter((x) => targetIdOf(x) === target.id);
     const formIds = Array.isArray(config.formIds) ? (config.formIds as string[]) : [];

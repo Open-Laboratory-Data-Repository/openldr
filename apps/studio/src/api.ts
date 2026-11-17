@@ -3287,7 +3287,8 @@ export type MapTestResult =
   | { ok: false; reason: string; field?: string };
 export interface MapSuggestionView { targetPath: string; field: string; score: number }
 /** A concept map the install holds. The lab's own map has `local` true and an empty name. */
-export interface MapCodeList { url: string; name: string; local: boolean }
+/** A code list for the code list rule. The lab's own list (`local`) names the source systems of its rows. */
+export interface MapCodeList { url: string; name: string; local: boolean; sourceSystems: string[] }
 export interface MapTestInput {
   config: { targetId: string; formIds: string[]; mappings: unknown[] };
   items: Record<string, unknown>[];
