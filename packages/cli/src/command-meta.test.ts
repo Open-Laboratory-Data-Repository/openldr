@@ -158,6 +158,7 @@ describe('COMMAND_META', () => {
       'report run: reports.export + reports.run',
       'test-catalog map match: terminology.manage + terminology.view',
       'test-catalog params: terminology.manage + terminology.view',
+      'workflows map-test: workflows.edit + workflows.view',
     ]);
   });
 

@@ -172,6 +172,12 @@ describe('a CSV file read by map-test and by Extract from File with Read every c
     expect(node[0][' name ']).toBe(' QZX 1 ');
   });
 
+  it('says what it prints in the help, with and without --json', () => {
+    const help = buildProgram().commands.find((c) => c.name() === 'workflows')!.commands.find((c) => c.name() === 'map-test')!.description();
+    expect(help).toContain('Prints counts and reasons; with --json, each row\'s result including its records.');
+    expect(help).not.toContain('no row values');
+  });
+
   it('says so in the help', () => {
     const help = buildProgram().commands.find((c) => c.name() === 'workflows')!.commands.find((c) => c.name() === 'map-test')!.description();
     expect(help).toContain("A CSV cell is read as text with the spaces around it cut, and a blank cell is left out.");

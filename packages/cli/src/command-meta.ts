@@ -494,10 +494,11 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'user unassign-role': { kind: 'app', capability: 'roles.manage', destructive: true }, // roles :137
   'users list': { kind: 'app', capability: 'users.view' }, // users :134
 
-  // workflows-routes.ts:144 (GET /api/workflows/:id/receipts :468 and /:requestId :479).
   // Runs the Test route's api (POST /api/workflows/map/test, workflows-routes.ts:224, guard EDIT :157).
-  // It stores nothing, but it takes the route's key. The file is uploaded and read on the server.
-  'workflows map-test': { kind: 'app', capability: 'workflows.edit', paths: [inFile('file')] },
+  // It stores nothing, but it takes the route's key. It also loads the workflow to read the node,
+  // which the view key guards (GET /api/workflows/:id, workflows-routes.ts:236). The file is read on the server.
+  'workflows map-test': { kind: 'app', capability: 'workflows.edit', alsoRequires: ['workflows.view'], paths: [inFile('file')] },
+  // workflows-routes.ts:144 (GET /api/workflows/:id/receipts :468 and /:requestId :479).
   'workflows receipts list': { kind: 'app', capability: 'workflows.view' },
   'workflows receipts show': { kind: 'app', capability: 'workflows.view' },
 });

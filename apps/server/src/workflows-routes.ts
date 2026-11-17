@@ -301,8 +301,9 @@ export function registerWorkflowRoutes(
 
   // Restore a system workflow to its seeded default graph. Carries over the webhook
   // node's stored `secretRef` (never regenerates it — see rebuildSystemWorkflow) and the
-  // form-validate node's `formId`, so a reset cannot silently break external producers'
-  // tokens or a site's re-pointed form binding.
+  // form the Map to FHIR node allows (its first `formIds` entry, or an older graph's
+  // form-validate `formId`), so a reset cannot silently break external producers' tokens
+  // or a site's re-pointed form binding.
   app.post('/api/workflows/:id/reset', EDIT, async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!isProtectedWorkflowId(id)) {
