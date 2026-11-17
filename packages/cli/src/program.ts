@@ -15,6 +15,7 @@ import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPlugin
 import { runReportList, runReportRun, runReportGlassExport } from './report';
 import { runAuditList } from './audit';
 import { runWorkflowReceiptsList, runWorkflowReceiptShow } from './workflows';
+import { runWorkflowMapTest } from './workflow-map';
 import {
   runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus, runUserPreferencesShow, runUserPreferencesSet,
   runUserResetPassword, runUserEndSessions, runUserKeyList, runUserKeyCreate, runUserKeyRevoke,
@@ -95,7 +96,15 @@ export function buildProgram(): Command {
   program.name('openldr').description('OpenLDR CE operator CLI');
   program.option('--actor <name>', 'audit actor name for this invocation (defaults to the OS user)');
 
-  const receipts = program.command('workflows').description('Inspect workflows')
+  const workflows = program.command('workflows').description('Inspect workflows');
+  workflows.command('map-test <workflowId> <nodeId> <file>')
+    .description('Run a Map to FHIR node\'s saved mapping on a .json list or .csv file. Prints counts and reasons, no row values. A CSV cell is text and a blank cell is left out, so a CSV run can differ from the same file read by Extract from File.')
+    .option('--json', 'emit the full per-row results, records included', false)
+    .action(async (workflowId: string, nodeId: string, file: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runWorkflowMapTest(workflowId, nodeId, file, opts); }
+      catch { process.stderr.write('Map test unavailable.\n'); process.exitCode = 1; }
+    });
+  const receipts = workflows
     .command('receipts').description('Inspect durable webhook requests');
   receipts.command('list <workflowId>').description('List webhook receipts for a workflow')
     .option('--limit <n>', 'page size, 1 to 100', '25')

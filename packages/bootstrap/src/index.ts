@@ -2163,6 +2163,7 @@ export {
   type CatalogImportField, type CatalogColumnMap, type CatalogValueMap, type CategoryAnswer, type SpecimenAnswer,
 } from './test-catalog-import';
 export type { TableFileFormat } from './table-file';
+export { readTableFile, TableFileError } from './table-file';
 export type {
   FacilityImportDeps, FacilityImportOptions, FacilityImportResult,
   // Reachable through `FacilityImportResult` — exported so a consumer can name the type of a
