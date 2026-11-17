@@ -66,6 +66,11 @@ export const en = {
       open: 'Continue to OpenLDR',
     },
   },
+  workflowRuns: {
+  "held": "{{count}} held",
+  "mapped": "{{count}} mapped",
+  "persisted": "{{count}} persisted"
+  },
   workflowReceipts: {
   "title": "Webhook receipts",
   "runs": "Runs",

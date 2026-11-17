@@ -42,7 +42,7 @@ The webhook answers for the whole run. The default **Ingest** workflow refuses a
 
 A run that completes answers HTTP 200 with `ok: true` and its `runId`.
 
-Some labs want the good rows of a message stored and the bad ones set aside. For that, build your own workflow and connect **held** to a Log node or another node. A run of that workflow completes and answers `ok: true` even when rows were held. Check the node on **held** in **History** to find them.
+Some labs want the good rows of a message stored and the bad ones set aside. For that, build your own workflow and connect **held** to a Log node or another node. A run of that workflow completes and answers `ok: true` even when rows were held. Check the node on **held** in **History** to find them. When rows were held, the run's row in **History** shows a count such as **3 held** beside its status. A run can complete with every row held. The run's header shows how many rows were mapped and held, and how many records Persist store stored.
 
 ## Try a saved mapping from the command line
 

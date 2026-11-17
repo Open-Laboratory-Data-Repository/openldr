@@ -68,6 +68,11 @@ export const fr: EnShape = {
       open: 'Continuer vers OpenLDR',
     },
   },
+  workflowRuns: {
+  "held": "{{count}} en attente",
+  "mapped": "{{count}} mappées",
+  "persisted": "{{count}} stockées"
+  },
   workflowReceipts: {
   "title": "Reçus webhook",
   "runs": "Exécutions",

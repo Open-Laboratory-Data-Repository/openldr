@@ -98,7 +98,7 @@ In **Runs**, select the row matching the source and time you need.
 
 ### 3. Read the outcome
 
-Check Completed or Failed, then each node status. The pictures come from an install seeded before Map to FHIR. There, Form Validate is skipped because the FHIR branch handled the Bundle. On a new install, the Bundle goes through **Map to FHIR** instead.
+Check Completed or Failed, then each node status. The pictures come from an install seeded before Map to FHIR. There, Form Validate is skipped because the FHIR branch handled the Bundle. On a new install, the Bundle goes through **Map to FHIR** instead. Completed means every step ran. It does not mean every row was stored. When Map to FHIR held rows, the run's row shows a count such as **3 held** beside Completed, and the run's header shows how many rows were mapped and held, and how many records were persisted. A skipped step shows its name.
 
 ![The completed run shows which branch handled this Bundle.](workflows-guide-run-result.png)
 

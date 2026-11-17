@@ -37,6 +37,57 @@ const SOURCE_VARIANT: Record<WorkflowRunSummary['triggerSource'], string> = {
   event: 'border-fuchsia-500/40 text-fuchsia-300',
 };
 
+/** What a run's data came to, where a node reported it. Absent means no node said. */
+export interface RunCounts {
+  mapped?: number;
+  held?: number;
+  persisted?: number;
+}
+
+const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * Mapped and held rows from Map to FHIR nodes (their meta has `heldReasons`), and persisted
+ * records from Persist store nodes (their meta has `batchId`), summed over the run's nodes.
+ * Results carry no node kind, so the meta's shape tells them apart. Mapped is never persisted.
+ */
+export function runCounts(result: unknown): RunCounts {
+  const out: RunCounts = {};
+  const add = (k: keyof RunCounts, n: number) => (out[k] = (out[k] ?? 0) + n);
+  for (const r of asExecuteResponse(result)?.results ?? []) {
+    const meta = r.meta as Record<string, unknown> | null | undefined;
+    if (!meta || typeof meta !== 'object') continue;
+    if (Array.isArray(meta.heldReasons)) {
+      if (isCount(meta.mapped)) add('mapped', meta.mapped);
+      if (isCount(meta.held)) add('held', meta.held);
+    }
+    if (typeof meta.batchId === 'string' && isCount(meta.persisted)) add('persisted', meta.persisted);
+  }
+  return out;
+}
+
+/** The run's execution status, and beside it how many rows were held when any were. */
+export function RunStatus({ run }: { run: WorkflowRunSummary }) {
+  const { t } = useTranslation();
+  const held = runCounts(run.result).held ?? 0;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      {run.status === 'completed' ? (
+        <Badge variant="outline">Completed</Badge>
+      ) : (
+        <Badge variant="outline" className="border-destructive/40 text-destructive" title={run.error ?? ''}>
+          Failed
+        </Badge>
+      )}
+      {held > 0 && (
+        <Badge variant="outline" className="border-amber-500/40 text-amber-400">
+          {t('workflowRuns.held', { count: held })}
+        </Badge>
+      )}
+    </span>
+  );
+}
+
 /** Coerce the opaque `run.result` into the per-node execution shape, if present. */
 function asExecuteResponse(result: unknown): ExecuteResponse | null {
   if (result && typeof result === 'object' && Array.isArray((result as { results?: unknown }).results)) {
@@ -173,17 +224,7 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {r.status === 'completed' ? (
-                            <Badge variant="outline">Completed</Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="border-destructive/40 text-destructive"
-                              title={r.error ?? ''}
-                            >
-                              Failed
-                            </Badge>
-                          )}
+                          <RunStatus run={r} />
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                           {new Date(r.startedAt).toLocaleString()}
@@ -216,6 +257,7 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
 }
 
 export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; loading: boolean; error?: string }) {
+  const { t } = useTranslation();
   const exec = asExecuteResponse(run.result);
   const results: NodeRunResult[] = exec?.results ?? [];
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -233,6 +275,12 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
     results.find((r) => r.status === 'error') ??
     results[0] ??
     null;
+
+  const counts = runCounts(run.result);
+  const countText = (['mapped', 'held', 'persisted'] as const)
+    .filter((k) => counts[k] !== undefined)
+    .map((k) => t(`workflowRuns.${k}`, { count: counts[k] }))
+    .join(' · ');
 
   const selectedFiles = selected ? outputBinaries(selected.output) : [];
   const selectedLogs: LogEntry[] = selected?.logs ?? [];
@@ -252,6 +300,12 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
         <span>{run.triggerSource}</span>
         <span>·</span>
         <span>{new Date(run.startedAt).toLocaleString()}</span>
+        {countText && (
+          <>
+            <span>·</span>
+            <span data-testid="run-counts">{countText}</span>
+          </>
+        )}
       </div>
 
       {run.error && (

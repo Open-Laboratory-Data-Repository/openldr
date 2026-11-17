@@ -165,6 +165,7 @@ export async function runWorkflow(
       results.push({
         nodeId: node.id,
         type: node.type,
+        label: node.data.label as string | undefined,
         status: 'skipped',
         durationMs: 0,
       });

@@ -165,6 +165,20 @@ describe('runWorkflow', () => {
     expect(res.results.find((r) => r.nodeId === 'no')?.status).toBe('skipped');
   });
 
+  it('keeps the label of a skipped node, so the run shows its name and not its id', async () => {
+    const nodes = [
+      { id: 't', type: 'trigger', data: {} },
+      { id: 'i', type: 'condition', data: { templateId: 'if', condition: 'true' } },
+      { id: 'no', type: 'action', data: { action: 'no-op', label: 'Held rows' } },
+    ];
+    const edges = [
+      { id: 'e1', source: 't', target: 'i' },
+      { id: 'e3', source: 'i', target: 'no', sourceHandle: 'false' },
+    ];
+    const res = await runWorkflow(nodes, edges, {});
+    expect(res.results.find((r) => r.nodeId === 'no')).toMatchObject({ status: 'skipped', label: 'Held rows' });
+  });
+
   it('prunes Filter true-handle downstream when all items are dropped', async () => {
     const nodes = [
       { id: 't', type: 'trigger', data: {} },

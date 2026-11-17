@@ -42,7 +42,7 @@ Le webhook répond pour l'exécution entière. Le workflow par défaut **Ingest*
 
 Une exécution terminée répond HTTP 200 avec `ok: true` et son `runId`.
 
-Certains laboratoires veulent stocker les bonnes lignes d'un message et mettre les mauvaises de côté. Créez alors votre propre workflow et reliez **retenus** à un nœud Log ou à un autre nœud. Une exécution de ce workflow se termine et répond `ok: true`, même si des lignes ont été retenues. Consultez le nœud relié à **retenus** dans **History** pour les retrouver.
+Certains laboratoires veulent stocker les bonnes lignes d'un message et mettre les mauvaises de côté. Créez alors votre propre workflow et reliez **retenus** à un nœud Log ou à un autre nœud. Une exécution de ce workflow se termine et répond `ok: true`, même si des lignes ont été retenues. Consultez le nœud relié à **retenus** dans **History** pour les retrouver. Quand des lignes sont mises en attente, la ligne du run dans **History** montre un nombre comme **3 en attente** à côté de son statut. Un run peut se terminer avec toutes ses lignes en attente. L'en-tête du run montre combien de lignes ont été mappées et mises en attente, et combien d'enregistrements Persist store a stockés.
 
 ## Essayer un mappage enregistré en ligne de commande
 
