@@ -22,12 +22,15 @@ export {
   WORKFLOW_CONFIG_FIELD_TYPES,
 } from '@openldr/marketplace';
 export { toItems, fromItems, type WorkflowItem, type BinaryRef } from './engine/items';
+export { bundleToResources } from './engine/node-handlers/unwrap-bundle';
 export {
   type RunPluginNodeInput,
   type RunPluginNodeOutput,
   type RunFormValidateInput,
   type RunFormValidateOutput,
   type FormValidateInvalid,
+  type RunMapToFhirInput,
+  type RunMapToFhirOutput,
   type RunPersistStoreInput,
   type RunPersistStoreOutput,
 } from './engine/services';

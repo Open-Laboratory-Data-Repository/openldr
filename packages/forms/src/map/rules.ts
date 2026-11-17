@@ -9,7 +9,12 @@ import { z } from 'zod';
 export const MapRuleSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('date'), format: z.string().min(1) }),
   z.object({ kind: z.literal('values'), map: z.record(z.string()) }),
-  z.object({ kind: z.literal('codeList'), conceptMapUrl: z.string().min(1) }),
+  z.object({
+    kind: z.literal('codeList'),
+    conceptMapUrl: z.string().min(1),
+    /** Only to break a tie when the map holds the same code from two source systems. */
+    sourceSystem: z.string().min(1).optional(),
+  }),
   z.object({
     kind: z.literal('split'),
     by: z.string().min(1),
@@ -26,7 +31,8 @@ export type MapValue = string | number | boolean | Coding;
 export type RuleResult = { ok: true; value: MapValue } | { ok: false; reason: string; field: string };
 
 export interface RuleDeps {
-  translateCode(conceptMapUrl: string, value: string): Promise<Coding | null>;
+  /** The coding a code list gives for a value, or null for no match or more than one. */
+  translateCode(conceptMapUrl: string, value: string, sourceSystem?: string): Promise<Coding | null>;
   /** Today, for two-digit years. Defaults to the current date. */
   now?: Date;
 }
@@ -110,7 +116,7 @@ export async function applyRule(
       return Object.hasOwn(rule.map, key) ? { ok: true, value: rule.map[key] } : fail(field, 'value is not in the translation list');
     }
     case 'codeList': {
-      const coding = await deps.translateCode(rule.conceptMapUrl, text.trim());
+      const coding = await deps.translateCode(rule.conceptMapUrl, text.trim(), rule.sourceSystem);
       return coding ? { ok: true, value: coding } : fail(field, 'value has no match in the code list');
     }
     case 'split': {

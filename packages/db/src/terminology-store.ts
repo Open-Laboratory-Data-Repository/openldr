@@ -62,6 +62,11 @@ export interface TerminologyStore {
   getResourceByUrl(url: string): Promise<FhirResource | null>;
   upsertMapElements(rows: MapElement[]): Promise<void>;
   translate(q: TranslateQuery): Promise<MapElement[]>;
+  /**
+   * Rows of one concept map for one source code. `system` narrows to one source system; without
+   * it every source system in the map counts, so the caller decides what two rows mean.
+   */
+  mapTargets(q: { mapUrl: string; code: string; system?: string }): Promise<MapElement[]>;
 }
 
 export function createTerminologyStore(db: Kysely<InternalSchema>, fhirStore: FhirStore): TerminologyStore {
@@ -184,6 +189,12 @@ export function createTerminologyStore(db: Kysely<InternalSchema>, fhirStore: Fh
       let qb = db.selectFrom('concept_map_elements').selectAll().where('source_system', '=', q.system).where('source_code', '=', q.code);
       if (q.mapUrl) qb = qb.where('map_url', '=', q.mapUrl);
       if (q.targetSystem) qb = qb.where('target_system', '=', q.targetSystem);
+      const rows = await qb.execute();
+      return rows.map((r) => ({ mapUrl: r.map_url, sourceSystem: r.source_system, sourceCode: r.source_code, targetSystem: r.target_system, targetCode: r.target_code, equivalence: r.equivalence }));
+    },
+    async mapTargets(q) {
+      let qb = db.selectFrom('concept_map_elements').selectAll().where('map_url', '=', q.mapUrl).where('source_code', '=', q.code);
+      if (q.system) qb = qb.where('source_system', '=', q.system);
       const rows = await qb.execute();
       return rows.map((r) => ({ mapUrl: r.map_url, sourceSystem: r.source_system, sourceCode: r.source_code, targetSystem: r.target_system, targetCode: r.target_code, equivalence: r.equivalence }));
     },

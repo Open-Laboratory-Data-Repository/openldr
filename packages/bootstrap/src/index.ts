@@ -93,6 +93,8 @@ import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
 import { createPluginNodeService } from './plugin-node-service';
 import { createFormValidateService } from './form-validate-service';
+import { createMapToFhirService, codingFromMapRows, loadStoredPacks } from './map-to-fhir-service';
+import { validateBatch } from '@openldr/fhir';
 import { createPersistStoreService } from './persist-store-service';
 import { createConnectorDialectLookup, createConnectorSqlRunner } from './connector-sql-service';
 import { createConnectorMongoRunner } from './connector-mongo-service';
@@ -1792,6 +1794,19 @@ const reporting: ReportingApi = {
     maxFileBytes: cfg.WORKFLOW_FILE_MAX_BYTES,
   });
   workflowServices.validateForm = createFormValidateService({ forms });
+  // Map to FHIR node: the same form-validate service, the stored Lab result packs, the code lists in
+  // the terminology store, and the check persist runs, without storing anything.
+  workflowServices.mapToFhir = createMapToFhirService({
+    forms,
+    validateForm: workflowServices.validateForm,
+    packs: () => loadStoredPacks(starterPacks, seededStarterPacks().map((p) => p.id)),
+    translateCode: async (mapUrl, code, system) => codingFromMapRows(await termStore.mapTargets({ mapUrl, code, system })),
+    validate: async (resources) =>
+      validateBatch(resources, {
+        level: await validationStrictness.get(),
+        resolveServiceRequest: (id: string) => canonicalFhirStore.exists('ServiceRequest', id),
+      }),
+  });
   workflowServices.persistStore = createPersistStoreService({
     persist: workflowPersist,
     publish: (event) => eventing.publish(event),

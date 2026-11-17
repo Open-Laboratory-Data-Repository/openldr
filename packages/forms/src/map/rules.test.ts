@@ -80,6 +80,27 @@ describe('applyRule: codeList', () => {
     expect(calls).toEqual([['urn:test:map', 't1']]);
   });
 
+  it('passes the source system through when the rule names one', async () => {
+    const calls: unknown[][] = [];
+    const deps: RuleDeps = {
+      translateCode: async (...args) => {
+        calls.push(args);
+        return coding;
+      },
+    };
+    await run({ kind: 'codeList', conceptMapUrl: 'urn:test:map', sourceSystem: 'urn:test:local' }, 't1', 'test', deps);
+    await run({ kind: 'codeList', conceptMapUrl: 'urn:test:map' }, 't1', 'test', deps);
+    expect(calls).toEqual([
+      ['urn:test:map', 't1', 'urn:test:local'],
+      ['urn:test:map', 't1', undefined],
+    ]);
+  });
+
+  it('accepts a source system in the schema and refuses an empty one', () => {
+    expect(MapRuleSchema.safeParse({ kind: 'codeList', conceptMapUrl: 'urn:test:map', sourceSystem: 'urn:test:local' }).success).toBe(true);
+    expect(MapRuleSchema.safeParse({ kind: 'codeList', conceptMapUrl: 'urn:test:map', sourceSystem: '' }).success).toBe(false);
+  });
+
   it('fails when the concept map has no match', async () => {
     const r = await run({ kind: 'codeList', conceptMapUrl: 'urn:test:map' }, 'QZX', 'test');
     expect(r).toMatchObject({ ok: false, field: 'test' });

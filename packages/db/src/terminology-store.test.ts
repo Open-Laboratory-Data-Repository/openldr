@@ -77,3 +77,38 @@ describe('searchConcepts', () => {
     expect(page2.map((r) => r.code)).toEqual(['GEN']);
   });
 });
+
+// The Map to FHIR node's code list rule names a map and a code, and only sometimes a source system.
+describe('mapTargets', () => {
+  async function seeded() {
+    const db = await makeMigratedDb();
+    const store = createTerminologyStore(db as never, createFhirStore(db as never));
+    await store.upsertMapElements([
+      { mapUrl: 'urn:test:map-a', sourceSystem: 'urn:test:src-1', sourceCode: 'X1', targetSystem: 'urn:test:tgt', targetCode: 'T1', equivalence: 'equivalent' },
+      { mapUrl: 'urn:test:map-a', sourceSystem: 'urn:test:src-2', sourceCode: 'X1', targetSystem: 'urn:test:tgt', targetCode: 'T2', equivalence: 'equivalent' },
+      { mapUrl: 'urn:test:map-a', sourceSystem: 'urn:test:src-1', sourceCode: 'X2', targetSystem: 'urn:test:tgt', targetCode: 'T3', equivalence: null },
+      { mapUrl: 'urn:test:map-b', sourceSystem: 'urn:test:src-1', sourceCode: 'X1', targetSystem: 'urn:test:tgt', targetCode: 'T9', equivalence: 'equivalent' },
+    ]);
+    return store;
+  }
+
+  it('finds every row for the map and code, whatever the source system', async () => {
+    const s = await seeded();
+    const rows = await s.mapTargets({ mapUrl: 'urn:test:map-a', code: 'X1' });
+    expect(rows.map((r) => r.targetCode).sort()).toEqual(['T1', 'T2']);
+    expect(rows.every((r) => r.mapUrl === 'urn:test:map-a')).toBe(true);
+  });
+
+  it('narrows to one source system when one is given', async () => {
+    const s = await seeded();
+    const rows = await s.mapTargets({ mapUrl: 'urn:test:map-a', code: 'X1', system: 'urn:test:src-2' });
+    expect(rows).toEqual([
+      { mapUrl: 'urn:test:map-a', sourceSystem: 'urn:test:src-2', sourceCode: 'X1', targetSystem: 'urn:test:tgt', targetCode: 'T2', equivalence: 'equivalent' },
+    ]);
+  });
+
+  it('gives nothing for a code the map does not hold', async () => {
+    const s = await seeded();
+    expect(await s.mapTargets({ mapUrl: 'urn:test:map-b', code: 'X2' })).toEqual([]);
+  });
+});
