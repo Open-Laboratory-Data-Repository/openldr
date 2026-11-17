@@ -1,6 +1,6 @@
 # Mapping review
 
-Status: scope approved; chunks 0 to 5 merged. Chunk 6 approved by Codex at adf4b7c1.
+Status: scope approved; chunks 0 to 6 merged. Chunk 7 (follow-ups) approved by Codex at 5ab92642.
 
 This file records the proposed behaviour, disagreements, and decisions.
 Keep the same file as it passes between reviewers.
@@ -946,3 +946,10 @@ pt have "Turn a workflow on or off", with the restart note and a made-up workflo
 C7-11 CONFIRMED: the web paragraph said the CLI always records the actor as `cli`; signed in, it
 records the account (`cli-actor.ts:53-54`). Operator: "Correct it". The sentence now says so in en,
 fr and pt. Served auditing is unchanged, as Codex asked.
+
+### Codex, 2026-11-17: chunk 7 approved (relayed by Claude)
+
+5 review checks: 0 confirmed, 5 refuted. Reviewed `4dd37e24..5ab92642` with `11d49fbe`. Approved for the
+follow-up scope and the operator's decisions. Codex's HONEST NON-PROOF: no latest screen check (the demo
+was lost in the power cut), no signed-in CLI run, no live audit row, no real database concurrency, no
+restart check, no real phone.
