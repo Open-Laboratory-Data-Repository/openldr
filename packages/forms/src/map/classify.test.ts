@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { classify } from './classify';
 import { shapeOf } from './shape';
-import type { SavedMapping } from './apply';
+import { applyMapping, type ApplyDeps, type SavedMapping } from './apply';
+import type { MapTarget } from './target';
 
 const forms = [
   { id: 'form-a', fieldIds: ['pat_no', 'given', 'surname'], requiredIds: ['pat_no'] },
@@ -55,6 +56,82 @@ describe('classify', () => {
     const empty = shapeOf({});
     for (const v of ['text', 4, null, [], [{ resourceType: 'Patient' }, 3], [{ a: 1 }]]) {
       expect(classify(v, forms, [saved])).toEqual({ kind: 'unknown', shape: empty });
+    }
+  });
+
+  it('calls a row with a blank cell left out mapped', () => {
+    const { result: _blank, ...row } = seen;
+    expect(classify(row, forms, [saved])).toEqual({ kind: 'mapped', mapping: saved });
+  });
+
+  it('calls a row mapped when a column is a number in this row and text in the sample', () => {
+    expect(classify({ ...seen, result: 4.2, lab_no: 17 }, forms, [saved])).toEqual({ kind: 'mapped', mapping: saved });
+  });
+
+  it('never calls a row with no keys mapped', () => {
+    const forEmpty: SavedMapping = { shapeHash: shapeOf({}).hash, fieldNames: [], targetId: 'test-target', rows: [] };
+    expect(classify({}, forms, [forEmpty, saved]).kind).toBe('unknown');
+    expect(classify({ gone: undefined }, forms, [forEmpty, saved]).kind).toBe('unknown');
+  });
+
+  it('picks the mapping with the fewest field names, and the first on a tie', () => {
+    const wide: SavedMapping = { ...saved, fieldNames: [...saved.fieldNames, 'ward'], targetId: 'wide' };
+    const tieA: SavedMapping = { ...saved, targetId: 'tie-a' };
+    const tieB: SavedMapping = { ...saved, targetId: 'tie-b' };
+    expect(classify({ lab_no: 'L-2' }, forms, [wide, tieA, tieB])).toEqual({ kind: 'mapped', mapping: tieA });
+    expect(classify({ lab_no: 'L-2', ward: 'W-1' }, forms, [tieA, wide])).toEqual({ kind: 'mapped', mapping: wide });
+  });
+
+  it('calls a row that fits a form a form, even when a mapping also knows its columns', () => {
+    const overForm: SavedMapping = { ...saved, fieldNames: ['pat_no', 'given', 'surname', 'ward'] };
+    expect(classify({ pat_no: 'T-1', given: 'Ann' }, forms, [overForm])).toEqual({ kind: 'form', formId: 'form-a' });
+    expect(classify({ given: 'Ann' }, forms, [overForm])).toEqual({ kind: 'mapped', mapping: overForm });
+  });
+});
+
+describe('classify then applyMapping on a row with a blank cell', () => {
+  const ID = 'Patient.identifier.value?system=urn:test:patient';
+  const target: MapTarget = {
+    id: 'test-target',
+    name: 'Test patient',
+    records: [{ type: 'Patient', packId: 'pack-p', repeats: false }],
+    links: [],
+    defaults: [],
+    fields: [
+      { path: ID, label: 'Patient number', required: true, repeats: false, valueSet: null },
+      { path: 'Patient.name.family?use=official', label: 'Last name', required: false, repeats: false, valueSet: null },
+    ],
+    identity: [{ record: 'Patient', parts: [{ field: ID }] }],
+  };
+  const sample = { pat_no: 'T-1', surname: 'TESTER' };
+  const mapping: SavedMapping = {
+    shapeHash: shapeOf(sample).hash,
+    fieldNames: Object.keys(sample),
+    targetId: target.id,
+    rows: [
+      { targetPath: ID, from: { field: 'pat_no' } },
+      { targetPath: 'Patient.name.family?use=official', from: { field: 'surname' } },
+    ],
+  };
+  const deps: ApplyDeps = { hashId: (parts) => `id-${parts.length}`, translateCode: async () => null };
+
+  it('maps a row missing an optional column', async () => {
+    const row = { pat_no: 'T-2' };
+    const c = classify(row, [], [mapping]);
+    expect(c).toEqual({ kind: 'mapped', mapping });
+    const res = await applyMapping(mapping, target, row, deps);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.resources[0]).toMatchObject({ resourceType: 'Patient', identifier: [{ system: 'urn:test:patient', value: 'T-2' }] });
+  });
+
+  it('classifies a row missing the column behind a required field as mapped, then apply fails naming the field', async () => {
+    const row = { surname: 'QZX-NAME' };
+    expect(classify(row, [], [mapping])).toEqual({ kind: 'mapped', mapping });
+    const res = await applyMapping(mapping, target, row, deps);
+    expect(res).toMatchObject({ ok: false, field: ID });
+    if (!res.ok) {
+      expect(res.reason).toContain('Patient number');
+      expect(res.reason).not.toContain('QZX');
     }
   });
 });

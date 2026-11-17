@@ -2,8 +2,14 @@ import type { SavedMapping } from './apply';
 import { shapeOf, type Shape } from './shape';
 
 /**
- * What kind of item this is: FHIR already, a match for one of CE's forms, a shape a saved mapping
- * knows, or a new shape a person has to map. Never throws.
+ * What kind of item this is: FHIR already, a match for one of CE's forms, a row a saved mapping
+ * knows, or a new shape a person has to map. Checked in that order. Never throws.
+ *
+ * A saved mapping knows a row when every key of the row is one of the mapping's `fieldNames`. A
+ * file reader drops blank cells and reads number-like cells as numbers, so rows of one file differ
+ * in keys and types; a missing column is empty to `applyMapping`, which fails a required one by
+ * name. Types and `shapeHash` play no part (the hash names the sample the mapping was made from).
+ * A row with a key the mapping never saw is a new shape. A row with no keys matches nothing.
  */
 
 export interface ClassifyForm {
@@ -41,8 +47,14 @@ export function classify(json: unknown, forms: ClassifyForm[], mappings: SavedMa
     if (form) return { kind: 'form', formId: form.id };
   }
 
-  const sortedKeys = JSON.stringify(keys); // shape fields are already sorted by name
-  const mapping = mappings.find((m) => m.shapeHash === shape.hash && JSON.stringify([...m.fieldNames].sort()) === sortedKeys);
+  // The tightest fit wins: the fewest field names, and the first in the list on a tie.
+  let mapping: SavedMapping | null = null;
+  if (keys.length > 0) {
+    for (const m of mappings) {
+      if (!keys.every((k) => m.fieldNames.includes(k))) continue;
+      if (!mapping || m.fieldNames.length < mapping.fieldNames.length) mapping = m;
+    }
+  }
   if (mapping) return { kind: 'mapped', mapping };
 
   return { kind: 'unknown', shape };
