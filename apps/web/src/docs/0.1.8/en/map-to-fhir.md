@@ -26,11 +26,11 @@ The webhook answers for the whole run. The default **Ingest** workflow refuses a
 
 A run that completes answers HTTP 200 with `ok: true` and its `runId`.
 
-To store the good rows of a message and set the bad ones aside, build your own workflow and connect **held** to a Log node or another node. A run of that workflow completes and answers `ok: true` even when rows were held. Check the node on **held** in **History** to find them.
+Some labs want the good rows of a message stored and the bad ones set aside. For that, build your own workflow and connect **held** to a Log node or another node. A run of that workflow completes and answers `ok: true` even when rows were held. Check the node on **held** in **History** to find them.
 
 ## Try a saved mapping from the command line
 
-`workflows map-test` runs a Map to FHIR node's saved mappings on a `.json` list or a `.csv` file. It prints counts and held reasons, never a row value, and stores nothing. It reads the saved workflow, so save the workflow in the studio first. In the shipped Ingest workflow, the workflow id is `wf-ingest` and the node id is `map-1`.
+`workflows map-test` runs a Map to FHIR node's saved mappings on a `.json` list or a `.csv` file. It stores nothing. Without `--json`, it prints counts and held reasons, never a row value. It reads the saved workflow, so save the workflow in the studio first. In the shipped Ingest workflow, the workflow id is `wf-ingest` and the node id is `map-1`.
 
 ```sh
 {{operator:data-map-test}}
@@ -38,14 +38,14 @@ To store the good rows of a message and set the bad ones aside, build your own w
 
 ![Try the saved mappings of a Map to FHIR node on a file.](guide:operator-data-map-test)
 
-The command exits with 0 when every row passes and 1 when any row is held. Add `--json` to print the full result for each row. A CSV run reads every cell as text and leaves out blank cells, so it can differ from the same file read by **Extract from File**.
+The command exits with 0 when every row passes and 1 when any row is held. With `--json`, it prints each row's result, records included, so the output holds the row's values. A CSV run reads every cell as text and leaves out blank cells. So it can differ from the same file read by **Extract from File**.
 
 ## Limits
 
 - A row with no Patient ID is held.
-- The same row sent twice gives the same records, not copies. The record ids come from the Patient ID, the specimen number or, without one, the collected date, and the test.
-- If one file maps the Patient ID system and another does not, one patient gets two Patient records.
-- **Extract from File** reads a CSV cell such as `12,5` as the number 125, and the **Number** rule keeps 125. It also reads some CSV dates, such as `01/12/2024`, as numbers, and the **Date** rule then holds the row. Post such data to a webhook as JSON instead. There `"12,5"` stays text.
+- The same row sent twice gives the same records, not copies. Each record id comes from the row's own identifiers. The patient's uses the Patient ID and its system. The specimen's adds the specimen number or, without one, the collected date. The order's adds its test code when mapped, and the result's adds the test.
+- If one file maps the Patient ID system and another does not, one patient gets two Patient records. Map it the same way in every file, for example as a fixed value. Without it, duplicate-patient detection cannot compare patients by Patient ID.
+- **Extract from File** reads a CSV cell such as `12,5` as the number 125, and the **Number** rule keeps 125. It also reads some CSV dates, such as `01/12/2024` and `2025-04-23`, as numbers, and the **Date** rule then holds the row. Post such data to a webhook as JSON instead. There `"12,5"` stays text.
 - The **Date** rule reads a date only, not a time.
 - The node does not read HL7 v2 messages.
 - Held reasons are in English.
@@ -63,5 +63,6 @@ These are the held reasons a person meets most often. A rule's reason starts wit
 - **not a FHIR Bundle this node can unwrap.** The body looks like FHIR but cannot be unwrapped.
 - **laboratory result must reference a ServiceRequest (basedOn).** A FHIR lab result came with no order. Send the order in the same post.
 - **basedOn ServiceRequest not found in batch or store.** A FHIR lab result names an order that is neither in the same run nor stored.
-- **nothing at body.** The node's source path does not point at the rows. After a webhook, set it to `body`.
+- **nothing at body.** The item has nothing under `body`. After Extract from File, leave the source path blank. After a webhook, check that the sender posts a body.
+- **not a row.** The list under the source path holds something that is not a row, such as a number or a text.
 - **held port is not connected.** This is a run failure, not a held reason. The error lists up to five reasons. In **Ingest** it is how a message that cannot be stored is refused. In your own workflow, connect **held** to a Log node to keep the good rows.

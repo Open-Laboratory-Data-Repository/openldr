@@ -324,12 +324,12 @@ preview a mapping in the app before saving it as `mapping.json`.
 ### Post pre-built FHIR (the CDR toolchain)
 
 The **Ingest** workflow is the front door for a system that already emits FHIR
-resources — most notably the **CDR toolchain**, which posts a **FHIR transaction Bundle**. Current
+resources. The main one is the **CDR toolchain**, which posts a **FHIR transaction Bundle**. Current
 CDR toolchain versions **default** their target path (`OPENLDR_CE_HOOK_PATH`) to the unified
 webhook (`/api/workflows/hooks/ingest`), so no path config is needed out of the box. An **older
-toolchain — or one whose `.env` still pins the retired `cdr-ingest` path** — must set
-`OPENLDR_CE_HOOK_PATH=/api/workflows/hooks/ingest` (the **full** path, not bare `ingest`) to target
-it. On a new install the pipeline is **Webhook → Map to FHIR → Persist store → Log**. Nothing is
+toolchain, or one whose `.env` still pins the retired `cdr-ingest` path**, must set
+`OPENLDR_CE_HOOK_PATH=/api/workflows/hooks/ingest` to target it. That is the **full** path, not
+bare `ingest`. On a new install the pipeline is **Webhook → Map to FHIR → Persist store → Log**. Nothing is
 connected to Map to FHIR's **held** output, on purpose. An install set up
 before this release keeps the older Switch and Unwrap FHIR Bundle graph until you reset it.
 

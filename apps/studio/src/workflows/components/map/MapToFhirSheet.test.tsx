@@ -502,7 +502,7 @@ describe('MapToFhirSheet fix round 1', () => {
     const other = { shapeHash: 'o', fieldNames: ['pat_no', 'zz'], targetId: 'test-target', rows: [] };
     const { update } = renderSheet({ targetId: 'test-target', mappings: [narrow, other] });
     await screen.findByTestId('map-row-Patient.identifier.value');
-    expect(screen.getByTestId('map-replaces-narrower')).toHaveTextContent('Saving replaces 1 saved mapping that covers fewer columns.');
+    expect(screen.getByTestId('map-replaces-narrower')).toHaveTextContent('Saving replaces 1 saved mapping whose columns are all in this one.');
     fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
     fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
     openMenuAndClick('Save');
