@@ -2,7 +2,7 @@
 
 Map to FHIR é um nó de workflow. Transforma as linhas próprias de um laboratório em registos FHIR que o OpenLDR pode guardar. Também deixa passar o FHIR tal como chega, e transforma as respostas a um formulário aceite em registos. O que não consegue mapear segue para a saída **retidos**, com um motivo. Os responsáveis de laboratório configuram-no uma vez para cada ficheiro do laboratório.
 
-Numa instalação nova, o workflow fornecido **Ingest** usa este nó. O webhook envia para **Map to FHIR**, e **saída** segue para **Persist store**. **retidos** segue para um nó Log chamado **Held: not mapped**. Uma instalação feita antes desta versão mantém o grafo Ingest antigo. **Reset to default** aplica o novo e elimina qualquer alteração feita ao antigo.
+Numa instalação nova, o workflow fornecido **Ingest** usa este nó. O webhook envia para **Map to FHIR**, e **saída** segue para **Persist store**. Nada está ligado a **retidos**, de propósito. Por isso o Ingest recusa uma mensagem inteira quando alguma parte dela não pode ser guardada. A execução falha, o emissor recebe um erro, e nada dessa mensagem é guardado. Uma instalação feita antes desta versão mantém o grafo Ingest antigo. **Reset to default** aplica o novo e elimina qualquer alteração feita ao antigo.
 
 ## Adicionar Map to FHIR a um workflow
 
@@ -98,6 +98,8 @@ A folha recusa guardar enquanto um campo obrigatório não tiver coluna nem valo
 
 ## Ligar a saída dos retidos
 
+Faça isto no seu próprio workflow, quando as linhas boas devem ser guardadas e as más postas de parte. Deixe **retidos** sem ligação no **Ingest**, para que continue a recusar uma mensagem que não consegue guardar.
+
 1. Pesquise `Log` na biblioteca de nós.
 2. Arraste **Log** para junto de **Map to FHIR**.
 3. Arraste o ponto **retidos** de **Map to FHIR** até ao ponto à esquerda do nó Log.
@@ -127,7 +129,7 @@ Registe apenas o motivo. Um item retido também contém a linha tal como chegou.
 
 - **no mapping for this shape.** A linha tem uma coluna que nenhum mapeamento guardado do nó conhece. Obtenha uma amostra com essa linha e guarde um mapeamento para ela.
 - **more than one saved mapping fits this row.** Dois mapeamentos guardados conhecem todas as suas colunas. Mantenha um mapeamento por ficheiro, ou use um nó por ficheiro.
-- **A execução falha com "held port is not connected".** Ligue **retidos** a um nó Log.
+- **A execução falha com "held port is not connected".** No **Ingest**, é assim que uma mensagem que não pode ser guardada é recusada. O erro indica os primeiros motivos. Corrija os dados ou o mapeamento e envie de novo. No seu próprio workflow, ligue **retidos** a um nó Log para guardar as linhas boas e pôr as más de parte.
 - **nothing at body.** O caminho de origem não aponta para as linhas. Depois de um webhook, defina **Caminho de origem** como `body`.
 - **Escutar não encontra nada.** Guarde primeiro o workflow. Depois selecione **Escutar** e envie a mensagem dentro de um minuto.
 

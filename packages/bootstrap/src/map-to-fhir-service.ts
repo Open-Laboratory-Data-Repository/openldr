@@ -251,8 +251,10 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): (input: RunM
     if (config.mappings.length > 0 && !targetId) throw new Error('Map to FHIR node config: targetId is required when the node has mappings');
     const mappings = parseMappings(config.mappings, targetId);
 
+    // Only a mapping needs the target. With none, FHIR and form items map without the packs, so a
+    // node like the default Ingest one does not depend on the pack seed.
     let target: MapTarget | null = null;
-    if (targetId) {
+    if (mappings.length > 0) {
       target = mapTargetById(await deps.packs(), targetId);
       if (!target) throw new Error(`Map to FHIR node config: no map target ${targetId}`);
     }

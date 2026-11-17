@@ -48,9 +48,9 @@ describe('rebuildSystemWorkflow', () => {
     expect(secretPreserved).toBe(true);
   });
 
-  it('restores webhook, Map to FHIR, Persist store and the two Log nodes', () => {
+  it('restores webhook, Map to FHIR, Persist store and Log', () => {
     const { workflow } = rebuildSystemWorkflow(existing as never);
-    expect(workflow.definition.nodes.map((n: any) => n.id).sort()).toEqual(['log-1', 'log-held-1', 'map-1', 'persist-1', 'trigger-1']);
+    expect(workflow.definition.nodes.map((n: any) => n.id).sort()).toEqual(['log-1', 'map-1', 'persist-1', 'trigger-1']);
   });
 
   // An install seeded before Map to FHIR has a Form Validate node. Its form carries over.

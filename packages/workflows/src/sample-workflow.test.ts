@@ -29,8 +29,8 @@ describe('buildDefaultWorkflows', () => {
     expect(hook?.data).toMatchObject({ secret: 'ingest-secret', path: 'ingest', method: 'POST' });
   });
 
-  it('is webhook, Map to FHIR, Persist store and two Log nodes, with no Switch, Unwrap or Form Validate', () => {
-    expect(nodeIds()).toEqual(['log-1', 'log-held-1', 'map-1', 'persist-1', 'trigger-1']);
+  it('is webhook, Map to FHIR, Persist store and Log, with no Switch, Unwrap or Form Validate', () => {
+    expect(nodeIds()).toEqual(['log-1', 'map-1', 'persist-1', 'trigger-1']);
     const actions = ingest.definition.nodes.map((n) => n.data.action ?? n.data.templateId);
     expect(actions).not.toContain('unwrap-bundle');
     expect(actions).not.toContain('form-validate');
@@ -52,21 +52,14 @@ describe('buildDefaultWorkflows', () => {
     expect(evt?.data.config).toMatchObject({ source: 'webhook-ingest' });
   });
 
-  it('sends out to Persist then Log, and held to its own Log', () => {
+  it('sends out to Persist then Log, and leaves held unwired so a held item fails the run', () => {
     const edges = ingest.definition.edges.map((e) => [e.source, e.sourceHandle ?? null, e.target]);
     expect(edges).toEqual([
       ['trigger-1', null, 'map-1'],
       ['map-1', 'out', 'persist-1'],
-      ['map-1', 'held', 'log-held-1'],
       ['persist-1', null, 'log-1'],
     ]);
-  });
-
-  it('labels the held Log so a person knows what it is, and logs only the reason', () => {
-    const held = ingest.definition.nodes.find((n) => n.id === 'log-held-1');
-    expect(held?.data).toMatchObject({ label: 'Held: not mapped', action: 'log', templateId: 'log' });
-    // A held item carries the original row. Only the reason, which holds no value, is logged.
-    expect(held?.data.message).toBe('Held: {{ $json.reason }}');
+    expect(ingest.definition.edges.some((e) => e.sourceHandle === 'held')).toBe(false);
   });
 
   it('describes the new graph, not the old Switch', () => {

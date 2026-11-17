@@ -2,7 +2,7 @@
 
 Map to FHIR is a workflow node. It turns a lab's own rows into FHIR records that OpenLDR can store. It also passes FHIR on as it is, and turns answers to an allowed form into records. Anything it cannot map goes to its **held** output with a reason. Lab managers set it up once for each lab file.
 
-The shipped **Ingest** workflow uses it on a new install. Its webhook sends to **Map to FHIR**, and **out** goes to **Persist store**. **held** goes to a Log node named **Held: not mapped**. An install set up before this release keeps its old Ingest graph. **Reset to default** gives the new one, and drops any change you made to the old one.
+The shipped **Ingest** workflow uses it on a new install. Its webhook sends to **Map to FHIR**, and **out** goes to **Persist store**. Nothing is connected to **held**, on purpose. So Ingest refuses a whole message when any part of it cannot be stored. The run fails, the sender gets an error, and nothing from that message is stored. An install set up before this release keeps its old Ingest graph. **Reset to default** gives the new one, and drops any change you made to the old one.
 
 ## Add Map to FHIR to a workflow
 
@@ -98,6 +98,8 @@ The sheet refuses to save while a required field has no column or fixed value, o
 
 ## Wire the held output
 
+Do this in your own workflow when good rows should be stored and bad rows set aside. Leave **held** unconnected in **Ingest**, so it keeps refusing a message it cannot store.
+
 1. Search the Node library for `Log`.
 2. Drag **Log** beside **Map to FHIR**.
 3. Drag the **held** dot of **Map to FHIR** to the dot on the left of the Log node.
@@ -127,7 +129,7 @@ Log the reason only. A held item also holds the row as it came in.
 
 - **no mapping for this shape.** The row has a column that no saved mapping of the node knows. Get a sample with that row and save a mapping for it.
 - **more than one saved mapping fits this row.** Two saved mappings know all of its columns. Keep one mapping per file, or use one node per file.
-- **The run fails with "held port is not connected".** Connect **held** to a Log node.
+- **The run fails with "held port is not connected".** In **Ingest** this is how a message that cannot be stored is refused. The error lists the first reasons. Fix the data or the mapping and send it again. In your own workflow, connect **held** to a Log node to store the good rows and set the bad ones aside.
 - **nothing at body.** The source path does not point at the rows. After a webhook, set **Source path** to `body`.
 - **Listen finds nothing.** Save the workflow first. Then select **Listen** and send the message within a minute.
 

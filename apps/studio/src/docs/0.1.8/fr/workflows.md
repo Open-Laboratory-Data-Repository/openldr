@@ -316,7 +316,7 @@ curl -X POST https://your-host/api/workflows/hooks/ingest \
 
 Une réponse terminée contient `ok`, `runId` et `correlationId`. Une réponse 202 signifie accepté, avec un identifiant de requête et une URL de suivi. Consultez cette URL avec le jeton actuel. Respectez Retry-After. Réutilisez la même clé d'idempotence et une entrée identique pour une nouvelle tentative. Une entrée différente avec la même clé retourne 409.
 
-Une exécution terminée peut quand même avoir des lignes retenues. Sur une nouvelle installation, **Map to FHIR** envoie une ligne qu'il ne sait pas mapper vers le nœud Log **Held: not mapped**, et la réponse ne le dit pas. Vérifiez ce nœud dans History.
+Sur une nouvelle installation, **Ingest** refuse un message entier dès qu'une partie ne peut pas être stockée. L'exécution échoue, l'émetteur reçoit HTTP 500, et rien de ce message n'est stocké. History montre les raisons sur le nœud **Map to FHIR**.
 
 ## Fichiers fictifs facultatifs d'exercice
 

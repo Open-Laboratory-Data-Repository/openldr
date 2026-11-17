@@ -329,17 +329,18 @@ CDR toolchain versions **default** their target path (`OPENLDR_CE_HOOK_PATH`) to
 webhook (`/api/workflows/hooks/ingest`), so no path config is needed out of the box. An **older
 toolchain — or one whose `.env` still pins the retired `cdr-ingest` path** — must set
 `OPENLDR_CE_HOOK_PATH=/api/workflows/hooks/ingest` (the **full** path, not bare `ingest`) to target
-it. On a new install the pipeline is **Webhook → Map to FHIR → Persist store → Log**, with
-Map to FHIR's **held** output going to a second Log node, **Held: not mapped**. An install set up
+it. On a new install the pipeline is **Webhook → Map to FHIR → Persist store → Log**. Nothing is
+connected to Map to FHIR's **held** output, on purpose. An install set up
 before this release keeps the older Switch and Unwrap FHIR Bundle graph until you reset it.
 
 - The request body is a **FHIR transaction Bundle** or a bare array of FHIR resources. **Map to
   FHIR** resolves internal references and unwraps it into **one item per resource**, because
   **Persist store persists one FHIR resource per input item**. It is the same write path, and the
   same **validation strictness gate**, the CLI uses.
-- **Map to FHIR checks each Bundle at that level before Persist store.** A Bundle that fails goes
-  to the held Log with a reason, and the webhook still answers `ok: true` for the run. Read the
-  held Log node in History to find it. See [Map to FHIR](/docs/map-to-fhir).
+- **Map to FHIR checks each Bundle at that level before Persist store.** Ingest refuses a whole
+  message when any part of it cannot be stored. The run fails, nothing from it is stored, and the
+  webhook answers HTTP 500, as before. The reasons are on the Map to FHIR node of the run in
+  History. See [Map to FHIR](/docs/map-to-fhir).
 - **One webhook handles tests and questionnaires together.** Persist stores every resource, and the
   projection routes each by `resourceType` (`Observation` → `lab_results`, `ServiceRequest` →
   `lab_requests`, `QuestionnaireResponse` → `questionnaire_responses`, …).

@@ -335,18 +335,17 @@ caminho de destino (`OPENLDR_CE_HOOK_PATH`) o webhook unificado
 mais antiga, ou uma cujo `.env` ainda fixe o caminho retirado `cdr-ingest`**, tem de definir
 `OPENLDR_CE_HOOK_PATH=/api/workflows/hooks/ingest` (o caminho **completo**, não apenas
 `ingest`) para o usar. Numa instalação nova, o pipeline é **Webhook → Map to FHIR → Persist
-store → Log**. A saída **retidos** de Map to FHIR segue para um segundo nó Log, **Held: not
-mapped**. Uma instalação feita antes desta versão mantém o grafo antigo com Switch e Unwrap
+store → Log**. Nada está ligado à saída **retidos** de Map to FHIR, de propósito. Uma instalação feita antes desta versão mantém o grafo antigo com Switch e Unwrap
 FHIR Bundle até o repor.
 
 - O corpo do pedido é um **Bundle FHIR de transação** ou uma lista simples de recursos FHIR.
   **Map to FHIR** resolve as referências internas e divide-o em **um item por recurso**,
   porque o **Persist store guarda um recurso FHIR por cada item de entrada**. É o mesmo
   caminho de escrita, com o mesmo **controlo de rigor da validação**, que a CLI usa.
-- **Map to FHIR verifica cada Bundle a esse nível antes do Persist store.** Um Bundle
-  recusado segue para o Log dos retidos com um motivo, e o webhook responde na mesma `ok: true`
-  para a execução. Leia o nó Log dos retidos em History para o encontrar. Consulte
-  [Map to FHIR](/docs/map-to-fhir).
+- **Map to FHIR verifica cada Bundle a esse nível antes do Persist store.** O Ingest recusa
+  uma mensagem inteira quando alguma parte dela não pode ser guardada. A execução falha, nada
+  dela é guardado, e o webhook responde HTTP 500, como antes. Os motivos estão no nó Map to
+  FHIR da execução, em History. Consulte [Map to FHIR](/docs/map-to-fhir).
 - **Um só webhook trata testes e questionários em conjunto.** O Persist guarda todos os
   recursos, e a projeção encaminha cada um pelo `resourceType` (`Observation` →
   `lab_results`, `ServiceRequest` → `lab_requests`, `QuestionnaireResponse` →

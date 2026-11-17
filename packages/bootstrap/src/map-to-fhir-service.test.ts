@@ -228,6 +228,32 @@ describe('createMapToFhirService', () => {
     expect(res.meta).toEqual({ fhir: 1, form: 1, mapped: 0, held: 0, heldReasons: [] });
     expect(packs).not.toHaveBeenCalled();
   });
+
+  // The default Ingest node has a target and no mapping. Its runs must not depend on the packs.
+  it.each(['lab-result', 'no-such-target'])('reads no packs with no mappings and targetId %s', async (targetId) => {
+    const packs = vi.fn(async () => PACKS);
+    const svc = createMapToFhirService(deps({ packs }));
+    const res = await svc({ items: [{ json: fhirPatient }, { json: { answer_a: 'yes' } }], config: { targetId, formIds: ['form-1'], mappings: [] } });
+    expect(res.meta).toEqual({ fhir: 1, form: 1, mapped: 0, held: 0, heldReasons: [] });
+    expect(packs).not.toHaveBeenCalled();
+  });
+
+  it('runs even when the packs would fail, as long as there is no mapping', async () => {
+    const packs = vi.fn(async () => { throw new Error('Map to FHIR: starter pack pack-patient is not stored'); });
+    const svc = createMapToFhirService(deps({ packs }));
+    const res = await svc({ items: [{ json: fhirPatient }], config: { targetId: 'lab-result', formIds: [], mappings: [] } });
+    expect(res.out).toHaveLength(1);
+    expect(packs).not.toHaveBeenCalled();
+  });
+
+  it('reads the packs once per call when there is a mapping', async () => {
+    const packs = vi.fn(async () => PACKS);
+    const svc = createMapToFhirService(deps({ packs }));
+    await svc({ items: [{ json: row }, { json: row }], config });
+    expect(packs).toHaveBeenCalledTimes(1);
+    await svc({ items: [{ json: row }], config });
+    expect(packs).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('codingFromMapRows', () => {

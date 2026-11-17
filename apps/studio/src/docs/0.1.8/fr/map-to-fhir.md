@@ -2,7 +2,7 @@
 
 Map to FHIR est un nœud de workflow. Il transforme les lignes propres à un laboratoire en enregistrements FHIR qu'OpenLDR peut stocker. Il transmet aussi le FHIR tel quel, et transforme les réponses à un formulaire accepté en enregistrements. Ce qu'il ne sait pas mapper part sur sa sortie **retenus**, avec une raison. Les responsables de laboratoire le configurent une fois pour chaque fichier de laboratoire.
 
-Sur une nouvelle installation, le workflow fourni **Ingest** l'utilise. Son webhook envoie vers **Map to FHIR**, et **sortie** va vers **Persist store**. **retenus** va vers un nœud Log nommé **Held: not mapped**. Une installation mise en place avant cette version garde son ancien graphe Ingest. **Reset to default** donne le nouveau, et supprime toute modification faite à l'ancien.
+Sur une nouvelle installation, le workflow fourni **Ingest** l'utilise. Son webhook envoie vers **Map to FHIR**, et **sortie** va vers **Persist store**. Rien n'est relié à **retenus**, et c'est voulu. Ingest refuse donc un message entier dès qu'une partie ne peut pas être stockée. L'exécution échoue, l'émetteur reçoit une erreur, et rien de ce message n'est stocké. Une installation mise en place avant cette version garde son ancien graphe Ingest. **Reset to default** donne le nouveau, et supprime toute modification faite à l'ancien.
 
 ## Ajouter Map to FHIR à un workflow
 
@@ -98,6 +98,8 @@ La feuille refuse d'enregistrer tant qu'un champ obligatoire n'a ni colonne ni v
 
 ## Relier la sortie des lignes retenues
 
+Faites-le dans votre propre workflow, quand les bonnes lignes doivent être stockées et les mauvaises mises de côté. Laissez **retenus** non relié dans **Ingest**, pour qu'il continue de refuser un message qu'il ne peut pas stocker.
+
 1. Recherchez `Log` dans la bibliothèque de nœuds.
 2. Glissez **Log** à côté de **Map to FHIR**.
 3. Glissez le point **retenus** de **Map to FHIR** vers le point à gauche du nœud Log.
@@ -127,7 +129,7 @@ Ne journalisez que la raison. Un élément retenu contient aussi la ligne telle 
 
 - **no mapping for this shape.** La ligne a une colonne qu'aucun mappage enregistré du nœud ne connaît. Obtenez un échantillon avec cette ligne et enregistrez un mappage pour elle.
 - **more than one saved mapping fits this row.** Deux mappages enregistrés connaissent toutes ses colonnes. Gardez un mappage par fichier, ou utilisez un nœud par fichier.
-- **L'exécution échoue avec "held port is not connected".** Reliez **retenus** à un nœud Log.
+- **L'exécution échoue avec "held port is not connected".** Dans **Ingest**, c'est ainsi qu'un message impossible à stocker est refusé. L'erreur donne les premières raisons. Corrigez les données ou le mappage et renvoyez-les. Dans votre propre workflow, reliez **retenus** à un nœud Log pour stocker les bonnes lignes et mettre les mauvaises de côté.
 - **nothing at body.** Le chemin source ne pointe pas vers les lignes. Après un webhook, réglez **Chemin source** sur `body`.
 - **Écouter ne trouve rien.** Enregistrez d'abord le workflow. Sélectionnez ensuite **Écouter** et envoyez le message dans la minute.
 

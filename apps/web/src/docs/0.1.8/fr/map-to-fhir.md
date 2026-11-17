@@ -14,7 +14,7 @@ Chaque ensemble d'enregistrements passe les contrôles d'OpenLDR au niveau de va
 
 Utilisez-le quand un système de laboratoire envoie son propre export et ne sait pas envoyer du FHIR. Une personne mappe les colonnes une fois, dans le studio, sur un vrai échantillon. Ensuite, chaque nouveau fichier avec ces colonnes se mappe sans aide.
 
-Sur une nouvelle installation, le workflow fourni **Ingest** l'utilise déjà. Son webhook, `/api/workflows/hooks/ingest`, envoie chaque requête vers Map to FHIR. **sortie** va vers **Persist store**, et **retenus** va vers un nœud Log nommé **Held: not mapped**. Une installation mise en place avant cette version garde son ancien graphe Ingest. **Reset to default** sur le workflow Ingest donne le nouveau, et supprime toute modification faite à l'ancien.
+Sur une nouvelle installation, le workflow fourni **Ingest** l'utilise déjà. Son webhook, `/api/workflows/hooks/ingest`, envoie chaque requête vers Map to FHIR. **sortie** va vers **Persist store**. Rien n'est relié à **retenus**, et c'est voulu. Une installation mise en place avant cette version garde son ancien graphe Ingest. **Reset to default** sur le workflow Ingest donne le nouveau, et supprime toute modification faite à l'ancien.
 
 Le guide intégré **Map to FHIR** montre pas à pas comment mapper un fichier.
 
@@ -22,9 +22,11 @@ Utilisez un nœud Map to FHIR par fichier de laboratoire. Une ligne n'est mappé
 
 ## Ce que voit l'émetteur
 
-Le webhook répond pour l'exécution entière. Une exécution terminée répond `ok: true` avec son `runId`, même si le nœud a retenu des lignes. Consultez le nœud Log des lignes retenues dans **History** pour les voir.
+Le webhook répond pour l'exécution entière. Le workflow par défaut **Ingest** refuse un message entier dès qu'une partie ne peut pas être stockée. Comme rien n'est relié à **retenus**, une seule ligne retenue fait échouer le nœud et l'exécution, et Persist store ne s'exécute pas. Rien de ce message n'est stocké. L'émetteur reçoit HTTP 500 avec `ok: false`, l'identifiant de l'exécution et l'erreur `workflow execution failed; inspect the recorded run before resubmitting`. Les raisons ne sont pas dans la réponse. Elles sont dans l'exécution, sur le nœud Map to FHIR, dans **History**.
 
-Si rien n'est relié à **retenus**, une seule ligne retenue fait échouer le nœud et l'exécution. Le webhook répond alors HTTP 500, et les étapes suivantes ne s'exécutent pas.
+Une exécution terminée répond HTTP 200 avec `ok: true` et son `runId`.
+
+Pour stocker les bonnes lignes d'un message et mettre les mauvaises de côté, créez votre propre workflow et reliez **retenus** à un nœud Log ou à un autre nœud. Une exécution de ce workflow se termine et répond `ok: true`, même si des lignes ont été retenues. Consultez le nœud relié à **retenus** dans **History** pour les retrouver.
 
 ## Essayer un mappage enregistré en ligne de commande
 
@@ -62,4 +64,4 @@ Voici les raisons de rétention les plus fréquentes. La raison d'une règle com
 - **laboratory result must reference a ServiceRequest (basedOn).** Un résultat de laboratoire FHIR est arrivé sans demande. Envoyez la demande dans la même requête.
 - **basedOn ServiceRequest not found in batch or store.** Un résultat de laboratoire FHIR nomme une demande qui n'est ni dans la même exécution ni stockée.
 - **nothing at body.** Le chemin source du nœud ne pointe pas vers les lignes. Après un webhook, réglez-le sur `body`.
-- **held port is not connected.** C'est un échec de l'exécution, pas une raison de rétention. Reliez **retenus** à un nœud Log.
+- **held port is not connected.** C'est un échec de l'exécution, pas une raison de rétention. L'erreur donne jusqu'à cinq raisons. Dans **Ingest**, c'est ainsi qu'un message impossible à stocker est refusé. Dans votre propre workflow, reliez **retenus** à un nœud Log pour garder les bonnes lignes.

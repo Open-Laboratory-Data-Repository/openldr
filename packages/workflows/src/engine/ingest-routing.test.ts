@@ -25,8 +25,17 @@ function fakeMapToFhir(input: RunMapToFhirInput) {
   const meta = { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [] as string[] };
   input.items.forEach((item, index) => {
     const json = item.json as Record<string, unknown>;
+    const hold = (reason: string) => {
+      held.push({ json: { item: json, reason } });
+      heldIndexes.push(index);
+      meta.held += 1;
+      meta.heldReasons.push(reason);
+    };
     if (json.resourceType === 'Bundle') {
-      for (const e of (json.entry as Array<{ resource: Record<string, unknown> }>) ?? []) out.push({ json: e.resource });
+      const resources = ((json.entry as Array<{ resource: Record<string, unknown> }>) ?? []).map((e) => e.resource);
+      // A resource with id FAILS stands for one that fails CE's checks: the whole Bundle is held.
+      if (resources.some((r) => r.id === 'FAILS')) return hold('record 1 (Observation): failed the business-rule check');
+      for (const r of resources) out.push({ json: r });
       meta.fhir += 1;
     } else if (typeof json.resourceType === 'string') {
       out.push({ json });
@@ -35,10 +44,7 @@ function fakeMapToFhir(input: RunMapToFhirInput) {
       out.push({ json: { resourceType: 'ServiceRequest', id: `sr-${index}` } });
       meta.form += 1;
     } else {
-      held.push({ json: { item: json, reason: 'no mapping for this shape' } });
-      heldIndexes.push(index);
-      meta.held += 1;
-      meta.heldReasons.push('no mapping for this shape');
+      hold('no mapping for this shape');
     }
   });
   return { out, held, heldIndexes, meta };
@@ -76,7 +82,7 @@ describe('wf-ingest routing', () => {
     expect(call.items).toEqual([{ json: { answer_a: 'x' } }]);
   });
 
-  it('sends a FHIR transaction Bundle to Persist as its resources, and nothing to the held Log', async () => {
+  it('sends a FHIR transaction Bundle to Persist as its resources', async () => {
     const { nodes, edges } = ingestGraph();
     const services = stubServices();
     const bundle = {
@@ -92,7 +98,6 @@ describe('wf-ingest routing', () => {
     expect(statusOf(results, 'map-1')).toBe('success');
     expect(statusOf(results, 'persist-1')).toBe('success');
     expect(statusOf(results, 'log-1')).toBe('success');
-    expect(statusOf(results, 'log-held-1')).toBe('skipped');
     expect(persistMock(services)).toHaveBeenCalledTimes(1);
     expect(persistedTypes(services)).toEqual(['Observation', 'ServiceRequest']);
   });
@@ -106,45 +111,73 @@ describe('wf-ingest routing', () => {
     });
     expect(status).toBe('completed');
     expect(statusOf(results, 'persist-1')).toBe('success');
-    expect(statusOf(results, 'log-held-1')).toBe('skipped');
     expect(persistedTypes(services)).toEqual(['ServiceRequest']);
   });
 
-  it('holds an unknown row in the held Log, logs only its reason, and does not run Persist', async () => {
+  const errorOf = (results: { nodeId: string; error?: string }[], id: string) => results.find((r) => r.nodeId === id)?.error;
+
+  it('fails the run for an unknown row, with the count and reason in the error, and does not run Persist', async () => {
     const { nodes, edges } = ingestGraph();
     const services = stubServices();
     const { results, status } = await runWorkflow(nodes, edges, {
       input: { method: 'POST', body: { QZX_col: 'QZX-value' }, headers: {}, query: {} },
       services,
     });
-    expect(status).toBe('completed');
-    expect(statusOf(results, 'persist-1')).toBe('skipped');
-    expect(statusOf(results, 'log-1')).toBe('skipped');
-    expect(statusOf(results, 'log-held-1')).toBe('success');
+    expect(status).toBe('failed');
+    expect(statusOf(results, 'map-1')).toBe('error');
+    expect(errorOf(results, 'map-1')).toBe(
+      'Map to FHIR node: 1 item(s) held and the held port is not connected. First reasons: no mapping for this shape',
+    );
+    expect(errorOf(results, 'map-1')).not.toContain('QZX');
     expect(persistMock(services)).not.toHaveBeenCalled();
-    const logs = (results.find((r) => r.nodeId === 'log-held-1') as { logs?: Array<{ message: string }> }).logs ?? [];
-    expect(logs.map((l) => l.message)).toEqual(['Held: no mapping for this shape']);
-    expect(JSON.stringify(logs)).not.toContain('QZX');
   });
 
-  it('sends each item of a mixed list its own way', async () => {
+  it('fails the run for a FHIR Bundle that fails the checks, and does not run Persist', async () => {
     const { nodes, edges } = ingestGraph();
     const services = stubServices();
-    const body = [
-      { resourceType: 'Observation', id: 'o1' },
-      { answer_a: 'x' },
-      { QZX_col: 'QZX-value' },
-    ];
+    const bundle = { resourceType: 'Bundle', type: 'transaction', entry: [{ resource: { resourceType: 'Observation', id: 'FAILS' } }] };
+    const { results, status } = await runWorkflow(nodes, edges, {
+      input: { method: 'POST', body: bundle, headers: {}, query: {} },
+      services,
+    });
+    expect(status).toBe('failed');
+    expect(errorOf(results, 'map-1')).toMatch(/1 item\(s\) held .* failed the business-rule check$/);
+    expect(persistMock(services)).not.toHaveBeenCalled();
+  });
+
+  it('refuses a whole mixed list when one item cannot be mapped: nothing reaches Persist', async () => {
+    const { nodes, edges } = ingestGraph();
+    const services = stubServices();
+    const body = [{ resourceType: 'Observation', id: 'o1' }, { answer_a: 'x' }, { QZX_col: 'QZX-value' }];
     const { results, status } = await runWorkflow(nodes, edges, {
       input: { method: 'POST', body, headers: {}, query: {} },
       services,
     });
+    expect(status).toBe('failed');
+    expect(statusOf(results, 'persist-1')).toBeUndefined();
+    expect(persistMock(services)).not.toHaveBeenCalled();
+  });
+
+  // Not the default workflow: a graph of this test's own, the way a person sets aside bad rows.
+  it('in a workflow with held wired to a Log, stores the good items and logs the held reason', async () => {
+    const { nodes: defaultNodes } = ingestGraph();
+    const nodes = [
+      ...defaultNodes,
+      { id: 'held-log', type: 'action', position: { x: 0, y: 0 }, data: { label: 'Held', action: 'log', message: 'Held: {{ $json.reason }}', config: {} } },
+    ];
+    const edges = [...ingestGraph().edges, { id: 'eh', source: 'map-1', target: 'held-log', sourceHandle: 'held' }];
+    const services = stubServices();
+    const body = [{ resourceType: 'Observation', id: 'o1' }, { answer_a: 'x' }, { QZX_col: 'QZX-value' }];
+    const { results, status } = await runWorkflow(nodes as never, edges as never, {
+      input: { method: 'POST', body, headers: {}, query: {} },
+      services,
+    });
     expect(status).toBe('completed');
-    expect(statusOf(results, 'persist-1')).toBe('success');
-    expect(statusOf(results, 'log-held-1')).toBe('success');
     expect(persistedTypes(services)).toEqual(['Observation', 'ServiceRequest']);
-    const heldInput = results.find((r) => r.nodeId === 'log-held-1') as { output?: WorkflowItem[] };
-    expect(heldInput.output?.map((i) => i.json.reason)).toEqual(['no mapping for this shape']);
+    const log = results.find((r) => r.nodeId === 'held-log') as { output?: WorkflowItem[]; logs?: Array<{ message: string }> };
+    expect(log.output?.map((i) => i.json.reason)).toEqual(['no mapping for this shape']);
+    expect(log.logs?.map((l) => l.message)).toEqual(['Held: no mapping for this shape']);
+    expect(JSON.stringify(log.logs)).not.toContain('QZX');
   });
 
   // The seam this branch exists to create, end to end through the REAL seeded graph: what

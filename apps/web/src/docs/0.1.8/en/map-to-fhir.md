@@ -14,7 +14,7 @@ Every set of records goes through OpenLDR's checks at the configured validation 
 
 Use it when a lab system sends its own export and cannot send FHIR. A person maps the columns once, in the studio, on a real sample. After that, each new file with those columns maps without help.
 
-On a new install, the shipped **Ingest** workflow already uses it. Its webhook, `/api/workflows/hooks/ingest`, sends every post to Map to FHIR. **out** goes to **Persist store**, and **held** goes to a Log node named **Held: not mapped**. An install set up before this release keeps its older Ingest graph. **Reset to default** on the Ingest workflow gives the new one, and drops any change made to the old one.
+On a new install, the shipped **Ingest** workflow already uses it. Its webhook, `/api/workflows/hooks/ingest`, sends every post to Map to FHIR. **out** goes to **Persist store**. Nothing is connected to **held**, on purpose. An install set up before this release keeps its older Ingest graph. **Reset to default** on the Ingest workflow gives the new one, and drops any change made to the old one.
 
 The in-app guide **Map to FHIR** shows how to map a file, step by step.
 
@@ -22,9 +22,11 @@ Use one Map to FHIR node for each lab file. A row is mapped only when exactly on
 
 ## What a sender sees
 
-The webhook answers for the whole run. A run that completes answers `ok: true` with its `runId`, even when the node held some rows. Check the held Log node in **History** to see them.
+The webhook answers for the whole run. The default **Ingest** workflow refuses a whole message when any part of it cannot be stored. With nothing connected to **held**, one held row fails the node and the run, and Persist store does not run. Nothing from that message is stored. The sender gets HTTP 500 with `ok: false`, the run id and the error `workflow execution failed; inspect the recorded run before resubmitting`. The held reasons are not in the response. They are in the run, on the Map to FHIR node, in **History**.
 
-If nothing is connected to **held**, one held row fails the node and the run. The webhook then answers HTTP 500, and the steps after the node do not run.
+A run that completes answers HTTP 200 with `ok: true` and its `runId`.
+
+To store the good rows of a message and set the bad ones aside, build your own workflow and connect **held** to a Log node or another node. A run of that workflow completes and answers `ok: true` even when rows were held. Check the node on **held** in **History** to find them.
 
 ## Try a saved mapping from the command line
 
@@ -62,4 +64,4 @@ These are the held reasons a person meets most often. A rule's reason starts wit
 - **laboratory result must reference a ServiceRequest (basedOn).** A FHIR lab result came with no order. Send the order in the same post.
 - **basedOn ServiceRequest not found in batch or store.** A FHIR lab result names an order that is neither in the same run nor stored.
 - **nothing at body.** The node's source path does not point at the rows. After a webhook, set it to `body`.
-- **held port is not connected.** This is a run failure, not a held reason. Connect **held** to a Log node.
+- **held port is not connected.** This is a run failure, not a held reason. The error lists up to five reasons. In **Ingest** it is how a message that cannot be stored is refused. In your own workflow, connect **held** to a Log node to keep the good rows.

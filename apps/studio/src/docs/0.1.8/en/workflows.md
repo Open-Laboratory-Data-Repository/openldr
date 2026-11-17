@@ -316,7 +316,7 @@ curl -X POST https://your-host/api/workflows/hooks/ingest \
 
 A completed response contains `ok`, `runId` and `correlationId`. A 202 response means accepted, with a request identifier and polling URL. Follow that URL with the current token. Respect Retry-After. Reuse the same idempotency key and identical input for a retry. Different input with the same key returns 409.
 
-A completed run can still have held rows. On a new install, **Map to FHIR** sends a row it cannot map to the **Held: not mapped** Log node, and the response does not say so. Check that node in History.
+On a new install, **Ingest** refuses a whole message when any part of it cannot be stored. The run fails, the sender gets HTTP 500, and nothing from that message is stored. History shows the reasons on the **Map to FHIR** node.
 
 ## Optional fictional practice files
 

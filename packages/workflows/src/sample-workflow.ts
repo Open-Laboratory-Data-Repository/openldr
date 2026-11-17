@@ -6,10 +6,14 @@ import type { Workflow } from './types';
 //     Webhook (POST /api/workflows/hooks/ingest, X-Webhook-Token)
 //       -> Map to FHIR (sourcePath 'body'; target Lab result; allowed form: "Lab order"; no mapping)
 //            out  -> Persist Store (source: webhook-ingest, emits data.persisted) -> Log
-//            held -> Log "Held: not mapped" (logs the reason only, never the row)
+//            held -> nothing, on purpose
 //     Map to FHIR sends FHIR (a Bundle, a resource list or one resource) on as its resources, turns
 //     answers to the "Lab order" form into records, and holds anything else with a reason. A lab
-//     adds saved mappings for its own rows in the studio. ONE persist stores every resource and the
+//     adds saved mappings for its own rows in the studio. With `held` unwired, one held item fails
+//     the node and the run, naming the count and the first reasons, and Persist does not run. So a
+//     sender whose data cannot be stored gets an error, as before Map to FHIR, never a 200. A
+//     workflow that should store the good rows and set the bad ones aside wires `held` to a node of
+//     its own. ONE persist stores every resource and the
 //     projection routes each by resourceType (Observation -> lab_results, ServiceRequest ->
 //     lab_requests, QuestionnaireResponse -> questionnaire_responses, and so on).
 //
@@ -63,7 +67,8 @@ export function buildDefaultWorkflows({ orderFormId, webhookSecret }: DefaultWor
       'Ingestion. POST to /api/workflows/hooks/ingest with header X-Webhook-Token. Map to FHIR ' +
       'sends FHIR on as its resources, turns answers to the "Lab order" form into records, and ' +
       'turns rows into records by the mappings saved in the node. Records go to Persist store ' +
-      'and emit data.persisted. Anything it cannot map goes to the held Log with a reason. ' +
+      'and emit data.persisted. If any part of a message cannot be mapped or fails the checks, ' +
+      'the run fails with the reasons and nothing from it is stored. ' +
       'Enabled by default: form capture submits through it. Copy the webhook secret to let ' +
       'external senders post to it too.',
     enabled: true,
@@ -121,27 +126,11 @@ export function buildDefaultWorkflows({ orderFormId, webhookSecret }: DefaultWor
             iconName: 'Terminal',
           },
         },
-        {
-          id: 'log-held-1',
-          type: 'action',
-          position: { x: 660, y: 320 },
-          data: {
-            label: 'Held: not mapped',
-            action: 'log',
-            // A held item carries the row as sent. Log the reason only, which holds no value.
-            message: 'Held: {{ $json.reason }}',
-            level: 'warn',
-            config: {},
-            templateId: 'log',
-            iconName: 'Terminal',
-          },
-        },
       ],
       edges: [
         { id: 'e1', source: 'trigger-1', target: 'map-1' },
         { id: 'e2', source: 'map-1', target: 'persist-1', sourceHandle: 'out' },
-        { id: 'e3', source: 'map-1', target: 'log-held-1', sourceHandle: 'held' },
-        { id: 'e4', source: 'persist-1', target: 'log-1' },
+        { id: 'e3', source: 'persist-1', target: 'log-1' },
       ],
     },
   };
