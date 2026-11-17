@@ -921,3 +921,21 @@ C7-1: "Write own field only". C7-7: "Add the CLI commands".
   listed in `command-meta.ts`. A webhook follows at once; schedules, listeners, ingest and event
   triggers follow at the next server start, and the command prints that.
 - C7-6: the plan is corrected.
+
+### Codex, 2026-11-17: second chunk 7 review (relayed by Claude)
+
+5 review checks: 0 confirmed, 3 refuted, 2 convention-conflict, 0 deferred. Reviewed `76532293..4aab1ce6`.
+C7-1 refuted (`workflow-enabled.ts:17-29`, `workflows-routes.ts:297-302`; replays kept the newer graph and
+a disabled state). C7-7 refuted (`program.ts:107-112`). C7-10 refuted (`cli/src/index.ts:28-31`, `:48-49`
+redact uncaught errors). C7-8 CONVENTION-CONFLICT: the commands audited with `cliActor()`, the OS user
+name; AGENTS.md section 6 says `cli`. C7-9 CONVENTION-CONFLICT: no web docs for the new commands.
+
+### Operator, 2026-11-17 (relayed by Claude)
+
+C7-8: "Fixed name 'cli'". C7-9: "Add web docs".
+
+### Claude, 2026-11-17: response
+
+C7-8: the commands audit with `cliNamedActor()`: `cli` locally, the signed-in account in served mode.
+The CLI test now checks `actorName: 'cli'` and failed before the change. C7-9: web `cli.md` en, fr and
+pt have "Turn a workflow on or off", with the restart note and a made-up workflow id.

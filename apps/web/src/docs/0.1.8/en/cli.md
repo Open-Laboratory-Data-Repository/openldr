@@ -266,6 +266,15 @@ Enroll a lab on the central server, then connect a lab to it:
 > Anything under `settings danger` is destructive (reset dashboards, clear audit,
 > factory reset). Those commands require `--force` and mirror the Studio danger zone.
 
+## Turn a workflow on or off
+
+`openldr workflows enable <workflow-id>` and `openldr workflows disable <workflow-id>` do what **Enable** and **Disable** do in the Studio's workflow list. Only that changes: the workflow's steps, name and description stay as they are. Enabling is refused when another enabled workflow uses the same webhook path, and the message names that workflow. A webhook follows the change at once. Restart the server for schedules, listeners, ingest and event triggers to follow. The CLI records the actor as `cli`.
+
+```
+openldr workflows disable wf_example
+openldr workflows enable wf_example
+```
+
 ## Copy files between S3 stores
 
 `openldr storage copy` copies every object from another S3 bucket into this install's storage. Use it to move off MinIO, as the [upgrading guide](/docs/upgrading) describes. It reads the source and never changes it. It skips a key that is already on the target with the same size, so you can run it again to resume. A same-size object with different content is not copied again. It prints object counts and bytes for both sides, then checks that every source object is on the target at the same size. It exits non-zero if any is missing. Extra objects on the target are expected while the api runs, because it keeps writing new files there. They do not fail the check. The CLI records the actor as `cli`.

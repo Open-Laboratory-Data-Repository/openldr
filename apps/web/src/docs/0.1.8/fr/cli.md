@@ -247,6 +247,15 @@ Inscrire un laboratoire sur le serveur central, puis y connecter un laboratoire 
 
 > Tout ce qui se trouve sous `settings danger` est destructif (réinitialiser les tableaux de bord, effacer l'audit, réinitialisation d'usine). Ces commandes exigent `--force` et reprennent la zone dangereuse du Studio.
 
+## Activer ou désactiver un flux de travail
+
+`openldr workflows enable <id-du-flux>` et `openldr workflows disable <id-du-flux>` font ce que font **Enable** et **Disable** dans la liste des flux de travail du Studio. Seul cela change : les étapes, le nom et la description du flux restent tels quels. L'activation est refusée quand un autre flux activé utilise le même chemin de webhook, et le message nomme ce flux. Un webhook suit le changement tout de suite. Redémarrez le serveur pour que les planifications, les écouteurs, l'ingestion et les déclencheurs d'événements suivent. La CLI enregistre l'acteur `cli`.
+
+```
+openldr workflows disable wf_example
+openldr workflows enable wf_example
+```
+
 ## Copier des fichiers entre stockages S3
 
 `openldr storage copy` copie chaque objet d'un autre compartiment S3 dans le stockage de cette installation. Utilisez-la pour quitter MinIO, comme le décrit le [guide de mise à niveau](/docs/upgrading). Elle lit la source et ne la modifie jamais. Elle ignore une clé déjà présente sur la cible avec la même taille : vous pouvez donc la relancer pour reprendre. Un objet de même taille mais de contenu différent n'est pas recopié. Elle affiche le nombre d'objets et d'octets des deux côtés, puis vérifie que chaque objet de la source est sur la cible avec la même taille. Elle se termine avec un code non nul s'il en manque un. Des objets en plus sur la cible sont normaux tant que l'api tourne, car elle continue d'y écrire de nouveaux fichiers. Ils ne font pas échouer la vérification. La CLI enregistre l'acteur sous `cli`.

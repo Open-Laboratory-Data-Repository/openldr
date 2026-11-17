@@ -1,6 +1,6 @@
 import { createAppContext, recordAuditEvent, setWorkflowEnabled } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
-import { cliActor } from './cli-actor';
+import { cliNamedActor } from './cli-actor';
 import { redactError } from './redact-error';
 
 /**
@@ -17,7 +17,7 @@ export async function runWorkflowSetEnabled(id: string, enabled: boolean): Promi
       process.stderr.write(`Workflow not found: ${id}\n`);
       return 1;
     }
-    await recordAuditEvent(ctx, cliActor(), {
+    await recordAuditEvent(ctx, cliNamedActor(), {
       action: enabled ? 'workflow.enable' : 'workflow.disable', entityType: 'workflow', entityId: id,
     });
     process.stdout.write(`${changed.after.name} is ${enabled ? 'enabled' : 'disabled'}. Webhooks follow now. `

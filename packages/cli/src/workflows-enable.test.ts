@@ -28,7 +28,7 @@ describe('openldr workflows enable|disable (follow-up C7-7)', () => {
     h.setWorkflowEnabled.mockResolvedValue({ before: wf(true), after: wf(false) });
     await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'workflows', 'disable', 'wf_1']);
     expect(h.setWorkflowEnabled).toHaveBeenCalledWith(h.ctx.workflows.store, 'wf_1', false);
-    expect(h.recordAuditEvent).toHaveBeenCalledWith(h.ctx, expect.objectContaining({ actorType: 'cli' }),
+    expect(h.recordAuditEvent).toHaveBeenCalledWith(h.ctx, expect.objectContaining({ actorType: 'cli', actorName: 'cli' }),
       expect.objectContaining({ action: 'workflow.disable', entityType: 'workflow', entityId: 'wf_1' }));
     expect(process.stdout.write).toHaveBeenCalledWith(expect.stringContaining('Samples is disabled'));
     expect(process.exitCode).toBe(0);

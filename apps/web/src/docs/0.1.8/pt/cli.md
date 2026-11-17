@@ -273,6 +273,15 @@ Inscrever um laboratório no servidor central e depois ligar o laboratório a el
 > repor as definições de fábrica). Esses comandos exigem `--force` e correspondem à zona de
 > perigo do Studio.
 
+## Ativar ou desativar um workflow
+
+`openldr workflows enable <id-do-workflow>` e `openldr workflows disable <id-do-workflow>` fazem o que **Enable** e **Disable** fazem na lista de workflows do Studio. Só isso muda: os passos, o nome e a descrição do workflow ficam como estão. A ativação é recusada quando outro workflow ativo usa o mesmo caminho de webhook, e a mensagem nomeia esse workflow. Um webhook segue a alteração de imediato. Reinicie o servidor para que os agendamentos, os ouvintes, a ingestão e os gatilhos de eventos sigam. A CLI regista o ator como `cli`.
+
+```
+openldr workflows disable wf_example
+openldr workflows enable wf_example
+```
+
 ## Copiar ficheiros entre armazenamentos S3
 
 `openldr storage copy` copia todos os objetos de outro bucket S3 para o armazenamento desta instalação. Use-o para sair do MinIO, como descreve o [guia de atualização](/docs/upgrading). Lê a origem e nunca a altera. Ignora uma chave que já está no destino com o mesmo tamanho, por isso pode executá-lo de novo para retomar. Um objeto com o mesmo tamanho mas conteúdo diferente não é copiado de novo. Mostra o número de objetos e de bytes dos dois lados e depois verifica se cada objeto da origem está no destino com o mesmo tamanho. Termina com código diferente de zero se faltar algum. Objetos a mais no destino são normais enquanto a api corre, porque ela continua a escrever ficheiros novos lá. Não fazem a verificação falhar. A CLI regista o ator como `cli`.
