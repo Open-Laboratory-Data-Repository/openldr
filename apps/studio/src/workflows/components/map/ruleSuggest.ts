@@ -73,13 +73,13 @@ export function codeNamedBy(value: string, codes: ExpandedCode[]): ExpandedCode 
 /**
  * The lines an accepted values suggestion opens with: one per distinct sample value on the From
  * side, at most `MAX_VALUE_LINES`. The To side holds the code the value names, when one does, and
- * is empty otherwise. They live on screen only: a line is saved once its To side is filled, so an
+ * is empty otherwise. A picked To is marked as suggested until the person accepts it. They live on screen only: a line is saved once its To side is filled, so an
  * untouched sample value never reaches the config.
  */
 export function valueLinesFor(draft: RowDraft, rows: SampleRow[], codes: ExpandedCode[] | null = null): ValuePair[] {
   return [...new Set(examplesOf(draft, rows))].slice(0, MAX_VALUE_LINES).map((from) => {
     const hit = codes ? codeNamedBy(from, codes) : null;
-    return hit ? { from, to: hit.code, ...(hit.system ? { system: hit.system } : {}) } : { from, to: '' };
+    return hit ? { from, to: hit.code, ...(hit.system ? { system: hit.system } : {}), suggested: true } : { from, to: '' };
   });
 }
 

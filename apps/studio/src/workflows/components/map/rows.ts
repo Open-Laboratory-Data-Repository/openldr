@@ -164,6 +164,8 @@ export interface ValuePair {
   from: string;
   to: string;
   system?: string;
+  /** A To the sheet picked, not the person. Left out of Save and Test until the person accepts it. */
+  suggested?: boolean;
 }
 
 export type RuleKind = RuleDraft['kind'];
@@ -351,7 +353,7 @@ export function ruleOf(rule: RuleDraft): MapRule | null | 'incomplete' {
       // A line counts only when both sides are filled.
       const map: Record<string, string | { system: string; code: string }> = {};
       for (const p of rule.pairs) {
-        if (p.from.trim() === '' || p.to.trim() === '') continue;
+        if (p.suggested || p.from.trim() === '' || p.to.trim() === '') continue;
         map[p.from.trim()] = p.system ? { system: p.system, code: p.to } : p.to;
       }
       if (Object.keys(map).length === 0) return 'incomplete';

@@ -2619,6 +2619,7 @@ export const en = {
         decimalComma: "Comma (12,5)",
         decimalPoint: "Point (12.5)",
         valuesHint: "Add one line per value in your file.",
+        valuesSuggested: "Codes the sheet picked are suggestions. Accept to keep them, or pick a code on a line.",
         suggest: {
           numberComma: "number, decimal comma",
           date: "date, {{format}}",

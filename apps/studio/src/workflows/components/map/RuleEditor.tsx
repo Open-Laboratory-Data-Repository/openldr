@@ -230,7 +230,7 @@ function ValuesInputs({
 }) {
   const { t } = useTranslation();
   const codes = useValueSetCodes(valueSet);
-  const setPair = (i: number, patch: Partial<{ from: string; to: string; system: string }>) =>
+  const setPair = (i: number, patch: Partial<{ from: string; to: string; system: string; suggested: boolean }>) =>
     onChange({ ...rule, pairs: rule.pairs.map((pr, j) => (j === i ? { ...pr, ...patch } : pr)) });
   const add = () => onChange({ ...rule, pairs: [...rule.pairs, { from: '', to: '' }] });
   const remove = (i: number) => {
@@ -257,6 +257,21 @@ function ValuesInputs({
           </DropdownMenu>
         </div>
       )}
+      {rule.pairs.some((pr) => pr.suggested) && (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted-foreground" data-testid={`map-values-suggested-${label}`}>
+          <span className="min-w-0 break-words">{t(`${P}.valuesSuggested`)}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 shrink-0 px-2 text-xs text-violet-500"
+            aria-label={`${t('workflows.mapToFhir.sheet.accept')}: ${t(`${P}.to`)}: ${label}`}
+            onClick={() => onChange({ ...rule, pairs: rule.pairs.map(({ suggested: _s, ...pr }) => pr) })}
+          >
+            {t('workflows.mapToFhir.sheet.accept')}
+          </Button>
+        </div>
+      )}
       {rule.pairs.map((pr, i) => (
         <div key={i} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto]">
           <Label className="whitespace-nowrap">{t(`${P}.from`)}</Label>
@@ -272,10 +287,11 @@ function ValuesInputs({
               })()}
               onValueChange={(v) => {
                 const c = codes.find((x) => `${x.system}|${x.code}` === v);
-                setPair(i, { to: c?.code ?? '', system: c?.system || undefined });
+                // The person chose this To, so the line is no longer a suggestion.
+                setPair(i, { to: c?.code ?? '', system: c?.system || undefined, suggested: undefined });
               }}
             >
-              <SelectTrigger aria-label={`${t(`${P}.to`)} ${i + 1}: ${label}`} className="w-full min-w-0">
+              <SelectTrigger aria-label={`${t(`${P}.to`)} ${i + 1}: ${label}`} className={`w-full min-w-0 ${pr.suggested ? 'text-muted-foreground' : ''}`}>
                 <SelectValue placeholder={t(`${P}.toPlaceholder`)} />
               </SelectTrigger>
               <SelectContent>

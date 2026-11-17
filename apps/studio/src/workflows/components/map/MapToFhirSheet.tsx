@@ -78,10 +78,12 @@ export function MapToFhirSheet({
           : t(r.dayFirstGuess ? `${P}.rule.suggest.dateDayFirst` : `${P}.rule.suggest.date`, { format: r.format });
   /**
    * A Values rule on a field with a code list opens with one line per sample value, on screen only,
-   * and with the code a value names already picked. A line is saved once its To is filled.
+   * and with the code a value names already picked. A picked code stays a suggestion, left out of
+   * Save, until the person accepts it: `accepted` is true for Accept on the rule suggestion.
    */
-  const valuesRuleFor = (d: RowDraft): RuleDraft => {
-    const pairs = columns && codeListUrlOf(d) ? valueLinesFor(d, columns.rows, codesOf(d)) : [];
+  const valuesRuleFor = (d: RowDraft, accepted: boolean): RuleDraft => {
+    const lines = columns && codeListUrlOf(d) ? valueLinesFor(d, columns.rows, codesOf(d)) : [];
+    const pairs = accepted ? lines.map(({ suggested: _s, ...p }) => p) : lines;
     return { kind: 'values', pairs: pairs.length > 0 ? pairs : [{ from: '', to: '' }] };
   };
   const testFields = target ? testFieldsOf(target) : [];
@@ -270,7 +272,7 @@ export function MapToFhirSheet({
               }
               rule={
                 <div className="flex min-w-0 flex-col gap-1">
-                  <RuleKindSelect rule={d.rule} label={d.label} onChange={(rule) => edit(i, { rule: rule.kind === 'values' ? valuesRuleFor(d) : rule })} />
+                  <RuleKindSelect rule={d.rule} label={d.label} onChange={(rule) => edit(i, { rule: rule.kind === 'values' ? valuesRuleFor(d, false) : rule })} />
                   {(() => {
                     // A test set per column takes no suggestion from a column it does not read.
                     const rs = asTest ? null : ruleSuggestionOf(d);
@@ -285,7 +287,7 @@ export function MapToFhirSheet({
                           className="h-6 shrink-0 px-2 text-xs text-violet-500"
                           aria-label={`${t(`${P}.sheet.accept`)}: ${t(`${P}.sheet.colRule`)}: ${d.label}`}
                           onClick={() =>
-                            edit(i, { rule: rs.kind === 'values' ? valuesRuleFor(d) : rs.rule })
+                            edit(i, { rule: rs.kind === 'values' ? valuesRuleFor(d, true) : rs.rule })
                           }
                         >
                           {t(`${P}.sheet.accept`)}

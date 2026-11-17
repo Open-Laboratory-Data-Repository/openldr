@@ -948,3 +948,58 @@ describe('MapToFhirSheet Excel dates and coded values', () => {
     expect(JSON.stringify(update.mock.calls[0][0].config)).not.toContain('QZX-F');
   });
 });
+
+describe('MapToFhirSheet preselected codes on a Values rule picked by hand', () => {
+  beforeEach(() => {
+    m(api.findValueSetByUrl).mockImplementation(async (url: string) => ({ id: 'vs-g', url }));
+    m(api.storedValueSetCodes).mockResolvedValue([
+      { system: 'urn:test:g', code: 'male', display: 'QZX-9' },
+      { system: 'urn:test:g', code: 'female', display: 'Female' },
+    ]);
+  });
+
+  async function pickValuesByHand() {
+    setRun([{ pid: 'QZX-1', t: 'QZX-2', sx: 'QZX-9' }, { pid: 'QZX-3', t: 'QZX-4', sx: 'QZX-8' }]);
+    const ui = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pid' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 't' } });
+    fireEvent.change(sourceSelect('Sex'), { target: { value: 'sx' } });
+    // Once the codes have loaded (the suggestion shows), the person picks Values without accepting it.
+    await screen.findByTestId('map-rule-suggestion-Patient.gender');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Sex' }), { target: { value: 'values' } });
+    // Line 1 names a code, so it is picked, as a suggestion. Line 2 the person picks.
+    expect((await screen.findByRole('combobox', { name: 'To 1: Sex' }) as HTMLSelectElement).value).toBe('urn:test:g|male');
+    fireEvent.change(screen.getByRole('combobox', { name: 'To 2: Sex' }), { target: { value: 'urn:test:g|female' } });
+    return ui;
+  }
+  const genderRule = (update: ReturnType<typeof vi.fn>) =>
+    update.mock.calls.at(-1)![0].config.mappings[0].rows.find((r: { targetPath: string }) => r.targetPath === 'Patient.gender').rule;
+
+  it('leaves a picked-for-you line out of Save until the person accepts it', async () => {
+    const { update } = await pickValuesByHand();
+    expect(screen.getByTestId('map-values-suggested-Sex')).toHaveTextContent('Codes the sheet picked are suggestions.');
+    openMenuAndClick('Save');
+    expect(genderRule(update)).toEqual({ kind: 'values', map: { 'QZX-8': { system: 'urn:test:g', code: 'female' } } });
+    expect(JSON.stringify(update.mock.calls.at(-1)![0].config)).not.toContain('QZX-9');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept: To: Sex' }));
+    expect(screen.queryByTestId('map-values-suggested-Sex')).toBeNull();
+    openMenuAndClick('Save');
+    expect(genderRule(update)).toEqual({ kind: 'values', map: { 'QZX-9': { system: 'urn:test:g', code: 'male' }, 'QZX-8': { system: 'urn:test:g', code: 'female' } } });
+  });
+
+  it('keeps a picked-for-you line once the person changes its To', async () => {
+    const { update } = await pickValuesByHand();
+    fireEvent.change(screen.getByRole('combobox', { name: 'To 1: Sex' }), { target: { value: 'urn:test:g|female' } });
+    openMenuAndClick('Save');
+    expect(Object.keys(genderRule(update).map)).toEqual(['QZX-9', 'QZX-8']);
+  });
+
+  it('leaves a picked-for-you line out of Test too', async () => {
+    await pickValuesByHand();
+    openMenuAndClick('Test');
+    await screen.findByTestId('map-test-footer');
+    expect(JSON.stringify(m(api.testMapping).mock.calls[0][0].config)).not.toContain('QZX-9');
+  });
+});
