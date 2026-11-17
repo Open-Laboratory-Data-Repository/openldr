@@ -5,6 +5,8 @@ import { ConfigError } from '@openldr/core';
 import { createWorkflowSecretStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { createSharedWebhookResolver } from '@openldr/workflows';
+import { seededStarterPacks } from '@openldr/forms';
+import { createMapToFhirApi } from '@openldr/bootstrap';
 import { registerWorkflowRoutes } from './workflows-routes';
 import { registerErrorHandler } from './error-handler';
 
@@ -1351,5 +1353,140 @@ describe('workflow reset — SEC-06 sealing (no plaintext secret persisted or au
     expect((await app.inject({ method: 'POST', url: '/api/workflows/wf-custom/reset' })).statusCode).toBe(400);
     // system workflow that is not stored → 404
     expect((await app.inject({ method: 'POST', url: '/api/workflows/wf-ingest/reset' })).statusCode).toBe(404);
+  });
+});
+
+// Map to FHIR: the mapping sheet's routes. The api is the real one, built over fakes, so the wire
+// shapes below are what a caller gets. Made-up values only.
+describe('map to fhir routes', () => {
+  const VIEWER = { id: 'u3', username: 'viewer', displayName: null, roles: ['viewer'], capabilities: ['workflows.view'] };
+  const PACKS = seededStarterPacks().map((p) => ({ id: p.id, resourceType: p.resourceType, entries: p.entries }));
+  const emptyMeta = { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [] as string[] };
+
+  function build(user: any, mapToFhir?: (i: any) => Promise<any>) {
+    const ctx = fakeCtx();
+    const calls: any[] = [];
+    ctx.workflows.mapToFhir = createMapToFhirApi({
+      mapToFhir: async (input: any) => {
+        calls.push(input);
+        if (mapToFhir) return mapToFhir(input);
+        return { out: [], held: [{ json: { item: input.items[0].json, reason: 'no mapping for this shape' } }], heldIndexes: [0], meta: { ...emptyMeta, held: 1, heldReasons: ['no mapping for this shape'] } };
+      },
+      packs: async () => PACKS,
+      conceptMaps: async () => [{ url: 'urn:test:codes', name: 'Test codes' }],
+    });
+    const app = Fastify();
+    registerErrorHandler(app as any);
+    app.addHook('onRequest', async (req: any) => { if (user) req.user = user; });
+    registerWorkflowRoutes(app, ctx);
+    return { app, ctx, calls };
+  }
+  const post = (app: any, url: string, payload: unknown) => app.inject({ method: 'POST', url, payload });
+  const cfg = { targetId: 'lab-result', formIds: [], mappings: [] };
+
+  it('GET targets answers { targets } and is not read as a workflow id', async () => {
+    const { app } = build(VIEWER);
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/map/targets?locale=fr' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(Object.keys(body)).toEqual(['targets']);
+    expect(body.targets[0].id).toBe('lab-result');
+    expect(body.targets[0]).toEqual(expect.objectContaining({ name: expect.any(String), records: expect.any(Array), fields: expect.any(Array), links: expect.any(Array) }));
+    const en = (await app.inject({ method: 'GET', url: '/api/workflows/map/targets' })).json();
+    const unknown = (await app.inject({ method: 'GET', url: '/api/workflows/map/targets?locale=zz' })).json();
+    expect(unknown).toEqual(en);
+    expect(body.targets[0].fields.map((f: any) => f.label)).not.toEqual(en.targets[0].fields.map((f: any) => f.label));
+  });
+
+  it('GET code-lists answers the lab map first, then stored maps', async () => {
+    const { app } = build(VIEWER);
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/map/code-lists' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ codeLists: [{ url: 'urn:openldr:terminology:local-map', name: 'Lab mapping' }, { url: 'urn:test:codes', name: 'Test codes' }] });
+  });
+
+  it('POST suggest answers { suggestions }', async () => {
+    const { app } = build(MANAGER_USER);
+    const res = await post(app, '/api/workflows/map/suggest', { targetId: 'lab-result', fieldNames: ['dob'], locale: 'en' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ suggestions: [{ targetPath: 'Patient.birthDate', field: 'dob', score: expect.any(Number) }] });
+  });
+
+  it('POST suggest: unknown target is 404; bad bodies are 400', async () => {
+    const { app } = build(MANAGER_USER);
+    expect((await post(app, '/api/workflows/map/suggest', { targetId: 'nope', fieldNames: ['a'] })).statusCode).toBe(404);
+    expect((await post(app, '/api/workflows/map/suggest', { fieldNames: ['a'] })).statusCode).toBe(400);
+    expect((await post(app, '/api/workflows/map/suggest', { targetId: 'lab-result', fieldNames: 'a' })).statusCode).toBe(400);
+    expect((await post(app, '/api/workflows/map/suggest', { targetId: 'lab-result', fieldNames: Array.from({ length: 501 }, (_, i) => `c${i}`) })).statusCode).toBe(400);
+    expect((await post(app, '/api/workflows/map/suggest', { targetId: 'lab-result', fieldNames: ['x'.repeat(201)] })).statusCode).toBe(400);
+    expect((await post(app, '/api/workflows/map/suggest', { targetId: 'lab-result', fieldNames: Array.from({ length: 500 }, () => 'x'.repeat(200)) })).statusCode).toBe(200);
+  });
+
+  it('POST test pins the result shapes, one per item, in order', async () => {
+    let n = 0;
+    const { app, calls } = build(MANAGER_USER, async (input) => {
+      n += 1;
+      if (n === 1) return { out: [{ json: { resourceType: 'Patient', id: 'p-1' } }, { json: { resourceType: 'Specimen', id: 's-1' } }], held: [], heldIndexes: [], meta: { ...emptyMeta, mapped: 1 } };
+      if (n === 2) return { out: [], held: [{ json: { item: input.items[0].json, reason: 'needs a value', field: 'Patient.birthDate' } }], heldIndexes: [0], meta: { ...emptyMeta, held: 1, heldReasons: ['needs a value'] } };
+      return { out: [{ json: { resourceType: 'Patient', id: 'p-3' } }], held: [], heldIndexes: [], meta: { ...emptyMeta, fhir: 1 } };
+    });
+    const res = await post(app, '/api/workflows/map/test', { config: cfg, items: [{ a: 1 }, { b: 2 }, { resourceType: 'Patient', id: 'p-3' }] });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      results: [
+        { ok: true, kind: 'mapped', resourceTypes: ['Patient', 'Specimen'], resources: [{ resourceType: 'Patient', id: 'p-1' }, { resourceType: 'Specimen', id: 's-1' }] },
+        { ok: false, reason: 'needs a value', field: 'Patient.birthDate' },
+        { ok: true, kind: 'fhir', resourceTypes: ['Patient'], resources: [{ resourceType: 'Patient', id: 'p-3' }] },
+      ],
+    });
+    expect(calls).toHaveLength(3);
+  });
+
+  it('POST test gives "no mapping for this shape" for an unknown shape', async () => {
+    const { app } = build(MANAGER_USER);
+    const res = await post(app, '/api/workflows/map/test', { config: cfg, items: [{ zz_col: 'v' }] });
+    expect(res.json()).toEqual({ results: [{ ok: false, reason: 'no mapping for this shape' }] });
+  });
+
+  it('POST test refuses 21 items and no items, and takes 20', async () => {
+    const { app, calls } = build(MANAGER_USER);
+    const items = (n: number) => Array.from({ length: n }, (_, i) => ({ c: i }));
+    const over = await post(app, '/api/workflows/map/test', { config: cfg, items: items(21) });
+    expect(over.statusCode).toBe(400);
+    expect(JSON.stringify(over.json())).toContain('20');
+    expect(calls).toHaveLength(0);
+    expect((await post(app, '/api/workflows/map/test', { config: cfg, items: [] })).statusCode).toBe(400);
+    expect((await post(app, '/api/workflows/map/test', { config: cfg })).statusCode).toBe(400);
+    expect((await post(app, '/api/workflows/map/test', { config: cfg, items: items(20) })).statusCode).toBe(200);
+    expect(calls).toHaveLength(20);
+  });
+
+  it('POST test: a config fault is a 400 with the service message', async () => {
+    const { app } = build(MANAGER_USER, async () => { throw new Error('Map to FHIR node config: no map target nope'); });
+    const res = await post(app, '/api/workflows/map/test', { config: { ...cfg, targetId: 'nope' }, items: [{ a: 1 }] });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.json())).toContain('Map to FHIR node config: no map target nope');
+  });
+
+  it('POST test stores nothing and writes no audit row', async () => {
+    const { app, ctx } = build(MANAGER_USER);
+    await post(app, '/api/workflows/map/test', { config: cfg, items: [{ a: 1 }] });
+    await post(app, '/api/workflows/map/suggest', { targetId: 'lab-result', fieldNames: ['dob'] });
+    expect(ctx.__auditEvents).toHaveLength(0);
+    expect(await ctx.workflows.store.list()).toHaveLength(0);
+  });
+
+  it('a viewer cannot call the two EDIT routes; no capability cannot call any', async () => {
+    const viewer = build(VIEWER);
+    expect((await post(viewer.app, '/api/workflows/map/suggest', { targetId: 'lab-result', fieldNames: ['a'] })).statusCode).toBe(403);
+    expect((await post(viewer.app, '/api/workflows/map/test', { config: cfg, items: [{ a: 1 }] })).statusCode).toBe(403);
+    const tech = build(TECHNICIAN_USER);
+    for (const url of ['/api/workflows/map/targets', '/api/workflows/map/code-lists']) {
+      expect((await tech.app.inject({ method: 'GET', url })).statusCode).toBe(403);
+    }
+    expect((await post(tech.app, '/api/workflows/map/suggest', { targetId: 'lab-result', fieldNames: ['a'] })).statusCode).toBe(403);
+    expect((await post(tech.app, '/api/workflows/map/test', { config: cfg, items: [{ a: 1 }] })).statusCode).toBe(403);
+    const anon = build(null);
+    expect((await anon.app.inject({ method: 'GET', url: '/api/workflows/map/targets' })).statusCode).toBe(401);
   });
 });

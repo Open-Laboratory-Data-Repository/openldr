@@ -70,6 +70,7 @@ import { createLabIdentity, type LabIdentityService } from './lab-identity';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
 import { createUpdateCheck, type UpdateCheck } from './update-check';
 export * from './update-check';
+export { createMapToFhirApi, MAP_TEST_MAX_ITEMS, MapConfigError, type MapToFhirApi, type MapTestResult } from './map-to-fhir-api';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
 import { createWorkflowSql } from './workflow-sql';
@@ -94,6 +95,7 @@ import { createPluginTarget } from './connector-target';
 import { createPluginNodeService } from './plugin-node-service';
 import { createFormValidateService } from './form-validate-service';
 import { createMapToFhirService, codingFromMapRows, loadStoredPacks } from './map-to-fhir-service';
+import { createMapToFhirApi, type MapToFhirApi } from './map-to-fhir-api';
 import { validateBatch } from '@openldr/fhir';
 import { createPersistStoreService } from './persist-store-service';
 import { createConnectorDialectLookup, createConnectorSqlRunner } from './connector-sql-service';
@@ -543,6 +545,8 @@ export interface AppContext {
     services: WorkflowServices;
     datasets: WorkflowDatasetStore;
     listeners: { reconcile(): Promise<void>; stopAll(): Promise<void> };
+    /** The mapping sheet's calls and the CLI's: targets, suggestions, a test run, code lists. */
+    mapToFhir: MapToFhirApi;
     /** SEC-06: encrypted store for secrets extracted from workflow definitions. */
     secretStore: WorkflowSecretStore;
   };
@@ -1425,7 +1429,17 @@ const reporting: ReportingApi = {
       }),
     },
   });
-  const workflows = { store: workflowStore, runs: workflowRuns, receipts: workflowReceipts, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners, secretStore: workflowSecrets };
+  // The stored Lab result packs: one reader for the node's service and for the mapping api.
+  const readStoredMapPacks = () => loadStoredPacks(starterPacks, seededStarterPacks().map((p) => p.id));
+  const mapToFhirApi = createMapToFhirApi({
+    mapToFhir: (input) => {
+      if (!workflowServices.mapToFhir) throw new Error('Map to FHIR service is not set');
+      return workflowServices.mapToFhir(input);
+    },
+    packs: readStoredMapPacks,
+    conceptMaps: async () => (await canonicalFhirStore.listByType('ConceptMap')).map((r) => r.resource as { url?: string; name?: string; title?: string }),
+  });
+  const workflows = { mapToFhir: mapToFhirApi, store: workflowStore, runs: workflowRuns, receipts: workflowReceipts, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners, secretStore: workflowSecrets };
 
   // Seal legacy plaintext definitions before serving requests. The shared webhook
   // resolver reads the saved references. Migration stays best-effort per workflow.
@@ -1799,7 +1813,7 @@ const reporting: ReportingApi = {
   workflowServices.mapToFhir = createMapToFhirService({
     forms,
     validateForm: workflowServices.validateForm,
-    packs: () => loadStoredPacks(starterPacks, seededStarterPacks().map((p) => p.id)),
+    packs: readStoredMapPacks,
     translateCode: async (mapUrl, code, system) => codingFromMapRows(await termStore.mapTargets({ mapUrl, code, system })),
     // An order that came in this run counts as found; otherwise the store is asked, as persist does.
     validate: async (resources, knownOrderIds) =>

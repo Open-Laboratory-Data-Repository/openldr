@@ -1,7 +1,7 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ZodError } from 'zod';
-import { sealDefinitionSecrets, type AppContext } from '@openldr/bootstrap';
+import { z, ZodError } from 'zod';
+import { sealDefinitionSecrets, MAP_TEST_MAX_ITEMS, MapConfigError, type AppContext } from '@openldr/bootstrap';
 import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, isSecretRef } from '@openldr/workflows';
 import { ConfigError, appError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
@@ -128,6 +128,18 @@ function stripAuthHeaders(headers: Record<string, unknown>): Record<string, unkn
   return out;
 }
 
+const MapSuggestBody = z.object({
+  targetId: z.string().min(1).max(200),
+  fieldNames: z.array(z.string().max(200)).max(500),
+  locale: z.string().max(20).optional(),
+});
+
+// Item count is checked by the handler, so the 21st item gets a message that states the limit.
+const MapTestBody = z.object({
+  config: z.object({ targetId: z.string().max(200), formIds: z.array(z.string().max(200)).max(100), mappings: z.array(z.unknown()).max(200) }),
+  items: z.array(z.record(z.unknown())).min(1).max(1000),
+});
+
 /** Constant-time string compare that does not leak via length (SEC-07). */
 function secretEquals(token: string, secret: string): boolean {
   const a = Buffer.from(token, 'utf8');
@@ -176,6 +188,38 @@ export function registerWorkflowRoutes(
       definition: redactWorkflowSecrets(w.definition),
       protected: isProtectedWorkflowId(w.id),
     }));
+  });
+
+  // Map to FHIR sheet. Bodies hold column names and sample rows, so nothing from a body is logged,
+  // audited or echoed in an error: every message below is fixed text. The logic is in
+  // ctx.workflows.mapToFhir, the same code the CLI runs.
+  app.get('/api/workflows/map/targets', VIEW, async (req, reply) => {
+    const locale = (req.query as { locale?: unknown }).locale;
+    return reply.send({ targets: await ctx.workflows.mapToFhir.targets(typeof locale === 'string' ? locale : undefined) });
+  });
+
+  app.get('/api/workflows/map/code-lists', VIEW, async (_req, reply) => {
+    return reply.send({ codeLists: await ctx.workflows.mapToFhir.codeLists() });
+  });
+
+  app.post('/api/workflows/map/suggest', EDIT, async (req, reply) => {
+    const parsed = MapSuggestBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'targetId and up to 500 field names of up to 200 characters are required' });
+    const suggestions = await ctx.workflows.mapToFhir.suggest(parsed.data);
+    if (!suggestions) return reply.code(404).send({ error: `unknown map target: ${parsed.data.targetId}` });
+    return reply.send({ suggestions });
+  });
+
+  app.post('/api/workflows/map/test', EDIT, async (req, reply) => {
+    const parsed = MapTestBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: `config and 1 to ${MAP_TEST_MAX_ITEMS} items are required` });
+    if (parsed.data.items.length > MAP_TEST_MAX_ITEMS) return reply.code(400).send({ error: `a test takes at most ${MAP_TEST_MAX_ITEMS} items` });
+    try {
+      return reply.send({ results: await ctx.workflows.mapToFhir.test(parsed.data) });
+    } catch (err) {
+      if (err instanceof MapConfigError) return reply.code(400).send({ error: err.message });
+      throw err;
+    }
   });
 
   app.get('/api/workflows/:id', VIEW, async (req, reply) => {
