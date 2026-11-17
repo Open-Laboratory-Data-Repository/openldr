@@ -217,6 +217,13 @@ The default Ingest workflow's fork becomes one Map to FHIR node feeding Persist 
 - **Mapped results carry the laboratory category** (the operator, 2026-11-17: "Mark as
   laboratory"). It is a default of the target, kept beside the status defaults, not a literal in
   handler code. So the rule "a lab result must link to an order" runs on every mapped result.
+- **A saved mapping matches a row whose columns it knows** (found during the build, 2026-11-17).
+  The Extract from File node drops blank cells, so the rows of one file have different field
+  lists, and one column can be a number in one row and text in the next. Matching on the exact
+  shape of 5.4 would hold every row with a blank cell. So a mapping matches a row when every field
+  of the row is one of the mapping's field names. Types play no part. A row with a field the
+  mapping never saw is still a new shape and goes to `held`. The shape hash stays as the name of
+  the sample a mapping was made from.
 - **Starter pack labels are English only.** The Lab result target takes its fr and pt labels from
   two content files keyed by target field.
 - **A loop body that ends in the Map node loses its `held` items.** A loop collects each
