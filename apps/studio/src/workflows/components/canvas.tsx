@@ -6,6 +6,7 @@ import {
   Background,
   BackgroundVariant,
   useReactFlow,
+  useNodesInitialized,
   type Node,
   type Edge,
 } from '@xyflow/react';
@@ -14,6 +15,7 @@ import { nodeTypes } from './node-types';
 import { edgeTypes } from './edge-types';
 import { useWorkflowStore } from '../hooks/use-workflow-store';
 import { isValidConnection } from '../lib/validation';
+import { shouldFitLoadedWorkflow } from '../lib/initial-fit';
 import { InteractionModeToggle } from './interaction-mode-toggle';
 
 interface CanvasProps {
@@ -27,7 +29,7 @@ interface CanvasProps {
 
 export function Canvas({ onFireTrigger }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, getInternalNode } = useReactFlow();
   const nodes = useWorkflowStore((s) => s.nodes);
   const edges = useWorkflowStore((s) => s.edges);
   const onNodesChange = useWorkflowStore((s) => s.onNodesChange);
@@ -119,17 +121,25 @@ export function Canvas({ onFireTrigger }: CanvasProps) {
     setConfigNode(null);
   }, [setSelectedNode, setConfigNode]);
 
-  // The `fitView` prop only fits on mount, but a saved workflow loads its nodes from the API
-  // *after* mount — so that first fit runs on an empty graph and the nodes end up parked at their
-  // raw coordinates (off-screen on a narrow phone). Fit once, on the frame after the nodes first
-  // arrive, so the whole graph is centered in view.
-  const didInitialFit = useRef(false);
+  // The `fitView` prop only fits on mount, and a saved workflow arrives from the API after mount.
+  // Before it arrives the canvas already holds a graph: the store's sample on a fresh load, or the
+  // previous workflow's graph after a switch. A fit spent on that graph zooms to the maximum and
+  // leaves the real workflow off-screen. So fit once per load (`loadSeq`), and only after React
+  // Flow has measured every node. fitView is called directly: a fit deferred to a frame that a
+  // re-render cancels is never made again.
+  // `useNodesInitialized` alone is not enough: on the render where a load lands it can still be
+  // true for the graph React Flow held before, so the fit would land on that graph. So it only
+  // triggers the check, and the check asks React Flow for each of the store's own nodes by id.
+  const loadSeq = useWorkflowStore((s) => s.loadSeq);
+  const nodesInitialized = useNodesInitialized();
+  const fittedSeq = useRef(-1);
   useEffect(() => {
-    if (didInitialFit.current || nodes.length === 0) return;
-    didInitialFit.current = true;
-    const id = requestAnimationFrame(() => void fitView({ padding: 0.2 }));
-    return () => cancelAnimationFrame(id);
-  }, [nodes.length, fitView]);
+    const nodesMeasured =
+      nodesInitialized && nodes.every((n) => (getInternalNode(n.id)?.measured?.width ?? 0) > 0);
+    if (!shouldFitLoadedWorkflow({ loadSeq, fittedSeq: fittedSeq.current, nodeCount: nodes.length, nodesMeasured })) return;
+    fittedSeq.current = loadSeq;
+    void fitView({ padding: 0.2 });
+  }, [loadSeq, nodesInitialized, nodes, fitView, getInternalNode]);
 
   // Re-fit when the canvas area resizes — the node library collapsing/expanding, the config panel
   // opening, or a phone rotating — so the graph stays framed instead of drifting off the edge.

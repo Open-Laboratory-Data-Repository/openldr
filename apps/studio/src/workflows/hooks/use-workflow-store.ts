@@ -56,6 +56,12 @@ interface WorkflowState {
    * middle/right mouse button.
    */
   interactionMode: 'pan' | 'select';
+  /**
+   * Counts loads: `setWorkflow` (a saved workflow arrived) and `clear` (a new workflow). The canvas
+   * fits its view once per load, so it never spends that fit on the graph shown before the saved
+   * workflow arrives. Editing nodes and `clearCanvas` do not count.
+   */
+  loadSeq: number;
 
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
@@ -100,6 +106,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   nodeRunMeta: {},
   armed: false,
   interactionMode: 'pan',
+  loadSeq: 0,
 
   onNodesChange: (changes) => {
     set({ nodes: applyNodeChanges(changes, get().nodes) as WorkflowNode[] });
@@ -155,11 +162,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   setWorkflow: (id, name, nodes, edges) => {
-    set({ workflowId: id, workflowName: name, nodes, edges });
+    set({ workflowId: id, workflowName: name, nodes, edges, loadSeq: get().loadSeq + 1 });
   },
 
   clear: () => {
     set({
+      loadSeq: get().loadSeq + 1,
       nodes: [],
       edges: [],
       selectedNodeId: null,
