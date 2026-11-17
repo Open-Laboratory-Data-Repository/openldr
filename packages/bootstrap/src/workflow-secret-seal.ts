@@ -25,7 +25,47 @@ export async function sealDefinitionSecrets(
   secretStore: WorkflowSecretStore,
   key: string | undefined,
 ): Promise<unknown> {
+  const { out, kept } = await seal(definition, workflowId, secretStore, key);
+  // GC any secrets no longer referenced by the sealed definition (empty kept → drop all).
+  await secretStore.deleteExcept(workflowId, kept);
+  return out;
+}
+
+/**
+ * A save's secrets, sealed but not yet tidied. The old rows stay until the workflow is stored:
+ * `commit` (after the write succeeded) drops the ones the new definition no longer names, `abort`
+ * (after the write was refused) drops only the rows this save just sealed. So a refused save, such
+ * as a webhook path another enabled workflow took a moment earlier, leaves the stored workflow and
+ * every secret it names exactly as they were.
+ */
+export interface SealedSave {
+  definition: unknown;
+  commit(): Promise<void>;
+  abort(): Promise<void>;
+}
+
+export async function sealForSave(
+  definition: unknown,
+  workflowId: string,
+  secretStore: WorkflowSecretStore,
+  key: string | undefined,
+): Promise<SealedSave> {
+  const { out, kept, created } = await seal(definition, workflowId, secretStore, key);
+  return {
+    definition: out,
+    commit: () => secretStore.deleteExcept(workflowId, kept),
+    abort: () => secretStore.deleteIds(workflowId, created),
+  };
+}
+
+async function seal(
+  definition: unknown,
+  workflowId: string,
+  secretStore: WorkflowSecretStore,
+  key: string | undefined,
+): Promise<{ out: unknown; kept: string[]; created: string[] }> {
   const kept: string[] = [];
+  const created: string[] = [];
   const out = await mapSecretFieldsAsync(definition, async (f) => {
     // Unchanged, already-sealed ref → keep the row, touch nothing.
     if (isSecretRef(f.value)) {
@@ -50,9 +90,8 @@ export async function sealDefinitionSecrets(
     const plaintext = typeof v === 'string' ? v : JSON.stringify(v);
     const id = await secretStore.put(workflowId, plaintext, key);
     kept.push(id);
+    created.push(id);
     f.set({ secretRef: id });
   });
-  // GC any secrets no longer referenced by the sealed definition (empty kept → drop all).
-  await secretStore.deleteExcept(workflowId, kept);
-  return out;
+  return { out, kept, created };
 }

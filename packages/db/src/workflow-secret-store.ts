@@ -23,6 +23,8 @@ export interface WorkflowSecretStore {
   deleteForWorkflow(workflowId: string): Promise<void>;
   /** Orphan GC: drop a workflow's secrets except the ids still referenced. */
   deleteExcept(workflowId: string, keepIds: string[]): Promise<void>;
+  /** Drop exactly these rows of a workflow: what a refused save had just sealed. */
+  deleteIds(workflowId: string, ids: string[]): Promise<void>;
 }
 
 export function createWorkflowSecretStore(db: Kysely<InternalSchema>): WorkflowSecretStore {
@@ -53,6 +55,11 @@ export function createWorkflowSecretStore(db: Kysely<InternalSchema>): WorkflowS
 
     async deleteForWorkflow(workflowId) {
       await db.deleteFrom('workflow_secrets').where('workflow_id', '=', workflowId).execute();
+    },
+
+    async deleteIds(workflowId, ids) {
+      if (!ids.length) return;
+      await db.deleteFrom('workflow_secrets').where('workflow_id', '=', workflowId).where('id', 'in', ids).execute();
     },
 
     async deleteExcept(workflowId, keepIds) {

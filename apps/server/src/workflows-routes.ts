@@ -1,7 +1,7 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z, ZodError } from 'zod';
-import { sealDefinitionSecrets, duplicateWorkflow, newWorkflowId, MAP_TEST_MAX_ITEMS, MapConfigError, type AppContext } from '@openldr/bootstrap';
+import { sealForSave, duplicateWorkflow, newWorkflowId, MAP_TEST_MAX_ITEMS, MapConfigError, type AppContext } from '@openldr/bootstrap';
 import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, isSecretRef } from '@openldr/workflows';
 import { ConfigError, appError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
@@ -92,10 +92,27 @@ function redactWorkflowSecrets(definition: unknown): unknown {
  * workflow, so a fail-closed `ConfigError` (SECRETS_ENCRYPTION_KEY unset) thrown by
  * `put` aborts the save with NOTHING persisted — no partial/plaintext definition.
  */
-async function extractWorkflowSecrets(ctx: AppContext, workflowId: string, definition: unknown): Promise<unknown> {
-  // Thin wrapper over the shared seal (also used by the boot migration): one impl means a
-  // saved `{ secretRef }` is byte-identical to a migrated one — the two can never drift.
-  return sealDefinitionSecrets(definition, workflowId, ctx.workflows.secretStore, ctx.cfg.SECRETS_ENCRYPTION_KEY);
+async function storeWithSecrets<T>(
+  ctx: AppContext,
+  workflowId: string,
+  definition: unknown,
+  write: (sealed: unknown) => Promise<T>,
+): Promise<T> {
+  // The shared seal (also used by the boot migration), so a saved `{ secretRef }` is
+  // byte-identical to a migrated one. The old rows stay until the write succeeds: a refused write
+  // (a webhook path another enabled workflow took a moment earlier) drops only what this save
+  // sealed, so the stored workflow keeps every secret it names.
+  const sealed = await sealForSave(definition, workflowId, ctx.workflows.secretStore, ctx.cfg.SECRETS_ENCRYPTION_KEY);
+  let result: T;
+  try {
+    result = await write(sealed.definition);
+  } catch (err) {
+    await sealed.abort().catch((e) => ctx.logger.warn({ err: e }, 'could not drop the secrets of a refused workflow save'));
+    throw err;
+  }
+  // Clean-up only: a failure here leaves unused rows, never a broken workflow.
+  await sealed.commit().catch((e) => ctx.logger.warn({ err: e }, 'could not drop unused workflow secrets after a save'));
+  return result;
 }
 
 /** Reads the request body (Buffer or async-iterable stream) into a Buffer, enforcing the byte cap. */
@@ -258,8 +275,8 @@ export function registerWorkflowRoutes(
       if (clash) return reply.code(409).send({ error: clash });
       // SEC-06: seal plaintext secrets into the store; persist refs only. Built fully
       // before create → a fail-closed ConfigError leaves nothing persisted.
-      const definition = (await extractWorkflowSecrets(ctx, parsed.id, parsed.definition)) as typeof parsed.definition;
-      const created = await ctx.workflows.store.create({ ...parsed, definition });
+      const created = await storeWithSecrets(ctx, parsed.id, parsed.definition,
+        (definition) => ctx.workflows.store.create({ ...parsed, definition: definition as typeof parsed.definition }));
       await syncWorkflowTriggers(ctx, created);
       ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
       ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
@@ -278,8 +295,8 @@ export function registerWorkflowRoutes(
       if (clash) return reply.code(409).send({ error: clash });
       // SEC-06: the workflow's OWN id (the :id param, which store.update forces onto
       // the row) owns its secrets. Seal plaintext → refs before persisting.
-      const definition = (await extractWorkflowSecrets(ctx, id, parsed.definition)) as typeof parsed.definition;
-      const updated = await ctx.workflows.store.update(id, { ...parsed, definition });
+      const updated = await storeWithSecrets(ctx, id, parsed.definition,
+        (definition) => ctx.workflows.store.update(id, { ...parsed, definition: definition as typeof parsed.definition }));
       await syncWorkflowTriggers(ctx, updated);
       ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
       ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
@@ -299,7 +316,11 @@ export function registerWorkflowRoutes(
       const copy = await duplicateWorkflow(source, {
         newId: newWorkflowId(), secretStore: ctx.workflows.secretStore, key: ctx.cfg.SECRETS_ENCRYPTION_KEY, createdBy: req.user?.username ?? null,
       });
-      const created = await ctx.workflows.store.create(copy);
+      // The copy's secrets were sealed under its new id. If the copy is not stored, drop them.
+      const created = await ctx.workflows.store.create(copy).catch(async (err) => {
+        await ctx.workflows.secretStore.deleteForWorkflow(copy.id).catch(() => undefined);
+        throw err;
+      });
       await syncWorkflowTriggers(ctx, created);
       ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
       ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
@@ -357,8 +378,8 @@ export function registerWorkflowRoutes(
       // GET /api/workflows/:id detail response. Seal first, persist refs only — and the seal
       // also GCs (deleteExcept) any secret rows the mangled graph left behind whose nodes are
       // not in the restored default.
-      const definition = (await extractWorkflowSecrets(ctx, id, workflow.definition)) as typeof workflow.definition;
-      const updated = await ctx.workflows.store.update(id, { ...workflow, definition });
+      const updated = await storeWithSecrets(ctx, id, workflow.definition,
+        (definition) => ctx.workflows.store.update(id, { ...workflow, definition: definition as typeof workflow.definition }));
       // Re-sync the in-memory webhook/schedule registries, same as create/update — otherwise
       // a reset that fixes a mangled path in storage would leave the RUNNING server still
       // routing on the stale (mangled) path until some other save happened.
@@ -367,7 +388,7 @@ export function registerWorkflowRoutes(
       ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
       void ctx.workflows.listeners.reconcile().catch((err) => ctx.logger.warn({ err }, 'listener reconcile failed'));
       // The `before` image can hold a LIVE plaintext secret: a graph seeded before SEC-06,
-      // imported, or otherwise saved by a path that skipped extractWorkflowSecrets keeps its
+      // imported, or otherwise saved by a path that skipped storeWithSecrets keeps its
       // webhook token as plaintext, and reset now CARRIES that value over (rather than minting a
       // fresh one), so the token stays in force after this audit row is written. `recordAudit`
       // does no masking of its own, and system_auditor ("Read-only oversight plus the audit log")
@@ -375,7 +396,7 @@ export function registerWorkflowRoutes(
       // role that is documented as read-only. Mask it through the SAME secret-field locator the
       // LIST route uses, rather than hand-rolling a second walk that could drift from it.
       // `updated` (the after image) needs no such treatment: it is built from a definition that
-      // already went through extractWorkflowSecrets before being persisted, so it only ever holds
+      // already went through storeWithSecrets before being persisted, so it only ever holds
       // refs.
       await recordAudit(ctx, req, {
         action: 'workflow.reset', entityType: 'workflow', entityId: id,

@@ -61,6 +61,9 @@ function fakeSecretStore() {
     deleteExcept: async (workflowId: string, keepIds: string[]) => {
       for (const [k, v] of rows) if (v.workflowId === workflowId && !keepIds.includes(k)) rows.delete(k);
     },
+    deleteIds: async (workflowId: string, ids: string[]) => {
+      for (const [k, v] of rows) if (v.workflowId === workflowId && ids.includes(k)) rows.delete(k);
+    },
   };
 }
 
@@ -889,6 +892,50 @@ describe('workflow routes', () => {
     expect((await app.inject({ method: 'DELETE', url: '/api/workflows/wf-secret' })).statusCode).toBe(200);
     expect(JSON.parse(await store.resolve(http.data.config.headers.secretRef, key))).toEqual({ Authorization: 'Bearer tok', 'X-Keep': 'yes' });
     expect(await store.resolve(trigger.data.secret.secretRef, key)).toBe(webhookSecret);
+    await db.destroy();
+  });
+
+  it('a save the store refuses keeps the stored workflow and every secret it names (C1-5)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const { ctx, db, store, key } = await realSecretCtx();
+    registerWorkflowRoutes(app, ctx);
+    const wf = (secret: string, path: string) => ({
+      ...SAMPLE_WORKFLOW, id: 'wf-b', name: 'Lab B',
+      definition: { nodes: [{ id: 't1', type: 'trigger', data: { triggerType: 'webhook', path, secret } }], edges: [] },
+    });
+    expect((await app.inject({ method: 'POST', url: '/api/workflows', payload: wf('old-secret', 'lab-b') })).statusCode).toBe(200);
+    const before = await ctx.workflows.store.get('wf-b');
+    const oldRef = before.definition.nodes[0].data.secret.secretRef;
+
+    // Another workflow claims the new path after the route's own check and before this write.
+    const realUpdate = ctx.workflows.store.update;
+    ctx.workflows.store.update = async () => { throw new WebhookPathClaimedError('lab-new', 'Lab A results'); };
+    const r = await app.inject({ method: 'PUT', url: '/api/workflows/wf-b', payload: wf('new-secret', 'lab-new') });
+    ctx.workflows.store.update = realUpdate;
+
+    expect(r.statusCode).toBe(409);
+    expect(await ctx.workflows.store.get('wf-b')).toEqual(before);
+    expect(await store.resolve(oldRef, key)).toBe('old-secret');
+    // The secret the refused save sealed is gone too, so nothing is left behind.
+    expect((await secretRows(db, 'wf-b')).map((row: any) => row.id)).toEqual([oldRef]);
+    await db.destroy();
+  });
+
+  it('a save the store accepts drops the secrets the new definition no longer names', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const { ctx, db, store, key } = await realSecretCtx();
+    registerWorkflowRoutes(app, ctx);
+    const wf = (secret: string) => ({
+      ...SAMPLE_WORKFLOW, id: 'wf-b', name: 'Lab B',
+      definition: { nodes: [{ id: 't1', type: 'trigger', data: { triggerType: 'webhook', path: 'lab-b', secret } }], edges: [] },
+    });
+    await app.inject({ method: 'POST', url: '/api/workflows', payload: wf('old-secret') });
+    expect((await app.inject({ method: 'PUT', url: '/api/workflows/wf-b', payload: wf('new-secret') })).statusCode).toBe(200);
+    const ref = (await ctx.workflows.store.get('wf-b')).definition.nodes[0].data.secret.secretRef;
+    expect(await store.resolve(ref, key)).toBe('new-secret');
+    expect((await secretRows(db, 'wf-b')).map((row: any) => row.id)).toEqual([ref]);
     await db.destroy();
   });
 
