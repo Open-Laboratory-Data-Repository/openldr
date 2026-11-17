@@ -39,6 +39,8 @@ Sem amostra, o painel mostra o mapeamento guardado do nó, o mais largo quando h
 
 ## Escolher uma coluna para cada campo
 
+Cada linha mostra o campo de origem e o seu exemplo, seguidos do **Destino**. O destino apresenta um nome de laboratório e o caminho FHIR. Pode mapear pelo nome sem escrever um caminho FHIR.
+
 Cada linha do painel é um campo do destino. Uma estrela marca um campo obrigatório. **Lab result** exige três: **Número do paciente**, **Data de colheita** e **Análise**.
 
 1. Na linha de um campo, abra a lista em **Dos seus dados** e escolha a coluna que o preenche.
@@ -114,6 +116,19 @@ Um texto simples num campo codificado, como **Análise**, é guardado como o có
 **Resultado esperado:** todas as linhas da amostra passam, ou sabe porque é que uma linha não passa.
 
 O teste envia as linhas da amostra, no máximo 20. Os motivos estão em inglês. O teste verifica cada linha sozinha. Duas linhas que dão o mesmo resultado com outros valores passam ambas no teste, enquanto uma execução retém a segunda.
+
+## Ver os registos gerados
+
+1. Abra **Ações do mapeamento** e selecione **Testar**.
+2. Encontre uma linha que passa nos resultados ao fundo do painel.
+3. Abra o menu de pontos **Ações da linha** dessa linha.
+4. Selecione **Ver FHIR gerado**.
+5. Confira os valores e as referências em **FHIR gerado**.
+6. Abra **Ações dos registos gerados** e selecione **Copiar JSON**.
+
+**Resultado esperado:** o painel mostra apenas os registos gerados para essa linha da amostra. O teste não guarda esses registos.
+
+Alterar uma origem, regra, destino ou amostra limpa os resultados do teste anterior. Selecione **Testar** novamente para ver o novo mapeamento.
 
 ## Guardar o mapeamento
 

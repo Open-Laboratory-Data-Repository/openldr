@@ -39,6 +39,8 @@ With no sample, the panel shows the node's saved mapping, the widest one when th
 
 ## Pick a column for each field
 
+Each row reads from your source field and example to its destination under **Maps to**. The destination shows a lab label and its FHIR path. You can map by the lab label without typing a FHIR path.
+
 Each line of the panel is one field of the target. A star marks a required field. **Lab result** needs three: **Patient ID**, **Collected date** and **Test**.
 
 1. On a field's line, open the select under **From your data** and choose the column that fills it.
@@ -114,6 +116,19 @@ A plain text in a coded field, such as **Test**, is stored as the lab's own code
 **Expected result:** every row of the sample passes, or you know why a row does not.
 
 Test sends the sample rows, at most 20. The reasons are in English. Test checks each row alone. Two rows that give the same result with other values both pass in Test, while a run holds the second.
+
+## Inspect the generated records
+
+1. Open **Mapping actions** and select **Test**.
+2. Find a row that passes in the results at the bottom.
+3. Open that row's **Row actions** dots menu.
+4. Select **View generated FHIR**.
+5. Check the values and references in **Generated FHIR**.
+6. Open **Generated record actions** and select **Copy JSON**.
+
+**Expected result:** the sheet shows only that sample row's generated records. Test does not store these records.
+
+Changing a source, rule, destination or sample clears the previous test results. Select **Test** again to inspect the new mapping.
 
 ## Save the mapping
 

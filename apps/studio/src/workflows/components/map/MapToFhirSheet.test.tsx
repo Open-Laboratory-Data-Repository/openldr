@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import * as api from '@/api';
 import { useWorkflowStore } from '../../hooks/use-workflow-store';
 import { MapToFhirSheet } from './MapToFhirSheet';
@@ -61,6 +61,55 @@ beforeEach(() => {
 });
 
 describe('MapToFhirSheet', () => {
+  it('clears a completed test when the source mapping changes', async () => {
+    setRun(ROWS_A);
+    m(api.testMapping).mockResolvedValue([{ ok: true, kind: 'mapped', resourceTypes: ['Patient'], resources: [] }]);
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
+    openMenuAndClick('Test');
+    await screen.findByTestId('map-test-results');
+
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'test_a' } });
+
+    expect(screen.queryByTestId('map-test-results')).not.toBeInTheDocument();
+    expect(screen.getByTestId('map-status')).not.toHaveTextContent('rows passes');
+  });
+
+  it('ignores a test response that arrives after its mapping was edited', async () => {
+    setRun(ROWS_A);
+    let finish!: (value: api.MapTestResult[]) => void;
+    m(api.testMapping).mockReturnValue(new Promise<api.MapTestResult[]>((resolve) => { finish = resolve; }));
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
+    openMenuAndClick('Test');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'test_a' } });
+
+    await act(async () => {
+      finish([{ ok: true, kind: 'mapped', resourceTypes: ['Patient'], resources: [] }]);
+    });
+
+    expect(screen.queryByTestId('map-test-results')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('map-test-footer')).not.toBeInTheDocument();
+  });
+
+  it('clears the test when another sample has the same field names', async () => {
+    setRun(ROWS_A);
+    m(api.testMapping).mockResolvedValue([{ ok: true, kind: 'mapped', resourceTypes: ['Patient'], resources: [] }]);
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
+    openMenuAndClick('Test');
+    await screen.findByTestId('map-test-results');
+    act(() => setRun(ROWS_A.map((row) => ({ ...row, pat_no: 'ANOTHER-SAMPLE' }))));
+
+    openMenuAndClick("Use this editor's last run");
+
+    await screen.findByText('ANOTHER-SAMPLE');
+    expect(screen.queryByTestId('map-test-results')).not.toBeInTheDocument();
+  });
+
   it('shows StripedEmpty, not rows, when there is no sample', async () => {
     setRun(null);
     renderSheet();
@@ -757,7 +806,7 @@ describe('MapToFhirSheet fix round 1', () => {
     expect(await screen.findByText(/the rows are under body/)).toBeInTheDocument();
     first.unmount();
     renderSheet({ sourcePath: 'body' });
-    await screen.findByText(/Pick the column that fills/);
+    await screen.findByRole('dialog', { name: 'Map to FHIR' });
     expect(screen.queryByText(/the rows are under body/)).toBeNull();
   });
 

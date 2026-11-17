@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
 import { testMapping } from '@/api';
@@ -24,7 +24,7 @@ import { useSamples } from './useSamples';
 
 type Notice = { tone: 'error' | 'ok'; text: string } | null;
 const P = 'workflows.mapToFhir';
-const COLS = 'sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_minmax(0,7rem)_minmax(0,9rem)]';
+const COLS = 'sm:grid-cols-[minmax(0,1fr)_minmax(0,7rem)_minmax(0,10rem)_minmax(0,9rem)]';
 
 const mappingsOf = (config: Record<string, unknown>): unknown[] => (Array.isArray(config.mappings) ? config.mappings : []);
 const targetIdOf = (m: unknown): unknown => (m && typeof m === 'object' ? (m as { targetId?: unknown }).targetId : undefined);
@@ -53,7 +53,13 @@ export function MapToFhirSheet({
   const [notice, setNotice] = useState<Notice>(null);
   const requestSave = useSaveRequest();
   const [test, setTest] = useState<TestState>({ kind: 'idle' });
+  const testVersion = useRef(0);
   const [adding, setAdding] = useState(false);
+
+  const invalidateTest = () => {
+    testVersion.current += 1;
+    setTest({ kind: 'idle' });
+  };
 
   const suggestions = useSuggestions({ open, draftsKey: m.draftsKey, targetId: m.targetId, shape: columns, drafts, locale: i18n.language });
   const codeLists = useCodeLists(drafts.some((d) => d.rule.kind === 'codeList'));
@@ -100,16 +106,19 @@ export function MapToFhirSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // A new target, shape or opening starts with no message, no results and no open panel.
+  // Results belong to one mapping and sample, including another sample of the same shape.
   useEffect(() => {
+    testVersion.current += 1;
     setNotice(null);
     setTest({ kind: 'idle' });
     setAdding(false);
-  }, [m.draftsKey, open]);
+    return () => { testVersion.current += 1; };
+  }, [m.draftsKey, open, samples.sample]);
 
   const edit = (i: number, patch: Partial<RowDraft>) => {
     m.setDrafts((ds) => ds.map((d, j) => (j === i ? { ...d, ...patch } : d)));
     setNotice(null);
+    invalidateTest();
   };
 
   const problemText = (built: Extract<BuildResult, { ok: false }>): string => {
@@ -183,19 +192,21 @@ export function MapToFhirSheet({
     if (!built.ok) return problem(built);
     const others = mappingsOf(config).filter((x) => targetIdOf(x) === target.id);
     const formIds = Array.isArray(config.formIds) ? (config.formIds as string[]) : [];
+    const version = ++testVersion.current;
     setTest({ kind: 'running' });
     try {
       const results = await testMapping({
         config: { targetId: target.id, formIds, mappings: withMapping(others, built.mapping) },
         items: columns.rows,
       });
-      setTest({ kind: 'done', results });
+      if (version === testVersion.current) setTest({ kind: 'done', results });
     } catch (e) {
-      setTest({ kind: 'failed', message: e instanceof Error ? e.message : String(e) });
+      if (version === testVersion.current) setTest({ kind: 'failed', message: e instanceof Error ? e.message : String(e) });
     }
   };
 
   const addRow = (path: string) => {
+    invalidateTest();
     m.setDrafts((ds) => [
       ...ds,
       { targetPath: path, label: path, required: false, repeats: false, valueSet: null, added: true, source: { kind: 'none' }, rule: { kind: 'none' } },
@@ -241,9 +252,9 @@ export function MapToFhirSheet({
           />
         )}
         <div className={`hidden border-b border-border px-6 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:grid sm:gap-x-3 ${COLS}`}>
-          <span>{t(`${P}.sheet.colField`)}</span>
           <span>{t(`${P}.sheet.colSource`)}</span>
           <span>{t(`${P}.sheet.colExample`)}</span>
+          <span>{t(`${P}.sheet.colField`)}</span>
           <span>{t(`${P}.sheet.colRule`)}</span>
         </div>
         {drafts.map((d, i) => {
@@ -325,7 +336,10 @@ export function MapToFhirSheet({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => m.setDrafts((ds) => ds.filter((_, j) => j !== i))}>
+                      <DropdownMenuItem onClick={() => {
+                        invalidateTest();
+                        m.setDrafts((ds) => ds.filter((_, j) => j !== i));
+                      }}>
                         {t(`${P}.sheet.removeRow`)}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -350,13 +364,13 @@ export function MapToFhirSheet({
       {/* The sheet does not scroll. The area under the header scrolls on its own, and the test result
           block sits below it, outside the scroll, so it stays in view without position: sticky. */}
       <SheetContent
-        className="w-full max-w-full gap-0 overflow-hidden p-0 sm:w-[52rem] sm:max-w-[92vw]"
+        className="h-dvh w-full max-w-full gap-0 overflow-hidden p-0 sm:w-[52rem] sm:max-w-[92vw] [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center"
         // Escape inside the column list closes the list, not the sheet, so unsaved work stays.
         onEscapeKeyDown={(e) => {
           if (e.target instanceof Element && e.target.closest('[data-column-picker]')) e.preventDefault();
         }}
       >
-        <SheetHeader className="shrink-0 border-b border-border px-6 py-4 pr-12">
+        <SheetHeader className="shrink-0 border-b border-border px-6 py-4 pr-16">
           <SheetTitle>{t(`${P}.sheet.title`)}</SheetTitle>
           <SheetDescription>{t(`${P}.sheet.description`)}</SheetDescription>
         </SheetHeader>

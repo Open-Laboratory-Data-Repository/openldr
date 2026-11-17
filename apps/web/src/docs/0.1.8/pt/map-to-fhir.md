@@ -20,6 +20,10 @@ O guia da aplicação **Map to FHIR** mostra passo a passo como mapear um fichei
 
 Use um nó Map to FHIR por cada ficheiro do laboratório. Uma linha só é mapeada quando exatamente um mapeamento guardado do nó conhece todas as suas colunas. Quando dois mapeamentos guardados servem para uma linha, o nó retém-na.
 
+## Ver um mapeamento antes de o usar
+
+O studio mostra cada campo de origem e o seu exemplo antes do nome de destino e do caminho FHIR. Depois de **Testar**, o menu de pontos de uma linha que passa oferece **Ver FHIR gerado**. Mostra os registos dessa linha em JSON copiável, com os valores convertidos e as ligações entre registos. O teste não os guarda. Alterar o mapeamento ou carregar outra amostra limpa os resultados anteriores.
+
 ## Um ficheiro com uma coluna por análise
 
 Uma folha de laboratório ou uma exportação WHONET tem muitas vezes uma coluna por análise, por exemplo uma coluna por antibiótico. Para o mapear:

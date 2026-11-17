@@ -39,6 +39,8 @@ Sans échantillon, le panneau montre le mappage enregistré du nœud, le plus la
 
 ## Choisir une colonne pour chaque champ
 
+Chaque ligne présente le champ source et son exemple, puis sa **Destination**. La destination affiche un libellé de laboratoire et son chemin FHIR. Vous pouvez mapper par le libellé sans saisir de chemin FHIR.
+
 Chaque ligne du panneau est un champ de la cible. Une étoile marque un champ obligatoire. **Lab result** en demande trois : **Identifiant patient**, **Date de prélèvement** et **Examen**.
 
 1. Sur la ligne d'un champ, ouvrez la liste sous **Depuis vos données** et choisissez la colonne qui le remplit.
@@ -114,6 +116,19 @@ Un texte simple dans un champ codé, comme **Examen**, est stocké comme le code
 **Résultat attendu :** chaque ligne de l'échantillon réussit, ou vous savez pourquoi elle échoue.
 
 Le test envoie les lignes de l'échantillon, 20 au plus. Les raisons sont en anglais. Le test vérifie chaque ligne seule. Deux lignes qui donnent le même résultat avec d'autres valeurs réussissent toutes deux au test, alors qu'une exécution retient la seconde.
+
+## Examiner les ressources générées
+
+1. Ouvrez **Actions du mappage** et sélectionnez **Tester**.
+2. Repérez une ligne qui réussit dans les résultats en bas du panneau.
+3. Ouvrez le menu à points **Actions de la ligne** de cette ligne.
+4. Sélectionnez **Voir le FHIR généré**.
+5. Vérifiez les valeurs et les références dans **FHIR généré**.
+6. Ouvrez **Actions des ressources générées** et sélectionnez **Copier le JSON**.
+
+**Résultat attendu :** le panneau montre uniquement les ressources générées pour cette ligne de l'échantillon. Le test ne les enregistre pas.
+
+Changer une source, une règle, une destination ou un échantillon efface les résultats du test précédent. Sélectionnez de nouveau **Tester** pour examiner le nouveau mappage.
 
 ## Enregistrer le mappage
 

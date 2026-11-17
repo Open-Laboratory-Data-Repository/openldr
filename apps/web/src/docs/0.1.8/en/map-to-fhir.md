@@ -20,6 +20,10 @@ The in-app guide **Map to FHIR** shows how to map a file, step by step.
 
 Use one Map to FHIR node for each lab file. A row is mapped only when exactly one saved mapping of the node knows all its columns. When two saved mappings fit a row, the node holds it.
 
+## Inspect a mapping before using it
+
+The studio shows each source field and its example before the destination label and FHIR path. After **Test**, a passing row's dots menu offers **View generated FHIR**. It shows the records for that row as copyable JSON, including converted values and links between records. Test does not store these records. Editing the mapping or loading another sample clears the previous results.
+
 ## A file with one column per test
 
 A lab sheet or a WHONET export often has one column per test, for example one column per antibiotic. To map it:

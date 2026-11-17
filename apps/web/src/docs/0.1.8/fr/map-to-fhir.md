@@ -20,6 +20,10 @@ Le guide intégré **Map to FHIR** montre pas à pas comment mapper un fichier.
 
 Utilisez un nœud Map to FHIR par fichier de laboratoire. Une ligne n'est mappée que si un seul mappage enregistré du nœud connaît toutes ses colonnes. Quand deux mappages enregistrés conviennent à une ligne, le nœud la retient.
 
+## Examiner un mappage avant de l'utiliser
+
+Le studio montre chaque champ source et son exemple avant le libellé de destination et le chemin FHIR. Après **Tester**, le menu à points d'une ligne qui réussit propose **Voir le FHIR généré**. Il montre les ressources de cette ligne en JSON copiable, avec les valeurs converties et les liens entre ressources. Le test ne les enregistre pas. Modifier le mappage ou charger un autre échantillon efface les résultats précédents.
+
 ## Un fichier avec une colonne par examen
 
 Une feuille de laboratoire ou un export WHONET a souvent une colonne par examen, par exemple une colonne par antibiotique. Pour le mapper :
