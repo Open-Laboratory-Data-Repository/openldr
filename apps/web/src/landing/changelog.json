@@ -6,6 +6,36 @@
       "version": null,
       "entries": [
         {
+          "hash": "8aec6478",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "A save writes only over the version it read, and drops only the secrets it replaced"
+        },
+        {
+          "hash": "d2a55d10",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "A refused workflow save keeps every secret its stored version names"
+        },
+        {
+          "hash": "63e5c97d",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "The database holds one enabled workflow per webhook path; a number used as a key stays invalid JSON"
+        },
+        {
+          "hash": "6382de90",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Say that saving a copied workflow turns it on"
+        },
+        {
+          "hash": "d16aa84e",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Long whole numbers keep every digit, and a copied workflow never stops the original"
+        },
+        {
           "hash": "76b90642",
           "type": "feat",
           "scope": "studio",
