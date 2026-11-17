@@ -17,7 +17,7 @@ import type { FacilityAdminLevel } from '@openldr/db/facility-answers';
 // existing caller.
 import type { FacilityHealth as FacilityRowHealth } from '@openldr/db';
 import type { ParsedFilter, ParsedSort } from '@openldr/table-query';
-import type { CodeSuggestion, StarterPack, StarterPackWithEntries } from '@openldr/forms/pure';
+import type { CodeSuggestion, MapTarget, StarterPack, StarterPackWithEntries } from '@openldr/forms/pure';
 
 /** Routes the server answers WITHOUT a bearer token. Mirrors the public-path checks at the top of
  *  the `onRequest` hook in `apps/server/src/auth-plugin.ts` — keep the two in step.
@@ -3279,6 +3279,31 @@ export async function fetchWorkflowRun(runId: string): Promise<WorkflowRunSummar
   if (!res.ok) throw new Error(`workflow run failed: ${res.status}`);
   return res.json() as Promise<WorkflowRunSummary>;
 }
+
+// ── Map to FHIR node: targets, suggestions, test, code lists ──────────────────
+/** One sample row's result from the Test route. A reason never holds a value from the row. */
+export type MapTestResult =
+  | { ok: true; kind: 'fhir' | 'form' | 'mapped'; resourceTypes: string[]; resources: unknown[] }
+  | { ok: false; reason: string; field?: string };
+export interface MapSuggestionView { targetPath: string; field: string; score: number }
+export interface MapCodeList { url: string; name: string }
+export interface MapTestInput {
+  config: { targetId: string; formIds: string[]; mappings: unknown[] };
+  items: Record<string, unknown>[];
+}
+
+export const fetchMapTargets = (locale: string): Promise<MapTarget[]> =>
+  apiGet<{ targets: MapTarget[] }>(`/api/workflows/map/targets?locale=${encodeURIComponent(locale)}`, 'list map targets').then((b) => b.targets);
+export const suggestMapping = (input: { targetId: string; fieldNames: string[]; locale?: string }): Promise<MapSuggestionView[]> =>
+  authFetch('/api/workflows/map/suggest', jbody(input, 'POST'))
+    .then((r) => okJson<{ suggestions: MapSuggestionView[] }>(r, 'suggest a mapping'))
+    .then((b) => b.suggestions);
+export const testMapping = (input: MapTestInput): Promise<MapTestResult[]> =>
+  authFetch('/api/workflows/map/test', jbody(input, 'POST'))
+    .then((r) => okJson<{ results: MapTestResult[] }>(r, 'test the mapping'))
+    .then((b) => b.results);
+export const fetchMapCodeLists = (): Promise<MapCodeList[]> =>
+  apiGet<{ codeLists: MapCodeList[] }>('/api/workflows/map/code-lists', 'list code lists').then((b) => b.codeLists);
 
 export interface WorkflowDatasetSummary {
   name: string;

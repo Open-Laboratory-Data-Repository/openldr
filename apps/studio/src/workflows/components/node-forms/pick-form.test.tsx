@@ -3,6 +3,7 @@ import { pickForm } from './index';
 import { DeclarativeNodeForm } from './plugin-node-form';
 import { SqlForm } from './sql-form';
 import { DefaultForm } from './default-form';
+import { MapToFhirForm } from './map-to-fhir-form';
 
 const mk = (data: Record<string, unknown>, type = 'action') => ({ id: 'n', type, data }) as never;
 
@@ -13,6 +14,11 @@ describe('pickForm routing', () => {
 
   it('routes persist-store to the declarative form', () => {
     expect(pickForm(mk({ templateId: 'persist-store', action: 'persist-store' }))).toBe(DeclarativeNodeForm);
+  });
+
+  it('routes map-to-fhir to its own form, with or without a templateId', () => {
+    expect(pickForm(mk({ templateId: 'map-to-fhir', action: 'map-to-fhir' }))).toBe(MapToFhirForm);
+    expect(pickForm(mk({ action: 'map-to-fhir' }))).toBe(MapToFhirForm);
   });
 
   it('still routes a registered host node to its bespoke form', () => {
