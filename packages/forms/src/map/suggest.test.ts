@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { suggest } from './suggest';
 import type { MapTarget } from './target';
+import { labResultTarget } from './targets';
+import { mapSynonyms } from './synonyms';
+import { seededStarterPacks } from '../samples/starter-packs';
 
 const ID = 'Patient.identifier.value?system=urn:test:patient';
 
@@ -30,7 +33,8 @@ describe('suggest', () => {
   });
 
   it('suggests at most one field per target field', () => {
-    const res = suggest(target, ['pat_no', 'patient_id'], synonyms);
+    // Different scores: two columns at the same best score would be a tie, which gives nothing.
+    const res = suggest(target, ['pat_no', 'pat_number'], synonyms);
     expect(res.filter((s) => s.targetPath === ID)).toHaveLength(1);
   });
 
@@ -54,5 +58,63 @@ describe('suggest', () => {
     expect(scores).toEqual([...scores].sort((a, b) => b - a));
     expect(res.find((s) => s.field === 'pat_number')?.targetPath).toBe(ID);
     expect(res.find((s) => s.field === 'pat_number')!.score).toBeLessThan(1);
+  });
+});
+
+describe('suggest: nested names, ties and full names', () => {
+  const people: MapTarget = {
+    ...target,
+    fields: [
+      ...target.fields,
+      { path: 'Patient.name.given', label: 'First name', required: false, repeats: false, valueSet: null },
+      { path: 'Patient.name.family', label: 'Last name', required: false, repeats: false, valueSet: null },
+    ],
+  };
+  const syn = {
+    ...synonyms,
+    [ID]: ['pat no', 'patient id', 'mrn'],
+    'Patient.name.given': ['first_name', 'given_name'],
+    'Patient.name.family': ['last_name', 'surname'],
+    '!Patient.name.given': ['name', 'full_name', 'fullname'],
+    '!Patient.name.family': ['name', 'full_name', 'fullname'],
+  };
+  const pairs = (names: string[]) => suggest(people, names, syn).map((s) => `${s.field}>${s.targetPath}`).sort();
+
+  it('reads a nested name by its last part too, whatever the order of the columns', () => {
+    const want = [`patient.dob>Patient.birthDate`, `patient.mrn>${ID}`].sort();
+    expect(pairs(['patient.dob', 'patient.mrn'])).toEqual(want);
+    expect(pairs(['patient.mrn', 'patient.dob'])).toEqual(want);
+  });
+
+  it('gives a field nothing when two columns share its best score', () => {
+    expect(suggest(people, ['pat no', 'patient id'], syn).filter((s) => s.targetPath === ID)).toEqual([]);
+  });
+
+  it('never offers a full-name column as First name or Last name, and still offers first_name', () => {
+    for (const n of ['name', 'full_name', 'fullname', 'patient.name']) {
+      expect(suggest(people, [n], syn).filter((s) => s.targetPath.startsWith('Patient.name')), n).toEqual([]);
+    }
+    expect(pairs(['first_name'])).toEqual(['first_name>Patient.name.given']);
+  });
+});
+
+describe('suggest on the Lab result target, with the shipped synonyms', () => {
+  const real = labResultTarget(seededStarterPacks(), 'en');
+  const of = (names: string[]) => Object.fromEntries(suggest(real, names, mapSynonyms('en')).map((x) => [x.field, x.targetPath]));
+
+  it('offers Test for a nested analyte, and no name part for a full name', () => {
+    const got = of(['accession', 'patient_id', 'name', 'sex', 'results.analyte', 'results.value']);
+    expect(got['results.analyte']).toBe('Observation.code');
+    expect(got.name).toBeUndefined();
+  });
+
+  it('gives Patient ID the identifier and Date of birth the birth date for nested patient columns', () => {
+    const got = of(['patient.dob', 'patient.mrn', 'patient.surname', 'patient.given']);
+    expect(got).toMatchObject({
+      'patient.dob': 'Patient.birthDate',
+      'patient.mrn': 'Patient.identifier.value',
+      'patient.surname': 'Patient.name.family?use=official',
+      'patient.given': 'Patient.name.given?use=official',
+    });
   });
 });

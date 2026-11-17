@@ -16,7 +16,8 @@ describe('synonym lists', () => {
     it(`keys the ${locale} list by paths of the Lab result target, each with column names`, () => {
       expect(Object.keys(file).length).toBeGreaterThan(0);
       for (const [key, names] of Object.entries(file)) {
-        expect(paths.has(key), `${locale}: ${key}`).toBe(true);
+        // `!path` lists names that must not go to that field (suggest.ts).
+        expect(paths.has(key.replace(/^!/, '')), `${locale}: ${key}`).toBe(true);
         expect(names.length, `${locale}: ${key}`).toBeGreaterThan(0);
         for (const n of names) expect(n.trim(), `${locale}: ${key}`).toBe(n);
         expect(new Set(names).size, `${locale}: ${key} has a repeat`).toBe(names.length);
@@ -35,6 +36,7 @@ describe('synonym coverage', () => {
       const seen = new Map<string, string>();
       const twice: string[] = [];
       for (const [key, names] of Object.entries(file)) {
+        if (key.startsWith('!')) continue; // a not-for list may name a column for several fields
         for (const n of names) {
           const at = seen.get(n.toLowerCase());
           if (at && at !== key) twice.push(`${n}: ${at} and ${key}`);

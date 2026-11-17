@@ -21,5 +21,7 @@
   "Observation.valueString": ["resultado_texto", "comentario_resultado"],
   "Observation.valueQuantity.unit": ["unidade", "unidades", "unidade_medida"],
   "Observation.effectiveDateTime": ["data_resultado", "data_do_resultado", "data_analise", "data_validacao"],
-  "Observation.interpretation": ["interpretacao", "interpretação", "sinal", "anomalia"]
+  "Observation.interpretation": ["interpretacao", "interpretação", "sinal", "anomalia"],
+  "!Patient.name.given?use=official": ["nome_completo", "nome_do_paciente", "nome_paciente"],
+  "!Patient.name.family?use=official": ["nome_completo", "nome_do_paciente", "nome_paciente"]
 }

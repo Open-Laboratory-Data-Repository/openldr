@@ -1,7 +1,7 @@
 {
   "Patient.identifier.value": ["pat_no", "patient_id", "patient_no", "patient_number", "pid", "mrn", "hospital_no", "unique_id"],
   "Patient.identifier.system": ["patient_id_system", "id_system", "id_type", "identifier_type"],
-  "Patient.name.given?use=official": ["first_name", "firstname", "given_name", "forename", "fname"],
+  "Patient.name.given?use=official": ["first_name", "firstname", "given_name", "given", "forename", "fname"],
   "Patient.name.family?use=official": ["last_name", "lastname", "surname", "family_name", "lname"],
   "Patient.birthDate": ["dob", "date_of_birth", "birth_date", "birthdate"],
   "Patient.gender": ["sex", "gender"],
@@ -21,5 +21,7 @@
   "Observation.valueString": ["result_text", "text_result", "result_comment"],
   "Observation.valueQuantity.unit": ["unit", "units", "result_unit"],
   "Observation.effectiveDateTime": ["result_date", "date_resulted", "test_date", "analysis_date"],
-  "Observation.interpretation": ["flag", "abnormal_flag", "interpretation", "result_flag"]
+  "Observation.interpretation": ["flag", "abnormal_flag", "interpretation", "result_flag"],
+  "!Patient.name.given?use=official": ["name", "full_name", "fullname", "patient_name", "client_name"],
+  "!Patient.name.family?use=official": ["name", "full_name", "fullname", "patient_name", "client_name"]
 }
