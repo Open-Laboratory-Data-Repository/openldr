@@ -223,25 +223,48 @@ describe('a fully mapped made-up row', () => {
     const b = await applyMapping(mapping(rows), target, { ...row }, deps());
     if (!a.ok || !b.ok) throw new Error('not ok');
     expect(b.resources.map((r) => r.id)).toEqual(a.resources.map((r) => r.id));
-    const P = hash(['Patient', 'urn:test:patient-id', 'T-0001']);
-    const S = hash(['Specimen', P, 'S-0001']);
-    const R = hash(['ServiceRequest', S, 'test-panel-x']);
+    // Exactly what hashId receives for each record (Task 4 documents it).
+    const P = hash(['Patient', 't:urn:test:patient-id', 't:T-0001']);
+    const S = hash(['Specimen', P, 't:S-0001']);
+    const R = hash(['ServiceRequest', S, 't:test-panel-x']);
     expect(a.resources.map((r) => r.id)).toEqual([
-      P, S, R, hash(['Observation', R, 'urn:test:codes|ta']), hash(['Observation', R, 'urn:test:codes|tb']),
+      P, S, R, hash(['Observation', R, 'c:["urn:test:codes","ta"]']), hash(['Observation', R, 'c:["urn:test:codes","tb"]']),
     ]);
   });
 
   it('identifies the specimen by its collected date when the row has no specimen number', async () => {
     const res = await applyMapping(mapping(rows), target, { ...row, spec_no: '' }, deps());
     if (!res.ok) throw new Error(res.reason);
-    const P = hash(['Patient', 'urn:test:patient-id', 'T-0001']);
-    expect(res.resources[1].id).toBe(hash(['Specimen', P, '2026-11-03T08:30:00Z']));
+    const P = hash(['Patient', 't:urn:test:patient-id', 't:T-0001']);
+    expect(res.resources[1].id).toBe(hash(['Specimen', 'fallback', P, 't:2026-11-03T08:30:00Z']));
+  });
+
+  it('gives two ids when one row\'s specimen number equals another row\'s collected date, same patient', async () => {
+    const a = await applyMapping(mapping(rows), target, { ...row, spec_no: '2026-11-03T08:30:00Z' }, deps());
+    const b = await applyMapping(mapping(rows), target, { ...row, spec_no: '' }, deps());
+    if (!a.ok || !b.ok) throw new Error('not ok');
+    expect(a.resources[0].id).toBe(b.resources[0].id);
+    expect(a.resources[1].id).not.toBe(b.resources[1].id);
+  });
+
+  it('holds a row whose required collected date is empty, naming that field as required', async () => {
+    const short: FieldMapping[] = [
+      { targetPath: 'Patient.identifier.value', from: { field: 'pat_no' } },
+      { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'collected' } },
+      { targetPath: 'Observation.code', from: { field: 'test_a' }, rule: { kind: 'codeList', conceptMapUrl: 'urn:test:map' } },
+    ];
+    const res = await applyMapping(mapping(short), target, { ...row, collected: '' }, deps());
+    expect(res).toMatchObject({ ok: false, field: 'Specimen.collection.collectedDateTime' });
+    if (!res.ok) {
+      expect(res.reason).toContain('Collected date');
+      expect(res.reason).toContain('required');
+    }
   });
 
   it('gives the order the specimen\'s id parts when the row has no order test code', async () => {
     const res = await applyMapping(mapping(rows.filter((r) => r.targetPath !== 'ServiceRequest.code')), target, row, deps());
     if (!res.ok) throw new Error(res.reason);
-    expect(res.resources[2].id).toBe(hash(['ServiceRequest', res.resources[1].id!]));
+    expect(res.resources[2].id).toBe(hash(['ServiceRequest', 'fallback', res.resources[1].id!]));
   });
 
   it('holds a row with no patient ID, naming the field', async () => {

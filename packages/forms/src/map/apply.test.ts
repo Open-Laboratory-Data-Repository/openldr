@@ -103,8 +103,10 @@ describe('applyMapping', () => {
     expect(res.resources.map((r) => r.resourceType)).toEqual(['Patient', 'Specimen', 'ServiceRequest', 'Observation']);
     const [patient, specimen, request, obs] = res.resources as [Patient, Specimen, ServiceRequest, Observation];
     // No specimen number, so the Specimen id falls back to the patient and the specimen type.
-    const P = hash(['Patient', 'T-001']);
-    const S = hash(['Specimen', P, 'blood-x']);
+    // hashId gets the record type, a 'fallback' marker when the fallback was used, then each part:
+    // a record id, `t:` plus trimmed text, `c:` plus [system, code], or '' for a missing optional part.
+    const P = hash(['Patient', 't:T-001']);
+    const S = hash(['Specimen', 'fallback', P, 't:blood-x']);
     const R = hash(['ServiceRequest', S, '']);
     const O = hash(['Observation', R, '']);
 
@@ -224,7 +226,7 @@ describe('applyMapping', () => {
     if (!res.ok) return;
     expect(res.resources[0]).toEqual({
       resourceType: 'Patient',
-      id: hash(['Patient', 'T-001']),
+      id: hash(['Patient', 't:T-001']),
       identifier: [{ system: 'urn:test:patient', value: 'T-001' }],
       name: [{ use: 'official', given: ['Ann'] }],
       birthDate: '2026-11-03',
@@ -336,24 +338,57 @@ describe('record ids come from the row', () => {
 
   it('fails a row with no patient identifier, naming the field and not the value', async () => {
     const loose: MapTarget = { ...target, fields: target.fields.map((f) => ({ ...f, required: false })) };
-    const res = await applyMapping(mapping(baseRows), loose, { ...row, pat_no: '' }, deps());
+    // The value under test is empty, so check that no other value of the row leaks into the reason.
+    const item = { ...row, pat_no: '', surname: 'QZXSUR', given: 'QZXGIV', specimen: 'QZXSPC' };
+    const res = await applyMapping(mapping(baseRows), loose, item, deps());
     expect(res).toMatchObject({ ok: false, field: 'Patient.identifier.value?system=urn:test:patient' });
     if (!res.ok) {
       expect(res.reason).toContain('Patient number');
-      expect(res.reason).not.toContain('TESTER');
+      expect(res.reason).not.toContain('QZX');
     }
   });
 
   it('uses the specimen number when there is one, and the fallback when there is not', async () => {
     const m = mapping([...baseRows, specNo]);
-    const P = hash(['Patient', 'T-001']);
-    expect(idOf(await applyMapping(m, target, { ...row, spec_no: 'S-1' }, deps()), 'Specimen')).toBe(hash(['Specimen', P, 'S-1']));
-    expect(idOf(await applyMapping(m, target, { ...row, spec_no: ' ' }, deps()), 'Specimen')).toBe(hash(['Specimen', P, 'blood-x']));
+    const P = hash(['Patient', 't:T-001']);
+    expect(idOf(await applyMapping(m, target, { ...row, spec_no: 'S-1' }, deps()), 'Specimen')).toBe(hash(['Specimen', P, 't:S-1']));
+    expect(idOf(await applyMapping(m, target, { ...row, spec_no: ' ' }, deps()), 'Specimen')).toBe(hash(['Specimen', 'fallback', P, 't:blood-x']));
   });
 
-  it('fails naming the missing part when neither the parts nor the fallback are there', async () => {
+  it('names the fallback\'s missing part when neither the parts nor the fallback are there', async () => {
     const res = await applyMapping(mapping([...baseRows.filter((r) => r.targetPath !== 'Specimen.type'), specNo]), target, row, deps());
-    expect(res).toMatchObject({ ok: false, field: 'Specimen.accessionIdentifier.value' });
+    expect(res).toMatchObject({ ok: false, field: 'Specimen.type' });
+  });
+
+  it('reports a required value that is empty as required, before any id is worked out', async () => {
+    const strict: MapTarget = { ...target, fields: target.fields.map((f) => (f.path === 'Specimen.type' ? { ...f, required: true } : f)) };
+    const res = await applyMapping(mapping([...baseRows, specNo]), strict, { ...row, specimen: '' }, deps());
+    expect(res).toMatchObject({ ok: false, field: 'Specimen.type' });
+    if (!res.ok) expect(res.reason).toContain('required');
+  });
+
+  it('trims an identity value, and keeps the stored value as the row gave it', async () => {
+    const a = await applyMapping(mapping(baseRows), target, { ...row, pat_no: ' T-001 ' }, deps());
+    const b = await applyMapping(mapping(baseRows), target, row, deps());
+    expect(idOf(a, 'Patient')).toBe(idOf(b, 'Patient'));
+    if (!a.ok) throw new Error(a.reason);
+    expect((a.resources[0] as Patient).identifier).toEqual([{ system: 'urn:test:patient', value: ' T-001 ' }]);
+  });
+
+  it('never gives a coding and a text the same id', async () => {
+    const codeDeps = { ...deps(), translateCode: async (): Promise<Coding | null> => ({ system: 'a', code: 'b' }) };
+    const coded = await applyMapping(mapping([...baseRows,
+      { targetPath: 'Observation.code', from: { field: 'test_a' }, rule: { kind: 'codeList', conceptMapUrl: 'urn:test:map' } },
+    ]), target, row, codeDeps);
+    const text = await applyMapping(mapping([...baseRows,
+      { targetPath: 'Observation.code', from: { fixed: 'a|b' } },
+    ]), target, row, codeDeps);
+    expect(idOf(coded, 'Observation')).not.toBe(idOf(text, 'Observation'));
+    // A text that spells the coding's tagged form does not meet it either.
+    const spelled = await applyMapping(mapping([...baseRows,
+      { targetPath: 'Observation.code', from: { fixed: 'c:["a","b"]' } },
+    ]), target, row, codeDeps);
+    expect(idOf(coded, 'Observation')).not.toBe(idOf(spelled, 'Observation'));
   });
 
   it('turns a coding into system and code for an id part', async () => {
@@ -361,7 +396,7 @@ describe('record ids come from the row', () => {
     if (!res.ok) throw new Error(res.reason);
     const R = res.resources.find((r) => r.resourceType === 'ServiceRequest')!.id!;
     const obs = res.resources.filter((r) => r.resourceType === 'Observation').map((r) => r.id);
-    expect(obs).toEqual([hash(['Observation', R, 'urn:test:codes|ta']), hash(['Observation', R, 'urn:test:codes|tb'])]);
+    expect(obs).toEqual([hash(['Observation', R, 'c:["urn:test:codes","ta"]']), hash(['Observation', R, 'c:["urn:test:codes","tb"]'])]);
   });
 
   it('fails two results in one row with the same code, naming the source field', async () => {

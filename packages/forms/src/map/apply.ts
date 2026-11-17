@@ -35,6 +35,10 @@ export interface ApplyDeps extends RuleDeps {
    * It must hash, so no row value shows in an id, and give a FHIR id (letters, digits, `-`, `.`,
    * at most 64). It must join the parts in a way that cannot be confused, for example sha256 hex
    * of `JSON.stringify(parts)`: a plain separator could occur inside a value.
+   *
+   * `parts` is the record type, then `'fallback'` when the identity's fallback was used, then one
+   * entry per identity part: another record's id, `t:` plus the trimmed text, `c:` plus
+   * `JSON.stringify([system, code])` for a coding, or `''` for a missing optional part.
    */
   hashId(parts: string[]): string | Promise<string>;
 }
@@ -107,9 +111,13 @@ function missing(key: string, label: string): Failure {
   return { ok: false, reason: `${label} is required and has no value`, field: key };
 }
 
-/** An identity part's value as text. A coding gives `system|code`. */
+/**
+ * An identity part's value, tagged by kind so two kinds never meet: `c:` plus `[system, code]`
+ * for a coding, `t:` plus the trimmed text for anything else. Only the id sees the trim; the
+ * record keeps the value as the row gave it.
+ */
 function partText(v: MapValue): string {
-  return typeof v === 'object' ? `${v.system ?? ''}|${v.code}` : String(v);
+  return typeof v === 'object' ? `c:${JSON.stringify([v.system ?? '', v.code])}` : `t:${String(v).trim()}`;
 }
 
 function write(resource: Resource, key: string, value: WriteValue): Failure | null {
@@ -158,6 +166,13 @@ export async function applyMapping(
   const identityOf = new Map(target.identity.map((i) => [i.record, i]));
   const ids = new Map<string, string>();
 
+  // A required value that is empty is reported as required, before an id needs it.
+  for (const f of target.fields) {
+    if (!f.required) continue;
+    const r = rowOf.get(f.path);
+    if (r && r.values.every((v) => v === null)) return missing(f.path, f.label);
+  }
+
   /** The values of one list of parts, or the first part with no value. */
   const collect = (parts: IdentityPart[], index: number): { values: string[] } | { missing: string } => {
     const values: string[] = [];
@@ -184,18 +199,19 @@ export async function applyMapping(
     const ident = identityOf.get(type);
     if (!ident) throw new Error(`map target ${target.id}: ${type} has no identity`);
     let used = ident.parts;
+    let marker: string[] = [];
     let got = collect(ident.parts, index);
     if ('missing' in got && ident.fallback) {
-      const alt = collect(ident.fallback, index);
-      if ('values' in alt) {
-        got = alt;
-        used = ident.fallback;
-      }
+      // With no value for the fallback either, its missing part is the one to name: the primary
+      // part is often a column the lab does not have.
+      got = collect(ident.fallback, index);
+      used = ident.fallback;
+      marker = ['fallback']; // so a fallback id never shares a hash input with a primary one
     }
     if ('missing' in got) {
       return { ok: false, reason: `${labelOf(got.missing)} is needed to tell one ${type} record from another, and has no value`, field: got.missing };
     }
-    const id = await deps.hashId([type, ...got.values]);
+    const id = await deps.hashId([type, ...marker, ...got.values]);
     if (typeof id !== 'string' || !FHIR_ID.test(id)) {
       throw new Error(`map target ${target.id}: hashId gave a ${type} id FHIR does not allow`);
     }
