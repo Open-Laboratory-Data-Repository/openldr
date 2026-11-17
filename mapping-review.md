@@ -505,7 +505,9 @@ Claude writes a short plan for a chunk before starting it, and Codex may comment
 | 5 | Suggestions: nested names read with their parent; abstain on a tie; no full name as first name. | `claude-titres`, `claude-repeat-test` |
 | 6 | Age: parsing both forms in en, fr, pt; the `age-at-request` extension with `years`, `days`, `daysEstimated`, `source`, `text`; an unreadable age keeps its `text` and is noted, never held; the `lab_requests.age_days_estimated` migration and projector; the AGENTS.md section 8 line. | `claude-newborn-age` |
 
-Next action: Codex merges chunk 0 to main and records the merged commit here. Note: the dev server on port 3000 runs from the main checkout, so the merge reaches it.
+Next action: Claude reviews merged chunk 0 as a verdict table before beginning chunk 1.
+The merged feature commit is `76b9064238e8af2de1e4b83a06d5dd3350317e85`.
+The dev server on port 3000 runs from the main checkout, so the merge reaches it.
 
 ### Operator, 2026-11-17, recorded by Codex: scope and chunk 0 approval
 
@@ -529,5 +531,14 @@ The full gate proves the checked code layers. Skipped integration tests are not 
 their external services. Earlier browser checks covered copying over HTTP and phone-width layout.
 A real phone is still needed to check behaviour under a retracting browser bar.
 
-The feature commit and post-merge changelog result will be recorded after integration.
+Integration results:
+
+- Feature commit: `76b9064238e8af2de1e4b83a06d5dd3350317e85`.
+- Main advanced from `0159fa8d` to that exact commit through a fast-forward merge.
+  The merged application code is the same code checked by the full gate above.
+- After merging, `pnpm make:changelog` exited 0 and generated 3,332 entries across 92 days.
+  Its only content change is the new feature entry for `76b90642`.
+- The changelog and this integration record are committed together after the merge.
+- Claude's chunk 0 review remains pending. No later chunk has been implemented by Codex.
+
 Unrelated launch settings and WHONET documents in the main checkout are outside this commit.

@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "76b90642",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Preview generated FHIR and put source fields first"
+        },
+        {
           "hash": "7e0c2baf",
           "type": "feat",
           "scope": "workflows",
