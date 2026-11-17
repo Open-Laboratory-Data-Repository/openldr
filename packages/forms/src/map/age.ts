@@ -11,7 +11,11 @@
  * - Never a birth date. Units are time units, not clinical vocabulary.
  */
 
+import { wholeNumberTooLong } from './rules';
+
 export const AGE_EXTENSION_URL = 'urn:openldr:ext:age-at-request';
+/** The most days `lab_requests.age_days` (a 32-bit integer) holds. A larger count is not stored. */
+const MAX_DAYS = 2_147_483_647;
 const UCUM = 'http://unitsofmeasure.org';
 
 type UnitCode = 'h' | 'd' | 'wk' | 'mo' | 'a';
@@ -56,9 +60,14 @@ function codeOf(unit: string): UnitCode | null {
   return CODE_OF.get(key) ?? null;
 }
 
+const NUMBER = /^\d+(?:[.,]\d+)?$/;
+
+/** The number, or null when the text is not one, or is one a number cannot hold exactly. */
 function numberOf(text: string): number | null {
-  const t = text.trim().replace(',', '.');
-  return /^\d+(?:\.\d+)?$/.test(t) ? Number(t) : null;
+  const t = text.trim();
+  if (!NUMBER.test(t) || wholeNumberTooLong(t)) return null;
+  const n = Number(t.replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
 }
 
 /** One value and unit per part: `2y 3m`, `2 years, 3 months`, `2 ans et 3 mois`. Null when any part fails. */
@@ -96,16 +105,21 @@ function fromParts(parts: Part[]): ReadAge {
 export function readAge(value: string | number, unit?: string): ReadAge {
   const sent = typeof value === 'number' ? String(value) : value;
   const unitText = unit?.trim() ?? '';
-  const n = numberOf(sent);
-  if (n !== null) {
+  // Kept as sent when nothing can be stored exactly: never a rounded or endless number (C6-1).
+  const unread = (text: string): ReadAge => ({ text, unread: true });
+  if (NUMBER.test(sent.trim())) {
     // A number: its unit comes from the Age unit field, or is years.
+    const asSent = unitText ? `${sent.trim()} ${unitText}` : sent;
+    const n = numberOf(sent);
     const code = unitText ? codeOf(unitText) : 'a';
-    if (!code) return { text: `${sent.trim()} ${unitText}`, unread: true };
-    return fromParts([{ value: n, unit: unitText || 'a', code }]);
+    if (n === null || !code) return unread(asSent);
+    const age = fromParts([{ value: n, unit: unitText || 'a', code }]);
+    return (age.days ?? 0) > MAX_DAYS ? unread(asSent) : age;
   }
   const parts = partsOf(sent);
-  if (!parts) return { text: sent, unread: true };
-  return { ...fromParts(parts), text: sent };
+  if (!parts) return unread(sent);
+  const age = fromParts(parts);
+  return (age.days ?? 0) > MAX_DAYS ? unread(sent) : { ...age, text: sent };
 }
 
 /** The `age-at-request` extension for a read age. Sub-extensions in a fixed order. */

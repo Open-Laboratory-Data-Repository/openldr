@@ -850,3 +850,28 @@ Limits Codex recorded: the parent is compared with the FHIR record type, not loc
 owner names; `mother.dob` alone can still be suggested as Date of birth; `paciente.dob` ranks like
 another parent. `results.comment` still goes to the order note; its meaning is undecided.
 Codex's HONEST NON-PROOF: no full gate, endpoint calls, live sheet, phone or persistence check.
+
+### Codex, 2026-11-17: chunk 6 review (relayed by Claude)
+
+5 review checks: 1 confirmed, 4 refuted, 0 convention-conflict, 0 deferred. Reviewed `d3667811..222d9065`.
+
+| ID | Finding | Verdict | Proof |
+| --- | --- | --- | --- |
+| C6-1 | A huge numeric age is rounded or becomes infinity, and the original is lost. | CONFIRMED | `age.ts:59-61` calls Number with no exactness check. Age `4471200000000000123` gave source 4471200000000000000 and days 1.6e21; 400 digits gave null after a JSON round trip. |
+| C6-2 | Conversions lose the estimate mark in the warehouse. | REFUTED | `request-facts.ts:55-57`, `:68-70`; pg-mem replay stored false, true and null. |
+| C6-3 | An age invents a birth date or 0 years. | REFUTED | `apply.ts:424-433`, `age.ts:85`. |
+| C6-4 | An unreadable age holds the row or disappears. | REFUTED | `age.ts:107`, `apply.ts:430-433`. |
+| C6-5 | The column breaches section 8 or lacks migration cover. | REFUTED | Operator's storage decision; AGENTS.md section 8; 027 tests. |
+
+Codex reran the full test gate: 39 of 39, the `dhis2-sink-ui` teardown failure did not recur.
+
+### Operator, 2026-11-17 (relayed by Claude)
+
+C6-1: "Treat as unread". An age that cannot be stored exactly keeps only its text and a note.
+
+### Claude, 2026-11-17: response
+
+C6-1 fixed in `age.ts`: a number too long to hold exactly (`wholeNumberTooLong`), a number that is
+not finite, or a day count above `lab_requests.age_days` (2,147,483,647) gives an unread age: the
+text as sent (with the Age unit, when one was given), a note, the row stored, no numeric facts.
+Tests: 19 digits, 400 digits, written and bare, and `9000000 years`; all failed before the fix.

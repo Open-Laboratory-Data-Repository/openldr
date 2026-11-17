@@ -49,3 +49,20 @@ describe('ageExtension', () => {
     expect(ageExtension(readAge('unknown'))).toEqual({ url: AGE_EXTENSION_URL, extension: [{ url: 'text', valueString: 'unknown' }] });
   });
 });
+
+describe('readAge: a number it cannot keep exactly (C6-1)', () => {
+  it('keeps a whole number too long to hold exactly as text only, every digit', () => {
+    expect(readAge('4471200000000000123')).toEqual({ text: '4471200000000000123', unread: true });
+    expect(readAge('4471200000000000123', 'days')).toEqual({ text: '4471200000000000123 days', unread: true });
+  });
+
+  it('keeps a number that is not finite as text only', () => {
+    const huge = '9'.repeat(400);
+    expect(readAge(huge)).toEqual({ text: huge, unread: true });
+    expect(readAge(`${huge} days`)).toEqual({ text: `${huge} days`, unread: true });
+  });
+
+  it('keeps an age whose day count the warehouse cannot hold as text only', () => {
+    expect(readAge('9000000 years')).toEqual({ text: '9000000 years', unread: true });
+  });
+});
