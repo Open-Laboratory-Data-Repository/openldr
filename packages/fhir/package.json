@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./paths": "./src/paths/index.ts"
+    "./paths": "./src/paths/index.ts",
+    "./xml": "./src/xml/from-xml.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -13,6 +14,7 @@
     "lint": "echo \"no lint\""
   },
   "dependencies": {
+    "fast-xml-parser": "^4.5.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

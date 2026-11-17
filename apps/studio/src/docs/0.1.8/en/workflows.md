@@ -314,6 +314,8 @@ curl -X POST https://your-host/api/workflows/hooks/ingest \
   -d @data/your-payload.json
 ```
 
+To send FHIR as XML, set `Content-Type: application/fhir+xml` and post the file with `--data-binary @data/your-payload.xml`. OpenLDR turns it into FHIR JSON before the workflow runs, so every node sees the same JSON a JSON sender gives. It reads a Bundle and the resource types OpenLDR stores: Patient, Specimen, ServiceRequest, Observation, DiagnosticReport, Encounter, Location, Organization and Practitioner. XML that is not FHIR gets HTTP 415, and XML that is not well formed gets HTTP 400. In both cases nothing runs.
+
 A completed response contains `ok`, `runId` and `correlationId`. A 202 response means accepted, with a request identifier and polling URL. Follow that URL with the current token. Respect Retry-After. Reuse the same idempotency key and identical input for a retry. Different input with the same key returns 409.
 
 On a new install, **Ingest** refuses a whole message when any part of it cannot be stored. The run fails, the sender gets HTTP 500, and nothing from that message is stored. History shows the reasons on the **Map to FHIR** node.
@@ -364,6 +366,8 @@ Reset normally keeps the existing webhook secret. If the reset warning says it c
 **Run waits without starting.** Select the play badge on the trigger after Run.
 
 **A secret is rejected.** Check the saved value and current path. Replacing a secret requires Save and, for Ingest, Save anyway. A saved secret cannot be revealed.
+
+**XML is refused with 415.** The root element must be in the `http://hl7.org/fhir` namespace, and every resource must be one of the types OpenLDR stores. The response names what is wrong. Only FHIR XML is read.
 
 **A node fails.** Inspect its input, configuration and logs in History. Check required connector settings and the field names entering it.
 

@@ -78,7 +78,7 @@ Check the system-workflow warning, then select **Save anyway** when you intend t
 
 ## Send your payload over HTTPS
 
-Use the saved webhook URL and secret. Ingest accepts a FHIR Bundle, a resource array or supported form answers. A CLI file import accepts a Bundle or single resource, not that raw array. There is no generic POST /fhir ingest endpoint. Put your approved payload in data/your-payload.json.
+Use the saved webhook URL and secret. Ingest accepts a FHIR Bundle, a resource array or supported form answers. It also accepts a FHIR Bundle or resource as XML, sent with `Content-Type: application/fhir+xml`, and turns it into FHIR JSON before the run. Other XML gets HTTP 415. A CLI file import accepts a Bundle or single resource, not that raw array. There is no generic POST /fhir ingest endpoint. Put your approved payload in data/your-payload.json.
 
 ### 1. Post with the saved secret and a request key
 

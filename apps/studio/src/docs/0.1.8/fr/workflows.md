@@ -314,6 +314,8 @@ curl -X POST https://your-host/api/workflows/hooks/ingest \
   -d @data/your-payload.json
 ```
 
+Pour envoyer du FHIR en XML, utilisez `Content-Type: application/fhir+xml` et envoyez le fichier avec `--data-binary @data/your-payload.xml`. OpenLDR le transforme en JSON FHIR avant l'exécution du workflow, donc chaque nœud voit le même JSON qu'un émetteur JSON. Il lit un Bundle et les types de ressource qu'OpenLDR stocke : Patient, Specimen, ServiceRequest, Observation, DiagnosticReport, Encounter, Location, Organization et Practitioner. Un XML qui n'est pas du FHIR reçoit HTTP 415, et un XML mal formé reçoit HTTP 400. Dans les deux cas, rien ne s'exécute.
+
 Une réponse terminée contient `ok`, `runId` et `correlationId`. Une réponse 202 signifie accepté, avec un identifiant de requête et une URL de suivi. Consultez cette URL avec le jeton actuel. Respectez Retry-After. Réutilisez la même clé d'idempotence et une entrée identique pour une nouvelle tentative. Une entrée différente avec la même clé retourne 409.
 
 Sur une nouvelle installation, **Ingest** refuse un message entier dès qu'une partie ne peut pas être stockée. L'exécution échoue, l'émetteur reçoit HTTP 500, et rien de ce message n'est stocké. History montre les raisons sur le nœud **Map to FHIR**.
@@ -364,6 +366,8 @@ La réinitialisation conserve normalement le secret webhook existant. Si l'avert
 **Run attend sans démarrer.** Sélectionnez le bouton de lecture du déclencheur après Run.
 
 **Un secret est rejeté.** Vérifiez la valeur enregistrée et le chemin actuel. Remplacer un secret exige Save et, pour Ingest, Save anyway. Un secret enregistré ne peut pas être révélé.
+
+**Le XML est refusé avec 415.** L'élément racine doit être dans l'espace de noms `http://hl7.org/fhir`, et chaque ressource doit être d'un type qu'OpenLDR stocke. La réponse indique le problème. Seul le XML FHIR est lu.
 
 **Un nœud échoue.** Inspectez son entrée, sa configuration et ses journaux dans History. Vérifiez le connecteur requis et les noms des champs entrants.
 

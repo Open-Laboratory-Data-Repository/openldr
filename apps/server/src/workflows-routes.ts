@@ -5,6 +5,10 @@ import { sealDefinitionSecrets, MAP_TEST_MAX_ITEMS, MapConfigError, type AppCont
 import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, isSecretRef } from '@openldr/workflows';
 import { ConfigError, appError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
+import { fhirXmlToJson } from '@openldr/fhir/xml';
+
+/** The content types the webhook reads as XML. Only FHIR XML gets through; see `fhirXmlToJson`. */
+const XML_TYPES = new Set(['application/fhir+xml', 'application/xml']);
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
 import { waitForWebhookReceipt } from './webhook-receipt-wait';
@@ -161,6 +165,11 @@ export function registerWorkflowRoutes(
   // when terminology-admin (or another route file) already added this parser to the app.
   if (!app.hasContentTypeParser('application/octet-stream')) {
     app.addContentTypeParser('application/octet-stream', (_req, payload, done) => done(null, payload));
+  }
+
+  // XML arrives as text. The webhook turns FHIR XML into FHIR JSON after its token check.
+  for (const type of XML_TYPES) {
+    if (!app.hasContentTypeParser(type)) app.addContentTypeParser(type, { parseAs: 'string' }, (_req, body, done) => done(null, body));
   }
 
   // Upload a binary file for use as a workflow trigger input. Returns a BinaryRef that can be
@@ -584,7 +593,12 @@ export function registerWorkflowRoutes(
     let files: Record<string, import('@openldr/workflows').BinaryRef> | undefined;
     let webhookBody: unknown = req.body;
     const ct = String(req.headers['content-type'] ?? '');
-    if (!ct.includes('application/json') && req.body && (Buffer.isBuffer(req.body) || typeof (req.body as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function')) {
+    if (XML_TYPES.has(ct.split(';')[0].trim().toLowerCase())) {
+      // Only FHIR XML: the converter refuses any other XML with 415, as before it existed.
+      const res = fhirXmlToJson(typeof req.body === 'string' ? req.body : '');
+      if (!res.ok) return reply.code(res.status).send({ error: res.error });
+      webhookBody = res.json;
+    } else if (!ct.includes('application/json') && req.body && (Buffer.isBuffer(req.body) || typeof (req.body as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function')) {
       const buf = await readBinaryBody(req.body, ctx.cfg.WORKFLOW_FILE_MAX_BYTES);
       const objectKey = `workflow-uploads/${randomUUID()}/webhook`;
       try { await ctx.blob.put(objectKey, new Uint8Array(buf), 'application/octet-stream'); }

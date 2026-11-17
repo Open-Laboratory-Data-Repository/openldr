@@ -96,6 +96,9 @@ importers:
       '@openldr/dhis2':
         specifier: workspace:*
         version: link:../../packages/dhis2
+      '@openldr/fhir':
+        specifier: workspace:*
+        version: link:../../packages/fhir
       '@openldr/forms':
         specifier: workspace:*
         version: link:../../packages/forms
@@ -1085,6 +1088,9 @@ importers:
 
   packages/fhir:
     dependencies:
+      fast-xml-parser:
+        specifier: ^4.5.0
+        version: 4.5.6
       zod:
         specifier: ^3.24.1
         version: 3.25.76

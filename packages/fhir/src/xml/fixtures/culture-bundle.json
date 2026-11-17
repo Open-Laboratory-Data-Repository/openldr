@@ -1,0 +1,180 @@
+{
+  "resourceType": "Bundle",
+  "id": "micro-test-5602",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "https://example.org/fhir/Patient/pat-1347",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "pat-1347",
+        "identifier": [
+          {
+            "system": "https://example.org/patient-id",
+            "value": "LAB-01347"
+          }
+        ],
+        "name": [
+          {
+            "family": "Chirwa",
+            "given": [
+              "Ruth"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1988-03-08"
+      }
+    },
+    {
+      "fullUrl": "https://example.org/fhir/Specimen/sp-5602",
+      "resource": {
+        "resourceType": "Specimen",
+        "id": "sp-5602",
+        "identifier": [
+          {
+            "system": "https://example.org/specimen-id",
+            "value": "S-5602"
+          }
+        ],
+        "status": "available",
+        "type": {
+          "text": "Midstream urine"
+        },
+        "subject": {
+          "reference": "Patient/pat-1347"
+        },
+        "receivedTime": "2026-11-17T09:10:00+03:00",
+        "request": [
+          {
+            "reference": "ServiceRequest/req-842"
+          }
+        ],
+        "collection": {
+          "collectedDateTime": "2026-11-17T08:35:00+03:00"
+        }
+      }
+    },
+    {
+      "fullUrl": "https://example.org/fhir/ServiceRequest/req-842",
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "id": "req-842",
+        "status": "completed",
+        "intent": "order",
+        "code": {
+          "text": "Urine culture and antibiotic susceptibility"
+        },
+        "subject": {
+          "reference": "Patient/pat-1347"
+        },
+        "authoredOn": "2026-11-17T08:00:00+03:00",
+        "specimen": [
+          {
+            "reference": "Specimen/sp-5602"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "https://example.org/fhir/Observation/obs-organism-5602",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs-organism-5602",
+        "basedOn": [
+          {
+            "reference": "ServiceRequest/req-842"
+          }
+        ],
+        "status": "final",
+        "code": {
+          "text": "Organism identified in urine by culture"
+        },
+        "subject": {
+          "reference": "Patient/pat-1347"
+        },
+        "effectiveDateTime": "2026-11-17T08:35:00+03:00",
+        "valueCodeableConcept": {
+          "text": "Escherichia coli"
+        },
+        "specimen": {
+          "reference": "Specimen/sp-5602"
+        }
+      }
+    },
+    {
+      "fullUrl": "https://example.org/fhir/Observation/obs-count-5602",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs-count-5602",
+        "basedOn": [
+          {
+            "reference": "ServiceRequest/req-842"
+          }
+        ],
+        "status": "final",
+        "code": {
+          "text": "Colony count in urine"
+        },
+        "subject": {
+          "reference": "Patient/pat-1347"
+        },
+        "effectiveDateTime": "2026-11-17T08:35:00+03:00",
+        "valueQuantity": {
+          "value": 100000,
+          "comparator": ">",
+          "unit": "CFU/mL",
+          "system": "http://unitsofmeasure.org",
+          "code": "{CFU}/mL"
+        },
+        "specimen": {
+          "reference": "Specimen/sp-5602"
+        },
+        "derivedFrom": [
+          {
+            "reference": "Observation/obs-organism-5602"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "https://example.org/fhir/Observation/obs-ampicillin-5602",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs-ampicillin-5602",
+        "basedOn": [
+          {
+            "reference": "ServiceRequest/req-842"
+          }
+        ],
+        "status": "final",
+        "code": {
+          "text": "Ampicillin susceptibility by disk diffusion"
+        },
+        "subject": {
+          "reference": "Patient/pat-1347"
+        },
+        "effectiveDateTime": "2026-11-17T08:35:00+03:00",
+        "valueQuantity": {
+          "value": 6,
+          "unit": "mm",
+          "system": "http://unitsofmeasure.org",
+          "code": "mm"
+        },
+        "interpretation": [
+          {
+            "text": "Resistant"
+          }
+        ],
+        "specimen": {
+          "reference": "Specimen/sp-5602"
+        },
+        "derivedFrom": [
+          {
+            "reference": "Observation/obs-organism-5602"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -314,6 +314,8 @@ curl -X POST https://your-host/api/workflows/hooks/ingest \
   -d @data/your-payload.json
 ```
 
+Para enviar FHIR em XML, use `Content-Type: application/fhir+xml` e envie o ficheiro com `--data-binary @data/your-payload.xml`. O OpenLDR transforma-o em JSON FHIR antes de o workflow correr, por isso cada nó vê o mesmo JSON que um emissor JSON envia. Lê um Bundle e os tipos de recurso que o OpenLDR guarda: Patient, Specimen, ServiceRequest, Observation, DiagnosticReport, Encounter, Location, Organization e Practitioner. XML que não é FHIR recebe HTTP 415, e XML mal formado recebe HTTP 400. Em ambos os casos nada corre.
+
 Uma resposta concluída contém `ok`, `runId` e `correlationId`. Uma resposta 202 significa aceite, com identificador do pedido e URL de consulta. Siga esse URL com o token atual. Respeite Retry-After. Reutilize a mesma chave de idempotência e uma entrada idêntica para repetir. Entrada diferente com a mesma chave devolve 409.
 
 Numa instalação nova, o **Ingest** recusa uma mensagem inteira quando alguma parte dela não pode ser guardada. A execução falha, o emissor recebe HTTP 500, e nada dessa mensagem é guardado. History mostra os motivos no nó **Map to FHIR**.
@@ -364,6 +366,8 @@ A reposição normalmente mantém o segredo webhook existente. Se o aviso indica
 **Run espera sem iniciar.** Selecione o botão de reprodução no acionador depois de Run.
 
 **Um segredo é rejeitado.** Verifique o valor guardado e o caminho atual. Substituir um segredo exige Save e, para Ingest, Save anyway. Um segredo guardado não pode ser revelado.
+
+**O XML é recusado com 415.** O elemento raiz tem de estar no espaço de nomes `http://hl7.org/fhir`, e cada recurso tem de ser de um tipo que o OpenLDR guarda. A resposta indica o problema. Só é lido XML FHIR.
 
 **Um nó falha.** Inspecione a entrada, a configuração e os registos em History. Verifique as definições do conector e os nomes dos campos que entram.
 

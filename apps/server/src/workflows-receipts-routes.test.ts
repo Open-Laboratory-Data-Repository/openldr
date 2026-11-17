@@ -104,3 +104,50 @@ describe('durable webhook receipt HTTP contract', () => {
   });
 
 });
+
+describe('FHIR XML at the webhook', () => {
+  const xml = '<?xml version="1.0"?><Patient xmlns="http://hl7.org/fhir"><id value="p1"/><name><given value="Ruth"/></name><multipleBirthInteger value="2"/></Patient>';
+  const post = (app: Awaited<ReturnType<typeof fixture>>['app'], contentType: string, payload: string, token = 'token') =>
+    app.inject({ method: 'POST', url: '/api/workflows/hooks/path', headers: { 'x-webhook-token': token, prefer: 'respond-async', 'content-type': contentType }, payload });
+
+  it.each(['application/fhir+xml', 'application/fhir+xml; charset=utf-8', 'application/xml'])('turns FHIR XML sent as %s into FHIR JSON before the run', async (ct) => {
+    const { app, receipts, blob } = await fixture();
+    try {
+      const r = await post(app, ct, xml);
+      expect(r.statusCode).toBe(202);
+      expect(receipts.accept).toHaveBeenCalledWith(expect.objectContaining({
+        files: undefined,
+        input: expect.objectContaining({ body: { resourceType: 'Patient', id: 'p1', name: [{ given: ['Ruth'] }], multipleBirthInteger: 2 } }),
+      }));
+      expect(blob.put).not.toHaveBeenCalled();
+    } finally { await app.close(); }
+  });
+
+  it('refuses XML that is not FHIR with 415, and runs nothing', async () => {
+    const { app, receipts } = await fixture();
+    try {
+      const r = await post(app, 'application/xml', '<results><row pat_no="LAB-1"/></results>');
+      expect(r.statusCode).toBe(415);
+      expect(r.json().error).toContain('http://hl7.org/fhir');
+      expect(receipts.accept).not.toHaveBeenCalled();
+    } finally { await app.close(); }
+  });
+
+  it('refuses broken XML with 400, and runs nothing', async () => {
+    const { app, receipts } = await fixture();
+    try {
+      const r = await post(app, 'application/fhir+xml', '<Patient xmlns="http://hl7.org/fhir"><id value="p1"></Patient>');
+      expect(r.statusCode).toBe(400);
+      expect(receipts.accept).not.toHaveBeenCalled();
+    } finally { await app.close(); }
+  });
+
+  it('checks the webhook token before it reads the XML', async () => {
+    const { app, receipts } = await fixture();
+    try {
+      const r = await post(app, 'application/xml', '<not-even-xml', 'wrong');
+      expect(r.statusCode).toBe(401);
+      expect(receipts.accept).not.toHaveBeenCalled();
+    } finally { await app.close(); }
+  });
+});

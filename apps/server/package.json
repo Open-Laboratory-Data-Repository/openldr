@@ -26,6 +26,7 @@
     "@openldr/dashboards": "workspace:*",
     "@openldr/db": "workspace:*",
     "@openldr/dhis2": "workspace:*",
+    "@openldr/fhir": "workspace:*",
     "@openldr/forms": "workspace:*",
     "@openldr/marketplace": "workspace:*",
     "@openldr/rbac": "workspace:*",

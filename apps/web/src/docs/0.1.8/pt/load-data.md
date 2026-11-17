@@ -78,7 +78,7 @@ Leia o aviso de workflow de sistema e selecione **Save anyway** quando pretender
 
 ## Enviar os seus dados por HTTPS
 
-Use URL e segredo guardados. Ingest aceita Bundle FHIR, lista de recursos ou respostas de formulário suportadas. O CLI aceita Bundle ou recurso único, não essa lista bruta. Não existe endpoint genérico POST /fhir. Coloque os seus dados aprovados em data/your-payload.json.
+Use URL e segredo guardados. Ingest aceita Bundle FHIR, lista de recursos ou respostas de formulário suportadas. Aceita também um Bundle ou recurso FHIR em XML, enviado com `Content-Type: application/fhir+xml`, e transforma-o em JSON FHIR antes de correr. Outro XML recebe HTTP 415. O CLI aceita Bundle ou recurso único, não essa lista bruta. Não existe endpoint genérico POST /fhir. Coloque os seus dados aprovados em data/your-payload.json.
 
 ### 1. Enviar com segredo e chave de pedido
 
