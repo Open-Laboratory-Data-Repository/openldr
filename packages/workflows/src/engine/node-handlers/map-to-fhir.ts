@@ -11,35 +11,48 @@ function isResource(v: unknown): boolean {
 }
 
 function heldItem(item: unknown, reason: string): WorkflowItem {
-  return { json: { item, reason } };
+  return { json: { item: structuredClone(item), reason } };
 }
+
+/** One place in input order: an item for the service, or an item this handler holds itself. */
+type Slot = { service: number } | { held: WorkflowItem };
 
 /**
  * The items to map, read from `sourcePath` when it is set. An object is one item. A list of FHIR
  * resources is one item, wrapped as a collection Bundle because an item's json cannot be a list.
  * Any other list gives one item per object. What is not a row is held here.
  */
-function readItems(input: WorkflowItem[], sourcePath: string): { items: WorkflowItem[]; held: WorkflowItem[] } {
-  if (!sourcePath) return { items: input.map((i) => ({ json: i.json })), held: [] };
+function readItems(input: WorkflowItem[], sourcePath: string): { items: WorkflowItem[]; slots: Slot[] } {
   const items: WorkflowItem[] = [];
-  const held: WorkflowItem[] = [];
+  const slots: Slot[] = [];
+  const send = (json: Record<string, unknown>) => {
+    slots.push({ service: items.length });
+    items.push({ json });
+  };
   for (const item of input) {
+    if (!sourcePath) {
+      send(item.json);
+      continue;
+    }
     const v = readPath(item.json, sourcePath);
     if (isObject(v)) {
-      items.push({ json: v });
+      send(v);
     } else if (Array.isArray(v) && v.length > 0 && v.every(isResource)) {
-      items.push({ json: { resourceType: 'Bundle', type: 'collection', entry: v.map((resource) => ({ resource })) } });
-    } else if (Array.isArray(v)) {
+      send({ resourceType: 'Bundle', type: 'collection', entry: v.map((resource) => ({ resource })) });
+    } else if (Array.isArray(v) && v.length > 0) {
       for (const el of v) {
-        if (isObject(el)) items.push({ json: el });
-        else held.push(heldItem(el, 'not a row'));
+        if (isObject(el)) send(el);
+        else slots.push({ held: heldItem(el, 'not a row') });
       }
     } else {
-      held.push(heldItem(item.json, `nothing at ${sourcePath}`));
+      slots.push({ held: heldItem(item.json, `nothing at ${sourcePath}`) });
     }
   }
-  return { items, held };
+  return { items, slots };
 }
+
+const MAX_HELD_REASONS = 20;
+const MAX_REASONS_IN_ERROR = 5;
 
 export const mapToFhirHandler: NodeHandler = async (node, ctx, input) => {
   if (!ctx.services) throw new Error('Map to FHIR node requires server services');
@@ -53,8 +66,28 @@ export const mapToFhirHandler: NodeHandler = async (node, ctx, input) => {
 
   const read = readItems(input, sourcePath);
   const result = await ctx.services.mapToFhir({ items: read.items, config: { targetId, formIds, mappings } });
-  const held = [...read.held, ...result.held];
+
+  // The service's held items and this handler's, in input order.
+  const heldByIndex = new Map(result.heldIndexes.map((index, i) => [index, result.held[i]]));
+  const held: WorkflowItem[] = [];
+  for (const slot of read.slots) {
+    if ('held' in slot) held.push(slot.held);
+    else {
+      const h = heldByIndex.get(slot.service);
+      if (h) held.push(h);
+    }
+  }
+  const reasons = held.map((h) => String(h.json.reason));
+
+  // Held items must go somewhere a person can see them. With no held edge they would vanish.
+  const heldWired = ctx.edges.some((e) => e.source === node.id && e.sourceHandle === 'held');
+  if (held.length > 0 && !heldWired) {
+    throw new Error(
+      `Map to FHIR node: ${held.length} item(s) held and the held port is not connected. First reasons: ${reasons.slice(0, MAX_REASONS_IN_ERROR).join('; ')}`,
+    );
+  }
+
   ctx.portItems[node.id] = { out: result.out, held };
-  ctx.nodeMeta[node.id] = { ...result.meta, held: result.meta.held + read.held.length };
+  ctx.nodeMeta[node.id] = { ...result.meta, held: held.length, heldReasons: reasons.slice(0, MAX_HELD_REASONS) };
   return result.out;
 };

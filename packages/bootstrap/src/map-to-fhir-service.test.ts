@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { seededStarterPacks, shapeOf, type FormField, type FormSchema, type SavedMapping } from '@openldr/forms';
 import { validateBatch } from '@openldr/fhir';
 import type { RunFormValidateInput, RunFormValidateOutput, WorkflowItem } from '@openldr/workflows';
-import { codingFromMapRows, createMapToFhirService, loadStoredPacks, type MapToFhirServiceDeps } from './map-to-fhir-service';
+import { codingFromMapRows, createMapToFhirService, KNOWN_ISSUE_TEXTS, loadStoredPacks, type MapToFhirServiceDeps } from './map-to-fhir-service';
 
 // Made-up values only. QZX marks a value that must never reach a reason.
 
@@ -58,7 +58,7 @@ function deps(over: Partial<MapToFhirServiceDeps> = {}): MapToFhirServiceDeps {
     validateForm: fakeValidateForm(),
     packs: async () => PACKS,
     translateCode: async (_url, value) => (value === 'TA' ? { system: 'urn:test:codes', code: 'ta' } : null),
-    validate: (resources) => validateBatch(resources, { level: 'high', resolveServiceRequest: async () => false }),
+    validate: (resources, knownOrderIds) => validateBatch(resources, { level: 'high', resolveServiceRequest: async (id) => knownOrderIds.has(id) }),
     ...over,
   };
 }
@@ -75,7 +75,9 @@ describe('createMapToFhirService', () => {
     });
     expect(res.out.map((i) => i.json.resourceType)).toEqual(['Patient', 'Observation', 'Patient', 'Specimen', 'ServiceRequest', 'Observation']);
     expect(res.held).toEqual([{ json: { item: unknown, reason: 'no mapping for this shape', shape: shapeOf(unknown) } }]);
-    expect(res.meta).toEqual({ fhir: 1, form: 1, mapped: 1, held: 1 });
+    expect(res.held[0].json.item).not.toBe(unknown);
+    expect(res.heldIndexes).toEqual([3]);
+    expect(res.meta).toEqual({ fhir: 1, form: 1, mapped: 1, held: 1, heldReasons: ['no mapping for this shape'] });
   });
 
   it('holds a mapped item whose records fail the clinical rules, with the rule message', async () => {
@@ -89,7 +91,7 @@ describe('createMapToFhirService', () => {
     expect(res.held).toHaveLength(1);
     expect(res.held[0].json.item).toEqual(row);
     expect(res.held[0].json.reason).toContain('laboratory result must reference a ServiceRequest (basedOn)');
-    expect(res.meta).toEqual({ fhir: 0, form: 0, mapped: 0, held: 1 });
+    expect(res.meta).toMatchObject({ fhir: 0, form: 0, mapped: 0, held: 1 });
   });
 
   it('gives the same record ids for the same mapped item twice, and no id holds the identifier', async () => {
@@ -126,6 +128,7 @@ describe('createMapToFhirService', () => {
     const svc = createMapToFhirService(deps({ validateForm }));
     const res = await svc({ items: [{ json: { answer_a: 'yes' } }], config });
     expect(res.held[0].json.reason).toBe('form form-1: answer_b');
+    expect(res.meta.heldReasons).toEqual(['form form-1: answer_b']);
   });
 
   it('holds a mapped item when a rule fails, naming the field and no value', async () => {
@@ -173,7 +176,7 @@ describe('createMapToFhirService', () => {
     const firstId = String(res.out[0].json.id);
     expect((res.out[1].json.subject as { reference: string }).reference).toBe(`Patient/${firstId}`);
     expect(bundle).toEqual(before);
-    expect(res.meta).toEqual({ fhir: 2, form: 0, mapped: 0, held: 0 });
+    expect(res.meta).toEqual({ fhir: 2, form: 0, mapped: 0, held: 0, heldReasons: [] });
   });
 
   it('holds a Bundle the unwrap refuses, with the fixed reason and its original json', async () => {
@@ -212,7 +215,7 @@ describe('createMapToFhirService', () => {
     const packs = vi.fn(async () => PACKS);
     const svc = createMapToFhirService(deps({ packs }));
     const res = await svc({ items: [{ json: fhirPatient }, { json: { answer_a: 'yes' } }], config: { targetId: '', formIds: ['form-1'], mappings: [] } });
-    expect(res.meta).toEqual({ fhir: 1, form: 1, mapped: 0, held: 0 });
+    expect(res.meta).toEqual({ fhir: 1, form: 1, mapped: 0, held: 0, heldReasons: [] });
     expect(packs).not.toHaveBeenCalled();
   });
 });
@@ -241,6 +244,14 @@ describe('codingFromMapRows', () => {
     expect(codingFromMapRows([r('T1'), r('T2', 'unmatched'), r('T3', 'disjoint')])).toEqual({ system: 'urn:test:tgt', code: 'T1' });
     expect(codingFromMapRows([r('T2', 'unmatched')])).toBeNull();
   });
+
+  it('counts only equivalent, equal, unstated and CE\'s own SAME-AS rows as a match', () => {
+    for (const eq of ['equivalent', 'equal', null, 'SAME-AS']) expect(codingFromMapRows([r('T1', eq)]), String(eq)).toEqual({ system: 'urn:test:tgt', code: 'T1' });
+    for (const eq of ['narrower', 'wider', 'inexact', 'relatedto', 'subsumes', 'specializes', 'NARROWER-THAN', 'BROADER-THAN', 'RELATED-TO', 'UNMAPPED-FROM']) {
+      expect(codingFromMapRows([r('T1', eq)]), eq).toBeNull();
+    }
+    expect(codingFromMapRows([r('T1'), r('T2', 'wider')])).toEqual({ system: 'urn:test:tgt', code: 'T1' });
+  });
 });
 
 describe('loadStoredPacks', () => {
@@ -254,5 +265,109 @@ describe('loadStoredPacks', () => {
 
   it('throws naming a pack the store does not hold', async () => {
     await expect(loadStoredPacks({ get: async () => null }, ['pack-x'])).rejects.toThrow(/pack-x/);
+  });
+});
+
+describe('held reasons hold no value', () => {
+  const labObs = (id: string, basedOn?: string) => ({
+    resourceType: 'Observation', id, status: 'final', code: { text: 'x' },
+    category: [{ coding: [{ code: 'laboratory' }] }],
+    ...(basedOn ? { basedOn: [{ reference: `ServiceRequest/${basedOn}` }] } : {}),
+  });
+
+  it('holds a lab Observation whose order is nowhere, with no id or reference in the reason', async () => {
+    const svc = createMapToFhirService(deps());
+    const res = await svc({ items: [{ json: labObs('QZX-ID-1', 'QZX-REF-1') }, { json: labObs('QZX-ID-2') }], config });
+    expect(res.held).toHaveLength(2);
+    expect(res.held[0].json.reason).toBe('record 1 (Observation) basedOn: basedOn ServiceRequest not found in batch or store');
+    expect(res.held[1].json.reason).toBe('record 1 (Observation) basedOn: laboratory result must reference a ServiceRequest (basedOn)');
+    for (const h of res.held) expect(String(h.json.reason)).not.toContain('QZX');
+  });
+
+  it('gives a structural failure whose message quotes a value no value', async () => {
+    const svc = createMapToFhirService(deps());
+    const res = await svc({ items: [{ json: { resourceType: 'Patient', id: 'p-9', gender: 'QZX' } }, { json: { resourceType: 'QZXType', id: 'x' } }], config });
+    expect(res.held).toHaveLength(2);
+    expect(res.held[0].json.reason).toBe('record 1 (Patient) gender: failed the invalid check');
+    expect(res.held[1].json.reason).toBe('record 1 resourceType: unsupported resourceType');
+    for (const h of res.held) expect(String(h.json.reason)).not.toContain('QZX');
+  });
+
+  it('gives a fixed phrase for a message it does not know, and drops a path segment that is not a plain name', async () => {
+    const validate = vi.fn(async () => ({
+      ok: false as const,
+      outcome: { resourceType: 'OperationOutcome' as const, issue: [{ severity: 'error' as const, code: 'business-rule', diagnostics: 'something about QZX', expression: ['Patient/QZX-ID-3.extension.QZX key.value'] }] },
+    }));
+    const svc = createMapToFhirService(deps({ validate }));
+    const res = await svc({ items: [{ json: fhirPatient }], config });
+    expect(res.held[0].json.reason).toBe('(Patient) extension.*.value: failed the business-rule check');
+  });
+
+  it('pins the rule texts it keeps to the real rule', async () => {
+    const missing = await validateBatch([labObs('o-1')], { level: 'high', resolveServiceRequest: async () => false });
+    const notFound = await validateBatch([labObs('o-1', 'sr-x')], { level: 'high', resolveServiceRequest: async () => false });
+    if (missing.ok || notFound.ok) throw new Error('expected failures');
+    expect(KNOWN_ISSUE_TEXTS.some((k) => k.text === missing.outcome.issue[0].diagnostics)).toBe(true);
+    expect(KNOWN_ISSUE_TEXTS.some((k) => k.prefix && String(notFound.outcome.issue[0].diagnostics).startsWith(`${k.text}:`))).toBe(true);
+  });
+
+  it('keeps only known form reason shapes, with the value cut', async () => {
+    const reasons = ["'QZX' is not an allowed option", "'QZX' is not a number", 'required', 'must be selected from the list', 'must be >= 3', 'must be <= 9', 'exceeds max length 20', 'a new QZX reason'];
+    const validateForm = vi.fn(async ({ formId }: RunFormValidateInput): Promise<RunFormValidateOutput> => ({
+      items: [],
+      meta: { formId, validated: 0, invalid: [{ index: 0, errors: reasons.map((reason, i) => ({ fieldId: `f${i}`, reason })) }] },
+    }));
+    const svc = createMapToFhirService(deps({ validateForm }));
+    const res = await svc({ items: [{ json: { answer_a: 'yes' } }], config });
+    expect(res.held[0].json.reason).toBe(
+      'form form-1: f0 is not an allowed option; f1 is not a number; f2 required; f3 must be selected from the list; f4 must be >= 3; f5 must be <= 9; f6 exceeds max length 20; f7',
+    );
+  });
+
+  it('keeps at most 20 held reasons, in input order', async () => {
+    const svc = createMapToFhirService(deps());
+    const items = Array.from({ length: 25 }, (_, i) => ({ json: { [`col_${i}`]: 'QZX' } }));
+    const res = await svc({ items, config });
+    expect(res.held).toHaveLength(25);
+    expect(res.meta.heldReasons).toHaveLength(20);
+    expect(res.heldIndexes).toEqual(items.map((_, i) => i));
+  });
+});
+
+describe('an order in the same run counts', () => {
+  const order = (id: string, status = 'active') => ({ resourceType: 'ServiceRequest', id, status, intent: 'order', subject: { reference: 'Patient/p-1' } });
+  const result = (id: string, sr: string) => ({
+    resourceType: 'Observation', id, status: 'final', code: { text: 'x' },
+    category: [{ coding: [{ code: 'laboratory' }] }], basedOn: [{ reference: `ServiceRequest/${sr}` }],
+  });
+
+  it('sends out a result whose order came in an earlier item', async () => {
+    const svc = createMapToFhirService(deps());
+    const res = await svc({ items: [{ json: order('sr-1') }, { json: result('o-1', 'sr-1') }], config });
+    expect(res.held).toEqual([]);
+    expect(res.out.map((i) => i.json.id)).toEqual(['sr-1', 'o-1']);
+  });
+
+  it('sends out a result whose order comes in a later item', async () => {
+    const svc = createMapToFhirService(deps());
+    const res = await svc({ items: [{ json: result('o-1', 'sr-1') }, { json: order('sr-1') }], config });
+    expect(res.held).toEqual([]);
+    expect(res.out.map((i) => i.json.id)).toEqual(['o-1', 'sr-1']);
+  });
+
+  it('holds the result when its order\'s own item is held', async () => {
+    const svc = createMapToFhirService(deps());
+    const res = await svc({ items: [{ json: result('o-1', 'sr-1') }, { json: order('sr-1', 'QZX') }], config });
+    expect(res.out).toEqual([]);
+    expect(res.heldIndexes).toEqual([0, 1]);
+    expect(res.held[0].json.reason).toContain('not found');
+  });
+
+  it('asks the store for an order the run does not hold', async () => {
+    const svc = createMapToFhirService(deps({
+      validate: (resources, known) => validateBatch(resources, { level: 'high', resolveServiceRequest: async (id) => known.has(id) || id === 'sr-stored' }),
+    }));
+    const res = await svc({ items: [{ json: result('o-1', 'sr-stored') }], config });
+    expect(res.held).toEqual([]);
   });
 });

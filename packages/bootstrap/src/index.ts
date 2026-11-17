@@ -1801,10 +1801,11 @@ const reporting: ReportingApi = {
     validateForm: workflowServices.validateForm,
     packs: () => loadStoredPacks(starterPacks, seededStarterPacks().map((p) => p.id)),
     translateCode: async (mapUrl, code, system) => codingFromMapRows(await termStore.mapTargets({ mapUrl, code, system })),
-    validate: async (resources) =>
+    // An order that came in this run counts as found; otherwise the store is asked, as persist does.
+    validate: async (resources, knownOrderIds) =>
       validateBatch(resources, {
         level: await validationStrictness.get(),
-        resolveServiceRequest: (id: string) => canonicalFhirStore.exists('ServiceRequest', id),
+        resolveServiceRequest: async (id: string) => knownOrderIds.has(id) || canonicalFhirStore.exists('ServiceRequest', id),
       }),
   });
   workflowServices.persistStore = createPersistStoreService({

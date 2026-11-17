@@ -33,11 +33,16 @@ export interface RunMapToFhirInput {
   items: WorkflowItem[];
   config: { targetId: string; formIds: string[]; mappings: unknown[] };
 }
-/** `out` holds one item per FHIR record. A `held` item is `{ item, reason, shape?, field? }`. */
+/**
+ * `out` holds one item per FHIR record. A `held` item is `{ item, reason, shape?, field? }`.
+ * `heldIndexes[i]` is the input index of `held[i]`. `meta.heldReasons` is the first 20 reasons,
+ * in input order.
+ */
 export interface RunMapToFhirOutput {
   out: WorkflowItem[];
   held: WorkflowItem[];
-  meta: { fhir: number; form: number; mapped: number; held: number };
+  heldIndexes: number[];
+  meta: { fhir: number; form: number; mapped: number; held: number; heldReasons: string[] };
 }
 
 export interface RunPersistStoreInput {

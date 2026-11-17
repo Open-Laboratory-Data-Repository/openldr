@@ -4,6 +4,7 @@ import {
   classify,
   mapTargetById,
   SavedMappingSchema,
+  type Classification,
   type ClassifyForm,
   type FormSchema,
   type MapTarget,
@@ -11,7 +12,7 @@ import {
   type RuleDeps,
   type SavedMapping,
 } from '@openldr/forms';
-import type { ValidateBatchResult } from '@openldr/fhir';
+import { getResourceSchema, validateResource, type OperationOutcomeIssue, type ValidateBatchResult } from '@openldr/fhir';
 import {
   bundleToResources,
   type RunFormValidateInput,
@@ -24,7 +25,8 @@ import {
 /**
  * The Map to FHIR node's service. Each item is FHIR already, a known form's answers, a row a saved
  * mapping knows, or none of these. Records that pass CE's checks go to `out`; the rest are held with
- * a reason. No reason, log line or thrown message holds a value from an item.
+ * a reason. No reason, log line or thrown message holds a value from an item: a reason is built only
+ * from text this file controls.
  */
 
 type Coding = NonNullable<Awaited<ReturnType<RuleDeps['translateCode']>>>;
@@ -36,21 +38,25 @@ export interface MapToFhirServiceDeps {
   /** The stored starter packs with their entries, to build the target from. */
   packs(): Promise<MapTargetPack[]>;
   translateCode: RuleDeps['translateCode'];
-  /** The batch check persist runs, at the configured level. It stores nothing. */
-  validate(resources: unknown[]): Promise<ValidateBatchResult>;
+  /**
+   * The batch check persist runs, at the configured level, on one item's records. It stores nothing.
+   * A ServiceRequest id in `knownOrderIds` came in this run and counts as found.
+   */
+  validate(resources: unknown[], knownOrderIds: ReadonlySet<string>): Promise<ValidateBatchResult>;
 }
 
 /**
- * FHIR ConceptMap equivalence codes that mean "no match". They are FHIR's own codes for a map row,
- * not clinical codes.
+ * FHIR ConceptMap equivalence codes that count as a match, plus `SAME-AS`, which CE writes for the
+ * lab's own map (`terminology-admin-store.ts`, `equivalence: input.mapType`). A row with no
+ * equivalence counts too. These are map row codes, not clinical codes.
  */
-const NO_MATCH_EQUIVALENCES = new Set(['unmatched', 'disjoint']);
+const MATCH_EQUIVALENCES = new Set(['equivalent', 'equal', 'SAME-AS']);
 
 /** The one coding a code list gives, or null for none or more than one distinct target. */
 export function codingFromMapRows(rows: { targetSystem: string; targetCode: string; equivalence: string | null }[]): Coding | null {
   const targets = new Map<string, Coding>();
   for (const r of rows) {
-    if (r.equivalence !== null && NO_MATCH_EQUIVALENCES.has(r.equivalence)) continue;
+    if (r.equivalence !== null && !MATCH_EQUIVALENCES.has(r.equivalence)) continue;
     targets.set(JSON.stringify([r.targetSystem, r.targetCode]), { system: r.targetSystem, code: r.targetCode });
   }
   return targets.size === 1 ? [...targets.values()][0] : null;
@@ -81,39 +87,94 @@ function classifyForm(id: string, schema: FormSchema): ClassifyForm {
   return { id, fieldIds: fields.map((f) => f.id), requiredIds: fields.filter((f) => f.required).map((f) => f.id) };
 }
 
-/**
- * A form reason without the answer it may quote. `validateAnswers` writes `'<value>' is not ...`;
- * that prefix is dropped. Any other reason with a quote gives null, and the caller names the field alone.
- */
+// The reasons `validateAnswers` writes. The numbers come from the form's own constraints.
+const FORM_REASONS = [/^required$/, /^must be selected from the list$/, /^must be [<>]= -?\d+(\.\d+)?$/, /^exceeds max length \d+$/];
+// Two reasons quote the answer first; only the text after the quote is kept.
+const FORM_QUOTED_REASON = /^'.*' (is not an allowed option|is not a number)$/s;
+
+/** A form reason this file knows, with any answer cut; null for any other, and the field is named alone. */
 function formReason(reason: string): string | null {
-  const quoted = /^'.*' (is not .+)$/s.exec(reason);
-  if (quoted) return quoted[1].includes("'") ? null : quoted[1];
-  return reason.includes("'") ? null : reason;
+  const quoted = FORM_QUOTED_REASON.exec(reason);
+  if (quoted) return quoted[1];
+  return FORM_REASONS.some((re) => re.test(reason)) ? reason : null;
 }
 
 /**
- * An issue's message without the item values it may carry. Zod adds `, received '<value>'` to an
- * enum failure, and CE's messages put item values after a colon (an unknown resource type, a missing
- * reference). Both tails are cut; the path says where the fault is.
+ * Issue texts kept in a reason. `prefix` texts are followed by `: <values>` in the message, and only
+ * the part before the colon is kept. Every other text becomes "failed the <code> check".
+ * The first two are `result-requires-request`'s; a test pins them to the rule. The rest are
+ * `validateResource`'s and zod's fixed text.
  */
-function issueReason(issue: { diagnostics?: string; expression?: string[] }): string {
-  const text = (issue.diagnostics ?? 'invalid').replace(/,? received .*$/is, '').replace(/:\s.*$/s, '').trim();
-  const where = issue.expression?.length ? `${issue.expression.join(', ')}: ` : '';
-  return `${where}${text}`;
+export const KNOWN_ISSUE_TEXTS: readonly { text: string; prefix?: boolean }[] = [
+  { text: 'laboratory result must reference a ServiceRequest (basedOn)' },
+  { text: 'basedOn ServiceRequest not found in batch or store', prefix: true },
+  { text: 'Required' },
+  { text: 'missing resourceType' },
+  { text: 'resource must be a JSON object' },
+  { text: 'unsupported resourceType', prefix: true },
+];
+
+function issueText(issue: OperationOutcomeIssue): string {
+  const d = issue.diagnostics ?? '';
+  const known = KNOWN_ISSUE_TEXTS.find((k) => (k.prefix ? d.startsWith(`${k.text}:`) : d === k.text));
+  if (known) return known.text;
+  return `failed the ${/^[a-z][a-z-]*$/.test(issue.code) ? issue.code : 'validation'} check`;
 }
 
-function held(item: unknown, reason: string, extra: { shape?: unknown; field?: string } = {}): WorkflowItem {
-  return { json: { item, reason, ...(extra.shape ? { shape: extra.shape } : {}), ...(extra.field ? { field: extra.field } : {}) } };
+/** A field path with every segment that is not a plain name or an index replaced by `*`. */
+function safePath(path: string): string {
+  if (path === '' || path === '(root)') return '';
+  return path
+    .split('.')
+    .map((s) => (/^[A-Za-z_][A-Za-z0-9_]*$/.test(s) || /^\d+$/.test(s) ? s : '*'))
+    .join('.');
+}
+
+type Res = Record<string, unknown>;
+
+/** A resource type only when CE knows it, so a sender's own type name never shows. */
+function knownType(type: unknown): string | null {
+  return typeof type === 'string' && getResourceSchema(type) ? type : null;
+}
+
+function describeIssue(issue: OperationOutcomeIssue, records: Res[], position: number | null): string {
+  let at = position;
+  let type = at !== null ? knownType(records[at]?.resourceType) : null;
+  let path = issue.expression?.[0] ?? '';
+  // A rule names the resource as `<Type>/<id>.<path>`. The id is the record's, so it is dropped.
+  const ref = /^([A-Za-z]+)\/([^.]*)(?:\.(.*))?$/s.exec(path);
+  if (ref) {
+    const found = records.findIndex((r) => r.resourceType === ref[1] && String(r.id) === ref[2]);
+    if (at === null && found >= 0) at = found;
+    type = knownType(ref[1]);
+    path = ref[3] ?? '';
+  }
+  const where = [at !== null ? `record ${at + 1}` : null, type ? `(${type})` : null, safePath(path) || null].filter(Boolean).join(' ');
+  return where ? `${where}: ${issueText(issue)}` : issueText(issue);
+}
+
+/** The structural failures of one item's records, each placed by its record. Null when all pass. */
+function structuralReason(records: Res[]): string | null {
+  const parts: string[] = [];
+  records.forEach((r, i) => {
+    const res = validateResource(r);
+    if (!res.ok) for (const issue of res.outcome.issue) parts.push(describeIssue(issue, records, i));
+  });
+  return parts.length > 0 ? parts.join('; ') : null;
+}
+
+function heldJson(original: unknown, reason: string, extra: { shape?: unknown; field?: string } = {}): Res {
+  return { item: structuredClone(original), reason, ...(extra.shape ? { shape: extra.shape } : {}), ...(extra.field ? { field: extra.field } : {}) };
 }
 
 function isBundle(v: unknown): boolean {
-  return v !== null && typeof v === 'object' && !Array.isArray(v) && (v as Record<string, unknown>).resourceType === 'Bundle';
+  return v !== null && typeof v === 'object' && !Array.isArray(v) && (v as Res).resourceType === 'Bundle';
 }
 
 /** Unwrap as the unwrap-bundle node does. A single resource that is not a Bundle is a list of one. */
-function unwrap(json: unknown): Record<string, unknown>[] | null {
+function unwrap(json: unknown): Res[] | null {
   const copy = structuredClone(json);
-  if (!isBundle(copy) && !Array.isArray(copy)) return [copy as Record<string, unknown>];
+  if (!isBundle(copy) && !Array.isArray(copy)) return [copy as Res];
   try {
     return bundleToResources(copy);
   } catch {
@@ -128,6 +189,15 @@ function parseMappings(raw: unknown[], targetId: string): SavedMapping[] {
     if (parsed.data.targetId !== targetId) throw new Error(`Map to FHIR node config: mapping ${i} is for target ${parsed.data.targetId}, not ${targetId}`);
     return parsed.data;
   });
+}
+
+const MAX_HELD_REASONS = 20;
+
+interface Entry {
+  original: Record<string, unknown>;
+  kind: Exclude<Classification['kind'], 'unknown'> | 'unknown';
+  records: Res[] | null;
+  held: Res | null;
 }
 
 export function createMapToFhirService(deps: MapToFhirServiceDeps): (input: RunMapToFhirInput) => Promise<RunMapToFhirOutput> {
@@ -149,26 +219,17 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): (input: RunM
       forms.push(classifyForm(id, def.schema));
     }
 
-    const out: WorkflowItem[] = [];
-    const heldItems: WorkflowItem[] = [];
-    const meta = { fhir: 0, form: 0, mapped: 0, held: 0 };
-    const hold = (item: WorkflowItem) => {
-      heldItems.push(item);
-      meta.held += 1;
-    };
-
+    // 1. Every item's records, or the reason it is held, before any order is checked.
+    const entries: Entry[] = [];
     for (const item of items) {
       const original = item.json;
       const kind = classify(original, forms, mappings);
-      let records: unknown[];
+      const entry: Entry = { original, kind: kind.kind, records: null, held: null };
+      entries.push(entry);
 
       if (kind.kind === 'fhir') {
-        const resources = unwrap(original);
-        if (!resources) {
-          hold(held(original, 'not a FHIR Bundle this node can unwrap'));
-          continue;
-        }
-        records = resources;
+        entry.records = unwrap(original);
+        if (!entry.records) entry.held = heldJson(original, 'not a FHIR Bundle this node can unwrap');
       } else if (kind.kind === 'form') {
         const res = await deps.validateForm({ formId: kind.formId, items: [{ json: structuredClone(original) }] });
         const errors = res.meta.invalid.flatMap((inv) => inv.errors);
@@ -177,33 +238,62 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): (input: RunM
             const reason = formReason(e.reason);
             return reason === null ? e.fieldId : `${e.fieldId} ${reason}`;
           });
-          hold(held(original, `form ${kind.formId}: ${parts.join('; ')}`));
-          continue;
-        }
-        records = res.items.map((i) => i.json);
+          entry.held = heldJson(original, `form ${kind.formId}: ${parts.join('; ')}`);
+        } else entry.records = res.items.map((i) => i.json);
       } else if (kind.kind === 'mapped') {
         // A mapping exists only with a target; the checks above make sure of it.
         const res = await applyMapping(kind.mapping, target as MapTarget, original, { translateCode: deps.translateCode, hashId });
-        if (!res.ok) {
-          hold(held(original, res.reason, { field: res.field }));
-          continue;
-        }
-        records = res.resources;
+        if (res.ok) entry.records = res.resources as unknown as Res[];
+        else entry.held = heldJson(original, res.reason, { field: res.field });
       } else {
-        hold(held(original, 'no mapping for this shape', { shape: kind.shape }));
-        continue;
+        entry.held = heldJson(original, 'no mapping for this shape', { shape: kind.shape });
       }
 
-      const check = await deps.validate(records);
-      if (!check.ok) {
-        hold(held(original, check.outcome.issue.map(issueReason).join('; ')));
-        continue;
+      if (entry.records) {
+        const structural = structuralReason(entry.records);
+        if (structural) {
+          entry.held = heldJson(original, structural);
+          entry.records = null;
+        }
       }
-      // The records go on as made; Persist Store runs the same check again before it stores them.
-      for (const r of records) out.push({ json: r as Record<string, unknown> });
-      meta[kind.kind] += 1;
     }
 
-    return { out, held: heldItems, meta };
+    // 2. The rule check, per item, with every order of the items still standing. A held item's
+    // orders stop counting, so check again until no further item is held.
+    for (let pass = 0; pass <= entries.length; pass++) {
+      const standing = entries.filter((e) => e.records && !e.held);
+      const known = new Set<string>();
+      for (const e of standing) for (const r of e.records as Res[]) if (r.resourceType === 'ServiceRequest' && typeof r.id === 'string') known.add(r.id);
+      let heldThisPass = false;
+      for (const e of standing) {
+        const records = e.records as Res[];
+        const check = await deps.validate(records, known);
+        if (!check.ok) {
+          e.held = heldJson(e.original, check.outcome.issue.map((i) => describeIssue(i, records, null)).join('; '));
+          heldThisPass = true;
+        }
+      }
+      if (!heldThisPass) break;
+    }
+
+    // 3. Out and held, in input order.
+    const out: WorkflowItem[] = [];
+    const held: WorkflowItem[] = [];
+    const heldIndexes: number[] = [];
+    const meta = { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [] as string[] };
+    entries.forEach((e, index) => {
+      if (e.held) {
+        held.push({ json: e.held });
+        heldIndexes.push(index);
+        meta.held += 1;
+        if (meta.heldReasons.length < MAX_HELD_REASONS) meta.heldReasons.push(String(e.held.reason));
+        return;
+      }
+      // The records go on as made; Persist Store runs the same check again before it stores them.
+      for (const r of e.records as Res[]) out.push({ json: r });
+      if (e.kind !== 'unknown') meta[e.kind] += 1;
+    });
+
+    return { out, held, heldIndexes, meta };
   };
 }
