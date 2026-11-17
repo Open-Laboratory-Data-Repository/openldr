@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@/i18n';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
@@ -265,6 +266,31 @@ describe('TestSheet: result parameters', () => {
     }
     const sex = within(block).getByText('Sex', { selector: 'label' });
     expect(sex.getAttribute('for')).toBe(screen.getByRole('combobox', { name: /sex for HGB band 1/i }).id);
+  });
+
+  // A bound was shown as String(number), so typing "11." parsed to 11 and redrew as "11": the dot
+  // was lost and "11.5" saved as 115. A leading "-" cleared the field the same way.
+  it('keeps a decimal point and a minus sign while the operator types a bound, one key at a time', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    const user = userEvent.setup();
+    renderSheet({ target: { kind: 'edit', test: withParam } });
+    await addBand('HGB');
+    const low = screen.getByLabelText(/low for HGB band 1/i);
+    await user.type(low, '11.');
+    expect(low).toHaveValue('11.');
+    await user.type(low, '5');
+    expect(low).toHaveValue('11.5');
+    const high = screen.getByLabelText(/high for HGB band 1/i);
+    await user.type(high, '-');
+    expect(high).toHaveValue('-');
+    await user.type(high, '0.5');
+    expect(high).toHaveValue('-0.5');
+    await user.type(screen.getByLabelText(/age from for HGB band 1/i), '0.25');
+    await user.type(screen.getByLabelText(/age to for HGB band 1/i), '1.5');
+    await save();
+    expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands).toEqual([
+      { name: null, low: 11.5, high: -0.5, unit: null, sex: null, ageLow: 0.25, ageHigh: 1.5 },
+    ]);
   });
 
   it('saves a range name, sex and age the operator set', async () => {
