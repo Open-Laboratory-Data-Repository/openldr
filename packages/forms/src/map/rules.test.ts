@@ -47,6 +47,49 @@ describe('applyRule: date', () => {
   });
 });
 
+describe('applyRule: date from an Excel date cell', () => {
+  const excel: MapRule = { kind: 'date', format: 'excel' };
+  // Excel's 1900 system counts days so that serial 1 is 1900-01-01, and it counts a 29 February 1900
+  // that never was as serial 60. So from serial 61 on, the date is 1899-12-30 plus the serial in days.
+
+  it('reads a known day', async () => {
+    // 1899-12-30 to 2023-01-01: 2 days to 1900-01-01, then 123 years (1900 to 2022) of 365 days plus
+    // 30 leap days (1904 to 2020; 1900 is not one): 2 + 44895 + 30 = 44927.
+    expect(await run(excel, 44927)).toEqual({ ok: true, value: '2023-01-01' });
+    // 45000 is 73 days later: January has 31, February 28, so day 73 is 15 March.
+    expect(await run(excel, 45000)).toEqual({ ok: true, value: '2023-03-15' });
+  });
+
+  it('reads serial 61 as 1 March 1900, and the serials before the false leap day as January and February', async () => {
+    expect(await run(excel, 61)).toEqual({ ok: true, value: '1900-03-01' });
+    expect(await run(excel, 1)).toEqual({ ok: true, value: '1900-01-01' });
+    expect(await run(excel, 59)).toEqual({ ok: true, value: '1900-02-28' });
+  });
+
+  it('fails serial 60, the 29 February 1900 Excel counts and the calendar does not have', async () => {
+    expect(await run(excel, 60, 'coll')).toEqual({ ok: false, reason: 'coll: expected a real calendar date', field: 'coll' });
+  });
+
+  it('drops the time part, so a value just before midnight stays on its own day', async () => {
+    expect(await run(excel, 45000.99999)).toEqual({ ok: true, value: '2023-03-15' });
+    expect(await run(excel, 45000.5)).toEqual({ ok: true, value: '2023-03-15' });
+  });
+
+  it('reads a text that is a plain number, as a CSV read as text gives it', async () => {
+    expect(await run(excel, ' 45000 ')).toEqual({ ok: true, value: '2023-03-15' });
+    expect(await run(excel, '45000.25')).toEqual({ ok: true, value: '2023-03-15' });
+  });
+
+  it('fails a negative, zero, a serial past 9999-12-31 and a text that is not a number, naming the field only', async () => {
+    for (const v of [-5, 0, '-5', 2958466, 'QZX-7', '12/03/2023', true]) {
+      const r = await applyRule(excel, v, 'coll', noCodes);
+      expect(r, String(v)).toEqual({ ok: false, reason: 'coll: expected an Excel date cell, a day number', field: 'coll' });
+    }
+    // 2958465 is 9999-12-31, the last day Excel holds.
+    expect(await run(excel, 2958465)).toEqual({ ok: true, value: '9999-12-31' });
+  });
+});
+
 describe('applyRule: values', () => {
   it('translates a listed value', async () => {
     expect(await run({ kind: 'values', map: { M: 'male' } }, 'M')).toEqual({ ok: true, value: 'male' });

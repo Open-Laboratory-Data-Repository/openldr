@@ -6,7 +6,11 @@ import { z } from 'zod';
  * source field and what was expected. It never carries the value: reasons reach logs and audit rows.
  */
 
+/** The date rule's format for an Excel date cell: a day number in Excel's 1900 date system. */
+export const EXCEL_DATE_FORMAT = 'excel';
+
 export const MapRuleSchema = z.discriminatedUnion('kind', [
+  /** `format` is a pattern of `d dd M MM yy yyyy`, or `excel` for an Excel date cell. */
   z.object({ kind: z.literal('date'), format: z.string().min(1) }),
   z.object({
     kind: z.literal('values'),
@@ -97,6 +101,28 @@ function applyDate(format: string, value: string, field: string, now: Date): Rul
   return { ok: true, value: `${pad(year, 4)}-${pad(got.M, 2)}-${pad(got.d, 2)}` };
 }
 
+const DAY_MS = 86_400_000;
+/** 9999-12-31 in Excel's 1900 system, the last day it holds. */
+const EXCEL_LAST_SERIAL = 2_958_465;
+
+/**
+ * An Excel date cell: a day number in the 1900 date system, as a number or a plain-number text.
+ * Excel counts a 29 February 1900 that never was as serial 60, so serial 61 is 1 March 1900 and
+ * every serial from 61 on is one more than the true day count. A time part is dropped, never
+ * rounded. Whole days in UTC, so no time zone moves a day. The 1904 system is not read.
+ */
+function applyExcelDate(value: string | number | boolean, field: string): RuleResult {
+  const text = typeof value === 'string' ? value.trim() : '';
+  const n = typeof value === 'number' ? value : /^\d+(?:\.\d+)?$/.test(text) ? Number(text) : NaN;
+  if (!Number.isFinite(n) || n < 1 || n >= EXCEL_LAST_SERIAL + 1) return fail(field, 'expected an Excel date cell, a day number');
+  const serial = Math.floor(n);
+  if (serial === 60) return fail(field, 'expected a real calendar date');
+  const days = serial < 60 ? serial - 1 : serial - 2; // days after 1900-01-01
+  const date = new Date(Date.UTC(1900, 0, 1) + days * DAY_MS);
+  const pad = (x: number, w: number) => String(x).padStart(w, '0');
+  return { ok: true, value: `${pad(date.getUTCFullYear(), 4)}-${pad(date.getUTCMonth() + 1, 2)}-${pad(date.getUTCDate(), 2)}` };
+}
+
 function applyNumber(decimal: ',' | '.', value: string | number | boolean, field: string): RuleResult {
   if (typeof value === 'number') return Number.isFinite(value) ? { ok: true, value } : fail(field, 'expected a number');
   const text = String(value).trim();
@@ -114,6 +140,7 @@ export async function applyRule(
   const text = String(value);
   switch (rule.kind) {
     case 'date':
+      if (rule.format === EXCEL_DATE_FORMAT) return applyExcelDate(value, field);
       return applyDate(rule.format, text, field, deps.now ?? new Date());
     case 'values': {
       const key = text.trim();
