@@ -939,3 +939,10 @@ C7-8: "Fixed name 'cli'". C7-9: "Add web docs".
 C7-8: the commands audit with `cliNamedActor()`: `cli` locally, the signed-in account in served mode.
 The CLI test now checks `actorName: 'cli'` and failed before the change. C7-9: web `cli.md` en, fr and
 pt have "Turn a workflow on or off", with the restart note and a made-up workflow id.
+
+### Codex, 2026-11-17: third chunk 7 review (relayed by Claude)
+
+3 review checks: 1 confirmed, 2 refuted. Reviewed `4aab1ce6..4dd37e24`. C7-8 and C7-9 refuted.
+C7-11 CONFIRMED: the web paragraph said the CLI always records the actor as `cli`; signed in, it
+records the account (`cli-actor.ts:53-54`). Operator: "Correct it". The sentence now says so in en,
+fr and pt. Served auditing is unchanged, as Codex asked.

@@ -275,7 +275,7 @@ Inscrever um laboratório no servidor central e depois ligar o laboratório a el
 
 ## Ativar ou desativar um workflow
 
-`openldr workflows enable <id-do-workflow>` e `openldr workflows disable <id-do-workflow>` fazem o que **Enable** e **Disable** fazem na lista de workflows do Studio. Só isso muda: os passos, o nome e a descrição do workflow ficam como estão. A ativação é recusada quando outro workflow ativo usa o mesmo caminho de webhook, e a mensagem nomeia esse workflow. Um webhook segue a alteração de imediato. Reinicie o servidor para que os agendamentos, os ouvintes, a ingestão e os gatilhos de eventos sigam. A CLI regista o ator como `cli`.
+`openldr workflows enable <id-do-workflow>` e `openldr workflows disable <id-do-workflow>` fazem o que **Enable** e **Disable** fazem na lista de workflows do Studio. Só isso muda: os passos, o nome e a descrição do workflow ficam como estão. A ativação é recusada quando outro workflow ativo usa o mesmo caminho de webhook, e a mensagem nomeia esse workflow. Um webhook segue a alteração de imediato. Reinicie o servidor para que os agendamentos, os ouvintes, a ingestão e os gatilhos de eventos sigam. Executada localmente, a CLI regista o ator como `cli`. Com sessão iniciada, regista a sua conta.
 
 ```
 openldr workflows disable wf_example

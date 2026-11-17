@@ -249,7 +249,7 @@ Inscrire un laboratoire sur le serveur central, puis y connecter un laboratoire 
 
 ## Activer ou désactiver un flux de travail
 
-`openldr workflows enable <id-du-flux>` et `openldr workflows disable <id-du-flux>` font ce que font **Enable** et **Disable** dans la liste des flux de travail du Studio. Seul cela change : les étapes, le nom et la description du flux restent tels quels. L'activation est refusée quand un autre flux activé utilise le même chemin de webhook, et le message nomme ce flux. Un webhook suit le changement tout de suite. Redémarrez le serveur pour que les planifications, les écouteurs, l'ingestion et les déclencheurs d'événements suivent. La CLI enregistre l'acteur `cli`.
+`openldr workflows enable <id-du-flux>` et `openldr workflows disable <id-du-flux>` font ce que font **Enable** et **Disable** dans la liste des flux de travail du Studio. Seul cela change : les étapes, le nom et la description du flux restent tels quels. L'activation est refusée quand un autre flux activé utilise le même chemin de webhook, et le message nomme ce flux. Un webhook suit le changement tout de suite. Redémarrez le serveur pour que les planifications, les écouteurs, l'ingestion et les déclencheurs d'événements suivent. Lancée en local, la CLI enregistre l'acteur `cli`. Connectée, elle enregistre votre compte.
 
 ```
 openldr workflows disable wf_example

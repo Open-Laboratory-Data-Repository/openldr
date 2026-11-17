@@ -268,7 +268,7 @@ Enroll a lab on the central server, then connect a lab to it:
 
 ## Turn a workflow on or off
 
-`openldr workflows enable <workflow-id>` and `openldr workflows disable <workflow-id>` do what **Enable** and **Disable** do in the Studio's workflow list. Only that changes: the workflow's steps, name and description stay as they are. Enabling is refused when another enabled workflow uses the same webhook path, and the message names that workflow. A webhook follows the change at once. Restart the server for schedules, listeners, ingest and event triggers to follow. The CLI records the actor as `cli`.
+`openldr workflows enable <workflow-id>` and `openldr workflows disable <workflow-id>` do what **Enable** and **Disable** do in the Studio's workflow list. Only that changes: the workflow's steps, name and description stay as they are. Enabling is refused when another enabled workflow uses the same webhook path, and the message names that workflow. A webhook follows the change at once. Restart the server for schedules, listeners, ingest and event triggers to follow. Run locally, the CLI records the actor as `cli`. Signed in, it records your account.
 
 ```
 openldr workflows disable wf_example
