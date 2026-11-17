@@ -5,6 +5,7 @@ import { MoreHorizontal } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { DecimalInput } from '@/components/ui/decimal-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -330,10 +331,6 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                               const n = i + 1;
                               const writeBands = (bands: CatalogResultBand[]) => set({ resultParams: setParam(draft.resultParams, p.code, { ...chosen, bands }) });
                               const setBand = (patch: Partial<CatalogResultBand>) => writeBands(chosen.bands.map((b, j) => (j === i ? { ...b, ...patch } : b)));
-                              const numberOrNull = (value: string) => {
-                                const n = Number(value);
-                                return value.trim() === '' || !Number.isFinite(n) ? null : n;
-                              };
                               const move = (by: number) => {
                                 const next = [...chosen.bands];
                                 [next[i], next[i + by]] = [next[i + by], next[i]];
@@ -391,12 +388,12 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                                     {(['low', 'high'] as const).map((edge) => (
                                       <Fragment key={edge}>
                                         {label(edge, edge === 'low' ? 'testCatalog.sheet.bandLow' : 'testCatalog.sheet.bandHigh')}
-                                        <Input
+                                        <DecimalInput
                                           id={id(edge)}
                                           className="h-8"
                                           aria-label={`${edge} for ${p.code} band ${n}`}
-                                          value={band[edge] === null ? '' : String(band[edge])}
-                                          onChange={(e) => setBand({ [edge]: numberOrNull(e.target.value) })}
+                                          value={band[edge]}
+                                          onValueChange={(v) => setBand({ [edge]: v })}
                                         />
                                       </Fragment>
                                     ))}
@@ -419,12 +416,12 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                                     {(['ageLow', 'ageHigh'] as const).map((edge) => (
                                       <Fragment key={edge}>
                                         {label(edge, edge === 'ageLow' ? 'testCatalog.sheet.bandAgeFrom' : 'testCatalog.sheet.bandAgeTo')}
-                                        <Input
+                                        <DecimalInput
                                           id={id(edge)}
                                           className="h-8"
                                           aria-label={t(edge === 'ageLow' ? 'testCatalog.sheet.bandAgeFromFor' : 'testCatalog.sheet.bandAgeToFor', { code: p.code, n })}
-                                          value={band[edge] === null ? '' : String(band[edge])}
-                                          onChange={(e) => setBand({ [edge]: numberOrNull(e.target.value) })}
+                                          value={band[edge]}
+                                          onValueChange={(v) => setBand({ [edge]: v })}
                                         />
                                       </Fragment>
                                     ))}

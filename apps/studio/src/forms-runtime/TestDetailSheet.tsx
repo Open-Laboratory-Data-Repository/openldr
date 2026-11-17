@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { catalogSpecimensFor, expandValueSetByUrl, type CatalogResultBand, type CatalogResultParam, type CatalogSexOption } from '@/api';
 import type { CodingAnswer, ResultCoding, TestDetail, TypedResult } from '@openldr/forms/pure';
-import { Input } from '@/components/ui/input';
+import { DecimalInput } from '@/components/ui/decimal-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -139,16 +139,12 @@ export function TestDetailSheet({ test, params, detail, sexes, copy, onChange, o
                   <Label htmlFor={keyOf(param)} className={hasLine ? TOP_LABEL : undefined}>{label}</Label>
                   <div>
                     <div className="flex items-center gap-2">
-                      <Input
+                      <DecimalInput
                         id={keyOf(param)}
                         inputMode="decimal"
                         className="w-32"
-                        value={typed === null ? '' : String(typed)}
-                        onChange={(e) => {
-                          const raw = e.target.value.trim();
-                          const next = raw === '' ? null : Number(raw);
-                          writeResult(param, next !== null && Number.isFinite(next) ? next : null, band);
-                        }}
+                        value={typed}
+                        onValueChange={(next) => writeResult(param, next, band)}
                       />
                       {param.unit ? <span className="text-sm text-muted-foreground">{param.unit}</span> : null}
                       {flag ? <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-700">{flag}</span> : null}

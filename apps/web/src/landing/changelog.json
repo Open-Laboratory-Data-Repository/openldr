@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "80e79a64",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Keep the decimal point while typing a result or range bound"
+        },
+        {
           "hash": "15819a70",
           "type": "fix",
           "scope": "cli",

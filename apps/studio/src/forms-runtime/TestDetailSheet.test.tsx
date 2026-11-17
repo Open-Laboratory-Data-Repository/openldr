@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 
 vi.mock('@/api', () => ({ catalogSpecimensFor: vi.fn(), expandValueSetByUrl: vi.fn() }));
 import { catalogSpecimensFor, expandValueSetByUrl } from '@/api';
@@ -80,6 +81,31 @@ describe('TestDetailSheet', () => {
     expect(written.results[0].value).toBe(9);
     expect(written.results[0].unit).toBe('g/dL');
     expect(written.results[0].band).toEqual(numeric.band);
+  });
+
+  // The input showed String(value) and parsed every keystroke, so "3." redrew as "3" and "3.5" was
+  // saved as 35. This test lets `detail` follow onChange, as TestDetailsField does.
+  it('keeps a decimal point while the bench types a result, one key at a time', async () => {
+    const user = userEvent.setup();
+    const writes: number[] = [];
+    function Host() {
+      const [current, setCurrent] = useState<typeof detail>(detail);
+      return (
+        <TestDetailSheet
+          test={test} params={[numeric]} detail={current} sexes={sexes}
+          onChange={(next) => { writes.push(next.results[0]?.value as number); setCurrent(next as typeof detail); }}
+          onClose={() => {}}
+        />
+      );
+    }
+    render(<Host />);
+    const input = await screen.findByLabelText('Haemoglobin');
+    await user.type(input, '3.');
+    expect(input).toHaveValue('3.');
+    await user.type(input, '5');
+    expect(input).toHaveValue('3.5');
+    expect(writes[writes.length - 1]).toBe(3.5);
+    expect(await screen.findByText('below 12')).toBeInTheDocument();
   });
 
   it('shows the flag for a value already outside the band', async () => {
