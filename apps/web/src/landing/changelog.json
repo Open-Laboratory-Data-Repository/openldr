@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "308fb640",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Map to FHIR keeps a result's comparator, never stores a unit with no number, and notes nested data it cannot read"
+        },
+        {
           "hash": "3ee847ae",
           "type": "feat",
           "scope": "workflows",
