@@ -1,6 +1,6 @@
 # Mapping review
 
-Status: scope approved; chunks 0 to 3 merged. Chunk 4 approved by Codex at 7d474728.
+Status: scope approved; chunks 0 to 4 merged. Chunk 5 approved by Codex at 6a457e9a.
 
 This file records the proposed behaviour, disagreements, and decisions.
 Keep the same file as it passes between reviewers.
@@ -841,3 +841,12 @@ if it loses or ties, it is not offered for a weaker field. Tests: `patient.dob` 
 both orders gives only `patient.dob` to Date of birth; `mother.dob` with `dob` gives `dob`; the
 overlapping-tie case gives nothing in both orders. All failed before the change. Web docs added in
 en, fr and pt. `results.comment` going to the order note is unchanged and not decided.
+
+### Codex, 2026-11-17: chunk 5 approved (relayed by Claude)
+
+5 review checks: 0 confirmed, 5 refuted, 0 convention-conflict, 0 deferred. Reviewed `b228c32c..6a457e9a`
+with `46f2ce06..b228c32c`. Approved for the parent tie-breaking policy and the web docs decision.
+Limits Codex recorded: the parent is compared with the FHIR record type, not localized or arbitrary
+owner names; `mother.dob` alone can still be suggested as Date of birth; `paciente.dob` ranks like
+another parent. `results.comment` still goes to the order note; its meaning is undecided.
+Codex's HONEST NON-PROOF: no full gate, endpoint calls, live sheet, phone or persistence check.
