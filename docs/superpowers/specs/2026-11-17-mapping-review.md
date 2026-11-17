@@ -725,3 +725,36 @@ Reviewed head `525c0e83`, including `f18a81d1`. Decision: approved for the agree
 error-message scope. C2-1 refuted at `apply.ts:289` and `:333`; replay with the real Lab result
 target gives "... (tests, entry 2 of 3)" and still holds the row.
 Codex's HONEST NON-PROOF: no full gate or 3991 screen at `525c0e83`; no phone, browser or persistence check.
+
+### Codex, 2026-11-17: chunk 3 review (relayed by Claude)
+
+7 review checks: 2 confirmed, 3 refuted, 2 convention-conflict, 0 deferred.
+Reviewed `2fc616ef..e23ec282` on `fix/chunk3-run-screens`. Decision: not approved yet.
+
+| ID | Finding | Verdict | Proof |
+| --- | --- | --- | --- |
+| C3-1 | Runs hide rows held inside loops. | CONFIRMED | `run-workflow.ts:288` runs each pass as its own run and `:310` keeps only terminal items. Reproduction: two rows held in a loop, run completed, counts `{}`. |
+| C3-2 | The guide says Completed means every step ran. | CONFIRMED | `workflows.md:101`; skipped steps still give completed (`run-workflow.ts:163`, `:260`). |
+| C3-3 | Counts confuse mapped with persisted. | REFUTED | `run-history-drawer.tsx:60-64`, `services.ts:46`, `:55-60`. |
+| C3-4 | Skipped nodes lose labels. | REFUTED | `run-workflow.ts:168`. |
+| C3-5 | LoadingState still has stripes or loses its spinner. | REFUTED | `spinner.tsx:16-19`. |
+| C3-6 | Run tables break section 5 rules (pagination on short pages, node table, plain state text, a native button). | CONVENTION-CONFLICT | Predates this diff. `run-history-drawer.tsx:241`, `:328-374`, `:203`, `:207`, `:318`, `:382`. |
+| C3-7 | Run paging orders by `started_at` only before OFFSET. | CONVENTION-CONFLICT | Predates this diff. `run-store.ts:39-40`; AGENTS.md section 7. |
+
+### Operator, 2026-11-17 (relayed by Claude): chunk 3 decisions
+
+- C3-1: "Loop adds up counts". The loop step records its body's mapped, held and persisted
+  totals over every pass; the run list and header include them.
+- C3-2: fix the wording in en, fr and pt.
+- C3-6 and C3-7: recorded as follow-ups. Not fixed in this chunk.
+
+### Claude, 2026-11-17: response to the chunk 3 review
+
+C3-1: `outcomeCounts` in `packages/workflows/src/engine/run-workflow.ts` reads the same meta shapes
+as the studio. `executeLoopNode` sums each pass's results into `bodyCounts` and sets the loop's
+meta to `{ iterations, bodyCounts }` when any step reported a count. A loop inside a loop adds
+its inner `bodyCounts` (by reading, not tested). `runCounts` in the studio adds a loop's `bodyCounts`. Tests: a loop of
+three rows (one mapped, two held) gives `bodyCounts { mapped: 1, held: 2 }`; the studio counts a
+loop's body. Both failed before the change.
+C3-2: the guides now say Completed means no step failed, and a step that did not run shows as
+skipped. They also say rows held inside a loop count.

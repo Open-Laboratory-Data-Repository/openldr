@@ -268,6 +268,39 @@ export async function runWorkflow(
   };
 }
 
+/** What a run's data came to, where a step reported it. Absent means no step said. */
+export interface OutcomeCounts {
+  mapped?: number;
+  held?: number;
+  persisted?: number;
+}
+
+const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * Mapped and held rows from Map to FHIR steps (their meta has `heldReasons`), persisted records
+ * from Persist store steps (their meta has `batchId`), and a loop step's own `bodyCounts`.
+ * Results carry no step kind, so the meta's shape tells them apart. The studio's run history
+ * reads the same shapes (`run-history-drawer.tsx`, `runCounts`).
+ */
+export function outcomeCounts(results: { meta?: unknown }[], into: OutcomeCounts = {}): OutcomeCounts {
+  const add = (k: keyof OutcomeCounts, n: unknown) => {
+    if (isCount(n)) into[k] = (into[k] ?? 0) + n;
+  };
+  for (const r of results) {
+    const meta = r.meta as Record<string, unknown> | null | undefined;
+    if (!meta || typeof meta !== 'object') continue;
+    if (Array.isArray(meta.heldReasons)) {
+      add('mapped', meta.mapped);
+      add('held', meta.held);
+    }
+    if (typeof meta.batchId === 'string') add('persisted', meta.persisted);
+    const body = meta.bodyCounts as OutcomeCounts | undefined;
+    if (body && typeof body === 'object') for (const k of ['mapped', 'held', 'persisted'] as const) add(k, body[k]);
+  }
+  return into;
+}
+
 async function executeLoopNode(
   node: WorkflowNode,
   ctx: ExecutionContext,
@@ -281,6 +314,9 @@ async function executeLoopNode(
   const plan = planIterations(node.data as { loopMode?: string; iterations?: number; batchSize?: number }, input);
 
   const accumulated: WorkflowItem[] = [];
+  // Each pass is its own run, whose step results are not kept. What its steps mapped, held and
+  // persisted is summed here, so the run still shows rows held inside the loop.
+  const bodyCounts: OutcomeCounts = {};
   for (const { index, item, batch } of plan) {
     // NOTE: each iteration re-runs topologicalSort + the loop pre-pass on iterNodes
     // (O(body) per iteration). Acceptable for MVP; revisit if very large bodies with
@@ -307,11 +343,13 @@ async function executeLoopNode(
       const failed = result.results.find((r) => r.status === 'error');
       throw new Error(`Loop: iteration ${index} failed: ${failed?.error ?? 'unknown error'}`);
     }
+    outcomeCounts(result.results, bodyCounts);
     const iterationItems = extractTerminalItems(bodyEdges, result.results);
     if (accumulated.length + iterationItems.length > ctx.loopMaxItems) {
       throw new Error(`Loop: accumulated items exceeded the limit (${ctx.loopMaxItems})`);
     }
     accumulated.push(...iterationItems);
   }
+  if (Object.keys(bodyCounts).length > 0) ctx.nodeMeta[node.id] = { iterations: plan.length, bodyCounts };
   return accumulated;
 }

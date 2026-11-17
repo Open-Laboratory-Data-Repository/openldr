@@ -74,6 +74,13 @@ describe('run outcomes beside the run status', () => {
     expect(runCounts(null)).toEqual({});
   });
 
+  it('adds the rows a loop step reports for its body', () => {
+    expect(runCounts({ results: [
+      { nodeId: 'm', type: 'action', status: 'success', durationMs: 1, meta: mapMeta(1, 0) },
+      { nodeId: 'loop', type: 'loop', status: 'success', durationMs: 1, meta: { iterations: 3, bodyCounts: { mapped: 1, held: 2 } } },
+    ] })).toEqual({ mapped: 2, held: 2 });
+  });
+
   it('shows Completed and a held count when a completed run held rows', () => {
     render(<RunStatus run={allHeld} />);
     expect(screen.getByText('Completed')).toBeInTheDocument();

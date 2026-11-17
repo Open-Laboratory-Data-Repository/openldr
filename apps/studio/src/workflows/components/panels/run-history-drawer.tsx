@@ -47,8 +47,9 @@ export interface RunCounts {
 const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 /**
- * Mapped and held rows from Map to FHIR nodes (their meta has `heldReasons`), and persisted
- * records from Persist store nodes (their meta has `batchId`), summed over the run's nodes.
+ * Mapped and held rows from Map to FHIR nodes (their meta has `heldReasons`), persisted records
+ * from Persist store nodes (their meta has `batchId`), and a loop node's `bodyCounts`, summed
+ * over the run's nodes. Same shapes as `outcomeCounts` in @openldr/workflows.
  * Results carry no node kind, so the meta's shape tells them apart. Mapped is never persisted.
  */
 export function runCounts(result: unknown): RunCounts {
@@ -62,6 +63,9 @@ export function runCounts(result: unknown): RunCounts {
       if (isCount(meta.held)) add('held', meta.held);
     }
     if (typeof meta.batchId === 'string' && isCount(meta.persisted)) add('persisted', meta.persisted);
+    // A loop step reports what its body did over every pass (`outcomeCounts` in the engine).
+    const body = meta.bodyCounts as RunCounts | undefined;
+    if (body && typeof body === 'object') for (const k of ['mapped', 'held', 'persisted'] as const) if (isCount(body[k])) add(k, body[k]);
   }
   return out;
 }

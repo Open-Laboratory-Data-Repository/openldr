@@ -42,7 +42,7 @@ O webhook responde pela execução inteira. O workflow predefinido **Ingest** re
 
 Uma execução concluída responde HTTP 200 com `ok: true` e o seu `runId`.
 
-Alguns laboratórios querem guardar as linhas boas de uma mensagem e pôr as más de parte. Nesse caso, crie o seu próprio workflow e ligue **retidos** a um nó Log ou a outro nó. Uma execução desse workflow conclui e responde `ok: true`, mesmo quando houve linhas retidas. Consulte em **History** o nó ligado a **retidos** para as encontrar. Quando há linhas retidas, a linha da execução em **History** mostra um número como **3 retidas** ao lado do estado. Uma execução pode terminar com todas as linhas retidas. O cabeçalho da execução mostra quantas linhas foram mapeadas e retidas, e quantos registos Persist store guardou.
+Alguns laboratórios querem guardar as linhas boas de uma mensagem e pôr as más de parte. Nesse caso, crie o seu próprio workflow e ligue **retidos** a um nó Log ou a outro nó. Uma execução desse workflow conclui e responde `ok: true`, mesmo quando houve linhas retidas. Consulte em **History** o nó ligado a **retidos** para as encontrar. Quando há linhas retidas, a linha da execução em **History** mostra um número como **3 retidas** ao lado do estado. Uma execução pode terminar com todas as linhas retidas. As linhas retidas dentro de um ciclo também contam. O cabeçalho da execução mostra quantas linhas foram mapeadas e retidas, e quantos registos Persist store guardou.
 
 ## Experimentar um mapeamento guardado na linha de comandos
 

@@ -175,3 +175,25 @@ describe('map-to-fhir in a run', () => {
     expect(res.results.find((r) => r.nodeId === 'm')?.meta).toMatchObject({ held: 1, heldReasons: ['no mapping for this shape 1'], notes: [] });
   });
 });
+
+describe('Map to FHIR inside a loop', () => {
+  it('records the rows its body mapped and held on the loop step, summed over every pass', async () => {
+    const nodes = [
+      { id: 't', type: 'trigger', data: {} },
+      { id: 'loop', type: 'loop', data: { loopMode: 'items', batchSize: 1 } },
+      { id: 'm', type: 'action', data: { action: 'map-to-fhir', config: { targetId: 't1', formIds: [], mappings: [] } } },
+      { id: 'h', type: 'action', data: { action: 'no-op' } },
+    ];
+    const edges = [
+      { id: 'e0', source: 't', target: 'loop' },
+      { id: 'e1', source: 'loop', target: 'm', sourceHandle: 'loop' },
+      { id: 'e2', source: 'm', target: 'h', sourceHandle: 'held' },
+    ];
+    const res = await runWorkflow(nodes, edges, {
+      input: [{ json: { ok: 'a' } }, { json: { other: 1 } }, { json: { other: 2 } }],
+      services: { mapToFhir: fakeService() } as unknown as WorkflowServices,
+    });
+    expect(res.status).toBe('completed');
+    expect(res.results.find((r) => r.nodeId === 'loop')?.meta).toMatchObject({ iterations: 3, bodyCounts: { mapped: 1, held: 2 } });
+  });
+});

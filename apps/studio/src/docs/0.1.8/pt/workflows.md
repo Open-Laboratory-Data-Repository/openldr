@@ -98,7 +98,7 @@ Em **Runs**, selecione a linha correspondente à origem e à hora pretendidas.
 
 ### 3. Ler o resultado
 
-Verifique Completed ou Failed e depois o estado de cada nó. As imagens vêm de uma instalação criada antes de Map to FHIR. Aí, Form Validate é ignorado porque o ramo FHIR tratou o Bundle. Numa instalação nova, o Bundle passa antes por **Map to FHIR**. Completed quer dizer que cada passo correu. Não quer dizer que cada linha foi guardada. Quando Map to FHIR reteve linhas, a linha da execução mostra um número como **3 retidas** ao lado de Completed, e o cabeçalho da execução mostra quantas linhas foram mapeadas e retidas, e quantos registos foram guardados. Um passo ignorado mostra o seu nome.
+Verifique Completed ou Failed e depois o estado de cada nó. As imagens vêm de uma instalação criada antes de Map to FHIR. Aí, Form Validate é ignorado porque o ramo FHIR tratou o Bundle. Numa instalação nova, o Bundle passa antes por **Map to FHIR**. Completed quer dizer que nenhum passo falhou. Um passo que não correu aparece como skipped. Completed não quer dizer que cada linha foi guardada. Quando Map to FHIR reteve linhas, a linha da execução mostra um número como **3 retidas** ao lado de Completed, e o cabeçalho da execução mostra quantas linhas foram mapeadas e retidas, e quantos registos foram guardados. As linhas retidas dentro de um ciclo também contam. Um passo ignorado mostra o seu nome.
 
 ![A execução concluída mostra o ramo que tratou este Bundle.](workflows-guide-run-result.png)
 
