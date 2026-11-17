@@ -6,10 +6,226 @@
       "version": null,
       "entries": [
         {
+          "hash": "4c066a27",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Sex picks from FHIR's own list of codes"
+        },
+        {
+          "hash": "88fbc82c",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Escape in the column list closes only the list, and the panel checks a mapping as a run reads it"
+        },
+        {
+          "hash": "8f8ac325",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "A per-test mapping the panel saves runs in a workflow"
+        },
+        {
+          "hash": "7dee3ee3",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A code the sheet picks is a suggestion until the person accepts it"
+        },
+        {
+          "hash": "a09b0d29",
+          "type": "fix",
+          "scope": "forms",
+          "title": "A test list needs columns to match, and an order keeps every test of its results"
+        },
+        {
           "hash": "624bf406",
           "type": "fix",
           "scope": "studio",
           "title": "A workflow opens fitted to the screen"
+        },
+        {
+          "hash": "9aec67fe",
+          "type": "feat",
+          "scope": "studio",
+          "title": "The mapping sheet maps a file with one column per test"
+        },
+        {
+          "hash": "0cdecf68",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "The within-run merge matches list entries by their pinned values"
+        },
+        {
+          "hash": "fb1b505b",
+          "type": "feat",
+          "scope": "forms",
+          "title": "The Date rule reads an Excel date cell"
+        },
+        {
+          "hash": "972e5fa3",
+          "type": "feat",
+          "scope": "forms",
+          "title": "A mapping can give each column of a file its own test"
+        },
+        {
+          "hash": "dd1d225f",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Map-test also needs the view key, and its help says what it prints"
+        },
+        {
+          "hash": "fd920a49",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The mapping sheet shows a saved mapping, fills a values rule from the sample and keeps the test result in view"
+        },
+        {
+          "hash": "ec9b5df0",
+          "type": "fix",
+          "scope": "forms",
+          "title": "The mapping takes its columns from the whole sample and refuses an id or a link as a target"
+        },
+        {
+          "hash": "cd41f4ce",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "A mapped row keeps its code and its own result"
+        },
+        {
+          "hash": "7dba2607",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Extract from File can read a CSV cell as the text in the file"
+        },
+        {
+          "hash": "84f4a35d",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "The default Ingest workflow refuses a message it cannot store, and reads no packs without a mapping"
+        },
+        {
+          "hash": "2d01f13e",
+          "type": "feat",
+          "scope": "workflows",
+          "title": "The default Ingest workflow uses Map to FHIR, with docs"
+        },
+        {
+          "hash": "0f6351a7",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The mapping sheet shows a saved column missing from the sample and warns when two mappings fit a row"
+        },
+        {
+          "hash": "6ef3844b",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The mapping sheet follows the node's target, counts rows, and groups a file's rows as one"
+        },
+        {
+          "hash": "41a2a97c",
+          "type": "fix",
+          "scope": "forms",
+          "title": "A row that two saved mappings fit is held, not guessed"
+        },
+        {
+          "hash": "88ee4d9f",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Workflows map-test"
+        },
+        {
+          "hash": "82e9263c",
+          "type": "fix",
+          "scope": "forms",
+          "title": "A saved mapping matches a row whose columns it knows, blank cells or not"
+        },
+        {
+          "hash": "1df54ed1",
+          "type": "feat",
+          "scope": "studio",
+          "title": "The mapping sheet says what it is doing and suggests a rule from the sample's form"
+        },
+        {
+          "hash": "17af5a14",
+          "type": "feat",
+          "scope": "studio",
+          "title": "The mapping sheet takes a sample from the latest stored run"
+        },
+        {
+          "hash": "1707fb10",
+          "type": "feat",
+          "scope": "studio",
+          "title": "The mapping sheet's rules, suggestions, test and listen"
+        },
+        {
+          "hash": "bdeaa65b",
+          "type": "fix",
+          "scope": "server",
+          "title": "The map routes name no code list in English and keep a bad body out of the log"
+        },
+        {
+          "hash": "cae73174",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "A held reason drops a record's id whole, and keeps only path parts FHIR knows"
+        },
+        {
+          "hash": "79512660",
+          "type": "feat",
+          "scope": "server",
+          "title": "Routes for map targets, suggestions and a mapping test"
+        },
+        {
+          "hash": "8ff56f5d",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Map unknown data to FHIR on a live sample"
+        },
+        {
+          "hash": "a1bf8773",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "A held reason holds no value, an unwired held port fails the run, and an order in the same run counts"
+        },
+        {
+          "hash": "8c0c4ff0",
+          "type": "feat",
+          "scope": "workflows",
+          "title": "The Map to FHIR node"
+        },
+        {
+          "hash": "07749432",
+          "type": "fix",
+          "scope": "forms",
+          "title": "A held row names the required field, and an id cannot be shared by two kinds of value"
+        },
+        {
+          "hash": "b4379ea2",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Mapped record ids come from the row's own identifiers"
+        },
+        {
+          "hash": "f0051fd1",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Specimen and Observation starter packs and the Lab result target"
+        },
+        {
+          "hash": "e7a16721",
+          "type": "fix",
+          "scope": "forms",
+          "title": "The mapping writer refuses a value its FHIR field cannot hold"
+        },
+        {
+          "hash": "2737995d",
+          "type": "feat",
+          "scope": "forms",
+          "title": "A mapping core that turns a row into linked FHIR records"
+        },
+        {
+          "hash": "ff341f5b",
+          "type": "feat",
+          "scope": "workflows",
+          "title": "A node can send different items down each output port"
         },
         {
           "hash": "80e79a64",
