@@ -22,6 +22,8 @@ import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Bleed } from '@/components/ui/bleed';
 import { TablePagination } from '@/components/ui/table-pagination';
+import { LoadingState } from '@/components/ui/spinner';
+import { StripedEmpty } from '@/components/ui/striped-empty';
 
 interface Props {
   open: boolean;
@@ -204,11 +206,11 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-auto">
               {loading ? (
-                <div className="p-4 text-sm text-muted-foreground">Loading…</div>
+                <LoadingState className="min-h-[16rem]" />
               ) : error ? (
                 <div className="p-4 text-sm text-destructive">{error}</div>
               ) : pageRuns.length === 0 ? (
-                <div className="p-4 text-sm text-muted-foreground">No runs yet.</div>
+                <StripedEmpty className="min-h-[16rem]">No runs yet.</StripedEmpty>
               ) : (
                 <Table>
                   <TableHeader>
@@ -242,15 +244,13 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
                 </Table>
               )}
             </div>
-            {(page > 0 || hasNext) && (
-              <TablePagination
-                page={page}
-                pageSize={pageSize}
-                total={pseudoTotal}
-                onPageChange={setPage}
-                onPageSizeChange={(n) => { setPageSize(n); setPage(0); }}
-              />
-            )}
+            <TablePagination
+              page={page}
+              pageSize={pageSize}
+              total={pseudoTotal}
+              onPageChange={setPage}
+              onPageSizeChange={(n) => { setPageSize(n); setPage(0); }}
+            />
           </div>
         )}
           </TabsContent>
@@ -266,11 +266,14 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
   const results: NodeRunResult[] = exec?.results ?? [];
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<'output' | 'result' | 'logs'>('output');
+  const [nodePage, setNodePage] = useState(0);
+  const [nodePageSize, setNodePageSize] = useState(10);
 
   // Reset selection + tab when a different run is opened.
   useEffect(() => {
     setSelectedId(null);
     setTab('output');
+    setNodePage(0);
   }, [run.id]);
 
   // Selected node: explicit click, else the first failed node, else the first node.
@@ -319,11 +322,11 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
       )}
 
       {loading ? (
-        <div className="p-4 text-sm text-muted-foreground">Loading detail…</div>
+        <LoadingState className="min-h-[16rem]" />
       ) : error ? (
         <div className="p-4 text-sm text-destructive">{error}</div>
       ) : results.length === 0 ? (
-        <div className="p-4 text-sm text-muted-foreground">No per-node results recorded.</div>
+        <StripedEmpty className="min-h-[16rem]">No per-node results recorded.</StripedEmpty>
       ) : (
         <>
           {/* Master: node table (edge-to-edge row rules via Bleed). */}
@@ -339,7 +342,7 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {results.map((r) => (
+                  {results.slice(nodePage * nodePageSize, (nodePage + 1) * nodePageSize).map((r) => (
                     <TableRow
                       key={r.nodeId}
                       className={cn(
@@ -376,6 +379,15 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
                 </TableBody>
               </Table>
             </Bleed>
+            <Bleed>
+              <TablePagination
+                page={nodePage}
+                pageSize={nodePageSize}
+                total={results.length}
+                onPageChange={setNodePage}
+                onPageSizeChange={(n) => { setNodePageSize(n); setNodePage(0); }}
+              />
+            </Bleed>
           </div>
 
           {/* Detail: selected node's data. */}
@@ -383,19 +395,21 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
             <div className="flex min-h-0 flex-1 flex-col border-t border-border">
               <div className="flex gap-4 px-4 pt-2 text-[11px]">
                 {(['output', 'result', 'logs'] as const).map((t) => (
-                  <button
+                  <Button
                     key={t}
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setTab(t)}
                     className={cn(
-                      'pb-1.5 capitalize',
+                      'h-auto rounded-none px-0 pb-1.5 text-[11px] font-normal capitalize hover:bg-transparent',
                       tab === t
                         ? 'border-b-2 border-violet-500 text-foreground'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
                     {t}
-                  </button>
+                  </Button>
                 ))}
               </div>
               <div className="border-b border-border" />
@@ -408,15 +422,17 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
                       <JsonView data={selected.output} emptyLabel="" />
                     )}
                     {selectedFiles.map((f) => (
-                      <button
+                      <Button
                         key={f.field}
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => void downloadWorkflowArtifact(f.objectKey, f.fileName)}
-                        className="inline-flex items-center gap-1.5 self-start rounded px-2 py-1 text-xs font-medium text-violet-400 transition-colors hover:bg-violet-500/10 hover:text-violet-300"
+                        className="h-auto gap-1.5 self-start px-2 py-1 text-xs font-medium text-violet-400 hover:bg-violet-500/10 hover:text-violet-300"
                       >
                         <Download className="h-3.5 w-3.5" />
                         {f.fileName}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 )}

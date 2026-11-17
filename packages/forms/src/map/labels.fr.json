@@ -24,5 +24,6 @@
   "Observation.effectiveDateTime": "Date du résultat",
   "Observation.interpretation": "Interprétation",
   "ServiceRequest.extension:age-at-request": "Âge",
-  "ServiceRequest.extension:age-at-request.unit": "Unité de l'âge"
+  "ServiceRequest.extension:age-at-request.unit": "Unité de l'âge",
+  "Observation.note.0.text": "Commentaire du résultat"
 }

@@ -7,10 +7,11 @@ vi.mock('@/api', async (orig) => {
   return { ...actual, fetchWorkflow: vi.fn() };
 });
 const setWorkflow = vi.fn();
+const setWorkflowMeta = vi.fn();
 const clear = vi.fn();
 vi.mock('./hooks/use-workflow-store', () => ({
   useWorkflowStore: (sel?: (s: any) => unknown) => {
-    const state = { configNodeId: null, workflowId: null, setWorkflow, clear, setConfigNode: vi.fn() };
+    const state = { configNodeId: null, workflowId: null, setWorkflow, setWorkflowMeta, clear, setConfigNode: vi.fn() };
     return sel ? sel(state) : state;
   },
 }));

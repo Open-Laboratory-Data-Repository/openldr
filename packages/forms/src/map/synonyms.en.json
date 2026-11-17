@@ -18,12 +18,13 @@
   "ServiceRequest.requester?type=Organization": ["facility", "facility_name", "health_facility", "site", "clinic", "referring_facility"],
   "Observation.code": ["test", "test_code", "test_name", "analyte", "assay"],
   "Observation.valueQuantity.value": ["result", "result_value", "result_val", "value", "numeric_result"],
-  "Observation.valueString": ["result_text", "text_result", "result_comment"],
+  "Observation.valueString": ["result_text", "text_result"],
   "Observation.valueQuantity.unit": ["unit", "units", "result_unit"],
   "Observation.effectiveDateTime": ["result_date", "date_resulted", "test_date", "analysis_date"],
   "Observation.interpretation": ["flag", "abnormal_flag", "interpretation", "result_flag"],
   "!Patient.name.given?use=official": ["name", "full_name", "fullname", "patient_name", "client_name"],
   "!Patient.name.family?use=official": ["name", "full_name", "fullname", "patient_name", "client_name"],
   "ServiceRequest.extension:age-at-request": ["age", "age_years", "patient_age", "age_at_request", "age_value"],
-  "ServiceRequest.extension:age-at-request.unit": ["age_unit", "age_units", "age_type"]
+  "ServiceRequest.extension:age-at-request.unit": ["age_unit", "age_units", "age_type"],
+  "Observation.note.0.text": ["result_comment", "comment", "result_note", "remark", "result_remark"]
 }

@@ -36,6 +36,19 @@ describe('WorkflowRunStore', () => {
     expect(await store.get('nope')).toBeUndefined();
   });
 
+  it('pages runs that started at the same moment by id, so no run repeats or goes missing', async () => {
+    const store = createWorkflowRunStore(db);
+    for (const id of ['r-a', 'r-b', 'r-c']) {
+      await store.record({
+        id, workflowId: 'w1', triggerSource: 'webhook', status: 'completed',
+        startedAt: '2026-01-01T00:00:00Z', finishedAt: '2026-01-01T00:00:01Z', result: {}, error: null,
+      });
+    }
+    const pages = [];
+    for (let offset = 0; offset < 3; offset++) pages.push(...(await store.list('w1', { limit: 1, offset })).map((r) => r.id));
+    expect(pages).toEqual(['r-c', 'r-b', 'r-a']);
+  });
+
   it('records and queries runs by correlation id', async () => {
     const db = await makeMigratedDb();
     const store = createWorkflowRunStore(db);

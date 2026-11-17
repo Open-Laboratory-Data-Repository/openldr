@@ -634,6 +634,15 @@ describe('MapToFhirSheet rule suggestions, status and results', () => {
     expect(rows.find((r: { targetPath: string }) => r.targetPath === 'Observation.valueQuantity.value').rule).toEqual({ kind: 'numberOrText', decimal: ',' });
   });
 
+  it('does not offer Number or text on a fixed value, which has a known type', async () => {
+    await mapForm();
+    const opts = () => within(screen.getByRole('combobox', { name: 'Rule: Result (number)' })).queryAllByRole('option').map((o) => o.textContent);
+    expect(opts()).toContain('Number or text');
+    fireEvent.change(sourceSelect('Result (number)'), { target: { value: '__fixed' } });
+    expect(opts()).not.toContain('Number or text');
+    expect(opts()).toContain('Number');
+  });
+
   it('gives no suggestion for a second result field once a record has one', async () => {
     setRun(ROWS_FORM);
     m(api.suggestMapping).mockResolvedValue([

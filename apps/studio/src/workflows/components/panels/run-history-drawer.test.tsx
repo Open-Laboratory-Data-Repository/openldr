@@ -1,6 +1,13 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { RunDetail, RunStatus, runCounts } from './run-history-drawer';
+import * as api from '@/api';
+import { RunDetail, RunHistoryDrawer, RunStatus, runCounts } from './run-history-drawer';
+
+vi.mock('@/api', async (orig) => {
+  const actual = await orig<typeof import('@/api')>();
+  return { ...actual, fetchWorkflowRuns: vi.fn(), fetchWorkflowRun: vi.fn() };
+});
+vi.mock('./receipt-history', () => ({ ReceiptHistory: () => null }));
 
 // CodeMirror (JsonView) is awkward in jsdom — render it as a textarea showing the value.
 vi.mock('../node-forms/code-editor', () => ({
@@ -98,5 +105,45 @@ describe('run outcomes beside the run status', () => {
     expect(screen.getByTestId('run-counts')).toHaveTextContent('0 mapped · 3 held');
     expect(screen.getByTestId('run-counts')).not.toHaveTextContent('persisted');
     expect(screen.getByText('Persist store')).toBeInTheDocument();
+  });
+});
+
+describe('run history and AGENTS.md section 5 (follow-up a)', () => {
+  const summary = (id: string) => ({
+    id, workflowId: 'wf_1', triggerSource: 'webhook' as const, status: 'completed' as const,
+    startedAt: '2026-06-30T00:00:00.000Z', finishedAt: '2026-06-30T00:00:01.000Z', error: null, result: null,
+  });
+
+  it('shows pagination under the runs table even with one run', async () => {
+    (api.fetchWorkflowRuns as ReturnType<typeof vi.fn>).mockResolvedValue([summary('r1')]);
+    render(<RunHistoryDrawer open workflowId="wf_1" onClose={() => {}} />);
+    expect(await screen.findByText('1–1 of 1')).toBeInTheDocument();
+  });
+
+  it('shows the spinner, not stripes, while the runs load, and the striped empty state when there are none', async () => {
+    let resolve!: (v: unknown[]) => void;
+    (api.fetchWorkflowRuns as ReturnType<typeof vi.fn>).mockReturnValue(new Promise((r) => { resolve = r; }));
+    render(<RunHistoryDrawer open workflowId="wf_1" onClose={() => {}} />);
+    expect(await screen.findByRole('status', { name: 'Loading' })).toBeInTheDocument();
+    expect(document.querySelector('pattern')).toBeNull();
+    resolve([]);
+    expect(await screen.findByText('No runs yet.')).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector('pattern')).not.toBeNull());
+  });
+
+  it('pages the node table, and uses shadcn buttons for the detail tabs', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({ nodeId: `n${i}`, label: `Node ${i}`, type: 'action', status: 'success', durationMs: 1, logs: [] }));
+    render(<RunDetail run={mkRun(many)} loading={false} />);
+    expect(screen.getByText('1–10 of 12')).toBeInTheDocument();
+    expect(screen.queryByText('Node 11')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Node 11')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /logs/i })).toBeInTheDocument();
+  });
+
+  it('shows the spinner while a run detail loads', () => {
+    render(<RunDetail run={mkRun([])} loading />);
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+    expect(document.querySelector('pattern')).toBeNull();
   });
 });

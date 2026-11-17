@@ -16,11 +16,24 @@ const P = 'workflows.mapToFhir.rule';
 
 /**
  * The rule kind for one row. Changing it starts that kind's inputs empty. Number or text is offered
- * only on a field that has a text form to keep a non-number in (`textKeyOf`).
+ * only on a field that has a text form to keep a non-number in (`textKeyOf`), and never on a fixed
+ * value: a typed value has a known type, and the mapping refuses it there (`applyMapping`).
  */
-export function RuleKindSelect({ rule, label, targetPath, onChange }: { rule: RuleDraft; label: string; targetPath: string; onChange: (r: RuleDraft) => void }) {
+export function RuleKindSelect({
+  rule,
+  label,
+  targetPath,
+  fixed = false,
+  onChange,
+}: {
+  rule: RuleDraft;
+  label: string;
+  targetPath: string;
+  fixed?: boolean;
+  onChange: (r: RuleDraft) => void;
+}) {
   const { t } = useTranslation();
-  const kinds = RULE_KINDS.filter((k) => k !== 'numberOrText' || textKeyOf(targetPath) !== null || rule.kind === k);
+  const kinds = RULE_KINDS.filter((k) => k !== 'numberOrText' || rule.kind === k || (!fixed && textKeyOf(targetPath) !== null));
   return (
     <Select value={rule.kind} onValueChange={(k) => onChange(emptyRule(k as RuleKind))}>
       <SelectTrigger aria-label={`${t('workflows.mapToFhir.sheet.colRule')}: ${label}`} className="w-full min-w-0">

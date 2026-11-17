@@ -309,6 +309,7 @@ export function MapToFhirSheet({
                     rule={d.rule}
                     label={d.label}
                     targetPath={d.targetPath}
+                    fixed={d.source.kind === 'fixed'}
                     onChange={(rule) =>
                       edit(i, { rule: rule.kind === 'values' ? valuesRuleFor(d, false) : rule.kind === 'number' || rule.kind === 'numberOrText' ? numberRuleFor(d, rule.kind) : rule })
                     }

@@ -97,11 +97,23 @@ const LAB_RESULT_AGE: MapTarget['fields'] = [
   { path: AGE_UNIT_FIELD, label: 'Age unit', required: false, repeats: false, valueSet: null },
 ];
 
-/** The fields with the age fields placed after the order's own. */
+// A note on one result, such as "repeat after recheck" (operator, 2026-11-17). No pack holds it.
+// The warehouse does not read it yet; it is kept in FHIR.
+const LAB_RESULT_COMMENT: MapTarget['fields'] = [
+  { path: 'Observation.note.0.text', label: 'Result comment', required: false, repeats: true, valueSet: null },
+];
+
+/** The fields with `add` placed after the last field of the `type` record. */
+function placeAfter(fields: MapTarget['fields'], type: string, add: MapTarget['fields']): MapTarget['fields'] {
+  const last = fields.map((f) => f.path.split('.')[0]).lastIndexOf(type);
+  const out = [...fields];
+  out.splice(last + 1, 0, ...add);
+  return out;
+}
+
+/** The age fields after the order's own, and the result comment after the result's own. */
 function withAge(target: MapTarget): MapTarget {
-  const last = target.fields.map((f) => f.path.split('.')[0]).lastIndexOf('ServiceRequest');
-  const fields = [...target.fields];
-  fields.splice(last + 1, 0, ...LAB_RESULT_AGE);
+  const fields = placeAfter(placeAfter(target.fields, 'ServiceRequest', LAB_RESULT_AGE), 'Observation', LAB_RESULT_COMMENT);
   return { ...target, fields, age: { record: 'ServiceRequest', value: AGE_FIELD, unit: AGE_UNIT_FIELD } };
 }
 

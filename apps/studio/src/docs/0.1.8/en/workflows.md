@@ -238,7 +238,7 @@ Open the dots beside the workflow you want to copy.
 
 Select **Duplicate**. A new row ends with **(copy)**. Open it before making changes.
 
-The copy starts **Disabled**, with a new webhook secret, so it never takes the original's messages. To use it, change its webhook path and save: saving turns it on. Two enabled workflows cannot share a webhook path: saving the second is refused, and the message names the first.
+The copy starts **Disabled**, with a new webhook secret, so it never takes the original's messages. To use it, change its webhook path and save, then open the dots beside it in the list and select **Enable**. Saving keeps a workflow on or off as it was. **Disable** in the same menu turns a workflow off. Two enabled workflows cannot share a webhook path: enabling or saving the second is refused, and the message names the first.
 
 ![Duplicate creates a separate workflow copy.](workflows-guide-duplicate.png)
 

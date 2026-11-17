@@ -146,3 +146,16 @@ describe('suggest: parent context and column order (C5-1, C5-2)', () => {
     expect(suggest(t, ['x', 'y'], syn)).toEqual([]);
   });
 });
+
+describe('suggest: a result comment (follow-up c)', () => {
+  const real = labResultTarget(seededStarterPacks(), 'en');
+  const of = (names: string[]) => Object.fromEntries(suggest(real, names, mapSynonyms('en')).map((x) => [x.field, x.targetPath]));
+
+  it('offers a result comment as Result comment, not as the order clinical notes', () => {
+    expect(of(['results.analyte', 'results.value', 'results.comment'])['results.comment']).toBe('Observation.note.0.text');
+  });
+
+  it('still offers clinical notes for an order column', () => {
+    expect(of(['clinical_notes'])['clinical_notes']).toBe('ServiceRequest.note.0.text');
+  });
+});

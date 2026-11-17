@@ -13,7 +13,7 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
-import { fetchWorkflows, createWorkflow, deleteWorkflow, duplicateWorkflow, resetWorkflow, type Workflow } from '@/api';
+import { fetchWorkflows, createWorkflow, deleteWorkflow, duplicateWorkflow, resetWorkflow, updateWorkflow, type Workflow } from '@/api';
 
 function newWorkflowId(): string {
   return `wf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -102,9 +102,20 @@ export function WorkflowList() {
     try {
       // The copy starts disabled with a fresh webhook secret, so it never takes the original's path.
       await duplicateWorkflow(w.id);
-      toast.success(`Duplicated ${w.name}. The copy is disabled. Change its webhook path and save it to turn it on.`);
+      toast.success(`Duplicated ${w.name}. The copy is disabled. Change its webhook path, then choose Enable in its menu.`);
       await load();
     } catch (e) { toast.error(`Duplicate failed: ${e instanceof Error ? e.message : String(e)}`); }
+  }, [load]);
+
+  // Turn a workflow on or off. Only `enabled` changes. The server refuses to enable a workflow
+  // whose webhook path an enabled workflow already uses, and names it.
+  const onToggle = useCallback(async (w: Workflow) => {
+    const enabled = !w.enabled;
+    try {
+      await updateWorkflow(w.id, { id: w.id, name: w.name, description: w.description, definition: w.definition, enabled, createdBy: w.createdBy });
+      toast.success(`${w.name} is ${enabled ? 'enabled' : 'disabled'}.`);
+      await load();
+    } catch (e) { toast.error(`${enabled ? 'Enable' : 'Disable'} failed: ${e instanceof Error ? e.message : String(e)}`); }
   }, [load]);
 
   const onDelete = useCallback(async () => {
@@ -205,6 +216,7 @@ export function WorkflowList() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => navigate(`/workflows/${w.id}`)}>Open</DropdownMenuItem>
+                          <DropdownMenuItem data-testid={`toggle-${w.id}`} onClick={() => { void onToggle(w); }}>{w.enabled ? 'Disable' : 'Enable'}</DropdownMenuItem>
                           <DropdownMenuItem data-testid={`duplicate-${w.id}`} onClick={() => { void onDuplicate(w); }}>Duplicate</DropdownMenuItem>
                           <DropdownMenuItem data-testid={`export-${w.id}`} onClick={() => exportWorkflow(w)}>Export</DropdownMenuItem>
                           {w.protected ? (

@@ -36,7 +36,9 @@ export function createWorkflowRunStore(db: Kysely<InternalSchema>): WorkflowRunS
     async list(workflowId, opts = {}) {
       const rows = await db.selectFrom('workflow_runs').selectAll()
         .where('workflow_id', '=', workflowId)
+        // id breaks a tie: with OFFSET, runs that start at one moment must not repeat across pages.
         .orderBy('started_at', 'desc')
+        .orderBy('id', 'desc')
         .limit(opts.limit ?? 50).offset(opts.offset ?? 0).execute();
       return rows.map((r) => fromRow(r as Record<string, unknown>));
     },

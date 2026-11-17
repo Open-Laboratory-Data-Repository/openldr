@@ -18,12 +18,13 @@
   "ServiceRequest.requester?type=Organization": ["unidade_sanitaria", "unidade_sanitária", "unidade_saude", "proveniencia", "proveniência"],
   "Observation.code": ["analise", "análise", "exame", "parametro", "parâmetro", "codigo_analise"],
   "Observation.valueQuantity.value": ["resultado", "valor", "valor_resultado"],
-  "Observation.valueString": ["resultado_texto", "comentario_resultado"],
+  "Observation.valueString": ["resultado_texto"],
   "Observation.valueQuantity.unit": ["unidade", "unidades", "unidade_medida"],
   "Observation.effectiveDateTime": ["data_resultado", "data_do_resultado", "data_analise", "data_validacao"],
   "Observation.interpretation": ["interpretacao", "interpretação", "sinal", "anomalia"],
   "!Patient.name.given?use=official": ["nome_completo", "nome_do_paciente", "nome_paciente"],
   "!Patient.name.family?use=official": ["nome_completo", "nome_do_paciente", "nome_paciente"],
   "ServiceRequest.extension:age-at-request": ["idade", "idade_paciente"],
-  "ServiceRequest.extension:age-at-request.unit": ["unidade_idade", "tipo_idade"]
+  "ServiceRequest.extension:age-at-request.unit": ["unidade_idade", "tipo_idade"],
+  "Observation.note.0.text": ["comentario_resultado", "comentário", "comentario", "nota_resultado"]
 }

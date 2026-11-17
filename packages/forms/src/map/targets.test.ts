@@ -173,6 +173,8 @@ describe('a fully mapped made-up row', () => {
     flag_b: 'flag-y',
     age: '3',
     age_unit: 'weeks',
+    comment_a: 'repeat after recheck',
+    comment_b: '',
   };
 
   // Every field of the target but one. Referring Facility shares ServiceRequest.requester with
@@ -203,6 +205,7 @@ describe('a fully mapped made-up row', () => {
     { targetPath: 'Observation.valueQuantity.unit', from: { fields: ['unit_a', 'unit_b'] } },
     { targetPath: 'Observation.effectiveDateTime', from: { fields: ['res_date_a', 'res_date_b'] } },
     { targetPath: 'Observation.interpretation', from: { fields: ['flag_a', 'flag_b'] } },
+    { targetPath: 'Observation.note.0.text', from: { fields: ['comment_a', 'comment_b'] } },
   ];
 
   const mapping = (r: FieldMapping[]) => ({ shapeHash: 'h', fieldNames: Object.keys(row).sort(), targetId: target.id, rows: r });
@@ -226,6 +229,14 @@ describe('a fully mapped made-up row', () => {
   it('covers every field but Referring Facility', () => {
     const mapped = new Set(rows.map((r) => r.targetPath));
     expect(target.fields.filter((f) => !mapped.has(f.path)).map((f) => f.label)).toEqual(['Referring Facility']);
+  });
+
+  it('writes a result comment on its own result only', async () => {
+    const res = await applyMapping(mapping(rows), target, row, deps());
+    if (!res.ok) throw new Error(res.reason);
+    const notes = res.resources.filter((r) => r.resourceType === 'Observation').map((r) => (r as unknown as { note?: unknown }).note);
+    expect(notes).toEqual([[{ text: 'repeat after recheck' }], undefined]);
+    expect(target.fields.find((f) => f.path === 'Observation.note.0.text')?.label).toBe('Result comment');
   });
 
   it('writes the age at request on the order, from the Age and Age unit fields', async () => {
