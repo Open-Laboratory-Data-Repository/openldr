@@ -13,7 +13,7 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
-import { fetchWorkflows, createWorkflow, deleteWorkflow, duplicateWorkflow, resetWorkflow, updateWorkflow, type Workflow } from '@/api';
+import { fetchWorkflows, createWorkflow, deleteWorkflow, duplicateWorkflow, resetWorkflow, setWorkflowEnabled, type Workflow } from '@/api';
 
 function newWorkflowId(): string {
   return `wf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -107,12 +107,13 @@ export function WorkflowList() {
     } catch (e) { toast.error(`Duplicate failed: ${e instanceof Error ? e.message : String(e)}`); }
   }, [load]);
 
-  // Turn a workflow on or off. Only `enabled` changes. The server refuses to enable a workflow
-  // whose webhook path an enabled workflow already uses, and names it.
+  // Turn a workflow on or off. Only `enabled` is sent, so a list loaded before another edit never
+  // writes that edit back (review C7-1). The server refuses to enable a workflow whose webhook path
+  // an enabled workflow already uses, and names it.
   const onToggle = useCallback(async (w: Workflow) => {
     const enabled = !w.enabled;
     try {
-      await updateWorkflow(w.id, { id: w.id, name: w.name, description: w.description, definition: w.definition, enabled, createdBy: w.createdBy });
+      await setWorkflowEnabled(w.id, enabled);
       toast.success(`${w.name} is ${enabled ? 'enabled' : 'disabled'}.`);
       await load();
     } catch (e) { toast.error(`${enabled ? 'Enable' : 'Disable'} failed: ${e instanceof Error ? e.message : String(e)}`); }

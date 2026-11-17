@@ -883,3 +883,41 @@ with `d3667811..222d9065`. Approved for the agreed age scope and the "Treat as u
 C6-1 refuted at `age.ts:68-70`, `:115`, `:117`, `:120-122`; boundary 2147483647 days kept, 2147483648 unread.
 Codex's HONEST NON-PROOF: no live browser, phone, webhook run, or real warehouse or FHIR store
 write at this commit; the warehouse replay was pg-mem; long decimals stay outside scope.
+
+## Chunk 7: follow-ups
+
+### Operator, 2026-11-17 (relayed by Claude)
+
+Follow-up decisions before the build: (d) "Keep state + menu": Save keeps a workflow's on/off
+state and description; the row menu gets Enable and Disable. (c) "Add Result comment":
+`Observation.note.0.text`, with `results.comment` suggested there.
+
+### Codex, 2026-11-17: chunk 7 review (relayed by Claude)
+
+7 review checks: 1 confirmed, 5 refuted, 1 convention-conflict, 0 deferred. Reviewed `11d49fbe..76532293`.
+
+| ID | Finding | Verdict | Proof |
+| --- | --- | --- | --- |
+| C7-1 | Saves and toggles write fields they did not edit. | CONFIRMED | `WorkflowList.tsx:115` sent the listed snapshot; `use-workflow-api.ts:35-40` sent the loaded state; the server checks the version it reads itself. A stale toggle restored an old graph; a stale Save re-enabled a disabled workflow. |
+| C7-2 | Save of an unchanged disabled workflow turns it on. | REFUTED | `use-workflow-api.ts:35-40`, `page.tsx:56-57`. |
+| C7-3 | Run tables lack pagination, states or a tiebreaker. | REFUTED | `run-history-drawer.tsx:247-254`, `:383-392`; `run-store.ts:42`. |
+| C7-4 | Result comments become order notes. | REFUTED | `targets.ts:103`, synonyms. |
+| C7-5 | A fixed row can newly pick Number or text. | REFUTED | `RuleEditor.tsx:36`. An earlier choice stays visible and is refused at run time. |
+| C7-6 | The CLI has no workflow commands. | REFUTED | `program.ts:99-122` has a `workflows` group. My plan was wrong. |
+| C7-7 | Enable/Disable has no CLI command. | CONVENTION-CONFLICT | AGENTS.md section 6. |
+
+### Operator, 2026-11-17 (relayed by Claude)
+
+C7-1: "Write own field only". C7-7: "Add the CLI commands".
+
+### Claude, 2026-11-17: response
+
+- C7-1: bootstrap `setWorkflowEnabled` changes only `enabled`, based on the version it reads, and
+  refuses a held webhook path naming the holder. `PUT /api/workflows/:id/enabled` and the row menu use
+  it. An update that leaves out `enabled` or `description` keeps the stored ones, and the editor's Save
+  leaves both out; the `workflowMeta` store field is removed. Route tests (stale toggle keeps the newer
+  graph and name; stale Save keeps a workflow off; refused enable; audit, 404, 400) failed before.
+- C7-7: `openldr workflows enable|disable <id>` call the same function, audited with the CLI actor,
+  listed in `command-meta.ts`. A webhook follows at once; schedules, listeners, ingest and event
+  triggers follow at the next server start, and the command prints that.
+- C7-6: the plan is corrected.

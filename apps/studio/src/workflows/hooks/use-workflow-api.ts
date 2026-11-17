@@ -15,17 +15,12 @@ import { serializeWorkflow } from '../lib/serializer';
 import { useWorkflowStore } from './use-workflow-store';
 
 /**
- * Build the persisted workflow body from the current store graph. `meta` is the loaded workflow's
- * description and on/off state, sent back unchanged: Save edits the graph and name only. The row
- * menu's Enable and Disable turn a workflow on and off.
+ * Build the persisted workflow body from the current store graph: the graph and name only. It
+ * leaves out `enabled` and `description`, so the server keeps the stored ones on an update and a
+ * Save never turns a workflow on (review C7-1). A new workflow gets the server's defaults: on, no
+ * description. The row menu's Enable and Disable turn a workflow on and off.
  */
-export function buildBody(opts: {
-  id: string;
-  name: string;
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
-  meta: { description: string | null; enabled: boolean };
-}) {
+export function buildBody(opts: { id: string; name: string; nodes: WorkflowNode[]; edges: WorkflowEdge[] }) {
   // An empty name field shows a placeholder in the UI; persist a sensible default so the
   // list never shows a blank row.
   const name = opts.name.trim() || 'Untitled Workflow';
@@ -34,9 +29,7 @@ export function buildBody(opts: {
   return {
     id: opts.id,
     name,
-    description: opts.meta.description,
     definition: { nodes: def.nodes, edges: def.edges },
-    enabled: opts.meta.enabled,
     createdBy: null,
   };
 }
@@ -110,12 +103,12 @@ export function useWorkflowApi() {
       if (s.workflowId) {
         await updateWorkflow(
           s.workflowId,
-          buildBody({ id: s.workflowId, name: s.workflowName, nodes: s.nodes, edges: s.edges, meta: s.workflowMeta }),
+          buildBody({ id: s.workflowId, name: s.workflowName, nodes: s.nodes, edges: s.edges }),
         );
       } else {
         const id = newWorkflowId();
         const result = await createWorkflow(
-          buildBody({ id, name: s.workflowName, nodes: s.nodes, edges: s.edges, meta: s.workflowMeta }),
+          buildBody({ id, name: s.workflowName, nodes: s.nodes, edges: s.edges }),
         );
         s.setWorkflow(result.id, result.name, s.nodes, s.edges);
       }
@@ -137,7 +130,7 @@ export function useWorkflowApi() {
     if (!store.workflowId) {
       const id = newWorkflowId();
       const result = await createWorkflow(
-        buildBody({ id, name: store.workflowName, nodes: store.nodes, edges: store.edges, meta: store.workflowMeta }),
+        buildBody({ id, name: store.workflowName, nodes: store.nodes, edges: store.edges }),
       );
       store.setWorkflow(result.id, result.name, store.nodes, store.edges);
       return result.id;
@@ -146,13 +139,13 @@ export function useWorkflowApi() {
     try {
       await updateWorkflow(
         store.workflowId,
-        buildBody({ id: store.workflowId, name: store.workflowName, nodes: store.nodes, edges: store.edges, meta: store.workflowMeta }),
+        buildBody({ id: store.workflowId, name: store.workflowName, nodes: store.nodes, edges: store.edges }),
       );
       return store.workflowId;
     } catch {
       const id = newWorkflowId();
       const result = await createWorkflow(
-        buildBody({ id, name: store.workflowName, nodes: store.nodes, edges: store.edges, meta: store.workflowMeta }),
+        buildBody({ id, name: store.workflowName, nodes: store.nodes, edges: store.edges }),
       );
       store.setWorkflow(result.id, result.name, store.nodes, store.edges);
       return result.id;

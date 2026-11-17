@@ -14,7 +14,7 @@ import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQue
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
 import { runReportList, runReportRun, runReportGlassExport } from './report';
 import { runAuditList } from './audit';
-import { runWorkflowReceiptsList, runWorkflowReceiptShow } from './workflows';
+import { runWorkflowReceiptsList, runWorkflowReceiptShow, runWorkflowSetEnabled } from './workflows';
 import { runWorkflowMapTest } from './workflow-map';
 import {
   runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus, runUserPreferencesShow, runUserPreferencesSet,
@@ -96,7 +96,7 @@ export function buildProgram(): Command {
   program.name('openldr').description('OpenLDR CE operator CLI');
   program.option('--actor <name>', 'audit actor name for this invocation (defaults to the OS user)');
 
-  const workflows = program.command('workflows').description('Inspect workflows');
+  const workflows = program.command('workflows').description('Inspect workflows, and turn them on or off');
   workflows.command('map-test <workflowId> <nodeId> <file>')
     .description('Run a Map to FHIR node\'s saved mapping on a .json list or .csv file. Prints counts and reasons; with --json, each row\'s result including its records. A CSV cell is read as text with the spaces around it cut, and a blank cell is left out. Extract from File with \'Read every cell as text\' on gives the same rows but keeps those spaces.')
     .option('--json', 'emit the full per-row results, records included', false)
@@ -104,6 +104,12 @@ export function buildProgram(): Command {
       try { process.exitCode = await runWorkflowMapTest(workflowId, nodeId, file, opts); }
       catch { process.stderr.write('Map test unavailable.\n'); process.exitCode = 1; }
     });
+  workflows.command('enable <workflowId>')
+    .description('Turn a workflow on, as Enable in the studio. Refused when another enabled workflow uses its webhook path.')
+    .action(async (workflowId: string) => { process.exitCode = await runWorkflowSetEnabled(workflowId, true); });
+  workflows.command('disable <workflowId>')
+    .description('Turn a workflow off, as Disable in the studio. Nothing else about it changes.')
+    .action(async (workflowId: string) => { process.exitCode = await runWorkflowSetEnabled(workflowId, false); });
   const receipts = workflows
     .command('receipts').description('Inspect durable webhook requests');
   receipts.command('list <workflowId>').description('List webhook receipts for a workflow')

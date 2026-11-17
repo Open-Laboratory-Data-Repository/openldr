@@ -26,4 +26,14 @@ Operator decisions, 2026-11-17: (d) "Keep state + menu"; (c) "Add Result comment
 Full gate, server lint, docs in en, fr and pt (in-app and web), phone width for the run history panel
 and the list menu, demo retest on 3991, Codex review, changelog after merge.
 
-Not done: no `openldr` CLI command for enabling a workflow. The CLI has no workflow commands today.
+## After Codex's review (C7-1, C7-6, C7-7)
+
+- C7-6: the first version of this plan said the CLI had no workflow commands. That was wrong: it
+  already has a `workflows` group (`program.ts:99-122`).
+- C7-1 (operator: "Write own field only"): Enable and Disable call `PUT /api/workflows/:id/enabled`,
+  which changes only `enabled` (bootstrap `setWorkflowEnabled`). The editor's Save leaves out
+  `enabled` and `description`; on update the server keeps the stored ones. The `workflowMeta`
+  store field from the first round is removed.
+- C7-7 (operator: "Add the CLI commands"): `openldr workflows enable|disable <id>` call the same
+  function, audited with the CLI actor. A webhook follows at once; schedules, listeners, ingest and
+  event triggers follow at the next server start, and the command says so.

@@ -357,6 +357,13 @@ To try a Map to FHIR node's saved mappings on a file, run `workflows map-test`. 
 ./openldr workflows map-test wf-ingest map-1 data/your-rows.csv
 ```
 
+To turn a workflow on or off from the command line, run `workflows enable` or `workflows disable` with its id. Only that changes, as with **Enable** and **Disable** in the list. Enabling is refused when another enabled workflow uses its webhook path. A webhook follows at once. Restart the server for schedules, listeners, ingest and event triggers to follow.
+
+```shell
+./openldr workflows disable WORKFLOW_ID
+./openldr workflows enable WORKFLOW_ID
+```
+
 ## Restore a shipped workflow
 
 System workflows offer **Reset to default** instead of Delete. Reset discards the customised graph and requires confirmation. Export the current definition first if you need to keep it.

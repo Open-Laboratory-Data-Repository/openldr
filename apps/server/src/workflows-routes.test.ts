@@ -1724,3 +1724,57 @@ describe('one enabled workflow per webhook path', () => {
     expect((await put({ ...hook('wf-a', 'Lab A results, renamed', 'lab-a', true) })).statusCode).toBe(200);
   });
 });
+
+describe('workflow on/off and stale saves (follow-up C7-1)', () => {
+  const hookWorkflow = (id: string, name: string, path: string, over: Record<string, unknown> = {}) => ({
+    id, name, description: null, enabled: true, createdBy: null,
+    definition: { nodes: [{ id: 't1', type: 'trigger', data: { triggerType: 'webhook', path } }], edges: [] },
+    ...over,
+  });
+  const setup = () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+    return { app, ctx };
+  };
+
+  it('PUT enabled changes only enabled, so a toggle never brings back an older graph or name', async () => {
+    const { app } = setup();
+    await app.inject({ method: 'POST', url: '/api/workflows', payload: hookWorkflow('wf-a', 'Old', 'a-path') });
+    await app.inject({ method: 'PUT', url: '/api/workflows/wf-a', payload: hookWorkflow('wf-a', 'New', 'a-path', { description: 'Edited' }) });
+    const res = await app.inject({ method: 'PUT', url: '/api/workflows/wf-a/enabled', payload: { enabled: false } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ id: 'wf-a', name: 'New', description: 'Edited', enabled: false });
+  });
+
+  it('an editor save that leaves out enabled and description keeps the stored ones', async () => {
+    const { app } = setup();
+    await app.inject({ method: 'POST', url: '/api/workflows', payload: hookWorkflow('wf-b', 'B', 'b-path', { description: 'Nightly' }) });
+    await app.inject({ method: 'PUT', url: '/api/workflows/wf-b/enabled', payload: { enabled: false } });
+    const { enabled: _e, description: _d, ...body } = hookWorkflow('wf-b', 'B renamed', 'b-path');
+    const res = await app.inject({ method: 'PUT', url: '/api/workflows/wf-b', payload: body });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ name: 'B renamed', description: 'Nightly', enabled: false });
+  });
+
+  it('refuses to enable a workflow whose webhook path an enabled workflow holds, naming it', async () => {
+    const { app, ctx } = setup();
+    await app.inject({ method: 'POST', url: '/api/workflows', payload: hookWorkflow('wf-c', 'Holder', 'shared') });
+    await app.inject({ method: 'POST', url: '/api/workflows', payload: hookWorkflow('wf-d', 'Copy', 'shared', { enabled: false }) });
+    const res = await app.inject({ method: 'PUT', url: '/api/workflows/wf-d/enabled', payload: { enabled: true } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain('Holder');
+    expect((await ctx.workflows.store.get('wf-d')).enabled).toBe(false);
+  });
+
+  it('audits enable and disable, answers 404 for an unknown id and 400 for a bad body', async () => {
+    const { app, ctx } = setup();
+    await app.inject({ method: 'POST', url: '/api/workflows', payload: hookWorkflow('wf-e', 'E', 'e-path') });
+    await app.inject({ method: 'PUT', url: '/api/workflows/wf-e/enabled', payload: { enabled: false } });
+    await app.inject({ method: 'PUT', url: '/api/workflows/wf-e/enabled', payload: { enabled: true } });
+    expect(ctx.__auditEvents.map((e: any) => e.action)).toEqual(expect.arrayContaining(['workflow.disable', 'workflow.enable']));
+    expect((await app.inject({ method: 'PUT', url: '/api/workflows/nope/enabled', payload: { enabled: true } })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'PUT', url: '/api/workflows/wf-e/enabled', payload: { enabled: 'yes' } })).statusCode).toBe(400);
+  });
+});

@@ -2138,6 +2138,7 @@ export type { SyncHandle, SyncStatus, SyncDirectionStatus, SyncMode } from './sy
 export { migrateLegacySyncConfig } from './sync-settings-migrate';
 export { sealDefinitionSecrets, sealForSave, secretRefsOf, type SealedSave } from './workflow-secret-seal';
 export { duplicateWorkflow, newWorkflowId } from './workflow-duplicate';
+export { setWorkflowEnabled } from './workflow-enabled';
 export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
 export { importFacilities, resolveKnownNationalSystem } from './facility-import';

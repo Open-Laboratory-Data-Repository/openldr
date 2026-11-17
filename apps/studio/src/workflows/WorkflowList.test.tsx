@@ -11,7 +11,7 @@ vi.mock('@/auth/AuthProvider', () => ({ useAuth: () => ({ user: { id: 'me', user
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() }, Toaster: () => null }));
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, fetchWorkflows: vi.fn(), createWorkflow: vi.fn(), updateWorkflow: vi.fn(), duplicateWorkflow: vi.fn(), deleteWorkflow: vi.fn(), resetWorkflow: vi.fn() };
+  return { ...actual, fetchWorkflows: vi.fn(), createWorkflow: vi.fn(), setWorkflowEnabled: vi.fn(), duplicateWorkflow: vi.fn(), deleteWorkflow: vi.fn(), resetWorkflow: vi.fn() };
 });
 import { toast } from 'sonner';
 import * as api from '@/api';
@@ -61,26 +61,23 @@ describe('WorkflowList', () => {
     expect(api.createWorkflow).not.toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith('Duplicated AMR sync. The copy is disabled. Change its webhook path, then choose Enable in its menu.');
   });
-  it('disables an enabled workflow from its row menu, keeping everything else', async () => {
-    (api.fetchWorkflows as any).mockResolvedValue([wf({ description: 'Nightly', definition: { nodes: [{ id: 'n1' }], edges: [] } })]);
-    (api.updateWorkflow as any).mockResolvedValue(wf({ enabled: false }));
+  it('disables an enabled workflow from its row menu, sending only the on/off state', async () => {
+    (api.setWorkflowEnabled as any).mockResolvedValue(wf({ enabled: false }));
     render(<MemoryRouter><WorkflowList /></MemoryRouter>);
     await screen.findByText('AMR sync');
     fireEvent.click(await openMenuItem(/actions for amr sync/i, 'toggle-wf_1'));
-    await waitFor(() => expect(api.updateWorkflow).toHaveBeenCalledWith('wf_1', expect.objectContaining({
-      id: 'wf_1', name: 'AMR sync', description: 'Nightly', enabled: false, definition: { nodes: [{ id: 'n1' }], edges: [] },
-    })));
+    await waitFor(() => expect(api.setWorkflowEnabled).toHaveBeenCalledWith('wf_1', false));
   });
 
   it('enables a disabled workflow, and shows the server reason when it is refused', async () => {
     (api.fetchWorkflows as any).mockResolvedValue([wf({ enabled: false })]);
-    (api.updateWorkflow as any).mockRejectedValue(new Error('webhook path samples is already used by Samples'));
+    (api.setWorkflowEnabled as any).mockRejectedValue(new Error('webhook path samples is already used by Samples'));
     render(<MemoryRouter><WorkflowList /></MemoryRouter>);
     await screen.findByText('AMR sync');
     const item = await openMenuItem(/actions for amr sync/i, 'toggle-wf_1');
     expect(item.textContent).toBe('Enable');
     fireEvent.click(item);
-    await waitFor(() => expect(api.updateWorkflow).toHaveBeenCalledWith('wf_1', expect.objectContaining({ enabled: true })));
+    await waitFor(() => expect(api.setWorkflowEnabled).toHaveBeenCalledWith('wf_1', true));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Enable failed: webhook path samples is already used by Samples'));
   });
 

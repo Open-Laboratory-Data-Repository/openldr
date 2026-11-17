@@ -3129,7 +3129,9 @@ export async function fetchWorkflow(id: string): Promise<Workflow> {
   return res.json() as Promise<Workflow>;
 }
 
-export async function createWorkflow(body: Omit<Workflow, 'createdAt' | 'updatedAt'>): Promise<Workflow> {
+export async function createWorkflow(
+  body: Omit<Workflow, 'createdAt' | 'updatedAt' | 'enabled' | 'description'> & Partial<Pick<Workflow, 'enabled' | 'description'>>,
+): Promise<Workflow> {
   const res = await authFetch('/api/workflows', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   });
@@ -3143,11 +3145,27 @@ export async function duplicateWorkflow(id: string): Promise<Workflow> {
     .then((r) => okJson<Workflow>(r, 'duplicate workflow'));
 }
 
-export async function updateWorkflow(id: string, body: Omit<Workflow, 'createdAt' | 'updatedAt'>): Promise<Workflow> {
+/**
+ * Save a workflow. `enabled` and `description` may be left out: the server then keeps the stored
+ * ones. The editor leaves them out, so its Save never turns a workflow on (review C7-1).
+ */
+export async function updateWorkflow(
+  id: string,
+  body: Omit<Workflow, 'createdAt' | 'updatedAt' | 'enabled' | 'description'> & Partial<Pick<Workflow, 'enabled' | 'description'>>,
+): Promise<Workflow> {
   const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}`, {
     method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   });
   return okJson<Workflow>(res, 'update workflow');
+}
+
+/** Turn a workflow on or off and change nothing else. Enabling is refused (409) when another
+ *  enabled workflow uses its webhook path; the message names it. */
+export async function setWorkflowEnabled(id: string, enabled: boolean): Promise<Workflow> {
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}/enabled`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled }),
+  });
+  return okJson<Workflow>(res, enabled ? 'enable workflow' : 'disable workflow');
 }
 
 export async function deleteWorkflow(id: string): Promise<void> {

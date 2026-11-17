@@ -499,6 +499,10 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // which the view key guards (GET /api/workflows/:id, workflows-routes.ts:236). The file is read on the server.
   'workflows map-test': { kind: 'app', capability: 'workflows.edit', alsoRequires: ['workflows.view'], paths: [inFile('file')] },
   // workflows-routes.ts:144 (GET /api/workflows/:id/receipts :468 and /:requestId :479).
+  // Enable and Disable in the studio row menu: PUT /api/workflows/:id/enabled, guard EDIT
+  // (workflows-routes.ts). Only `enabled` changes; nothing is removed, so not destructive.
+  'workflows enable': { kind: 'app', capability: 'workflows.edit' },
+  'workflows disable': { kind: 'app', capability: 'workflows.edit' },
   'workflows receipts list': { kind: 'app', capability: 'workflows.view' },
   'workflows receipts show': { kind: 'app', capability: 'workflows.view' },
 });

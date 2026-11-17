@@ -244,6 +244,8 @@ const REASON: Record<string, string> = {
 const NOT_A_PATH: Record<string, string[]> = {
   'workflows receipts list': ['workflowId', '--limit', '--offset'],
   'workflows receipts show': ['requestId'],
+  'workflows enable': ['workflowId'],
+  'workflows disable': ['workflowId'],
   'workflows map-test': ['workflowId', 'nodeId'],
   'connectors inspect': ['id'],
   'connectors update': ['id'],

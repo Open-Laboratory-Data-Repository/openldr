@@ -31,11 +31,6 @@ interface WorkflowState {
   configNodeId: string | null;
   workflowName: string;
   workflowId: string | null;
-  /**
-   * The loaded workflow's description and on/off state. Save sends them back unchanged, so saving
-   * never turns a workflow on or wipes its description. A new workflow has none and starts on.
-   */
-  workflowMeta: { description: string | null; enabled: boolean };
 
   /** Per-node execution status, keyed by node id. Missing = 'idle'. */
   nodeRunStatus: Record<string, NodeRunStatus>;
@@ -78,7 +73,6 @@ interface WorkflowState {
   setSelectedNode: (id: string | null) => void;
   setConfigNode: (id: string | null) => void;
   setWorkflowName: (name: string) => void;
-  setWorkflowMeta: (meta: { description: string | null; enabled: boolean }) => void;
   setWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[]) => void;
   /** Full reset — wipes the canvas AND the workflow identity (id + name). Used when
    *  starting a brand-new workflow (the /workflows/new load path). */
@@ -104,7 +98,6 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   configNodeId: null,
   workflowName: 'Untitled workflow',
   workflowId: null,
-  workflowMeta: { description: null, enabled: true },
   nodeRunStatus: {},
   nodeRunError: {},
   nodeLogs: {},
@@ -168,10 +161,6 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set({ workflowName: name });
   },
 
-  setWorkflowMeta: (meta) => {
-    set({ workflowMeta: meta });
-  },
-
   setWorkflow: (id, name, nodes, edges) => {
     set({ workflowId: id, workflowName: name, nodes, edges, loadSeq: get().loadSeq + 1 });
   },
@@ -185,8 +174,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       configNodeId: null,
       workflowName: '', // empty → the name field shows its placeholder; save falls back to a default
       workflowId: null,
-      workflowMeta: { description: null, enabled: true },
-      nodeRunStatus: {},
+          nodeRunStatus: {},
       nodeRunError: {},
       nodeLogs: {},
       nodeRunInput: {},

@@ -1,7 +1,7 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z, ZodError } from 'zod';
-import { sealForSave, secretRefsOf, duplicateWorkflow, newWorkflowId, MAP_TEST_MAX_ITEMS, MapConfigError, type AppContext } from '@openldr/bootstrap';
+import { sealForSave, secretRefsOf, duplicateWorkflow, newWorkflowId, setWorkflowEnabled, MAP_TEST_MAX_ITEMS, MapConfigError, type AppContext } from '@openldr/bootstrap';
 import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, isSecretRef } from '@openldr/workflows';
 import { ConfigError, appError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
@@ -291,7 +291,14 @@ export function registerWorkflowRoutes(
     const { id } = req.params as { id: string };
     try {
       const before = await ctx.workflows.store.get(id);
-      const parsed = WorkflowSchema.parse(req.body);
+      // The editor's Save sends the graph and name only. A field it leaves out keeps its stored
+      // value, so a page opened before Disable never turns the workflow back on (review C7-1).
+      const raw = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = WorkflowSchema.parse({
+        ...raw,
+        enabled: Object.hasOwn(raw, 'enabled') ? raw.enabled : (before?.enabled ?? true),
+        description: Object.hasOwn(raw, 'description') ? raw.description : (before?.description ?? null),
+      });
       const clash = await pathClash(ctx, { ...parsed, id });
       if (clash) return reply.code(409).send({ error: clash });
       // SEC-06: the workflow's OWN id (the :id param, which store.update forces onto
@@ -308,6 +315,25 @@ export function registerWorkflowRoutes(
       void ctx.workflows.listeners.reconcile().catch((err) => ctx.logger.warn({ err }, 'listener reconcile failed'));
       await recordAudit(ctx, req, { action: 'workflow.update', entityType: 'workflow', entityId: id, before, after: updated });
       return updated;
+    } catch (err) { return mapError(err, reply); }
+  });
+
+  // On or off, and nothing else (workflow-enabled.ts). The CLI's `workflows enable|disable` calls
+  // the same function.
+  app.put('/api/workflows/:id/enabled', EDIT, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
+      const changed = await setWorkflowEnabled(ctx.workflows.store, id, enabled);
+      if (!changed) return reply.code(404).send({ error: `unknown workflow: ${id}` });
+      await syncWorkflowTriggers(ctx, changed.after);
+      ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
+      ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
+      void ctx.workflows.listeners.reconcile().catch((err) => ctx.logger.warn({ err }, 'listener reconcile failed'));
+      await recordAudit(ctx, req, {
+        action: enabled ? 'workflow.enable' : 'workflow.disable', entityType: 'workflow', entityId: id, before: changed.before, after: changed.after,
+      });
+      return changed.after;
     } catch (err) { return mapError(err, reply); }
   });
 

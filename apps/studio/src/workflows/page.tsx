@@ -31,7 +31,6 @@ export function Workflows() {
 
   const { id } = useParams();
   const setWorkflow = useWorkflowStore((s) => s.setWorkflow);
-  const setWorkflowMeta = useWorkflowStore((s) => s.setWorkflowMeta);
   const clear = useWorkflowStore((s) => s.clear);
   const setConfigNode = useWorkflowStore((s) => s.setConfigNode);
 
@@ -53,12 +52,11 @@ export function Workflows() {
       .then((w) => {
         if (!active) return;
         setWorkflow(w.id, w.name, w.definition.nodes as WorkflowNode[], w.definition.edges as WorkflowEdge[]);
-        setWorkflowMeta({ description: w.description, enabled: w.enabled });
         setIsProtected(w.protected === true);
       })
       .catch(() => { /* missing id leaves a blank builder; save will create one */ });
     return () => { active = false; };
-  }, [id, setWorkflow, setWorkflowMeta, clear]);
+  }, [id, setWorkflow, clear]);
 
   // Protected workflows carry form capture AND automated ingest. A broken edit stops
   // clerks saving data, so make the operator acknowledge it rather than discover it.
