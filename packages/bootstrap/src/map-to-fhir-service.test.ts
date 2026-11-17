@@ -28,7 +28,8 @@ const formSchema: FormSchema = {
 
 const PACKS = seededStarterPacks().map((p) => ({ id: p.id, resourceType: p.resourceType, entries: p.entries }));
 
-const row = { pat_no: 'T-0001', collected: '2026-11-03T08:30:00Z', test_a: 'TA' };
+// A result too: a test with no result gives no result record (ruling of 2026-11-17).
+const row = { pat_no: 'T-0001', collected: '2026-11-03T08:30:00Z', test_a: 'TA', result_a: '12.5' };
 const mapping: SavedMapping = {
   shapeHash: shapeOf(row).hash,
   fieldNames: Object.keys(row).sort(),
@@ -37,6 +38,7 @@ const mapping: SavedMapping = {
     { targetPath: 'Patient.identifier.value', from: { field: 'pat_no' } },
     { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'collected' } },
     { targetPath: 'Observation.code', from: { field: 'test_a' }, rule: { kind: 'codeList', conceptMapUrl: 'urn:test:map' } },
+    { targetPath: 'Observation.valueQuantity.value', from: { field: 'result_a' } },
   ],
 };
 
@@ -800,5 +802,23 @@ describe('notes on what a mapped row held that was not stored', () => {
     expect(res.meta.mapped).toBe(2);
     expect(res.meta.notes).toEqual(['culture: holds nested data no mapping reads, so it was not stored']);
     expect(JSON.stringify(res.meta)).not.toContain('coli');
+  });
+});
+
+describe('one result value per result record', () => {
+  it('holds a row that fills both the number and the text for one test, with a fixed reason and no value', async () => {
+    const both = { ...row, text_a: 'see note' };
+    const m: SavedMapping = {
+      ...mapping,
+      shapeHash: shapeOf(both).hash,
+      fieldNames: Object.keys(both).sort(),
+      rows: [...mapping.rows, { targetPath: 'Observation.valueString', from: { field: 'text_a' } }],
+    };
+    const res = await createMapToFhirService(deps())({ items: [{ json: both }], config: { ...config, mappings: [m] } });
+    expect(res.out).toEqual([]);
+    expect(res.meta.held).toBe(1);
+    const reason = String(res.meta.heldReasons[0]);
+    expect(reason).toBe('record 4 (Observation) valueString: holds more than one result value');
+    expect(reason).not.toContain('see note');
   });
 });

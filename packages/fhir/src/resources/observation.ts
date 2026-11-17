@@ -3,6 +3,17 @@ import { fhirId, fhirDateTime, fhirInstant, fhirString } from '../datatypes/prim
 import { Identifier, CodeableConcept, Reference, Quantity, Meta } from '../datatypes/complex';
 import { registerResource } from '../registry';
 
+/**
+ * FHIR's value[x]: an Observation, and each component, holds at most one result value. Two, such as
+ * valueString beside valueQuantity, contradict each other. The message names the fields, never a value.
+ */
+function oneValue(o: Record<string, unknown>, ctx: z.RefinementCtx): void {
+  const values = Object.keys(o).filter((k) => /^value[A-Z]/.test(k) && o[k] !== undefined).sort();
+  if (values.length > 1) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [values[1]], message: `holds more than one result value: ${values.join(', ')}. FHIR allows one.` });
+  }
+}
+
 const ObservationComponent = z
   .object({
     code: CodeableConcept,
@@ -11,7 +22,8 @@ const ObservationComponent = z
     valueString: fhirString.optional(),
     interpretation: z.array(CodeableConcept).optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine(oneValue);
 
 export const Observation = z
   .object({
@@ -34,7 +46,8 @@ export const Observation = z
     specimen: Reference.optional(),
     component: z.array(ObservationComponent).optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine(oneValue);
 export type Observation = z.infer<typeof Observation>;
 
 registerResource('Observation', Observation);

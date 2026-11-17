@@ -162,8 +162,9 @@ describe('a fully mapped made-up row', () => {
     test_b: 'TB',
     num_a: '12.5',
     num_b: '7.1',
-    text_a: 'see note',
-    text_b: 'see note',
+    // Blank, so each test holds one result value: FHIR allows one, and a number is given.
+    text_a: '',
+    text_b: '',
     unit_a: 'u-a',
     unit_b: 'u-b',
     res_date_a: '2026-11-04',
@@ -504,11 +505,14 @@ describe('a file with one column per test', () => {
     expect(results(res).map((o) => o.valueString)).toEqual(['one', 'two', 'three']);
   });
 
-  it('keeps what a record with only fixed rows gives: one result for a fixed test', async () => {
+  it('gives no result for a fixed test with no result value, keeps it on the order, and notes it', async () => {
     const base = perColumn().slice(0, 2);
     const one = await applyMapping(mapping([...base, { targetPath: 'Observation.code', from: { fixed: 'AMP' } }]), target, wide, deps());
     if (!one.ok) throw new Error(one.reason);
-    expect(results(one)).toHaveLength(1);
+    expect(results(one)).toHaveLength(0);
+    const order = one.resources.find((r) => r.resourceType === 'ServiceRequest') as { code?: { coding?: { code: string }[] } };
+    expect(order.code?.coding?.map((c) => c.code)).toEqual(['AMP']);
+    expect(one.notes).toEqual(['Observation: no result in this row, so no result record was stored']);
   });
 
   it('fails a list of tests with no data row of the same length on the record, naming the test field', async () => {

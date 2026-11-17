@@ -15,6 +15,7 @@ const row = {
   panel: 'QZX-PANEL',
   test: 'QZX-TEST',
   flag: 'QZX-FLAG',
+  result: '12.5',
 };
 
 const mapping: SavedMapping = {
@@ -28,6 +29,7 @@ const mapping: SavedMapping = {
     { targetPath: 'ServiceRequest.code', from: { field: 'panel' } },
     { targetPath: 'Observation.code', from: { field: 'test' } },
     { targetPath: 'Observation.interpretation', from: { field: 'flag' } },
+    { targetPath: 'Observation.valueQuantity.value', from: { field: 'result' } },
   ],
 };
 

@@ -34,6 +34,11 @@ export interface MapTarget {
    * an id. For example the order's test codes from its results'.
    */
   derived?: { path: string; from: string }[];
+  /**
+   * Repeating record types made only when they hold a result value (a `value[x]`): a test whose
+   * result is blank gives no result record, and the run notes it. Its code still reaches `derived`.
+   */
+  needsValue?: string[];
 }
 
 // Only these characters are escaped, so a key stays readable: `Patient.name.given?use=official`.
@@ -102,6 +107,7 @@ export function buildTarget(
     extra?: MapTarget['fields'];
     required?: string[];
     derived?: MapTarget['derived'];
+    needsValue?: MapTarget['needsValue'];
   },
 ): MapTarget {
   const linkPaths = new Set(opts.links.map((l) => l.path));
@@ -166,6 +172,7 @@ export function buildTarget(
   return {
     id, name, records, links: opts.links, defaults: opts.defaults, fields, identity: opts.identity,
     ...(opts.derived ? { derived: opts.derived } : {}),
+    ...(opts.needsValue ? { needsValue: opts.needsValue } : {}),
   };
 }
 

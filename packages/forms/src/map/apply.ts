@@ -346,6 +346,9 @@ export async function applyMapping(
   }
 
   const repeated: Resource[] = [];
+  // Records left out for holding no result value. Their test codes still reach the order.
+  const withoutValue: Resource[] = [];
+  const needsValue = new Set(target.needsValue ?? []);
   for (const record of target.records) {
     if (!record.repeats) continue;
     const rows = rowsOf.get(record.type) ?? [];
@@ -389,6 +392,12 @@ export async function applyMapping(
       const resource: Resource = { resourceType: record.type, id: got.id };
       const f = fill(resource, rows, i);
       if (f) return f;
+      if (needsValue.has(record.type) && !Object.keys(resource).some((k) => /^value[A-Z]/.test(k))) {
+        withoutValue.push(resource);
+        const by = rows.find((x) => plainPath(x.row.targetPath).startsWith(`${record.type}.value`));
+        notes.add(`${by ? by.label : record.type}: no result in this row, so no result record was stored`);
+        continue;
+      }
       repeated.push(resource);
     }
   }
@@ -403,7 +412,7 @@ export async function applyMapping(
     const fromType = d.from.split('.')[0];
     const seen = new Set<string>();
     const codings: Coding[] = [];
-    for (const r of repeated) {
+    for (const r of [...repeated, ...withoutValue]) {
       if (r.resourceType !== fromType) continue;
       for (const c of codingsAt(r, d.from)) {
         const key = JSON.stringify([c.system ?? '', c.code]);

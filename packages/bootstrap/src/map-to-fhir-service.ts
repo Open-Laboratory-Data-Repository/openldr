@@ -121,6 +121,8 @@ export const KNOWN_ISSUE_TEXTS: readonly { text: string; prefix?: boolean }[] = 
   { text: 'invalid FHIR date' },
   { text: 'invalid FHIR dateTime' },
   { text: 'invalid FHIR instant' },
+  // The one-value rule on Observation (`resources/observation.ts`). The fields it lists are dropped.
+  { text: 'holds more than one result value', prefix: true },
 ];
 
 function issueText(issue: OperationOutcomeIssue): string {

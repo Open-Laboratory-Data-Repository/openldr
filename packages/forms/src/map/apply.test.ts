@@ -588,3 +588,50 @@ describe('nested data no mapping reads', () => {
     expect(res.ok && res.notes).toBeUndefined();
   });
 });
+
+describe('a blank result gives no result record', () => {
+  const needs: MapTarget = {
+    ...target,
+    needsValue: ['Observation'],
+    derived: [{ path: 'ServiceRequest.code', from: 'Observation.code' }],
+  };
+  const rows: FieldMapping[] = [
+    ...baseRows,
+    { targetPath: 'Observation.code', from: { fields: ['test_a', 'test_b'] } },
+    { targetPath: 'Observation.valueQuantity.value', from: { fields: ['result_a', 'result_b'] }, rule: { kind: 'number', decimal: ',' } },
+  ];
+  const typesOf = (res: Awaited<ReturnType<typeof applyMapping>>) => (res.ok ? res.resources.map((r) => r.resourceType) : res.reason);
+
+  it.each([['an empty text', ''], ['a null', null], ['a missing key', undefined]])('makes no Observation for %s, and notes it', async (_, blank) => {
+    const r: Record<string, unknown> = { ...row, result_b: blank };
+    if (blank === undefined) delete r.result_b;
+    const res = await applyMapping(mapping(rows), needs, r, deps());
+    expect(typesOf(res)).toEqual(['Patient', 'Specimen', 'ServiceRequest', 'Observation']);
+    expect(res.ok && res.notes).toEqual(['Result: no result in this row, so no result record was stored']);
+  });
+
+  it('keeps the blank test on the order, through its derived test codes', async () => {
+    const res = await applyMapping(mapping(rows), needs, { ...row, result_b: '' }, deps());
+    if (!res.ok) throw new Error(res.reason);
+    const order = res.resources.find((r) => r.resourceType === 'ServiceRequest') as ServiceRequest;
+    expect(order.code?.coding?.map((c) => c.code)).toEqual(['TA', 'TB']);
+  });
+
+  it('keeps a zero', async () => {
+    const res = await applyMapping(mapping(rows), needs, { ...row, result_b: '0' }, deps());
+    if (!res.ok) throw new Error(res.reason);
+    const values = res.resources.filter((r) => r.resourceType === 'Observation').map((o) => (o as Observation).valueQuantity?.value);
+    expect(values).toEqual([12.5, 0]);
+    expect(res.notes).toBeUndefined();
+  });
+
+  it('makes no Observation when every result is blank, and still stores the patient, specimen and order', async () => {
+    const res = await applyMapping(mapping(rows), needs, { ...row, result_a: '', result_b: '' }, deps());
+    expect(typesOf(res)).toEqual(['Patient', 'Specimen', 'ServiceRequest']);
+  });
+
+  it('leaves a target without needsValue as before', async () => {
+    const res = await applyMapping(mapping(rows), target, { ...row, result_b: '' }, deps());
+    expect(typesOf(res)).toEqual(['Patient', 'Specimen', 'ServiceRequest', 'Observation', 'Observation']);
+  });
+});

@@ -78,6 +78,9 @@ const LAB_RESULT_IDENTITY: MapTarget['identity'] = [
 // a panel code. A mapped Tests field always wins.
 const LAB_RESULT_DERIVED: MapTarget['derived'] = [{ path: 'ServiceRequest.code', from: 'Observation.code' }];
 
+// A blank result gives no result record (operator ruling, 2026-11-17). The order keeps the test.
+const LAB_RESULT_NEEDS_VALUE: MapTarget['needsValue'] = ['Observation'];
+
 function localise(target: MapTarget, locale: string): MapTarget {
   const labels = LABELS[locale];
   if (!labels) return target;
@@ -98,6 +101,7 @@ export function labResultTarget(packs: readonly MapTargetPack[], locale = 'en'):
     extra: LAB_RESULT_EXTRA,
     required: LAB_RESULT_REQUIRED,
     derived: LAB_RESULT_DERIVED,
+    needsValue: LAB_RESULT_NEEDS_VALUE,
   });
   return localise(target, locale);
 }
