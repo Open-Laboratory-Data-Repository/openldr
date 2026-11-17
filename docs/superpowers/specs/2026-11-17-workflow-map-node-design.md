@@ -209,6 +209,14 @@ The default Ingest workflow's fork becomes one Map to FHIR node feeding Persist 
     result target marks the patient identifier required.
   - A target declares each record's identity, as it declares its links. The mapping core knows no
     resource type.
+- **The Lab result target has its own short required list** (the operator, 2026-11-17: "Short
+  list"). Required: Patient ID, date collected, test. Everything else is optional, including first
+  name, last name, date of birth, sex and priority. The starter packs keep their own required
+  flags for forms. Only the target overrides them. With no test code on the order itself, the
+  order's id comes from the specimen alone.
+- **Mapped results carry the laboratory category** (the operator, 2026-11-17: "Mark as
+  laboratory"). It is a default of the target, kept beside the status defaults, not a literal in
+  handler code. So the rule "a lab result must link to an order" runs on every mapped result.
 - **Starter pack labels are English only.** The Lab result target takes its fr and pt labels from
   two content files keyed by target field.
 - **A loop body that ends in the Map node loses its `held` items.** A loop collects each
