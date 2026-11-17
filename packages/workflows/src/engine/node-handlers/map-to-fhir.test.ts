@@ -196,4 +196,35 @@ describe('Map to FHIR inside a loop', () => {
     expect(res.status).toBe('completed');
     expect(res.results.find((r) => r.nodeId === 'loop')?.meta).toMatchObject({ iterations: 3, bodyCounts: { mapped: 1, held: 2 } });
   });
+
+  it('keeps the counts of the passes that ran when a later pass fails', async () => {
+    const svc = fakeService();
+    const once = svc.getMockImplementation()!;
+    let calls = 0;
+    svc.mockImplementation(async (input) => {
+      calls += 1;
+      if (calls === 2) throw new Error('mapping service down');
+      return once(input);
+    });
+    const nodes = [
+      { id: 't', type: 'trigger', data: {} },
+      { id: 'loop', type: 'loop', data: { loopMode: 'items', batchSize: 1 } },
+      { id: 'm', type: 'action', data: { action: 'map-to-fhir', config: { targetId: 't1', formIds: [], mappings: [] } } },
+      { id: 'h', type: 'action', data: { action: 'no-op' } },
+    ];
+    const edges = [
+      { id: 'e0', source: 't', target: 'loop' },
+      { id: 'e1', source: 'loop', target: 'm', sourceHandle: 'loop' },
+      { id: 'e2', source: 'm', target: 'h', sourceHandle: 'held' },
+    ];
+    const res = await runWorkflow(nodes, edges, {
+      input: [{ json: { other: 1 } }, { json: { other: 2 } }, { json: { other: 3 } }],
+      services: { mapToFhir: svc } as unknown as WorkflowServices,
+    });
+    expect(res.status).toBe('failed');
+    const loop = res.results.find((r) => r.nodeId === 'loop');
+    expect(loop?.status).toBe('error');
+    // Pass 1 held its row; pass 2 failed; pass 3 never ran.
+    expect(loop?.meta).toEqual({ iterations: 3, bodyCounts: { mapped: 0, held: 1 } });
+  });
 });

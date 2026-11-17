@@ -758,3 +758,21 @@ three rows (one mapped, two held) gives `bodyCounts { mapped: 1, held: 2 }`; the
 loop's body. Both failed before the change.
 C3-2: the guides now say Completed means no step failed, and a step that did not run shows as
 skipped. They also say rows held inside a loop count.
+
+### Codex, 2026-11-17: second chunk 3 review (relayed by Claude)
+
+6 review checks: 1 confirmed, 3 refuted, 2 convention-conflict, 0 deferred. Reviewed `e23ec282..1f4be824`.
+C3-1, C3-2 and C3-9 (nested loops: replay gave mapped 2, held 4, as expected) refuted.
+C3-8 CONFIRMED: a later failed pass drops the counts of earlier passes (`run-workflow.ts:342-344`
+throws before the counts reach the loop's meta). C3-6 and C3-7 stay recorded follow-ups.
+
+### Operator, 2026-11-17 (relayed by Claude)
+
+C3-8: "Keep partial counts". Count every pass that ran, including the failed one.
+
+### Claude, 2026-11-17: response
+
+C3-8 fixed: each pass's results are counted before the failure check, and the loop stores its
+counts before every throw. Test: pass 1 holds a row, pass 2's mapping throws; the failed loop step
+has `{ iterations: 3, bodyCounts: { mapped: 0, held: 1 } }`. It failed before the fix.
+`iterations` stays the number of planned passes. The in-app guide says a later failed pass keeps the counts.

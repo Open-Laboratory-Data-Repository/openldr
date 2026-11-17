@@ -317,6 +317,10 @@ async function executeLoopNode(
   // Each pass is its own run, whose step results are not kept. What its steps mapped, held and
   // persisted is summed here, so the run still shows rows held inside the loop.
   const bodyCounts: OutcomeCounts = {};
+  // Stored before any throw too, so a failed loop still shows what its earlier passes did.
+  const keepCounts = () => {
+    if (Object.keys(bodyCounts).length > 0) ctx.nodeMeta[node.id] = { iterations: plan.length, bodyCounts };
+  };
   for (const { index, item, batch } of plan) {
     // NOTE: each iteration re-runs topologicalSort + the loop pre-pass on iterNodes
     // (O(body) per iteration). Acceptable for MVP; revisit if very large bodies with
@@ -339,17 +343,20 @@ async function executeLoopNode(
         ctx.emit(e);
       },
     });
+    // A failed pass's steps count too: they ran up to the failure.
+    outcomeCounts(result.results, bodyCounts);
     if (result.status === 'failed') {
+      keepCounts();
       const failed = result.results.find((r) => r.status === 'error');
       throw new Error(`Loop: iteration ${index} failed: ${failed?.error ?? 'unknown error'}`);
     }
-    outcomeCounts(result.results, bodyCounts);
     const iterationItems = extractTerminalItems(bodyEdges, result.results);
     if (accumulated.length + iterationItems.length > ctx.loopMaxItems) {
+      keepCounts();
       throw new Error(`Loop: accumulated items exceeded the limit (${ctx.loopMaxItems})`);
     }
     accumulated.push(...iterationItems);
   }
-  if (Object.keys(bodyCounts).length > 0) ctx.nodeMeta[node.id] = { iterations: plan.length, bodyCounts };
+  keepCounts();
   return accumulated;
 }
