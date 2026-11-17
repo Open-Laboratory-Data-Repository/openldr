@@ -291,7 +291,8 @@ describe('MapToFhirSheet', () => {
     fireEvent.change(sourceSelect('Sex'), { target: { value: 'sex' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Sex' }), { target: { value: 'values' } });
     fireEvent.change(await screen.findByRole('textbox', { name: 'From 1: Sex' }), { target: { value: 'm' } });
-    fireEvent.change(screen.getByRole('textbox', { name: 'To 1: Sex' }), { target: { value: 'male' } });
+    // Sex has no value set, so To picks from FHIR's own list, a plain code.
+    fireEvent.change(screen.getByRole('combobox', { name: 'To 1: Sex' }), { target: { value: '|male' } });
     fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Test' }), { target: { value: 'codeList' } });
     const list = (await screen.findByRole('combobox', { name: 'Code list: Test' })) as HTMLSelectElement;
@@ -504,15 +505,15 @@ describe('MapToFhirSheet rule suggestions, status and results', () => {
     expect((await screen.findByRole('textbox', { name: 'From 1: Sex' }) as HTMLInputElement).value).toBe('QZX-2');
     expect((screen.getByRole('textbox', { name: 'From 2: Sex' }) as HTMLInputElement).value).toBe('QZX-5');
     expect(screen.queryByRole('textbox', { name: 'From 3: Sex' })).toBeNull();
-    // The field has a value set, so To picks from its codes, and starts empty.
+    // To picks from the field's codes, and starts empty.
     const to1 = (await screen.findByRole('combobox', { name: 'To 1: Sex' })) as HTMLSelectElement;
     expect(to1.value).toBe('');
-    fireEvent.change(to1, { target: { value: 'urn:test:sys|female' } });
+    fireEvent.change(to1, { target: { value: '|female' } });
     openMenuAndClick('Save');
     const config = update.mock.calls[0][0].config;
     const gender = config.mappings[0].rows.find((r: { targetPath: string }) => r.targetPath === 'Patient.gender');
-    // The code is saved with its system, so a coded field keeps it.
-    expect(gender.rule).toEqual({ kind: 'values', map: { 'QZX-2': { system: 'urn:test:sys', code: 'female' } } });
+    // Sex is a code field with no value set: its To comes from FHIR's own list, a plain code.
+    expect(gender.rule).toEqual({ kind: 'values', map: { 'QZX-2': 'female' } });
     expect(JSON.stringify(config)).not.toContain('QZX-5');
   });
 
@@ -915,9 +916,12 @@ describe('MapToFhirSheet Excel dates and coded values', () => {
     expect(screen.queryByRole('textbox', { name: 'Format: Date of birth' })).toBeNull();
   });
 
-  it('gives Sex its FHIR list: the sample values on From, a code picker on To, and the code a value names picked', async () => {
-    // Sex has no value set of its own. Its FHIR binding takes a whole code system, so nothing is
-    // stored and the codes come from the live expansion, as the forms read them.
+  it('reads a value set with no stored codes from its live expansion: the sample values on From, a code picker on To, and the code a value names picked', async () => {
+    // A value set that takes a whole code system keeps no stored codes, so the codes come from
+    // the live expansion, as the forms read them. (Sex with no value set uses FHIR's own list.)
+    m(api.fetchMapTargets).mockResolvedValue([
+      { ...TEST_TARGET, fields: TEST_TARGET.fields.map((f) => (f.path === 'Patient.gender' ? { ...f, valueSet: 'urn:test:g-vs' } : f)) },
+    ]);
     m(api.findValueSetByUrl).mockImplementation(async (url: string) => ({ id: 'vs-g', url }));
     m(api.storedValueSetCodes).mockResolvedValue([]);
     m(api.expandValueSetByUrl).mockResolvedValue([
@@ -952,6 +956,9 @@ describe('MapToFhirSheet Excel dates and coded values', () => {
 
 describe('MapToFhirSheet preselected codes on a Values rule picked by hand', () => {
   beforeEach(() => {
+    m(api.fetchMapTargets).mockResolvedValue([
+      { ...TEST_TARGET, fields: TEST_TARGET.fields.map((f) => (f.path === 'Patient.gender' ? { ...f, valueSet: 'urn:test:vs' } : f)) },
+    ]);
     m(api.findValueSetByUrl).mockImplementation(async (url: string) => ({ id: 'vs-g', url }));
     m(api.storedValueSetCodes).mockResolvedValue([
       { system: 'urn:test:g', code: 'male', display: 'QZX-9' },
@@ -1069,5 +1076,28 @@ describe('MapToFhirSheet column list keys', () => {
     await openPicker();
     expect(screen.getByRole('button', { name: 'Close column list' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Close' })).toHaveLength(1);
+  });
+});
+
+describe('MapToFhirSheet Sex picks from FHIR\'s own list', () => {
+  it('offers the codes of the path table\'s label for a code field with no value set, and saves a plain code', async () => {
+    // No value set is held for Sex, and the live expansion gives nothing.
+    m(api.findValueSetByUrl).mockResolvedValue(null);
+    setRun([{ pid: 'QZX-1', t: 'QZX-2', sx: 'M' }]);
+    const { update } = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pid' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 't' } });
+    fireEvent.change(sourceSelect('Sex'), { target: { value: 'sx' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Sex' }), { target: { value: 'values' } });
+    expect((screen.getByRole('textbox', { name: 'From 1: Sex' }) as HTMLInputElement).value).toBe('M');
+    const to = screen.getByRole('combobox', { name: 'To 1: Sex' }) as HTMLSelectElement;
+    expect([...to.options].map((o) => o.textContent).filter((x) => x !== '-')).toEqual(['male', 'female', 'other', 'unknown']);
+    // "M" is not "male", so nothing is picked for the person.
+    expect(to.value).toBe('');
+    fireEvent.change(to, { target: { value: [...to.options].find((o) => o.textContent === 'male')!.value } });
+    openMenuAndClick('Save');
+    const gender = update.mock.calls[0][0].config.mappings[0].rows.find((r: { targetPath: string }) => r.targetPath === 'Patient.gender');
+    expect(gender.rule).toEqual({ kind: 'values', map: { M: 'male' } });
   });
 });

@@ -40,6 +40,7 @@ export function RuleInputs({
   rule,
   label,
   valueSet,
+  fhirCodes = null,
   codeLists,
   onChange,
 }: {
@@ -47,6 +48,8 @@ export function RuleInputs({
   label: string;
   /** The target field's value set URL: the "to" of a values rule picks from its codes. */
   valueSet: string | null;
+  /** FHIR's own list for a code field with no value set. When given, To picks from it instead. */
+  fhirCodes?: ExpandedCode[] | null;
   codeLists: CodeListsState;
   onChange: (r: RuleDraft) => void;
 }) {
@@ -189,7 +192,7 @@ export function RuleInputs({
         </div>
       );
     case 'values':
-      return <ValuesInputs rule={rule} label={label} valueSet={valueSet} onChange={onChange} />;
+      return <ValuesInputs rule={rule} label={label} valueSet={valueSet} fhirCodes={fhirCodes} onChange={onChange} />;
   }
 }
 
@@ -221,15 +224,18 @@ function ValuesInputs({
   rule,
   label,
   valueSet,
+  fhirCodes,
   onChange,
 }: {
   rule: Extract<RuleDraft, { kind: 'values' }>;
   label: string;
   valueSet: string | null;
+  fhirCodes: ExpandedCode[] | null;
   onChange: (r: RuleDraft) => void;
 }) {
   const { t } = useTranslation();
-  const codes = useValueSetCodes(valueSet);
+  const loaded = useValueSetCodes(fhirCodes ? null : valueSet);
+  const codes = fhirCodes ?? loaded;
   const setPair = (i: number, patch: Partial<{ from: string; to: string; system: string; suggested: boolean }>) =>
     onChange({ ...rule, pairs: rule.pairs.map((pr, j) => (j === i ? { ...pr, ...patch } : pr)) });
   const add = () => onChange({ ...rule, pairs: [...rule.pairs, { from: '', to: '' }] });
@@ -238,7 +244,7 @@ function ValuesInputs({
     onChange({ ...rule, pairs: pairs.length > 0 ? pairs : [{ from: '', to: '' }] });
   };
 
-  if (valueSet && codes === null) return <LoadingState label={t(`${P}.loadingCodes`)} className="h-9" />;
+  if (valueSet && codes === null && !fhirCodes) return <LoadingState label={t(`${P}.loadingCodes`)} className="h-9" />;
 
   return (
     <div className="flex flex-col gap-2 rounded-md bg-muted/40 px-3 py-2">

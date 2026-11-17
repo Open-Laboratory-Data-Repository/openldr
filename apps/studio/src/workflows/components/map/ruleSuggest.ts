@@ -1,6 +1,7 @@
 import { lookupBinding, lookupFhirPath } from '@openldr/fhir/paths';
 import { EXCEL_DATE_FORMAT, parseTargetPath } from '@openldr/forms/pure';
 import type { ExpandedCode } from '@/api';
+import { codeOptionsFromLabel } from '@/forms-builder/fhirTypeMap';
 import { hasSource, type RowDraft, type RuleDraft, type SampleRow, type ValuePair } from './rows';
 
 /**
@@ -39,6 +40,19 @@ export function codeListUrlOf(draft: RowDraft): string | null {
   const p = tablePath(draft.targetPath);
   const b = p ? lookupBinding(p) : null;
   return b && (b.strength === 'required' || b.strength === 'extensible') ? b.valueSet : null;
+}
+
+/**
+ * FHIR's own list for a `code` field with no value set, read from the path table's label (for
+ * `Patient.gender`, "male | female | other | unknown"), as the forms builder reads it. Plain codes,
+ * with no system, which is what a `code` field takes. Null when the label is not such a list.
+ */
+export function fhirListCodes(draft: RowDraft): ExpandedCode[] | null {
+  if (draft.valueSet || leafTypeOf(draft.targetPath) !== 'code') return null;
+  const p = tablePath(draft.targetPath);
+  const info = p ? lookupFhirPath(p) : null;
+  const options = info ? codeOptionsFromLabel(info.label) : null;
+  return options ? options.map((o) => ({ system: '', code: o.code, display: null })) : null;
 }
 
 /** The sample's values for a row's source columns, as text, blanks left out. */

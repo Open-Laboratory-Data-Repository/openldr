@@ -631,3 +631,23 @@ describe('a Values rule whose To is a code from a value set', () => {
     expect(byType('Specimen').type).toEqual({ coding: [{ system: 'urn:test:spec', code: 'bld' }] });
   });
 });
+
+describe('Sex mapped to a code from FHIR\'s own list', () => {
+  it('gives a Patient that passes validateResource', async () => {
+    const row = { pid: 'T-0501', coll: '2026-11-05', t: 'TA', sx: 'M' };
+    const rows: FieldMapping[] = [
+      { targetPath: 'Patient.identifier.value', from: { field: 'pid' } },
+      { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'coll' } },
+      { targetPath: 'Observation.code', from: { field: 't' } },
+      // A plain code, as the mapping panel saves a code picked from the path table's list.
+      { targetPath: 'Patient.gender', from: { field: 'sx' }, rule: { kind: 'values', map: { M: 'male' } } },
+    ];
+    const deps: ApplyDeps = { hashId: (parts) => parts.join('').replace(/[^A-Za-z0-9]/g, '').slice(0, 60) || 'x', translateCode: async () => null };
+    const res = await applyMapping({ shapeHash: 'h', fieldNames: Object.keys(row).sort(), targetId: target.id, rows }, target, row, deps);
+    if (!res.ok) throw new Error(res.reason);
+    const patient = res.resources.find((r) => r.resourceType === 'Patient')!;
+    expect((patient as { gender?: string }).gender).toBe('male');
+    const v = validateResource(patient);
+    expect(v.ok ? 'ok' : JSON.stringify(v.outcome)).toBe('ok');
+  });
+});

@@ -17,7 +17,7 @@ import { TestResults, type TestState } from './TestResults';
 import { classify, type SavedMapping } from '@openldr/forms/pure';
 import { buildMapping, columnTestPlans, hasSource, narrowerCount, testFieldsOf, unusedFields, withMapping, type BuildResult, type RowDraft, type RuleDraft } from './rows';
 import { useCodeLists, useCodeSets, useFeedsFromWebhook, useSuggestions } from './useMapHelpers';
-import { codeListUrlOf, suggestRuleFor, valueLinesFor, type RuleSuggestion } from './ruleSuggest';
+import { codeListUrlOf, fhirListCodes, suggestRuleFor, valueLinesFor, type RuleSuggestion } from './ruleSuggest';
 import { useMappingDraft } from './useMappingDraft';
 import { useSamples } from './useSamples';
 
@@ -58,14 +58,17 @@ export function MapToFhirSheet({
   const localCodeList = Array.isArray(codeLists) ? (codeLists.find((c) => c.local)?.url ?? null) : null;
   const codeUrlOf = (d: RowDraft) => (hasSource(d) && d.rule.kind === 'none' ? codeListUrlOf(d) : null);
   const codeSets = useCodeSets(drafts.map(codeUrlOf).filter((u): u is string => u !== null));
+  // A code field with no value set picks from FHIR's own list; any other from its value set.
   const codesOf = (d: RowDraft) => {
+    const own = fhirListCodes(d);
+    if (own) return own;
     const url = codeListUrlOf(d);
     return url ? (codeSets[url] ?? null) : null;
   };
   const ruleSuggestionOf = (d: RowDraft): RuleSuggestion | null => {
     if (!columns) return null;
     const url = codeUrlOf(d);
-    const codes = url ? (codeSets[url] ?? null) : null;
+    const codes = fhirListCodes(d) ?? (url ? (codeSets[url] ?? null) : null);
     return suggestRuleFor(d, columns.rows, codes ? new Set(codes.map((c) => c.code)) : null);
   };
   const describeRule = (r: RuleSuggestion) =>
@@ -301,7 +304,7 @@ export function MapToFhirSheet({
               }
               ruleInputs={
                 d.rule.kind === 'none' || d.rule.kind === 'trim' ? undefined : (
-                  <RuleInputs rule={d.rule} label={d.label} valueSet={codeListUrlOf(d)} codeLists={codeLists} onChange={(rule) => edit(i, { rule })} />
+                  <RuleInputs rule={d.rule} label={d.label} valueSet={codeListUrlOf(d)} fhirCodes={fhirListCodes(d)} codeLists={codeLists} onChange={(rule) => edit(i, { rule })} />
                 )
               }
               actions={
