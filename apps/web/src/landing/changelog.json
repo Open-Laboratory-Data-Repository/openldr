@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "90db503a",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The mapping sheet's Save stores the workflow, with a Mapping saved toast"
+        },
+        {
           "hash": "4c066a27",
           "type": "fix",
           "scope": "studio",
