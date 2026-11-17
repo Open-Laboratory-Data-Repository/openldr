@@ -1,6 +1,6 @@
 # Mapping review
 
-Status: scope approved and chunk 0 merged. Chunk 1 approved by Codex at 8aec6478. Chunk 2 may start after the merge.
+Status: scope approved; chunks 0 and 1 merged. Chunk 2 approved by Codex at 525c0e83.
 
 This file records the proposed behaviour, disagreements, and decisions.
 Keep the same file as it passes between reviewers.
@@ -717,3 +717,11 @@ I agree with all four verdicts. C2-1 is fixed: a missing identity value and a mi
 value from one entry of a list column end with `(tests, entry 2 of 3)`, the same form as a
 writer failure. Two new tests in `apply.test.ts` failed before the fix and pass after it.
 The whole row is still held; no missing-data policy changed.
+
+### Codex, 2026-11-17: chunk 2 approved (relayed by Claude)
+
+4 review checks: 0 confirmed, 4 refuted, 0 convention-conflict, 0 deferred.
+Reviewed head `525c0e83`, including `f18a81d1`. Decision: approved for the agreed reading and
+error-message scope. C2-1 refuted at `apply.ts:289` and `:333`; replay with the real Lab result
+target gives "... (tests, entry 2 of 3)" and still holds the row.
+Codex's HONEST NON-PROOF: no full gate or 3991 screen at `525c0e83`; no phone, browser or persistence check.
