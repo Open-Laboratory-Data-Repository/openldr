@@ -1,0 +1,233 @@
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { MoreHorizontal } from 'lucide-react';
+import { findValueSetByUrl, storedValueSetCodes, type ExpandedCode, type MapCodeList } from '@/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { LoadingState } from '@/components/ui/spinner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { emptyRule, RULE_KINDS, type RuleDraft, type RuleKind, type SplitTake } from './rows';
+
+const P = 'workflows.mapToFhir.rule';
+
+/** The rule kind for one row. Changing it starts that kind's inputs empty. */
+export function RuleKindSelect({ rule, label, onChange }: { rule: RuleDraft; label: string; onChange: (r: RuleDraft) => void }) {
+  const { t } = useTranslation();
+  return (
+    <Select value={rule.kind} onValueChange={(k) => onChange(emptyRule(k as RuleKind))}>
+      <SelectTrigger aria-label={`${t('workflows.mapToFhir.sheet.colRule')}: ${label}`} className="w-full min-w-0">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {RULE_KINDS.map((k) => (
+          <SelectItem key={k} value={k}>
+            {t(`${P}.kinds.${k}`)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+export type CodeListsState = MapCodeList[] | 'loading' | 'failed';
+
+/** The chosen rule's own inputs, label left and input right. Null for a rule with none. */
+export function RuleInputs({
+  rule,
+  label,
+  valueSet,
+  codeLists,
+  onChange,
+}: {
+  rule: RuleDraft;
+  label: string;
+  /** The target field's value set URL: the "to" of a values rule picks from its codes. */
+  valueSet: string | null;
+  codeLists: CodeListsState;
+  onChange: (r: RuleDraft) => void;
+}) {
+  const { t } = useTranslation();
+  const grid = 'grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 rounded-md bg-muted/40 px-3 py-2';
+  const named = (s: string) => `${s}: ${label}`;
+
+  switch (rule.kind) {
+    case 'none':
+    case 'trim':
+      return null;
+    case 'date':
+      return (
+        <div className={grid}>
+          <Label className="whitespace-nowrap">{t(`${P}.format`)}</Label>
+          <Input aria-label={named(t(`${P}.format`))} value={rule.format} placeholder="dd/MM/yyyy" onChange={(e) => onChange({ ...rule, format: e.target.value })} />
+          <span />
+          <p className="text-[11px] text-muted-foreground">{t(`${P}.formatHint`)}</p>
+        </div>
+      );
+    case 'number':
+      return (
+        <div className={grid}>
+          <Label className="whitespace-nowrap">{t(`${P}.decimal`)}</Label>
+          <Select value={rule.decimal} onValueChange={(v) => onChange({ ...rule, decimal: v as ',' | '.' })}>
+            <SelectTrigger aria-label={named(t(`${P}.decimal`))} className="w-full min-w-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value=",">{t(`${P}.decimalComma`)}</SelectItem>
+              <SelectItem value=".">{t(`${P}.decimalPoint`)}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      );
+    case 'split':
+      return (
+        <div className={grid}>
+          <Label className="whitespace-nowrap">{t(`${P}.splitBy`)}</Label>
+          <Input aria-label={named(t(`${P}.splitBy`))} value={rule.by} onChange={(e) => onChange({ ...rule, by: e.target.value })} />
+          <Label className="whitespace-nowrap">{t(`${P}.take`)}</Label>
+          <Select value={rule.take} onValueChange={(v) => onChange({ ...rule, take: v as SplitTake })}>
+            <SelectTrigger aria-label={named(t(`${P}.take`))} className="w-full min-w-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="first">{t(`${P}.takeFirst`)}</SelectItem>
+              <SelectItem value="last">{t(`${P}.takeLast`)}</SelectItem>
+              <SelectItem value="part">{t(`${P}.takePart`)}</SelectItem>
+            </SelectContent>
+          </Select>
+          {rule.take === 'part' && (
+            <>
+              <Label className="whitespace-nowrap">{t(`${P}.part`)}</Label>
+              <Input
+                aria-label={named(t(`${P}.part`))}
+                type="number"
+                min={1}
+                value={rule.part}
+                onChange={(e) => onChange({ ...rule, part: e.target.value })}
+              />
+            </>
+          )}
+        </div>
+      );
+    case 'codeList':
+      return (
+        <div className={grid}>
+          <Label className="whitespace-nowrap">{t(`${P}.codeList`)}</Label>
+          {codeLists === 'loading' ? (
+            <LoadingState label={t(`${P}.loadingCodeLists`)} className="h-9" />
+          ) : codeLists === 'failed' ? (
+            <p className="text-xs text-destructive">{t(`${P}.codeListsFailed`)}</p>
+          ) : codeLists.length === 0 ? (
+            <p className="text-xs text-muted-foreground">{t(`${P}.codeListsEmpty`)}</p>
+          ) : (
+            <Select value={rule.conceptMapUrl || undefined} onValueChange={(v) => onChange({ ...rule, conceptMapUrl: v })}>
+              <SelectTrigger aria-label={named(t(`${P}.codeList`))} className="w-full min-w-0">
+                <SelectValue placeholder={t(`${P}.codeListPlaceholder`)} />
+              </SelectTrigger>
+              <SelectContent>
+                {codeLists.map((c) => (
+                  <SelectItem key={c.url} value={c.url}>
+                    {c.local ? t(`${P}.localCodeList`) : c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Label className="whitespace-nowrap">{t(`${P}.sourceSystem`)}</Label>
+          <Input aria-label={named(t(`${P}.sourceSystem`))} value={rule.sourceSystem} onChange={(e) => onChange({ ...rule, sourceSystem: e.target.value })} />
+          <span />
+          <p className="text-[11px] text-muted-foreground">{t(`${P}.sourceSystemHint`)}</p>
+        </div>
+      );
+    case 'values':
+      return <ValuesInputs rule={rule} label={label} valueSet={valueSet} onChange={onChange} />;
+  }
+}
+
+/** The codes of a value set by URL, or null while they load, or [] when there are none. */
+function useValueSetCodes(url: string | null): ExpandedCode[] | null {
+  const [codes, setCodes] = useState<ExpandedCode[] | null>(url ? null : []);
+  useEffect(() => {
+    if (!url) {
+      setCodes([]);
+      return;
+    }
+    let live = true;
+    setCodes(null);
+    (async () => {
+      const held = await findValueSetByUrl(url);
+      const list = held ? await storedValueSetCodes(held.id) : [];
+      if (live) setCodes(list);
+    })().catch(() => live && setCodes([]));
+    return () => {
+      live = false;
+    };
+  }, [url]);
+  return codes;
+}
+
+/** Rows of "from" and "to". The person types each "from"; it is never filled from the sample. */
+function ValuesInputs({
+  rule,
+  label,
+  valueSet,
+  onChange,
+}: {
+  rule: Extract<RuleDraft, { kind: 'values' }>;
+  label: string;
+  valueSet: string | null;
+  onChange: (r: RuleDraft) => void;
+}) {
+  const { t } = useTranslation();
+  const codes = useValueSetCodes(valueSet);
+  const setPair = (i: number, patch: Partial<{ from: string; to: string }>) =>
+    onChange({ ...rule, pairs: rule.pairs.map((pr, j) => (j === i ? { ...pr, ...patch } : pr)) });
+  const add = () => onChange({ ...rule, pairs: [...rule.pairs, { from: '', to: '' }] });
+  const remove = (i: number) => {
+    const pairs = rule.pairs.filter((_, j) => j !== i);
+    onChange({ ...rule, pairs: pairs.length > 0 ? pairs : [{ from: '', to: '' }] });
+  };
+
+  if (valueSet && codes === null) return <LoadingState label={t(`${P}.loadingCodes`)} className="h-9" />;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md bg-muted/40 px-3 py-2">
+      {rule.pairs.map((pr, i) => (
+        <div key={i} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto]">
+          <Label className="whitespace-nowrap">{t(`${P}.from`)}</Label>
+          <Input aria-label={`${t(`${P}.from`)} ${i + 1}: ${label}`} value={pr.from} onChange={(e) => setPair(i, { from: e.target.value })} />
+          <span className="sm:hidden" />
+          <Label className="whitespace-nowrap">{t(`${P}.to`)}</Label>
+          {codes && codes.length > 0 ? (
+            <Select value={pr.to || undefined} onValueChange={(v) => setPair(i, { to: v })}>
+              <SelectTrigger aria-label={`${t(`${P}.to`)} ${i + 1}: ${label}`} className="w-full min-w-0">
+                <SelectValue placeholder={t(`${P}.toPlaceholder`)} />
+              </SelectTrigger>
+              <SelectContent>
+                {codes.map((c) => (
+                  <SelectItem key={`${c.system}|${c.code}`} value={c.code}>
+                    {c.display ? `${c.display} (${c.code})` : c.code}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input aria-label={`${t(`${P}.to`)} ${i + 1}: ${label}`} value={pr.to} onChange={(e) => setPair(i, { to: e.target.value })} />
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={`${t(`${P}.valueActions`)} ${i + 1}: ${label}`}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={add}>{t(`${P}.addValue`)}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => remove(i)}>{t(`${P}.removeValue`)}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ))}
+    </div>
+  );
+}

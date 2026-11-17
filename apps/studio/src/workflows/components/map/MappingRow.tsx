@@ -111,8 +111,13 @@ export function MappingRow({
         {suggestion}
       </div>
 
-      <div className="min-w-0 pt-2 text-xs text-muted-foreground">
-        {example && <TruncatedText text={example} className="block" />}
+      <div className="flex min-w-0 gap-1 text-xs text-muted-foreground sm:block sm:pt-2">
+        {example && (
+          <>
+            <span className="shrink-0 sm:hidden">{t(`${p}.colExample`)}:</span>
+            <TruncatedText text={example} className="block min-w-0" />
+          </>
+        )}
       </div>
 
       <div className="min-w-0">{rule}</div>

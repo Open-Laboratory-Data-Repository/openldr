@@ -2447,6 +2447,7 @@ export const fr: EnShape = {
         removeValue: "Retirer cette valeur",
         codeList: "Liste de codes",
         codeListPlaceholder: "Choisissez une liste de codes",
+      localCodeList: 'La liste de codes du laboratoire',
         loadingCodeLists: "Chargement des listes de codes",
         codeListsEmpty: "Aucune liste de codes n'est installée. Ajoutez-en une dans Terminologie.",
         codeListsFailed: "Les listes de codes n'ont pas pu être chargées.",

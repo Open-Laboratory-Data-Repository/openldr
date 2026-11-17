@@ -2565,6 +2565,7 @@ export const en = {
         removeValue: "Remove this value",
         codeList: "Code list",
         codeListPlaceholder: "Pick a code list",
+      localCodeList: "This lab's own code list",
         loadingCodeLists: "Loading code lists",
         codeListsEmpty: "No code list is installed. Add one under Terminology.",
         codeListsFailed: "The code lists could not be loaded.",

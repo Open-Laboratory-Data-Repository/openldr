@@ -3286,7 +3286,8 @@ export type MapTestResult =
   | { ok: true; kind: 'fhir' | 'form' | 'mapped'; resourceTypes: string[]; resources: unknown[] }
   | { ok: false; reason: string; field?: string };
 export interface MapSuggestionView { targetPath: string; field: string; score: number }
-export interface MapCodeList { url: string; name: string }
+/** A concept map the install holds. The lab's own map has `local` true and an empty name. */
+export interface MapCodeList { url: string; name: string; local: boolean }
 export interface MapTestInput {
   config: { targetId: string; formIds: string[]; mappings: unknown[] };
   items: Record<string, unknown>[];
