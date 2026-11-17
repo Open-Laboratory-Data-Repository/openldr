@@ -70,9 +70,9 @@ function compileDateFormat(format: string): { re: RegExp; parts: ('d' | 'M' | 'y
   return { re: new RegExp(`^${source}$`), parts, twoDigitYear };
 }
 
-/** The latest year ending in `yy` that is not more than one year after `now`. */
+/** The latest year ending in `yy` that is not after the current year. */
 function fullYear(yy: number, now: Date): number {
-  const max = now.getUTCFullYear() + 1;
+  const max = now.getUTCFullYear();
   return max - ((((max - yy) % 100) + 100) % 100);
 }
 

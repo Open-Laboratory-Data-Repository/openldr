@@ -145,11 +145,20 @@ export async function applyMapping(
   }
 
   // Resolve every row first, grouped by the record type it writes.
+  const linkPaths = new Set(target.links.map((l) => l.path));
   const rowsOf = new Map<string, ResolvedRow[]>();
   for (const row of mapping.rows) {
     const parsed = parseTargetPath(row.targetPath);
     if (!parsed) return { ok: false, reason: `the target path ${row.targetPath} is malformed`, field: row.targetPath };
     const type = parsed.path.split('.')[0];
+    // An id comes from the identity and a link from the target. A hand-edited config cannot map either.
+    const plain = parsed.path.split('.').filter((s) => !/^\d+$/.test(s)).join('.');
+    if (plain === `${type}.id`) {
+      return { ok: false, reason: `${row.targetPath}: a record's id is made from its identity and cannot be mapped`, field: row.targetPath };
+    }
+    if (linkPaths.has(plain)) {
+      return { ok: false, reason: `${row.targetPath}: the target makes this link itself, so it cannot be mapped`, field: row.targetPath };
+    }
     const record = recordOf.get(type);
     if (!record) return { ok: false, reason: `the target has no ${type} record`, field: row.targetPath };
     const resolved = await resolveRow(row, target, json, deps);

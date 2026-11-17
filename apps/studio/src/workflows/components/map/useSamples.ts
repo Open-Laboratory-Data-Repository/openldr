@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchWorkflowRun, fetchWorkflowRuns, type ExecuteResponse, type WorkflowRunSummary } from '@/api';
 import { useWorkflowStore } from '../../hooks/use-workflow-store';
-import { rowsFromItems, type SampleRow } from './rows';
+import { sampleFromItems, type Sample } from './rows';
 
 /** How often Listen asks for new runs, and when it gives up. */
 export const LISTEN_POLL_MS = 2000;
@@ -10,6 +10,8 @@ export const LISTEN_MAX_MS = 60000;
 export const STORED_RUNS_LOOKED_AT = 10;
 
 export type SampleStatus = 'idle' | 'listening' | 'loadingStored' | 'timedOut' | 'noStoredRun' | 'failed';
+
+const EMPTY: Sample = { rows: [], fieldNames: [] };
 
 const newestFirst = (runs: WorkflowRunSummary[]) => [...runs].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
 
@@ -23,7 +25,7 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
   const ownInput = useWorkflowStore((s) => s.nodeRunInput[nodeId]);
   const runOutputs = useWorkflowStore((s) => s.nodeRunOutput);
 
-  const [rows, setRows] = useState<SampleRow[]>([]);
+  const [sample, setSample] = useState<Sample>(EMPTY);
   const [status, setStatus] = useState<SampleStatus>('idle');
   const timers = useRef<{ poll?: ReturnType<typeof setInterval>; stop?: ReturnType<typeof setTimeout> }>({});
   const token = useRef(0);
@@ -39,15 +41,15 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
   const hasLastRun = lastRunItems() !== undefined;
 
   /** The rows of one stored run: the feeding node's output, read through `sourcePath`. */
-  const rowsOfRun = async (runId: string, feederIds: string[]): Promise<SampleRow[]> => {
+  const rowsOfRun = async (runId: string, feederIds: string[]): Promise<Sample> => {
     const detail = await fetchWorkflowRun(runId);
     const results = (detail.result as ExecuteResponse | null)?.results ?? [];
     for (const r of results) {
       if (!feederIds.includes(r.nodeId) || r.output == null) continue;
-      const found = rowsFromItems(r.output, sourcePath);
-      if (found.length > 0) return found;
+      const found = sampleFromItems(r.output, sourcePath);
+      if (found.rows.length > 0) return found;
     }
-    return [];
+    return EMPTY;
   };
 
   const stopTimers = useCallback(() => {
@@ -61,7 +63,7 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
     stopTimers();
     setStatus('idle');
     const raw = lastRunItems();
-    setRows(raw === undefined ? [] : rowsFromItems(raw, sourcePath));
+    setSample(raw === undefined ? EMPTY : sampleFromItems(raw, sourcePath));
   };
 
   const stopListening = useCallback(() => {
@@ -81,8 +83,8 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
       for (const run of runs) {
         const found = await rowsOfRun(run.id, feederIds);
         if (token.current !== mine) return;
-        if (found.length > 0) {
-          setRows(found);
+        if (found.rows.length > 0) {
+          setSample(found);
           setStatus('idle');
           return;
         }
@@ -118,9 +120,9 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
           // A run is passed over for good only once it has finished. Stored runs are written when
           // they finish today, so this guards a run caught early, should one ever be listed.
           if (run.status === 'completed' || run.status === 'failed') seen.add(run.id);
-          if (found.length > 0) {
+          if (found.rows.length > 0) {
             stopTimers();
-            setRows(found);
+            setSample(found);
             setStatus('idle');
             return;
           }
@@ -156,14 +158,14 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
     if (!open) {
       stopTimers();
       setStatus('idle');
-      setRows([]);
+      setSample(EMPTY);
     }
   }, [open, stopTimers]);
 
   useEffect(() => stopTimers, [stopTimers]);
 
   return {
-    rows,
+    sample,
     hasLastRun,
     canListen: workflowId != null,
     status,

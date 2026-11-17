@@ -1,4 +1,5 @@
 {
+  "$name": "Résultat de laboratoire",
   "Patient.identifier.value": "Identifiant patient",
   "Patient.identifier.system": "Système de l'identifiant patient",
   "Patient.name.given?use=official": "Prénom",

@@ -77,7 +77,8 @@ const LAB_RESULT_IDENTITY: MapTarget['identity'] = [
 function localise(target: MapTarget, locale: string): MapTarget {
   const labels = LABELS[locale];
   if (!labels) return target;
-  return { ...target, fields: target.fields.map((f) => ({ ...f, label: labels[f.path] ?? f.label })) };
+  // `$name` holds the target's own name; every other key is a field path.
+  return { ...target, name: labels.$name ?? target.name, fields: target.fields.map((f) => ({ ...f, label: labels[f.path] ?? f.label })) };
 }
 
 export function labResultTarget(packs: readonly MapTargetPack[], locale = 'en'): MapTarget {

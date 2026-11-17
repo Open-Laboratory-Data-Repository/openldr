@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildMapping, draftsFor, exampleFor, exampleText, groupRows, ruleOf, rowsFromItems, savedMappingFor, withMapping, MAX_SAMPLE_ROWS } from './rows';
+import { buildMapping, columnSet, draftsFor, exampleFor, exampleText, ruleOf, rowsFromItems, sampleFromItems, savedMappingFor, withMapping, MAX_SAMPLE_ROWS } from './rows';
 import { shapeOf } from '@openldr/forms/pure';
 import { TEST_TARGET, ROWS_A, ROWS_B, asItems } from './test-fixtures';
 
@@ -25,31 +25,25 @@ describe('rowsFromItems', () => {
   });
 });
 
-describe('groupRows', () => {
-  it('puts rows that lack a column into the group of the row that has it', () => {
-    const full = { a: 'QZX-1', b: 'QZX-2', c: 'QZX-3' };
-    const rows = [{ a: 'QZX-1', b: 2 }, full, { b: 'QZX-2', c: 'QZX-3' }];
-    const g = groupRows(rows);
-    expect(g).toHaveLength(1);
-    expect(g[0].fieldNames).toEqual(['a', 'b', 'c']);
-    expect(g[0].rows).toEqual(rows);
-    expect(g[0].hash).toBe(shapeOf(full).hash);
+describe('sampleFromItems and columnSet', () => {
+  it('takes the columns of every row, before the cut to the Test limit', () => {
+    const items = Array.from({ length: 30 }, (_, i) => ({ json: i === 24 ? { a: `QZX-${i}`, late: 'QZX-L' } : { a: `QZX-${i}` } }));
+    const sample = sampleFromItems(items, '');
+    expect(sample.rows).toHaveLength(MAX_SAMPLE_ROWS);
+    expect(sample.fieldNames).toEqual(['a', 'late']);
   });
 
-  it('starts a second group for a row with a column the others lack', () => {
-    const g = groupRows([{ a: 1, b: 2 }, { a: 1 }, { a: 1, z: 2 }]);
-    expect(g.map((x) => [x.fieldNames, x.rows.length])).toEqual([
-      [['a', 'b'], 2],
-      [['a', 'z'], 1],
-    ]);
+  it('gives rows {a,b} and {a,c} one set of columns a, b, c', () => {
+    const sample = sampleFromItems(asItems([{ a: 1, b: 2 }, { a: 1, c: 3 }]), '');
+    const set = columnSet(sample)!;
+    expect(set.fieldNames).toEqual(['a', 'b', 'c']);
+    expect(set.rows).toEqual(sample.rows);
+    // The hash is shapeOf of an object with each column set to the empty string.
+    expect(set.hash).toBe(shapeOf({ a: '', b: '', c: '' }).hash);
   });
 
-  it('keeps two different shapes apart', () => {
-    const g = groupRows([...ROWS_A, ...ROWS_B]);
-    expect(g.map((x) => [x.fieldNames, x.rows.length])).toEqual([
-      [['pat_no', 'sex', 'test_a', 'test_b'], 2],
-      [['ident', 'result'], 1],
-    ]);
+  it('gives no column set for no rows', () => {
+    expect(columnSet(sampleFromItems([], ''))).toBeNull();
   });
 });
 

@@ -290,6 +290,18 @@ describe('applyMapping', () => {
     expect((res.resources[2] as ServiceRequest).note).toEqual([{ text: 'from the test' }]);
   });
 
+  it('refuses a mapped record id, naming the target key and no value', async () => {
+    const res = await applyMapping(mapping([...baseRows, { targetPath: 'Patient.id', from: { field: 'pat_no' } }]), target, row, deps());
+    expect(res).toEqual({ ok: false, reason: 'Patient.id: a record\'s id is made from its identity and cannot be mapped', field: 'Patient.id' });
+  });
+
+  it('refuses a mapped link path, with pins or an index, naming the target key', async () => {
+    for (const key of ['Observation.subject', 'Observation.basedOn.0', 'Observation.specimen?type=Specimen']) {
+      const res = await applyMapping(mapping([...baseRows, { targetPath: key, from: { field: 'given' } }]), target, row, deps());
+      expect(res, key).toEqual({ ok: false, reason: `${key}: the target makes this link itself, so it cannot be mapped`, field: key });
+    }
+  });
+
   it('fails a path the table does not know', async () => {
     const res = await applyMapping(mapping([...baseRows, { targetPath: 'Patient.shoeSize', from: { field: 'given' } }]), target, row, deps());
     expect(res).toMatchObject({ ok: false, field: 'Patient.shoeSize' });

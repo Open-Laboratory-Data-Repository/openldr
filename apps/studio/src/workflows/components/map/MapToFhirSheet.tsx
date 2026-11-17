@@ -46,22 +46,22 @@ export function MapToFhirSheet({
   const { t, i18n } = useTranslation();
   const config = ((node.data as { config?: Record<string, unknown> }).config ?? {}) as Record<string, unknown>;
   const samples = useSamples({ nodeId: node.id, open, sourcePath: String(config.sourcePath ?? '') });
-  const m = useMappingDraft({ open, locale: i18n.language, config, rows: samples.rows });
-  const { target, group, drafts } = m;
+  const m = useMappingDraft({ open, locale: i18n.language, config, sample: samples.sample });
+  const { target, columns, drafts } = m;
 
   const [notice, setNotice] = useState<Notice>(null);
   const [test, setTest] = useState<TestState>({ kind: 'idle' });
   const [adding, setAdding] = useState(false);
 
-  const suggestions = useSuggestions({ open, draftsKey: m.draftsKey, targetId: m.targetId, shape: group, drafts, locale: i18n.language });
+  const suggestions = useSuggestions({ open, draftsKey: m.draftsKey, targetId: m.targetId, shape: columns, drafts, locale: i18n.language });
   const codeLists = useCodeLists(drafts.some((d) => d.rule.kind === 'codeList'));
   const localCodeList = Array.isArray(codeLists) ? (codeLists.find((c) => c.local)?.url ?? null) : null;
   const codeUrlOf = (d: RowDraft) => (hasSource(d) && d.rule.kind === 'none' ? codeListUrlOf(d) : null);
   const codeSets = useCodeSets(drafts.map(codeUrlOf).filter((u): u is string => u !== null));
   const ruleSuggestionOf = (d: RowDraft): RuleSuggestion | null => {
-    if (!group) return null;
+    if (!columns) return null;
     const url = codeUrlOf(d);
-    return suggestRuleFor(d, group.rows, url ? (codeSets[url] ?? null) : null);
+    return suggestRuleFor(d, columns.rows, url ? (codeSets[url] ?? null) : null);
   };
   const describeRule = (r: RuleSuggestion) =>
     r.kind === 'numberComma'
@@ -99,32 +99,32 @@ export function MapToFhirSheet({
             : t(`${P}.sheet.ruleIncomplete`, { label: built.label }),
     });
 
-  // A group that edits a wider saved mapping keeps that mapping's field names and hash, so the node
+  // A column set that edits a wider saved mapping keeps that mapping's field names and hash, so the node
   // never holds two mappings where one's columns contain the other's.
-  const saveShape = group && m.loaded && m.loaded.fieldNames.length > group.fieldNames.length
+  const saveShape = columns && m.loaded && m.loaded.fieldNames.length > columns.fieldNames.length
     ? { hash: m.loaded.shapeHash, fieldNames: m.loaded.fieldNames }
-    : group;
+    : columns;
   const sameTarget = mappingsOf(config).filter((x) => targetIdOf(x) === m.targetId);
   const replacesNarrower = saveShape ? narrowerCount(sameTarget, saveShape.fieldNames) : 0;
   const feedsFromWebhook = useFeedsFromWebhook(node.id);
 
-  // Columns a group offers: the sample's, plus a wider saved mapping's that this sample lacks.
+  // The columns offered: the sample's, plus a wider saved mapping's that this sample lacks.
   const offered = saveShape ? saveShape.fieldNames : [];
-  const absent = group ? offered.filter((f) => !group.fieldNames.includes(f)) : [];
+  const absent = columns ? offered.filter((f) => !columns.fieldNames.includes(f)) : [];
 
   // What the node will hold after Save, with the mapping on screen in place of its saved version.
   // A row that more than one of them fits is held by the node, so the sheet says so first.
   const ambiguous = useMemo(() => {
-    if (!group || !saveShape || !m.targetId) return false;
+    if (!columns || !saveShape || !m.targetId) return false;
     const built = buildMapping(drafts, saveShape, m.targetId, { requireAll: false, localCodeList });
     const savedHere = m.saved.filter((x) => x.targetId === m.targetId);
     const after = (built.ok ? withMapping(savedHere, built.mapping) : savedHere) as SavedMapping[];
-    return group.rows.some((row) => classify(row, [], after).kind === 'ambiguous');
-  }, [group, saveShape, drafts, m.saved, m.targetId, localCodeList]);
+    return columns.rows.some((row) => classify(row, [], after).kind === 'ambiguous');
+  }, [columns, saveShape, drafts, m.saved, m.targetId, localCodeList]);
   const showWebhookHint = feedsFromWebhook && String(config.sourcePath ?? '').trim() === '';
 
   const save = () => {
-    if (!target || !group || !saveShape) return;
+    if (!target || !columns || !saveShape) return;
     const built = buildMapping(drafts, saveShape, target.id, { requireAll: true, localCodeList });
     if (!built.ok) return problem(built);
     // A node runs one target, so mappings made for another target are dropped.
@@ -134,7 +134,7 @@ export function MapToFhirSheet({
   };
 
   const runTest = async () => {
-    if (!target || !group || !saveShape) return;
+    if (!target || !columns || !saveShape) return;
     const built = buildMapping(drafts, saveShape, target.id, { requireAll: false, localCodeList });
     if (!built.ok) return problem(built);
     const others = mappingsOf(config).filter((x) => targetIdOf(x) === target.id);
@@ -143,7 +143,7 @@ export function MapToFhirSheet({
     try {
       const results = await testMapping({
         config: { targetId: target.id, formIds, mappings: withMapping(others, built.mapping) },
-        items: group.rows,
+        items: columns.rows,
       });
       setTest({ kind: 'done', results });
     } catch (e) {
@@ -161,10 +161,10 @@ export function MapToFhirSheet({
 
   const taken = useMemo(() => new Set(drafts.map((d) => d.targetPath)), [drafts]);
   const required = drafts.filter((d) => d.required);
-  const unused = group ? unusedFields(group.fieldNames, drafts) : [];
+  const unused = columns ? unusedFields(columns.fieldNames, drafts) : [];
   const listening = samples.status === 'listening';
   const otherTargetCount = mappingsOf(config).filter((x) => targetIdOf(x) !== m.targetId).length;
-  const ready = Boolean(target && group && m.draftsKey);
+  const ready = Boolean(target && columns && m.draftsKey);
 
   let body: ReactNode;
   if (m.targets === null) {
@@ -175,13 +175,19 @@ export function MapToFhirSheet({
     body = <LoadingState label={t(`${P}.sheet.listening`)} className="min-h-[16rem] flex-1" />;
   } else if (samples.status === 'loadingStored') {
     body = <LoadingState label={t(`${P}.sheet.loadingStored`)} className="min-h-[16rem] flex-1" />;
-  } else if (!ready || !group || !target) {
+  } else if (!ready || !columns || !target) {
     body = <StripedEmpty className="min-h-[16rem] flex-1">{t(samples.canListen ? `${P}.sheet.empty` : `${P}.sheet.emptyUnsaved`)}</StripedEmpty>;
   } else {
     body = (
       <div className="flex min-w-0 flex-col">
         {adding && (
-          <AddPathPanel recordTypes={target.records.map((r) => r.type)} taken={taken} onAdd={addRow} onClose={() => setAdding(false)} />
+          <AddPathPanel
+            recordTypes={target.records.map((r) => r.type)}
+            taken={taken}
+            linkPaths={target.links.map((l) => l.path)}
+            onAdd={addRow}
+            onClose={() => setAdding(false)}
+          />
         )}
         <div className={`hidden border-b border-border px-6 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:grid sm:gap-x-3 ${COLS}`}>
           <span>{t(`${P}.sheet.colField`)}</span>
@@ -191,14 +197,14 @@ export function MapToFhirSheet({
         </div>
         {drafts.map((d, i) => {
           const s = suggestions[d.targetPath];
-          const showSuggestion = s && !hasSource(d) && group.fieldNames.includes(s);
+          const showSuggestion = s && !hasSource(d) && columns.fieldNames.includes(s);
           return (
             <MappingRow
               key={d.targetPath}
               draft={d}
-              fieldNames={[...group.fieldNames, ...absent]}
+              fieldNames={[...columns.fieldNames, ...absent]}
               absent={absent}
-              rows={group.rows}
+              rows={columns.rows}
               onChange={(source) => edit(i, { source })}
               suggestion={
                 showSuggestion ? (
@@ -340,23 +346,6 @@ export function MapToFhirSheet({
                 ))}
               </SelectContent>
             </Select>
-            {m.groups.length > 1 && (
-              <>
-                <Label className="whitespace-nowrap">{t(`${P}.sheet.shape`)}</Label>
-                <Select value={m.shapeHash} onValueChange={m.setShapeHash}>
-                  <SelectTrigger aria-label={t(`${P}.sheet.shape`)} className="w-full min-w-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {m.groups.map((g) => (
-                      <SelectItem key={g.hash} value={g.hash}>
-                        {t(`${P}.sheet.shapeOption`, { fields: t(`${P}.sheet.fieldCount`, { count: g.fieldNames.length }), rows: t(`${P}.sheet.rowCount`, { count: g.rows.length }) })}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </>
-            )}
           </div>
         )}
 
@@ -372,7 +361,7 @@ export function MapToFhirSheet({
               </>
             ) : (
               <>
-                {group && <span>{t(`${P}.sheet.sampleRows`, { count: group.rows.length })}</span>}
+                {columns && <span>{t(`${P}.sheet.sampleRows`, { count: columns.rows.length })}</span>}
                 {test.kind === 'done' && (
                   <span>{t(`${P}.sheet.testSummary`, { count: test.results.filter((r) => r.ok).length, total: test.results.length })}</span>
                 )}

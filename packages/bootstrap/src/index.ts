@@ -94,7 +94,7 @@ import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
 import { createPluginNodeService } from './plugin-node-service';
 import { createFormValidateService } from './form-validate-service';
-import { createMapToFhirService, codingFromMapRows, loadStoredPacks } from './map-to-fhir-service';
+import { createMapToFhirService, codingFromMapRows, loadStoredPacks, type MapToFhirService } from './map-to-fhir-service';
 import { createMapToFhirApi, type MapToFhirApi } from './map-to-fhir-api';
 import { validateBatch } from '@openldr/fhir';
 import { createPersistStoreService } from './persist-store-service';
@@ -1433,10 +1433,12 @@ const reporting: ReportingApi = {
   const readStoredMapPacks = () => loadStoredPacks(starterPacks, seededStarterPacks().map((p) => p.id));
   // listByType defaults to 500 and sets no ceiling. The newest maps come first, so above this the oldest are left out.
   const STORED_CONCEPT_MAP_LIMIT = 10_000;
+  // Set below with the other workflow services. The api calls it directly, so a Test's cache reaches it.
+  let mapToFhirService: MapToFhirService | null = null;
   const mapToFhirApi = createMapToFhirApi({
-    mapToFhir: (input) => {
-      if (!workflowServices.mapToFhir) throw new Error('Map to FHIR service is not set');
-      return workflowServices.mapToFhir(input);
+    mapToFhir: (input, cache) => {
+      if (!mapToFhirService) throw new Error('Map to FHIR service is not set');
+      return mapToFhirService(input, cache);
     },
     packs: readStoredMapPacks,
     conceptMaps: async () => (await canonicalFhirStore.listByType('ConceptMap', STORED_CONCEPT_MAP_LIMIT)).map((r) => r.resource as { url?: string; name?: string; title?: string }),
@@ -1813,7 +1815,7 @@ const reporting: ReportingApi = {
   workflowServices.validateForm = createFormValidateService({ forms });
   // Map to FHIR node: the same form-validate service, the stored Lab result packs, the code lists in
   // the terminology store, and the check persist runs, without storing anything.
-  workflowServices.mapToFhir = createMapToFhirService({
+  workflowServices.mapToFhir = mapToFhirService = createMapToFhirService({
     forms,
     validateForm: workflowServices.validateForm,
     packs: readStoredMapPacks,

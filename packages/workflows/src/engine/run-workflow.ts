@@ -239,6 +239,8 @@ export async function runWorkflow(
         label: node.data.label as string | undefined,
         status: 'error',
         error: message,
+        // A node may record its meta before it throws (Map to FHIR's held counts and reasons).
+        ...(ctx.nodeMeta[node.id] !== undefined ? { meta: ctx.nodeMeta[node.id] } : {}),
         durationMs,
         logs: ctx.logs[node.id],
       });

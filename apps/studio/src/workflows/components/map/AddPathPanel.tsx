@@ -8,10 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
-/** The FHIR paths of a record type that the writer can fill from one cell, minus ones in use. */
-export function addablePaths(resourceType: string, taken: Set<string>): { path: string; label: string }[] {
+/**
+ * The FHIR paths of a record type that the writer can fill from one cell, minus ones in use, the
+ * record's id and the links the target makes. The node refuses a mapped id or link.
+ */
+export function addablePaths(resourceType: string, taken: Set<string>, linkPaths: readonly string[] = []): { path: string; label: string }[] {
   return fhirPathOptionsFor(resourceType)
-    .filter((info) => canWriteFromCell(info.path) && !taken.has(info.path))
+    .filter((info) => canWriteFromCell(info.path) && !taken.has(info.path) && info.path !== `${resourceType}.id` && !linkPaths.includes(info.path))
     .map((info) => ({ path: info.path, label: info.label }));
 }
 
@@ -19,18 +22,21 @@ export function addablePaths(resourceType: string, taken: Set<string>): { path: 
 export function AddPathPanel({
   recordTypes,
   taken,
+  linkPaths,
   onAdd,
   onClose,
 }: {
   recordTypes: string[];
   taken: Set<string>;
+  /** The paths the target writes its links to. */
+  linkPaths: string[];
   onAdd: (path: string) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const P = 'workflows.mapToFhir.addPath';
   const [type, setType] = useState(recordTypes[0] ?? '');
-  const paths = useMemo(() => (type ? addablePaths(type, taken) : []), [type, taken]);
+  const paths = useMemo(() => (type ? addablePaths(type, taken, linkPaths) : []), [type, taken, linkPaths]);
 
   return (
     <div className="border-b border-border px-6 py-3" data-testid="map-add-path">

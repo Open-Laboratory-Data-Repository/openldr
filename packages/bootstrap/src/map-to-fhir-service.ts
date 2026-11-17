@@ -106,7 +106,7 @@ function formReason(reason: string): string | null {
  * Issue texts kept in a reason. `prefix` texts are followed by `: <values>` in the message, and only
  * the part before the colon is kept. Every other text becomes "failed the <code> check".
  * The first two are `result-requires-request`'s; a test pins them to the rule. The rest are
- * `validateResource`'s and zod's fixed text.
+ * `validateResource`'s and zod's fixed text; a test pins the date texts to the validator.
  */
 export const KNOWN_ISSUE_TEXTS: readonly { text: string; prefix?: boolean }[] = [
   { text: 'laboratory result must reference a ServiceRequest (basedOn)' },
@@ -115,6 +115,10 @@ export const KNOWN_ISSUE_TEXTS: readonly { text: string; prefix?: boolean }[] = 
   { text: 'missing resourceType' },
   { text: 'resource must be a JSON object' },
   { text: 'unsupported resourceType', prefix: true },
+  // The FHIR date, dateTime and instant patterns' fixed texts (`datatypes/primitives.ts`).
+  { text: 'invalid FHIR date' },
+  { text: 'invalid FHIR dateTime' },
+  { text: 'invalid FHIR instant' },
 ];
 
 function issueText(issue: OperationOutcomeIssue): string {
@@ -280,13 +284,38 @@ interface Entry {
   held: Res | null;
 }
 
-export function createMapToFhirService(deps: MapToFhirServiceDeps): (input: RunMapToFhirInput) => Promise<RunMapToFhirOutput> {
+/**
+ * Store reads kept for one caller's series of calls, such as a Test of many rows sent one row per
+ * call. A run passes none and reads the store once per call.
+ */
+export interface MapToFhirCallCache {
+  packs?: Promise<MapTargetPack[]>;
+  forms: Map<string, Promise<{ schema: FormSchema } | null>>;
+}
+
+export function createMapToFhirCallCache(): MapToFhirCallCache {
+  return { forms: new Map() };
+}
+
+export type MapToFhirService = (input: RunMapToFhirInput, cache?: MapToFhirCallCache) => Promise<RunMapToFhirOutput>;
+
+export function createMapToFhirService(deps: MapToFhirServiceDeps): MapToFhirService {
   // The lab's own map holds rows of every source system, so a code looked up there without one
   // could come from another domain. With no source system it gives no match.
   const translateCode: RuleDeps['translateCode'] = async (url, value, sourceSystem) =>
     url === LOCAL_MAP_URL && !sourceSystem ? null : deps.translateCode(url, value, sourceSystem);
 
-  return async ({ items, config }) => {
+  return async ({ items, config }, cache) => {
+    const readPacks = () => (cache ? (cache.packs ??= deps.packs()) : deps.packs());
+    const readForm = (id: string) => {
+      if (!cache) return deps.forms.get(id);
+      let got = cache.forms.get(id);
+      if (!got) {
+        got = deps.forms.get(id);
+        cache.forms.set(id, got);
+      }
+      return got;
+    };
     const targetId = config.targetId.trim();
     if (config.mappings.length > 0 && !targetId) throw new Error('Map to FHIR node config: targetId is required when the node has mappings');
     const mappings = parseMappings(config.mappings, targetId);
@@ -295,13 +324,13 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): (input: RunM
     // node like the default Ingest one does not depend on the pack seed.
     let target: MapTarget | null = null;
     if (mappings.length > 0) {
-      target = mapTargetById(await deps.packs(), targetId);
+      target = mapTargetById(await readPacks(), targetId);
       if (!target) throw new Error(`Map to FHIR node config: no map target ${targetId}`);
     }
 
     const forms: ClassifyForm[] = [];
     for (const id of config.formIds) {
-      const def = await deps.forms.get(id);
+      const def = await readForm(id);
       if (!def) throw new Error(`Map to FHIR node config: form ${id} not found`);
       forms.push(classifyForm(id, def.schema));
     }

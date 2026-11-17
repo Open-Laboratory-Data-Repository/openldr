@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { seededStarterPacks } from '@openldr/forms';
 import type { RunMapToFhirInput, RunMapToFhirOutput } from '@openldr/workflows';
 import { createMapToFhirApi, MAP_TEST_MAX_ITEMS, MapConfigError } from './map-to-fhir-api';
+import { createMapToFhirService } from './map-to-fhir-service';
 
 // Made-up values only.
 
@@ -118,5 +119,29 @@ describe('codeLists', () => {
   it('does not list the lab map twice', async () => {
     const a = api({ conceptMaps: async () => [{ url: 'urn:openldr:terminology:local-map', name: 'x' }] });
     expect(await a.codeLists()).toEqual([{ url: 'urn:openldr:terminology:local-map', name: '', local: true, sourceSystems: [] }]);
+  });
+});
+
+describe('test reads the store once per call', () => {
+  it('reads the packs once and each form once for many rows', async () => {
+    const packs = vi.fn(async () => PACKS);
+    const get = vi.fn(async () => ({ schema: { fields: [] } as never }));
+    const service = createMapToFhirService({
+      forms: { get },
+      validateForm: async () => ({ items: [], meta: { formId: 'f', validated: 0, invalid: [] } }),
+      packs,
+      translateCode: async () => null,
+      validate: async () => ({ ok: true }) as never,
+    });
+    const a = createMapToFhirApi({ mapToFhir: service, packs: async () => PACKS, conceptMaps: async () => [], localSourceSystems: async () => [] });
+    const mapping = { shapeHash: 'h', fieldNames: ['a'], targetId: 'lab-result', rows: [] };
+    const items = Array.from({ length: 50 }, (_, i) => ({ other: `QZX-${i}` }));
+    const res = await a.test({ config: { targetId: 'lab-result', formIds: ['f1', 'f2'], mappings: [mapping] }, items });
+    expect(res).toHaveLength(50);
+    expect(packs).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledTimes(2);
+    // A second call reads again: the cache lives for one call only.
+    await a.test({ config: { targetId: 'lab-result', formIds: ['f1', 'f2'], mappings: [mapping] }, items: items.slice(0, 2) });
+    expect(packs).toHaveBeenCalledTimes(2);
   });
 });

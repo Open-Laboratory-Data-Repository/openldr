@@ -79,6 +79,9 @@ export const mapToFhirHandler: NodeHandler = async (node, ctx, input) => {
   }
   const reasons = held.map((h) => String(h.json.reason));
 
+  // Recorded before any throw, so a failed run still shows the counts and reasons.
+  ctx.nodeMeta[node.id] = { ...result.meta, held: held.length, heldReasons: reasons.slice(0, MAX_HELD_REASONS) };
+
   // Held items must go somewhere a person can see them. With no held edge they would vanish.
   const heldWired = ctx.edges.some((e) => e.source === node.id && e.sourceHandle === 'held');
   if (held.length > 0 && !heldWired) {
@@ -88,6 +91,5 @@ export const mapToFhirHandler: NodeHandler = async (node, ctx, input) => {
   }
 
   ctx.portItems[node.id] = { out: result.out, held };
-  ctx.nodeMeta[node.id] = { ...result.meta, held: held.length, heldReasons: reasons.slice(0, MAX_HELD_REASONS) };
   return result.out;
 };

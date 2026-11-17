@@ -398,6 +398,18 @@ describe('held reasons hold no value', () => {
     expect(KNOWN_ISSUE_TEXTS.some((k) => k.prefix && String(notFound.outcome.issue[0].diagnostics).startsWith(`${k.text}:`))).toBe(true);
   });
 
+  it('keeps the validator\'s date texts, pinned to the real validator', async () => {
+    const svc = createMapToFhirService(deps());
+    const res = await svc({
+      items: [{ json: { resourceType: 'Patient', id: 'p-1', birthDate: 'QZX-1' } }, { json: { resourceType: 'Specimen', id: 's-1', receivedTime: 'QZX-2' } }],
+      config,
+    });
+    expect(res.held.map((h) => h.json.reason)).toEqual(['record 1 (Patient) birthDate: invalid FHIR date', 'record 1 (Specimen) receivedTime: invalid FHIR dateTime']);
+    for (const text of ['invalid FHIR date', 'invalid FHIR dateTime', 'invalid FHIR instant']) {
+      expect(KNOWN_ISSUE_TEXTS.some((k) => k.text === text && !k.prefix), text).toBe(true);
+    }
+  });
+
   it('keeps only known form reason shapes, with the value cut', async () => {
     const reasons = ["'QZX' is not an allowed option", "'QZX' is not a number", 'required', 'must be selected from the list', 'must be >= 3', 'must be <= 9', 'exceeds max length 20', 'a new QZX reason'];
     const validateForm = vi.fn(async ({ formId }: RunFormValidateInput): Promise<RunFormValidateOutput> => ({

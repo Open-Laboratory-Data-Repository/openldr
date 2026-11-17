@@ -18,8 +18,9 @@ describe('applyRule: date', () => {
     expect(await run({ kind: 'date', format: 'd.M.yyyy' }, '3.1.2024')).toEqual({ ok: true, value: '2024-01-03' });
   });
 
-  it('puts a two-digit year no more than one year after now', async () => {
-    expect(await run({ kind: 'date', format: 'dd/MM/yy' }, '01/01/27')).toEqual({ ok: true, value: '2027-01-01' });
+  it('puts a two-digit year in the latest year that is not after the current year', async () => {
+    expect(await run({ kind: 'date', format: 'dd/MM/yy' }, '01/01/26')).toEqual({ ok: true, value: '2026-01-01' });
+    expect(await run({ kind: 'date', format: 'dd/MM/yy' }, '01/01/27')).toEqual({ ok: true, value: '1927-01-01' });
     expect(await run({ kind: 'date', format: 'dd/MM/yy' }, '01/01/28')).toEqual({ ok: true, value: '1928-01-01' });
   });
 

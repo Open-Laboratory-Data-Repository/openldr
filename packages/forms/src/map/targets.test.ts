@@ -102,7 +102,15 @@ describe('labels in French and Portuguese', () => {
     it(`gives every field a ${locale} label, and keys only fields of the target`, () => {
       const labels = file as Record<string, string>;
       for (const f of target.fields) expect(labels[f.path]?.trim(), `${locale}: ${f.path}`).toBeTruthy();
-      for (const key of Object.keys(labels)) expect(paths.has(key), `${locale}: ${key}`).toBe(true);
+      // `$name` is the target's own name, not a field.
+      for (const key of Object.keys(labels).filter((k) => k !== '$name')) expect(paths.has(key), `${locale}: ${key}`).toBe(true);
+    });
+
+    it(`names the target in ${locale}`, () => {
+      const name = (file as Record<string, string>).$name;
+      expect(name?.trim()).toBeTruthy();
+      expect(labResultTarget(packs, locale).name).toBe(name);
+      expect(name).not.toBe('Lab result');
     });
 
     it(`uses the ${locale} labels for that locale`, () => {

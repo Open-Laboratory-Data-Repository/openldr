@@ -47,12 +47,8 @@ function itemJsons(raw: unknown): unknown[] {
   return list.map((i) => (isObject(i) && 'json' in i ? i.json : i));
 }
 
-/**
- * Turn raw items into sample rows the way the node does: apply `sourcePath`, an object is one row,
- * a list of plain objects is one row each. FHIR (an object or a list with `resourceType`) and
- * scalars are not rows. At most `MAX_SAMPLE_ROWS`.
- */
-export function rowsFromItems(raw: unknown, sourcePath: string): SampleRow[] {
+/** Every row the items give, read the way the node reads them. No cut. */
+function allRowsFromItems(raw: unknown, sourcePath: string): SampleRow[] {
   const rows: SampleRow[] = [];
   for (const json of itemJsons(raw)) {
     const v = readPath(json, sourcePath.trim());
@@ -62,15 +58,39 @@ export function rowsFromItems(raw: unknown, sourcePath: string): SampleRow[] {
       for (const el of v) if (isObject(el) && !isResource(el)) rows.push(el);
     }
   }
-  return rows.slice(0, MAX_SAMPLE_ROWS);
+  return rows;
 }
 
-export interface ShapeGroup {
-  /** `shapeOf` of the group's largest row: the sample the mapping is made from. */
-  hash: string;
-  /** The largest row's field names, sorted. Every row of the group has only names from this list. */
+/**
+ * Turn raw items into sample rows the way the node does: apply `sourcePath`, an object is one row,
+ * a list of plain objects is one row each. FHIR (an object or a list with `resourceType`) and
+ * scalars are not rows. At most `MAX_SAMPLE_ROWS`.
+ */
+export function rowsFromItems(raw: unknown, sourcePath: string): SampleRow[] {
+  return allRowsFromItems(raw, sourcePath).slice(0, MAX_SAMPLE_ROWS);
+}
+
+/** The rows a sheet keeps, and the column names of every row the items gave, names only. */
+export interface Sample {
+  /** At most `MAX_SAMPLE_ROWS`, in item order. */
+  rows: SampleRow[];
+  /** Every row's columns, sorted, taken before the cut to `MAX_SAMPLE_ROWS`. */
   fieldNames: string[];
-  /** The group's rows, in sample order. */
+}
+
+export function sampleFromItems(raw: unknown, sourcePath: string): Sample {
+  const all = allRowsFromItems(raw, sourcePath);
+  const names = new Set<string>();
+  for (const row of all) for (const n of namesOf(row)) names.add(n);
+  return { rows: all.slice(0, MAX_SAMPLE_ROWS), fieldNames: [...names].sort() };
+}
+
+/** The one set of columns a sheet works on: a sample's columns and its rows. */
+export interface ColumnSet {
+  /** `shapeOf` of an object holding each column with the value `''`. Matching never reads it. */
+  hash: string;
+  fieldNames: string[];
+  /** The sample rows, in sample order. */
   rows: SampleRow[];
 }
 
@@ -79,33 +99,19 @@ function namesOf(row: SampleRow): string[] {
   return shapeOf(row).fields.map((f) => f.name);
 }
 
-/**
- * Rows grouped the way the node matches a saved mapping: a row belongs with rows whose field list
- * holds all of its fields, since a file reader drops blank cells. Rows are taken largest field list
- * first; a row joins the first group whose fields contain all of its own, or starts a new group.
- */
-export function groupRows(rows: SampleRow[]): ShapeGroup[] {
-  const order = rows.map((row, i) => ({ row, i, names: namesOf(row) }));
-  order.sort((x, y) => y.names.length - x.names.length || x.i - y.i);
-  const groups: { hash: string; fieldNames: string[]; members: { row: SampleRow; i: number }[] }[] = [];
-  for (const r of order) {
-    const g = groups.find((x) => r.names.every((n) => x.fieldNames.includes(n)));
-    if (g) g.members.push(r);
-    else groups.push({ hash: shapeOf(r.row).hash, fieldNames: r.names, members: [r] });
-  }
-  return groups.map((g) => ({
-    hash: g.hash,
-    fieldNames: g.fieldNames,
-    rows: g.members.sort((x, y) => x.i - y.i).map((m) => m.row),
-  }));
+/** The sheet's column set for a sample, or null when the sample has no column. */
+export function columnSet(sample: Sample): ColumnSet | null {
+  if (sample.fieldNames.length === 0) return null;
+  const hash = shapeOf(Object.fromEntries(sample.fieldNames.map((n) => [n, '']))).hash;
+  return { hash, fieldNames: [...sample.fieldNames], rows: sample.rows };
 }
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 const within = (inner: string[], outer: string[]) => inner.every((x) => outer.includes(x));
 
 /**
- * The saved mapping a group edits: the one with the same field names, else one holding all of them,
- * else the widest one whose columns all sit in the group. In the last case Save writes the group's
+ * The saved mapping a column set edits: the one with the same field names, else one holding all of
+ * them, else the widest one whose columns all sit in the set. In the last case Save writes the set's
  * wider names and the narrower mapping is replaced, so its rows are the starting draft.
  */
 export function savedMappingFor(group: { fieldNames: string[] }, saved: SavedMapping[]): SavedMapping | null {
@@ -120,7 +126,7 @@ export function savedMappingFor(group: { fieldNames: string[] }, saved: SavedMap
   );
 }
 
-/** The first value the group's rows give for a column, skipping rows with no value. */
+/** The first value the sample rows give for a column, skipping rows with no value. */
 export function exampleFor(field: string, rows: SampleRow[]): unknown {
   for (const row of rows) {
     const v = row[field];

@@ -94,7 +94,9 @@ describe('mapToFhirHandler', () => {
     const items = Array.from({ length: 7 }, (_, i) => ({ json: { [`c${i}`]: 'QZX' } }));
     await expect(mapToFhirHandler(node({}), ctx, items)).rejects.toThrow(
       'Map to FHIR node: 7 item(s) held and the held port is not connected. First reasons: no mapping for this shape 0; no mapping for this shape 1; no mapping for this shape 2; no mapping for this shape 3; no mapping for this shape 4',
-    );
+    );    // The meta is recorded before the throw, so a failed run still shows every reason up to 20.
+    expect(ctx.nodeMeta['m']).toMatchObject({ held: 7 });
+    expect((ctx.nodeMeta['m'] as { heldReasons: string[] }).heldReasons).toHaveLength(7);
   });
 
   it('does not throw for an unconnected held port when nothing is held', async () => {
@@ -169,5 +171,6 @@ describe('map-to-fhir in a run', () => {
     expect(res.status).not.toBe('completed');
     expect(statusOf('m')).toBe('error');
     expect(res.results.find((r) => r.nodeId === 'm')?.error).toContain('1 item(s) held and the held port is not connected');
+    expect(res.results.find((r) => r.nodeId === 'm')?.meta).toMatchObject({ held: 1, heldReasons: ['no mapping for this shape 1'] });
   });
 });

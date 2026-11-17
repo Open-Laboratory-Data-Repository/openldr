@@ -183,26 +183,26 @@ describe('MapToFhirSheet', () => {
     expect(row.from).toEqual({ fields: ['test_a', 'test_b'] });
   });
 
-  it('gives a shape select for two shapes, naming counts only, and saving one keeps the other', async () => {
+  it('makes one set of columns from rows of two forms, with no shape select', async () => {
     setRun([...ROWS_A, ...ROWS_B]);
-    const { shapeOf } = await import('@openldr/forms/pure');
-    const hashA = shapeOf(ROWS_A[0]).hash;
-    const hashB = shapeOf(ROWS_B[0]).hash;
-    const kept = { shapeHash: hashA, fieldNames: ['pat_no', 'sex', 'test_a', 'test_b'], targetId: 'test-target', rows: [] };
-    const { update } = renderSheet({ targetId: 'test-target', mappings: [kept] });
-    const shape = (await screen.findByRole('combobox', { name: 'Sample shape' })) as HTMLSelectElement;
-    const labels = [...shape.options].map((o) => o.textContent);
-    expect(labels).toContain('4 fields, 2 rows');
-    expect(labels).toContain('2 fields, 1 row');
-    for (const v of MARKERS) expect(labels.join(' ')).not.toContain(v);
-
-    fireEvent.change(shape, { target: { value: hashB } });
-    await waitFor(() => expect((sourceSelect('Patient ID').querySelectorAll('option'))).toHaveLength(5));
+    const { update } = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    expect(screen.queryByRole('combobox', { name: 'Sample shape' })).toBeNull();
+    expect(screen.getByTestId('map-status')).toHaveTextContent('3 sample rows');
     fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'ident' } });
-    fireEvent.change(sourceSelect('Test'), { target: { value: 'result' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
     openMenuAndClick('Save');
     const mappings = update.mock.calls[0][0].config.mappings;
-    expect(mappings.map((x: { shapeHash: string }) => x.shapeHash)).toEqual([hashA, hashB]);
+    expect(mappings).toHaveLength(1);
+    expect(mappings[0].fieldNames).toEqual(['ident', 'pat_no', 'result', 'sex', 'test_a', 'test_b']);
+  });
+
+  it('offers a column first filled at row 25 of 30', async () => {
+    setRun(Array.from({ length: 30 }, (_, i) => (i === 24 ? { pat_no: `QZX-${i}`, late: 'QZX-L' } : { pat_no: `QZX-${i}` })));
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    expect([...sourceSelect('Sex').options].map((o) => o.value)).toContain('late');
+    expect(screen.getByTestId('map-status')).toHaveTextContent('20 sample rows');
   });
 
   it('adds a FHIR path row, never starred, offering only paths one cell can fill', async () => {
@@ -221,6 +221,20 @@ describe('MapToFhirSheet', () => {
     fireEvent.change(pathSelect, { target: { value: 'Patient.active' } });
     const row = screen.getByTestId('map-row-Patient.active');
     expect(within(row).queryByLabelText('Required')).toBeNull();
+  });
+
+  it('leaves a record id and a link the target makes out of Add a FHIR path', async () => {
+    setRun(ROWS_A);
+    m(api.fetchMapTargets).mockResolvedValue([{ ...TEST_TARGET, links: [{ from: 'Observation', path: 'Observation.subject', to: 'Patient' }] }]);
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    openMenuAndClick('Add a FHIR path');
+    const offered = () => [...(screen.getByRole('combobox', { name: 'FHIR path' }) as HTMLSelectElement).options].map((o) => o.value);
+    expect(offered()).not.toContain('Patient.id');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Record' }), { target: { value: 'Observation' } });
+    expect(offered()).not.toContain('Observation.id');
+    expect(offered()).not.toContain('Observation.subject');
+    expect(offered()).toContain('Observation.issued');
   });
 
   it('saves a values rule the person typed, and a code list picked from the list', async () => {
@@ -500,7 +514,7 @@ describe('MapToFhirSheet fix round 1', () => {
     }
   });
 
-  it('groups rows that lack a column with the row that has it, and takes the example from the first row with a value', async () => {
+  it('lists every column of rows that lack some, and takes the example from the first row with a value', async () => {
     setRun([{ pat_no: 'QZX-1', test_a: 'QZX-3' }, { pat_no: 'QZX-5', sex: 'QZX-6', test_a: 'QZX-4' }, { sex: 'QZX-2', test_a: 'QZX-3' }]);
     renderSheet();
     await screen.findByTestId('map-row-Patient.identifier.value');
@@ -694,16 +708,6 @@ describe('MapToFhirSheet fix round 2', () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it('picks the default group by the current target only', async () => {
-    setRun([...ROWS_A, ...ROWS_B]);
-    const { shapeOf } = await import('@openldr/forms/pure');
-    const forOther = { shapeHash: shapeOf(ROWS_A[0]).hash, fieldNames: ['pat_no', 'sex', 'test_a', 'test_b'], targetId: 'gone-target', rows: [] };
-    const forThis = { shapeHash: shapeOf(ROWS_B[0]).hash, fieldNames: ['ident', 'result'], targetId: 'test-target', rows: [] };
-    renderSheet({ targetId: 'test-target', mappings: [forOther, forThis] });
-    const shape = (await screen.findByRole('combobox', { name: 'Sample shape' })) as HTMLSelectElement;
-    await waitFor(() => expect(shape.value).toBe(shapeOf(ROWS_B[0]).hash));
   });
 
   it('opens a wider group on a narrower saved mapping, and Save writes the wider names and drops the narrower', async () => {

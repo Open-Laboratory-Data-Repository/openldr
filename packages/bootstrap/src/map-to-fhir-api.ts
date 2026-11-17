@@ -1,6 +1,7 @@
 import { listMapTargets, mapTargetById, mapSynonyms, suggest, type MapTarget, type MapTargetPack } from '@openldr/forms';
 import { LOCAL_MAP_URL } from '@openldr/db';
 import type { RunMapToFhirInput, RunMapToFhirOutput } from '@openldr/workflows';
+import { createMapToFhirCallCache, type MapToFhirCallCache } from './map-to-fhir-service';
 
 /**
  * What the mapping sheet and the CLI call for Map to FHIR: the targets, suggestions, a test run and
@@ -44,7 +45,8 @@ export interface MapToFhirApi {
 }
 
 export interface MapToFhirApiDeps {
-  mapToFhir(input: RunMapToFhirInput): Promise<RunMapToFhirOutput>;
+  /** The service. `cache` lets one Test call read the packs and forms once for all its rows. */
+  mapToFhir(input: RunMapToFhirInput, cache?: MapToFhirCallCache): Promise<RunMapToFhirOutput>;
   packs(): Promise<MapTargetPack[]>;
   /** Stored ConceptMap resources. */
   conceptMaps(): Promise<{ url?: string; name?: string; title?: string }[]>;
@@ -62,10 +64,10 @@ function kindOf(meta: RunMapToFhirOutput['meta']): 'fhir' | 'form' | 'mapped' {
 }
 
 export function createMapToFhirApi(deps: MapToFhirApiDeps): MapToFhirApi {
-  async function testOne(config: MapTestInput['config'], item: Record<string, unknown>): Promise<MapTestResult> {
+  async function testOne(config: MapTestInput['config'], item: Record<string, unknown>, cache: MapToFhirCallCache): Promise<MapTestResult> {
     let out: RunMapToFhirOutput;
     try {
-      out = await deps.mapToFhir({ items: [{ json: item }], config });
+      out = await deps.mapToFhir({ items: [{ json: item }], config }, cache);
     } catch (err) {
       if (err instanceof Error && err.message.startsWith(CONFIG_FAULT_PREFIX)) throw new MapConfigError(err.message);
       throw err;
@@ -91,7 +93,8 @@ export function createMapToFhirApi(deps: MapToFhirApiDeps): MapToFhirApi {
     },
     async test({ config, items }) {
       const results: MapTestResult[] = [];
-      for (const item of items) results.push(await testOne(config, item));
+      const cache = createMapToFhirCallCache();
+      for (const item of items) results.push(await testOne(config, item, cache));
       return results;
     },
     async codeLists() {
