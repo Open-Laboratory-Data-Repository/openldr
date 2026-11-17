@@ -25,6 +25,26 @@ export interface RunFormValidateOutput {
   meta: { formId: string; validated: number; invalid: FormValidateInvalid[] };
 }
 
+/**
+ * Input of the Map to FHIR node. `mappings` are saved mappings; the host narrows them with the
+ * forms package's schema, which this package does not import.
+ */
+export interface RunMapToFhirInput {
+  items: WorkflowItem[];
+  config: { targetId: string; formIds: string[]; mappings: unknown[] };
+}
+/**
+ * `out` holds one item per FHIR record. A `held` item is `{ item, reason, shape?, field? }`.
+ * `heldIndexes[i]` is the input index of `held[i]`. `meta.heldReasons` is the first 20 reasons,
+ * in input order.
+ */
+export interface RunMapToFhirOutput {
+  out: WorkflowItem[];
+  held: WorkflowItem[];
+  heldIndexes: number[];
+  meta: { fhir: number; form: number; mapped: number; held: number; heldReasons: string[] };
+}
+
 export interface RunPersistStoreInput {
   items: WorkflowItem[];
   source?: string;
@@ -84,6 +104,8 @@ export interface WorkflowServices {
   runPluginNode?(input: RunPluginNodeInput): Promise<RunPluginNodeOutput>;
   /** Validate items against a form definition → FHIR resource items. Host-injected. */
   validateForm?(input: RunFormValidateInput): Promise<RunFormValidateOutput>;
+  /** Turn FHIR, form answers or mapped rows into FHIR records, and hold the rest. Host-injected. */
+  mapToFhir?(input: RunMapToFhirInput): Promise<RunMapToFhirOutput>;
   /** Persist FHIR resource items + emit data.persisted. Host-injected. */
   persistStore?(input: RunPersistStoreInput): Promise<RunPersistStoreOutput>;
   loadDataset(name: string): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;

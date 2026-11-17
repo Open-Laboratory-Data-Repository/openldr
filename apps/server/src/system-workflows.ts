@@ -26,6 +26,14 @@ function findNode(def: { nodes?: unknown[] }, templateId: string): Record<string
   ) as Record<string, any> | undefined;
 }
 
+/** The order form the stored graph is bound to: Map to FHIR's first allowed form, else Form Validate's form. */
+function storedFormId(def: { nodes?: unknown[] }): string | undefined {
+  const mapped = findNode(def, 'map-to-fhir')?.data?.config?.formIds;
+  if (Array.isArray(mapped) && typeof mapped[0] === 'string' && mapped[0].trim()) return mapped[0];
+  const old = findNode(def, 'form-validate')?.data?.config?.formId;
+  return typeof old === 'string' && old.trim() ? old : undefined;
+}
+
 /**
  * The webhook token the reset should keep in force, read out of whatever is currently stored.
  *
@@ -53,7 +61,9 @@ function carryOverSecret(trigger: Record<string, any> | undefined): { secretRef:
  *  - the webhook node's secret. The seed mints secrets with randomUUID(), so
  *    minting a fresh one here would silently invalidate every external producer's
  *    token. Reset restores structure, never credentials.
- *  - the form-validate node's `formId`, so a site that re-pointed it keeps its binding.
+ *  - the order form binding, so a site that re-pointed it keeps it. It is read from the Map to
+ *    FHIR node's first allowed form, or from the Form Validate node of a graph seeded before
+ *    Map to FHIR. The node's saved mappings are not carried over.
  *
  * `secretPreserved` has ONE precise meaning: **no external sender's webhook token
  * changed as a result of this reset.** Concretely:
@@ -75,7 +85,7 @@ export function rebuildSystemWorkflow(existing: { id: string; definition: { node
   secretPreserved: boolean;
 } {
   const carried = carryOverSecret(findNode(existing.definition, 'webhook-trigger'));
-  const oldFormId = findNode(existing.definition, 'form-validate')?.data?.config?.formId as string | undefined;
+  const oldFormId = storedFormId(existing.definition);
 
   const defaults = buildDefaultWorkflows({
     orderFormId: oldFormId ?? SEEDED_ORDER_FORM_ID,

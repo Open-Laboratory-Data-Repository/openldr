@@ -27,7 +27,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'aggregate', 'summarize', 'pivot', 'date-time', 'compare-datasets',
   // sinks
   'materialize-dataset', 'export-artifact',
-  'form-validate', 'persist-store',
+  'form-validate', 'map-to-fhir', 'persist-store',
   // codecs (slice B)
   'crypto', 'jwt', 'xml', 'markdown', 'html-extract', 'html',
   // binary/file (slice C)
@@ -233,6 +233,10 @@ export const nodeCategories: NodeCategory[] = [
         keywords: ['form', 'validate', 'fhir', 'ingest'],
         data: { action: 'form-validate', config: {} },
       }),
+      node('map-to-fhir', 'action', 'Map to FHIR', 'ArrowRightLeft', 'Turn FHIR, form answers or mapped rows into FHIR records', {
+        keywords: ['map', 'fhir', 'mapping', 'ingest', 'held'],
+        data: { action: 'map-to-fhir', config: {} },
+      }),
       node('persist-store', 'action', 'Persist Store', 'Database', 'Persist FHIR resources and emit data.persisted', {
         keywords: ['persist', 'save', 'fhir', 'store', 'sink'],
         data: { action: 'persist-store', config: {} },
@@ -315,7 +319,7 @@ export const nodeCategories: NodeCategory[] = [
         data: { config: { format: 'json', binaryField: 'data', fileName: '', textField: '' } },
       }),
       node('extract-from-file', 'action', 'Extract from File', 'FileInput', 'Parse file contents', {
-        data: { config: { format: 'json', sourceField: 'file', outputField: 'data' } },
+        data: { config: { format: 'json', sourceField: 'file', outputField: 'data', cellsAsText: true } },
       }),
       node('spreadsheet-file', 'action', 'Spreadsheet File', 'Sheet', 'Read / write CSV, XLSX', {
         data: { config: { operation: 'read', format: 'xlsx', sourceField: 'file', binaryField: 'data', fileName: '' } },

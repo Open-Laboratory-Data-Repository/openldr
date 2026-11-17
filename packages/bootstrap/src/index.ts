@@ -10,7 +10,7 @@ import { createBlobFromConfig } from './s3-config';
 import { requireOidcIssuer, type Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
-import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, LOCAL_MAP_URL, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -70,6 +70,7 @@ import { createLabIdentity, type LabIdentityService } from './lab-identity';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
 import { createUpdateCheck, type UpdateCheck } from './update-check';
 export * from './update-check';
+export { createMapToFhirApi, MAP_TEST_MAX_ITEMS, MapConfigError, type MapToFhirApi, type MapTestResult } from './map-to-fhir-api';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
 import { createWorkflowSql } from './workflow-sql';
@@ -93,6 +94,9 @@ import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
 import { createPluginNodeService } from './plugin-node-service';
 import { createFormValidateService } from './form-validate-service';
+import { createMapToFhirService, codingFromMapRows, loadStoredPacks, type MapToFhirService } from './map-to-fhir-service';
+import { createMapToFhirApi, type MapToFhirApi } from './map-to-fhir-api';
+import { validateBatch } from '@openldr/fhir';
 import { createPersistStoreService } from './persist-store-service';
 import { createConnectorDialectLookup, createConnectorSqlRunner } from './connector-sql-service';
 import { createConnectorMongoRunner } from './connector-mongo-service';
@@ -541,6 +545,8 @@ export interface AppContext {
     services: WorkflowServices;
     datasets: WorkflowDatasetStore;
     listeners: { reconcile(): Promise<void>; stopAll(): Promise<void> };
+    /** The mapping sheet's calls and the CLI's: targets, suggestions, a test run, code lists. */
+    mapToFhir: MapToFhirApi;
     /** SEC-06: encrypted store for secrets extracted from workflow definitions. */
     secretStore: WorkflowSecretStore;
   };
@@ -1423,7 +1429,22 @@ const reporting: ReportingApi = {
       }),
     },
   });
-  const workflows = { store: workflowStore, runs: workflowRuns, receipts: workflowReceipts, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners, secretStore: workflowSecrets };
+  // The stored Lab result packs: one reader for the node's service and for the mapping api.
+  const readStoredMapPacks = () => loadStoredPacks(starterPacks, seededStarterPacks().map((p) => p.id));
+  // listByType defaults to 500 and sets no ceiling. The newest maps come first, so above this the oldest are left out.
+  const STORED_CONCEPT_MAP_LIMIT = 10_000;
+  // Set below with the other workflow services. The api calls it directly, so a Test's cache reaches it.
+  let mapToFhirService: MapToFhirService | null = null;
+  const mapToFhirApi = createMapToFhirApi({
+    mapToFhir: (input, cache) => {
+      if (!mapToFhirService) throw new Error('Map to FHIR service is not set');
+      return mapToFhirService(input, cache);
+    },
+    packs: readStoredMapPacks,
+    conceptMaps: async () => (await canonicalFhirStore.listByType('ConceptMap', STORED_CONCEPT_MAP_LIMIT)).map((r) => r.resource as { url?: string; name?: string; title?: string }),
+    localSourceSystems: () => termStore.mapSourceSystems(LOCAL_MAP_URL),
+  });
+  const workflows = { mapToFhir: mapToFhirApi, store: workflowStore, runs: workflowRuns, receipts: workflowReceipts, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners, secretStore: workflowSecrets };
 
   // Seal legacy plaintext definitions before serving requests. The shared webhook
   // resolver reads the saved references. Migration stays best-effort per workflow.
@@ -1792,6 +1813,20 @@ const reporting: ReportingApi = {
     maxFileBytes: cfg.WORKFLOW_FILE_MAX_BYTES,
   });
   workflowServices.validateForm = createFormValidateService({ forms });
+  // Map to FHIR node: the same form-validate service, the stored Lab result packs, the code lists in
+  // the terminology store, and the check persist runs, without storing anything.
+  workflowServices.mapToFhir = mapToFhirService = createMapToFhirService({
+    forms,
+    validateForm: workflowServices.validateForm,
+    packs: readStoredMapPacks,
+    translateCode: async (mapUrl, code, system) => codingFromMapRows(await termStore.mapTargets({ mapUrl, code, system })),
+    // An order that came in this run counts as found; otherwise the store is asked, as persist does.
+    validate: async (resources, knownOrderIds) =>
+      validateBatch(resources, {
+        level: await validationStrictness.get(),
+        resolveServiceRequest: async (id: string) => knownOrderIds.has(id) || canonicalFhirStore.exists('ServiceRequest', id),
+      }),
+  });
   workflowServices.persistStore = createPersistStoreService({
     persist: workflowPersist,
     publish: (event) => eventing.publish(event),
@@ -2131,6 +2166,7 @@ export {
   type CatalogImportField, type CatalogColumnMap, type CatalogValueMap, type CategoryAnswer, type SpecimenAnswer,
 } from './test-catalog-import';
 export type { TableFileFormat } from './table-file';
+export { readTableFile, TableFileError } from './table-file';
 export type {
   FacilityImportDeps, FacilityImportOptions, FacilityImportResult,
   // Reachable through `FacilityImportResult` — exported so a consumer can name the type of a

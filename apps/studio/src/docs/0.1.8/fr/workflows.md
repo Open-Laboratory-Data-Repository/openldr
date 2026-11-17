@@ -6,7 +6,7 @@ Utilisez vos propres enregistrements et requêtes de rapport. Aucun jeu de donn�
 
 **View workflows** ouvre les définitions et exécutions. **Edit workflows** les crée et les modifie. **Run workflows** lance les exécutions manuelles. **Manage workflow secrets** modifie les identifiants webhook.
 
-Le workflow fourni **Ingest** traite aussi les soumissions Forms. Gardez-le activé. Le modifier affecte chaque émetteur utilisant son webhook. Remplacez un secret seulement lorsque vous êtes prêt à mettre ces émetteurs à jour.
+Le workflow fourni **Ingest** traite aussi les soumissions Forms. Sur une nouvelle installation, il fait passer ce qu'il reçoit par [Map to FHIR](/docs/map-to-fhir). Gardez-le activé. Le modifier affecte chaque émetteur utilisant son webhook. Remplacez un secret seulement lorsque vous êtes prêt à mettre ces émetteurs à jour.
 
 ## Trouver un workflow
 
@@ -98,7 +98,7 @@ Dans **Runs**, sélectionnez la ligne correspondant à la source et à l'heure r
 
 ### 3. Lire le résultat
 
-Vérifiez Completed ou Failed, puis le statut de chaque nœud. Dans cet exemple Bundle, Form Validate est ignoré, car la branche FHIR a traité l'entrée.
+Vérifiez Completed ou Failed, puis le statut de chaque nœud. Les images viennent d'une installation créée avant Map to FHIR. Là, Form Validate est ignoré, car la branche FHIR a traité le Bundle. Sur une nouvelle installation, le Bundle passe plutôt par **Map to FHIR**.
 
 ![L'exécution terminée montre la branche ayant traité ce Bundle.](workflows-guide-run-result.png)
 
@@ -316,6 +316,8 @@ curl -X POST https://your-host/api/workflows/hooks/ingest \
 
 Une réponse terminée contient `ok`, `runId` et `correlationId`. Une réponse 202 signifie accepté, avec un identifiant de requête et une URL de suivi. Consultez cette URL avec le jeton actuel. Respectez Retry-After. Réutilisez la même clé d'idempotence et une entrée identique pour une nouvelle tentative. Une entrée différente avec la même clé retourne 409.
 
+Sur une nouvelle installation, **Ingest** refuse un message entier dès qu'une partie ne peut pas être stockée. L'exécution échoue, l'émetteur reçoit HTTP 500, et rien de ce message n'est stocké. History montre les raisons sur le nœud **Map to FHIR**.
+
 ## Fichiers fictifs facultatifs d'exercice
 
 Utilisez-les uniquement sur une installation de test. [Téléchargez un Bundle avec un patient fictif](https://openldr.online/docs-samples/user-guide/workflows/example-patient.json) pour pratiquer le webhook. Enregistrez-le dans `data/your-payload.json` du dossier d'installation, par exemple `~/Downloads/openldr_ce` ou `C:\openldr_ce`. Utilisez la commande précédente avec votre hôte et jeton de test.
@@ -345,6 +347,12 @@ Utilisez `./openldr` dans votre dossier installé sous Linux ou macOS, `.\openld
 ./openldr workflows receipts show REQUEST_ID --json
 ```
 
+Pour essayer les mappages enregistrés d'un nœud Map to FHIR sur un fichier, lancez `workflows map-test`. La commande ne stocke rien. Enregistrez d'abord le workflow, car la commande lit le nœud enregistré. Dans le workflow fourni Ingest, l'identifiant du nœud est `map-1`.
+
+```shell
+./openldr workflows map-test wf-ingest map-1 data/your-rows.csv
+```
+
 ## Restaurer un workflow fourni
 
 Les workflows système proposent **Reset to default** plutôt que Delete. La réinitialisation abandonne le graphe personnalisé et exige une confirmation. Exportez d'abord la définition actuelle si vous devez la conserver.
@@ -365,4 +373,4 @@ La réinitialisation conserve normalement le secret webhook existant. Si l'avert
 
 ## Guides associés
 
-[Activité](/docs/activity) suit le parcours du contenu. [Rapports planifiés](/docs/report-pipeline) construit les données enregistrées et les classeurs de sortie. [Connecteurs](/docs/connectors) configure les systèmes externes.
+[Activité](/docs/activity) suit le parcours du contenu. [Rapports planifiés](/docs/report-pipeline) construit les données enregistrées et les classeurs de sortie. [Connecteurs](/docs/connectors) configure les systèmes externes. [Map to FHIR](/docs/map-to-fhir) mappe les lignes propres à un laboratoire.

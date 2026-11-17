@@ -29,6 +29,7 @@ import { ExcelTemplateForm } from './excel-template-form';
 import { PivotForm } from './pivot-form';
 import { DatabaseForm } from './database-form';
 import { EmailForm } from './email-form';
+import { MapToFhirForm } from './map-to-fhir-form';
 
 export interface NodeFormProps {
   node: WorkflowNode;
@@ -68,6 +69,7 @@ const FORMS: Record<string, ComponentType<NodeFormProps>> = {
   'load-dataset': LoadDatasetForm,
   'plugin-node': DeclarativeNodeForm,
   'form-validate': DeclarativeNodeForm,
+  'map-to-fhir': MapToFhirForm,
   'persist-store': DeclarativeNodeForm,
   'read-write-file': ReadWriteFileForm,
   'excel-template': ExcelTemplateForm,
@@ -92,6 +94,7 @@ export function pickForm(node: WorkflowNode): ComponentType<NodeFormProps> {
   if (node.type === 'webhook') return WebhookForm;
   if (node.type === 'loop') return LoopForm;
   if (node.type === 'action' && data.action === 'log') return LogForm;
+  if (node.type === 'action' && data.action === 'map-to-fhir') return MapToFhirForm;
   if (node.type === 'plugin-node') return DeclarativeNodeForm;
 
   // Any unregistered host action node renders its descriptor config[] declaratively

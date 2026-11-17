@@ -73,7 +73,7 @@ export const NAV_SECTIONS: Array<{ id: string; label: Record<DocLocale, string>;
       { slug: 'upgrading' },
       { slug: 'environment' },
       { slug: 'auth-providers' },
-      { slug: 'load-data' },
+      { slug: 'load-data', children: ['map-to-fhir'] },
       { slug: 'v1-import' },
       { slug: 'connector-diagnose' },
     ],

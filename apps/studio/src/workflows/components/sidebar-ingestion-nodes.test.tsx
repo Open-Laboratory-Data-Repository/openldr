@@ -10,15 +10,17 @@ beforeEach(() => {
 });
 
 describe('Sidebar — ingestion nodes', () => {
-  it('shows Form Validate and Persist Store as draggable palette items', async () => {
+  it('shows Form Validate, Map to FHIR and Persist Store as draggable palette items', async () => {
     render(<Sidebar />);
     const coreHeader = await screen.findByText('Core');
     fireEvent.click(coreHeader.closest('button')!);
 
     const formValidate = await screen.findByText('Form Validate');
     const persistStore = await screen.findByText('Persist Store');
+    const mapToFhir = await screen.findByText('Map to FHIR');
 
     expect(formValidate.closest('[draggable]')).toHaveAttribute('draggable', 'true');
     expect(persistStore.closest('[draggable]')).toHaveAttribute('draggable', 'true');
+    expect(mapToFhir.closest('[draggable]')).toHaveAttribute('draggable', 'true');
   });
 });

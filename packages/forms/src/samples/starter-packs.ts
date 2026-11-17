@@ -5,16 +5,17 @@ import { getPageTarget } from '../page-targets';
 import { sampleForms } from './forms';
 
 /**
- * The four seeded starter packs. Each is built from the form OpenLDR itself ships for that resource
- * type (`./forms.ts`), so a pack cannot drift from its form. Corlix's packs use its own code systems
- * and API property names, which CE's pages would not save (spec S5).
+ * The seeded starter packs. The first four are built from the form OpenLDR itself ships for that
+ * resource type (`./forms.ts`), so a pack cannot drift from its form. Specimen and Observation have
+ * no sample form, so their packs are written out below (`LITERAL_PACKS`). Corlix's packs use its
+ * own code systems and API property names, which CE's pages would not save (spec S5).
  *
  * A pack stores no codes (AGENTS.md §8). A coded select takes its options from the FHIR element's own
  * list when the studio turns the entry into a field.
  */
 
 /** Bump when a pack's content changes. Boot rewrites the seeded packs either way. */
-export const STARTER_PACK_VERSION = '4';
+export const STARTER_PACK_VERSION = '5';
 
 interface PackSource {
   id: string;
@@ -92,8 +93,96 @@ function toEntry(field: FormField, ord: number, form: FormSchema, page: string |
   return entry;
 }
 
+type LiteralEntry = Pick<StarterPackEntry, 'fhirPath' | 'label' | 'fieldType' | 'required' | 'boundValueSet' | 'rationale'>;
+
+/**
+ * Packs with no sample form behind them, so they are written out here. Each holds what a lab's
+ * results file usually carries. No links: the Map to FHIR node writes those itself. The value set
+ * URLs name the seeded lists; the codes stay in the terminology service.
+ */
+const LITERAL_PACKS: { id: string; resourceType: string; name: string; entries: LiteralEntry[] }[] = [
+  {
+    id: 'pack-specimen',
+    resourceType: 'Specimen',
+    name: 'Specimen',
+    entries: [
+      {
+        fhirPath: 'Specimen.collection.collectedDateTime', label: 'Collected date', fieldType: 'datetime', required: true,
+        boundValueSet: null, rationale: 'When the sample was taken. The warehouse uses it as the received time when no received date is given.',
+      },
+      {
+        fhirPath: 'Specimen.type', label: 'Specimen type', fieldType: 'reference', required: false,
+        boundValueSet: 'urn:openldr:valueset:specimen-type', rationale: 'What was collected, from the seeded specimen type list.',
+      },
+      {
+        fhirPath: 'Specimen.accessionIdentifier.value', label: 'Specimen number', fieldType: 'text', required: false,
+        boundValueSet: null, rationale: "The lab's own number for the sample, so the record can be matched to the tube.",
+      },
+      {
+        fhirPath: 'Specimen.receivedTime', label: 'Received date', fieldType: 'datetime', required: false,
+        boundValueSet: null, rationale: 'When the lab received the sample.',
+      },
+    ],
+  },
+  {
+    id: 'pack-observation',
+    resourceType: 'Observation',
+    name: 'Test result',
+    entries: [
+      {
+        fhirPath: 'Observation.code', label: 'Test', fieldType: 'reference', required: true,
+        boundValueSet: 'urn:openldr:valueset:lab-tests', rationale: "Which test the result is for, from this lab's test list.",
+      },
+      {
+        fhirPath: 'Observation.valueQuantity.value', label: 'Result (number)', fieldType: 'number', required: false,
+        boundValueSet: null, rationale: 'A measured result. Use this or the text result, whichever the test gives.',
+      },
+      {
+        fhirPath: 'Observation.valueString', label: 'Result (text)', fieldType: 'text', required: false,
+        boundValueSet: null, rationale: 'A result written as words. Use this or the number result, whichever the test gives.',
+      },
+      {
+        fhirPath: 'Observation.valueQuantity.unit', label: 'Unit', fieldType: 'text', required: false,
+        boundValueSet: null, rationale: 'The unit of a number result, as the lab writes it.',
+      },
+      {
+        fhirPath: 'Observation.effectiveDateTime', label: 'Result date', fieldType: 'datetime', required: false,
+        boundValueSet: null, rationale: 'When the result was made. The warehouse stores it as the result time.',
+      },
+      {
+        fhirPath: 'Observation.interpretation', label: 'Flag', fieldType: 'text', required: false,
+        boundValueSet: null, rationale: 'The high, low or abnormal flag on the result. The warehouse reads its code, so map it through a code list.',
+      },
+    ],
+  },
+];
+
+function literalPack(p: (typeof LITERAL_PACKS)[number]): SeededStarterPack {
+  return {
+    id: p.id,
+    resourceType: p.resourceType,
+    name: p.name,
+    version: STARTER_PACK_VERSION,
+    entries: p.entries.map((e, ord) => ({
+      ord,
+      fhirPath: e.fhirPath,
+      label: e.label,
+      apiProperty: null,
+      fieldType: e.fieldType,
+      fhirValueField: null,
+      required: e.required,
+      locked: false,
+      defaultOn: true,
+      boundValueSet: e.boundValueSet,
+      referenceTarget: null,
+      referenceMultiple: false,
+      rationale: e.rationale,
+    })),
+  };
+}
+
 export function seededStarterPacks(): SeededStarterPack[] {
-  return SOURCES.map((source) => {
+  return [...SOURCES.map((source) => {
     const form = sampleForms.find((f) => f.id === source.formId);
     if (!form || !form.fhirResourceType) throw new Error(`starter pack: no sample form ${source.formId}`);
     const fields = [...form.fields].sort((a, b) => a.order - b.order).filter((f) => !LEFT_OUT.has(f.id));
@@ -104,5 +193,5 @@ export function seededStarterPacks(): SeededStarterPack[] {
       version: STARTER_PACK_VERSION,
       entries: fields.map((f, i) => toEntry(f, i, form, source.page)),
     };
-  });
+  }), ...LITERAL_PACKS.map(literalPack)];
 }

@@ -1,24 +1,27 @@
 import type { Workflow } from './types';
 
-// The seeded default workflows for a fresh install: ONE unified ingestion workflow that
-// routes by the SHAPE of the posted payload, plus one reactive demo.
+// The seeded default workflows for a fresh install: ONE ingestion workflow, plus one reactive demo.
 //
 //   Ingest (wf-ingest, ENABLED):
 //     Webhook (POST /api/workflows/hooks/ingest, X-Webhook-Token)
-//       → Switch  rule "fhir": body is a FHIR transaction Bundle OR a bare resource array
-//           ├─ handle "fhir" → Unwrap FHIR Bundle (sourcePath 'body'; entry[].resource →
-//           │                   one item per FHIR resource, tolerates a bare array)
-//           └─ fallback "form" → Form Validate ("Lab order" form; sourcePath 'body' →
-//                                 answers → ServiceRequest/Observation)
-//       → Persist Store (source: webhook-ingest → emits data.persisted)
-//       → Log
-//     ONE webhook handles BOTH form answers AND pre-built FHIR (e.g. the CDR toolchain); ONE
-//     persist stores every resource and the projection routes each by resourceType
-//     (Observation → lab_results, ServiceRequest → lab_requests,
-//     QuestionnaireResponse → questionnaire_responses, …).
+//       -> Map to FHIR (sourcePath 'body'; target Lab result; allowed form: "Lab order"; no mapping)
+//            out  -> Persist Store (source: webhook-ingest, emits data.persisted) -> Log
+//            held -> nothing, on purpose
+//     Map to FHIR sends FHIR (a Bundle, a resource list or one resource) on as its resources, turns
+//     answers to the "Lab order" form into records, and holds anything else with a reason. A lab
+//     adds saved mappings for its own rows in the studio. With `held` unwired, one held item fails
+//     the node and the run, naming the count and the first reasons, and Persist does not run. So a
+//     sender whose data cannot be stored gets an error, as before Map to FHIR, never a 200. A
+//     workflow that should store the good rows and set the bad ones aside wires `held` to a node of
+//     its own. ONE persist stores every resource and the
+//     projection routes each by resourceType (Observation -> lab_results, ServiceRequest ->
+//     lab_requests, QuestionnaireResponse -> questionnaire_responses, and so on).
 //
 //   Reactive (wf-sample-reactive, ENABLED):
-//     Event Trigger (data.persisted, source: webhook-ingest) → Log
+//     Event Trigger (data.persisted, source: webhook-ingest) -> Log
+//
+// This graph reaches fresh installs and the reset action only. A stored wf-ingest is never
+// migrated: an install seeded earlier keeps its Switch, Unwrap and Form Validate graph.
 //
 // wf-ingest ships ENABLED. It used to ship disabled, on the reasoning that it exposes a live
 // HTTP endpoint the operator should opt into — defensible while the workflow served only that
@@ -46,12 +49,11 @@ import type { Workflow } from './types';
 const INGEST_WEBHOOK_PATH = 'ingest';
 /** Ingest Persist Store `source` — MUST match the reactive Event Trigger `source`. */
 const INGEST_PERSIST_SOURCE = 'webhook-ingest';
-/** Switch rule: route a FHIR transaction Bundle or a bare resource array to the "fhir" branch. */
-const FHIR_ROUTE_CONDITION =
-  "Array.isArray($json.body) || (!!$json.body && $json.body.resourceType === 'Bundle')";
+/** The Map to FHIR target the Ingest node starts with. A target id, not a clinical code. */
+const INGEST_MAP_TARGET = 'lab-result';
 
 export interface DefaultWorkflowInput {
-  /** Id of the seeded "Lab order" form the ingest workflow's form branch validates against. */
+  /** Id of the seeded "Lab order" form whose answers the ingest workflow's Map to FHIR node allows. */
   orderFormId: string;
   /** Per-install shared secret for the ingest webhook (sent as X-Webhook-Token). */
   webhookSecret: string;
@@ -62,12 +64,13 @@ export function buildDefaultWorkflows({ orderFormId, webhookSecret }: DefaultWor
     id: 'wf-ingest',
     name: 'Ingest',
     description:
-      'Unified ingestion. POST to /api/workflows/hooks/ingest with header X-Webhook-Token → a ' +
-      'Switch routes by payload shape: a FHIR transaction Bundle (or bare resource array) is ' +
-      'unwrapped into one item per resource, while form ANSWERS are validated against the ' +
-      '"Lab order" form → both persist to the FHIR store (the projection routes each resource ' +
-      'by type) → emit data.persisted. Enabled by default — form capture submits through it; ' +
-      'copy the webhook secret to let external senders post to it too.',
+      'Ingestion. POST to /api/workflows/hooks/ingest with header X-Webhook-Token. Map to FHIR ' +
+      'sends FHIR on as its resources, turns answers to the "Lab order" form into records, and ' +
+      'turns rows into records by the mappings saved in the node. Records go to Persist store ' +
+      'and emit data.persisted. If any part of a message cannot be mapped or fails the checks, ' +
+      'the run fails with the reasons and nothing from it is stored. ' +
+      'Enabled by default: form capture submits through it. Copy the webhook secret to let ' +
+      'external senders post to it too.',
     enabled: true,
     createdBy: null,
     definition: {
@@ -86,45 +89,21 @@ export function buildDefaultWorkflows({ orderFormId, webhookSecret }: DefaultWor
           },
         },
         {
-          id: 'route-1',
-          type: 'condition',
+          id: 'map-1',
+          type: 'action',
           position: { x: 360, y: 220 },
           data: {
-            label: 'Route by payload shape',
-            rules: [{ name: 'fhir', condition: FHIR_ROUTE_CONDITION }],
-            fallbackOutput: 'form',
-            templateId: 'switch',
-            iconName: 'Split',
-          },
-        },
-        {
-          id: 'unwrap-1',
-          type: 'action',
-          position: { x: 660, y: 120 },
-          data: {
-            label: 'Unwrap FHIR Bundle',
-            action: 'unwrap-bundle',
-            config: { sourcePath: 'body' },
-            templateId: 'unwrap-bundle',
-            iconName: 'PackageOpen',
-          },
-        },
-        {
-          id: 'form-validate-1',
-          type: 'action',
-          position: { x: 660, y: 320 },
-          data: {
-            label: 'Validate form answers',
-            action: 'form-validate',
-            config: { formId: orderFormId, sourcePath: 'body' },
-            templateId: 'form-validate',
-            iconName: 'ClipboardCheck',
+            label: 'Map to FHIR',
+            action: 'map-to-fhir',
+            config: { sourcePath: 'body', targetId: INGEST_MAP_TARGET, formIds: [orderFormId], mappings: [] },
+            templateId: 'map-to-fhir',
+            iconName: 'ArrowRightLeft',
           },
         },
         {
           id: 'persist-1',
           type: 'action',
-          position: { x: 960, y: 220 },
+          position: { x: 660, y: 120 },
           data: {
             label: 'Persist store',
             action: 'persist-store',
@@ -136,7 +115,7 @@ export function buildDefaultWorkflows({ orderFormId, webhookSecret }: DefaultWor
         {
           id: 'log-1',
           type: 'action',
-          position: { x: 1260, y: 220 },
+          position: { x: 960, y: 120 },
           data: {
             label: 'Log persisted',
             action: 'log',
@@ -149,12 +128,9 @@ export function buildDefaultWorkflows({ orderFormId, webhookSecret }: DefaultWor
         },
       ],
       edges: [
-        { id: 'e1', source: 'trigger-1', target: 'route-1' },
-        { id: 'e2', source: 'route-1', target: 'unwrap-1', sourceHandle: 'fhir' },
-        { id: 'e3', source: 'route-1', target: 'form-validate-1', sourceHandle: 'form' },
-        { id: 'e4', source: 'unwrap-1', target: 'persist-1' },
-        { id: 'e5', source: 'form-validate-1', target: 'persist-1' },
-        { id: 'e6', source: 'persist-1', target: 'log-1' },
+        { id: 'e1', source: 'trigger-1', target: 'map-1' },
+        { id: 'e2', source: 'map-1', target: 'persist-1', sourceHandle: 'out' },
+        { id: 'e3', source: 'persist-1', target: 'log-1' },
       ],
     },
   };

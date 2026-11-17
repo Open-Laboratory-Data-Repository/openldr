@@ -15,6 +15,7 @@ import { exportHandler } from './export';
 import { loadDatasetHandler } from './load-dataset';
 import { pluginNodeHandler } from './plugin-node';
 import { formValidateHandler } from './form-validate';
+import { mapToFhirHandler } from './map-to-fhir';
 import { persistStoreHandler } from './persist-store';
 import { stopErrorHandler } from './stop-error';
 import { switchHandler } from './switch';
@@ -66,6 +67,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'export-artifact': exportHandler,
   'load-dataset': loadDatasetHandler,
   'form-validate': formValidateHandler,
+  'map-to-fhir': mapToFhirHandler,
   'persist-store': persistStoreHandler,
   'sort': sortHandler,
   'limit': limitHandler,

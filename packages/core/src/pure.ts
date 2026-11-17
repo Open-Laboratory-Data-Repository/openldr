@@ -8,3 +8,4 @@ export * from './param-format';
 export * from './semver';
 export * from './release-manifest';
 export * from './update-verdict';
+export * from './similarity';

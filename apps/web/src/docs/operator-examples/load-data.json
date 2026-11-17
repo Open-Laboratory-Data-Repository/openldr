@@ -11,6 +11,10 @@
     "unix": "./openldr workflows receipts show REQUEST_ID --json",
     "windows": ".\\openldr.ps1 workflows receipts show REQUEST_ID --json"
   },
+  "data-map-test": {
+    "unix": "./openldr workflows map-test wf-ingest map-1 data/your-rows.csv",
+    "windows": ".\\openldr.ps1 workflows map-test wf-ingest map-1 data/your-rows.csv"
+  },
   "data-validate": {
     "unix": "./openldr fhir validate data/your-payload.json",
     "windows": ".\\openldr.ps1 fhir validate data/your-payload.json"

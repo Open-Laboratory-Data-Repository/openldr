@@ -195,6 +195,64 @@ The default Ingest workflow's fork becomes one Map to FHIR node feeding Persist 
   port needs the runner to carry items per output port. That is a small engine change and the
   plan's first task.
 
+- **Record ids come from the row's own identifiers** (the operator, 2026-11-17, during the build:
+  "From the row's identifiers"). A random id per row would make a second Patient, Specimen and
+  order each time a row is sent again.
+  - Patient: the mapped patient identifier, its system when mapped plus its value.
+  - Specimen: the mapped specimen number, scoped by the patient. With no specimen number, the
+    patient plus the collected date.
+  - ServiceRequest: the specimen plus the order's test code.
+  - Observation: the order plus the result's own code, so two results of one order stay two.
+  - The id is a hash of those parts, so no raw identifier value appears in an id.
+  - The same row sent twice gives the same ids. Two rows with one patient ID give one Patient id.
+  - A row with no patient identifier goes to `held`, with a reason naming the field. The Lab
+    result target marks the patient identifier required.
+  - A target declares each record's identity, as it declares its links. The mapping core knows no
+    resource type.
+- **The Lab result target has its own short required list** (the operator, 2026-11-17: "Short
+  list"). Required: Patient ID, date collected, test. Everything else is optional, including first
+  name, last name, date of birth, sex and priority. The starter packs keep their own required
+  flags for forms. Only the target overrides them. With no test code on the order itself, the
+  order's id comes from the specimen alone.
+- **Mapped results carry the laboratory category** (the operator, 2026-11-17: "Mark as
+  laboratory"). It is a default of the target, kept beside the status defaults, not a literal in
+  handler code. So the rule "a lab result must link to an order" runs on every mapped result.
+- **A saved mapping matches a row whose columns it knows** (found during the build, 2026-11-17).
+  The Extract from File node drops blank cells, so the rows of one file have different field
+  lists, and one column can be a number in one row and text in the next. Matching on the exact
+  shape of 5.4 would hold every row with a blank cell. So a mapping matches a row when every field
+  of the row is one of the mapping's field names. Types play no part. A row with a field the
+  mapping never saw is still a new shape and goes to `held`. The shape hash stays as the name of
+  the sample a mapping was made from.
+- **Starter pack labels are English only.** The Lab result target takes its fr and pt labels from
+  two content files keyed by target field.
+- **A loop passes on what the last nodes of its body give** (`extractTerminalItems`,
+  `run-workflow.ts:309`). A Map node with nothing after it in the body is a last node, and its
+  output is its `out` items. Its `held` items go on only through a node connected to `held` inside
+  the body. The in-app guide says to connect both.
+- **A plain text in a coded field is the lab's own code** (ruling R35, fix wave). The writer gives
+  `{ text, coding: [{ code }] }` with no system, so the warehouse finds the code. A code list
+  rule gives a standard coding.
+- **The sheet works on one set of columns per sample** (fix wave). It takes the columns of every
+  row the feeding node gave, before the cut to 20 rows. There is no shape select.
+- **Extract from File has `cellsAsText`** (fix wave, the operator's ruling). With it on, a CSV
+  cell reaches the workflow as the text in the file. Saved nodes have it off and behave as before;
+  a node dropped from the sidebar has it on. An Excel cell keeps its type.
+- **A result id that two rows of one run give with other values is a clash** (fix wave). The
+  later row is held. A result's identity also takes the result date, when mapped.
+- **Rows of one run that give one patient, specimen or order make one record** (fix wave). The
+  first non-empty value of each path wins, and the record goes out once, at the first row. Across
+  runs, a thin row still replaces the stored record.
+- **A file with one column per test can be mapped** (Task 8c; ruled by the parent session on the
+  operator's behalf, 2026-11-17: "Build this one, it is not optional"). A row of a repeating record
+  can take `from: { fixedList: string[] }`, one fixed value per position, paired with the result
+  field's `{ fields }`. A fixed value never keeps a position alive, so a blank cell gives no result.
+  On the sheet, each column of a result field shows with its test, which starts as the column's
+  name. Also in Task 8c, by the same source: the Date rule reads an Excel date cell
+  (`format: 'excel'`, 1900 system only); an order with no mapped Tests field takes its results'
+  test codes (`derived` on the target, outside every id); a Values rule's To can be a code with
+  its system; the within-run merge matches pinned list entries by their pinned values.
+
 ## 9. Still not checked
 
 - How good name suggestions are on real lab files. No real file has been tried.

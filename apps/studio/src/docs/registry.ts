@@ -632,7 +632,7 @@ export const DOC_GUIDES: DocGuide[] = [
     requiredRoles: ['lab_admin', 'lab_manager'],
     estimatedMinutes: 35,
     difficulty: 'intermediate',
-    relatedSlugs: ['report-pipeline', 'reports', 'connectors', 'audit'],
+    relatedSlugs: ['report-pipeline', 'reports', 'connectors', 'audit', 'map-to-fhir'],
     screenshotNames: ['workflows-list.png', 'workflow-builder.png', 'workflow-run-history.png'],
     capturedNames: [
       'workflows-tour.png',
@@ -685,6 +685,19 @@ export const DOC_GUIDES: DocGuide[] = [
       'workflows-guide-phone-search.png',
       'workflows-guide-phone-open.png',
     ],
+    status: 'published',
+  },
+  {
+    slug: 'map-to-fhir',
+    title: 'Map to FHIR',
+    group: 'system-setup',
+    summary: 'Map to FHIR is a workflow node. It turns a lab\'s own rows into FHIR records, passes FHIR on, and holds what it cannot map with a reason.',
+    audience: ['lab-managers', 'administrators'],
+    requiredRoles: ['lab_admin', 'lab_manager'],
+    estimatedMinutes: 20,
+    difficulty: 'intermediate',
+    relatedSlugs: ['workflows', 'forms', 'terminology'],
+    screenshotNames: [],
     status: 'published',
   },
 

@@ -158,6 +158,7 @@ describe('COMMAND_META', () => {
       'report run: reports.export + reports.run',
       'test-catalog map match: terminology.manage + terminology.view',
       'test-catalog params: terminology.manage + terminology.view',
+      'workflows map-test: workflows.edit + workflows.view',
     ]);
   });
 
@@ -218,7 +219,7 @@ const REASON: Record<string, string> = {
   key: SETTING, keyId: ID, kind: CHOICE, level: CHOICE, loinc: ID, name: ID, plugin: ID, requestId: ID,
   resourceId: ID, resourceType: CHOICE, roles: ID, run: ID, site: CHOICE, siteId: ID, slug: ID, state: CHOICE,
   subject: ID, system: URI, systemId: ID, systemUrl: URI, table: 'a warehouse table name', 'target-code': ID,
-  username: ID, value: SETTING, valueSetUrl: URI, version: 'a version number', workflowId: ID,
+  username: ID, value: SETTING, valueSetUrl: URI, nodeId: ID, version: 'a version number', workflowId: ID,
   // options
   '--action': FILTER, '--activity': CHOICE, '--actor': 'audit list: a filter on the actor id, not the root --actor',
   '--address': TEXT, '--agent': PERSON, '--approved-by': PERSON, '--caps': 'capability keys', '--category': FILTER,
@@ -243,6 +244,7 @@ const REASON: Record<string, string> = {
 const NOT_A_PATH: Record<string, string[]> = {
   'workflows receipts list': ['workflowId', '--limit', '--offset'],
   'workflows receipts show': ['requestId'],
+  'workflows map-test': ['workflowId', 'nodeId'],
   'connectors inspect': ['id'],
   'connectors update': ['id'],
   'connectors diagnose': ['id'],

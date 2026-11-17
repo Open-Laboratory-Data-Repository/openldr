@@ -6,7 +6,7 @@ Use your own records and reporting queries. No documentation sample data is requ
 
 **View workflows** opens definitions and runs. **Edit workflows** creates and changes them. **Run workflows** starts manual runs. **Manage workflow secrets** changes webhook credentials.
 
-The shipped **Ingest** workflow also handles Forms submissions. Keep it enabled. Editing it affects every sender using its webhook. Replace a secret only when you are ready to update those senders.
+The shipped **Ingest** workflow also handles Forms submissions. On a new install it sends what it receives through [Map to FHIR](/docs/map-to-fhir). Keep it enabled. Editing it affects every sender using its webhook. Replace a secret only when you are ready to update those senders.
 
 ## Find a workflow
 
@@ -98,7 +98,7 @@ In **Runs**, select the row matching the source and time you need.
 
 ### 3. Read the outcome
 
-Check Completed or Failed, then each node status. In this Bundle example, Form Validate is skipped because the FHIR branch handled the input.
+Check Completed or Failed, then each node status. The pictures come from an install seeded before Map to FHIR. There, Form Validate is skipped because the FHIR branch handled the Bundle. On a new install, the Bundle goes through **Map to FHIR** instead.
 
 ![The completed run shows which branch handled this Bundle.](workflows-guide-run-result.png)
 
@@ -316,6 +316,8 @@ curl -X POST https://your-host/api/workflows/hooks/ingest \
 
 A completed response contains `ok`, `runId` and `correlationId`. A 202 response means accepted, with a request identifier and polling URL. Follow that URL with the current token. Respect Retry-After. Reuse the same idempotency key and identical input for a retry. Different input with the same key returns 409.
 
+On a new install, **Ingest** refuses a whole message when any part of it cannot be stored. The run fails, the sender gets HTTP 500, and nothing from that message is stored. History shows the reasons on the **Map to FHIR** node.
+
 ## Optional fictional practice files
 
 Use these only in a test installation. [Download one fictional patient Bundle](https://openldr.online/docs-samples/user-guide/workflows/example-patient.json) to practise the webhook. Store it as `data/your-payload.json` in your installation folder, for example `~/Downloads/openldr_ce` or `C:\openldr_ce`. Use the command above with your test host and token.
@@ -345,6 +347,12 @@ Use `./openldr` in your installed Linux or macOS folder, `.\openldr.ps1` on Wind
 ./openldr workflows receipts show REQUEST_ID --json
 ```
 
+To try a Map to FHIR node's saved mappings on a file, run `workflows map-test`. It stores nothing. Save the workflow first, because the command reads the saved node. In the shipped Ingest workflow, the node id is `map-1`.
+
+```shell
+./openldr workflows map-test wf-ingest map-1 data/your-rows.csv
+```
+
 ## Restore a shipped workflow
 
 System workflows offer **Reset to default** instead of Delete. Reset discards the customised graph and requires confirmation. Export the current definition first if you need to keep it.
@@ -365,4 +373,4 @@ Reset normally keeps the existing webhook secret. If the reset warning says it c
 
 ## Related guides
 
-[Activity](/docs/activity) follows the payload lifecycle. [Scheduled reports](/docs/report-pipeline) builds stored data and workbook output. [Connectors](/docs/connectors) configures external systems.
+[Activity](/docs/activity) follows the payload lifecycle. [Scheduled reports](/docs/report-pipeline) builds stored data and workbook output. [Connectors](/docs/connectors) configures external systems. [Map to FHIR](/docs/map-to-fhir) maps a lab's own rows.
