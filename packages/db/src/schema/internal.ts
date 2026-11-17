@@ -756,6 +756,8 @@ export interface WorkflowsTable {
   created_by: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
+  /** Raised by every update. A save writes only if the version it read is still stored. */
+  version: Generated<number>;
 }
 
 export interface WorkflowWebhookReceiptsTable {

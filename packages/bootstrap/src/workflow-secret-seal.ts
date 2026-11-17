@@ -1,4 +1,4 @@
-import { mapSecretFieldsAsync, isSecretRef } from '@openldr/workflows';
+import { forEachSecretField, mapSecretFieldsAsync, isSecretRef } from '@openldr/workflows';
 import type { WorkflowSecretStore } from '@openldr/db';
 
 /**
@@ -31,12 +31,24 @@ export async function sealDefinitionSecrets(
   return out;
 }
 
+/** The secret row ids a definition names. */
+export function secretRefsOf(definition: unknown): string[] {
+  const ids: string[] = [];
+  if (definition) forEachSecretField(definition, (f) => { if (isSecretRef(f.value)) ids.push(f.value.secretRef); });
+  return ids;
+}
+
 /**
- * A save's secrets, sealed but not yet tidied. The old rows stay until the workflow is stored:
- * `commit` (after the write succeeded) drops the ones the new definition no longer names, `abort`
- * (after the write was refused) drops only the rows this save just sealed. So a refused save, such
- * as a webhook path another enabled workflow took a moment earlier, leaves the stored workflow and
- * every secret it names exactly as they were.
+ * A save's secrets, sealed but not yet tidied. Nothing is deleted before the workflow is stored.
+ *
+ * - `commit`, after the write succeeded, drops only the rows `previous` (the version this save
+ *   replaced) named and the new version does not. It never touches rows another save made, and,
+ *   because the store writes only over the version the save read (`expectedVersion`), no stored or
+ *   later version can still name what it drops.
+ * - `abort`, after the write was refused, drops only the rows this save sealed.
+ *
+ * So a refused save leaves the stored workflow and its secrets as they were, and a slow save's
+ * clean-up cannot remove a newer save's secrets.
  */
 export interface SealedSave {
   definition: unknown;
@@ -49,11 +61,13 @@ export async function sealForSave(
   workflowId: string,
   secretStore: WorkflowSecretStore,
   key: string | undefined,
+  previous: unknown,
 ): Promise<SealedSave> {
   const { out, kept, created } = await seal(definition, workflowId, secretStore, key);
+  const replaced = secretRefsOf(previous).filter((id) => !kept.includes(id));
   return {
     definition: out,
-    commit: () => secretStore.deleteExcept(workflowId, kept),
+    commit: () => secretStore.deleteIds(workflowId, replaced),
     abort: () => secretStore.deleteIds(workflowId, created),
   };
 }

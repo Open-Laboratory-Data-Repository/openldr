@@ -1,12 +1,12 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z, ZodError } from 'zod';
-import { sealForSave, duplicateWorkflow, newWorkflowId, MAP_TEST_MAX_ITEMS, MapConfigError, type AppContext } from '@openldr/bootstrap';
+import { sealForSave, secretRefsOf, duplicateWorkflow, newWorkflowId, MAP_TEST_MAX_ITEMS, MapConfigError, type AppContext } from '@openldr/bootstrap';
 import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, isSecretRef } from '@openldr/workflows';
 import { ConfigError, appError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
 import { fhirXmlToJson } from '@openldr/fhir/xml';
-import { findWebhookPathClaims, quoteLongIntegers, WebhookPathClaimedError } from '@openldr/workflows';
+import { findWebhookPathClaims, quoteLongIntegers, WebhookPathClaimedError, WorkflowChangedError } from '@openldr/workflows';
 
 /** The content types the webhook reads as XML. Only FHIR XML gets through; see `fhirXmlToJson`. */
 const XML_TYPES = new Set(['application/fhir+xml', 'application/xml']);
@@ -96,13 +96,14 @@ async function storeWithSecrets<T>(
   ctx: AppContext,
   workflowId: string,
   definition: unknown,
+  previous: unknown,
   write: (sealed: unknown) => Promise<T>,
 ): Promise<T> {
   // The shared seal (also used by the boot migration), so a saved `{ secretRef }` is
   // byte-identical to a migrated one. The old rows stay until the write succeeds: a refused write
   // (a webhook path another enabled workflow took a moment earlier) drops only what this save
   // sealed, so the stored workflow keeps every secret it names.
-  const sealed = await sealForSave(definition, workflowId, ctx.workflows.secretStore, ctx.cfg.SECRETS_ENCRYPTION_KEY);
+  const sealed = await sealForSave(definition, workflowId, ctx.workflows.secretStore, ctx.cfg.SECRETS_ENCRYPTION_KEY, previous);
   let result: T;
   try {
     result = await write(sealed.definition);
@@ -110,7 +111,7 @@ async function storeWithSecrets<T>(
     await sealed.abort().catch((e) => ctx.logger.warn({ err: e }, 'could not drop the secrets of a refused workflow save'));
     throw err;
   }
-  // Clean-up only: a failure here leaves unused rows, never a broken workflow.
+  // Drops only what the replaced version named and this one does not. A failure leaves unused rows.
   await sealed.commit().catch((e) => ctx.logger.warn({ err: e }, 'could not drop unused workflow secrets after a save'));
   return result;
 }
@@ -275,7 +276,7 @@ export function registerWorkflowRoutes(
       if (clash) return reply.code(409).send({ error: clash });
       // SEC-06: seal plaintext secrets into the store; persist refs only. Built fully
       // before create → a fail-closed ConfigError leaves nothing persisted.
-      const created = await storeWithSecrets(ctx, parsed.id, parsed.definition,
+      const created = await storeWithSecrets(ctx, parsed.id, parsed.definition, null,
         (definition) => ctx.workflows.store.create({ ...parsed, definition: definition as typeof parsed.definition }));
       await syncWorkflowTriggers(ctx, created);
       ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
@@ -295,8 +296,12 @@ export function registerWorkflowRoutes(
       if (clash) return reply.code(409).send({ error: clash });
       // SEC-06: the workflow's OWN id (the :id param, which store.update forces onto
       // the row) owns its secrets. Seal plaintext → refs before persisting.
-      const updated = await storeWithSecrets(ctx, id, parsed.definition,
-        (definition) => ctx.workflows.store.update(id, { ...parsed, definition: definition as typeof parsed.definition }));
+      // A save names only secrets the stored version holds. Another one comes from an editor opened
+      // before a later save, whose clean-up may have dropped it: refuse rather than store a dead link.
+      const held = new Set(secretRefsOf(before?.definition));
+      if (secretRefsOf(parsed.definition).some((ref) => !held.has(ref))) throw new WorkflowChangedError();
+      const updated = await storeWithSecrets(ctx, id, parsed.definition, before?.definition ?? null,
+        (definition) => ctx.workflows.store.update(id, { ...parsed, definition: definition as typeof parsed.definition }, { expectedVersion: before?.version }));
       await syncWorkflowTriggers(ctx, updated);
       ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
       ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
@@ -378,8 +383,8 @@ export function registerWorkflowRoutes(
       // GET /api/workflows/:id detail response. Seal first, persist refs only — and the seal
       // also GCs (deleteExcept) any secret rows the mangled graph left behind whose nodes are
       // not in the restored default.
-      const updated = await storeWithSecrets(ctx, id, workflow.definition,
-        (definition) => ctx.workflows.store.update(id, { ...workflow, definition: definition as typeof workflow.definition }));
+      const updated = await storeWithSecrets(ctx, id, workflow.definition, before.definition,
+        (definition) => ctx.workflows.store.update(id, { ...workflow, definition: definition as typeof workflow.definition }, { expectedVersion: before.version }));
       // Re-sync the in-memory webhook/schedule registries, same as create/update — otherwise
       // a reset that fixes a mangled path in storage would leave the RUNNING server still
       // routing on the stale (mangled) path until some other save happened.
@@ -737,6 +742,8 @@ function mapError(err: unknown, reply: FastifyReply): { error: string } {
   if (err instanceof ZodError) { reply.code(400); return { error: 'invalid payload' }; }
   // The database refused a webhook path claim: another enabled workflow holds it (store.ts).
   if (err instanceof WebhookPathClaimedError) { reply.code(409); return { error: err.message }; }
+  // Another save replaced the version this one was based on (store.ts, expectedVersion).
+  if (err instanceof WorkflowChangedError) { reply.code(409); return { error: err.message }; }
   // SEC-06 fail-closed: saving a workflow that carries a secret without
   // SECRETS_ENCRYPTION_KEY set throws ConfigError from the secret store. This is a
   // SERVER-config fault (the client's payload was valid), so map to 503 — consistent

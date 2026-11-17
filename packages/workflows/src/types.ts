@@ -64,6 +64,8 @@ export const WorkflowSchema = z.object({
   createdBy: z.string().nullable().default(null),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
+  /** The stored version, raised by every update. Read-only: a save never sets it. */
+  version: z.number().int().optional(),
 });
 export type Workflow = z.infer<typeof WorkflowSchema>;
 

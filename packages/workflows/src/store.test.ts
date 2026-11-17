@@ -23,6 +23,8 @@ beforeEach(async () => {
     .addColumn('path', 'text', c => c.notNull())
     .addPrimaryKeyConstraint('workflow_webhook_paths_pkey', ['workflow_id', 'path']).execute();
   // As migration 120: the path is the key, so two enabled workflows cannot both claim it.
+  // As migration 121.
+  await db.schema.alterTable('workflows').addColumn('version', 'integer', c => c.notNull().defaultTo(0)).execute();
   await db.schema.createTable('workflow_webhook_claims')
     .addColumn('path', 'text', c => c.primaryKey())
     .addColumn('workflow_id', 'text', c => c.notNull().references('workflows.id').onDelete('cascade')).execute();
@@ -109,5 +111,26 @@ describe('one enabled workflow per webhook path, held by the database', () => {
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     const refused = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
     expect(refused.reason).toMatchObject({ name: 'WebhookPathClaimedError', path: 'lab-x' });
+  });
+});
+
+describe('a save writes only over the version it read', () => {
+  const plain = (id: string, name: string) => ({ id, name, description: null, enabled: true, createdBy: null, definition: { nodes: [], edges: [] } }) as never;
+
+  it('raises the version on each update, and refuses an update based on an older version', async () => {
+    const store = createWorkflowStore(db);
+    await store.create(plain('wf-v', 'v0'));
+    expect((await store.get('wf-v'))!.version).toBe(0);
+    await store.update('wf-v', plain('wf-v', 'v1'), { expectedVersion: 0 });
+    expect((await store.get('wf-v'))!.version).toBe(1);
+    await expect(store.update('wf-v', plain('wf-v', 'stale'), { expectedVersion: 0 })).rejects.toMatchObject({ name: 'WorkflowChangedError' });
+    expect((await store.get('wf-v'))!.name).toBe('v1');
+  });
+
+  it('keeps an update with no expected version working, as the seed and boot migration use it', async () => {
+    const store = createWorkflowStore(db);
+    await store.create(plain('wf-v', 'v0'));
+    await store.update('wf-v', plain('wf-v', 'v1'));
+    expect((await store.get('wf-v'))!.version).toBe(1);
   });
 });

@@ -44,6 +44,14 @@ export class WebhookPathClaimedError extends Error {
   }
 }
 
+/** A save based on a version that is no longer the stored one. */
+export class WorkflowChangedError extends Error {
+  constructor() {
+    super('This workflow changed since you opened it. Reload it, then save again.');
+    this.name = 'WorkflowChangedError';
+  }
+}
+
 export class WebhookPathConflictError extends Error {
   constructor() { super('Webhook path has multiple enabled triggers'); this.name = 'WebhookPathConflictError'; }
 }

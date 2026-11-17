@@ -1,7 +1,8 @@
 import type { Kysely } from 'kysely';
 import type { InternalSchema } from '@openldr/db';
 import { type Workflow, WorkflowSchema } from './types';
-import { normalizeWebhookPath, webhookNodePath, WebhookPathClaimedError } from './shared-webhook-resolver';
+import { normalizeWebhookPath, webhookNodePath, WebhookPathClaimedError, WorkflowChangedError } from './shared-webhook-resolver';
+import { sql } from 'kysely';
 
 function toRow(w: Workflow) {
   return {
@@ -25,6 +26,7 @@ function fromRow(r: Record<string, unknown>): Workflow {
     createdBy: r.created_by ?? null,
     createdAt: r.created_at ? String(r.created_at) : undefined,
     updatedAt: r.updated_at ? String(r.updated_at) : undefined,
+    version: r.version == null ? undefined : Number(r.version),
   });
 }
 
@@ -33,7 +35,11 @@ export interface WorkflowStore {
   findByWebhookPath(path: string): Promise<Workflow[]>;
   get(id: string): Promise<Workflow | undefined>;
   create(w: Workflow): Promise<Workflow>;
-  update(id: string, w: Workflow): Promise<Workflow>;
+  /**
+   * Store a new version. With `expectedVersion`, write only if that is still the stored version,
+   * else throw `WorkflowChangedError`: the save was based on a version another save has replaced.
+   */
+  update(id: string, w: Workflow, opts?: { expectedVersion?: number }): Promise<Workflow>;
   remove(id: string): Promise<void>;
 }
 
@@ -65,12 +71,19 @@ export function createWorkflowStore(db: Kysely<InternalSchema>): WorkflowStore {
       }));
       return (await store.get(w.id))!;
     },
-    async update(id, w) {
+    async update(id, w, opts) {
       const parsed = WorkflowSchema.parse({ ...w, id });
+      const expected = opts?.expectedVersion;
       await claiming(db, parsed, () => db.transaction().execute(async trx => {
         await assertPathsFree(trx, parsed);
-        const updated = await trx.updateTable('workflows').set(toRow(parsed) as never)
-          .where('id', '=', id).executeTakeFirst();
+        let q = trx.updateTable('workflows').set({ ...toRow(parsed), version: sql`version + 1` } as never).where('id', '=', id);
+        // Compare and set: a second save from the same version finds the version raised and writes nothing.
+        if (expected !== undefined) q = q.where('version', '=', expected);
+        const updated = await q.executeTakeFirst();
+        if (updated.numUpdatedRows === 0n && expected !== undefined
+          && await trx.selectFrom('workflows').select('id').where('id', '=', id).executeTakeFirst()) {
+          throw new WorkflowChangedError();
+        }
         if (updated.numUpdatedRows > 0n) {
           await replacePaths(trx, parsed);
           await replaceClaims(trx, parsed);

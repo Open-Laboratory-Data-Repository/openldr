@@ -6,6 +6,7 @@ import { createWorkflowStore, type Workflow } from '@openldr/workflows';
 import * as workflows from '../../../packages/db/src/migrations/internal/027_workflows';
 import * as paths from '../../../packages/db/src/migrations/internal/096_workflow_webhook_paths';
 import * as claims from '../../../packages/db/src/migrations/internal/120_workflow_webhook_claims';
+import * as version from '../../../packages/db/src/migrations/internal/121_workflow_version';
 
 // Two saves that arrive together, each through its own connection pool, as two server replicas
 // would send them. Real PostgreSQL only: pg-mem cannot run two transactions at once.
@@ -26,7 +27,7 @@ describe.skipIf(!url)('webhook path claims on disposable PostgreSQL', () => {
     scoped.searchParams.set('options', `-c search_path=${schema}`);
     replicaA = createInternalDb(scoped.toString());
     replicaB = createInternalDb(scoped.toString());
-    for (const m of [workflows, paths, claims]) await m.up(replicaA.db as Kysely<unknown>);
+    for (const m of [workflows, paths, claims, version]) await m.up(replicaA.db as Kysely<unknown>);
   });
   afterEach(async () => {
     await replicaA?.close();
@@ -61,6 +62,22 @@ describe.skipIf(!url)('webhook path claims on disposable PostgreSQL', () => {
       expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
       expect((results.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason).toMatchObject({ name: 'WebhookPathClaimedError', path });
       expect(await enabledOn(replicaA.db, path)).toBe(1);
+    }
+  });
+
+  it('lets exactly one of two concurrent updates from one version land, 25 times over', async () => {
+    const a = createWorkflowStore(replicaA.db), b = createWorkflowStore(replicaB.db);
+    for (let i = 0; i < 25; i++) {
+      const id = `v-${i}`;
+      await a.create(hook(id, `version-${i}`, false));
+      const base = (await a.get(id))!.version!;
+      const results = await Promise.allSettled([
+        a.update(id, { ...hook(id, `version-${i}`, false), name: 'from A' }, { expectedVersion: base }),
+        b.update(id, { ...hook(id, `version-${i}`, false), name: 'from B' }, { expectedVersion: base }),
+      ]);
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      expect((results.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason).toMatchObject({ name: 'WorkflowChangedError' });
+      expect((await a.get(id))!.version).toBe(base + 1);
     }
   });
 });

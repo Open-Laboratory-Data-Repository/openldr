@@ -4,7 +4,7 @@ import Fastify from 'fastify';
 import { ConfigError } from '@openldr/core';
 import { createWorkflowSecretStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { createSharedWebhookResolver, WebhookPathClaimedError } from '@openldr/workflows';
+import { createSharedWebhookResolver, createWorkflowStore, WebhookPathClaimedError } from '@openldr/workflows';
 import { seededStarterPacks } from '@openldr/forms';
 import { createMapToFhirApi } from '@openldr/bootstrap';
 import { registerWorkflowRoutes } from './workflows-routes';
@@ -937,6 +937,80 @@ describe('workflow routes', () => {
     expect(await store.resolve(ref, key)).toBe('new-secret');
     expect((await secretRows(db, 'wf-b')).map((row: any) => row.id)).toEqual([ref]);
     await db.destroy();
+  });
+
+  describe('overlapping saves of one workflow (C1-6)', () => {
+    async function setup() {
+      const app = Fastify();
+      app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+      const { ctx, db, store, key } = await realSecretCtx();
+      ctx.workflows.store = createWorkflowStore(db);
+      registerWorkflowRoutes(app, ctx);
+      const wf = (name: string, secret: unknown) => ({
+        ...SAMPLE_WORKFLOW, id: 'wf-o', name,
+        definition: { nodes: [{ id: 't1', type: 'trigger', data: { triggerType: 'webhook', path: 'lab-o', secret } }], edges: [] },
+      });
+      expect((await app.inject({ method: 'POST', url: '/api/workflows', payload: wf('First', 's-0') })).statusCode).toBe(200);
+      const put = (body: unknown) => app.inject({ method: 'PUT', url: '/api/workflows/wf-o', payload: body as object });
+      const refOf = async () => (await ctx.workflows.store.get('wf-o')).definition.nodes[0].data.secret.secretRef as string;
+      return { app, ctx, db, store, key, wf, put, refOf };
+    }
+    const gate = () => { let open!: () => void; const p = new Promise<void>((r) => { open = r; }); return { p, open }; };
+
+    it('a slow save whose clean-up runs after a newer save leaves the newer secret in place', async () => {
+      const { ctx, db, store, key, wf, put, refOf } = await setup();
+      const real = ctx.workflows.store.update.bind(ctx.workflows.store);
+      const written = gate(), release = gate();
+      let calls = 0;
+      ctx.workflows.store.update = async (...args: any[]) => {
+        const result = await (real as any)(...args);
+        if (calls++ === 0) { written.open(); await release.p; }
+        return result;
+      };
+      const saveA = put(wf('Save A', 's-a'));
+      await written.p;                                   // A is stored; its clean-up has not run.
+      expect((await put(wf('Save B', 's-b'))).statusCode).toBe(200);
+      release.open();
+      expect((await saveA).statusCode).toBe(200);
+      const stored = await ctx.workflows.store.get('wf-o');
+      expect(stored.name).toBe('Save B');
+      expect(await store.resolve(await refOf(), key)).toBe('s-b');
+      expect((await secretRows(db, 'wf-o')).map((r: any) => r.id)).toEqual([await refOf()]);
+      await db.destroy();
+    });
+
+    it('of two saves from one version, the later write is refused as changed and leaves nothing behind', async () => {
+      const { ctx, db, store, key, wf, put, refOf } = await setup();
+      const real = ctx.workflows.store.update.bind(ctx.workflows.store);
+      const reached = gate(), release = gate();
+      let calls = 0;
+      ctx.workflows.store.update = async (...args: any[]) => {
+        if (calls++ === 0) { reached.open(); await release.p; }
+        return (real as any)(...args);
+      };
+      const saveA = put(wf('Save A', 's-a'));
+      await reached.p;                                   // A has read version 0 and sealed, not written.
+      expect((await put(wf('Save B', 's-b'))).statusCode).toBe(200);
+      release.open();
+      const a = await saveA;
+      expect(a.statusCode).toBe(409);
+      expect(a.json().error).toBe('This workflow changed since you opened it. Reload it, then save again.');
+      expect((await ctx.workflows.store.get('wf-o')).name).toBe('Save B');
+      expect(await store.resolve(await refOf(), key)).toBe('s-b');
+      expect((await secretRows(db, 'wf-o')).map((r: any) => r.id)).toEqual([await refOf()]);
+      await db.destroy();
+    });
+
+    it('refuses a save that names a secret the stored version does not hold', async () => {
+      const { db, wf, put, refOf } = await setup();
+      const first = await refOf();
+      expect((await put(wf('Second', 's-1'))).statusCode).toBe(200);
+      // An editor tab opened before the second save still holds the first secret's reference.
+      const r = await put(wf('Stale tab', { secretRef: first }));
+      expect(r.statusCode).toBe(409);
+      expect(r.json().error).toBe('This workflow changed since you opened it. Reload it, then save again.');
+      await db.destroy();
+    });
   });
 
   it('duplicate answers 404 for an unknown workflow', async () => {
