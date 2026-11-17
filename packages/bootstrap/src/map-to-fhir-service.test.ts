@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { seededStarterPacks, shapeOf, type FormField, type FormSchema, type SavedMapping } from '@openldr/forms';
 import { validateBatch } from '@openldr/fhir';
-import type { RunFormValidateInput, RunFormValidateOutput, WorkflowItem } from '@openldr/workflows';
+import { runWorkflow, type RunFormValidateInput, type RunFormValidateOutput, type WorkflowItem, type WorkflowServices } from '@openldr/workflows';
 import { codingFromMapRows, createMapToFhirService, KNOWN_ISSUE_TEXTS, loadStoredPacks, type MapToFhirServiceDeps } from './map-to-fhir-service';
 
 // Made-up values only. QZX marks a value that must never reach a reason.
@@ -293,14 +293,65 @@ describe('held reasons hold no value', () => {
     for (const h of res.held) expect(String(h.json.reason)).not.toContain('QZX');
   });
 
-  it('gives a fixed phrase for a message it does not know, and drops a path segment that is not a plain name', async () => {
-    const validate = vi.fn(async () => ({
+  const failWith = (expression: string) =>
+    vi.fn(async () => ({
       ok: false as const,
-      outcome: { resourceType: 'OperationOutcome' as const, issue: [{ severity: 'error' as const, code: 'business-rule', diagnostics: 'something about QZX', expression: ['Patient/QZX-ID-3.extension.QZX key.value'] }] },
+      outcome: { resourceType: 'OperationOutcome' as const, issue: [{ severity: 'error' as const, code: 'business-rule', diagnostics: 'something about QZX', expression: [expression] }] },
     }));
-    const svc = createMapToFhirService(deps({ validate }));
+
+  it('gives the fixed text only when the expression matches no record', async () => {
+    const svc = createMapToFhirService(deps({ validate: failWith('Patient/QZX-ID-3.extension.QZX key.value') }));
     const res = await svc({ items: [{ json: fhirPatient }], config });
-    expect(res.held[0].json.reason).toBe('(Patient) extension.*.value: failed the business-rule check');
+    expect(res.held[0].json.reason).toBe('failed the business-rule check');
+  });
+
+  it('turns a path segment FHIR does not know at that place into *', async () => {
+    const svc = createMapToFhirService(deps({ validate: failWith('Patient/p-1.extension.QZXkey.value') }));
+    const res = await svc({ items: [{ json: fhirPatient }], config });
+    expect(res.held[0].json.reason).toBe('record 1 (Patient) extension.*.*: failed the business-rule check');
+  });
+
+  it('keeps the path parts FHIR knows, and indexes', async () => {
+    const svc = createMapToFhirService(deps({ validate: failWith('Patient/p-1.name.0.given.1') }));
+    const res = await svc({ items: [{ json: fhirPatient }], config });
+    expect(res.held[0].json.reason).toBe('record 1 (Patient) name.0.given.1: failed the business-rule check');
+  });
+
+  const DOTTED_IDS = ['abc.QZX', 'p.12345', 'QZX.Smith.basedOn'];
+  const LEAKS = ['QZX', '12345', 'Smith', 'abc'];
+
+  it('drops a dotted record id whole from a reason and from heldReasons', async () => {
+    const svc = createMapToFhirService(deps());
+    const res = await svc({ items: DOTTED_IDS.map((id) => ({ json: labObs(id, 'sr-missing') })), config });
+    expect(res.held).toHaveLength(3);
+    for (const h of res.held) expect(h.json.reason).toBe('record 1 (Observation) basedOn: basedOn ServiceRequest not found in batch or store');
+    for (const text of [...res.held.map((h) => String(h.json.reason)), ...res.meta.heldReasons]) {
+      for (const leak of LEAKS) expect(text).not.toContain(leak);
+    }
+  });
+
+  it('places the issue on the record whose whole prefix matches, when one id starts another', async () => {
+    const svc = createMapToFhirService(deps());
+    const bundle = { resourceType: 'Bundle', type: 'collection', entry: [{ resource: labObs('abc', 'sr-1') }, { resource: labObs('abc.basedOn') }, { resource: { resourceType: 'ServiceRequest', id: 'sr-1', status: 'active', intent: 'order', subject: { reference: 'Patient/p-1' } } }] };
+    const res = await svc({ items: [{ json: bundle }], config });
+    expect(res.held[0].json.reason).toBe('record 2 (Observation) basedOn: laboratory result must reference a ServiceRequest (basedOn)');
+  });
+
+  it('keeps dotted ids out of the handler\'s thrown message', async () => {
+    const svc = createMapToFhirService(deps());
+    const nodes = [
+      { id: 't', type: 'trigger', data: {} },
+      { id: 'm', type: 'action', data: { action: 'map-to-fhir', config: {} } },
+      { id: 'a', type: 'action', data: { action: 'no-op' } },
+    ];
+    const edges = [{ id: 'e0', source: 't', target: 'm' }, { id: 'e1', source: 'm', target: 'a', sourceHandle: 'out' }];
+    const res = await runWorkflow(nodes as never, edges as never, {
+      input: DOTTED_IDS.map((id) => labObs(id, 'sr-missing')),
+      services: { mapToFhir: svc } as unknown as WorkflowServices,
+    });
+    const error = String(res.results.find((r) => r.nodeId === 'm')?.error);
+    expect(error).toContain('3 item(s) held and the held port is not connected');
+    for (const leak of LEAKS) expect(error).not.toContain(leak);
   });
 
   it('pins the rule texts it keeps to the real rule', async () => {
@@ -361,6 +412,21 @@ describe('an order in the same run counts', () => {
     expect(res.out).toEqual([]);
     expect(res.heldIndexes).toEqual([0, 1]);
     expect(res.held[0].json.reason).toContain('not found');
+  });
+
+  it('stops counting the orders of an item the order rule holds, and holds what needed them in the next pass', async () => {
+    // Item 0 carries order sr-1 and a lab result with no basedOn, so the rule holds it in pass 1.
+    // Item 1 passes in pass 1 through sr-1, and is held in pass 2 once sr-1 stops counting.
+    const first = { resourceType: 'Bundle', type: 'collection', entry: [{ resource: order('sr-1') }, { resource: { ...result('o-0', 'sr-1'), basedOn: undefined } }] };
+    const validate = vi.fn((resources: unknown[], known: ReadonlySet<string>) =>
+      validateBatch(resources, { level: 'high', resolveServiceRequest: async (id) => known.has(id) }),
+    );
+    const res = await createMapToFhirService(deps({ validate }))({ items: [{ json: JSON.parse(JSON.stringify(first)) }, { json: result('o-1', 'sr-1') }], config });
+    expect(res.heldIndexes).toEqual([0, 1]);
+    expect(res.held[0].json.reason).toContain('must reference a ServiceRequest');
+    expect(res.held[1].json.reason).toContain('not found');
+    // Pass 1 checks both items with sr-1 known; pass 2 checks item 1 with nothing known.
+    expect(validate.mock.calls.map((c) => [...c[1]])).toEqual([['sr-1'], ['sr-1'], []]);
   });
 
   it('asks the store for an order the run does not hold', async () => {

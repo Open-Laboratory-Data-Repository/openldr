@@ -13,6 +13,7 @@ import {
   type SavedMapping,
 } from '@openldr/forms';
 import { getResourceSchema, validateResource, type OperationOutcomeIssue, type ValidateBatchResult } from '@openldr/fhir';
+import { lookupFhirPath } from '@openldr/fhir/paths';
 import {
   bundleToResources,
   type RunFormValidateInput,
@@ -121,12 +122,29 @@ function issueText(issue: OperationOutcomeIssue): string {
   return `failed the ${/^[a-z][a-z-]*$/.test(issue.code) ? issue.code : 'validation'} check`;
 }
 
-/** A field path with every segment that is not a plain name or an index replaced by `*`. */
-function safePath(path: string): string {
+// Top-level keys every resource has that the path table does not list.
+const RESOURCE_KEYS = new Set(['resourceType']);
+
+/**
+ * A field path keeping only what CE's FHIR path table knows for this resource type at that place,
+ * and list indexes. Every other segment, and every segment after it, becomes `*`, so a key a sender
+ * chose never shows. With no known type, only indexes and `resourceType` stay.
+ */
+function safePath(type: string | null, path: string): string {
   if (path === '' || path === '(root)') return '';
+  let at: string | null = type;
   return path
     .split('.')
-    .map((s) => (/^[A-Za-z_][A-Za-z0-9_]*$/.test(s) || /^\d+$/.test(s) ? s : '*'))
+    .map((seg, i) => {
+      if (/^\d+$/.test(seg)) return seg;
+      if (i === 0 && RESOURCE_KEYS.has(seg)) return seg;
+      if (at !== null && lookupFhirPath(`${at}.${seg}`)) {
+        at = `${at}.${seg}`;
+        return seg;
+      }
+      at = null;
+      return '*';
+    })
     .join('.');
 }
 
@@ -137,20 +155,47 @@ function knownType(type: unknown): string | null {
   return typeof type === 'string' && getResourceSchema(type) ? type : null;
 }
 
-function describeIssue(issue: OperationOutcomeIssue, records: Res[], position: number | null): string {
-  let at = position;
-  let type = at !== null ? knownType(records[at]?.resourceType) : null;
-  let path = issue.expression?.[0] ?? '';
-  // A rule names the resource as `<Type>/<id>.<path>`. The id is the record's, so it is dropped.
-  const ref = /^([A-Za-z]+)\/([^.]*)(?:\.(.*))?$/s.exec(path);
-  if (ref) {
-    const found = records.findIndex((r) => r.resourceType === ref[1] && String(r.id) === ref[2]);
-    if (at === null && found >= 0) at = found;
-    type = knownType(ref[1]);
-    path = ref[3] ?? '';
+/**
+ * The record a rule's expression names, by the exact `<Type>/<id>` of each record in the item (an id
+ * may hold dots, so it is never parsed out). The longest match wins. Null when no record matches.
+ */
+function ruleTarget(expression: string, records: Res[]): { index: number; rest: string } | null {
+  let best: { index: number; rest: string } | null = null;
+  let bestLength = -1;
+  for (let index = 0; index < records.length; index++) {
+    const r = records[index];
+    if (typeof r.resourceType !== 'string' || typeof r.id !== 'string') continue;
+    const ref = `${r.resourceType}/${r.id}`;
+    const rest = expression === ref ? '' : expression.startsWith(`${ref}.`) ? expression.slice(ref.length + 1) : null;
+    if (rest !== null && ref.length > bestLength) {
+      best = { index, rest };
+      bestLength = ref.length;
+    }
   }
-  const where = [at !== null ? `record ${at + 1}` : null, type ? `(${type})` : null, safePath(path) || null].filter(Boolean).join(' ');
-  return where ? `${where}: ${issueText(issue)}` : issueText(issue);
+  return best;
+}
+
+/**
+ * One issue as `record <n> (<Type>) <path>: <text>`. A structural issue has its record's position.
+ * A rule issue is placed by `ruleTarget`; when no record matches, only the text is given.
+ */
+function describeIssue(issue: OperationOutcomeIssue, records: Res[], position: number | null): string {
+  const text = issueText(issue);
+  const expression = issue.expression?.[0] ?? '';
+  let at: number;
+  let path: string;
+  if (position !== null) {
+    at = position;
+    path = expression;
+  } else {
+    const target = ruleTarget(expression, records);
+    if (!target) return text;
+    at = target.index;
+    path = target.rest;
+  }
+  const type = knownType(records[at]?.resourceType);
+  const where = [`record ${at + 1}`, type ? `(${type})` : null, safePath(type, path) || null].filter(Boolean).join(' ');
+  return `${where}: ${text}`;
 }
 
 /** The structural failures of one item's records, each placed by its record. Null when all pass. */
