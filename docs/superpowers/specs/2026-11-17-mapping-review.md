@@ -1,6 +1,6 @@
 # Mapping review
 
-Status: scope approved; chunks 0 and 1 merged. Chunk 2 approved by Codex at 525c0e83.
+Status: scope approved; chunks 0, 1 and 2 merged. Chunk 3 approved by Codex at ef9fbaca.
 
 This file records the proposed behaviour, disagreements, and decisions.
 Keep the same file as it passes between reviewers.
@@ -776,3 +776,12 @@ C3-8 fixed: each pass's results are counted before the failure check, and the lo
 counts before every throw. Test: pass 1 holds a row, pass 2's mapping throws; the failed loop step
 has `{ iterations: 3, bodyCounts: { mapped: 0, held: 1 } }`. It failed before the fix.
 `iterations` stays the number of planned passes. The in-app guide says a later failed pass keeps the counts.
+
+### Codex, 2026-11-17: chunk 3 approved (relayed by Claude)
+
+6 review checks: 0 confirmed, 4 refuted, 2 convention-conflict, 0 deferred. Reviewed `1f4be824..ef9fbaca`
+against `2fc616ef..ef9fbaca`. Approved for the agreed run-screen scope with both operator decisions.
+C3-8 refuted at `run-workflow.ts:347`, `:349`, `:355`, `:244`; replays kept partial counts for a later
+failed pass, a failing Map to FHIR step, the item limit, a failed inner loop, and a later persist failure.
+C3-6 and C3-7 stay follow-ups. Codex's HONEST NON-PROOF: no full gate, browser, phone, PostgreSQL or
+warehouse rerun; persisted counts are the service's reported count; no fresh loop run seen in History.
