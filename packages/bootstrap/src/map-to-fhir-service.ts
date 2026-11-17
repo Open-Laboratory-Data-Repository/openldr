@@ -3,6 +3,7 @@ import {
   applyMapping,
   classify,
   mapTargetById,
+  parseTargetPath,
   pinnedListOf,
   SavedMappingSchema,
   type Classification,
@@ -329,11 +330,46 @@ function fillMissing(base: Res | unknown[], extra: Res | unknown[], path: string
   }
 }
 
+/**
+ * A path the target fills from the results (the order's test codes) is a set across the rows of a
+ * run: the codings of `extra` that `base` lacks, by system and code, go after `base`'s own, in the
+ * order first seen. `fillMissing` then finds nothing left to add there.
+ */
+function mergeDerived(base: Res, extra: Res, paths: Set<string>): void {
+  for (const path of paths) {
+    const [type, ...rest] = path.split('.');
+    if (base.resourceType !== type || rest.length === 0) continue;
+    const at = (r: Res) => readDotted(r, rest.join('.'));
+    const e = at(extra);
+    if (!isPlainObject(e) || !Array.isArray(e.coding)) continue;
+    let b = at(base);
+    if (!isPlainObject(b)) {
+      let holder: Res = base;
+      for (const seg of rest.slice(0, -1)) {
+        if (!isPlainObject(holder[seg])) holder[seg] = {};
+        holder = holder[seg] as Res;
+      }
+      b = holder[rest[rest.length - 1]] = {};
+    }
+    const bb = b as Res;
+    const list = Array.isArray(bb.coding) ? bb.coding : (bb.coding = []);
+    const key = (c: unknown) => (isPlainObject(c) ? JSON.stringify([c.system ?? '', c.code ?? '']) : '');
+    const seen = new Set(list.map(key));
+    for (const c of e.coding) {
+      if (seen.has(key(c))) continue;
+      seen.add(key(c));
+      list.push(structuredClone(c));
+    }
+  }
+}
+
 interface Entry {
   original: Record<string, unknown>;
   kind: Exclude<Classification['kind'], 'unknown'> | 'unknown';
   records: Res[] | null;
   held: Res | null;
+  /** The paths the target fills from the results and this item's mapping does not map. */
+  derived: Set<string>;
 }
 
 /**
@@ -392,7 +428,11 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): MapToFhirSer
     for (const item of items) {
       const original = item.json;
       const kind = classify(original, forms, mappings);
-      const entry: Entry = { original, kind: kind.kind, records: null, held: null };
+      const entry: Entry = { original, kind: kind.kind, records: null, held: null, derived: new Set() };
+      if (kind.kind === 'mapped' && target) {
+        const mapped = new Set(kind.mapping.rows.map((r) => (parseTargetPath(r.targetPath)?.path ?? r.targetPath).split('.').filter((x) => !/^\d+$/.test(x)).join('.')));
+        for (const d of target.derived ?? []) if (!mapped.has(d.path)) entry.derived.add(d.path);
+      }
       entries.push(entry);
 
       if (kind.kind === 'fhir') {
@@ -495,6 +535,7 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): MapToFhirSer
         const key = `${String(r.resourceType)}/${String(r.id)}`;
         const first = emitted.get(key);
         if (first) {
+          mergeDerived(first, r, e.derived);
           fillMissing(first, r, String(r.resourceType), pins);
           continue;
         }

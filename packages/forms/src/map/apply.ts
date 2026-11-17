@@ -67,6 +67,11 @@ interface ResolvedRow {
   values: (MapValue | null)[];
   /** True for a fixed value or a list of them. A fixed value never keeps a position alive. */
   fixed: boolean;
+  /**
+   * A list of fixed values keeps its rule until a position is kept alive by the data, so a test
+   * whose column is blank is never looked up. The positions whose rule has run.
+   */
+  deferred?: Set<number>;
 }
 
 function isEmpty(v: unknown): boolean {
@@ -100,7 +105,7 @@ async function resolveRow(
     if (typeof s.value !== 'string' && typeof s.value !== 'number' && typeof s.value !== 'boolean') {
       return { ok: false, reason: `${s.field}: expected a single value, not a list or an object`, field: s.field };
     }
-    if (!row.rule) {
+    if (!row.rule || 'fixedList' in row.from) {
       values.push(s.value);
       continue;
     }
@@ -115,6 +120,7 @@ async function resolveRow(
     sources: [...new Set(sources.map((s) => s.field))],
     values,
     fixed: 'fixed' in row.from || 'fixedList' in row.from,
+    ...('fixedList' in row.from && row.rule ? { deferred: new Set<number>() } : {}),
   };
 }
 
@@ -309,9 +315,24 @@ export async function applyMapping(
     // The rows that read a list from the data. A position where every one of them is empty gives no
     // record; a fixed value, alone or in a list, never keeps a position alive.
     const multi = rows.filter((r) => !r.fixed && r.values.length === n && n > 1);
+    // A list of fixed values pairs with the data by position, so the data must give as many.
+    const unpaired = rows.find((r) => 'fixedList' in r.row.from && r.values.length > 1 && !multi.some((m) => m.values.length === r.values.length));
+    if (unpaired) {
+      const key = unpaired.row.targetPath;
+      return { ok: false, reason: `${key}: a list of fixed values needs a field of the same record that reads as many columns`, field: key };
+    }
     const taken = new Set<string>();
     for (let i = 0; i < n; i++) {
       if (multi.length > 0 && multi.every((r) => r.values[i] === null)) continue;
+      for (const r of rows) {
+        const at = r.values.length === 1 ? 0 : i;
+        const v = r.values[at];
+        if (!r.deferred || r.deferred.has(at) || v === null || typeof v === 'object' || !r.row.rule) continue;
+        const ruled = await applyRule(r.row.rule, v, r.row.targetPath, deps);
+        if (!ruled.ok) return ruled;
+        r.values[at] = ruled.value;
+        r.deferred.add(at);
+      }
       const got = await idFor(record.type, i);
       if ('ok' in got) return got;
       if (taken.has(got.id)) {

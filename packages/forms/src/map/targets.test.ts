@@ -504,13 +504,43 @@ describe('a file with one column per test', () => {
     expect(results(res).map((o) => o.valueString)).toEqual(['one', 'two', 'three']);
   });
 
-  it('keeps what a record with only fixed rows gives: one result for a fixed test, one per entry for a list', async () => {
+  it('keeps what a record with only fixed rows gives: one result for a fixed test', async () => {
     const base = perColumn().slice(0, 2);
     const one = await applyMapping(mapping([...base, { targetPath: 'Observation.code', from: { fixed: 'AMP' } }]), target, wide, deps());
-    const list = await applyMapping(mapping([...base, { targetPath: 'Observation.code', from: { fixedList: ['AMP', 'CIP'] } }]), target, wide, deps());
-    if (!one.ok || !list.ok) throw new Error('not ok');
+    if (!one.ok) throw new Error(one.reason);
     expect(results(one)).toHaveLength(1);
-    expect(results(list)).toHaveLength(2);
+  });
+
+  it('fails a list of tests with no data row of the same length on the record, naming the test field', async () => {
+    const base = perColumn().slice(0, 2);
+    const reason = 'Observation.code: a list of fixed values needs a field of the same record that reads as many columns';
+    // No data row at all.
+    const none = await applyMapping(mapping([...base, { targetPath: 'Observation.code', from: { fixedList: ['AMP', 'CIP'] } }]), target, wide, deps());
+    expect(none).toEqual({ ok: false, reason, field: 'Observation.code' });
+    // One column and three tests would copy one value to three results.
+    const one = await applyMapping(mapping([
+      ...base,
+      { targetPath: 'Observation.valueString', from: { fields: ['AMP'] } },
+      { targetPath: 'Observation.code', from: { fixedList: ['AMP', 'CIP', 'GEN'] } },
+    ]), target, wide, deps());
+    expect(one).toEqual({ ok: false, reason, field: 'Observation.code' });
+  });
+
+  it('runs a Code list rule on the tests only where the row has a value', async () => {
+    // The code list knows AMP and GEN, not CIP.
+    const partial: ApplyDeps = {
+      hashId: hash,
+      translateCode: async (_url, value): Promise<Coding | null> => (value === 'CIP' ? null : { system: 'urn:test:codes', code: value.toLowerCase() }),
+    };
+    const rows = perColumn({ rule: { kind: 'codeList', conceptMapUrl: 'urn:test:map' } });
+    const blank = await applyMapping(mapping(rows), target, { ...wide, CIP: '' }, partial);
+    if (!blank.ok) throw new Error(blank.reason);
+    expect(results(blank).map((o) => o.code)).toEqual([
+      { coding: [{ system: 'urn:test:codes', code: 'amp' }] },
+      { coding: [{ system: 'urn:test:codes', code: 'gen' }] },
+    ]);
+    const filled = await applyMapping(mapping(rows), target, wide, partial);
+    expect(filled).toEqual({ ok: false, reason: 'Observation.code: value has no match in the code list', field: 'Observation.code' });
   });
 
   it('passes the saved mapping schema with a list of tests, and refuses an empty list or an empty test', () => {

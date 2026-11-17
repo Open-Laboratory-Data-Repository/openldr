@@ -686,3 +686,56 @@ describe('the within-run merge of a list with two pinned entries', () => {
     ]);
   });
 });
+
+describe('the within-run merge of an order whose codes come from its results', () => {
+  const base = { pid: 'T-0301', coll: '2026-11-05' };
+  const codeOf = (res: { out: WorkflowItem[] }) =>
+    (res.out.find((i) => i.json.resourceType === 'ServiceRequest')!.json.code as { coding: { code: string }[] }).coding.map((c) => c.code);
+  const plainCode: MapToFhirServiceDeps['translateCode'] = async () => null;
+
+  it('keeps every test of one order across rows, in the order first seen', async () => {
+    const m: SavedMapping = {
+      shapeHash: 'h1', fieldNames: ['coll', 'pid', 't'], targetId: 'lab-result',
+      rows: [
+        { targetPath: 'Patient.identifier.value', from: { field: 'pid' } },
+        { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'coll' } },
+        { targetPath: 'Observation.code', from: { field: 't' } },
+      ],
+    };
+    const svc = createMapToFhirService(deps({ translateCode: plainCode }));
+    const res = await svc({ items: [{ json: { ...base, t: 'HB' } }, { json: { ...base, t: 'WBC' } }, { json: { ...base, t: 'HB' } }], config: { targetId: 'lab-result', formIds: [], mappings: [m] } });
+    expect(res.held).toEqual([]);
+    expect(codeOf(res)).toEqual(['HB', 'WBC']);
+  });
+
+  it('keeps every test when rows of a file with one column per test fill different columns', async () => {
+    const m: SavedMapping = {
+      shapeHash: 'h2', fieldNames: ['AMP', 'CIP', 'GEN', 'coll', 'pid'], targetId: 'lab-result',
+      rows: [
+        { targetPath: 'Patient.identifier.value', from: { field: 'pid' } },
+        { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'coll' } },
+        { targetPath: 'Observation.valueString', from: { fields: ['AMP', 'CIP', 'GEN'] } },
+        { targetPath: 'Observation.code', from: { fixedList: ['AMP', 'CIP', 'GEN'] } },
+      ],
+    };
+    const svc = createMapToFhirService(deps({ translateCode: plainCode }));
+    const res = await svc({ items: [{ json: { ...base, AMP: 'QZX-1' } }, { json: { ...base, CIP: 'QZX-2', GEN: 'QZX-3' } }], config: { targetId: 'lab-result', formIds: [], mappings: [m] } });
+    expect(res.held).toEqual([]);
+    expect(codeOf(res)).toEqual(['AMP', 'CIP', 'GEN']);
+  });
+
+  it('merges a mapped Tests field as before', async () => {
+    const m: SavedMapping = {
+      shapeHash: 'h3', fieldNames: ['coll', 'pid', 'panel', 't'], targetId: 'lab-result',
+      rows: [
+        { targetPath: 'Patient.identifier.value', from: { field: 'pid' } },
+        { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'coll' } },
+        { targetPath: 'ServiceRequest.code', from: { field: 'panel' } },
+        { targetPath: 'Observation.code', from: { field: 't' } },
+      ],
+    };
+    const svc = createMapToFhirService(deps({ translateCode: plainCode }));
+    const res = await svc({ items: [{ json: { ...base, panel: 'P1', t: 'HB' } }, { json: { ...base, panel: 'P1', t: 'WBC' } }], config: { targetId: 'lab-result', formIds: [], mappings: [m] } });
+    expect(res.out.find((i) => i.json.resourceType === 'ServiceRequest')!.json.code).toEqual({ text: 'P1', coding: [{ code: 'P1' }] });
+  });
+});
