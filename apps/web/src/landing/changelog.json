@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "525c0e83",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "A missing value in one list entry names the entry"
+        },
+        {
+          "hash": "f18a81d1",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Map to FHIR reads ≤ and ≥, and its reasons name the list entry"
+        },
+        {
           "hash": "8aec6478",
           "type": "fix",
           "scope": "workflows",
