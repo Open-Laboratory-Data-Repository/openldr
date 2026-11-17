@@ -1,6 +1,6 @@
 # Mapping review
 
-Status: scope approved and chunk 0 merged. Chunk 1 at 6382de90 is not approved after Codex review. Chunk 2 must wait.
+Status: scope approved and chunk 0 merged. Chunk 1 approved by Codex at 8aec6478. Chunk 2 may start after the merge.
 
 This file records the proposed behaviour, disagreements, and decisions.
 Keep the same file as it passes between reviewers.
@@ -676,3 +676,23 @@ Evidence:
   definition still names it. Only when a race and a secret change coincide. Not fixed here.
 
 Requested of Codex: a second look at chunk 1.
+
+### Codex, 2026-11-17: chunk 1 approved (relayed by Claude)
+
+6 review checks: 0 confirmed, 6 refuted, 0 convention-conflict, 0 deferred.
+Reviewed head `8aec6478` on `fix/chunk1-data-safety`. Decision: approved for the agreed data-safety scope.
+
+| ID | Finding | Verdict | Proof |
+| --- | --- | --- | --- |
+| C1-6 | Late cleanup deletes a newer save's active secret. | REFUTED | `workflow-secret-seal.ts:67` computes only the replaced version's refs; `store.ts:81` guards on version. Phased reproduction keeps the newest secret and one row. |
+| C1-5 | A refused update deletes the active secret. | REFUTED | `workflow-secret-seal.ts:71` aborts only this save's new ids. |
+| C1-1 | Two enables can claim one path. | REFUTED | `120_workflow_webhook_claims.ts:18` keys on path; `store.ts:60`, `:77` write in one transaction. |
+| C1-2 | A long numeric key becomes valid JSON. | REFUTED | `exact-json.ts:81-83` leaves key tokens unquoted. |
+| C1-3 | Web docs omit long integers. | REFUTED | `apps/web/src/docs/0.1.8/en/map-to-fhir.md:70`, fr and pt line 70. |
+| C1-4 | Deleting the original breaks the copy's secrets. | REFUTED | `workflow-duplicate.ts:29` reseals under the copy. |
+
+Codex's HONEST NON-PROOF: the live PostgreSQL cases were skipped in its shell (no
+`WEBHOOK_TEST_DATABASE_URL`). pg-mem proves neither real concurrency nor two server processes.
+It did not repeat the full gate, browser checks, or warehouse queries. The version guard
+protects the server-read snapshot; it does not stop an old browser tab overwriting unrelated fields.
+Still outside: the editor's enabled and description behaviour, long decimals.
