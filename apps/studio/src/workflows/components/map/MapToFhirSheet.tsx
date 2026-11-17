@@ -117,7 +117,7 @@ export function MapToFhirSheet({
   const taken = useMemo(() => new Set(drafts.map((d) => d.targetPath)), [drafts]);
   const required = drafts.filter((d) => d.required);
   const unused = group ? unusedFields(group.fieldNames, drafts) : [];
-  const listening = samples.listen === 'listening';
+  const listening = samples.status === 'listening';
   const otherTargetCount = mappingsOf(config).filter((x) => targetIdOf(x) !== m.targetId).length;
   const ready = Boolean(target && group && m.draftsKey);
 
@@ -128,6 +128,8 @@ export function MapToFhirSheet({
     body = <StripedEmpty className="min-h-[16rem] flex-1">{t(m.targetsFailed ? `${P}.targetsFailed` : `${P}.noTargets`)}</StripedEmpty>;
   } else if (listening) {
     body = <LoadingState label={t(`${P}.sheet.listening`)} className="min-h-[16rem] flex-1" />;
+  } else if (samples.status === 'loadingStored') {
+    body = <LoadingState label={t(`${P}.sheet.loadingStored`)} className="min-h-[16rem] flex-1" />;
   } else if (!ready || !group || !target) {
     body = <StripedEmpty className="min-h-[16rem] flex-1">{t(`${P}.sheet.empty`)}</StripedEmpty>;
   } else {
@@ -216,8 +218,9 @@ export function MapToFhirSheet({
         <div className="flex items-center justify-between gap-2 px-6 py-3">
           <div className="min-w-0 text-xs text-muted-foreground">
             {!samples.canListen && <p>{t(`${P}.sheet.unsavedListen`)}</p>}
-            {samples.listen === 'timedOut' && <p>{t(`${P}.sheet.listenTimedOut`)}</p>}
-            {samples.listen === 'failed' && <p className="text-destructive">{t(`${P}.sheet.listenFailed`)}</p>}
+            {samples.status === 'timedOut' && <p>{t(`${P}.sheet.listenTimedOut`)}</p>}
+            {samples.status === 'noStoredRun' && <p>{t(`${P}.sheet.noStoredRun`)}</p>}
+            {samples.status === 'failed' && <p className="text-destructive">{t(`${P}.sheet.listenFailed`)}</p>}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -226,15 +229,20 @@ export function MapToFhirSheet({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled={!samples.hasLastRun} onClick={samples.loadLastRun}>
-                {t(`${P}.sheet.useLastRun`)}
-              </DropdownMenuItem>
               {samples.canListen &&
                 (listening ? (
                   <DropdownMenuItem onClick={samples.stopListening}>{t(`${P}.sheet.stopListening`)}</DropdownMenuItem>
                 ) : (
                   <DropdownMenuItem onClick={samples.startListening}>{t(`${P}.sheet.listen`)}</DropdownMenuItem>
                 ))}
+              {samples.canListen && (
+                <DropdownMenuItem disabled={samples.status === 'loadingStored'} onClick={() => void samples.loadLatestStoredRun()}>
+                  {t(`${P}.sheet.useLatestStored`)}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem disabled={!samples.hasLastRun} onClick={samples.loadLastRun}>
+                {t(`${P}.sheet.useLastRun`)}
+              </DropdownMenuItem>
               <DropdownMenuItem disabled={!ready || test.kind === 'running'} onClick={() => void runTest()}>
                 {t(`${P}.sheet.test`)}
               </DropdownMenuItem>

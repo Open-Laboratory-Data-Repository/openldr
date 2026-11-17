@@ -60,7 +60,7 @@ describe('MapToFhirSheet', () => {
   it('shows StripedEmpty, not rows, when there is no sample', async () => {
     setRun(null);
     renderSheet();
-    expect(await screen.findByText(/There is no sample yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/Choose Listen, then send a message/)).toBeInTheDocument();
     expect(screen.queryByTestId('map-row-Patient.identifier.value')).not.toBeInTheDocument();
   });
 
@@ -270,7 +270,7 @@ describe('MapToFhirSheet Listen', () => {
       const update = vi.fn();
       const ui = (open: boolean) => <MapToFhirSheet open={open} onOpenChange={() => {}} node={mkNode()} update={update} />;
       const { rerender } = render(ui(true));
-      await screen.findByText(/There is no sample yet/);
+      await screen.findByText(/Choose Listen, then send a message/);
       openMenuAndClick('Listen');
       expect(await screen.findByText('Listening for a new run')).toBeInTheDocument();
       await vi.advanceTimersByTimeAsync(2100);
@@ -293,7 +293,7 @@ describe('MapToFhirSheet Listen', () => {
       m(api.fetchWorkflowRuns).mockResolvedValue([{ id: 'r1', startedAt: later }]);
       m(api.fetchWorkflowRun).mockResolvedValue({ id: 'r1', startedAt: later, result: { results: [{ nodeId: 'up1', output: asItems(ROWS_A) }] } });
       renderSheet();
-      await screen.findByText(/There is no sample yet/);
+      await screen.findByText(/Choose Listen, then send a message/);
       openMenuAndClick('Listen');
       await vi.advanceTimersByTimeAsync(2100);
       expect(await screen.findByTestId('map-row-Patient.identifier.value')).toBeInTheDocument();
@@ -317,3 +317,47 @@ describe('MapToFhirSheet Listen', () => {
     expect(screen.queryByRole('menuitem', { name: 'Listen' })).toBeNull();
   });
 });
+
+describe('MapToFhirSheet latest stored run', () => {
+  const saved = () =>
+    useWorkflowStore.setState({ workflowId: 'wf1', edges: [{ id: 'e1', source: 'up1', target: 'map1' }] as never, nodeRunInput: {}, nodeRunOutput: {} });
+  const run = (id: string, startedAt: string, output: unknown) => ({ id, startedAt, result: { results: [{ nodeId: 'up1', output }] } });
+
+  it('reads rows under body from a webhook envelope through the source path', async () => {
+    saved();
+    const r = run('r1', '2026-01-02T00:00:00Z', [{ json: { headers: { h: 'x' }, query: {}, body: ROWS_A } }]);
+    m(api.fetchWorkflowRuns).mockResolvedValue([r]);
+    m(api.fetchWorkflowRun).mockResolvedValue(r);
+    renderSheet({ sourcePath: 'body' });
+    await screen.findByText(/Choose Listen, then send a message/);
+    openMenuAndClick('Use the latest stored run');
+    expect(await screen.findByTestId('map-row-Patient.identifier.value')).toBeInTheDocument();
+    expect(m(api.fetchWorkflowRuns)).toHaveBeenCalledWith('wf1', { limit: 10 });
+    expect([...sourceSelect('Patient ID').options].map((o) => o.value)).toEqual(['', '__none', '__fixed', 'pat_no', 'sex', 'test_a', 'test_b']);
+  });
+
+  it('falls back to an older run when the newest has no rows', async () => {
+    saved();
+    const newest = run('new', '2026-01-03T00:00:00Z', [{ json: { resourceType: 'Patient', id: 'p1' } }]);
+    const older = run('old', '2026-01-01T00:00:00Z', asItems(ROWS_B));
+    m(api.fetchWorkflowRuns).mockResolvedValue([older, newest]);
+    m(api.fetchWorkflowRun).mockImplementation(async (id: string) => (id === 'new' ? newest : older));
+    renderSheet();
+    await screen.findByText(/Choose Listen, then send a message/);
+    openMenuAndClick('Use the latest stored run');
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    expect(m(api.fetchWorkflowRun).mock.calls.map((c) => c[0])).toEqual(['new', 'old']);
+    expect([...sourceSelect('Patient ID').options].map((o) => o.value)).toContain('ident');
+  });
+
+  it('says so in one line when no stored run has rows', async () => {
+    saved();
+    m(api.fetchWorkflowRuns).mockResolvedValue([run('r1', '2026-01-01T00:00:00Z', [])]);
+    m(api.fetchWorkflowRun).mockResolvedValue(run('r1', '2026-01-01T00:00:00Z', []));
+    renderSheet();
+    await screen.findByText(/Choose Listen, then send a message/);
+    openMenuAndClick('Use the latest stored run');
+    expect(await screen.findByText('None of the 10 newest runs has rows for this node.')).toBeInTheDocument();
+  });
+});
+

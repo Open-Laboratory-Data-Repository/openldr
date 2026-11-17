@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchWorkflowRun, fetchWorkflowRuns, type ExecuteResponse } from '@/api';
+import { fetchWorkflowRun, fetchWorkflowRuns, type ExecuteResponse, type WorkflowRunSummary } from '@/api';
 import { useWorkflowStore } from '../../hooks/use-workflow-store';
 import { rowsFromItems, type SampleRow } from './rows';
 
 /** How often Listen asks for new runs, and when it gives up. */
 export const LISTEN_POLL_MS = 2000;
 export const LISTEN_MAX_MS = 60000;
+/** How many of the newest stored runs are read, by Listen and by "Use the latest stored run". */
+export const STORED_RUNS_LOOKED_AT = 10;
 
-export type ListenState = 'idle' | 'listening' | 'timedOut' | 'failed';
+export type SampleStatus = 'idle' | 'listening' | 'loadingStored' | 'timedOut' | 'noStoredRun' | 'failed';
+
+const newestFirst = (runs: WorkflowRunSummary[]) => [...runs].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
 
 /**
  * The sheet's samples. They live in this hook's React state only: never in the workflow store's
@@ -20,7 +24,7 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
   const runOutputs = useWorkflowStore((s) => s.nodeRunOutput);
 
   const [rows, setRows] = useState<SampleRow[]>([]);
-  const [listen, setListen] = useState<ListenState>('idle');
+  const [status, setStatus] = useState<SampleStatus>('idle');
   const timers = useRef<{ poll?: ReturnType<typeof setInterval>; stop?: ReturnType<typeof setTimeout> }>({});
   const token = useRef(0);
 
@@ -34,6 +38,18 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
   };
   const hasLastRun = lastRunItems() !== undefined;
 
+  /** The rows of one stored run: the feeding node's output, read through `sourcePath`. */
+  const rowsOfRun = async (runId: string, feederIds: string[]): Promise<SampleRow[]> => {
+    const detail = await fetchWorkflowRun(runId);
+    const results = (detail.result as ExecuteResponse | null)?.results ?? [];
+    for (const r of results) {
+      if (!feederIds.includes(r.nodeId) || r.output == null) continue;
+      const found = rowsFromItems(r.output, sourcePath);
+      if (found.length > 0) return found;
+    }
+    return [];
+  };
+
   const stopTimers = useCallback(() => {
     token.current += 1;
     if (timers.current.poll) clearInterval(timers.current.poll);
@@ -42,15 +58,42 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
   }, []);
 
   const loadLastRun = () => {
+    stopTimers();
+    setStatus('idle');
     const raw = lastRunItems();
     setRows(raw === undefined ? [] : rowsFromItems(raw, sourcePath));
   };
 
   const stopListening = useCallback(() => {
     stopTimers();
-    setListen('idle');
+    setStatus('idle');
   }, [stopTimers]);
 
+  /** The newest of the last stored runs whose feeding node gave rows, with no waiting. */
+  const loadLatestStoredRun = async () => {
+    if (!workflowId) return;
+    stopTimers();
+    const mine = token.current;
+    const feederIds = [...feeders];
+    setStatus('loadingStored');
+    try {
+      const runs = newestFirst(await fetchWorkflowRuns(workflowId, { limit: STORED_RUNS_LOOKED_AT })).slice(0, STORED_RUNS_LOOKED_AT);
+      for (const run of runs) {
+        const found = await rowsOfRun(run.id, feederIds);
+        if (token.current !== mine) return;
+        if (found.length > 0) {
+          setRows(found);
+          setStatus('idle');
+          return;
+        }
+      }
+      if (token.current === mine) setStatus('noStoredRun');
+    } catch {
+      if (token.current === mine) setStatus('failed');
+    }
+  };
+
+  /** Poll for runs that start after the press, and stop at the first whose feeding node gave rows. */
   const startListening = () => {
     if (!workflowId) return;
     stopTimers();
@@ -58,30 +101,28 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
     const since = Date.now();
     const seen = new Set<string>();
     const feederIds = [...feeders];
-    setListen('listening');
+    setStatus('listening');
 
     const tick = async () => {
       try {
-        const runs = await fetchWorkflowRuns(workflowId, { limit: 10 });
+        const runs = newestFirst(await fetchWorkflowRuns(workflowId, { limit: STORED_RUNS_LOOKED_AT }));
         for (const run of runs) {
           if (token.current !== mine) return;
           if (seen.has(run.id) || Date.parse(run.startedAt) < since) continue;
           seen.add(run.id);
-          const detail = await fetchWorkflowRun(run.id);
+          const found = await rowsOfRun(run.id, feederIds);
           if (token.current !== mine) return;
-          const results = (detail.result as ExecuteResponse | null)?.results ?? [];
-          const feed = results.find((r) => feederIds.includes(r.nodeId) && r.output != null);
-          if (feed) {
+          if (found.length > 0) {
             stopTimers();
-            setRows(rowsFromItems(feed.output, sourcePath));
-            setListen('idle');
+            setRows(found);
+            setStatus('idle');
             return;
           }
         }
       } catch {
         if (token.current !== mine) return;
         stopTimers();
-        setListen('failed');
+        setStatus('failed');
       }
     };
 
@@ -89,7 +130,7 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
     timers.current.stop = setTimeout(() => {
       if (token.current !== mine) return;
       stopTimers();
-      setListen('timedOut');
+      setStatus('timedOut');
     }, LISTEN_MAX_MS);
   };
 
@@ -97,7 +138,7 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
   useEffect(() => {
     if (!open) {
       stopTimers();
-      setListen('idle');
+      setStatus('idle');
       setRows([]);
     }
   }, [open, stopTimers]);
@@ -108,8 +149,9 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
     rows,
     hasLastRun,
     canListen: workflowId != null,
-    listen,
+    status,
     loadLastRun,
+    loadLatestStoredRun,
     startListening,
     stopListening,
   };
