@@ -74,6 +74,10 @@ const LAB_RESULT_IDENTITY: MapTarget['identity'] = [
   },
 ];
 
+// With no Tests field mapped, the order takes its results' test codes, so the warehouse order has
+// a panel code. A mapped Tests field always wins.
+const LAB_RESULT_DERIVED: MapTarget['derived'] = [{ path: 'ServiceRequest.code', from: 'Observation.code' }];
+
 function localise(target: MapTarget, locale: string): MapTarget {
   const labels = LABELS[locale];
   if (!labels) return target;
@@ -93,6 +97,7 @@ export function labResultTarget(packs: readonly MapTargetPack[], locale = 'en'):
     identity: LAB_RESULT_IDENTITY,
     extra: LAB_RESULT_EXTRA,
     required: LAB_RESULT_REQUIRED,
+    derived: LAB_RESULT_DERIVED,
   });
   return localise(target, locale);
 }

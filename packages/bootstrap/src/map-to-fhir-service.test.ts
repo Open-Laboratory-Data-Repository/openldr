@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { seededStarterPacks, shapeOf, type FormField, type FormSchema, type SavedMapping } from '@openldr/forms';
+import { classify, seededStarterPacks, shapeOf, type FormField, type FormSchema, type SavedMapping } from '@openldr/forms';
 import { validateBatch } from '@openldr/fhir';
 import { runWorkflow, type RunFormValidateInput, type RunFormValidateOutput, type WorkflowItem, type WorkflowServices } from '@openldr/workflows';
+// The CLI test reads the file codec the same way: the package index does not export it.
+import { fileToRows } from '../../workflows/src/engine/node-handlers/file-codecs';
 import { codingFromMapRows, createMapToFhirService, KNOWN_ISSUE_TEXTS, loadStoredPacks, type MapToFhirServiceDeps } from './map-to-fhir-service';
 
 // Made-up values only. QZX marks a value that must never reach a reason.
@@ -602,5 +604,45 @@ describe('the lab\'s own code list', () => {
     const res = await svc({ items: [{ json: row }], config: { ...config, mappings: [localRow('urn:test:src')] } });
     expect(res.held).toEqual([]);
     expect(translateCode).toHaveBeenCalledWith(LOCAL, 'TA', 'urn:test:src');
+  });
+});
+
+describe('a file with one column per test, end to end through the real pieces', () => {
+  // The header of samples/lab-sample.csv, with made-up rows of the same shape. Each test column
+  // holds that test's result; a blank cell is no result.
+  const csv = [
+    'PatientID,Sex,DOB,SpecimenNo,Specimen,CollectionDate,LocationType,Organism,OrganismCode,AMP,CIP,GEN',
+    'T-0101,QZX-S,2001-02-03,S-0101,QZX-SP,2026-11-05,QZX-L,QZX-O,QZX-OC,QZX-R1,QZX-R2,QZX-R3',
+    'T-0102,QZX-S,2001-02-04,S-0102,QZX-SP,2026-11-06,QZX-L,QZX-O,QZX-OC,QZX-R4,,QZX-R5',
+  ].join('\n');
+
+  it('maps each row to linked records, one result per filled test cell, and passes the rules', async () => {
+    const rows = fileToRows(new TextEncoder().encode(csv), { cellsAsText: true });
+    expect(rows).toHaveLength(2);
+    const perColumn: SavedMapping = {
+      shapeHash: shapeOf(Object.fromEntries(Object.keys(rows[0]).map((k) => [k, '']))).hash,
+      fieldNames: Object.keys(rows[0]).sort(),
+      targetId: 'lab-result',
+      rows: [
+        { targetPath: 'Patient.identifier.value', from: { field: 'PatientID' } },
+        { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'CollectionDate' } },
+        { targetPath: 'Observation.valueString', from: { fields: ['AMP', 'CIP', 'GEN'] } },
+        { targetPath: 'Observation.code', from: { fixedList: ['AMP', 'CIP', 'GEN'] } },
+      ],
+    };
+    // Row two has a blank CIP cell, so its columns are fewer: `classify` still finds the one mapping.
+    for (const r of rows) expect(classify(r, [], [perColumn]).kind).toBe('mapped');
+    const svc = createMapToFhirService(deps());
+    const res = await svc({ items: rows.map((json) => ({ json })), config: { targetId: 'lab-result', formIds: [], mappings: [perColumn] } });
+    expect(res.held).toEqual([]);
+    const out = res.out.map((i) => i.json as Record<string, unknown> & { resourceType: string; id: string });
+    const orders = out.filter((r) => r.resourceType === 'ServiceRequest');
+    expect(orders).toHaveLength(2);
+    const obs = out.filter((r) => r.resourceType === 'Observation');
+    expect(obs.map((o) => (o.code as { text: string }).text)).toEqual(['AMP', 'CIP', 'GEN', 'AMP', 'GEN']);
+    const orderIds = new Set(orders.map((o) => `ServiceRequest/${o.id}`));
+    for (const o of obs) expect(orderIds.has((o.basedOn as { reference: string }[])[0].reference)).toBe(true);
+    // The order takes its results' tests, since its own Tests field is not mapped.
+    expect((orders[1].code as { coding: { code: string }[] }).coding.map((c) => c.code)).toEqual(['AMP', 'GEN']);
   });
 });

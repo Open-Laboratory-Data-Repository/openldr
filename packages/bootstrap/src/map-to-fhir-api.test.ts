@@ -145,3 +145,30 @@ describe('test reads the store once per call', () => {
     expect(packs).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('test with a saved mapping that gives each column its own test', () => {
+  it('sends the list of tests through the real service, one result per filled column', async () => {
+    const service = createMapToFhirService({
+      forms: { get: async () => null },
+      validateForm: async () => ({ items: [], meta: { formId: 'f', validated: 0, invalid: [] } }),
+      packs: async () => PACKS,
+      translateCode: async () => null,
+      validate: async () => ({ ok: true }) as never,
+    });
+    const a = createMapToFhirApi({ mapToFhir: service, packs: async () => PACKS, conceptMaps: async () => [], localSourceSystems: async () => [] });
+    const mapping = {
+      shapeHash: 'h', fieldNames: ['AMP', 'CIP', 'GEN', 'pid', 'coll'], targetId: 'lab-result',
+      rows: [
+        { targetPath: 'Patient.identifier.value', from: { field: 'pid' } },
+        { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'coll' } },
+        { targetPath: 'Observation.valueString', from: { fields: ['AMP', 'CIP', 'GEN'] } },
+        { targetPath: 'Observation.code', from: { fixedList: ['AMP', 'CIP', 'GEN'] } },
+      ],
+    };
+    const res = await a.test({ config: { targetId: 'lab-result', formIds: [], mappings: [mapping] }, items: [{ pid: 'T-1', coll: '2026-11-05', AMP: 'QZX-1', GEN: 'QZX-2' }] });
+    expect(res).toHaveLength(1);
+    expect(res[0]).toMatchObject({ ok: true, kind: 'mapped' });
+    const types = (res[0] as { resourceTypes: string[] }).resourceTypes;
+    expect(types.filter((t) => t === 'Observation')).toHaveLength(2);
+  });
+});

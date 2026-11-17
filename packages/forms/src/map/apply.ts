@@ -1,4 +1,5 @@
-import type { FhirResource } from 'fhir/r4';
+import type { Coding, FhirResource } from 'fhir/r4';
+import { lookupFhirPath } from '@openldr/fhir/paths';
 import { z } from 'zod';
 import { applyRule, MapRuleSchema, type MapValue, type RuleDeps } from './rules';
 import { parseTargetPath, type IdentityPart, type MapTarget } from './target';
@@ -16,6 +17,12 @@ export const FieldMappingSchema = z.object({
     z.object({ field: z.string().min(1) }).strict(),
     z.object({ fields: z.array(z.string().min(1)).min(1) }).strict(),
     z.object({ fixed: z.string() }).strict(),
+    /**
+     * One fixed value per position, paired with the other rows of a repeating record that give a
+     * list: the test of each column of a file with one column per test. Config only: what the person
+     * typed, or a column's name. Allowed only on a field of a repeating record.
+     */
+    z.object({ fixedList: z.array(z.string().min(1)).min(1) }).strict(),
   ]),
   rule: MapRuleSchema.optional(),
 });
@@ -58,6 +65,8 @@ interface ResolvedRow {
   sources: string[];
   /** One entry per value; null where the source is missing or empty. */
   values: (MapValue | null)[];
+  /** True for a fixed value or a list of them. A fixed value never keeps a position alive. */
+  fixed: boolean;
 }
 
 function isEmpty(v: unknown): boolean {
@@ -67,6 +76,7 @@ function isEmpty(v: unknown): boolean {
 function sourcesOf(row: FieldMapping, json: Record<string, unknown>): { field: string; value: unknown }[] {
   const from = row.from;
   if ('fixed' in from) return [{ field: row.targetPath, value: from.fixed }];
+  if ('fixedList' in from) return from.fixedList.map((v) => ({ field: row.targetPath, value: v }));
   if ('fields' in from) return from.fields.map((f) => ({ field: f, value: json[f] }));
   const v = json[from.field];
   if (Array.isArray(v) && v.length > 0) return v.map((e) => ({ field: from.field, value: e }));
@@ -104,6 +114,7 @@ async function resolveRow(
     required: field?.required ?? false,
     sources: [...new Set(sources.map((s) => s.field))],
     values,
+    fixed: 'fixed' in row.from || 'fixedList' in row.from,
   };
 }
 
@@ -161,6 +172,9 @@ export async function applyMapping(
     }
     const record = recordOf.get(type);
     if (!record) return { ok: false, reason: `the target has no ${type} record`, field: row.targetPath };
+    if ('fixedList' in row.from && !record.repeats) {
+      return { ok: false, reason: `${row.targetPath}: a list of fixed values is allowed only on a field of a repeating record`, field: row.targetPath };
+    }
     const resolved = await resolveRow(row, target, json, deps);
     if ('ok' in resolved) return resolved;
     if (!record.repeats && resolved.values.length > 1) {
@@ -292,7 +306,9 @@ export async function applyMapping(
     if (bad) {
       return { ok: false, reason: `${bad.sources.join(', ')}: ${bad.values.length} values where the other rows give ${n}`, field: bad.sources[0] };
     }
-    const multi = rows.filter((r) => r.values.length === n && n > 1);
+    // The rows that read a list from the data. A position where every one of them is empty gives no
+    // record; a fixed value, alone or in a list, never keeps a position alive.
+    const multi = rows.filter((r) => !r.fixed && r.values.length === n && n > 1);
     const taken = new Set<string>();
     for (let i = 0; i < n; i++) {
       if (multi.length > 0 && multi.every((r) => r.values[i] === null)) continue;
@@ -314,5 +330,57 @@ export async function applyMapping(
     }
   }
 
+  // A field the target fills from the repeating records when no row maps it: the order's test
+  // codes from its results'. It is written after every id is made, so no id reads it.
+  const mappedPlain = new Set(mapping.rows.map((r) => plainPath(r.targetPath)));
+  for (const d of target.derived ?? []) {
+    if (mappedPlain.has(d.path)) continue;
+    const holder = single.find((r) => r.resourceType === d.path.split('.')[0]);
+    if (!holder) continue;
+    const fromType = d.from.split('.')[0];
+    const seen = new Set<string>();
+    const codings: Coding[] = [];
+    for (const r of repeated) {
+      if (r.resourceType !== fromType) continue;
+      for (const c of codingsAt(r, d.from)) {
+        const key = JSON.stringify([c.system ?? '', c.code]);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        codings.push(c);
+      }
+    }
+    if (codings.length === 0) continue;
+    const many = lookupFhirPath(d.path)?.leafType === 'CodeableConcept';
+    for (const [i, c] of (many ? codings : codings.slice(0, 1)).entries()) {
+      const f = write(holder, many ? `${d.path}.coding.${i}` : d.path, c);
+      if (f) return f;
+    }
+  }
+
   return { ok: true, resources: [...single, ...repeated] as unknown as FhirResource[] };
+}
+
+/** A key's FHIR path with no pinned values and no list indexes. */
+function plainPath(key: string): string {
+  const parsed = parseTargetPath(key);
+  return (parsed?.path ?? key).split('.').filter((s) => !/^\d+$/.test(s)).join('.');
+}
+
+/** Every coding a record holds at a plain path: a CodeableConcept's codings, or a Coding itself. */
+function codingsAt(resource: Resource, path: string): Coding[] {
+  let values: unknown[] = [resource];
+  for (const seg of path.split('.').slice(1)) {
+    values = values.flatMap((v) => {
+      const next = v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>)[seg] : undefined;
+      return Array.isArray(next) ? next : next === undefined ? [] : [next];
+    });
+  }
+  const out: Coding[] = [];
+  const isCoding = (v: unknown): v is Coding => !!v && typeof v === 'object' && typeof (v as Coding).code === 'string';
+  for (const v of values) {
+    const coding = v && typeof v === 'object' ? (v as { coding?: unknown }).coding : undefined;
+    if (Array.isArray(coding)) out.push(...coding.filter(isCoding));
+    else if (isCoding(v)) out.push(v);
+  }
+  return out.map((c) => (c.system ? { system: c.system, code: c.code } : { code: c.code! }));
 }

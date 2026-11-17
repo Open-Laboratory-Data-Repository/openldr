@@ -56,6 +56,17 @@ describe('applyRule: values', () => {
     expect(await run({ kind: 'values', map: { M: 'male' } }, ' M ')).toEqual({ ok: true, value: 'male' });
   });
 
+  it('gives a Coding for a value mapped to a code from a value set, and text for an old string map', async () => {
+    const rule: MapRule = { kind: 'values', map: { F: { system: 'urn:test:sys', code: 'female' }, M: 'male' } };
+    expect(await run(rule, 'F')).toEqual({ ok: true, value: { system: 'urn:test:sys', code: 'female' } });
+    expect(await run(rule, 'M')).toEqual({ ok: true, value: 'male' });
+  });
+
+  it('refuses a coded value with no system or no code', () => {
+    expect(MapRuleSchema.safeParse({ kind: 'values', map: { F: { system: '', code: 'f' } } }).success).toBe(false);
+    expect(MapRuleSchema.safeParse({ kind: 'values', map: { F: { system: 'urn:test:sys' } } }).success).toBe(false);
+  });
+
   it('fails an unmapped value naming the field, not the value', async () => {
     const r = await run({ kind: 'values', map: { M: 'male' } }, 'QZX', 'sex');
     expect(r).toMatchObject({ ok: false, field: 'sex' });
@@ -174,6 +185,7 @@ describe('MapRuleSchema', () => {
     const rules: MapRule[] = [
       { kind: 'date', format: 'dd/MM/yy' },
       { kind: 'values', map: { M: 'male' } },
+      { kind: 'values', map: { F: { system: 'urn:test:sys', code: 'female' }, M: 'male' } },
       { kind: 'codeList', conceptMapUrl: 'urn:test:map' },
       { kind: 'split', by: ' ', take: 2 },
       { kind: 'trim' },

@@ -8,7 +8,11 @@ import { z } from 'zod';
 
 export const MapRuleSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('date'), format: z.string().min(1) }),
-  z.object({ kind: z.literal('values'), map: z.record(z.string()) }),
+  z.object({
+    kind: z.literal('values'),
+    /** Each source value to a text, or to a code picked from a value set, with its system. */
+    map: z.record(z.union([z.string(), z.object({ system: z.string().min(1), code: z.string().min(1) }).strict()])),
+  }),
   z.object({
     kind: z.literal('codeList'),
     conceptMapUrl: z.string().min(1),
@@ -113,7 +117,10 @@ export async function applyRule(
       return applyDate(rule.format, text, field, deps.now ?? new Date());
     case 'values': {
       const key = text.trim();
-      return Object.hasOwn(rule.map, key) ? { ok: true, value: rule.map[key] } : fail(field, 'value is not in the translation list');
+      if (!Object.hasOwn(rule.map, key)) return fail(field, 'value is not in the translation list');
+      const to = rule.map[key];
+      // A coded value gives a Coding: a CodeableConcept keeps its system, a code field takes its code.
+      return { ok: true, value: typeof to === 'string' ? to : { system: to.system, code: to.code } };
     }
     case 'codeList': {
       const coding = await deps.translateCode(rule.conceptMapUrl, text.trim(), rule.sourceSystem);

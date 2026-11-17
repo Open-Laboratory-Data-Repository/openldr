@@ -255,4 +255,26 @@ describe('buildTarget', () => {
       expect(() => build([{ record: 'Patient', parts: [] }, ...good.slice(1)])).toThrow('Patient');
     });
   });
+
+  describe('derived fields', () => {
+    const packs = (repeats: boolean) => [
+      { pack: { id: 'pack-sr', resourceType: 'ServiceRequest' }, entries: [entry(0, 'ServiceRequest.code', 'Tests')] },
+      { pack: { id: 'pack-o', resourceType: 'Observation' }, entries: [entry(0, 'Observation.code', 'Test')], repeats },
+    ];
+    const identity = [
+      { record: 'ServiceRequest', parts: [{ field: 'ServiceRequest.code', optional: true }] },
+      { record: 'Observation', parts: [{ record: 'ServiceRequest' }, { field: 'Observation.code' }] },
+    ];
+    const make = (derived: { path: string; from: string }[], repeats = true) =>
+      buildTarget('t', 'T', packs(repeats), { links: [], defaults: [], identity, derived });
+
+    it('keeps a derived field whose paths are fields and whose source repeats', () => {
+      expect(make([{ path: 'ServiceRequest.code', from: 'Observation.code' }]).derived).toEqual([{ path: 'ServiceRequest.code', from: 'Observation.code' }]);
+    });
+
+    it('refuses a path that is not a field, and a source that does not repeat', () => {
+      expect(() => make([{ path: 'ServiceRequest.priority', from: 'Observation.code' }])).toThrow('ServiceRequest.priority, which is not a field');
+      expect(() => make([{ path: 'ServiceRequest.code', from: 'Observation.code' }], false)).toThrow('does not repeat');
+    });
+  });
 });

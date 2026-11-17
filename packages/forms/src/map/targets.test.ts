@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Coding } from 'fhir/r4';
 import { validateBatch, validateResource, type StrictnessLevel } from '@openldr/fhir';
 import { seededStarterPacks } from '../samples/starter-packs';
-import { applyMapping, type ApplyDeps, type FieldMapping } from './apply';
+import { applyMapping, SavedMappingSchema, type ApplyDeps, type FieldMapping } from './apply';
 import { parseTargetPath } from './target';
 import { labResultTarget, listMapTargets, mapTargetById } from './targets';
 import labelsFr from './labels.fr.json';
@@ -396,5 +396,208 @@ describe('a fully mapped made-up row', () => {
       { targetPath: 'ServiceRequest.extension?url=urn:openldr:ext:rejection', from: { field: 'notes' } },
     ]), target, row, deps());
     expect(res).toMatchObject({ ok: false, field: 'ServiceRequest.extension?url=urn:openldr:ext:rejection' });
+  });
+});
+
+describe('a file with one column per test', () => {
+  // The header of samples/lab-sample.csv, with made-up values. Each test column holds that test's result.
+  const fnv = (text: string): string => {
+    let h = 0xcbf29ce484222325n;
+    for (const b of new TextEncoder().encode(text)) h = ((h ^ BigInt(b)) * 0x100000001b3n) & 0xffffffffffffffffn;
+    return h.toString(16).padStart(16, '0');
+  };
+  const hash = (parts: string[]) => fnv(JSON.stringify(parts));
+  const deps = (): ApplyDeps => ({
+    hashId: hash,
+    translateCode: async (_url, value): Promise<Coding | null> => ({ system: 'urn:test:codes', code: `std-${value.toLowerCase()}` }),
+  });
+  const wide = {
+    PatientID: 'T-0009', Sex: 'QZX-SEX', DOB: '2001-02-03', SpecimenNo: 'S-0009', Specimen: 'QZX-SPEC',
+    CollectionDate: '2026-11-05', LocationType: 'QZX-LOC', Organism: 'QZX-ORG', OrganismCode: 'QZX-OC',
+    AMP: 'QZX-R1', CIP: 'QZX-R2', GEN: 'QZX-R3',
+  };
+  const perColumn = (testRow: Partial<FieldMapping> = {}): FieldMapping[] => [
+    { targetPath: 'Patient.identifier.value', from: { field: 'PatientID' } },
+    { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'CollectionDate' } },
+    { targetPath: 'Observation.valueString', from: { fields: ['AMP', 'CIP', 'GEN'] } },
+    { targetPath: 'Observation.code', from: { fixedList: ['AMP', 'CIP', 'GEN'] }, ...testRow },
+  ];
+  const mapping = (r: FieldMapping[]) => ({ shapeHash: 'h', fieldNames: Object.keys(wide).sort(), targetId: target.id, rows: r });
+  type Rec = Record<string, unknown> & { resourceType: string; id: string };
+  const results = (res: { resources: unknown[] }) => (res.resources as Rec[]).filter((r) => r.resourceType === 'Observation');
+
+  it('gives one result per column, each with its own test, linked to the one order, specimen and patient', async () => {
+    const res = await applyMapping(mapping(perColumn()), target, wide, deps());
+    if (!res.ok) throw new Error(res.reason);
+    const [patient, specimen, order] = res.resources as Rec[];
+    const obs = results(res);
+    expect(obs.map((o) => o.code)).toEqual([
+      { text: 'AMP', coding: [{ code: 'AMP' }] },
+      { text: 'CIP', coding: [{ code: 'CIP' }] },
+      { text: 'GEN', coding: [{ code: 'GEN' }] },
+    ]);
+    expect(obs.map((o) => o.valueString)).toEqual(['QZX-R1', 'QZX-R2', 'QZX-R3']);
+    for (const o of obs) {
+      expect(o.subject).toEqual({ reference: `Patient/${patient.id}` });
+      expect(o.specimen).toEqual({ reference: `Specimen/${specimen.id}` });
+      expect(o.basedOn).toEqual([{ reference: `ServiceRequest/${order.id}` }]);
+    }
+  });
+
+  it('gives the three results different ids, the same on every run', async () => {
+    const a = await applyMapping(mapping(perColumn()), target, wide, deps());
+    const b = await applyMapping(mapping(perColumn()), target, { ...wide }, deps());
+    if (!a.ok || !b.ok) throw new Error('not ok');
+    const ids = results(a).map((o) => o.id);
+    expect(new Set(ids).size).toBe(3);
+    expect(results(b).map((o) => o.id)).toEqual(ids);
+  });
+
+  it('gives no result for a blank cell, though the test row has a test there', async () => {
+    const res = await applyMapping(mapping(perColumn()), target, { ...wide, CIP: '  ' }, deps());
+    if (!res.ok) throw new Error(res.reason);
+    expect(results(res).map((o) => (o.code as { text: string }).text)).toEqual(['AMP', 'GEN']);
+  });
+
+  it('maps the patient, specimen and order with no result when every test cell is blank', async () => {
+    const res = await applyMapping(mapping(perColumn()), target, { ...wide, AMP: '', CIP: '', GEN: '' }, deps());
+    if (!res.ok) throw new Error(res.reason);
+    expect(res.resources.map((r) => r.resourceType)).toEqual(['Patient', 'Specimen', 'ServiceRequest']);
+  });
+
+  it('fails a list of tests of the wrong length, naming the test field', async () => {
+    const res = await applyMapping(mapping(perColumn({ from: { fixedList: ['AMP', 'CIP'] } })), target, wide, deps());
+    expect(res).toMatchObject({ ok: false, field: 'Observation.code' });
+  });
+
+  it('fails a list of fixed values on a field that does not repeat, naming the key', async () => {
+    const rows = [...perColumn(), { targetPath: 'Patient.gender', from: { fixedList: ['female'] } }];
+    const res = await applyMapping(mapping(rows), target, wide, deps());
+    expect(res).toEqual({
+      ok: false,
+      reason: 'Patient.gender: a list of fixed values is allowed only on a field of a repeating record',
+      field: 'Patient.gender',
+    });
+  });
+
+  it('fails two columns with the same test, as two results with one id', async () => {
+    const res = await applyMapping(mapping(perColumn({ from: { fixedList: ['AMP', 'AMP', 'GEN'] } })), target, wide, deps());
+    expect(res).toEqual({ ok: false, reason: 'Test: two Observation records in this row have the same value, so they would share one id', field: 'Observation.code' });
+  });
+
+  it('runs a Code list rule on the test row over each test', async () => {
+    const res = await applyMapping(mapping(perColumn({ rule: { kind: 'codeList', conceptMapUrl: 'urn:test:map' } })), target, wide, deps());
+    if (!res.ok) throw new Error(res.reason);
+    expect(results(res).map((o) => o.code)).toEqual([
+      { coding: [{ system: 'urn:test:codes', code: 'std-amp' }] },
+      { coding: [{ system: 'urn:test:codes', code: 'std-cip' }] },
+      { coding: [{ system: 'urn:test:codes', code: 'std-gen' }] },
+    ]);
+  });
+
+  it('runs a rule on the result row over every column', async () => {
+    const rows = perColumn().map((r) =>
+      r.targetPath === 'Observation.valueString' ? { ...r, rule: { kind: 'values' as const, map: { 'QZX-R1': 'one', 'QZX-R2': 'two', 'QZX-R3': 'three' } } } : r,
+    );
+    const res = await applyMapping(mapping(rows), target, wide, deps());
+    if (!res.ok) throw new Error(res.reason);
+    expect(results(res).map((o) => o.valueString)).toEqual(['one', 'two', 'three']);
+  });
+
+  it('keeps what a record with only fixed rows gives: one result for a fixed test, one per entry for a list', async () => {
+    const base = perColumn().slice(0, 2);
+    const one = await applyMapping(mapping([...base, { targetPath: 'Observation.code', from: { fixed: 'AMP' } }]), target, wide, deps());
+    const list = await applyMapping(mapping([...base, { targetPath: 'Observation.code', from: { fixedList: ['AMP', 'CIP'] } }]), target, wide, deps());
+    if (!one.ok || !list.ok) throw new Error('not ok');
+    expect(results(one)).toHaveLength(1);
+    expect(results(list)).toHaveLength(2);
+  });
+
+  it('passes the saved mapping schema with a list of tests, and refuses an empty list or an empty test', () => {
+    expect(SavedMappingSchema.safeParse(mapping(perColumn())).success).toBe(true);
+    expect(SavedMappingSchema.safeParse(mapping(perColumn({ from: { fixedList: [] } }))).success).toBe(false);
+    expect(SavedMappingSchema.safeParse(mapping(perColumn({ from: { fixedList: ['AMP', ''] } }))).success).toBe(false);
+  });
+});
+
+describe('the order takes its results\' tests when its own Tests field is not mapped', () => {
+  const fnv = (text: string): string => {
+    let h = 0xcbf29ce484222325n;
+    for (const b of new TextEncoder().encode(text)) h = ((h ^ BigInt(b)) * 0x100000001b3n) & 0xffffffffffffffffn;
+    return h.toString(16).padStart(16, '0');
+  };
+  const deps = (): ApplyDeps => ({
+    hashId: (parts) => fnv(JSON.stringify(parts)),
+    translateCode: async (_url, value): Promise<Coding | null> => ({ system: 'urn:test:codes', code: value.toLowerCase() }),
+  });
+  const row = { pid: 'T-0010', coll: '2026-11-05', t1: 'TA', t2: 'TA', t3: 'TB', r1: 'QZX-1', r2: 'QZX-2', r3: 'QZX-3', d1: '2026-11-05T08:00:00Z', d2: '2026-11-05T18:00:00Z', d3: '2026-11-05T08:00:00Z' };
+  const base: FieldMapping[] = [
+    { targetPath: 'Patient.identifier.value', from: { field: 'pid' } },
+    { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'coll' } },
+  ];
+  const mapping = (r: FieldMapping[]) => ({ shapeHash: 'h', fieldNames: Object.keys(row).sort(), targetId: target.id, rows: [...base, ...r] });
+  type Rec = Record<string, unknown> & { resourceType: string; id: string };
+  const orderOf = (res: { resources: unknown[] }) => (res.resources as Rec[]).find((r) => r.resourceType === 'ServiceRequest')!;
+
+  it('declares the order\'s code as taken from the results\' codes', () => {
+    expect(target.derived).toEqual([{ path: 'ServiceRequest.code', from: 'Observation.code' }]);
+  });
+
+  it('gives one result\'s code to the order', async () => {
+    const res = await applyMapping(mapping([
+      { targetPath: 'Observation.code', from: { field: 't1' }, rule: { kind: 'codeList', conceptMapUrl: 'urn:test:map' } },
+      { targetPath: 'Observation.valueString', from: { field: 'r1' } },
+    ]), target, row, deps());
+    if (!res.ok) throw new Error(res.reason);
+    expect(orderOf(res).code).toEqual({ coding: [{ system: 'urn:test:codes', code: 'ta' }] });
+  });
+
+  it('gives three results with two distinct codes two codings, in order, duplicates dropped', async () => {
+    const res = await applyMapping(mapping([
+      { targetPath: 'Observation.code', from: { fields: ['t1', 't2', 't3'] }, rule: { kind: 'codeList', conceptMapUrl: 'urn:test:map' } },
+      { targetPath: 'Observation.valueString', from: { fields: ['r1', 'r2', 'r3'] } },
+      { targetPath: 'Observation.effectiveDateTime', from: { fields: ['d1', 'd2', 'd3'] } },
+    ]), target, row, deps());
+    if (!res.ok) throw new Error(res.reason);
+    expect(res.resources.filter((r) => r.resourceType === 'Observation')).toHaveLength(3);
+    expect(orderOf(res).code).toEqual({ coding: [{ system: 'urn:test:codes', code: 'ta' }, { system: 'urn:test:codes', code: 'tb' }] });
+  });
+
+  it('leaves a mapped Tests field as the row gives it', async () => {
+    const res = await applyMapping(mapping([
+      { targetPath: 'ServiceRequest.code', from: { field: 't3' } },
+      { targetPath: 'Observation.code', from: { field: 't1' } },
+    ]), target, row, deps());
+    if (!res.ok) throw new Error(res.reason);
+    expect(orderOf(res).code).toEqual({ text: 'TB', coding: [{ code: 'TB' }] });
+  });
+
+  it('gives the order the same id with and without the derived code', async () => {
+    const rows: FieldMapping[] = [{ targetPath: 'Observation.code', from: { field: 't1' } }];
+    const withIt = await applyMapping(mapping(rows), target, row, deps());
+    const without = await applyMapping(mapping(rows), { ...target, derived: [] }, row, deps());
+    if (!withIt.ok || !without.ok) throw new Error('not ok');
+    expect(orderOf(without).code).toBeUndefined();
+    expect(orderOf(withIt).id).toBe(orderOf(without).id);
+  });
+});
+
+describe('a Values rule whose To is a code from a value set', () => {
+  const deps: ApplyDeps = { hashId: (parts) => String(parts.length) + 'x' + parts.join('').replace(/[^A-Za-z0-9]/g, '').slice(0, 40), translateCode: async () => null };
+  const row = { pid: 'T-0011', coll: '2026-11-05', sex: 'F', spec: 'QZX-B', t: 'TA' };
+  const rows: FieldMapping[] = [
+    { targetPath: 'Patient.identifier.value', from: { field: 'pid' } },
+    { targetPath: 'Specimen.collection.collectedDateTime', from: { field: 'coll' } },
+    { targetPath: 'Observation.code', from: { field: 't' } },
+    { targetPath: 'Patient.gender', from: { field: 'sex' }, rule: { kind: 'values', map: { F: { system: 'urn:test:gender', code: 'female' } } } },
+    { targetPath: 'Specimen.type', from: { field: 'spec' }, rule: { kind: 'values', map: { 'QZX-B': { system: 'urn:test:spec', code: 'bld' } } } },
+  ];
+
+  it('lands with its system on a CodeableConcept, and as its code on a code field like Sex', async () => {
+    const res = await applyMapping({ shapeHash: 'h', fieldNames: Object.keys(row).sort(), targetId: target.id, rows }, target, row, deps);
+    if (!res.ok) throw new Error(res.reason);
+    const byType = (t: string) => res.resources.find((r) => r.resourceType === t) as unknown as Record<string, unknown>;
+    expect(byType('Patient').gender).toBe('female');
+    expect(byType('Specimen').type).toEqual({ coding: [{ system: 'urn:test:spec', code: 'bld' }] });
   });
 });

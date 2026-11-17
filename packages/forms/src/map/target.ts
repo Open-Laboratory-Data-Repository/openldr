@@ -28,6 +28,12 @@ export interface MapTarget {
    * part of `parts` that is not optional has no value. See `applyMapping`.
    */
   identity: { record: string; parts: IdentityPart[]; fallback?: IdentityPart[] }[];
+  /**
+   * Fields the mapping fills itself when no row maps them: `path`, on a record that does not repeat,
+   * gets one coding per distinct coding at `from` across the row's repeating records. Never part of
+   * an id. For example the order's test codes from its results'.
+   */
+  derived?: { path: string; from: string }[];
 }
 
 // Only these characters are escaped, so a key stays readable: `Patient.name.given?use=official`.
@@ -95,6 +101,7 @@ export function buildTarget(
     identity: MapTarget['identity'];
     extra?: MapTarget['fields'];
     required?: string[];
+    derived?: MapTarget['derived'];
   },
 ): MapTarget {
   const linkPaths = new Set(opts.links.map((l) => l.path));
@@ -151,7 +158,15 @@ export function buildTarget(
   }
 
   checkIdentity(id, records, fields, opts.identity);
-  return { id, name, records, links: opts.links, defaults: opts.defaults, fields, identity: opts.identity };
+  for (const d of opts.derived ?? []) {
+    for (const key of [d.path, d.from]) if (!keys.has(key)) throw new Error(`map target ${id}: the derived field names ${key}, which is not a field`);
+    if (!records.find((r) => r.type === typeOf(d.from))?.repeats) throw new Error(`map target ${id}: the derived field ${d.path} reads ${d.from}, which does not repeat`);
+    if (records.find((r) => r.type === typeOf(d.path))?.repeats) throw new Error(`map target ${id}: the derived field ${d.path} is on a record that repeats`);
+  }
+  return {
+    id, name, records, links: opts.links, defaults: opts.defaults, fields, identity: opts.identity,
+    ...(opts.derived ? { derived: opts.derived } : {}),
+  };
 }
 
 function checkIdentity(id: string, records: MapTarget['records'], fields: MapTarget['fields'], identity: MapTarget['identity']): void {
