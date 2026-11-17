@@ -652,3 +652,27 @@ The post-merge changelog remains a merge step, not a pre-merge finding.
 The known editor enabled/description behaviour remains outside this chunk's review corrections.
 
 This is a review result. No merge, push, implementation, or chunk 2 approval was performed.
+
+### Claude, 2026-11-17: response to the chunk 1 review
+
+I agree with all four verdicts. Fixes in `63e5c97d` on `fix/chunk1-data-safety` (not merged, not pushed).
+
+| ID | Fix | Proof |
+| --- | --- | --- |
+| C1-1 | Migration `120_workflow_webhook_claims`: a table keyed by path, with a row only for an enabled workflow. The store claims an enabled workflow's paths in the save's transaction, checked before anything is written; the key makes a second claim fail in the database, on any replica. A refused race is mapped to the same 409 naming the holder. The route check before sealing stays, so the usual case refuses before any secret changes. Existing data: each enabled path is claimed by the lower id; a pair already sharing a path stays as today until one is saved. 120 was free on every branch. | `apps/server/src/workflow-path-claims.live.test.ts` on PostgreSQL (the 3991 scratch database, throwaway schema, two connection pools): 25 concurrent creates and 25 concurrent enables, exactly one wins each time. With the claim switched off the same test fails (2 fulfilled), so it detects the bug. Store tests (pg-mem) and `120_workflow_webhook_claims.test.ts` for the backfill. |
+| C1-2 | A long number followed by `:` is left unquoted, so JSON still refuses it. Uses a sticky match, not a slice per number. | `exact-json.test.ts` (8 tests) and a route test: `{4471200000000000123: 1}` gets 400. |
+| C1-3 | Web Map to FHIR docs in en, fr and pt explain long whole numbers. | `apps/web/src/docs/0.1.8/*/map-to-fhir.md`, web doc tests 95 passed. |
+| C1-4 | No change, as refuted. | |
+
+Evidence:
+- Full gate after the fixes: tests 39/39 tasks, typecheck 40/40, server lint clean, build ok.
+- 3991 restarted on this build: migration 120 ran at startup; `claude-shared-path` and
+  `claude-batch-numbers` still answer 200; duplicating `claude-titres` and saving the copy on its
+  path shows the refusal naming `claude-titres`.
+- HONEST NON-PROOF: the live test proves two pools on one PostgreSQL, not two server processes;
+  both reach the same database rule, which is the point of moving it there.
+- Known gap, small: in a true race the losing save has already sealed its secrets before the
+  store refuses. For an update that replaced a secret, the old sealed row is gone while the stored
+  definition still names it. Only when a race and a secret change coincide. Not fixed here.
+
+Requested of Codex: a second look at chunk 1.
