@@ -228,3 +228,28 @@ describe('pinnedListOf', () => {
     expect(pinnedListOf('ServiceRequest.requester?type=Practitioner')).toBeNull();
   });
 });
+
+describe('a whole number too long to hold exactly', () => {
+  it('is refused by a number field, never rounded', () => {
+    const obs: Record<string, unknown> = { resourceType: 'Observation' };
+    expect(writeValue(obs, 'Observation.valueQuantity.value', '4471200000000000123')).toEqual({
+      ok: false,
+      reason: 'Observation.valueQuantity.value has more digits than a number can hold exactly',
+    });
+    expect(obs.valueQuantity).toBeUndefined();
+  });
+
+  it('keeps every digit in a text field', () => {
+    const sp: Record<string, unknown> = { resourceType: 'Specimen' };
+    expect(writeValue(sp, 'Specimen.accessionIdentifier.value', '4471200000000000123')).toEqual({ ok: true });
+    expect(sp).toEqual({ resourceType: 'Specimen', accessionIdentifier: { value: '4471200000000000123' } });
+  });
+
+  it('still writes a safe whole number and a decimal as numbers', () => {
+    const obs: Record<string, unknown> = { resourceType: 'Observation' };
+    expect(writeValue(obs, 'Observation.valueQuantity.value', '9007199254740991')).toEqual({ ok: true });
+    expect((obs.valueQuantity as { value: number }).value).toBe(9007199254740991);
+    const obs2: Record<string, unknown> = { resourceType: 'Observation' };
+    expect(writeValue(obs2, 'Observation.valueQuantity.value', '12345678901234567.5')).toEqual({ ok: true });
+  });
+});

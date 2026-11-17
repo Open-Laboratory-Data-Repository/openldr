@@ -243,3 +243,18 @@ describe('MapRuleSchema', () => {
     expect(MapRuleSchema.safeParse({ kind: 'split', by: ' ', take: -1 }).success).toBe(false);
   });
 });
+
+describe('applyRule: number, with a whole number too long to hold exactly', () => {
+  it('refuses it with either decimal mark, naming the field and not the value', async () => {
+    for (const decimal of [',', '.'] as const) {
+      const r = await applyRule({ kind: 'number', decimal }, '4471200000000000123', 'specimen_no', {} as RuleDeps);
+      expect(r).toEqual({ ok: false, reason: 'specimen_no: has more digits than a number can hold exactly', field: 'specimen_no' });
+    }
+    const neg = await applyRule({ kind: 'number', decimal: '.' }, '-9007199254740993', 'x', {} as RuleDeps);
+    expect(neg.ok).toBe(false);
+  });
+
+  it('still reads the largest safe whole number', async () => {
+    expect(await applyRule({ kind: 'number', decimal: '.' }, '9007199254740991', 'x', {} as RuleDeps)).toEqual({ ok: true, value: 9007199254740991 });
+  });
+});

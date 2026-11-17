@@ -151,3 +151,38 @@ describe('FHIR XML at the webhook', () => {
     } finally { await app.close(); }
   });
 });
+
+describe('long whole numbers at the webhook', () => {
+  const post = (app: Awaited<ReturnType<typeof fixture>>['app'], payload: string) =>
+    app.inject({ method: 'POST', url: '/api/workflows/hooks/path', headers: { 'x-webhook-token': 'token', prefer: 'respond-async', 'content-type': 'application/json' }, payload });
+
+  it('keeps every digit of a long whole number as text, and notes the field', async () => {
+    const { app, receipts } = await fixture();
+    try {
+      const r = await post(app, '[{"specimen_no": 4471200000000000123, "ct": 21.4}, {"specimen_no": 4471200000000000124, "ct": 0}]');
+      expect(r.statusCode).toBe(202);
+      const input = (receipts.accept.mock.calls[0] as unknown as [{ input: { body: unknown; notes?: string[] } }])[0].input;
+      expect(input.body).toEqual([{ specimen_no: '4471200000000000123', ct: 21.4 }, { specimen_no: '4471200000000000124', ct: 0 }]);
+      expect(input.notes).toEqual(['specimen_no: a whole number too long to keep exactly was kept as text, with every digit. Send it in quotes.']);
+    } finally { await app.close(); }
+  });
+
+  it('adds no notes when every number fits', async () => {
+    const { app, receipts } = await fixture();
+    try {
+      await post(app, '{"specimen_no": "4471200000000000123", "n": 9007199254740991}');
+      const input = (receipts.accept.mock.calls[0] as unknown as [{ input: Record<string, unknown> }])[0].input;
+      expect(input.body).toEqual({ specimen_no: '4471200000000000123', n: 9007199254740991 });
+      expect('notes' in input).toBe(false);
+    } finally { await app.close(); }
+  });
+
+  it('still refuses a __proto__ key and broken JSON, as Fastify does everywhere else', async () => {
+    const { app, receipts } = await fixture();
+    try {
+      expect((await post(app, '{"__proto__": {"x": 1}}')).statusCode).toBe(400);
+      expect((await post(app, '{"a": 1,')).statusCode).toBe(400);
+      expect(receipts.accept).not.toHaveBeenCalled();
+    } finally { await app.close(); }
+  });
+});

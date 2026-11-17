@@ -3133,16 +3133,21 @@ export async function createWorkflow(body: Omit<Workflow, 'createdAt' | 'updated
   const res = await authFetch('/api/workflows', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`create workflow failed: ${res.status}`);
-  return res.json() as Promise<Workflow>;
+  // okJson carries the server's reason, such as a webhook path another enabled workflow uses.
+  return okJson<Workflow>(res, 'create workflow');
+}
+
+/** A disabled copy with a fresh webhook secret and its own sealed secrets (server side). */
+export async function duplicateWorkflow(id: string): Promise<Workflow> {
+  return authFetch(`/api/workflows/${encodeURIComponent(id)}/duplicate`, jbody({}, 'POST'))
+    .then((r) => okJson<Workflow>(r, 'duplicate workflow'));
 }
 
 export async function updateWorkflow(id: string, body: Omit<Workflow, 'createdAt' | 'updatedAt'>): Promise<Workflow> {
   const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}`, {
     method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`update workflow failed: ${res.status}`);
-  return res.json() as Promise<Workflow>;
+  return okJson<Workflow>(res, 'update workflow');
 }
 
 export async function deleteWorkflow(id: string): Promise<void> {

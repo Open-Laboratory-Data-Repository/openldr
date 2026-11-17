@@ -11,7 +11,7 @@ vi.mock('@/auth/AuthProvider', () => ({ useAuth: () => ({ user: { id: 'me', user
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() }, Toaster: () => null }));
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, fetchWorkflows: vi.fn(), createWorkflow: vi.fn(), deleteWorkflow: vi.fn(), resetWorkflow: vi.fn() };
+  return { ...actual, fetchWorkflows: vi.fn(), createWorkflow: vi.fn(), duplicateWorkflow: vi.fn(), deleteWorkflow: vi.fn(), resetWorkflow: vi.fn() };
 });
 import { toast } from 'sonner';
 import * as api from '@/api';
@@ -52,12 +52,14 @@ describe('WorkflowList', () => {
     fireEvent.click(await screen.findByTestId('open-wf_1'));
     expect(navigateMock).toHaveBeenCalledWith('/workflows/wf_1');
   });
-  it('duplicates a workflow', async () => {
-    (api.createWorkflow as any).mockResolvedValue(wf({ id: 'wf_2', name: 'AMR sync (copy)' }));
+  it('duplicates a workflow on the server, and says the copy is disabled', async () => {
+    (api.duplicateWorkflow as any).mockResolvedValue(wf({ id: 'wf_2', name: 'AMR sync (copy)', enabled: false }));
     render(<MemoryRouter><WorkflowList /></MemoryRouter>);
     await screen.findByText('AMR sync');
     fireEvent.click(await openMenuItem(/actions for amr sync/i, 'duplicate-wf_1'));
-    await waitFor(() => expect(api.createWorkflow).toHaveBeenCalledWith(expect.objectContaining({ name: 'AMR sync (copy)' })));
+    await waitFor(() => expect(api.duplicateWorkflow).toHaveBeenCalledWith('wf_1'));
+    expect(api.createWorkflow).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith('Duplicated AMR sync. The copy is disabled until you change its webhook path and enable it.');
   });
   it('deletes a workflow after confirm', async () => {
     (api.deleteWorkflow as any).mockResolvedValue(undefined);

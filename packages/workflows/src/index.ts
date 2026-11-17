@@ -45,5 +45,6 @@ export {
   type SecretValue,
   type SecretFieldRef,
 } from './secret-fields';
-export { createSharedWebhookResolver, WebhookPathConflictError, type SharedWebhookResolver } from './shared-webhook-resolver';
+export { createSharedWebhookResolver, findWebhookPathClaims, WebhookPathConflictError, type SharedWebhookResolver, type WebhookPathClaim } from './shared-webhook-resolver';
+export { parseJsonKeepingLongIntegers, quoteLongIntegers } from './exact-json';
 export { createWorkflowReceiptService, WebhookAcceptanceError, WebhookIdempotencyConflictError, type WorkflowReceipt, type WorkflowReceiptService } from './receipt-service';

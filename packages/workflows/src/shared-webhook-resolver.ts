@@ -13,6 +13,29 @@ export function webhookNodePath(node: WorkflowNode): string | undefined {
   return normalizeWebhookPath(path) || undefined;
 }
 
+/** A webhook path in a definition that another enabled workflow already uses. */
+export interface WebhookPathClaim { path: string; workflowId: string; name: string }
+
+/**
+ * Each webhook path in `nodes` that an enabled workflow other than `selfId` already uses. Two enabled
+ * workflows on one path make the path unavailable to both (`resolve` below), so a save that would
+ * cause that is refused instead. `findByPath` returns enabled workflows only, as the store does.
+ */
+export async function findWebhookPathClaims(
+  nodes: WorkflowNode[],
+  selfId: string,
+  findByPath: (path: string) => Promise<Workflow[]>,
+): Promise<WebhookPathClaim[]> {
+  const paths = [...new Set(nodes.map(webhookNodePath).filter((p): p is string => p !== undefined))];
+  const claims: WebhookPathClaim[] = [];
+  for (const path of paths) {
+    for (const w of await findByPath(path)) {
+      if (w.id !== selfId && w.enabled) claims.push({ path, workflowId: w.id, name: w.name });
+    }
+  }
+  return claims;
+}
+
 export class WebhookPathConflictError extends Error {
   constructor() { super('Webhook path has multiple enabled triggers'); this.name = 'WebhookPathConflictError'; }
 }

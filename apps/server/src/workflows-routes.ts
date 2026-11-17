@@ -1,11 +1,12 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z, ZodError } from 'zod';
-import { sealDefinitionSecrets, MAP_TEST_MAX_ITEMS, MapConfigError, type AppContext } from '@openldr/bootstrap';
+import { sealDefinitionSecrets, duplicateWorkflow, newWorkflowId, MAP_TEST_MAX_ITEMS, MapConfigError, type AppContext } from '@openldr/bootstrap';
 import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, isSecretRef } from '@openldr/workflows';
 import { ConfigError, appError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
 import { fhirXmlToJson } from '@openldr/fhir/xml';
+import { findWebhookPathClaims, quoteLongIntegers } from '@openldr/workflows';
 
 /** The content types the webhook reads as XML. Only FHIR XML gets through; see `fhirXmlToJson`. */
 const XML_TYPES = new Set(['application/fhir+xml', 'application/xml']);
@@ -253,6 +254,8 @@ export function registerWorkflowRoutes(
   app.post('/api/workflows', EDIT, async (req, reply) => {
     try {
       const parsed = WorkflowSchema.parse(req.body);
+      const clash = await pathClash(ctx, parsed);
+      if (clash) return reply.code(409).send({ error: clash });
       // SEC-06: seal plaintext secrets into the store; persist refs only. Built fully
       // before create → a fail-closed ConfigError leaves nothing persisted.
       const definition = (await extractWorkflowSecrets(ctx, parsed.id, parsed.definition)) as typeof parsed.definition;
@@ -271,6 +274,8 @@ export function registerWorkflowRoutes(
     try {
       const before = await ctx.workflows.store.get(id);
       const parsed = WorkflowSchema.parse(req.body);
+      const clash = await pathClash(ctx, { ...parsed, id });
+      if (clash) return reply.code(409).send({ error: clash });
       // SEC-06: the workflow's OWN id (the :id param, which store.update forces onto
       // the row) owns its secrets. Seal plaintext → refs before persisting.
       const definition = (await extractWorkflowSecrets(ctx, id, parsed.definition)) as typeof parsed.definition;
@@ -281,6 +286,26 @@ export function registerWorkflowRoutes(
       void ctx.workflows.listeners.reconcile().catch((err) => ctx.logger.warn({ err }, 'listener reconcile failed'));
       await recordAudit(ctx, req, { action: 'workflow.update', entityType: 'workflow', entityId: id, before, after: updated });
       return updated;
+    } catch (err) { return mapError(err, reply); }
+  });
+
+  // A copy that stands on its own: disabled, a fresh webhook secret, every other secret sealed
+  // again under the copy's id (workflow-duplicate.ts).
+  app.post('/api/workflows/:id/duplicate', EDIT, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const source = await ctx.workflows.store.get(id);
+      if (!source) return reply.code(404).send({ error: `unknown workflow: ${id}` });
+      const copy = await duplicateWorkflow(source, {
+        newId: newWorkflowId(), secretStore: ctx.workflows.secretStore, key: ctx.cfg.SECRETS_ENCRYPTION_KEY, createdBy: req.user?.username ?? null,
+      });
+      const created = await ctx.workflows.store.create(copy);
+      await syncWorkflowTriggers(ctx, created);
+      ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
+      ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
+      void ctx.workflows.listeners.reconcile().catch((err) => ctx.logger.warn({ err }, 'listener reconcile failed'));
+      await recordAudit(ctx, req, { action: 'workflow.duplicate', entityType: 'workflow', entityId: created.id, before: null, after: created, metadata: { sourceId: id } });
+      return reply.send(created);
     } catch (err) { return mapError(err, reply); }
   });
 
@@ -569,87 +594,123 @@ export function registerWorkflowRoutes(
     return entry;
   }
 
-  // Sender polling uses the current webhook secret, never a receipt ID alone.
-  app.get('/api/workflows/hooks/*', async (req, reply) => {
-    const entry = await authenticateWebhook(req, reply);
-    if (!entry) return;
-    const { requestId } = req.query as { requestId?: string };
-    if (typeof requestId !== 'string' || !requestId || requestId.length > 200) return reply.code(400).send({ error: 'requestId is required' });
-    try {
-      const receipt = await ctx.workflows.receipts.get(requestId);
-      if (!receipt || receipt.workflowId !== entry.workflowId) return reply.code(404).send({ error: 'unknown receipt' });
-      reply.header('cache-control', 'no-store');
-      return { requestId: receipt.id, status: receipt.status, runId: receipt.runId };
-    } catch { return reply.code(503).send({ error: 'receipt status unavailable' }); }
-  });
+  // The webhook routes read JSON their own way, in their own scope: a lab may send a long ID
+  // without quotes, and its exact digits must survive (exact-json.ts). Fastify's reader still parses
+  // the quoted text, so `__proto__` and `constructor` keys stay refused as everywhere else.
+  app.register(async (hooks) => {
+    const fastifyJson = hooks.getDefaultJsonParser('error', 'error');
+    hooks.removeContentTypeParser('application/json');
+    hooks.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+      const quoted = quoteLongIntegers(body as string);
+      (req as FastifyRequest & { keptAsText?: string[] }).keptAsText = quoted.keptAsText;
+      fastifyJson(req, quoted.text, done);
+    });
 
-  app.post('/api/workflows/hooks/*', async (req, reply) => {
-    const entry = await authenticateWebhook(req, reply);
-    if (!entry) return;
-    const idempotencyKey = req.headers['idempotency-key'];
-    if (idempotencyKey !== undefined && (typeof idempotencyKey !== 'string' || !/^[\x21-\x7e]{1,200}$/.test(idempotencyKey))) {
-      return reply.code(400).send({ error: 'Idempotency-Key must contain 1 to 200 printable non-space ASCII characters' });
-    }
-    let files: Record<string, import('@openldr/workflows').BinaryRef> | undefined;
-    let webhookBody: unknown = req.body;
-    const ct = String(req.headers['content-type'] ?? '');
-    if (XML_TYPES.has(ct.split(';')[0].trim().toLowerCase())) {
-      // Only FHIR XML: the converter refuses any other XML with 415, as before it existed.
-      const res = fhirXmlToJson(typeof req.body === 'string' ? req.body : '');
-      if (!res.ok) return reply.code(res.status).send({ error: res.error });
-      webhookBody = res.json;
-    } else if (!ct.includes('application/json') && req.body && (Buffer.isBuffer(req.body) || typeof (req.body as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function')) {
-      const buf = await readBinaryBody(req.body, ctx.cfg.WORKFLOW_FILE_MAX_BYTES);
-      const objectKey = `workflow-uploads/${randomUUID()}/webhook`;
-      try { await ctx.blob.put(objectKey, new Uint8Array(buf), 'application/octet-stream'); }
-      catch { return reply.code(503).send({ error: 'webhook payload storage unavailable' }); }
-      files = { file: { objectKey, contentType: 'application/octet-stream', fileName: 'webhook', byteSize: buf.length } };
-      webhookBody = undefined;
-    }
-    let accepted;
-    try {
-      accepted = await ctx.workflows.receipts.accept({
-        workflowId: entry.workflowId, idempotencyKey,
-        input: { method: req.method, body: webhookBody, headers: stripAuthHeaders(req.headers as Record<string, unknown>), query: req.query }, files,
-      });
-    } catch (err) {
-      // A connection failure can leave commit outcome uncertain. Keep uploaded bytes.
-      if (err instanceof Error && err.name === 'WebhookIdempotencyConflictError') {
-        if (files) await Promise.all(Object.values(files).map(f => ctx.blob.delete(f.objectKey).catch(() => undefined)));
-        return reply.code(409).send({ error: 'Idempotency-Key was already used with different input' });
+    // Sender polling uses the current webhook secret, never a receipt ID alone.
+    hooks.get('/api/workflows/hooks/*', async (req, reply) => {
+      const entry = await authenticateWebhook(req, reply);
+      if (!entry) return;
+      const { requestId } = req.query as { requestId?: string };
+      if (typeof requestId !== 'string' || !requestId || requestId.length > 200) return reply.code(400).send({ error: 'requestId is required' });
+      try {
+        const receipt = await ctx.workflows.receipts.get(requestId);
+        if (!receipt || receipt.workflowId !== entry.workflowId) return reply.code(404).send({ error: 'unknown receipt' });
+        reply.header('cache-control', 'no-store');
+        return { requestId: receipt.id, status: receipt.status, runId: receipt.runId };
+      } catch { return reply.code(503).send({ error: 'receipt status unavailable' }); }
+    });
+
+    hooks.post('/api/workflows/hooks/*', async (req, reply) => {
+      const entry = await authenticateWebhook(req, reply);
+      if (!entry) return;
+      const idempotencyKey = req.headers['idempotency-key'];
+      if (idempotencyKey !== undefined && (typeof idempotencyKey !== 'string' || !/^[\x21-\x7e]{1,200}$/.test(idempotencyKey))) {
+        return reply.code(400).send({ error: 'Idempotency-Key must contain 1 to 200 printable non-space ASCII characters' });
       }
-      if (err instanceof Error && err.name === 'WebhookAcceptanceError') {
-        if (files) await Promise.all(Object.values(files).map(f => ctx.blob.delete(f.objectKey).catch(() => undefined)));
-        return reply.code(409).send({ ok: false, error: 'workflow is not enabled; nothing was processed' });
+      let files: Record<string, import('@openldr/workflows').BinaryRef> | undefined;
+      let webhookBody: unknown = req.body;
+      const ct = String(req.headers['content-type'] ?? '');
+      if (XML_TYPES.has(ct.split(';')[0].trim().toLowerCase())) {
+        // Only FHIR XML: the converter refuses any other XML with 415, as before it existed.
+        const res = fhirXmlToJson(typeof req.body === 'string' ? req.body : '');
+        if (!res.ok) return reply.code(res.status).send({ error: res.error });
+        webhookBody = res.json;
+      } else if (!ct.includes('application/json') && req.body && (Buffer.isBuffer(req.body) || typeof (req.body as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function')) {
+        const buf = await readBinaryBody(req.body, ctx.cfg.WORKFLOW_FILE_MAX_BYTES);
+        const objectKey = `workflow-uploads/${randomUUID()}/webhook`;
+        try { await ctx.blob.put(objectKey, new Uint8Array(buf), 'application/octet-stream'); }
+        catch { return reply.code(503).send({ error: 'webhook payload storage unavailable' }); }
+        files = { file: { objectKey, contentType: 'application/octet-stream', fileName: 'webhook', byteSize: buf.length } };
+        webhookBody = undefined;
       }
-      return reply.code(503).send({ error: 'webhook acceptance unavailable; retry with the same Idempotency-Key' });
-    }
-    if (!accepted.created && files) await Promise.all(Object.values(files).map(f => ctx.blob.delete(f.objectKey).catch(() => undefined)));
-    let receipt = accepted.receipt;
-    const path = (req.params as Record<string, string>)['*'] ?? '';
-    const statusUrl = `/api/workflows/hooks/${path.split('/').map(encodeURIComponent).join('/')}?requestId=${encodeURIComponent(receipt.id)}`;
-    reply.header('location', statusUrl).header('cache-control', 'no-store');
-    const asyncRequested = String(req.headers.prefer ?? '').split(',').some(v => v.trim().toLowerCase() === 'respond-async');
-    if (!asyncRequested) {
-      const controller = new AbortController();
-      const onClose = () => controller.abort();
-      if (req.raw.aborted || reply.raw.destroyed) controller.abort();
-      reply.raw.once('close', onClose);
-      try { receipt = await waitForWebhookReceipt(receipt, id => ctx.workflows.receipts.get(id), controller.signal); }
-      finally { reply.raw.off('close', onClose); }
-      if (controller.signal.aborted) return;
-    }
-    if (receipt.status === 'completed' && receipt.outcome) {
-      return { ok: true, runId: receipt.outcome.runId, correlationId: receipt.outcome.correlationId };
-    }
-    if (receipt.status === 'failed') {
-      return reply.code(500).send({ ok: false, requestId: receipt.id, runId: receipt.runId, correlationId: receipt.outcome?.correlationId ?? null, status: 'failed', error: 'workflow execution failed; inspect the recorded run before resubmitting' });
-    }
-    if (receipt.status === 'interrupted' || receipt.status === 'cancelled') {
-      return reply.code(409).send({ ok: false, requestId: receipt.id, status: receipt.status, error: receipt.status === 'interrupted' ? 'execution outcome is uncertain; operator review required before resubmitting' : 'workflow was cancelled before execution; nothing was processed' });
-    }
-    return reply.code(202).header('retry-after', '2').send({ accepted: true, requestId: receipt.id, status: receipt.status, statusUrl });
+      let accepted;
+      try {
+        accepted = await ctx.workflows.receipts.accept({
+          workflowId: entry.workflowId, idempotencyKey,
+          input: { method: req.method, body: webhookBody, headers: stripAuthHeaders(req.headers as Record<string, unknown>), query: req.query, ...notesOf(req) }, files,
+        });
+      } catch (err) {
+        // A connection failure can leave commit outcome uncertain. Keep uploaded bytes.
+        if (err instanceof Error && err.name === 'WebhookIdempotencyConflictError') {
+          if (files) await Promise.all(Object.values(files).map(f => ctx.blob.delete(f.objectKey).catch(() => undefined)));
+          return reply.code(409).send({ error: 'Idempotency-Key was already used with different input' });
+        }
+        if (err instanceof Error && err.name === 'WebhookAcceptanceError') {
+          if (files) await Promise.all(Object.values(files).map(f => ctx.blob.delete(f.objectKey).catch(() => undefined)));
+          return reply.code(409).send({ ok: false, error: 'workflow is not enabled; nothing was processed' });
+        }
+        return reply.code(503).send({ error: 'webhook acceptance unavailable; retry with the same Idempotency-Key' });
+      }
+      if (!accepted.created && files) await Promise.all(Object.values(files).map(f => ctx.blob.delete(f.objectKey).catch(() => undefined)));
+      let receipt = accepted.receipt;
+      const path = (req.params as Record<string, string>)['*'] ?? '';
+      const statusUrl = `/api/workflows/hooks/${path.split('/').map(encodeURIComponent).join('/')}?requestId=${encodeURIComponent(receipt.id)}`;
+      reply.header('location', statusUrl).header('cache-control', 'no-store');
+      const asyncRequested = String(req.headers.prefer ?? '').split(',').some(v => v.trim().toLowerCase() === 'respond-async');
+      if (!asyncRequested) {
+        const controller = new AbortController();
+        const onClose = () => controller.abort();
+        if (req.raw.aborted || reply.raw.destroyed) controller.abort();
+        reply.raw.once('close', onClose);
+        try { receipt = await waitForWebhookReceipt(receipt, id => ctx.workflows.receipts.get(id), controller.signal); }
+        finally { reply.raw.off('close', onClose); }
+        if (controller.signal.aborted) return;
+      }
+      if (receipt.status === 'completed' && receipt.outcome) {
+        return { ok: true, runId: receipt.outcome.runId, correlationId: receipt.outcome.correlationId };
+      }
+      if (receipt.status === 'failed') {
+        return reply.code(500).send({ ok: false, requestId: receipt.id, runId: receipt.runId, correlationId: receipt.outcome?.correlationId ?? null, status: 'failed', error: 'workflow execution failed; inspect the recorded run before resubmitting' });
+      }
+      if (receipt.status === 'interrupted' || receipt.status === 'cancelled') {
+        return reply.code(409).send({ ok: false, requestId: receipt.id, status: receipt.status, error: receipt.status === 'interrupted' ? 'execution outcome is uncertain; operator review required before resubmitting' : 'workflow was cancelled before execution; nothing was processed' });
+      }
+      return reply.code(202).header('retry-after', '2').send({ accepted: true, requestId: receipt.id, status: receipt.status, statusUrl });
+    });
   });
+}
+
+/** The webhook input's notes: each field whose long whole number was kept as text. Names only. */
+function notesOf(req: FastifyRequest): { notes?: string[] } {
+  const kept = (req as FastifyRequest & { keptAsText?: string[] }).keptAsText ?? [];
+  if (kept.length === 0) return {};
+  return { notes: kept.map((k) => `${k}: a whole number too long to keep exactly was kept as text, with every digit. Send it in quotes.`) };
+}
+
+/**
+ * Why an enabled workflow cannot be saved: another enabled workflow uses one of its webhook paths.
+ * Two on one path would leave that path unavailable to both. A disabled workflow may share a path.
+ */
+async function pathClash(ctx: AppContext, w: { id: string; enabled: boolean; definition: { nodes: unknown[] } }): Promise<string | null> {
+  if (!w.enabled) return null;
+  const claims = await findWebhookPathClaims(
+    w.definition.nodes as Parameters<typeof findWebhookPathClaims>[0],
+    w.id,
+    (path) => ctx.workflows.store.findByWebhookPath(path),
+  );
+  const c = claims[0];
+  if (!c) return null;
+  return `The webhook path "${c.path}" is already used by the enabled workflow "${c.name}". Change this workflow's webhook path, or disable one of them.`;
 }
 
 function mapError(err: unknown, reply: FastifyReply): { error: string } {

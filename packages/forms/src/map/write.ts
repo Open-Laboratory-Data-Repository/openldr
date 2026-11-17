@@ -1,6 +1,6 @@
 import { lookupFhirPath } from '@openldr/fhir/paths';
 import { setPath } from '../extract/set-path';
-import type { MapValue } from './rules';
+import { TOO_LONG_FOR_NUMBER, wholeNumberTooLong, type MapValue } from './rules';
 import { parseTargetPath } from './target';
 
 /**
@@ -52,6 +52,7 @@ function wrap(leafType: string, value: WriteValue, path: string): Wrapped {
     }
     case 'number':
       if (typeof value === 'number') return { ok: true, value };
+      if (typeof value === 'string' && wholeNumberTooLong(value)) return { ok: false, reason: `${path} ${TOO_LONG_FOR_NUMBER}` };
       if (typeof value === 'string' && PLAIN_NUMBER.test(value.trim())) return { ok: true, value: Number(value.trim()) };
       return no('a number');
     case 'CodeableConcept':

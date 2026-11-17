@@ -13,7 +13,7 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
-import { fetchWorkflows, createWorkflow, deleteWorkflow, resetWorkflow, type Workflow } from '@/api';
+import { fetchWorkflows, createWorkflow, deleteWorkflow, duplicateWorkflow, resetWorkflow, type Workflow } from '@/api';
 
 function newWorkflowId(): string {
   return `wf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -100,11 +100,9 @@ export function WorkflowList() {
 
   const onDuplicate = useCallback(async (w: Workflow) => {
     try {
-      await createWorkflow({
-        id: newWorkflowId(), name: `${w.name} (copy)`, description: w.description,
-        definition: w.definition, enabled: w.enabled, createdBy: null,
-      });
-      toast.success(`Duplicated ${w.name}`);
+      // The copy starts disabled with a fresh webhook secret, so it never takes the original's path.
+      await duplicateWorkflow(w.id);
+      toast.success(`Duplicated ${w.name}. The copy is disabled until you change its webhook path and enable it.`);
       await load();
     } catch (e) { toast.error(`Duplicate failed: ${e instanceof Error ? e.message : String(e)}`); }
   }, [load]);

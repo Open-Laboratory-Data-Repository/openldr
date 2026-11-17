@@ -138,6 +138,9 @@ function fakeCtx() {
         create: async (w: any) => { data.push(w); return w; },
         update: async (id: string, w: any) => { const i = data.findIndex((x) => x.id === id); if (i >= 0) data[i] = w; return w; },
         remove: async (id: string) => { const i = data.findIndex((x) => x.id === id); if (i >= 0) data.splice(i, 1); },
+        // As the real store: enabled workflows with a webhook node on that path.
+        findByWebhookPath: async (path: string) => data.filter((d) => d.enabled && (d.definition?.nodes ?? []).some((n: any) =>
+          (n.type === 'webhook' || n.data?.triggerType === 'webhook') && String(n.data?.path ?? '').replace(/^\/+|\/+$/g, '') === path)),
       },
       runs: extras.runs,
       schedules: extras.schedules,
@@ -286,6 +289,7 @@ describe('workflow routes', () => {
           create: async (w: unknown) => w,
           update: async (_id: string, w: unknown) => w,
           remove: async () => {},
+          findByWebhookPath: async () => [],
         },
         runs: extras.runs,
         schedules: extras.schedules,
@@ -855,6 +859,44 @@ describe('workflow routes', () => {
     // Exactly two sealed rows for the workflow.
     expect((await secretRows(db, 'wf-secret')).length).toBe(2);
     await db.destroy();
+  });
+
+  it('duplicate makes a disabled copy with a fresh webhook secret and its own sealed secrets', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const { ctx, db, store, key } = await realSecretCtx();
+    registerWorkflowRoutes(app, ctx);
+    expect((await app.inject({ method: 'POST', url: '/api/workflows', payload: SECRET_WORKFLOW })).statusCode).toBe(200);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/wf-secret/duplicate' });
+    expect(res.statusCode).toBe(200);
+    const copy = res.json();
+    expect(copy.id).not.toBe('wf-secret');
+    expect(copy.enabled).toBe(false);
+    expect(copy.name).toBe(`${SECRET_WORKFLOW.name} (copy)`);
+    expect(JSON.stringify(copy)).not.toContain('sup3r-secret');
+
+    const trigger = copy.definition.nodes.find((n: any) => n.id === 't1');
+    const http = copy.definition.nodes.find((n: any) => n.id === 'h1');
+    const webhookSecret = await store.resolve(trigger.data.secret.secretRef, key);
+    expect(webhookSecret).not.toBe('sup3r-secret');
+    expect(webhookSecret).toMatch(/^[0-9a-f-]{36}$/);
+    expect(JSON.parse(await store.resolve(http.data.config.headers.secretRef, key))).toEqual({ Authorization: 'Bearer tok', 'X-Keep': 'yes' });
+    expect((await secretRows(db, copy.id)).length).toBe(2);
+    expect(ctx.__auditEvents.some((e: any) => e.action === 'workflow.duplicate' && e.entityId === copy.id)).toBe(true);
+
+    // Deleting the original leaves the copy's secrets in place.
+    expect((await app.inject({ method: 'DELETE', url: '/api/workflows/wf-secret' })).statusCode).toBe(200);
+    expect(JSON.parse(await store.resolve(http.data.config.headers.secretRef, key))).toEqual({ Authorization: 'Bearer tok', 'X-Keep': 'yes' });
+    expect(await store.resolve(trigger.data.secret.secretRef, key)).toBe(webhookSecret);
+    await db.destroy();
+  });
+
+  it('duplicate answers 404 for an unknown workflow', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    registerWorkflowRoutes(app, fakeCtx());
+    expect((await app.inject({ method: 'POST', url: '/api/workflows/nope/duplicate' })).statusCode).toBe(404);
   });
 
   it('POST leaves a headers blob with NO auth header as plaintext (not extracted)', async () => {
@@ -1512,5 +1554,44 @@ describe('map to fhir routes', () => {
     }
     expect(lines.length).toBeGreaterThan(0);
     expect(lines.join('')).not.toContain('QZX');
+  });
+});
+
+describe('one enabled workflow per webhook path', () => {
+  const hook = (id: string, name: string, path: string, enabled: boolean) => ({
+    ...SAMPLE_WORKFLOW, id, name, enabled,
+    definition: { nodes: [{ id: 't1', type: 'trigger', data: { triggerType: 'webhook', path, secret: `s-${id}` } }], edges: [] },
+  });
+  async function setup() {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+    const post = (w: unknown) => app.inject({ method: 'POST', url: '/api/workflows', payload: w as object });
+    const put = (w: { id: string }) => app.inject({ method: 'PUT', url: `/api/workflows/${w.id}`, payload: w as object });
+    return { app, ctx, post, put };
+  }
+
+  it('refuses a second enabled workflow on a path, naming the first, and stores nothing', async () => {
+    const { ctx, post } = await setup();
+    expect((await post(hook('wf-a', 'Lab A results', 'lab-a', true))).statusCode).toBe(200);
+    const r = await post(hook('wf-b', 'Lab A copy', '/lab-a/', true));
+    expect(r.statusCode).toBe(409);
+    expect(r.json().error).toBe('The webhook path "lab-a" is already used by the enabled workflow "Lab A results". Change this workflow\'s webhook path, or disable one of them.');
+    expect(await ctx.workflows.store.get('wf-b')).toBeUndefined();
+  });
+
+  it('lets a disabled workflow share the path, and refuses enabling it while the other is enabled', async () => {
+    const { post, put } = await setup();
+    await post(hook('wf-a', 'Lab A results', 'lab-a', true));
+    expect((await post(hook('wf-c', 'Lab A copy', 'lab-a', false))).statusCode).toBe(200);
+    expect((await put(hook('wf-c', 'Lab A copy', 'lab-a', true))).statusCode).toBe(409);
+    expect((await put(hook('wf-c', 'Lab A copy', 'lab-c', true))).statusCode).toBe(200);
+  });
+
+  it('lets a workflow save again on its own path', async () => {
+    const { post, put } = await setup();
+    await post(hook('wf-a', 'Lab A results', 'lab-a', true));
+    expect((await put({ ...hook('wf-a', 'Lab A results, renamed', 'lab-a', true) })).statusCode).toBe(200);
   });
 });

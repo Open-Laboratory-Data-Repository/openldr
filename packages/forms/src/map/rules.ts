@@ -123,9 +123,26 @@ function applyExcelDate(value: string | number | boolean, field: string): RuleRe
   return { ok: true, value: `${pad(date.getUTCFullYear(), 4)}-${pad(date.getUTCMonth() + 1, 2)}-${pad(date.getUTCDate(), 2)}` };
 }
 
+const MAX_WHOLE = BigInt(Number.MAX_SAFE_INTEGER);
+
+/**
+ * True for a whole number, as text, that a number cannot hold exactly: past 9007199254740991 a
+ * 64-bit float changes its last digits. Such a value is refused as a number, never rounded. A text
+ * field keeps every digit.
+ */
+export function wholeNumberTooLong(text: string): boolean {
+  const t = text.trim();
+  if (!/^[+-]?\d+$/.test(t)) return false;
+  const n = BigInt(t.replace(/^\+/, ''));
+  return n > MAX_WHOLE || n < -MAX_WHOLE;
+}
+
+export const TOO_LONG_FOR_NUMBER = 'has more digits than a number can hold exactly';
+
 function applyNumber(decimal: ',' | '.', value: string | number | boolean, field: string): RuleResult {
   if (typeof value === 'number') return Number.isFinite(value) ? { ok: true, value } : fail(field, 'expected a number');
   const text = String(value).trim();
+  if (wholeNumberTooLong(text)) return fail(field, TOO_LONG_FOR_NUMBER);
   const re = decimal === ',' ? /^[+-]?\d+(?:,\d+)?$/ : /^[+-]?\d+(?:\.\d+)?$/;
   if (!re.test(text)) return fail(field, `expected a number with ${decimal === ',' ? 'a comma' : 'a point'} as the decimal mark`);
   return { ok: true, value: Number(text.replace(',', '.')) };
