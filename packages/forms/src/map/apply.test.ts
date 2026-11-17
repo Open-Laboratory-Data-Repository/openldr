@@ -687,6 +687,37 @@ describe('chunk 2: comparators written as one character, and list entries in rea
     else throw new Error('expected a failure');
   });
 
+  it('names the list entry whose identity value is missing, and never a value', async () => {
+    // Observation.code is optional in the made-up target; make it needed, as in the Lab result target.
+    const needsCode: MapTarget = {
+      ...target,
+      identity: target.identity.map((i) => i.record === 'Observation'
+        ? { ...i, parts: [{ record: 'ServiceRequest' }, { field: 'Observation.code' }] }
+        : i),
+    };
+    const res = await applyMapping(mapping(listRows()), needsCode,
+      { ...row, tests: ['T1', null, 'T3'], results: ['1', '2', '3'] }, deps());
+    expect(res).toEqual({
+      ok: false,
+      reason: 'Test is needed to tell one Observation record from another, and has no value (tests, entry 2 of 3)',
+      field: 'Observation.code',
+    });
+  });
+
+  it('names the list entry whose required value is missing', async () => {
+    const required: MapTarget = {
+      ...target,
+      fields: target.fields.map((f) => (f.path === 'Observation.valueQuantity.value' ? { ...f, required: true } : f)),
+    };
+    const res = await applyMapping(mapping(listRows()), required,
+      { ...row, tests: ['T1', 'T2', 'T3'], results: ['1', '', '3'] }, deps());
+    expect(res).toEqual({
+      ok: false,
+      reason: 'Result is required and has no value (results, entry 2 of 3)',
+      field: 'Observation.valueQuantity.value',
+    });
+  });
+
   // The target's own optional identity part tells two results of one test apart.
   const dated: MapTarget = {
     ...target,

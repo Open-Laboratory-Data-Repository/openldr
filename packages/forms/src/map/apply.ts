@@ -166,6 +166,11 @@ async function resolveRow(
   };
 }
 
+/** For a value from one entry of a list column, ` (results, entry 2 of 4)`; otherwise empty. */
+function listEntry(r: ResolvedRow | undefined, index: number): string {
+  return r?.list && r.values.length > 1 ? ` (${r.sources[0]}, ${entryOf(index, r.values.length)})` : '';
+}
+
 function missing(key: string, label: string): Failure {
   return { ok: false, reason: `${label} is required and has no value`, field: key };
 }
@@ -281,7 +286,8 @@ export async function applyMapping(
       marker = ['fallback']; // so a fallback id never shares a hash input with a primary one
     }
     if ('missing' in got) {
-      return { ok: false, reason: `${labelOf(got.missing)} is needed to tell one ${type} record from another, and has no value`, field: got.missing };
+      const where = listEntry(rowOf.get(got.missing), index);
+      return { ok: false, reason: `${labelOf(got.missing)} is needed to tell one ${type} record from another, and has no value${where}`, field: got.missing };
     }
     const id = await deps.hashId([type, ...marker, ...got.values]);
     if (typeof id !== 'string' || !FHIR_ID.test(id)) {
@@ -322,12 +328,14 @@ export async function applyMapping(
     for (const r of rows) {
       const value = r.values.length === 1 ? r.values[0] : r.values[index];
       if (value === null) {
-        if (r.required) return missing(r.row.targetPath, r.label);
+        if (r.required) {
+          const f = missing(r.row.targetPath, r.label);
+          return { ...f, reason: `${f.reason}${listEntry(r, index)}` };
+        }
         continue;
       }
       // A writer reason names the target path; for a list entry, add the column and the entry.
-      const where = (f: Failure): Failure =>
-        r.list && r.values.length > 1 ? { ...f, reason: `${f.reason} (${r.sources[0]}, ${entryOf(index, r.values.length)})` } : f;
+      const where = (f: Failure): Failure => ({ ...f, reason: `${f.reason}${listEntry(r, index)}` });
       const f = write(resource, r.row.targetPath, value);
       if (f) return where(f);
       const comparator = r.comparators?.[r.values.length === 1 ? 0 : index];
