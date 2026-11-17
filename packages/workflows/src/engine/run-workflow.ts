@@ -85,12 +85,14 @@ function upstreamItemsFor(
   edges: WorkflowEdge[],
   nodeOutputs: Record<string, WorkflowItem[]>,
   skippedEdges: Set<string>,
+  portItems: Record<string, Record<string, WorkflowItem[]>> = {},
 ): WorkflowItem[] {
   const out: WorkflowItem[] = [];
   for (const edge of edges) {
     if (edge.target !== node.id) continue;
     if (skippedEdges.has(edge.id)) continue;
-    const items = nodeOutputs[edge.source];
+    const ports = portItems[edge.source];
+    const items = ports ? ports[edge.sourceHandle || 'out'] : nodeOutputs[edge.source];
     if (Array.isArray(items)) out.push(...items);
   }
   return out;
@@ -178,7 +180,7 @@ export async function runWorkflow(
 
     const start = Date.now();
     try {
-      const input = upstreamItemsFor(node, edges, ctx.nodeOutputs, skippedEdges);
+      const input = upstreamItemsFor(node, edges, ctx.nodeOutputs, skippedEdges, ctx.portItems);
       let output: WorkflowItem[];
       if (node.type === 'loop') {
         output = await executeLoopNode(node, ctx, input, nodes, loopInfo.get(node.id)!);
@@ -217,6 +219,14 @@ export async function runWorkflow(
       if (branch !== undefined) {
         for (const e of edges.filter((edge) => edge.source === node.id)) {
           if (e.sourceHandle && e.sourceHandle !== branch) skippedEdges.add(e.id);
+        }
+      }
+
+      // Port pruning: a node that set portItems skips each edge whose port has no items.
+      const ports = ctx.portItems[node.id];
+      if (ports) {
+        for (const e of edges.filter((edge) => edge.source === node.id)) {
+          if ((ports[e.sourceHandle || 'out'] ?? []).length === 0) skippedEdges.add(e.id);
         }
       }
     } catch (err) {

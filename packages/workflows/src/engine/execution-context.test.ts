@@ -22,3 +22,10 @@ describe('createContext loop fields', () => {
     expect(ctx.loopMaxItems).toBe(100_000);
   });
 });
+
+describe('createContext portItems', () => {
+  it('defaults portItems to an empty object', () => {
+    const ctx = createContext(undefined, () => {});
+    expect(ctx.portItems).toEqual({});
+  });
+});

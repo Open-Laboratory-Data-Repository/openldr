@@ -21,6 +21,12 @@ export interface ExecutionContext {
   nodeMeta: Record<string, unknown>;
   /** Branch decision (chosen sourceHandle, e.g. 'true'/'false') set by If/Filter; read by the runner for edge-pruning. */
   branches: Record<string, string>;
+  /**
+   * Items a node sends down each named output port, keyed by node id then port name.
+   * A handler that sets this still returns its `out` items. The runner reads it per
+   * outgoing edge, using the edge's `sourceHandle` (no handle reads `out`).
+   */
+  portItems: Record<string, Record<string, WorkflowItem[]>>;
   /** Captured log lines per node. */
   logs: Record<string, import('../types').LogEntry[]>;
   /** Stream an event out to listeners (SSE + buffer). */
@@ -58,5 +64,5 @@ export function createContext(
   files?: Record<string, BinaryRef>,
   callStack: string[] = [],
 ): ExecutionContext {
-  return { input, nodeOutputs: {}, nodeMeta: {}, branches: {}, logs: {}, emit, edges, codeLimits, services, workflowId, files, callStack, loopVars: [], loopMaxItems: DEFAULT_LOOP_MAX_ITEMS };
+  return { input, nodeOutputs: {}, nodeMeta: {}, branches: {}, portItems: {}, logs: {}, emit, edges, codeLimits, services, workflowId, files, callStack, loopVars: [], loopMaxItems: DEFAULT_LOOP_MAX_ITEMS };
 }
