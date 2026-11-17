@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, TriangleAlert, XCircle } from 'lucide-react';
 import type { MapTestResult } from '@/api';
 import { LoadingState } from '@/components/ui/spinner';
 import { reasonText } from './reasonText';
@@ -29,9 +29,22 @@ export function TestResults({ state, drafts }: { state: TestState; drafts: RowDr
             <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
           )}
           <span className="shrink-0 font-medium text-foreground">{t(`${P}.testRow`, { n: i + 1 })}</span>
-          <span className="min-w-0 break-words text-muted-foreground">
-            {r.ok ? `${r.resourceTypes.join(', ')} ${t(`${P}.passes`)}` : reasonText(r.reason, r.field, drafts, t(`${P}.addValuesRule`))}
-          </span>
+          <div className="min-w-0">
+            <span className="break-words text-muted-foreground">
+              {r.ok ? `${r.resourceTypes.join(', ')} ${t(`${P}.passes`)}` : reasonText(r.reason, r.field, drafts, t(`${P}.addValuesRule`))}
+            </span>
+            {/* What the row held that is not stored: a nested column, or a unit with no number. */}
+            {r.ok && r.notes && r.notes.length > 0 && (
+              <ul className="mt-1 space-y-0.5">
+                {r.notes.map((n) => (
+                  <li key={n} className="flex min-w-0 items-start gap-1.5 text-amber-500" data-testid="map-test-note">
+                    <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 break-words">{n}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </li>
       ))}
     </ul>

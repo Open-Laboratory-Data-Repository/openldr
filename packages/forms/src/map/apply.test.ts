@@ -501,3 +501,90 @@ describe('SavedMappingSchema', () => {
     expect(SavedMappingSchema.safeParse(mapping([{ targetPath: '', from: { field: 'a' } }])).success).toBe(false);
   });
 });
+
+describe('a result with a comparator, and a unit with no number', () => {
+  const resultRow = (rule?: FieldMapping['rule']): FieldMapping => ({
+    targetPath: 'Observation.valueQuantity.value', from: { field: 'result_a' }, ...(rule ? { rule } : {}),
+  });
+  const obsOf = (res: Awaited<ReturnType<typeof applyMapping>>) => {
+    if (!res.ok) throw new Error(res.reason);
+    return res.resources.find((r) => r.resourceType === 'Observation') as Observation;
+  };
+
+  it('reads a leading > as the comparator and the rest as the number', async () => {
+    const res = await applyMapping(mapping([...baseRows, resultRow()]), target, { ...row, result_a: '>100000' }, deps());
+    expect(obsOf(res).valueQuantity).toEqual({ comparator: '>', value: 100000 });
+  });
+
+  it('reads <, <=, >= and spaces, through the Number rule with a decimal comma', async () => {
+    const cases: [string, string, number][] = [['<0,5', '<', 0.5], ['<= 1,25', '<=', 1.25], ['>=12,5', '>=', 12.5]];
+    for (const [cell, comparator, value] of cases) {
+      const res = await applyMapping(mapping([...baseRows, resultRow({ kind: 'number', decimal: ',' })]), target, { ...row, result_a: cell }, deps());
+      expect(obsOf(res).valueQuantity).toEqual({ comparator, value });
+    }
+  });
+
+  it('writes no comparator for a plain number', async () => {
+    const res = await applyMapping(mapping([...baseRows, resultRow({ kind: 'number', decimal: ',' })]), target, row, deps());
+    expect(obsOf(res).valueQuantity).toEqual({ value: 12.5 });
+  });
+
+  it('fails a comparator with no number after it, naming the field and not the value', async () => {
+    const res = await applyMapping(mapping([...baseRows, resultRow()]), target, { ...row, result_a: '>' }, deps());
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.reason).toContain('Observation.valueQuantity.value');
+  });
+
+  it('leaves a comparator alone on a field that has none in FHIR', async () => {
+    const res = await applyMapping(mapping([...baseRows, { targetPath: 'Observation.valueString', from: { field: 'result_a' } }]), target, { ...row, result_a: '>100000' }, deps());
+    expect(obsOf(res).valueString).toBe('>100000');
+  });
+
+  it('stores the text result without a unit when the row has no number, and notes it', async () => {
+    const rows: FieldMapping[] = [
+      ...baseRows,
+      { targetPath: 'Observation.valueString', from: { field: 'result_a' } },
+      { targetPath: 'Observation.valueQuantity.unit', from: { fixed: 'CFU/mL' } },
+    ];
+    const res = await applyMapping(mapping(rows), target, { ...row, result_a: 'Growth detected' }, deps());
+    const obs = obsOf(res);
+    expect(obs.valueString).toBe('Growth detected');
+    expect(obs.valueQuantity).toBeUndefined();
+    expect(res.ok && res.notes).toEqual(['Observation.valueQuantity.unit: no number in this row, so the unit was not stored']);
+  });
+
+  it('keeps the unit with its number, and notes nothing', async () => {
+    const rows: FieldMapping[] = [...baseRows, resultRow(), { targetPath: 'Observation.valueQuantity.unit', from: { fixed: 'CFU/mL' } }];
+    const res = await applyMapping(mapping(rows), target, { ...row, result_a: '>100000' }, deps());
+    expect(obsOf(res).valueQuantity).toEqual({ comparator: '>', value: 100000, unit: 'CFU/mL' });
+    expect(res.ok && res.notes).toBeUndefined();
+  });
+});
+
+describe('nested data no mapping reads', () => {
+  const nested = {
+    ...row,
+    culture: { status: 'Final', isolates: [{ organism: 'Escherichia coli' }] },
+    microscopy: { white_cells: { value: '25-30' } },
+    symptoms: ['Dysuria', 'Urinary frequency'],
+    isolates: [{ organism: 'E. coli' }],
+  };
+
+  it('notes each object column, and each list of objects, by name and never by value', async () => {
+    const res = await applyMapping(mapping(baseRows), target, nested, deps());
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.notes).toEqual([
+      'culture: holds nested data no mapping reads, so it was not stored',
+      'isolates: holds nested data no mapping reads, so it was not stored',
+      'microscopy: holds nested data no mapping reads, so it was not stored',
+    ]);
+    expect(JSON.stringify(res.notes)).not.toContain('coli');
+  });
+
+  it('notes nothing for a flat row, or a list of plain values', async () => {
+    const res = await applyMapping(mapping(baseRows), target, { ...row, symptoms: ['a', 'b'] }, deps());
+    expect(res.ok && res.notes).toBeUndefined();
+  });
+});

@@ -22,7 +22,7 @@ function fakeMapToFhir(input: RunMapToFhirInput) {
   const out: WorkflowItem[] = [];
   const held: WorkflowItem[] = [];
   const heldIndexes: number[] = [];
-  const meta = { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [] as string[] };
+  const meta = { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [] as string[], notes: [] as string[] };
   input.items.forEach((item, index) => {
     const json = item.json as Record<string, unknown>;
     const hold = (reason: string) => {

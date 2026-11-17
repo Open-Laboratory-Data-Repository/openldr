@@ -85,7 +85,7 @@ The kinds of rule are these.
 - **Code list** looks the value up in a code list. **This lab's own code list** holds the mappings added on a term's **Mappings** tab in Terminology. It holds codes from several systems, so pick its **Source system** too. The panel refuses to save without one. The other code lists are the ConceptMap resources stored in OpenLDR.
 - **Split** keeps one part of the cell.
 - **Trim spaces** removes spaces at both ends.
-- **Number** reads a number with the **Decimal mark** you choose.
+- **Number** reads a number with the **Decimal mark** you choose. On **Result (number)**, a leading `<`, `<=`, `>=` or `>` is kept as the comparator, so `>100000` is stored as more than 100000. This works with or without the rule.
 
 The panel suggests a rule from the form of the example values, such as a decimal comma or a date format. Check a date suggestion when the day and the month can both be 12 or less.
 
@@ -147,6 +147,8 @@ The Map to FHIR node's result in **History** lists up to 20 held reasons. Log th
 
 - A row matches a saved mapping when every column of the row is one the mapping knows. **Extract from File** leaves out blank cells, so a blank cell there does not count. In a JSON post, a key counts even when its value is empty. When two saved mappings of one node fit a row, the node holds it. Use one Map to FHIR node for each lab file.
 - A row with no Patient ID is held.
+- A unit is stored only with a number. When a row has a unit but no number, for example a text result, the result is stored without the unit, and the run notes it.
+- A column that holds nested data, such as an object or a list of objects, cannot be mapped. Its data is not stored. **Test** shows a note under the row, and the node's result in **History** lists it under `notes`. To keep that data, send it as FHIR.
 - The same row sent twice gives the same records, not copies. Each record id comes from the row's own identifiers. The patient's uses the Patient ID and its system. The specimen's adds the specimen number or, without one, the collected date. The order's adds its test code when mapped. The result's adds the test and, when mapped, the result date. When the order's **Tests** field is not mapped, the order takes the test codes of all its results in the run, each once, and its id does not change. A later run replaces them with that run's codes.
 - In one run, rows that give the same patient, specimen or order make one record. A later row fills only what an earlier one left empty.
 - A file with fewer columns sent after a fuller one replaces the stored patient. The fields the thinner file does not have become empty. **History** keeps the old version.

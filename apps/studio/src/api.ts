@@ -3283,7 +3283,8 @@ export async function fetchWorkflowRun(runId: string): Promise<WorkflowRunSummar
 // ── Map to FHIR node: targets, suggestions, test, code lists ──────────────────
 /** One sample row's result from the Test route. A reason never holds a value from the row. */
 export type MapTestResult =
-  | { ok: true; kind: 'fhir' | 'form' | 'mapped'; resourceTypes: string[]; resources: unknown[] }
+  /** `notes`: what the row held that is not stored, by name only. Absent when there is none. */
+  | { ok: true; kind: 'fhir' | 'form' | 'mapped'; resourceTypes: string[]; resources: unknown[]; notes?: string[] }
   | { ok: false; reason: string; field?: string };
 export interface MapSuggestionView { targetPath: string; field: string; score: number }
 /** A concept map the install holds. The lab's own map has `local` true and an empty name. */

@@ -233,6 +233,22 @@ describe('MapToFhirSheet', () => {
     expect(screen.queryByTestId('map-suggestion-Patient.identifier.value')).toBeNull();
   });
 
+  it('shows under a passing row what the row held that is not stored', async () => {
+    setRun(ROWS_A);
+    m(api.testMapping).mockResolvedValue([
+      { ok: true, kind: 'mapped', resourceTypes: ['Patient'], resources: [], notes: ['culture: holds nested data no mapping reads, so it was not stored'] },
+      { ok: true, kind: 'mapped', resourceTypes: ['Patient'], resources: [] },
+    ]);
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
+    openMenuAndClick('Test');
+    const results = await screen.findByTestId('map-test-results');
+    expect(within(results).getAllByTestId('map-test-note')).toHaveLength(1);
+    expect(within(results).getByText('culture: holds nested data no mapping reads, so it was not stored')).toBeInTheDocument();
+  });
+
   it('does not save or test a suggestion that was not accepted', async () => {
     setRun(ROWS_A);
     m(api.suggestMapping).mockResolvedValue([{ targetPath: 'Patient.gender', field: 'sex', score: 0.9 }]);

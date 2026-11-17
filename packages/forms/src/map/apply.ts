@@ -52,7 +52,11 @@ export interface ApplyDeps extends RuleDeps {
 
 const FHIR_ID = /^[A-Za-z0-9.-]{1,64}$/;
 
-export type ApplyResult = { ok: true; resources: FhirResource[] } | { ok: false; reason: string; field?: string };
+/**
+ * `notes` lists what the row held that was not stored, by column or field name and never by value:
+ * a column of nested data no mapping reads, or a unit with no number. Absent when there is none.
+ */
+export type ApplyResult = { ok: true; resources: FhirResource[]; notes?: string[] } | { ok: false; reason: string; field?: string };
 type Failure = Extract<ApplyResult, { ok: false }>;
 
 type Resource = Record<string, unknown> & { resourceType: string; id: string };
@@ -65,6 +69,11 @@ interface ResolvedRow {
   sources: string[];
   /** One entry per value; null where the source is missing or empty. */
   values: (MapValue | null)[];
+  /**
+   * The comparator each value began with (`<`, `<=`, `>=`, `>`), or null. Set only on a number field
+   * whose FHIR Quantity has a comparator, so `>100000` is stored as the comparator and 100000.
+   */
+  comparators?: (string | null)[];
   /** True for a fixed value or a list of them. A fixed value never keeps a position alive. */
   fixed: boolean;
   /**
@@ -76,6 +85,16 @@ interface ResolvedRow {
 
 function isEmpty(v: unknown): boolean {
   return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+}
+
+const COMPARATOR = /^\s*(<=|>=|<|>)\s*([\s\S]*)$/;
+
+/** The key of the comparator beside a Quantity's value, or null when FHIR has none there. */
+function comparatorKeyOf(key: string): string | null {
+  if (!key.endsWith('.value')) return null;
+  const plain = plainPath(key);
+  if (!plain.endsWith('.value') || lookupFhirPath(plain)?.leafType !== 'number') return null;
+  return lookupFhirPath(`${plain.slice(0, -'.value'.length)}.comparator`) ? `${key.slice(0, -'.value'.length)}.comparator` : null;
 }
 
 function sourcesOf(row: FieldMapping, json: Record<string, unknown>): { field: string; value: unknown }[] {
@@ -97,19 +116,26 @@ async function resolveRow(
   const field = target.fields.find((f) => f.path === row.targetPath);
   const sources = sourcesOf(row, json);
   const values: (MapValue | null)[] = [];
+  const reads = !('fixed' in row.from) && !('fixedList' in row.from) && comparatorKeyOf(row.targetPath) !== null;
+  const comparators: (string | null)[] = [];
   for (const s of sources) {
     if (isEmpty(s.value)) {
       values.push(null);
+      comparators.push(null);
       continue;
     }
     if (typeof s.value !== 'string' && typeof s.value !== 'number' && typeof s.value !== 'boolean') {
       return { ok: false, reason: `${s.field}: expected a single value, not a list or an object`, field: s.field };
     }
+    let value: string | number | boolean = s.value;
+    const m = reads && typeof value === 'string' ? COMPARATOR.exec(value) : null;
+    comparators.push(m ? m[1] : null);
+    if (m) value = m[2];
     if (!row.rule || 'fixedList' in row.from) {
-      values.push(s.value);
+      values.push(value);
       continue;
     }
-    const r = await applyRule(row.rule, s.value, s.field, deps);
+    const r = await applyRule(row.rule, value, s.field, deps);
     if (!r.ok) return r;
     values.push(r.value);
   }
@@ -120,6 +146,7 @@ async function resolveRow(
     sources: [...new Set(sources.map((s) => s.field))],
     values,
     fixed: 'fixed' in row.from || 'fixedList' in row.from,
+    ...(comparators.some((c) => c !== null) ? { comparators } : {}),
     ...('fixedList' in row.from && row.rule ? { deferred: new Set<number>() } : {}),
   };
 }
@@ -149,6 +176,7 @@ export async function applyMapping(
   deps: ApplyDeps,
 ): Promise<ApplyResult> {
   const recordOf = new Map(target.records.map((r) => [r.type, r]));
+  const notes = new Set<string>();
 
   const mapped = new Set(mapping.rows.map((r) => r.targetPath));
   for (const f of target.fields) if (f.required && !mapped.has(f.path)) return missing(f.path, f.label);
@@ -284,6 +312,20 @@ export async function applyMapping(
       }
       const f = write(resource, r.row.targetPath, value);
       if (f) return f;
+      const comparator = r.comparators?.[r.values.length === 1 ? 0 : index];
+      if (comparator) {
+        const c = write(resource, comparatorKeyOf(r.row.targetPath)!, comparator);
+        if (c) return c;
+      }
+    }
+    // A unit, system or code describes a number. With no number in this row, there is nothing to
+    // describe, and FHIR allows one result value, so the bare Quantity is left out and noted.
+    for (const [key, v] of Object.entries(resource)) {
+      if (!v || typeof v !== 'object' || Array.isArray(v) || 'value' in v) continue;
+      if (lookupFhirPath(`${resource.resourceType}.${key}`)?.leafType !== 'Quantity') continue;
+      delete resource[key];
+      const by = rows.find((x) => plainPath(x.row.targetPath).startsWith(`${resource.resourceType}.${key}.`));
+      notes.add(`${by ? by.label : `${resource.resourceType}.${key}`}: no number in this row, so the unit was not stored`);
     }
     for (const link of target.links) {
       if (link.from !== resource.resourceType) continue;
@@ -378,7 +420,19 @@ export async function applyMapping(
     }
   }
 
-  return { ok: true, resources: [...single, ...repeated] as unknown as FhirResource[] };
+  // A column of nested data, an object or a list of objects, that no row reads. The node cannot read
+  // into it, so it is noted rather than lost without a word.
+  const read = new Set(mapping.rows.flatMap((r) => ('field' in r.from ? [r.from.field] : 'fields' in r.from ? r.from.fields : [])));
+  const nested = Object.keys(json)
+    .filter((k) => !read.has(k))
+    .filter((k) => {
+      const v = json[k];
+      return Array.isArray(v) ? v.some((e) => e !== null && typeof e === 'object') : v !== null && typeof v === 'object';
+    })
+    .sort()
+    .map((k) => `${k}: holds nested data no mapping reads, so it was not stored`);
+  const all = [...nested, ...notes];
+  return { ok: true, resources: [...single, ...repeated] as unknown as FhirResource[], ...(all.length > 0 ? { notes: all } : {}) };
 }
 
 /** A key's FHIR path with no pinned values and no list indexes. */

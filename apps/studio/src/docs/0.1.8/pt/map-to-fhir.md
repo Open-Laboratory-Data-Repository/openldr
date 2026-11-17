@@ -85,7 +85,7 @@ Estes são os tipos de regra.
 - **Lista de códigos** procura o valor numa lista de códigos. **A lista de códigos do próprio laboratório** contém os mapeamentos adicionados no separador **Mappings** de um termo, em Terminologia. Tem códigos de vários sistemas, por isso escolha também o seu **Sistema de origem**. O painel recusa guardar sem ele. As outras listas são os recursos ConceptMap guardados no OpenLDR.
 - **Dividir** mantém uma parte da célula.
 - **Retirar espaços** tira os espaços do início e do fim.
-- **Número** lê um número com o **Separador decimal** que escolher.
+- **Número** lê um número com o **Separador decimal** que escolher. Em **Resultado (número)**, um `<`, `<=`, `>=` ou `>` no início fica como comparador, por isso `>100000` é guardado como mais de 100000. Funciona com ou sem a regra.
 
 O painel sugere uma regra a partir da forma dos valores de exemplo, por exemplo uma vírgula decimal ou um formato de data. Confirme uma data sugerida quando o dia e o mês podem ambos ser 12 ou menos.
 
@@ -147,6 +147,8 @@ Em **History**, o resultado do nó Map to FHIR lista até 20 motivos. Registe ap
 
 - Uma linha corresponde a um mapeamento guardado quando todas as suas colunas são conhecidas do mapeamento. **Extract from File** deixa de fora as células vazias, que por isso não contam. Num envio JSON, uma chave conta mesmo quando o valor está vazio. Quando dois mapeamentos guardados do mesmo nó servem para uma linha, o nó retém-na. Use um nó Map to FHIR por cada ficheiro do laboratório.
 - Uma linha sem número do paciente fica retida.
+- Uma unidade só é guardada com um número. Quando uma linha tem unidade mas não tem número, por exemplo um resultado em texto, o resultado é guardado sem a unidade, e a execução regista-o.
+- Uma coluna com dados aninhados, como um objeto ou uma lista de objetos, não pode ser mapeada. Os seus dados não são guardados. **Test** mostra uma nota por baixo da linha, e o resultado do nó em **History** lista-a em `notes`. Para manter esses dados, envie-os como FHIR.
 - A mesma linha enviada duas vezes dá os mesmos registos, não cópias. Cada identificador de registo vem dos identificadores da própria linha. O do paciente usa o número do paciente e o seu sistema. O da amostra junta o número da amostra ou, na falta dele, a data de colheita. O do pedido junta o código de análise quando mapeado. O do resultado junta a análise e, quando mapeada, a data do resultado. Quando o campo **Análises pedidas** do pedido não está mapeado, o pedido recebe os códigos de análise de todos os seus resultados da execução, cada um uma vez, e o seu identificador não muda. Uma execução seguinte substitui-os pelos seus próprios códigos.
 - Numa mesma execução, as linhas que dão o mesmo paciente, a mesma amostra ou o mesmo pedido fazem um só registo. Uma linha seguinte só preenche o que uma linha anterior deixou vazio.
 - Um ficheiro com menos colunas enviado depois de um mais completo substitui o paciente guardado. Os campos que o ficheiro mais pobre não tem ficam vazios. **History** guarda a versão antiga.

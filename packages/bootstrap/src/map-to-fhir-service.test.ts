@@ -81,7 +81,7 @@ describe('createMapToFhirService', () => {
     expect(res.held).toEqual([{ json: { item: unknown, reason: 'no mapping for this shape', shape: shapeOf(unknown) } }]);
     expect(res.held[0].json.item).not.toBe(unknown);
     expect(res.heldIndexes).toEqual([3]);
-    expect(res.meta).toEqual({ fhir: 1, form: 1, mapped: 1, held: 1, heldReasons: ['no mapping for this shape'] });
+    expect(res.meta).toEqual({ fhir: 1, form: 1, mapped: 1, held: 1, heldReasons: ['no mapping for this shape'], notes: [] });
   });
 
   it('holds a row that two saved mappings fit, with the shape, and counts it under held', async () => {
@@ -91,7 +91,7 @@ describe('createMapToFhirService', () => {
     expect(res.out).toEqual([]);
     expect(res.held).toEqual([{ json: { item: row, reason: 'more than one saved mapping fits this row', shape: shapeOf(row) } }]);
     expect(res.heldIndexes).toEqual([0]);
-    expect(res.meta).toEqual({ fhir: 0, form: 0, mapped: 0, held: 1, heldReasons: ['more than one saved mapping fits this row'] });
+    expect(res.meta).toEqual({ fhir: 0, form: 0, mapped: 0, held: 1, heldReasons: ['more than one saved mapping fits this row'], notes: [] });
   });
 
   it('holds a mapped item whose records fail the clinical rules, with the rule message', async () => {
@@ -190,7 +190,7 @@ describe('createMapToFhirService', () => {
     const firstId = String(res.out[0].json.id);
     expect((res.out[1].json.subject as { reference: string }).reference).toBe(`Patient/${firstId}`);
     expect(bundle).toEqual(before);
-    expect(res.meta).toEqual({ fhir: 2, form: 0, mapped: 0, held: 0, heldReasons: [] });
+    expect(res.meta).toEqual({ fhir: 2, form: 0, mapped: 0, held: 0, heldReasons: [], notes: [] });
   });
 
   it('holds a Bundle the unwrap refuses, with the fixed reason and its original json', async () => {
@@ -229,7 +229,7 @@ describe('createMapToFhirService', () => {
     const packs = vi.fn(async () => PACKS);
     const svc = createMapToFhirService(deps({ packs }));
     const res = await svc({ items: [{ json: fhirPatient }, { json: { answer_a: 'yes' } }], config: { targetId: '', formIds: ['form-1'], mappings: [] } });
-    expect(res.meta).toEqual({ fhir: 1, form: 1, mapped: 0, held: 0, heldReasons: [] });
+    expect(res.meta).toEqual({ fhir: 1, form: 1, mapped: 0, held: 0, heldReasons: [], notes: [] });
     expect(packs).not.toHaveBeenCalled();
   });
 
@@ -238,7 +238,7 @@ describe('createMapToFhirService', () => {
     const packs = vi.fn(async () => PACKS);
     const svc = createMapToFhirService(deps({ packs }));
     const res = await svc({ items: [{ json: fhirPatient }, { json: { answer_a: 'yes' } }], config: { targetId, formIds: ['form-1'], mappings: [] } });
-    expect(res.meta).toEqual({ fhir: 1, form: 1, mapped: 0, held: 0, heldReasons: [] });
+    expect(res.meta).toEqual({ fhir: 1, form: 1, mapped: 0, held: 0, heldReasons: [], notes: [] });
     expect(packs).not.toHaveBeenCalled();
   });
 
@@ -787,5 +787,18 @@ describe('a mapping as the panel saves it, run as a saved workflow runs it', () 
     // A values rule's keys are the person's From values, so the path stops at the map.
     await expect(run).rejects.toThrow('Map to FHIR node config: mapping 0 is not a saved mapping: row 4 (Specimen.type), rule.map');
     await expect(run.catch((e: Error) => e.message)).resolves.not.toContain('Urine');
+  });
+});
+
+describe('notes on what a mapped row held that was not stored', () => {
+  it('lists a nested column once in meta.notes, by name, and still stores the rows', async () => {
+    const nested = (pat_no: string) => ({ ...row, pat_no, culture: { isolates: [{ organism: 'Escherichia coli' }] } });
+    const wide: SavedMapping = { ...mapping, shapeHash: shapeOf(nested('x')).hash, fieldNames: Object.keys(nested('x')).sort() };
+    const svc = createMapToFhirService(deps());
+    const res = await svc({ items: [{ json: nested('T-0001') }, { json: nested('T-0002') }], config: { ...config, mappings: [wide] } });
+    expect(res.held).toEqual([]);
+    expect(res.meta.mapped).toBe(2);
+    expect(res.meta.notes).toEqual(['culture: holds nested data no mapping reads, so it was not stored']);
+    expect(JSON.stringify(res.meta)).not.toContain('coli');
   });
 });

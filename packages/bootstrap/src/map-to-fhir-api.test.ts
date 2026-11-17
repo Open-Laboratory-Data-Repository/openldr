@@ -11,7 +11,7 @@ const config = { targetId: 'lab-result', formIds: [] as string[], mappings: [] a
 
 function api(over: { mapToFhir?: (i: RunMapToFhirInput) => Promise<RunMapToFhirOutput>; conceptMaps?: () => Promise<{ url?: string; name?: string; title?: string }[]>; localSourceSystems?: () => Promise<string[]> } = {}) {
   return createMapToFhirApi({
-    mapToFhir: over.mapToFhir ?? (async () => ({ out: [], held: [], heldIndexes: [], meta: { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [] } })),
+    mapToFhir: over.mapToFhir ?? (async () => ({ out: [], held: [], heldIndexes: [], meta: { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [], notes: [] } })),
     packs: async () => PACKS,
     conceptMaps: over.conceptMaps ?? (async () => []),
     localSourceSystems: over.localSourceSystems ?? (async () => []),
@@ -61,10 +61,10 @@ describe('test', () => {
       mapToFhir: async (input) => {
         calls.push(input);
         const n = calls.length;
-        if (n === 1) return { out: [{ json: { resourceType: 'Patient', id: 'p1' } }, { json: { resourceType: 'Observation', id: 'o1' } }], held: [], heldIndexes: [], meta: { fhir: 1, form: 0, mapped: 0, held: 0, heldReasons: [] } };
-        if (n === 2) return { out: [{ json: { resourceType: 'Patient', id: 'p2' } }], held: [], heldIndexes: [], meta: { fhir: 0, form: 1, mapped: 0, held: 0, heldReasons: [] } };
-        if (n === 3) return { out: [{ json: { resourceType: 'Specimen', id: 's3' } }], held: [], heldIndexes: [], meta: { fhir: 0, form: 0, mapped: 1, held: 0, heldReasons: [] } };
-        return { out: [], held: [{ json: { item: {}, reason: 'no mapping for this shape', shape: { hash: 'h', fields: [] } } }], heldIndexes: [0], meta: { fhir: 0, form: 0, mapped: 0, held: 1, heldReasons: ['no mapping for this shape'] } };
+        if (n === 1) return { out: [{ json: { resourceType: 'Patient', id: 'p1' } }, { json: { resourceType: 'Observation', id: 'o1' } }], held: [], heldIndexes: [], meta: { fhir: 1, form: 0, mapped: 0, held: 0, heldReasons: [], notes: [] } };
+        if (n === 2) return { out: [{ json: { resourceType: 'Patient', id: 'p2' } }], held: [], heldIndexes: [], meta: { fhir: 0, form: 1, mapped: 0, held: 0, heldReasons: [], notes: [] } };
+        if (n === 3) return { out: [{ json: { resourceType: 'Specimen', id: 's3' } }], held: [], heldIndexes: [], meta: { fhir: 0, form: 0, mapped: 1, held: 0, heldReasons: [], notes: [] } };
+        return { out: [], held: [{ json: { item: {}, reason: 'no mapping for this shape', shape: { hash: 'h', fields: [] } } }], heldIndexes: [0], meta: { fhir: 0, form: 0, mapped: 0, held: 1, heldReasons: ['no mapping for this shape'], notes: [] } };
       },
     });
     const res = await a.test({ config, items: [{ a: 1 }, { b: 2 }, { c: 3 }, { d: 4 }] });
@@ -78,7 +78,7 @@ describe('test', () => {
     ]);
   });
   it('carries the field of a held item', async () => {
-    const a = api({ mapToFhir: async () => ({ out: [], held: [{ json: { item: {}, reason: 'needs a value', field: 'Patient.birthDate' } }], heldIndexes: [0], meta: { fhir: 0, form: 0, mapped: 0, held: 1, heldReasons: ['needs a value'] } }) });
+    const a = api({ mapToFhir: async () => ({ out: [], held: [{ json: { item: {}, reason: 'needs a value', field: 'Patient.birthDate' } }], heldIndexes: [0], meta: { fhir: 0, form: 0, mapped: 0, held: 1, heldReasons: ['needs a value'], notes: [] } }) });
     expect(await a.test({ config, items: [{}] })).toEqual([{ ok: false, reason: 'needs a value', field: 'Patient.birthDate' }]);
   });
   it('turns a config fault into a MapConfigError with the message', async () => {

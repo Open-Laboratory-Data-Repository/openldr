@@ -23,7 +23,7 @@ export class MapConfigError extends Error {
 export interface MapSuggestionResult { targetPath: string; field: string; score: number }
 
 export type MapTestResult =
-  | { ok: true; kind: 'fhir' | 'form' | 'mapped'; resourceTypes: string[]; resources: unknown[] }
+  | { ok: true; kind: 'fhir' | 'form' | 'mapped'; resourceTypes: string[]; resources: unknown[]; notes?: string[] }
   | { ok: false; reason: string; field?: string };
 
 export interface MapTestInput {
@@ -79,7 +79,8 @@ export function createMapToFhirApi(deps: MapToFhirApiDeps): MapToFhirApi {
     }
     const resources = out.out.map((i) => i.json);
     const resourceTypes = resources.map((r) => String((r as { resourceType?: unknown }).resourceType ?? ''));
-    return { ok: true, kind: kindOf(out.meta), resourceTypes, resources };
+    const notes = out.meta.notes ?? [];
+    return { ok: true, kind: kindOf(out.meta), resourceTypes, resources, ...(notes.length > 0 ? { notes } : {}) };
   }
 
   return {

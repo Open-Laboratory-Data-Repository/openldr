@@ -11,7 +11,7 @@ function fakeService() {
     const out = items.filter((i) => i.json.ok).map((i) => ({ json: { resourceType: 'Basic', id: `r-${String(i.json.ok)}` } }));
     const heldIndexes = items.flatMap((i, index) => (i.json.ok ? [] : [index]));
     const held = heldIndexes.map((index) => ({ json: { item: items[index].json, reason: `no mapping for this shape ${index}` } }));
-    return { out, held, heldIndexes, meta: { fhir: 0, form: 0, mapped: out.length, held: held.length, heldReasons: held.map((h) => h.json.reason) } };
+    return { out, held, heldIndexes, meta: { fhir: 0, form: 0, mapped: out.length, held: held.length, heldReasons: held.map((h) => h.json.reason), notes: [] } };
   });
 }
 
@@ -41,7 +41,7 @@ describe('mapToFhirHandler', () => {
     });
     expect(out).toEqual([{ json: { resourceType: 'Basic', id: 'r-a' } }]);
     expect(ctx.portItems['m']).toEqual({ out, held: [{ json: { item: { other: 1 }, reason: 'no mapping for this shape 1' } }] });
-    expect(ctx.nodeMeta['m']).toEqual({ fhir: 0, form: 0, mapped: 1, held: 1, heldReasons: ['no mapping for this shape 1'] });
+    expect(ctx.nodeMeta['m']).toEqual({ fhir: 0, form: 0, mapped: 1, held: 1, heldReasons: ['no mapping for this shape 1'], notes: [] });
   });
 
   it('splits a list of rows at sourcePath, holds an element that is not a row, and keeps input order', async () => {
@@ -172,6 +172,6 @@ describe('map-to-fhir in a run', () => {
     expect(res.status).not.toBe('completed');
     expect(statusOf('m')).toBe('error');
     expect(res.results.find((r) => r.nodeId === 'm')?.error).toContain('1 item(s) held and the held port is not connected');
-    expect(res.results.find((r) => r.nodeId === 'm')?.meta).toMatchObject({ held: 1, heldReasons: ['no mapping for this shape 1'] });
+    expect(res.results.find((r) => r.nodeId === 'm')?.meta).toMatchObject({ held: 1, heldReasons: ['no mapping for this shape 1'], notes: [] });
   });
 });

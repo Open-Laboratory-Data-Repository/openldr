@@ -1361,7 +1361,7 @@ describe('workflow reset — SEC-06 sealing (no plaintext secret persisted or au
 describe('map to fhir routes', () => {
   const VIEWER = { id: 'u3', username: 'viewer', displayName: null, roles: ['viewer'], capabilities: ['workflows.view'] };
   const PACKS = seededStarterPacks().map((p) => ({ id: p.id, resourceType: p.resourceType, entries: p.entries }));
-  const emptyMeta = { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [] as string[] };
+  const emptyMeta = { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [] as string[], notes: [] as string[] };
 
   function build(user: any, mapToFhir?: (i: any) => Promise<any>) {
     const ctx = fakeCtx();

@@ -85,7 +85,7 @@ Voici les types de règle.
 - **Liste de codes** cherche la valeur dans une liste de codes. **La liste de codes du laboratoire** contient les correspondances ajoutées dans l'onglet **Mappings** d'un terme, dans Terminologie. Elle contient des codes de plusieurs systèmes : choisissez aussi son **Système source**. Le panneau refuse d'enregistrer sans lui. Les autres listes sont les ressources ConceptMap stockées dans OpenLDR.
 - **Découper** garde une partie de la cellule.
 - **Retirer les espaces** enlève les espaces au début et à la fin.
-- **Nombre** lit un nombre avec le **Séparateur décimal** choisi.
+- **Nombre** lit un nombre avec le **Séparateur décimal** choisi. Sur **Résultat (nombre)**, un `<`, `<=`, `>=` ou `>` au début est gardé comme comparateur, donc `>100000` est stocké comme plus de 100000. Cela marche avec ou sans la règle.
 
 Le panneau suggère une règle d'après la forme des valeurs d'exemple, par exemple une virgule décimale ou un format de date. Vérifiez une date suggérée quand le jour et le mois peuvent tous deux valoir 12 ou moins.
 
@@ -147,6 +147,8 @@ Dans **History**, le résultat du nœud Map to FHIR liste jusqu'à 20 raisons. N
 
 - Une ligne correspond à un mappage enregistré quand chacune de ses colonnes est connue du mappage. **Extract from File** laisse de côté les cellules vides, qui ne comptent donc pas. Dans un envoi JSON, une clé compte même si sa valeur est vide. Quand deux mappages enregistrés d'un même nœud conviennent à une ligne, le nœud la retient. Utilisez un nœud Map to FHIR par fichier de laboratoire.
 - Une ligne sans identifiant patient est retenue.
+- Une unité n'est stockée qu'avec un nombre. Quand une ligne a une unité mais pas de nombre, par exemple un résultat en texte, le résultat est stocké sans l'unité, et l'exécution le note.
+- Une colonne qui contient des données imbriquées, comme un objet ou une liste d'objets, ne peut pas être mappée. Ses données ne sont pas stockées. **Test** affiche une note sous la ligne, et le résultat du nœud dans **History** la liste sous `notes`. Pour garder ces données, envoyez-les en FHIR.
 - La même ligne envoyée deux fois donne les mêmes enregistrements, pas des copies. Chaque identifiant d'enregistrement vient des identifiants de la ligne. Celui du patient utilise l'identifiant patient et son système. Celui de l'échantillon ajoute le numéro d'échantillon ou, à défaut, la date de prélèvement. Celui de la demande ajoute son code d'examen s'il est mappé. Celui du résultat ajoute l'examen et, si elle est mappée, la date du résultat. Quand le champ **Examens demandés** de la demande n'est pas mappé, la demande prend les codes d'examen de tous ses résultats de l'exécution, chacun une fois, et son identifiant ne change pas. Une exécution suivante les remplace par ses propres codes.
 - Dans une même exécution, les lignes qui donnent le même patient, le même échantillon ou la même demande font un seul enregistrement. Une ligne suivante ne remplit que ce qu'une ligne précédente a laissé vide.
 - Un fichier avec moins de colonnes envoyé après un fichier plus complet remplace le patient stocké. Les champs que le fichier plus pauvre n'a pas deviennent vides. **History** garde l'ancienne version.

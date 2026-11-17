@@ -385,6 +385,8 @@ interface Entry {
   held: Res | null;
   /** The paths the target fills from the results and this item's mapping does not map. */
   derived: Set<string>;
+  /** What the item held that was not stored, by name and never by value (`ApplyResult.notes`). */
+  notes: string[];
 }
 
 /**
@@ -443,7 +445,7 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): MapToFhirSer
     for (const item of items) {
       const original = item.json;
       const kind = classify(original, forms, mappings);
-      const entry: Entry = { original, kind: kind.kind, records: null, held: null, derived: new Set() };
+      const entry: Entry = { original, kind: kind.kind, records: null, held: null, derived: new Set(), notes: [] };
       if (kind.kind === 'mapped' && target) {
         const mapped = new Set(kind.mapping.rows.map((r) => (parseTargetPath(r.targetPath)?.path ?? r.targetPath).split('.').filter((x) => !/^\d+$/.test(x)).join('.')));
         for (const d of target.derived ?? []) if (!mapped.has(d.path)) entry.derived.add(d.path);
@@ -466,8 +468,10 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): MapToFhirSer
       } else if (kind.kind === 'mapped') {
         // A mapping exists only with a target; the checks above make sure of it.
         const res = await applyMapping(kind.mapping, target as MapTarget, original, { translateCode, hashId });
-        if (res.ok) entry.records = res.resources as unknown as Res[];
-        else entry.held = heldJson(original, res.reason, { field: res.field });
+        if (res.ok) {
+          entry.records = res.resources as unknown as Res[];
+          entry.notes = res.notes ?? [];
+        } else entry.held = heldJson(original, res.reason, { field: res.field });
       } else if (kind.kind === 'ambiguous') {
         entry.held = heldJson(original, 'more than one saved mapping fits this row', { shape: kind.shape });
       } else {
@@ -532,7 +536,7 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): MapToFhirSer
     const pins: PinSets = target ? pinSetsOf(target) : new Map();
     const held: WorkflowItem[] = [];
     const heldIndexes: number[] = [];
-    const meta = { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [] as string[] };
+    const meta = { fhir: 0, form: 0, mapped: 0, held: 0, heldReasons: [] as string[], notes: [] as string[] };
     entries.forEach((e, index) => {
       if (e.held) {
         held.push({ json: e.held });
@@ -558,6 +562,8 @@ export function createMapToFhirService(deps: MapToFhirServiceDeps): MapToFhirSer
         emitted.set(key, copy);
         out.push({ json: copy });
       }
+      // The same note from many rows is listed once.
+      for (const n of e.notes) if (meta.notes.length < MAX_HELD_REASONS && !meta.notes.includes(n)) meta.notes.push(n);
       // An unknown or ambiguous item is always held, so only these three reach here.
       if (e.kind === 'fhir' || e.kind === 'form' || e.kind === 'mapped') meta[e.kind] += 1;
     });
