@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "7e0c2baf",
+          "type": "feat",
+          "scope": "workflows",
+          "title": "Map to FHIR reads a lab's nested JSON"
+        },
+        {
+          "hash": "fa19d4a7",
+          "type": "fix",
+          "scope": "fhir",
+          "title": "A result record holds one value, and a blank result gives no result record"
+        },
+        {
           "hash": "308fb640",
           "type": "fix",
           "scope": "workflows",
