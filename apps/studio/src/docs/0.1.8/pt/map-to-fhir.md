@@ -51,7 +51,7 @@ Cada linha do painel é um campo do destino. Uma estrela marca um campo obrigat�
 
 **Resultado esperado:** o painel conta os campos obrigatórios mapeados e mostra um exemplo da amostra ao lado de cada coluna escolhida.
 
-Uma sugestão só aparece num campo sem coluna. O campo fica sem coluna até selecionar **Aceitar**. Uma coluna aninhada como `patient.dob` também é lida pela sua última parte, `dob`. Quando duas colunas servem igualmente bem a um campo, ou uma coluna a dois campos, o painel não sugere nada e deixa a escolha consigo. Uma coluna com nome de nome completo, como `nome_completo`, nunca é sugerida para **Nome próprio** ou **Apelido**.
+Uma sugestão só aparece num campo sem coluna. O campo fica sem coluna até selecionar **Aceitar**. Uma coluna aninhada como `patient.dob` também é lida pela sua última parte, `dob`. Quando duas colunas servem igualmente bem a um campo, a coluna sob o registo do campo, como `patient.dob` para um campo do paciente, ganha a uma coluna sob outro, como `mother.dob`. Um empate que os nomes não resolvem não dá sugestão, e a ordem das colunas nunca decide. Uma coluna com nome de nome completo, como `nome_completo`, nunca é sugerida para **Nome próprio** ou **Apelido**.
 
 ## Mapear um ficheiro com uma coluna por análise
 

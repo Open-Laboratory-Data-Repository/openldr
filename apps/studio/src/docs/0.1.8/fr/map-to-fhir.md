@@ -51,7 +51,7 @@ Chaque ligne du panneau est un champ de la cible. Une étoile marque un champ ob
 
 **Résultat attendu :** le panneau compte les champs obligatoires mappés et montre un exemple de l'échantillon à côté de chaque colonne choisie.
 
-Une suggestion n'apparaît que sur un champ sans colonne. Le champ reste sans colonne tant que vous n'avez pas sélectionné **Accepter**. Une colonne imbriquée comme `patient.dob` est aussi lue par sa dernière partie, `dob`. Quand deux colonnes conviennent aussi bien à un champ, ou une colonne à deux champs, le panneau ne suggère rien et vous laisse choisir. Une colonne nommée comme un nom complet, par exemple `nom_complet`, n'est jamais suggérée pour **Prénom** ou **Nom de famille**.
+Une suggestion n'apparaît que sur un champ sans colonne. Le champ reste sans colonne tant que vous n'avez pas sélectionné **Accepter**. Une colonne imbriquée comme `patient.dob` est aussi lue par sa dernière partie, `dob`. Quand deux colonnes conviennent aussi bien à un champ, une colonne sous l'enregistrement du champ, comme `patient.dob` pour un champ du patient, l'emporte sur une colonne sous un autre, comme `mother.dob`. Une égalité que les noms ne tranchent pas ne donne aucune suggestion, et l'ordre des colonnes ne décide jamais. Une colonne nommée comme un nom complet, par exemple `nom_complet`, n'est jamais suggérée pour **Prénom** ou **Nom de famille**.
 
 ## Mapper un fichier avec une colonne par examen
 

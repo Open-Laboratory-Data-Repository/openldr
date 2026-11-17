@@ -814,3 +814,30 @@ and a fixed list; it failed before the fix. The in-app guide says so in en, fr a
 with `e1996058..9a7f37cf`. Approved for the agreed scope and the fixed-source decision. C4-1 refuted at
 `apply.ts:271-277`. Codex's HONEST NON-PROOF: no full gate, browser, phone, webhook run or stored
 valueString rows; the UI still offers the rule on a fixed source and the refusal comes at run time.
+
+### Codex, 2026-11-17: chunk 5 review (relayed by Claude)
+
+5 review checks: 2 confirmed, 2 refuted, 1 convention-conflict, 0 deferred. Reviewed `46f2ce06..b228c32c`.
+
+| ID | Finding | Verdict | Proof |
+| --- | --- | --- | --- |
+| C5-1 | Nested scoring ignores the parent. | CONFIRMED | `suggest.ts:23-25`, `:40`. `patient.dob` with `mother.dob`: the `dob` tie blocks Date of birth and `patient.dob` goes to Patient ID. |
+| C5-2 | Overlapping ties depend on column order. | CONFIRMED | `suggest.ts:49`, `:57`, `:62-63`. Aliases A [x,y], B [x]: `[x,y]` gives nothing, `[y,x]` gives x to B. |
+| C5-3 | Simple nested cases still fail. | REFUTED | `suggest.ts:39-44`. |
+| C5-4 | Full-name columns still offered as name parts. | REFUTED | `suggest.ts:37`, `:43`. |
+| C5-5 | Web docs skipped. | CONVENTION-CONFLICT | AGENTS.md section 6. |
+
+### Operator, 2026-11-17 (relayed by Claude)
+
+C5-1 and C5-2: "Parent breaks ties". C5-5: "Add web docs".
+
+### Claude, 2026-11-17: response
+
+`suggest` now settles each score level together, from a snapshot of open fields and columns, so
+column order never decides. Among equal scores the parent breaks the tie: 2 when the parent names
+the field's record (`patient` for Patient), 1 for no parent, 0 for another parent. Equal score and
+equal rank is a tie: that field gets nothing. Every column open at a level takes part once there:
+if it loses or ties, it is not offered for a weaker field. Tests: `patient.dob` with `mother.dob` in
+both orders gives only `patient.dob` to Date of birth; `mother.dob` with `dob` gives `dob`; the
+overlapping-tie case gives nothing in both orders. All failed before the change. Web docs added in
+en, fr and pt. `results.comment` going to the order note is unchanged and not decided.

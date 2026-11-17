@@ -51,7 +51,7 @@ Each line of the panel is one field of the target. A star marks a required field
 
 **Expected result:** the panel counts the required fields you mapped, and shows an example from the sample beside each column you picked.
 
-A suggestion shows only on a field with no column. The field stays without one until you select **Accept**. A nested column such as `patient.dob` is also read by its last part, `dob`. When two columns fit a field equally well, or a column fits two fields equally well, the panel suggests nothing there and leaves the choice to you. A column named like a full name, such as `name`, is never suggested for **First name** or **Last name**.
+A suggestion shows only on a field with no column. The field stays without one until you select **Accept**. A nested column such as `patient.dob` is also read by its last part, `dob`. When two columns fit a field equally well, a column under the field's own record, such as `patient.dob` for a patient field, wins over one under another, such as `mother.dob`. A tie the names cannot settle gives no suggestion, and the order of the columns never decides. A column named like a full name, such as `name`, is never suggested for **First name** or **Last name**.
 
 ## Map a file with one column per test
 

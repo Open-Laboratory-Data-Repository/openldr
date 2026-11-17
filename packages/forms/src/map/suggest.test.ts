@@ -118,3 +118,31 @@ describe('suggest on the Lab result target, with the shipped synonyms', () => {
     });
   });
 });
+
+describe('suggest: parent context and column order (C5-1, C5-2)', () => {
+  const real = labResultTarget(seededStarterPacks(), 'en');
+  const of = (names: string[]) => Object.fromEntries(suggest(real, names, mapSynonyms('en')).map((x) => [x.field, x.targetPath]));
+
+  it('lets the patient parent win a tie over another parent, and never offers the loser elsewhere', () => {
+    for (const names of [['patient.dob', 'mother.dob'], ['mother.dob', 'patient.dob']]) {
+      expect(of(names), names.join()).toEqual({ 'patient.dob': 'Patient.birthDate' });
+    }
+  });
+
+  it('prefers a flat column to one under another parent', () => {
+    expect(of(['mother.dob', 'dob'])).toEqual({ dob: 'Patient.birthDate' });
+  });
+
+  it('gives the same suggestions whatever the order of the columns, when ties overlap', () => {
+    const t: MapTarget = {
+      ...target,
+      fields: [
+        { path: 'Patient.identifier.value', label: 'Alpha', required: false, repeats: false, valueSet: null },
+        { path: 'Patient.birthDate', label: 'Beta', required: false, repeats: false, valueSet: null },
+      ],
+    };
+    const syn = { 'Patient.identifier.value': ['x', 'y'], 'Patient.birthDate': ['x'] };
+    expect(suggest(t, ['x', 'y'], syn)).toEqual(suggest(t, ['y', 'x'], syn));
+    expect(suggest(t, ['x', 'y'], syn)).toEqual([]);
+  });
+});

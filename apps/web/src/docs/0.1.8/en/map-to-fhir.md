@@ -24,6 +24,8 @@ Use one Map to FHIR node for each lab file. A row is mapped only when exactly on
 
 The studio shows each source field and its example before the destination label and FHIR path. After **Test**, a passing row's dots menu offers **View generated FHIR**. It shows the records for that row as copyable JSON, including converted values and links between records. Test does not store these records. Editing the mapping or loading another sample clears the previous results.
 
+The studio suggests a column for a field from the column's name. A nested column such as `patient.dob` is also read by its last part, `dob`. When two columns fit a field equally well, a column under the field's own record, such as `patient.dob` for a patient field, wins over one under another, such as `mother.dob`. A tie the names cannot settle gives no suggestion, and the order of the columns never decides. A column named like a full name, such as `name`, is never suggested for First name or Last name. A suggestion is used only when you accept it.
+
 ## A file with one column per test
 
 A lab sheet or a WHONET export often has one column per test, for example one column per antibiotic. To map it:

@@ -24,6 +24,8 @@ Utilisez un nœud Map to FHIR par fichier de laboratoire. Une ligne n'est mappé
 
 Le studio montre chaque champ source et son exemple avant le libellé de destination et le chemin FHIR. Après **Tester**, le menu à points d'une ligne qui réussit propose **Voir le FHIR généré**. Il montre les ressources de cette ligne en JSON copiable, avec les valeurs converties et les liens entre ressources. Le test ne les enregistre pas. Modifier le mappage ou charger un autre échantillon efface les résultats précédents.
 
+Le studio suggère une colonne pour un champ à partir du nom de la colonne. Une colonne imbriquée comme `patient.dob` est aussi lue par sa dernière partie, `dob`. Quand deux colonnes conviennent aussi bien à un champ, une colonne sous l'enregistrement du champ, comme `patient.dob` pour un champ du patient, l'emporte sur une colonne sous un autre, comme `mother.dob`. Une égalité que les noms ne tranchent pas ne donne aucune suggestion, et l'ordre des colonnes ne décide jamais. Une colonne nommée comme un nom complet, par exemple `nom_complet`, n'est jamais suggérée pour Prénom ou Nom de famille. Une suggestion ne sert que si vous l'acceptez.
+
 ## Un fichier avec une colonne par examen
 
 Une feuille de laboratoire ou un export WHONET a souvent une colonne par examen, par exemple une colonne par antibiotique. Pour le mapper :

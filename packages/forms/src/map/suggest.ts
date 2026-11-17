@@ -26,46 +26,65 @@ function readsOf(field: string): string[] {
 }
 
 /**
+ * How well a column's parent fits a field's record, to break a tie: 2 when the parent names the
+ * record (`patient.dob` for a Patient field), 1 for a column with no parent, 0 for another parent
+ * (`mother.dob`). Only a tie looks at it.
+ */
+function parentRank(field: string, targetPath: string): number {
+  const dot = field.lastIndexOf('.');
+  if (dot <= 0) return 1;
+  return similarity(field.slice(0, dot), targetPath.split('.')[0]) >= MIN_SCORE ? 2 : 0;
+}
+
+/**
  * `synonyms[path]` lists names a column for that field might have. `synonyms['!' + path]` lists names
  * that must not go to it, such as a full name for First name: a column at least as close to one of
  * those as to the field is not offered for it.
+ *
+ * Equal scores are settled together, so the order of the columns or fields never decides. Among
+ * equal scores the better parent wins; equal scores with equal parents are a tie, left to the person.
+ * A column takes part once, at its best score still open: if it loses or ties there, it is not
+ * offered for a weaker field.
  */
 export function suggest(target: MapTarget, fieldNames: string[], synonyms: Record<string, string[]>): MapSuggestion[] {
-  const candidates: (MapSuggestion & { t: number; s: number })[] = [];
-  target.fields.forEach((f, t) => {
+  type Candidate = MapSuggestion & { rank: number };
+  const candidates: Candidate[] = [];
+  for (const f of target.fields) {
     const names = [f.label, ...(synonyms[f.path] ?? [])];
     const notFor = synonyms[`!${f.path}`] ?? [];
-    fieldNames.forEach((field, s) => {
+    for (const field of fieldNames) {
       const reads = readsOf(field);
       const best = (list: string[]) => Math.max(0, ...reads.flatMap((r) => list.map((n) => similarity(r, n))));
       const score = best(names);
-      if (score < MIN_SCORE) return;
-      if (notFor.length > 0 && best(notFor) >= score) return;
-      candidates.push({ targetPath: f.path, field, score, t, s });
-    });
-  });
+      if (score < MIN_SCORE) continue;
+      if (notFor.length > 0 && best(notFor) >= score) continue;
+      candidates.push({ targetPath: f.path, field, score, rank: parentRank(field, f.path) });
+    }
+  }
 
-  // Highest first, so each target field and each source field takes its best match once.
-  candidates.sort((a, b) => b.score - a.score || a.t - b.t || a.s - b.s);
   const usedTargets = new Set<string>();
   const usedFields = new Set<string>();
   const out: MapSuggestion[] = [];
-  for (const c of candidates) {
-    if (usedTargets.has(c.targetPath) || usedFields.has(c.field)) continue;
-    // A tie is left to the person: never pick by the order of the columns or the fields.
-    const rivals = candidates.filter(
-      (d) => d !== c && Math.abs(d.score - c.score) < TIE && !usedTargets.has(d.targetPath) && !usedFields.has(d.field),
+  const levels = [...new Set(candidates.map((c) => c.score))].sort((a, b) => b - a);
+  for (const level of levels) {
+    // Every candidate open at this score, taken before any is settled.
+    const open = candidates.filter(
+      (c) => Math.abs(c.score - level) < TIE && !usedTargets.has(c.targetPath) && !usedFields.has(c.field),
     );
-    const fieldTie = rivals.some((d) => d.targetPath === c.targetPath);
-    const columnTie = rivals.some((d) => d.field === c.field);
-    if (fieldTie || columnTie) {
-      if (fieldTie) usedTargets.add(c.targetPath);
-      if (columnTie) usedFields.add(c.field);
-      continue;
+    const winners: Candidate[] = [];
+    for (const c of open) {
+      const rivals = open.filter((d) => d !== c && (d.targetPath === c.targetPath || d.field === c.field));
+      if (rivals.every((d) => d.rank < c.rank)) winners.push(c);
     }
-    usedTargets.add(c.targetPath);
-    usedFields.add(c.field);
-    out.push({ targetPath: c.targetPath, field: c.field, score: c.score });
+    // A target closes with its winner, or when two of its best-ranked candidates tie. A target whose
+    // candidates only lost their column to another target stays open for a weaker score.
+    for (const path of new Set(open.map((c) => c.targetPath))) {
+      const here = open.filter((c) => c.targetPath === path);
+      const top = Math.max(...here.map((c) => c.rank));
+      if (winners.some((w) => w.targetPath === path) || here.filter((c) => c.rank === top).length > 1) usedTargets.add(path);
+    }
+    for (const c of open) usedFields.add(c.field);
+    out.push(...winners.map(({ targetPath, field, score }) => ({ targetPath, field, score })));
   }
-  return out;
+  return out.sort((a, b) => b.score - a.score);
 }
