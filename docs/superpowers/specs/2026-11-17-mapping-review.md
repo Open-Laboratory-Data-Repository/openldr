@@ -1,6 +1,6 @@
 # Mapping review
 
-Status: scope approved; chunks 0 to 4 merged. Chunk 5 approved by Codex at 6a457e9a.
+Status: scope approved; chunks 0 to 5 merged. Chunk 6 approved by Codex at adf4b7c1.
 
 This file records the proposed behaviour, disagreements, and decisions.
 Keep the same file as it passes between reviewers.
@@ -875,3 +875,11 @@ C6-1 fixed in `age.ts`: a number too long to hold exactly (`wholeNumberTooLong`)
 not finite, or a day count above `lab_requests.age_days` (2,147,483,647) gives an unread age: the
 text as sent (with the Age unit, when one was given), a note, the row stored, no numeric facts.
 Tests: 19 digits, 400 digits, written and bare, and `9000000 years`; all failed before the fix.
+
+### Codex, 2026-11-17: chunk 6 approved (relayed by Claude)
+
+5 review checks: 0 confirmed, 5 refuted, 0 convention-conflict, 0 deferred. Reviewed `222d9065..adf4b7c1`
+with `d3667811..222d9065`. Approved for the agreed age scope and the "Treat as unread" decision.
+C6-1 refuted at `age.ts:68-70`, `:115`, `:117`, `:120-122`; boundary 2147483647 days kept, 2147483648 unread.
+Codex's HONEST NON-PROOF: no live browser, phone, webhook run, or real warehouse or FHIR store
+write at this commit; the warehouse replay was pg-mem; long decimals stay outside scope.
