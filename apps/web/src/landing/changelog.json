@@ -6,6 +6,24 @@
       "version": null,
       "entries": [
         {
+          "hash": "4dd37e24",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Workflow enable and disable audit as cli, and the web CLI guide covers them"
+        },
+        {
+          "hash": "4aab1ce6",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Enable and Disable change only on/off, Save keeps it, and the CLI can do both"
+        },
+        {
+          "hash": "76532293",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Follow-ups from the mapping review"
+        },
+        {
           "hash": "adf4b7c1",
           "type": "fix",
           "scope": "workflows",
