@@ -103,7 +103,7 @@ export function MapToFhirForm({ node, update }: NodeFormProps) {
         <Label className="whitespace-nowrap">{t(`${p}.form.target`)}</Label>
         <div className="min-w-0">
           <Select
-            value={pendingTarget ?? (typeof config.targetId === 'string' && config.targetId ? config.targetId : undefined)}
+            value={typeof config.targetId === 'string' && config.targetId ? config.targetId : undefined}
             onValueChange={pickTarget}
             disabled={targets === null}
           >
@@ -119,7 +119,7 @@ export function MapToFhirForm({ node, update }: NodeFormProps) {
             </SelectContent>
           </Select>
           {targetsFailed && <p className="mt-1 text-[11px] text-destructive">{t(`${p}.targetsFailed`)}</p>}
-          {pendingTarget && (
+          {pendingTarget && otherCount(pendingTarget) > 0 && (
             <div className="mt-1.5 flex items-start justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5" data-testid="mtf-target-change">
               <p className="text-[11px] leading-snug text-amber-500">{t(`${p}.form.targetChange`, { count: otherCount(pendingTarget) })}</p>
               <DropdownMenu>

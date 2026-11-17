@@ -58,10 +58,11 @@ export function useMappingDraft({
   // Keep the current shape, else one with a saved mapping, else the first.
   useEffect(() => {
     if (groups.some((g) => g.hash === shapeHash)) return;
-    const withSaved = groups.find((g) => savedMappingFor(g, saved) !== null);
+    const forTarget = saved.filter((m) => m.targetId === targetId);
+    const withSaved = groups.find((g) => savedMappingFor(g, forTarget) !== null);
     setShapeHash((withSaved ?? groups[0])?.hash ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups]);
+  }, [groups, targetId]);
 
   const group: ShapeGroup | null = groups.find((g) => g.hash === shapeHash) ?? null;
   const key = target && group ? `${target.id}|${group.hash}` : '';

@@ -103,11 +103,19 @@ export function groupRows(rows: SampleRow[]): ShapeGroup[] {
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 const within = (inner: string[], outer: string[]) => inner.every((x) => outer.includes(x));
 
-/** The saved mapping for a group: the one with the same field names, else one holding all of them. */
+/**
+ * The saved mapping a group edits: the one with the same field names, else one holding all of them,
+ * else the widest one whose columns all sit in the group. In the last case Save writes the group's
+ * wider names and the narrower mapping is replaced, so its rows are the starting draft.
+ */
 export function savedMappingFor(group: { fieldNames: string[] }, saved: SavedMapping[]): SavedMapping | null {
+  const narrower = saved
+    .filter((m) => m.fieldNames.length > 0 && within(m.fieldNames, group.fieldNames))
+    .sort((a, b) => b.fieldNames.length - a.fieldNames.length);
   return (
     saved.find((m) => sameSet(m.fieldNames, group.fieldNames)) ??
     saved.find((m) => within(group.fieldNames, m.fieldNames)) ??
+    narrower[0] ??
     null
   );
 }

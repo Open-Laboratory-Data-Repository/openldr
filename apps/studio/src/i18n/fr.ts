@@ -2439,9 +2439,11 @@ export const fr: EnShape = {
         testSummary_other: "{{count}} lignes sur {{total}} réussissent",
         requiredSummary_one: "Champs obligatoires mappés : {{done}} sur {{count}}.",
         requiredSummary_other: "Champs obligatoires mappés : {{done}} sur {{count}}.",
-        replacesNarrower_one: "Ceci remplace 1 mappage enregistré qui couvre moins de colonnes.",
-        replacesNarrower_other: "Ceci remplace {{count}} mappages enregistrés qui couvrent moins de colonnes.",
+        replacesNarrower_one: "L'enregistrement remplace 1 mappage enregistré qui couvre moins de colonnes.",
+        replacesNarrower_other: "L'enregistrement remplace {{count}} mappages enregistrés qui couvrent moins de colonnes.",
         emptyUnsaved: "Il n'y a pas encore d'échantillon. Enregistrez d'abord le workflow, puis choisissez Écouter et envoyez-lui un message, ou choisissez Utiliser la dernière exécution enregistrée.",
+        ambiguous: "Plus d'un mappage enregistré convient à certaines de ces lignes, donc le nœud les retiendra. Gardez un mappage par fichier, ou utilisez un nœud Mapper vers FHIR par fichier.",
+        notInSample: "{{field}} (absent de cet échantillon)",
       },
       addPath: {
         resourceType: "Enregistrement",

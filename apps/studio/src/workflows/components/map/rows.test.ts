@@ -62,6 +62,12 @@ describe('savedMappingFor', () => {
     expect(savedMappingFor({ fieldNames: ['a', 'b'] }, [wide])).toBe(wide);
     expect(savedMappingFor({ fieldNames: ['a', 'x'] }, [wide, same])).toBeNull();
   });
+
+  it('falls back to the widest narrower mapping whose columns are all in the group', () => {
+    const one = mk(['a']);
+    const two = mk(['a', 'b']);
+    expect(savedMappingFor({ fieldNames: ['a', 'b', 'c'] }, [one, two])).toBe(two);
+  });
 });
 
 describe('exampleFor', () => {

@@ -14,6 +14,7 @@ import { AddPathPanel } from './AddPathPanel';
 import { MappingRow } from './MappingRow';
 import { RuleInputs, RuleKindSelect } from './RuleEditor';
 import { TestResults, type TestState } from './TestResults';
+import { classify, type SavedMapping } from '@openldr/forms/pure';
 import { buildMapping, hasSource, narrowerCount, unusedFields, withMapping, type BuildResult, type RowDraft } from './rows';
 import { useCodeLists, useCodeSets, useFeedsFromWebhook, useSuggestions } from './useMapHelpers';
 import { codeListUrlOf, suggestRuleFor, type RuleSuggestion } from './ruleSuggest';
@@ -100,6 +101,20 @@ export function MapToFhirSheet({
   const sameTarget = mappingsOf(config).filter((x) => targetIdOf(x) === m.targetId);
   const replacesNarrower = saveShape ? narrowerCount(sameTarget, saveShape.fieldNames) : 0;
   const feedsFromWebhook = useFeedsFromWebhook(node.id);
+
+  // Columns a group offers: the sample's, plus a wider saved mapping's that this sample lacks.
+  const offered = saveShape ? saveShape.fieldNames : [];
+  const absent = group ? offered.filter((f) => !group.fieldNames.includes(f)) : [];
+
+  // What the node will hold after Save, with the mapping on screen in place of its saved version.
+  // A row that more than one of them fits is held by the node, so the sheet says so first.
+  const ambiguous = useMemo(() => {
+    if (!group || !saveShape || !m.targetId) return false;
+    const built = buildMapping(drafts, saveShape, m.targetId, { requireAll: false });
+    const savedHere = m.saved.filter((x) => x.targetId === m.targetId);
+    const after = (built.ok ? withMapping(savedHere, built.mapping) : savedHere) as SavedMapping[];
+    return group.rows.some((row) => classify(row, [], after).kind === 'ambiguous');
+  }, [group, saveShape, drafts, m.saved, m.targetId]);
   const showWebhookHint = feedsFromWebhook && String(config.sourcePath ?? '').trim() === '';
 
   const save = () => {
@@ -175,7 +190,8 @@ export function MapToFhirSheet({
             <MappingRow
               key={d.targetPath}
               draft={d}
-              fieldNames={group.fieldNames}
+              fieldNames={[...group.fieldNames, ...absent]}
+              absent={absent}
               rows={group.rows}
               onChange={(source) => edit(i, { source })}
               suggestion={
@@ -361,6 +377,11 @@ export function MapToFhirSheet({
         {replacesNarrower > 0 && ready && (
           <p className="px-6 pb-2 text-xs text-amber-500" data-testid="map-replaces-narrower">
             {t(`${P}.sheet.replacesNarrower`, { count: replacesNarrower })}
+          </p>
+        )}
+        {ambiguous && ready && (
+          <p className="px-6 pb-2 text-xs text-amber-500" data-testid="map-ambiguous">
+            {t(`${P}.sheet.ambiguous`)}
           </p>
         )}
         {showWebhookHint && <p className="px-6 pb-2 text-xs text-amber-500">{t(`${P}.webhookHint`)}</p>}

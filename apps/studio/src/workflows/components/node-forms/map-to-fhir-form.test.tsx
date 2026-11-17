@@ -95,6 +95,8 @@ describe('MapToFhirForm', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Target' }), { target: { value: 'other-target' } });
     expect(update).not.toHaveBeenCalled();
     expect(screen.getByTestId('mtf-target-change')).toHaveTextContent('Changing the target removes 1 saved mapping made for another target.');
+    // Until the change is confirmed the select shows the node's real target.
+    expect((screen.getByRole('combobox', { name: 'Target' }) as HTMLSelectElement).value).toBe('test-target');
     openMenu('Target change actions', 'Change the target and remove them');
     expect(update).toHaveBeenCalledOnce();
     expect(update.mock.calls[0][0].config).toMatchObject({ targetId: 'other-target', mappings: [theirs] });

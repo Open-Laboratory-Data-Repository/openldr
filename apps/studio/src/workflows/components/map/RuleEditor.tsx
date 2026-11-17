@@ -181,6 +181,8 @@ function ValuesInputs({
 }) {
   const { t } = useTranslation();
   const codes = useValueSetCodes(valueSet);
+  // The system picked per line, so a code found in two systems shows the one the person chose.
+  const [picked, setPicked] = useState<Record<number, string>>({});
   const setPair = (i: number, patch: Partial<{ from: string; to: string }>) =>
     onChange({ ...rule, pairs: rule.pairs.map((pr, j) => (j === i ? { ...pr, ...patch } : pr)) });
   const add = () => onChange({ ...rule, pairs: [...rule.pairs, { from: '', to: '' }] });
@@ -218,10 +220,15 @@ function ValuesInputs({
             // Keyed by system and code, since one code can come from two systems; the code is saved.
             <Select
               value={(() => {
+                const mine = picked[i];
+                if (mine && codes.some((x) => `${x.system}|${x.code}` === mine && x.code === pr.to)) return mine;
                 const c = codes.find((x) => x.code === pr.to);
                 return c ? `${c.system}|${c.code}` : undefined;
               })()}
-              onValueChange={(v) => setPair(i, { to: codes.find((x) => `${x.system}|${x.code}` === v)?.code ?? '' })}
+              onValueChange={(v) => {
+                setPicked((p) => ({ ...p, [i]: v }));
+                setPair(i, { to: codes.find((x) => `${x.system}|${x.code}` === v)?.code ?? '' });
+              }}
             >
               <SelectTrigger aria-label={`${t(`${P}.to`)} ${i + 1}: ${label}`} className="w-full min-w-0">
                 <SelectValue placeholder={t(`${P}.toPlaceholder`)} />

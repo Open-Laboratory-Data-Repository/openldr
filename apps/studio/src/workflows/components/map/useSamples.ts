@@ -113,9 +113,11 @@ export function useSamples({ nodeId, open, sourcePath }: { nodeId: string; open:
         for (const run of runs) {
           if (token.current !== mine) return;
           if (seen.has(run.id)) continue;
-          seen.add(run.id);
           const found = await rowsOfRun(run.id, feederIds);
           if (token.current !== mine) return;
+          // A run is passed over for good only once it has finished. Stored runs are written when
+          // they finish today, so this guards a run caught early, should one ever be listed.
+          if (run.status === 'completed' || run.status === 'failed') seen.add(run.id);
           if (found.length > 0) {
             stopTimers();
             setRows(found);

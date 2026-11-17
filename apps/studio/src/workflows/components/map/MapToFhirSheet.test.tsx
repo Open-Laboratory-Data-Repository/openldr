@@ -426,7 +426,7 @@ describe('MapToFhirSheet rule suggestions, status and results', () => {
     // A reason reads in the sheet's labels, and the result is pinned at the bottom.
     expect(within(footer).getByText('Result (number): needs a number')).toBeInTheDocument();
     expect(footer.className).toContain('sticky');
-    expect(screen.getByTestId('map-status')).toHaveTextContent('1 row of 2 passes');
+    expect(screen.getByTestId('map-status')).toHaveTextContent('1 of 2 rows passes');
   });
 
   it('counts the sample rows of the group on screen', async () => {
@@ -502,7 +502,7 @@ describe('MapToFhirSheet fix round 1', () => {
     const other = { shapeHash: 'o', fieldNames: ['pat_no', 'zz'], targetId: 'test-target', rows: [] };
     const { update } = renderSheet({ targetId: 'test-target', mappings: [narrow, other] });
     await screen.findByTestId('map-row-Patient.identifier.value');
-    expect(screen.getByTestId('map-replaces-narrower')).toHaveTextContent('This replaces 1 saved mapping that covers fewer columns.');
+    expect(screen.getByTestId('map-replaces-narrower')).toHaveTextContent('Saving replaces 1 saved mapping that covers fewer columns.');
     fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pat_no' } });
     fireEvent.change(sourceSelect('Test'), { target: { value: 'test_a' } });
     openMenuAndClick('Save');
@@ -594,6 +594,103 @@ describe('MapToFhirSheet fix round 1', () => {
     openMenuAndClick('Save');
     const row = update.mock.calls[0][0].config.mappings[0].rows.find((r: { targetPath: string }) => r.targetPath === 'Patient.gender');
     expect(row.rule).toEqual({ kind: 'values', map: { m: 'male' } });
+  });
+});
+
+describe('MapToFhirSheet fix round 2', () => {
+  it('shows a saved column that is not in this sample, marked, and Save keeps it', async () => {
+    setRun([{ ident: 'QZX-1' }]);
+    const wide = {
+      shapeHash: 'w', fieldNames: ['ident', 'result'], targetId: 'test-target',
+      rows: [{ targetPath: 'Patient.identifier.value', from: { field: 'ident' } }, { targetPath: 'Observation.code', from: { field: 'result' } }],
+    };
+    const { update } = renderSheet({ targetId: 'test-target', mappings: [wide] });
+    await waitFor(() => expect(sourceSelect('Test').value).toBe('result'));
+    const option = [...sourceSelect('Test').options].find((o) => o.value === 'result');
+    expect(option?.textContent).toBe('result (not in this sample)');
+    expect(within(screen.getByTestId('map-row-Observation.code')).queryByText(/Example/)).toBeNull();
+    openMenuAndClick('Save');
+    const saved = update.mock.calls[0][0].config.mappings[0];
+    expect(saved.fieldNames).toEqual(['ident', 'result']);
+    expect(saved.rows.find((r: { targetPath: string }) => r.targetPath === 'Observation.code').from).toEqual({ field: 'result' });
+  });
+
+  it('warns when more than one saved mapping fits some rows', async () => {
+    setRun([{ a: 'QZX-1' }]);
+    const ab = { shapeHash: 'ab', fieldNames: ['a', 'b'], targetId: 'test-target', rows: [] };
+    const ac = { shapeHash: 'ac', fieldNames: ['a', 'c'], targetId: 'test-target', rows: [] };
+    renderSheet({ targetId: 'test-target', mappings: [ab, ac] });
+    expect(await screen.findByTestId('map-ambiguous')).toHaveTextContent('More than one saved mapping fits some of these rows, so the node will hold them.');
+  });
+
+  it('does not warn when only one mapping fits', async () => {
+    setRun([{ a: 'QZX-1', b: 'QZX-2' }]);
+    const ab = { shapeHash: 'ab', fieldNames: ['a', 'b'], targetId: 'test-target', rows: [] };
+    const ac = { shapeHash: 'ac', fieldNames: ['a', 'c'], targetId: 'test-target', rows: [] };
+    renderSheet({ targetId: 'test-target', mappings: [ab, ac] });
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    expect(screen.queryByTestId('map-ambiguous')).toBeNull();
+  });
+
+  it('keeps the system the person picked for a code found in two systems', async () => {
+    setRun(ROWS_A);
+    m(api.fetchMapTargets).mockResolvedValue([
+      { ...TEST_TARGET, fields: TEST_TARGET.fields.map((f) => (f.path === 'Patient.gender' ? { ...f, valueSet: 'urn:test:vs' } : f)) },
+    ]);
+    m(api.findValueSetByUrl).mockResolvedValue({ id: 'vs1', url: 'urn:test:vs' });
+    m(api.storedValueSetCodes).mockResolvedValue([
+      { system: 'urn:test:a', code: 'male', display: 'A' },
+      { system: 'urn:test:b', code: 'male', display: 'B' },
+    ]);
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Sex'), { target: { value: 'sex' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Sex' }), { target: { value: 'values' } });
+    const to = (await screen.findByRole('combobox', { name: 'To 1: Sex' })) as HTMLSelectElement;
+    fireEvent.change(to, { target: { value: 'urn:test:b|male' } });
+    expect((screen.getByRole('combobox', { name: 'To 1: Sex' }) as HTMLSelectElement).value).toBe('urn:test:b|male');
+  });
+
+  it('takes a run seen while running once it has finished with rows', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      useWorkflowStore.setState({ workflowId: 'wf1', edges: [{ id: 'e1', source: 'up1', target: 'map1' }] as never, nodeRunInput: {}, nodeRunOutput: {} });
+      const running = { id: 'r1', status: 'running', startedAt: '2026-01-02T00:00:00Z', result: {} };
+      const done = { id: 'r1', status: 'completed', startedAt: '2026-01-02T00:00:00Z', result: { results: [{ nodeId: 'up1', output: asItems(ROWS_A) }] } };
+      m(api.fetchWorkflowRuns).mockResolvedValueOnce([]).mockResolvedValueOnce([running]).mockResolvedValue([done]);
+      m(api.fetchWorkflowRun).mockResolvedValueOnce(running).mockResolvedValue(done);
+      renderSheet();
+      await screen.findByText(/Choose Listen, then send a message/);
+      openMenuAndClick('Listen');
+      await vi.advanceTimersByTimeAsync(2100);
+      await vi.advanceTimersByTimeAsync(2100);
+      expect(await screen.findByTestId('map-row-Patient.identifier.value')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('picks the default group by the current target only', async () => {
+    setRun([...ROWS_A, ...ROWS_B]);
+    const { shapeOf } = await import('@openldr/forms/pure');
+    const forOther = { shapeHash: shapeOf(ROWS_A[0]).hash, fieldNames: ['pat_no', 'sex', 'test_a', 'test_b'], targetId: 'gone-target', rows: [] };
+    const forThis = { shapeHash: shapeOf(ROWS_B[0]).hash, fieldNames: ['ident', 'result'], targetId: 'test-target', rows: [] };
+    renderSheet({ targetId: 'test-target', mappings: [forOther, forThis] });
+    const shape = (await screen.findByRole('combobox', { name: 'Sample shape' })) as HTMLSelectElement;
+    await waitFor(() => expect(shape.value).toBe(shapeOf(ROWS_B[0]).hash));
+  });
+
+  it('opens a wider group on a narrower saved mapping, and Save writes the wider names and drops the narrower', async () => {
+    setRun(ROWS_A);
+    const narrow = { shapeHash: 'n', fieldNames: ['pat_no', 'test_a'], targetId: 'test-target', rows: [{ targetPath: 'Patient.identifier.value', from: { field: 'pat_no' } }, { targetPath: 'Observation.code', from: { field: 'test_a' } }] };
+    const { update } = renderSheet({ targetId: 'test-target', mappings: [narrow] });
+    await waitFor(() => expect(sourceSelect('Patient ID').value).toBe('pat_no'));
+    expect(sourceSelect('Test').value).toBe('test_a');
+    openMenuAndClick('Save');
+    const mappings = update.mock.calls[0][0].config.mappings;
+    expect(mappings).toHaveLength(1);
+    expect(mappings[0].fieldNames).toEqual(['pat_no', 'sex', 'test_a', 'test_b']);
+    expect(mappings[0].rows).toHaveLength(2);
   });
 });
 

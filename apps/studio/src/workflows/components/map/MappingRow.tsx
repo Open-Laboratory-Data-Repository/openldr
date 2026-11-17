@@ -17,6 +17,7 @@ const FIXED = '__fixed';
 export function MappingRow({
   draft,
   fieldNames,
+  absent = [],
   rows,
   onChange,
   suggestion,
@@ -26,6 +27,8 @@ export function MappingRow({
 }: {
   draft: RowDraft;
   fieldNames: string[];
+  /** Saved columns that this sample does not have. They are offered, marked, with no example. */
+  absent?: string[];
   /** The group's sample rows, for the Example column. Shown only here, never saved. */
   rows: SampleRow[];
   onChange: (source: SourceDraft) => void;
@@ -87,7 +90,7 @@ export function MappingRow({
             <SelectItem value={FIXED}>{t(`${p}.fixedValue`)}</SelectItem>
             {names.map((f) => (
               <SelectItem key={f} value={f}>
-                {f}
+                {absent.includes(f) ? t(`${p}.notInSample`, { field: f }) : f}
               </SelectItem>
             ))}
           </SelectContent>
@@ -103,7 +106,7 @@ export function MappingRow({
         {draft.repeats && src.kind === 'field' && first && (
           <MultiSelect
             aria-label={t(`${p}.alsoFrom`) + ': ' + draft.label}
-            options={names.filter((f) => f !== first).map((f) => ({ value: f, label: f }))}
+            options={names.filter((f) => f !== first).map((f) => ({ value: f, label: absent.includes(f) ? t(`${p}.notInSample`, { field: f }) : f }))}
             value={src.fields.slice(1)}
             onChange={(more) => onChange({ kind: 'field', fields: [first, ...more] })}
             placeholder={t(`${p}.alsoFrom`)}
