@@ -389,7 +389,8 @@ export function ruleOf(rule: RuleDraft): MapRule | null | 'incomplete' {
 
 export type BuildResult =
   | { ok: true; mapping: SavedMapping }
-  | { ok: false; problem: 'required' | 'rule' | 'sourceSystem'; label: string }
+  /** `invalid`: the row would not pass `SavedMappingSchema` as the node reads it. */
+  | { ok: false; problem: 'required' | 'rule' | 'sourceSystem' | 'invalid'; label: string }
   /** `columns`: the columns whose test is empty, or that share one test. */
   | { ok: false; problem: 'testEmpty' | 'testDuplicate'; columns: string[] }
   /** A second result field whose column count differs from the one that carries the tests. */
@@ -447,8 +448,17 @@ export function buildMapping(
     else continue;
     rows.push(rule ? { targetPath: d.targetPath, from, rule } : { targetPath: d.targetPath, from });
   }
-  const mapping = SavedMappingSchema.parse({ shapeHash: shape.hash, fieldNames: [...shape.fieldNames], targetId, rows });
-  return { ok: true, mapping };
+  // Checked as the node will read it: after the JSON round trip of a saved workflow. So the panel
+  // never saves, or sends to Test, a mapping a run would refuse.
+  const candidate = JSON.parse(JSON.stringify({ shapeHash: shape.hash, fieldNames: [...shape.fieldNames], targetId, rows }));
+  const parsed = SavedMappingSchema.safeParse(candidate);
+  if (!parsed.success) {
+    const at = parsed.error.issues[0]?.path ?? [];
+    const row = at[0] === 'rows' && typeof at[1] === 'number' ? rows[at[1]] : undefined;
+    const label = drafts.find((d) => d.targetPath === row?.targetPath)?.label ?? row?.targetPath ?? '';
+    return { ok: false, problem: 'invalid', label };
+  }
+  return { ok: true, mapping: parsed.data };
 }
 
 /** The saved mappings as a list, read from config without trusting it. */

@@ -2421,6 +2421,7 @@ export const fr: EnShape = {
         unused: "Non utilisés : {{fields}}",
         saveMissing: "{{label}} est obligatoire. Choisissez une colonne ou une valeur fixe.",
         ruleIncomplete: "Terminez la règle de {{label}}.",
+        rowInvalid: "Le nœud ne pourrait pas lire la ligne {{label}} telle quelle. Changez sa colonne ou sa règle, puis enregistrez de nouveau.",
         sourceSystemMissing: "Choisissez le système source de {{label}}. La liste de codes du laboratoire en exige un.",
         saved: "Le mappage est dans le nœud. Enregistrez le workflow pour le garder.",
         testing: "Test de l'échantillon",
@@ -2450,6 +2451,7 @@ export const fr: EnShape = {
         filterColumns: "Filtrer les colonnes",
         selectAllShown: "Sélectionner toutes les colonnes affichées",
         noColumnShown: "Aucune colonne ne correspond au filtre.",
+        closeColumns: "Fermer la liste des colonnes",
       },
       addPath: {
         resourceType: "Enregistrement",

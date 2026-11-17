@@ -48,7 +48,15 @@ export function ColumnPicker({
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-md border border-border p-2" data-testid={`map-column-picker-${label}`}>
+    // Escape closes this list only. The sheet ignores an Escape from inside it (`data-column-picker`).
+    <div
+      className="flex min-w-0 flex-col gap-2 rounded-md border border-border p-2"
+      data-testid={`map-column-picker-${label}`}
+      data-column-picker=""
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') setOpen(false);
+      }}
+    >
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Input
           aria-label={`${t(`${p}.filterColumns`)}: ${label}`}
@@ -68,7 +76,7 @@ export function ColumnPicker({
           {t(`${p}.selectAllShown`)}
         </Button>
         <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" aria-expanded onClick={() => setOpen(false)}>
-          {t('workflows.mapToFhir.addPath.close')}
+          {t(`${p}.closeColumns`)}
         </Button>
       </div>
       {shown.length === 0 ? (

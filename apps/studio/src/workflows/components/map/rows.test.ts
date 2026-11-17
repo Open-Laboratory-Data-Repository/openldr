@@ -165,3 +165,13 @@ describe('testFieldsOf and per-column tests', () => {
     expect(built.mapping.rows.find((r) => r.targetPath === 'Observation.code')!.from).toEqual({ fixedList: ['B', 'typed'] });
   });
 });
+
+describe('buildMapping refuses what the node would refuse', () => {
+  it('gives a problem naming the row, not a throw, when the mapping would not parse after a JSON round trip', () => {
+    // A row the panel never makes: a blank target path. It stands for any shape the schema refuses.
+    const drafts = draftsFor(TEST_TARGET, null).map((d) =>
+      d.targetPath === 'Patient.identifier.value' ? { ...d, targetPath: '', label: 'Patient ID', source: { kind: 'fixed' as const, value: 'x' } } : d,
+    );
+    expect(buildMapping(drafts, { hash: 'h', fieldNames: ['a'] }, TEST_TARGET.id, { requireAll: false })).toEqual({ ok: false, problem: 'invalid', label: 'Patient ID' });
+  });
+});

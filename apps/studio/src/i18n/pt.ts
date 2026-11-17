@@ -2421,6 +2421,7 @@ export const pt: EnShape = {
         unused: "Não usados: {{fields}}",
         saveMissing: "{{label}} é obrigatório. Escolha uma coluna ou um valor fixo.",
         ruleIncomplete: "Termine a regra de {{label}}.",
+        rowInvalid: "O nó não conseguiria ler a linha {{label}} tal como está. Mude a sua coluna ou a sua regra e guarde de novo.",
         sourceSystemMissing: "Escolha o sistema de origem de {{label}}. A lista de códigos do próprio laboratório exige um.",
         saved: "O mapeamento está no nó. Guarde o fluxo de trabalho para o manter.",
         testing: "A testar a amostra",
@@ -2450,6 +2451,7 @@ export const pt: EnShape = {
         filterColumns: "Filtrar colunas",
         selectAllShown: "Selecionar todas as mostradas",
         noColumnShown: "Nenhuma coluna corresponde ao filtro.",
+        closeColumns: "Fechar a lista de colunas",
       },
       addPath: {
         resourceType: "Registo",

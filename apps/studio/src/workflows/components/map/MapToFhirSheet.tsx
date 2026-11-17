@@ -115,6 +115,8 @@ export function MapToFhirSheet({
         return t(`${P}.sheet.sourceSystemMissing`, { label: built.label });
       case 'rule':
         return t(`${P}.sheet.ruleIncomplete`, { label: built.label });
+      case 'invalid':
+        return t(`${P}.sheet.rowInvalid`, { label: built.label });
       case 'testEmpty':
         return t(`${P}.sheet.testEmpty`, { columns: built.columns.join(', ') });
       case 'testDuplicate':
@@ -335,7 +337,13 @@ export function MapToFhirSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       {/* The sheet does not scroll. The area under the header scrolls on its own, and the test result
           block sits below it, outside the scroll, so it stays in view without position: sticky. */}
-      <SheetContent className="w-full max-w-full gap-0 overflow-hidden p-0 sm:w-[52rem] sm:max-w-[92vw]">
+      <SheetContent
+        className="w-full max-w-full gap-0 overflow-hidden p-0 sm:w-[52rem] sm:max-w-[92vw]"
+        // Escape inside the column list closes the list, not the sheet, so unsaved work stays.
+        onEscapeKeyDown={(e) => {
+          if (e.target instanceof Element && e.target.closest('[data-column-picker]')) e.preventDefault();
+        }}
+      >
         <SheetHeader className="shrink-0 border-b border-border px-6 py-4 pr-12">
           <SheetTitle>{t(`${P}.sheet.title`)}</SheetTitle>
           <SheetDescription>{t(`${P}.sheet.description`)}</SheetDescription>

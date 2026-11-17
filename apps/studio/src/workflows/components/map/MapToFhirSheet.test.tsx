@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import * as api from '@/api';
 import { useWorkflowStore } from '../../hooks/use-workflow-store';
 import { MapToFhirSheet } from './MapToFhirSheet';
+import { labResultTarget, SavedMappingSchema, seededStarterPacks } from '@openldr/forms/pure';
 import { TEST_TARGET, MARKERS, ROWS_A, ROWS_B, ROWS_FORM, FORM_EXAMPLES, asItems } from './test-fixtures';
 
 vi.mock('@/components/ui/select', () => import('./test-select-mock'));
@@ -1001,5 +1002,72 @@ describe('MapToFhirSheet preselected codes on a Values rule picked by hand', () 
     openMenuAndClick('Test');
     await screen.findByTestId('map-test-footer');
     expect(JSON.stringify(m(api.testMapping).mock.calls[0][0].config)).not.toContain('QZX-9');
+  });
+});
+
+describe('MapToFhirSheet saves what a workflow run reads', () => {
+  const target = labResultTarget(seededStarterPacks());
+  const label = (path: string) => target.fields.find((f) => f.path === path)!.label;
+  const ROWS = [
+    { pat_no: 'T-0401', gender: 'M', dob: '45000', sample_no: 'S-0401', sample_type: 'Urine', coll_dt: '2026-11-05', organism: 'QZX-ORG', AMP: 'R', CIP: 'S' },
+    { pat_no: 'T-0402', gender: 'M', dob: '45001', sample_no: 'S-0402', sample_type: 'Urine', coll_dt: '2026-11-06', organism: 'QZX-ORG', AMP: 'S', GEN: 'I' },
+  ];
+
+  it('saves a per-test mapping with a coded Values rule and an Excel date that passes the schema after a JSON round trip', async () => {
+    m(api.fetchMapTargets).mockResolvedValue([target]);
+    m(api.findValueSetByUrl).mockImplementation(async (url: string) => (url.includes('specimen-type') ? { id: 'vs-s', url } : null));
+    m(api.storedValueSetCodes).mockResolvedValue([{ system: 'urn:test:specimen', code: 'UR', display: 'Urine' }]);
+    setRun(ROWS);
+    const { update } = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect(label('Patient.identifier.value')), { target: { value: 'pat_no' } });
+    fireEvent.change(sourceSelect(label('Specimen.collection.collectedDateTime')), { target: { value: 'coll_dt' } });
+    fireEvent.change(sourceSelect(label('Patient.birthDate')), { target: { value: 'dob' } });
+    fireEvent.click(screen.getByRole('button', { name: `Accept: Rule: ${label('Patient.birthDate')}` }));
+    fireEvent.change(sourceSelect(label('Specimen.type')), { target: { value: 'sample_type' } });
+    await screen.findByTestId('map-rule-suggestion-Specimen.type');
+    fireEvent.click(screen.getByRole('button', { name: `Accept: Rule: ${label('Specimen.type')}` }));
+    expect((await screen.findByRole('combobox', { name: `To 1: ${label('Specimen.type')}` }) as HTMLSelectElement).value).toBe('urn:test:specimen|UR');
+    fireEvent.change(sourceSelect(label('Observation.valueString')), { target: { value: 'AMP' } });
+    fireEvent.click(screen.getByRole('button', { name: `Add another column: ${label('Observation.valueString')}` }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'CIP' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'GEN' }));
+    openMenuAndClick('Save');
+
+    const config = update.mock.calls[0][0].config;
+    const back = JSON.parse(JSON.stringify(config));
+    const parsed = SavedMappingSchema.safeParse(back.mappings[0]);
+    expect(parsed.success ? [] : parsed.error.issues).toEqual([]);
+    expect(back.mappings[0]).toEqual(config.mappings[0]);
+    const rows = back.mappings[0].rows as { targetPath: string; from: unknown; rule?: unknown }[];
+    const byPath = (k: string) => rows.find((r) => r.targetPath === k)!;
+    expect(byPath('Observation.code').from).toEqual({ fixedList: ['AMP', 'CIP', 'GEN'] });
+    expect(byPath('Observation.valueString').from).toEqual({ fields: ['AMP', 'CIP', 'GEN'] });
+    expect(byPath('Specimen.type').rule).toEqual({ kind: 'values', map: { Urine: { system: 'urn:test:specimen', code: 'UR' } } });
+    expect(byPath('Patient.birthDate').rule).toEqual({ kind: 'date', format: 'excel' });
+  });
+});
+
+describe('MapToFhirSheet column list keys', () => {
+  async function openPicker(onOpenChange = vi.fn()) {
+    setRun([{ pid: 'QZX-1', AMP: 'QZX-2', CIP: 'QZX-3' }]);
+    render(<MapToFhirSheet open onOpenChange={onOpenChange} node={mkNode()} update={vi.fn()} />);
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Result (text)'), { target: { value: 'AMP' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add another column: Result (text)' }));
+    return onOpenChange;
+  }
+
+  it('closes only the column list when Escape is pressed in its filter box', async () => {
+    const onOpenChange = await openPicker();
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Filter columns: Result (text)' }), { key: 'Escape' });
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.queryByRole('textbox', { name: 'Filter columns: Result (text)' })).toBeNull();
+  });
+
+  it('names the column list\'s close button apart from the sheet\'s', async () => {
+    await openPicker();
+    expect(screen.getByRole('button', { name: 'Close column list' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Close' })).toHaveLength(1);
   });
 });

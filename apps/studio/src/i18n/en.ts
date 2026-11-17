@@ -2539,6 +2539,7 @@ export const en = {
         unused: "Unused: {{fields}}",
         saveMissing: "{{label}} is required. Pick a column or a fixed value for it.",
         ruleIncomplete: "Finish the rule on {{label}}.",
+        rowInvalid: "The node could not read the row {{label}} as it is. Change its column or its rule, then save again.",
         sourceSystemMissing: "Pick the source system for {{label}}. The lab's own code list needs one.",
         saved: "The mapping is in the node. Save the workflow to keep it.",
         testing: "Testing the sample",
@@ -2568,6 +2569,7 @@ export const en = {
         filterColumns: "Filter columns",
         selectAllShown: "Select all shown",
         noColumnShown: "No column matches the filter.",
+        closeColumns: "Close column list",
       },
       addPath: {
         resourceType: "Record",
