@@ -34,7 +34,7 @@ describe('starter pack store', () => {
   it('answers an empty list for a type with no pack, and null for an unknown id', async () => {
     const store = createStarterPackStore(await makeMigratedDb());
     await store.replaceSeeded(seededStarterPacks());
-    expect(await store.listForResource('Specimen')).toEqual([]);
+    expect(await store.listForResource('DiagnosticReport')).toEqual([]);
     expect(await store.get('nope')).toBeNull();
   });
 

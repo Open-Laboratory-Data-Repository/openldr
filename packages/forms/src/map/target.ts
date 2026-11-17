@@ -72,12 +72,15 @@ export function buildTarget(
   id: string,
   name: string,
   packs: { pack: { id: string; resourceType: string }; entries: StarterPackEntry[]; repeats?: boolean }[],
-  opts: { links: MapTarget['links']; defaults: MapTarget['defaults'] },
+  /** `extra`: fields no pack holds. Each goes first among its record's fields and takes its repeats. */
+  opts: { links: MapTarget['links']; defaults: MapTarget['defaults']; extra?: MapTarget['fields'] },
 ): MapTarget {
   const linkPaths = new Set(opts.links.map((l) => l.path));
   const records: MapTarget['records'] = [];
   const fields: MapTarget['fields'] = [];
   const keys = new Set<string>();
+  const extra = opts.extra ?? [];
+  const typeOf = (key: string) => key.split(/[.?]/)[0];
 
   for (const { pack, entries, repeats = false } of packs) {
     // Links name records by type, so two records of one type would be ambiguous.
@@ -85,6 +88,16 @@ export function buildTarget(
       throw new Error(`map target ${id}: two packs make a ${pack.resourceType} record`);
     }
     records.push({ type: pack.resourceType, packId: pack.id, repeats });
+
+    for (const f of extra) {
+      if (typeOf(f.path) !== pack.resourceType) continue;
+      if (linkPaths.has(parseTargetPath(f.path)?.path ?? f.path)) {
+        throw new Error(`map target ${id}: the extra field ${f.path} is a link the target writes`);
+      }
+      if (keys.has(f.path)) throw new Error(`map target ${id}: two entries share the key ${f.path}`);
+      keys.add(f.path);
+      fields.push({ ...f, repeats });
+    }
 
     for (const entry of entries) {
       if (!entry.fhirPath || linkPaths.has(entry.fhirPath)) continue;
@@ -94,6 +107,12 @@ export function buildTarget(
       if (keys.has(key)) throw new Error(`map target ${id}: two entries share the key ${key}`);
       keys.add(key);
       fields.push({ path: key, label: entry.label, required: entry.required, repeats, valueSet: entry.boundValueSet });
+    }
+  }
+
+  for (const f of extra) {
+    if (!records.some((r) => r.type === typeOf(f.path))) {
+      throw new Error(`map target ${id}: the extra field ${f.path} has no ${typeOf(f.path)} record`);
     }
   }
 

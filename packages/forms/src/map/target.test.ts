@@ -128,6 +128,20 @@ describe('buildTarget', () => {
     ], opts)).toThrow('Patient');
   });
 
+  it('puts extra fields first among their own record, and refuses a clash or an unknown record', () => {
+    const extraField = { path: 'Patient.identifier.value', label: 'Patient ID', required: false, repeats: false, valueSet: null };
+    const packs = [
+      { pack: patient, entries: [entry(0, 'Patient.gender', 'Sex')] },
+      { pack: observation, entries: [entry(0, 'Observation.valueString', 'Result')], repeats: true },
+    ];
+    const t = buildTarget('t', 'T', packs, { ...opts, extra: [extraField] });
+    expect(t.fields.map((f) => f.path)).toEqual(['Patient.identifier.value', 'Patient.gender', 'Observation.valueString']);
+    expect(t.fields[0]).toEqual(extraField);
+    expect(() => buildTarget('t', 'T', packs, { ...opts, extra: [{ ...extraField, path: 'Patient.gender' }] })).toThrow('Patient.gender');
+    expect(() => buildTarget('t', 'T', packs, { ...opts, extra: [{ ...extraField, path: 'Specimen.type' }] })).toThrow('Specimen');
+    expect(() => buildTarget('t', 'T', packs, { ...opts, extra: [{ ...extraField, path: 'Observation.subject' }] })).toThrow('Observation.subject');
+  });
+
   it('builds from the seeded patient and order packs without a clash', () => {
     const packs = seededStarterPacks().filter((p) => p.id === 'pack-patient' || p.id === 'pack-service-request');
     const t = buildTarget('t', 'T', packs.map((p) => ({ pack: p, entries: p.entries })), {
