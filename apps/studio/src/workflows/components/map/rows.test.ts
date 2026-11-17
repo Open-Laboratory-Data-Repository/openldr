@@ -62,7 +62,7 @@ describe('buildMapping and draftsFor', () => {
     drafts[0].source = { kind: 'field', fields: ['a'] };
     drafts[2].source = { kind: 'field', fields: ['a', 'b'] };
     drafts[2].rule = { kind: 'split', by: '-', take: 'last', part: '1' };
-    drafts.push({ ...drafts[1], targetPath: 'Patient.birthDate', label: 'Patient.birthDate', added: true, source: { kind: 'fixed', value: '2000-01-01' } });
+    drafts.push({ ...drafts[1], targetPath: 'Patient.active', label: 'Patient.active', added: true, source: { kind: 'fixed', value: 'true' } });
     const built = buildMapping(drafts, shape, TEST_TARGET.id, { requireAll: true });
     expect(built.ok).toBe(true);
     if (!built.ok) return;
@@ -72,7 +72,9 @@ describe('buildMapping and draftsFor', () => {
       ['Patient.gender', { kind: 'none' }, 'none', false],
       ['Observation.code', { kind: 'field', fields: ['a', 'b'] }, 'split', false],
       ['Observation.valueString', { kind: 'none' }, 'none', false],
-      ['Patient.birthDate', { kind: 'fixed', value: '2000-01-01' }, 'none', true],
+      ['Observation.valueQuantity.value', { kind: 'none' }, 'none', false],
+      ['Patient.birthDate', { kind: 'none' }, 'none', false],
+      ['Patient.active', { kind: 'fixed', value: 'true' }, 'none', true],
     ]);
   });
 

@@ -15,7 +15,8 @@ import { MappingRow } from './MappingRow';
 import { RuleInputs, RuleKindSelect } from './RuleEditor';
 import { TestResults, type TestState } from './TestResults';
 import { buildMapping, hasSource, unusedFields, withMapping, type BuildResult, type RowDraft } from './rows';
-import { useCodeLists, useSuggestions } from './useMapHelpers';
+import { useCodeLists, useCodeSets, useSuggestions } from './useMapHelpers';
+import { codeListUrlOf, suggestRuleFor, type RuleSuggestion } from './ruleSuggest';
 import { useMappingDraft } from './useMappingDraft';
 import { useSamples } from './useSamples';
 
@@ -53,6 +54,19 @@ export function MapToFhirSheet({
 
   const suggestions = useSuggestions({ open, draftsKey: m.draftsKey, targetId: m.targetId, shape: group, drafts, locale: i18n.language });
   const codeLists = useCodeLists(drafts.some((d) => d.rule.kind === 'codeList'));
+  const codeUrlOf = (d: RowDraft) => (hasSource(d) && d.rule.kind === 'none' ? codeListUrlOf(d) : null);
+  const codeSets = useCodeSets(drafts.map(codeUrlOf).filter((u): u is string => u !== null));
+  const ruleSuggestionOf = (d: RowDraft): RuleSuggestion | null => {
+    if (!group) return null;
+    const url = codeUrlOf(d);
+    return suggestRuleFor(d, group.rows, url ? (codeSets[url] ?? null) : null);
+  };
+  const describeRule = (r: RuleSuggestion) =>
+    r.kind === 'numberComma'
+      ? t(`${P}.rule.suggest.numberComma`)
+      : r.kind === 'values'
+        ? t(`${P}.rule.suggest.values`)
+        : t(r.dayFirstGuess ? `${P}.rule.suggest.dateDayFirst` : `${P}.rule.suggest.date`, { format: r.format });
 
   // Opening the sheet loads the editor's last run when it holds one.
   useEffect(() => {
@@ -126,7 +140,7 @@ export function MapToFhirSheet({
     body = <LoadingState label={t(`${P}.loadingTargets`)} className="min-h-[16rem] flex-1" />;
   } else if (m.targetsFailed || m.targets.length === 0) {
     body = <StripedEmpty className="min-h-[16rem] flex-1">{t(m.targetsFailed ? `${P}.targetsFailed` : `${P}.noTargets`)}</StripedEmpty>;
-  } else if (listening) {
+  } else if (listening && !ready) {
     body = <LoadingState label={t(`${P}.sheet.listening`)} className="min-h-[16rem] flex-1" />;
   } else if (samples.status === 'loadingStored') {
     body = <LoadingState label={t(`${P}.sheet.loadingStored`)} className="min-h-[16rem] flex-1" />;
@@ -171,7 +185,30 @@ export function MapToFhirSheet({
                   </div>
                 ) : undefined
               }
-              rule={<RuleKindSelect rule={d.rule} label={d.label} onChange={(rule) => edit(i, { rule })} />}
+              rule={
+                <div className="flex min-w-0 flex-col gap-1">
+                  <RuleKindSelect rule={d.rule} label={d.label} onChange={(rule) => edit(i, { rule })} />
+                  {(() => {
+                    const rs = ruleSuggestionOf(d);
+                    if (!rs) return null;
+                    return (
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted-foreground" data-testid={`map-rule-suggestion-${d.targetPath}`}>
+                        <span className="min-w-0 break-words">{t(`${P}.sheet.ruleSuggested`, { rule: describeRule(rs) })}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 shrink-0 px-2 text-xs text-violet-500"
+                          aria-label={`${t(`${P}.sheet.accept`)}: ${t(`${P}.sheet.colRule`)}: ${d.label}`}
+                          onClick={() => edit(i, { rule: rs.rule })}
+                        >
+                          {t(`${P}.sheet.accept`)}
+                        </Button>
+                      </div>
+                    );
+                  })()}
+                </div>
+              }
               ruleInputs={
                 d.rule.kind === 'none' || d.rule.kind === 'trim' ? undefined : (
                   <RuleInputs rule={d.rule} label={d.label} valueSet={d.valueSet} codeLists={codeLists} onChange={(rule) => edit(i, { rule })} />
@@ -202,7 +239,6 @@ export function MapToFhirSheet({
           </p>
           {unused.length > 0 && <p className="break-words">{t(`${P}.sheet.unused`, { fields: unused.join(', ') })}</p>}
         </div>
-        <TestResults state={test} />
       </div>
     );
   }
@@ -295,6 +331,23 @@ export function MapToFhirSheet({
         {otherTargetCount > 0 && m.targetId && m.targetId !== m.savedTargetId && (
           <p className="px-6 pb-2 text-xs text-amber-500">{t(`${P}.sheet.targetChange`, { count: otherTargetCount })}</p>
         )}
+        {m.targets && m.targets.length > 0 && (
+          <div className="flex min-h-6 items-center gap-2 px-6 pb-2 text-xs text-muted-foreground" data-testid="map-status">
+            {listening ? (
+              <>
+                <LoadingState className="h-6 w-8 shrink-0 rounded" />
+                <span>{t(`${P}.sheet.listeningStatus`)}</span>
+              </>
+            ) : (
+              <>
+                {samples.rows.length > 0 && <span>{t(`${P}.sheet.samplesHeld`, { count: samples.rows.length })}</span>}
+                {test.kind === 'done' && (
+                  <span>{t(`${P}.sheet.testSummary`, { pass: test.results.filter((r) => r.ok).length, total: test.results.length })}</span>
+                )}
+              </>
+            )}
+          </div>
+        )}
         {notice && (
           <p
             role={notice.tone === 'error' ? 'alert' : 'status'}
@@ -305,6 +358,11 @@ export function MapToFhirSheet({
         )}
 
         <div className="flex min-h-[16rem] min-w-0 flex-1 flex-col">{body}</div>
+        {test.kind !== 'idle' && (
+          <div className="sticky bottom-0 z-10 max-h-[40dvh] shrink-0 overflow-y-auto border-t border-border bg-background" data-testid="map-test-footer">
+            <TestResults state={test} drafts={drafts} />
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );

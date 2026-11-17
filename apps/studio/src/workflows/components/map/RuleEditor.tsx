@@ -193,6 +193,21 @@ function ValuesInputs({
 
   return (
     <div className="flex flex-col gap-2 rounded-md bg-muted/40 px-3 py-2">
+      {rule.pairs.length === 0 && (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] text-muted-foreground">{t(`${P}.valuesHint`)}</p>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={`${t(`${P}.valueActions`)}: ${label}`}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={add}>{t(`${P}.addValue`)}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
       {rule.pairs.map((pr, i) => (
         <div key={i} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto]">
           <Label className="whitespace-nowrap">{t(`${P}.from`)}</Label>

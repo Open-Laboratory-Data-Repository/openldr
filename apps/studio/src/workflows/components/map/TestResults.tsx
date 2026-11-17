@@ -2,14 +2,16 @@ import { useTranslation } from 'react-i18next';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import type { MapTestResult } from '@/api';
 import { LoadingState } from '@/components/ui/spinner';
+import { reasonText } from './reasonText';
+import type { RowDraft } from './rows';
 
 export type TestState = { kind: 'idle' } | { kind: 'running' } | { kind: 'done'; results: MapTestResult[] } | { kind: 'failed'; message: string };
 
 /**
- * Per sample row: the record types and "passes", or the server's reason. A reason names fields and
- * paths only, never a value. Shown inline, never in a toast.
+ * Per sample row: the record types and "passes", or the server's reason in the sheet's labels. A
+ * reason names fields and paths only, never a value. Shown inline, never in a toast.
  */
-export function TestResults({ state }: { state: TestState }) {
+export function TestResults({ state, drafts }: { state: TestState; drafts: RowDraft[] }) {
   const { t } = useTranslation();
   const P = 'workflows.mapToFhir.sheet';
   if (state.kind === 'idle') return null;
@@ -28,7 +30,7 @@ export function TestResults({ state }: { state: TestState }) {
           )}
           <span className="shrink-0 font-medium text-foreground">{t(`${P}.testRow`, { n: i + 1 })}</span>
           <span className="min-w-0 break-words text-muted-foreground">
-            {r.ok ? `${r.resourceTypes.join(', ')} ${t(`${P}.passes`)}` : r.reason}
+            {r.ok ? `${r.resourceTypes.join(', ')} ${t(`${P}.passes`)}` : reasonText(r.reason, r.field, drafts)}
           </span>
         </li>
       ))}

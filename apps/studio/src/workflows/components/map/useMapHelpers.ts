@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { fetchMapCodeLists, suggestMapping } from '@/api';
+import { fetchMapCodeLists, findValueSetByUrl, storedValueSetCodes, suggestMapping } from '@/api';
 import { hasSource, type RowDraft } from './rows';
 import type { CodeListsState } from './RuleEditor';
 
@@ -62,4 +62,35 @@ export function useCodeLists(needed: boolean): CodeListsState {
       .catch(() => setState('failed'));
   }, [needed]);
   return state;
+}
+
+/**
+ * The codes of each value set URL, for rule suggestions: a Set once loaded, null while loading or
+ * when the install does not hold that value set. Each URL is loaded once per sheet.
+ */
+export function useCodeSets(urls: string[]): Record<string, Set<string> | null> {
+  const [sets, setSets] = useState<Record<string, Set<string> | null>>({});
+  const started = useRef(new Set<string>());
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const key = [...new Set(urls)].sort().join('\n');
+  useEffect(() => {
+    for (const url of key ? key.split('\n') : []) {
+      if (started.current.has(url)) continue;
+      started.current.add(url);
+      (async () => {
+        const held = await findValueSetByUrl(url);
+        const codes = held ? await storedValueSetCodes(held.id) : null;
+        if (mounted.current) setSets((s) => ({ ...s, [url]: codes ? new Set(codes.map((c) => c.code)) : null }));
+      })().catch(() => {
+        if (mounted.current) setSets((s) => ({ ...s, [url]: null }));
+      });
+    }
+  }, [key]);
+  return sets;
 }

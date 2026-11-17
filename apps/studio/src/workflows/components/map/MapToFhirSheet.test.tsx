@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import * as api from '@/api';
 import { useWorkflowStore } from '../../hooks/use-workflow-store';
 import { MapToFhirSheet } from './MapToFhirSheet';
-import { TEST_TARGET, MARKERS, ROWS_A, ROWS_B, asItems } from './test-fixtures';
+import { TEST_TARGET, MARKERS, ROWS_A, ROWS_B, ROWS_FORM, FORM_EXAMPLES, asItems } from './test-fixtures';
 
 vi.mock('@/components/ui/select', () => import('./test-select-mock'));
 vi.mock('@/api', async (orig) => ({
@@ -164,7 +164,7 @@ describe('MapToFhirSheet', () => {
     const sentRows = sent.config.mappings[0].rows.map((r: { targetPath: string }) => r.targetPath);
     expect(sentRows).toEqual(['Patient.identifier.value', 'Observation.code']);
     expect(screen.getByText('Patient, Observation passes')).toBeInTheDocument();
-    expect(screen.getByText('Test is required and has no value')).toBeInTheDocument();
+    expect(screen.getByText('Test: is required and has no value')).toBeInTheDocument();
 
     openMenuAndClick('Save');
     const rows = update.mock.calls[0][0].config.mappings[0].rows.map((r: { targetPath: string }) => r.targetPath);
@@ -216,9 +216,10 @@ describe('MapToFhirSheet', () => {
     expect(offered.length).toBeGreaterThan(0);
     expect(offered.every((x) => canWriteFromCell(x))).toBe(true);
     expect(offered).not.toContain('Patient.identifier.value');
-    expect(offered).toContain('Patient.birthDate');
-    fireEvent.change(pathSelect, { target: { value: 'Patient.birthDate' } });
-    const row = screen.getByTestId('map-row-Patient.birthDate');
+    expect(offered).not.toContain('Patient.birthDate');
+    expect(offered).toContain('Patient.active');
+    fireEvent.change(pathSelect, { target: { value: 'Patient.active' } });
+    const row = screen.getByTestId('map-row-Patient.active');
     expect(within(row).queryByLabelText('Required')).toBeNull();
   });
 
@@ -273,6 +274,7 @@ describe('MapToFhirSheet Listen', () => {
       await screen.findByText(/Choose Listen, then send a message/);
       openMenuAndClick('Listen');
       expect(await screen.findByText('Listening for a new run')).toBeInTheDocument();
+      expect(screen.getByTestId('map-status')).toHaveTextContent('Listening for a message...');
       await vi.advanceTimersByTimeAsync(2100);
       expect(m(api.fetchWorkflowRuns)).toHaveBeenCalledTimes(1);
 
@@ -358,6 +360,86 @@ describe('MapToFhirSheet latest stored run', () => {
     await screen.findByText(/Choose Listen, then send a message/);
     openMenuAndClick('Use the latest stored run');
     expect(await screen.findByText('None of the 10 newest runs has rows for this node.')).toBeInTheDocument();
+  });
+});
+
+describe('MapToFhirSheet rule suggestions, status and results', () => {
+  beforeEach(() => {
+    m(api.findValueSetByUrl).mockImplementation(async (url: string) => (url.includes('administrative-gender') ? { id: 'vs1', url } : null));
+    m(api.storedValueSetCodes).mockResolvedValue([{ system: 'urn:test:sys', code: 'male', display: null }, { system: 'urn:test:sys', code: 'female', display: null }]);
+  });
+
+  async function mapForm() {
+    setRun(ROWS_FORM);
+    const ui = renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Patient ID'), { target: { value: 'pid' } });
+    fireEvent.change(sourceSelect('Test'), { target: { value: 't' } });
+    fireEvent.change(sourceSelect('Result (number)'), { target: { value: 'res' } });
+    fireEvent.change(sourceSelect('Date of birth'), { target: { value: 'dob' } });
+    fireEvent.change(sourceSelect('Sex'), { target: { value: 'sx' } });
+    return ui;
+  }
+
+  it('suggests a rule from the form of the values, and saves only the accepted rule', async () => {
+    const { update } = await mapForm();
+    expect(await screen.findByTestId('map-rule-suggestion-Observation.valueQuantity.value')).toHaveTextContent('Suggested rule: number, decimal comma');
+    expect(screen.getByTestId('map-rule-suggestion-Patient.birthDate')).toHaveTextContent('Suggested rule: date, dd/MM/yyyy');
+    expect(await screen.findByTestId('map-rule-suggestion-Patient.gender')).toHaveTextContent('add one line per value in your file');
+    expect(screen.queryByTestId('map-rule-suggestion-Patient.identifier.value')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept: Rule: Result (number)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept: Rule: Date of birth' }));
+    openMenuAndClick('Save');
+    const config = update.mock.calls[0][0].config;
+    const rows = config.mappings[0].rows;
+    const byPath = (k: string) => rows.find((r: { targetPath: string }) => r.targetPath === k);
+    expect(byPath('Observation.valueQuantity.value').rule).toEqual({ kind: 'number', decimal: ',' });
+    expect(byPath('Patient.birthDate').rule).toEqual({ kind: 'date', format: 'dd/MM/yyyy' });
+    expect(byPath('Patient.gender').rule).toBeUndefined();
+    const text = JSON.stringify(config);
+    for (const v of [...MARKERS, ...FORM_EXAMPLES]) expect(text).not.toContain(v);
+  });
+
+  it('says when day and month cannot be told apart', async () => {
+    setRun([{ pid: 'QZX-1', t: 'QZX-2', dob: '03/04/2025' }]);
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    fireEvent.change(sourceSelect('Date of birth'), { target: { value: 'dob' } });
+    expect(screen.getByTestId('map-rule-suggestion-Patient.birthDate')).toHaveTextContent('day first; change it if your file has the month first');
+  });
+
+  it('opens the accepted values rule with no lines, and does not send an unaccepted rule to Test', async () => {
+    m(api.testMapping).mockResolvedValue([{ ok: false, reason: 'Observation.valueQuantity.value needs a number', field: 'Observation.valueQuantity.value' }, { ok: true, kind: 'mapped', resourceTypes: ['Patient'], resources: [] }]);
+    await mapForm();
+    await screen.findByTestId('map-rule-suggestion-Patient.gender');
+    fireEvent.click(screen.getByRole('button', { name: 'Accept: Rule: Sex' }));
+    expect(screen.queryByRole('textbox', { name: 'From 1: Sex' })).toBeNull();
+    expect(screen.getByText('Add one line per value in your file.')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rule: Sex' }), { target: { value: 'none' } });
+    openMenuAndClick('Test');
+    const footer = await screen.findByTestId('map-test-footer');
+    const sent = m(api.testMapping).mock.calls[0][0].config.mappings[0].rows;
+    expect(sent.every((r: { rule?: unknown }) => r.rule === undefined)).toBe(true);
+    // A reason reads in the sheet's labels, and the result is pinned at the bottom.
+    expect(within(footer).getByText('Result (number): needs a number')).toBeInTheDocument();
+    expect(footer.className).toContain('sticky');
+    expect(screen.getByTestId('map-status')).toHaveTextContent('1 of 2 rows pass');
+  });
+
+  it('says how many messages are held, and that it is listening', async () => {
+    setRun(ROWS_A);
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    expect(screen.getByTestId('map-status')).toHaveTextContent('2 messages held as sample');
+  });
+
+  it('uses the singular for one message', async () => {
+    setRun(ROWS_B);
+    renderSheet();
+    await screen.findByTestId('map-row-Patient.identifier.value');
+    expect(screen.getByTestId('map-status')).toHaveTextContent('1 message held as sample');
   });
 });
 
