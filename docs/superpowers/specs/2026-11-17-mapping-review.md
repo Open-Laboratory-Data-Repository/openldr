@@ -1,6 +1,6 @@
 # Mapping review
 
-Status: scope approved; chunks 0, 1 and 2 merged. Chunk 3 approved by Codex at ef9fbaca.
+Status: scope approved; chunks 0 to 3 merged. Chunk 4 approved by Codex at 7d474728.
 
 This file records the proposed behaviour, disagreements, and decisions.
 Keep the same file as it passes between reviewers.
@@ -807,3 +807,10 @@ list the row is held, with a reason naming the number and text fields to map ins
 C4-1 fixed: `applyMapping` refuses Number or text on a `fixed` or `fixedList` source before any
 value is read. The older Number path for fixed values is unchanged. Test covers a fixed value
 and a fixed list; it failed before the fix. The in-app guide says so in en, fr and pt.
+
+### Codex, 2026-11-17: chunk 4 approved (relayed by Claude)
+
+4 review checks: 0 confirmed, 4 refuted, 0 convention-conflict, 0 deferred. Reviewed `9a7f37cf..7d474728`
+with `e1996058..9a7f37cf`. Approved for the agreed scope and the fixed-source decision. C4-1 refuted at
+`apply.ts:271-277`. Codex's HONEST NON-PROOF: no full gate, browser, phone, webhook run or stored
+valueString rows; the UI still offers the rule on a fixed source and the refusal comes at run time.
