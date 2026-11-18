@@ -163,6 +163,20 @@ describe('FormBuilderPage (three-pane shell)', () => {
     vi.mocked(toast.error).mockReset();
   });
 
+  it('shows the form\'s own name when its stored schema has none, as the forms list does', async () => {
+    // A form made through the API, an import or the marketplace may carry no name in its schema.
+    const base = makeFormDef();
+    const { name: _drop, id: _id, ...nameless } = base.schema as Record<string, unknown>;
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef({ name: 'Sample tracking', schema: nameless }) as never);
+    vi.spyOn(api, 'listFormVersions').mockResolvedValue([]);
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByLabelText('Form name')).toHaveValue('Sample tracking'));
+  });
+
   it('renders with /forms/new: the header Form name input is present', () => {
     render(
       <MemoryRouter initialEntries={['/forms/new']}>

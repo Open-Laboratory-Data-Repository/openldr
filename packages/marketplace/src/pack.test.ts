@@ -32,6 +32,37 @@ describe('packBundle', () => {
     await rm(out, { recursive: true, force: true });
   });
 
+  it('refuses a manifest with keys this packer does not know, naming them and writing nothing', async () => {
+    // An older packer once stripped importSource.corrections and ui.requiredCapabilities, then signed
+    // what was left, so the signature was valid but the bundle had lost its settings.
+    const out = join(await mkdtemp(join(tmpdir(), 'pack-')), 'bundle');
+    const kp = generatePublisherKeypair();
+    const manifest = { ...structuredClone(baseManifest), payload: { ...baseManifest.payload, newerSetting: { fields: ['a'] } }, alsoNew: 1 };
+    await expect(packBundle({ manifest, payload: new Uint8Array([1]), outDir: out, privateKeyDer: kp.privateKeyDer, publicKeyDer: kp.publicKeyDer }))
+      .rejects.toThrow(/payload\.newerSetting.*alsoNew|alsoNew.*payload\.newerSetting/);
+    expect(existsSync(out)).toBe(false);
+  });
+
+  it('refuses unknown keys named like built-in object properties too (review I1)', async () => {
+    for (const key of ['toString', 'constructor', '__proto__']) {
+      const out = join(await mkdtemp(join(tmpdir(), 'pack-')), 'bundle');
+      const kp = generatePublisherKeypair();
+      const manifest = JSON.parse(`{"${key}": "x", ${JSON.stringify(baseManifest).slice(1)}`) as Record<string, unknown>;
+      await expect(packBundle({ manifest, payload: new Uint8Array([1]), outDir: out, privateKeyDer: kp.privateKeyDer, publicKeyDer: kp.publicKeyDer }), key)
+        .rejects.toThrow(new RegExp(key.replace(/_/g, '_')));
+      expect(existsSync(out), key).toBe(false);
+    }
+  });
+
+  it('packs and verifies a plugin whose UI is declared only in its manifest, with no ui.html (review F1)', async () => {
+    const out = await mkdtemp(join(tmpdir(), 'pack-'));
+    const kp = generatePublisherKeypair();
+    const manifest = { ...structuredClone(baseManifest), payload: { ...baseManifest.payload, ui: { nav: { label: 'Notes' }, declarative: { type: 'object', properties: { note: { type: 'string' } } } } } };
+    await packBundle({ manifest, payload: new Uint8Array([1]), outDir: out, privateKeyDer: kp.privateKeyDer, publicKeyDer: kp.publicKeyDer });
+    expect(verifyBundle(await readBundle(out))).toMatchObject({ valid: true });
+    await rm(out, { recursive: true, force: true });
+  });
+
   it('a tampered written manifest fails verification', async () => {
     const out = await mkdtemp(join(tmpdir(), 'pack-'));
     const kp = generatePublisherKeypair();

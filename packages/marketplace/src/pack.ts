@@ -48,6 +48,13 @@ export async function packBundle(input: PackInput): Promise<PackResult> {
   draft.payload = payload;
 
   const parsed = parseArtifactManifest(draft); // validates before signing
+  // The schema strips keys it does not know. Signing what is left gives a valid signature over a
+  // manifest that lost settings, which a packer older than the plugin once did silently. Refuse
+  // instead, naming what would be lost, before anything is written.
+  const lost = droppedPaths(draft, parsed as unknown);
+  if (lost.length > 0) {
+    throw new Error(`packBundle: this packer does not know ${lost.join(', ')}; update OpenLDR CE before packing, or the bundle would lose them`);
+  }
   const signature = signManifest(parsed as unknown as Record<string, unknown>, payloadSha, input.privateKeyDer);
   const signedManifest = { ...(parsed as unknown as Record<string, unknown>), signature };
 
@@ -74,4 +81,19 @@ export async function packBundle(input: PackInput): Promise<PackResult> {
   if (!check.valid) throw new Error('packBundle: produced an invalid bundle (internal error)');
 
   return { bundleDir: input.outDir, fingerprint, manifest: parsed };
+}
+
+/** Paths present in `given` that the parsed manifest does not carry. Defaults the schema adds are
+ *  fine; only lost keys count. Arrays are compared item by item. */
+function droppedPaths(given: unknown, kept: unknown, at = ''): string[] {
+  if (given === null || typeof given !== 'object') return [];
+  if (kept === null || typeof kept !== 'object') return at ? [at] : [];
+  const out: string[] = [];
+  for (const key of Object.keys(given as Record<string, unknown>)) {
+    const path = Array.isArray(given) ? `${at}[${key}]` : at ? `${at}.${key}` : key;
+    // Own keys only: `in` would also find inherited names such as toString (review I1).
+    if (!Object.prototype.hasOwnProperty.call(kept, key)) { out.push(path); continue; }
+    out.push(...droppedPaths((given as Record<string, unknown>)[key], (kept as Record<string, unknown>)[key], path));
+  }
+  return out;
 }

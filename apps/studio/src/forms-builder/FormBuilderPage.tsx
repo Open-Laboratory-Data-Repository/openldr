@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { AppShell } from '@/shell/AppShell';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { createForm, deleteForm, formQuestionnaireUrl, getForm, listFormVersions, loadStarterPack, publishForm, setFormStatus, updateForm, type FormDefinition } from '../api';
-import { createDefaultFormSchema, makeUniqueFieldId, newField, slugify } from './builderModel';
+import { createDefaultFormSchema, formSchemaOf, makeUniqueFieldId, newField, slugify } from './builderModel';
 import {
   buildFieldFromElement, buildFieldFromPackEntry, buildGroupPart, linkTestDetails, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf,
 } from './newFormFields';
@@ -95,7 +95,7 @@ export function FormBuilderPage(): JSX.Element {
         if (cancelled) return;
         setFormId(loaded.id);
         setStatus(loaded.status);
-        setSchema(normalizeFormSchema(loaded.schema));
+        setSchema(formSchemaOf(loaded));
         void listFormVersions(loaded.id)
           .then((vs) => { if (!cancelled) setPublishedVersion(vs[0]?.version ?? null); })
           .catch(() => { /* the number is a nicety; a failure here must not break the builder */ });
@@ -713,7 +713,7 @@ export function FormBuilderPage(): JSX.Element {
           // other builder action. Without it, restore is the one change you cannot take back,
           // which is the opposite of what a version history is for.
           history.pushHistory();
-          setSchema(normalizeFormSchema(form.schema));
+          setSchema(formSchemaOf(form));
           setStatus(form.status);
         }}
       />

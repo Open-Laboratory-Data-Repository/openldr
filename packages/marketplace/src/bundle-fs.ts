@@ -87,9 +87,11 @@ export function verifyBundle(b: Bundle): { valid: boolean; fingerprint: string; 
   const okSha =
     b.raw.payload != null &&
     (b.raw.payload as Record<string, string>)[shaField] === b.payloadSha256;
-  // UI integrity: when a manifest declares payload.ui, its bytes must match the signed sha.
-  const uiMeta = (b.raw.payload as { ui?: { sha256?: string } } | null)?.ui;
-  const okUi = !uiMeta ? true : !!b.ui && createHash('sha256').update(b.ui).digest('hex') === uiMeta.sha256;
+  // UI integrity: a webview ui (payload.ui.entry) ships a ui.html whose bytes must match the signed
+  // sha. A declarative ui has no file: its content is in the manifest, which the signature covers
+  // (open-items review F1). The schema requires entry and sha256 together.
+  const uiMeta = (b.raw.payload as { ui?: { entry?: string; sha256?: string } } | null)?.ui;
+  const okUi = !uiMeta?.entry ? true : !!b.ui && createHash('sha256').update(b.ui).digest('hex') === uiMeta.sha256;
   const okSig = verifyArtifact(b.raw, b.payloadSha256, b.publicKeyDer);
   const valid = okFp && okSha && okUi && okSig;
   const reason: BundleInvalidReason | undefined =

@@ -49,11 +49,12 @@ export function MultiSelect({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-4 w-4 shrink-0"
+                className="-my-1 h-6 w-6 shrink-0 rounded-full"
                 aria-label={removeLabel(labelOf(v))}
                 onClick={() => onChange(value.filter((x) => x !== v))}
               >
-                <X className="h-3 w-3" />
+                {/* 24px to tap on a phone; the negative margin keeps the chip's height. */}
+                <X className="h-3.5 w-3.5" />
               </Button>
             </Badge>
           ))}
