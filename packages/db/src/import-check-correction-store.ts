@@ -23,6 +23,15 @@ export interface ImportCheckCorrectionStore {
   remove(copyId: string, keys: string[]): Promise<void>;
   /** Delete up to `limit` keys' corrections of a copy. Answers the rows deleted; 0 means none left. */
   deleteSome(copyId: string, limit: number): Promise<number>;
+  /** Stores corrections only while their check run still holds this correction's claim (design
+   *  2026-11-18-held-corrections, review H17). In one transaction it locks the run's row in
+   *  `plugin_data`, checks that `correcting.token` is `token`, that `correcting.until` is after
+   *  `nowMs`, and that the run's status is not one of `liveStatuses`, and only then writes. A check
+   *  is queued by updating that same row, so the two are ordered by the database. It also locks the
+   *  request's held row and checks it is still held, so a request saved since it was read is not
+   *  corrected (review H17). False: nothing was written. */
+  putUnderClaim(claim: { pluginId: string; collection: string; runKey: string; token: string; nowMs: number; liveStatuses: string[] },
+    rows: Array<Omit<Correction, 'correctedAt'> & { correctedAt: Date }>): Promise<boolean>;
 }
 
 /** Keys per statement. */
@@ -73,6 +82,41 @@ export function createImportCheckCorrectionStore(db: Kysely<InternalSchema>): Im
           .where('copy_id', '=', copyId).where('key', 'in', unique.slice(i, i + CHUNK))
           .execute();
       }
+    },
+
+    async putUnderClaim(claim, rows) {
+      return db.transaction().execute(async (trx) => {
+        const run = await trx.selectFrom('plugin_data').select('doc')
+          .where('plugin_id', '=', claim.pluginId).where('collection', '=', claim.collection).where('key', '=', claim.runKey)
+          .forUpdate().executeTakeFirst();
+        const doc = (typeof run?.doc === 'string' ? JSON.parse(run.doc) : run?.doc) as
+          { status?: string; correcting?: { token?: string; until?: string } } | undefined;
+        const held = doc?.correcting?.token === claim.token
+          && Date.parse(doc.correcting.until ?? '') > claim.nowMs
+          && !claim.liveStatuses.includes(doc.status ?? '');
+        if (!held) return false;
+        // The request must still be held when the correction is written, read under a lock too.
+        const keys = [...new Set(rows.map((c) => `${c.copyId}\u0000${c.key}`))];
+        for (const k of keys) {
+          const [copyId, key] = k.split('\u0000') as [string, string];
+          const row = await trx.selectFrom('import_check_held').select('reason')
+            .where('copy_id', '=', copyId).where('key', '=', key).forUpdate().executeTakeFirst();
+          if (!row || row.reason !== 'held') return false;
+        }
+        for (const c of rows) {
+          await trx.insertInto('import_check_corrections')
+            .values({
+              copy_id: c.copyId, key: c.key, field: c.field, value: c.value, original: c.original,
+              reason: c.reason, corrected_by: c.correctedBy, corrected_at: c.correctedAt,
+            })
+            .onConflict((oc) => oc.columns(['copy_id', 'key', 'field']).doUpdateSet((eb) => ({
+              value: eb.ref('excluded.value'), original: eb.ref('excluded.original'), reason: eb.ref('excluded.reason'),
+              corrected_by: eb.ref('excluded.corrected_by'), corrected_at: eb.ref('excluded.corrected_at'),
+            })))
+            .execute();
+        }
+        return true;
+      });
     },
 
     async deleteSome(copyId, limit) {

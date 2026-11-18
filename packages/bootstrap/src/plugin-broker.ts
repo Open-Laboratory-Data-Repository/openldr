@@ -26,7 +26,7 @@ export const CORRECTOR_CAPABILITY = 'imports.correct_held';
 /** The only calls a corrector may make: what the Feedback tab reads, and correcting. */
 const CORRECTOR_OPS = new Set([
   // `import.allowed` gives the connector names the tab shows beside each copy.
-  'import.allowed', 'import.copy.list', 'import.check.list', 'import.check.held', 'import.check.heldItem', 'import.check.heldItems',
+  'import.allowed', 'import.copy.list', 'import.check.list', 'import.check.status', 'import.check.held', 'import.check.heldItem', 'import.check.heldItems',
   'import.check.correct', 'import.check.recheck', 'import.check.access',
 ]);
 const isCorrector = (p: { capabilities?: string[] }): boolean => (p.capabilities ?? []).includes(CORRECTOR_CAPABILITY);
@@ -128,7 +128,7 @@ export function copyForPage(run: CopyRun): PageCopyRun {
 /** A check run as a plugin page sees it: no `cursor`, which is a source key, no `driver`, which
  *  names a server process, and none of the record's own bookkeeping. A page tells a start that
  *  carried on by its counts: such a run has requests already read. */
-export type PageCheckRun = Omit<CheckRun, 'driver' | 'rev' | 'kind' | 'pluginId' | 'pluginVersion' | 'cursor' | 'startedBy' | 'copyFinishedAt' | 'carriedOn'>;
+export type PageCheckRun = Omit<CheckRun, 'driver' | 'rev' | 'kind' | 'pluginId' | 'pluginVersion' | 'cursor' | 'startedBy' | 'copyFinishedAt' | 'carriedOn' | 'recheck' | 'pass' | 'correcting'>;
 
 /** The one place a check run is cut down for a plugin page. Every check op's answer goes through it.
  *  A run where no request named a laboratory has only the null entry: the page gets an empty list,
@@ -136,7 +136,7 @@ export type PageCheckRun = Omit<CheckRun, 'driver' | 'rev' | 'kind' | 'pluginId'
 export function checkForPage(run: CheckRun): PageCheckRun {
   const {
     driver: _driver, rev: _rev, kind: _kind, pluginId: _pluginId, pluginVersion: _pluginVersion, cursor: _cursor, startedBy: _startedBy,
-    copyFinishedAt: _copyFinishedAt, carriedOn: _carriedOn, laboratories, ...rest
+    copyFinishedAt: _copyFinishedAt, carriedOn: _carriedOn, recheck: _recheck, pass: _pass, correcting: _correcting, laboratories, ...rest
   } = run;
   if (laboratories === undefined) return rest;
   return { ...rest, laboratories: laboratories.some((l) => l.code !== null) ? laboratories : [] };
