@@ -1,6 +1,24 @@
 {
-  "generatedAt": "2026-11-17",
+  "generatedAt": "2026-11-18",
   "days": [
+    {
+      "date": "2026-11-18",
+      "version": null,
+      "entries": [
+        {
+          "hash": "1d9b2b1e",
+          "type": "fix",
+          "scope": "server",
+          "title": "Set maxParamLength under routerOptions, as Fastify 5 asks"
+        },
+        {
+          "hash": "4ab03f45",
+          "type": "fix",
+          "scope": "",
+          "title": "Workflow patients open, and orders keep the lab's test names"
+        }
+      ]
+    },
     {
       "date": "2026-11-17",
       "version": null,
