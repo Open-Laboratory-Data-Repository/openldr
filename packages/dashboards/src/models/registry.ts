@@ -114,15 +114,16 @@ export const MODELS: QueryModel[] = [
       { table: 'patients', alias: 'jp', left: 'patient_id', right: 'id' },
       { table: 'specimens', alias: 'js', left: 'specimen_id', right: 'id', optional: true, label: 'Specimen',
         denyColumns: ['id', 'patient_id', 'accession', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'] },
-      // Keyed on the business identifier `request_id` (not a PK): assumed unique per request in
-      // well-formed data. If a source ever emits duplicate request_ids, this leftJoin can fan out and
-      // inflate COUNT/aggregate metrics for widgets that pull in this relationship — an admin/data
-      // assumption, unlike the PK-keyed `jp`/`js` joins.
-      { table: 'lab_requests', alias: 'jr', left: 'request_id', right: 'request_id', optional: true, label: 'Request',
+      // A result's request_id is its Observation.basedOn, the ServiceRequest's id, which is
+      // lab_requests.id (relational/observation.ts, service-request.ts). Keyed on that primary key,
+      // so the join cannot fan out. It used to match lab_requests.request_id, the business
+      // identifier, which equals the id only for the DISA source (roles part 3, sample rebuild).
+      { table: 'lab_requests', alias: 'jr', left: 'request_id', right: 'id', optional: true, label: 'Request',
         denyColumns: ['id', 'request_id', 'patient_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'] },
     ],
     dimensions: [
       { key: 'code_text', label: 'Analyte', column: 'observation_desc', kind: 'string' },
+      { key: 'status', label: 'Status', column: 'status', kind: 'string' },
       { key: 'interpretation_code', label: 'Interpretation', column: 'abnormal_flag', kind: 'string' },
       { key: 'value_unit', label: 'Unit', column: 'numeric_units', kind: 'string' },
       { key: 'value', label: 'Value', column: 'numeric_value', kind: 'number' },

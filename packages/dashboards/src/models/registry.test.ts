@@ -107,7 +107,7 @@ describe('observations optional relationships', () => {
     expect(js.exposableColumns).toEqual(['received_time', 'status', 'type_code', 'type_text', 'origin', 'created_at']);
     expect(js.exposableColumns).not.toContain('patient_id'); // denied
     const jr = m.optionalJoins!.find((j) => j.alias === 'jr')!;
-    expect(jr).toMatchObject({ label: 'Request', left: 'request_id', right: 'request_id' });
+    expect(jr).toMatchObject({ label: 'Request', left: 'request_id', right: 'id' }); // a result stores its request's id (roles part 3)
     expect(jr.exposableColumns).toContain('panel_desc');
     expect(jr.exposableColumns).not.toContain('patient_id'); // denied
   });
