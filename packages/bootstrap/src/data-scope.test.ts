@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { DataScope, UserDataScopeStore } from '@openldr/db';
-import { DataScopeError, setUserDataScope } from './data-scope';
+import { DataScopeError, resolveDataScope, setUserDataScope } from './data-scope';
 
 // Design 2026-11-18-roles-scope, part 3: the one setter the route and the CLI call.
 function memStore(): UserDataScopeStore & { saved: Map<string, DataScope> } {
@@ -67,5 +67,40 @@ describe('setUserDataScope', () => {
   it('saves Limited with nothing listed, which sees nothing', async () => {
     const r = await setUserDataScope(deps(), 'kc-sub', { limited: true, facilities: [], districts: [], regions: [] });
     expect(r.after).toEqual({ limited: true, facilities: [], districts: [], regions: [] });
+  });
+});
+
+describe('resolveDataScope', () => {
+  const registry = [
+    { id: 'r1', name: 'Kondoa HC', facility_code: 'FAC-1', region: 'Dodoma', district: 'Kondoa' },
+    // Two registers carry the same code: each projects as its own id.
+    { id: 'r2', name: 'Arusha HC', facility_code: 'DUP', region: 'Arusha', district: 'Kondoa' },
+    { id: 'r3', name: 'Arumeru HC', facility_code: 'DUP', region: 'Arusha', district: 'Arumeru' },
+    { id: 'r4', name: 'Dodoma Lab', facility_code: 'LAB-4', region: 'Dodoma', district: 'Chamwino' },
+  ];
+  const deps = { registryRows: async () => registry };
+
+  it('is undefined for Everything, so no limit is added', async () => {
+    expect(await resolveDataScope(deps, { limited: false })).toBeUndefined();
+  });
+
+  it('keeps the lists and adds the register codes of every in-scope facility, by id, region or district', async () => {
+    const r = await resolveDataScope(deps, { limited: true, facilities: ['r3'], districts: [{ region: 'Arusha', district: 'Kondoa' }], regions: [] });
+    expect(r).toEqual({
+      registryIds: ['r3'], regions: [], districts: [{ region: 'Arusha', district: 'Kondoa' }],
+      registryCodes: ['r2', 'r3'],
+    });
+    const dodoma = await resolveDataScope(deps, { limited: true, facilities: [], districts: [], regions: ['Dodoma'] });
+    expect(dodoma?.registryCodes).toEqual(['FAC-1', 'LAB-4']);
+  });
+
+  it('keeps a district to its own region', async () => {
+    const r = await resolveDataScope(deps, { limited: true, facilities: [], districts: [{ region: 'Dodoma', district: 'Kondoa' }], regions: [] });
+    expect(r?.registryCodes).toEqual(['FAC-1']);
+  });
+
+  it('resolves Limited with nothing listed to nothing', async () => {
+    expect(await resolveDataScope(deps, { limited: true, facilities: [], districts: [], regions: [] }))
+      .toEqual({ registryIds: [], regions: [], districts: [], registryCodes: [] });
   });
 });

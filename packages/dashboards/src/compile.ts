@@ -8,6 +8,7 @@ import { customColumnKind } from './types';
 import type { ReportResultData, ReportColumn, ChartHint } from '@openldr/reporting';
 import { ageBandArms } from './age-band';
 import { runReadQuery, type SqlRunOpts, type SqlDialect } from './sql-runner';
+import { scopeCondition, NO_SCOPE_LINK, type ResolvedScope } from './scope';
 
 type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 type AnyQB = SelectQueryBuilder<ExternalSchema, keyof ExternalSchema, unknown>;
@@ -300,7 +301,9 @@ export function collectUsedJoins(model: QueryModel, q: BuilderQuery): ModelJoin[
 }
 
 /** Build the Kysely query (no grain bucketing — date grain is applied in JS after fetch). */
-export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy): AnyQB {
+export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy, scope?: ResolvedScope): AnyQB {
+  // A limited user's query must carry the limit. A model with no facility link cannot (roles part 3).
+  if (scope && !model.scopeLink) throw new Error(NO_SCOPE_LINK);
   model = effectiveModel(model, q, policy);
   const wide = !!(q.metrics && q.metrics.length > 0);
   let qb = db.selectFrom(model.table) as unknown as AnyQB;
@@ -368,6 +371,8 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
   } else {
     qb = applyFilters(qb, model, q.filters ?? [], qualify);
   }
+  // The data limit goes last, as its own AND term, so no filter of the user's can widen it.
+  if (scope) qb = qb.where(scopeCondition(model.scopeLink!, model.table, scope) as never) as AnyQB;
   return qb;
 }
 
@@ -397,12 +402,12 @@ function applyTopN(
 /** Fetch one extra group beyond the cap. Never shape a partial aggregate result. */
 async function fetchBuilderGroups(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy: ColumnPolicy | undefined,
-  opts: SqlRunOpts, engine: SqlDialect,
+  opts: SqlRunOpts, engine: SqlDialect, scope?: ResolvedScope,
 ): Promise<Record<string, unknown>[]> {
   if (!Number.isSafeInteger(opts.rowCap) || opts.rowCap < 1 || opts.rowCap >= Number.MAX_SAFE_INTEGER) {
     throw new Error('rowCap must be a positive safe integer');
   }
-  const query = compileBuilderQuery(db, model, q, policy);
+  const query = compileBuilderQuery(db, model, q, policy, scope);
   const rows = await runReadQuery(db, query.compile(), { ...opts, rowCap: opts.rowCap + 1 }, engine);
   if (rows.length > opts.rowCap) {
     throw new Error(`Builder query exceeds the group limit of ${opts.rowCap}. Narrow the filters or reduce grouping.`);
@@ -413,13 +418,13 @@ async function fetchBuilderGroups(
 /** Shape a multi-metric (wide) query into a table: label + one column per metric (aggregate or derived). */
 async function runWideQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy,
-  opts: SqlRunOpts = { timeoutMs: 5000, rowCap: 10_000 }, engine: SqlDialect = 'postgres',
+  opts: SqlRunOpts = { timeoutMs: 5000, rowCap: 10_000 }, engine: SqlDialect = 'postgres', scope?: ResolvedScope,
 ): Promise<ReportResultData> {
   model = effectiveModel(model, q, policy);
   const metrics = q.metrics!;
   const aggKeys = metrics.filter((m) => !m.derived).map((m) => m.key);
   const derivedMetrics = metrics.filter((m) => m.derived);
-  const rows = (await fetchBuilderGroups(db, model, q, policy, opts, engine)) as Record<string, unknown>[];
+  const rows = (await fetchBuilderGroups(db, model, q, policy, opts, engine, scope)) as Record<string, unknown>[];
   const d = q.dimension ? dim(model, q.dimension.key) : undefined;
 
   let shaped: Record<string, unknown>[];
@@ -465,12 +470,13 @@ async function runWideQuery(
 /** Execute and shape into ReportResultData, applying date-grain bucketing in JS. */
 export async function runBuilderQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy,
-  opts: SqlRunOpts = { timeoutMs: 5000, rowCap: 10_000 }, engine: SqlDialect = 'postgres',
+  opts: SqlRunOpts = { timeoutMs: 5000, rowCap: 10_000 }, engine: SqlDialect = 'postgres', scope?: ResolvedScope,
 ): Promise<ReportResultData> {
+  if (scope && !model.scopeLink) throw new Error(NO_SCOPE_LINK);
   model = effectiveModel(model, q, policy);
   if (!hasMeasure(q)) return { columns: [], rows: [], chart: { type: 'stat', value: '', label: 'No measure' } };
-  if (q.metrics && q.metrics.length > 0) return runWideQuery(db, model, q, policy, opts, engine);
-  const rows = (await fetchBuilderGroups(db, model, q, policy, opts, engine)) as { value: number; label?: unknown; series?: unknown }[];
+  if (q.metrics && q.metrics.length > 0) return runWideQuery(db, model, q, policy, opts, engine, scope);
+  const rows = (await fetchBuilderGroups(db, model, q, policy, opts, engine, scope)) as { value: number; label?: unknown; series?: unknown }[];
   const d = q.dimension ? dim(model, q.dimension.key) : undefined;
 
   if (q.breakdown) {

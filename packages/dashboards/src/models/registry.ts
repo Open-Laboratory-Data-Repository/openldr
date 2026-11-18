@@ -84,14 +84,17 @@ export interface ModelJoin {
 }
 export interface ModelDimension { key: string; label: string; column: string; kind: DimensionKind; dateGrain?: DateGrain[]; compute?: AgeBandCompute | ExprCompute; join?: string }
 export interface ModelMetric { key: string; label: string; agg: Agg; column?: string }
-export interface QueryModel { id: string; label: string; table: keyof ExternalSchema; dimensions: ModelDimension[]; metrics: ModelMetric[]; joins?: ModelJoin[] }
+/** How a model's rows reach a facility, for a limited user's data limit (roles part 3). A model with
+ *  none is not offered to a limited user. */
+export type ModelScopeLink = 'request' | 'report' | 'result';
+export interface QueryModel { id: string; label: string; table: keyof ExternalSchema; dimensions: ModelDimension[]; metrics: ModelMetric[]; joins?: ModelJoin[]; scopeLink?: ModelScopeLink }
 
 const DATE_GRAINS: DateGrain[] = ['day', 'week', 'month', 'year'];
 const COUNT: ModelMetric = { key: 'count', label: 'Count', agg: 'count' };
 
 export const MODELS: QueryModel[] = [
   {
-    id: 'service_requests', label: 'Test Orders', table: 'lab_requests',
+    id: 'service_requests', label: 'Test Orders', table: 'lab_requests', scopeLink: 'request',
     joins: [
       { table: 'patients', alias: 'jp', left: 'patient_id', right: 'id', optional: true, label: 'Patient',
         denyColumns: ['id', 'patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email', 'date_of_birth',
@@ -106,7 +109,7 @@ export const MODELS: QueryModel[] = [
     metrics: [COUNT, { key: 'distinct_subjects', label: 'Distinct Patients', agg: 'count_distinct', column: 'patient_id' }],
   },
   {
-    id: 'observations', label: 'Results', table: 'lab_results',
+    id: 'observations', label: 'Results', table: 'lab_results', scopeLink: 'result',
     joins: [
       { table: 'patients', alias: 'jp', left: 'patient_id', right: 'id' },
       { table: 'specimens', alias: 'js', left: 'specimen_id', right: 'id', optional: true, label: 'Specimen',
@@ -129,7 +132,7 @@ export const MODELS: QueryModel[] = [
     metrics: [COUNT, { key: 'avg_value', label: 'Avg Value', agg: 'avg', column: 'numeric_value' }],
   },
   {
-    id: 'diagnostic_reports', label: 'Reports', table: 'diagnostic_reports',
+    id: 'diagnostic_reports', label: 'Reports', table: 'diagnostic_reports', scopeLink: 'report',
     dimensions: [
       { key: 'status', label: 'Status', column: 'status', kind: 'string' },
       { key: 'code_text', label: 'Report Type', column: 'code_text', kind: 'string' },

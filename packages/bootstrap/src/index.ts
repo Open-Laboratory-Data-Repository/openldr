@@ -19,7 +19,8 @@ import { formAccess, type FormAccessCheck } from './form-access';
 import { dashboardAccess, type DashboardAccessCheck } from './dashboard-access';
 import { createFormStore, createStarterPackStore, seededStarterPacks, type FormStore, type StarterPackStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
-import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, validateSelectSql, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, StoredQueryRowLimitError, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type SqlDialect, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
+import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, validateSelectSql, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, StoredQueryRowLimitError, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, NO_SCOPE_LINK, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type SqlDialect, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
+import { resolveDataScope } from './data-scope';
 import { runReportStoredQuery } from './report-query';
 import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
 import {
@@ -49,7 +50,7 @@ import { checkCustomQueryFile, importCustomQueries } from './custom-query-transf
 import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore, type DataScope } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -151,10 +152,13 @@ export class DashboardQueryError extends Error {
 
 export interface DashboardsApi {
   store: DashboardStore;
-  models(): ClientQueryModel[];
+  /** The models a person may build on. A limited user is not offered a model with no facility link. */
+  models(scope?: DataScope): ClientQueryModel[];
   /** The admin-governed universe of joinable tables (global; not per-model), browser-safe. */
   joinableTables(): ClientJoinableTable[];
-  query(q: WidgetQuery): Promise<ReportResult>;
+  /** Runs a widget query. With a limited data scope (roles part 3), a builder query counts only
+   *  in-scope rows, and SQL and models with no facility link are refused with NO_SCOPE_LINK. */
+  query(q: WidgetQuery, scope?: DataScope): Promise<ReportResult>;
   /** Builder→SQL eject: compile a builder-mode query to its SQL text (parameters inlined as
    *  readable literals). Display-only — the returned text is never executed. */
   compileSql(q: Extract<WidgetQuery, { mode: 'builder' }>): Promise<string>;
@@ -949,16 +953,23 @@ const reporting: ReportingApi = {
   await reloadColumnPolicy().catch((err) => {
     logger.warn({ err }, 'column-exposure-policy cache load failed; falling back to HARDCODED_DENY_UNION per table');
   });
-  const runDashboardQuery = async (q: WidgetQuery): Promise<ReportResult> => {
+  // The register rows a data limit is resolved against (roles part 3).
+  const scopeRegistryRows = () => internal.db.selectFrom('facility_registry')
+    .select(['id', 'name', 'facility_code', 'region', 'district']).execute();
+  const runDashboardQuery = async (q: WidgetQuery, scope?: DataScope): Promise<ReportResult> => {
     let data;
+    // A limited user never runs SQL: a placeholder cannot guarantee the limit (roles part 3).
+    if (scope?.limited && q.mode !== 'builder') throw new DashboardQueryError(NO_SCOPE_LINK);
     if (q.mode === 'builder') {
       const model = getModel(q.model);
       if (!model) throw new DashboardQueryError(`unknown model: ${q.model}`);
+      if (scope?.limited && !model.scopeLink) throw new DashboardQueryError(NO_SCOPE_LINK);
+      const limit = scope ? await resolveDataScope({ registryRows: scopeRegistryRows }, scope) : undefined;
       data = await runBuilderQuery(reportingDb, model, q, policyCache, {
         timeoutMs: await numberSettings.get('dashboard.sql_timeout_ms'),
         rowCap: await numberSettings.get('dashboard.sql_row_cap'),
         withDeadline: selectedTarget.withQueryTimeout,
-      }, cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : cfg.TARGET_STORE_ADAPTER === 'mysql' ? 'mysql' : 'postgres');
+      }, cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : cfg.TARGET_STORE_ADAPTER === 'mysql' ? 'mysql' : 'postgres', limit);
     } else {
       // `q.sql` is the STORED template verbatim (the client sends resolved filter `values`
       // separately and the server applies the substitution). Vet the untouched template against
@@ -989,7 +1000,10 @@ const reporting: ReportingApi = {
   };
   const dashboards: DashboardsApi = {
     store: dashboardStore,
-    models: () => modelsForClient(undefined, policyCache),
+    models: (scope?: DataScope) => {
+      const all = modelsForClient(undefined, policyCache);
+      return scope?.limited ? all.filter((m) => getModel(m.id)?.scopeLink) : all;
+    },
     joinableTables: () => joinableTablesForClient(policyCache),
     query: runDashboardQuery,
     compileSql: compileDashboardSql,
