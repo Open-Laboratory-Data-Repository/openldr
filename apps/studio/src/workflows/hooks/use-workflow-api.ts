@@ -38,22 +38,43 @@ function newWorkflowId(): string {
   return `wf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** The catalog id of a plugin node on the canvas: `pluginId:nodeId`, or its stored node type. */
+function pluginNodeKey(n: WorkflowNode): string {
+  const d = n.data as unknown as { pluginId?: string; nodeId?: string; nodeType?: string };
+  return d.pluginId ? `${d.pluginId}:${d.nodeId ?? ''}` : (d.nodeType ?? '');
+}
+
 /**
- * Returns true when the current canvas has at least one plugin-node whose
- * server-side descriptor carries abi:'bytes' (a binary converter node).
- * Fetches the node catalog and matches against canvas nodes in one pass.
+ * Whether Run must ask for a file: some plugin node that reads bytes has nothing upstream but
+ * triggers. Run then puts the picked file on the trigger item. When another node (Read/Write File,
+ * for one) sits upstream, that node supplies the file, so no picker opens.
  */
-async function needsFileUpload(nodes: WorkflowNode[]): Promise<boolean> {
-  const pluginNodes = nodes.filter((n) => n.type === 'plugin-node');
-  if (pluginNodes.length === 0) return false;
+export function needsPickedFile(nodes: WorkflowNode[], edges: WorkflowEdge[], bytesIds: ReadonlySet<string>): boolean {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const parents = new Map<string, string[]>();
+  for (const e of edges) parents.set(e.target, [...(parents.get(e.target) ?? []), e.source]);
+  const fedByANode = (id: string): boolean => {
+    const seen = new Set<string>();
+    const todo = [...(parents.get(id) ?? [])];
+    while (todo.length) {
+      const p = todo.pop()!;
+      if (seen.has(p)) continue;
+      seen.add(p);
+      const n = byId.get(p);
+      if (n && n.type !== 'trigger') return true;
+      todo.push(...(parents.get(p) ?? []));
+    }
+    return false;
+  };
+  return nodes.some((n) => n.type === 'plugin-node' && bytesIds.has(pluginNodeKey(n)) && !fedByANode(n.id));
+}
+
+/** Fetches the node catalog, then applies `needsPickedFile` to the canvas. */
+async function needsFileUpload(nodes: WorkflowNode[], edges: WorkflowEdge[]): Promise<boolean> {
+  if (!nodes.some((n) => n.type === 'plugin-node')) return false;
   let descriptors;
   try { descriptors = await fetchWorkflowNodes(); } catch { return false; }
-  const bytesIds = new Set(descriptors.filter((d) => d.abi === 'bytes').map((d) => d.id));
-  return pluginNodes.some((n) => {
-    const d = n.data as unknown as { pluginId?: string; nodeId?: string; nodeType?: string };
-    const nodeId = d.pluginId ? `${d.pluginId}:${d.nodeId ?? ''}` : (d.nodeType ?? '');
-    return bytesIds.has(nodeId);
-  });
+  return needsPickedFile(nodes, edges, new Set(descriptors.filter((d) => d.abi === 'bytes').map((d) => d.id)));
 }
 
 /**
@@ -70,14 +91,20 @@ function pickFile(accept?: string): Promise<File | null> {
     document.body.appendChild(input);
     input.onchange = () => {
       const file = input.files?.[0] ?? null;
-      document.body.removeChild(input);
+      if (input.isConnected) document.body.removeChild(input);
       resolve(file);
     };
-    // Resolve null on cancel (focus returns to window without a change event).
+    // Resolve null on cancel. Browsers that fire the input's cancel event say so directly; the
+    // others return focus to the window without a change event.
+    input.addEventListener('cancel', () => {
+      if (input.isConnected) document.body.removeChild(input);
+      window.removeEventListener('focus', onFocus);
+      resolve(null);
+    });
     const onFocus = () => {
       setTimeout(() => {
         if (!input.files?.length) {
-          document.body.removeChild(input);
+          if (input.isConnected) document.body.removeChild(input);
           resolve(null);
         }
         window.removeEventListener('focus', onFocus);
@@ -169,7 +196,7 @@ export function useWorkflowApi() {
       // Determine whether any canvas node needs a binary file before saving,
       // so we can gate the run without starting the SSE stream prematurely.
       const currentNodes = store.nodes;
-      const requiresFile = await needsFileUpload(currentNodes);
+      const requiresFile = await needsFileUpload(currentNodes, store.edges);
 
       let files: Record<string, WorkflowBinaryRef> | undefined;
       if (requiresFile) {
