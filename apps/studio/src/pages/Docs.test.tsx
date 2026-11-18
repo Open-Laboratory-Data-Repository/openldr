@@ -1,8 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import i18n from '@/i18n';
 import { Docs } from './Docs';
+
+// The docs list hides a guide whose permission a person lacks (roles part 4). These tests grant
+// every permission unless a test withholds some.
+const auth = vi.hoisted(() => ({ denied: [] as string[] }));
+vi.mock('../auth/AuthProvider', async (orig) => ({
+  ...(await orig<typeof import('../auth/AuthProvider')>()),
+  useAuth: () => ({ user: null, loading: false, hasCapability: (c: string) => !auth.denied.includes(c), signOut: () => {}, authEnforced: true, authMode: 'oidc' }),
+}));
 
 const registry = vi.hoisted(() => {
   const groups = [
@@ -35,6 +43,7 @@ const registry = vi.hoisted(() => {
     summary: slug === 'workflows' ? 'Create and run workflows.' : `Guide for ${title}.`,
     audience: ['all-users'],
     requiredRoles: slug === 'users' ? ['lab_admin'] : [],
+    requiredCapabilities: slug === 'audit' ? ['audit.view'] : undefined,
     estimatedMinutes: slug === 'start-here' ? 8 : index + 5,
     difficulty: slug === 'advanced-docs' ? 'advanced' : 'beginner',
     relatedSlugs,
@@ -218,6 +227,26 @@ describe('DocsLayout', () => {
       fireEvent.scroll(pane);
       await waitFor(() => expect(within(list).getByRole('link', { name: 'Third part' })).toHaveAttribute('aria-current', 'location'));
     } finally { geometry.mockRestore(); }
+  });
+
+  it('hides a guide from the list and search without its permission, but still opens it by link (roles part 4)', async () => {
+    auth.denied = ['audit.view'];
+    try {
+      renderAt('/docs');
+      const nav = screen.getByRole('navigation', { name: 'Documentation sections' });
+      expect(within(nav).queryByText('Audit')).toBeNull();
+      expect(within(nav).getByText('Users and Roles')).toBeTruthy();
+      cleanup();
+      // Reports lists Audit as related; without the permission that link is gone too.
+      renderAt('/docs/reports');
+      expect(screen.getAllByRole('link').map((l) => l.getAttribute('href'))).not.toContain('/docs/audit');
+      expect(screen.getAllByRole('link').map((l) => l.getAttribute('href'))).toContain('/docs/dashboard');
+      cleanup();
+      renderAt('/docs/audit');
+      expect(screen.getByRole('heading', { level: 1, name: 'Audit' })).toBeTruthy();
+    } finally {
+      auth.denied = [];
+    }
   });
 
   it('exposes a download menu in the toolbar', () => {

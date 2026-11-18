@@ -20,6 +20,8 @@ The person setting up a fresh installation creates the first administrator. If y
 
 You can use your own data throughout. Sample data is optional.
 
+The guide list shows only the guides for pages you can use. If a guide you expect is missing, ask your administrator for the permission. A link to any guide still opens it.
+
 ## Finish the first setup
 
 On a new installation, follow Studio's first-run steps. They cover the laboratory name, time zone, optional sample data and setup checks.

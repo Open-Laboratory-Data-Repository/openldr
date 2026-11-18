@@ -20,6 +20,8 @@ La personne qui prépare une installation neuve crée le premier administrateur.
 
 Vous pouvez utiliser vos propres données. Les données d'exemple sont facultatives.
 
+La liste des guides n'affiche que les guides des pages que vous pouvez utiliser. S'il vous manque un guide, demandez la permission à votre administrateur. Un lien vers un guide l'ouvre quand même.
+
 ## Terminer la première configuration
 
 Sur une nouvelle installation, suivez les étapes du premier démarrage de Studio. Elles couvrent le nom du laboratoire, le fuseau horaire, les données d'exemple facultatives et les vérifications d'installation.

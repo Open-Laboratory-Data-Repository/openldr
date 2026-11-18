@@ -4,6 +4,8 @@ O OpenLDR Studio é a aplicação web para os registos do seu laboratório. Use 
 
 Comece por abrir o Studio. Se outro guia pedir uma instrução na linha de comandos, siga primeiro os passos abaixo. Não precisa de dados de exemplo.
 
+A lista de guias mostra apenas os guias das páginas que pode usar. Se faltar um guia, peça a permissão a um administrador. Uma ligação para um guia abre-o na mesma.
+
 A configuração das unidades de saúde, do catálogo de testes e das definições de pacientes é opcional. O OpenLDR pode receber e processar dados antes destas configurações. Recomendamos vivamente que as faça durante a utilização do sistema. Comece por consultar [Terminologia](/docs/terminology) e siga **Configurar o seu sistema** no menu da documentação.
 
 ## Abrir o Studio
