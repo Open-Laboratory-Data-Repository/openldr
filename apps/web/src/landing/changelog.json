@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "39247853",
+          "type": "feat",
+          "scope": "terminology",
+          "title": "Name the v1-flags and v1-findings request attributes"
+        },
+        {
           "hash": "0b5cf434",
           "type": "fix",
           "scope": "standalone",
