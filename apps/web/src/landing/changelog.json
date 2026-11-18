@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "b76f6d90",
+          "type": "feat",
+          "scope": "terminology",
+          "title": "Import a lab's result codes as a plain FHIR CodeSystem"
+        },
+        {
+          "hash": "6abb2b9d",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Run asks for a file only when no node upstream supplies it"
+        },
+        {
           "hash": "b3df6978",
           "type": "fix",
           "scope": "studio",
