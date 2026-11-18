@@ -16,7 +16,14 @@ export interface HeldRow {
 }
 
 /** A held request with the plugin's own JSON. CE never reads inside `findings` or `check`. */
-export interface HeldItem extends HeldRow { findings: unknown; check: unknown }
+export interface HeldItem extends HeldRow {
+  findings: unknown;
+  check: unknown;
+  /** The values as read of the fields a person may correct, as the plugin sent them, or null. */
+  fields: Record<string, string | null> | null;
+  /** The check pass that held it, or null when unknown. */
+  pass: string | null;
+}
 
 export interface HeldListOptions { reason?: HeldReason; label?: string; laboratory?: string; offset: number; limit: number }
 
@@ -31,7 +38,7 @@ export interface HeldItemsPage { rows: HeldItem[]; total: number; next?: string 
 
 export interface ImportCheckHeldStore {
   /** Insert or replace by (copyId, key). */
-  put(item: Omit<HeldItem, 'heldAt'>): Promise<void>;
+  put(item: Omit<HeldItem, 'heldAt' | 'fields' | 'pass'> & { fields?: Record<string, string | null> | null; pass?: string | null }): Promise<void>;
   remove(copyId: string, keys: string[]): Promise<void>;
   /** Ordered by key. `total` counts every row that matches the filter, not only the page. */
   list(copyId: string, opts: HeldListOptions): Promise<{ rows: HeldRow[]; total: number }>;
@@ -50,6 +57,12 @@ type Stored = {
   copy_id: string; key: string; run_id: string; reason: string; label: string | null; laboratory: string | null;
   error: string | null; held_at: Date | string;
 };
+
+/** The stored values as read: jsonb comes back parsed on Postgres and may come back as text elsewhere. */
+function fieldsOf(v: unknown): Record<string, string | null> | null {
+  if (v === null || v === undefined) return null;
+  return (typeof v === 'string' ? JSON.parse(v) : v) as Record<string, string | null>;
+}
 
 function toRow(r: Stored): HeldRow {
   return {
@@ -75,7 +88,7 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
   }
 
   /** One page of the matching rows. Within one copy the key is unique, so this order has no tie. */
-  function page<C extends 'copy_id' | 'key' | 'run_id' | 'reason' | 'label' | 'laboratory' | 'error' | 'held_at' | 'findings' | 'check'>(
+  function page<C extends 'copy_id' | 'key' | 'run_id' | 'reason' | 'label' | 'laboratory' | 'error' | 'held_at' | 'findings' | 'check' | 'fields' | 'pass'>(
     copyId: string, opts: HeldListOptions, columns: C[],
   ) {
     return matching(copyId, opts).select(columns).orderBy('key').limit(opts.limit).offset(opts.offset).execute();
@@ -99,6 +112,8 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
         error: item.error,
         findings: JSON.stringify(item.findings),
         check: JSON.stringify(item.check),
+        fields: item.fields ? JSON.stringify(item.fields) : null,
+        pass: item.pass ?? null,
       };
       await db.insertInto('import_check_held')
         .values(values)
@@ -110,6 +125,8 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
           error: eb.ref('excluded.error'),
           findings: eb.ref('excluded.findings'),
           check: eb.ref('excluded.check'),
+          fields: eb.ref('excluded.fields'),
+          pass: eb.ref('excluded.pass'),
           held_at: new Date(),
         })))
         .execute();
@@ -130,8 +147,8 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
     },
 
     async listItems(copyId, opts) {
-      const columns = ['copy_id', 'key', 'run_id', 'reason', 'label', 'laboratory', 'error', 'held_at', 'findings', 'check'] as const;
-      const toItem = (r: Stored & { findings: unknown; check: unknown }): HeldItem => ({ ...toRow(r), findings: r.findings, check: r.check });
+      const columns = ['copy_id', 'key', 'run_id', 'reason', 'label', 'laboratory', 'error', 'held_at', 'findings', 'check', 'fields', 'pass'] as const;
+      const toItem = (r: Stored & { findings: unknown; check: unknown; fields: unknown; pass: string | null }): HeldItem => ({ ...toRow(r), findings: r.findings, check: r.check, fields: fieldsOf(r.fields), pass: r.pass ?? null });
       if (opts.after === undefined) {
         const rows = await page(copyId, opts, [...columns]);
         return { rows: rows.map(toItem), total: await count(copyId, opts) };
@@ -151,7 +168,7 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
         .where('copy_id', '=', copyId).where('key', '=', key)
         .executeTakeFirst();
       if (!r) return null;
-      return { ...toRow(r), findings: r.findings, check: r.check };
+      return { ...toRow(r), findings: r.findings, check: r.check, fields: fieldsOf(r.fields), pass: r.pass ?? null };
     },
 
     async deleteSome(copyId, limit) {

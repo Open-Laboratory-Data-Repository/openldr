@@ -32,6 +32,15 @@ describe('import check held store', () => {
     expect(got!.check).toEqual({ z: 1 });
   });
 
+  it('keeps the values as read that the plugin sent, and null when it sent none (held corrections)', async () => {
+    await store.put({ ...item('A'), fields: { dob_age: '2024-03-11', sex: null } });
+    await store.put(item('B'));
+    expect((await store.get('c1', 'A'))!.fields).toEqual({ dob_age: '2024-03-11', sex: null });
+    expect((await store.get('c1', 'B'))!.fields).toBeNull();
+    const page = await store.listItems('c1', { offset: 0, limit: 10 });
+    expect(page.rows.map((r) => r.fields)).toEqual([{ dob_age: '2024-03-11', sex: null }, null]);
+  });
+
   it('lists by key with a total, and pages', async () => {
     for (const k of ['D', 'B', 'A', 'C', 'E']) await store.put(item(k));
     const p1 = await store.list('c1', { offset: 0, limit: 2 });

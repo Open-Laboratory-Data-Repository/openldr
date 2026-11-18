@@ -1,11 +1,11 @@
 import { MAX_SELF_RESUMES, takeBack } from './job-interruptions';
 import { resolveByPerson } from './job-continue';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { redact } from '@openldr/core';
 import {
-  CopySetTooLargeError, type CopyRow, type HeldItem, type HeldItemsPage, type HeldReason, type HeldRow, type ImportCheckHeldStore,
-  type ImportCopyStore, type PluginDataStore, type Provenance,
+  CopySetTooLargeError, type Correction, type CopyRow, type HeldItem, type HeldItemsPage, type HeldReason, type HeldRow,
+  type ImportCheckCorrectionStore, type ImportCheckHeldStore, type ImportCopyStore, type PluginDataStore, type Provenance,
 } from '@openldr/db';
 import { allowedResourceTypes, canCheck } from '@openldr/marketplace';
 import { changedSets, copySetHashes, copySpecSchema, type CopyRun, type ImportCopyService } from './import-copy';
@@ -27,7 +27,8 @@ import { PAGE_SIZE_MAX, PAGE_SIZE_MIN } from './import-sql';
 // process. Every write of the run is a compare-and-swap on its `rev`.
 //
 // CE reads `key`, `held`, `resources`, `error`, `label` and `laboratory` of a group, and nothing
-// inside `findings` or `check`. Those two are kept as the plugin gave them, only in the held-back store.
+// inside `findings` or `check`. Those two are kept as the plugin gave them, only in the held-back store,
+// and so are `fields`, the values as read a person may correct (design 2026-11-18-held-corrections).
 // No row value reaches a log, an audit row or an error text: a plugin's error is kept as a bare
 // code, a save error as its code, and an error from CE's own database as its SQLSTATE.
 
@@ -101,6 +102,24 @@ export interface CheckRun {
   /** True when the last start carried on from where the run stopped or failed. False when it began
    *  at the first key. Absent on a record written before a check could carry on. */
   carriedOn?: boolean;
+  /** Set while the run checks again only these held keys after a person corrected them (design
+   *  2026-11-18-held-corrections). The run goes back to `returnTo` and `finishedAt` after. */
+  recheck?: {
+    keys: string[]; returnTo: CheckStatus; finishedAt: string | null;
+    /** The keys already decided and counted, saved with the counts. A saved one's held row is
+     *  removed only after that save, so a cut between the two only finishes the removal (re-review H3). */
+    done?: Array<{ key: string; outcome: 'saved' | 'other' }>;
+    /** Each key's counted decision as it stood when the recheck was queued: what the recheck takes
+     *  away from the counts. Kept here, not read from the held row, which the recheck rewrites
+     *  before its counts are saved (re-review H3). Codes only, no source value. */
+    before?: Array<{ key: string; label: string | null; laboratory: string | null; pass: string | null }>;
+  };
+  /** A correction being saved: no recheck or start may begin until it is cleared or `until` passes
+   *  (review H17). Taken and cleared by compare-and-swap, as a start or a recheck is queued. */
+  correcting?: { token: string; until: string };
+  /** Names one pass from the first key, carried on through a stop. A held row records the pass that
+   *  counted it, so a recheck moves only this pass's counts (review H4). Absent on older records. */
+  pass?: string;
 }
 
 export interface ImportCheckStartInput {
@@ -128,7 +147,14 @@ export interface ImportCheckService {
   list(pluginId: string): Promise<CheckRun[]>;
   stop(pluginId: string, runId: string, actor: ImportActor): Promise<CheckRun>;
   held(pluginId: string, copyId: string, opts: HeldFilter): Promise<{ rows: HeldRow[]; total: number }>;
-  heldItem(pluginId: string, copyId: string, key: string): Promise<HeldItem | null>;
+  /** A held request, with its corrections and the fields the plugin lets a person correct. */
+  heldItem(pluginId: string, copyId: string, key: string): Promise<HeldItemView | null>;
+  /** Stores corrections to a held request. Refuses a field the plugin does not declare, an empty
+   *  reason, and a request that is not held by rules or check. */
+  correct(input: ImportCheckCorrectInput): Promise<{ corrections: Correction[] }>;
+  /** Checks one corrected held request again, in the run that held it. Refused while a check of
+   *  the copy is live. Answers the run as queued; the driver does the rest. */
+  recheck(input: { pluginId: string; copyId: string; key: string; actor: ImportActor }): Promise<CheckRun>;
   /** The same rows as `held`, in the same order, each with its findings and check. With `after`,
    *  read by key: the rows past that key, and `next`, the last key of the page or null when no row
    *  is left. A page read by key does not move when a check adds or removes rows before it. */
@@ -146,6 +172,8 @@ export interface ImportCheckServiceDeps extends Pick<ImportServiceDeps, 'plugins
   /** The copy rows, read only. */
   copyStore: ImportCopyStore;
   held: ImportCheckHeldStore;
+  /** Corrections people made to held requests. Without it no correction is read or written. */
+  corrections?: ImportCheckCorrectionStore;
   /** To read a copy's record. A copy belongs to the plugin whose id it is read under. */
   copies: Pick<ImportCopyService, 'get'>;
   /** The connectors an admin allowed the plugin to read (`ImportService.allowed`), as the copy
@@ -155,6 +183,103 @@ export interface ImportCheckServiceDeps extends Pick<ImportServiceDeps, 'plugins
   driverId: string;
   /** Injectable for tests; the wait while CE's own database does not answer. */
   sleep?: (ms: number) => Promise<void>;
+}
+
+export interface ImportCheckCorrectInput {
+  pluginId: string;
+  copyId: string;
+  key: string;
+  /** Field to value. Null clears the field. */
+  values: Record<string, string | null>;
+  reason: string;
+  actor: ImportActor;
+}
+
+/** A held request as the page reads it. */
+export interface HeldItemView extends HeldItem {
+  corrections: Correction[];
+  /** The fields the plugin lets a person correct. Empty when it declares none. */
+  correctable: string[];
+}
+
+/** How long a correction's claim on its check run lasts if it is never cleared (a crash mid-save). */
+const CORRECTING_MS = 60_000;
+
+/** The longest corrected value and reason a person may give. */
+const CORRECTION_VALUE_MAX = 200;
+const CORRECTION_REASON_MAX = 500;
+
+interface Decided { outcome: 'saved' | 'held' | 'failed'; laboratory: string | null; label: string | undefined }
+interface Tally { resources: number; decided: Decided[] }
+const freshTally = (): Tally => ({ resources: 0, decided: [] });
+/** Each request counts once in the run and once in its laboratory, under the same label name,
+ *  so the laboratories always add up to the run. */
+function addTallyTo(run: CheckRun, t: Tally): void {
+  const c = run.counts;
+  c.resources += t.resources;
+  const labs = run.laboratories;
+  const byCode = new Map((labs ?? []).map((l) => [l.code, l]));
+  const entryFor = (code: string | null): CheckLaboratory => {
+    const named = byCode.size - (byCode.has(null) ? 1 : 0);
+    const at = code !== null && !byCode.has(code) && named >= MAX_LABORATORIES ? null : code;
+    let entry = byCode.get(at);
+    if (!entry) {
+      entry = { code: at, counts: { read: 0, saved: 0, held: 0, failed: 0, labels: {} } };
+      byCode.set(at, entry);
+      labs!.push(entry);
+    }
+    return entry;
+  };
+  // Labels are counted in maps, never by name on a plain object: a label such as
+  // `constructor` would read the object's own function. They go back as plain objects.
+  const runLabels = new Map(Object.entries(c.labels));
+  const labLabels = new Map<CheckLaboratory, Map<string, number>>();
+  const labelsOf = (entry: CheckLaboratory): Map<string, number> => {
+    let m = labLabels.get(entry);
+    if (!m) { m = new Map(Object.entries(entry.counts.labels)); labLabels.set(entry, m); }
+    return m;
+  };
+  const bump = (m: Map<string, number>, name: string): void => { m.set(name, (m.get(name) ?? 0) + 1); };
+  for (const d of t.decided) {
+    c.read += 1;
+    c[d.outcome] += 1;
+    let name: string | null = null;
+    if (d.label !== undefined) {
+      const named = runLabels.size - (runLabels.has(OTHER_LABEL) ? 1 : 0);
+      name = validLabel(d.label) !== null && (runLabels.has(d.label) || named < MAX_LABELS) ? d.label : OTHER_LABEL;
+      bump(runLabels, name);
+    }
+    if (!labs) continue;
+    const entry = entryFor(d.laboratory);
+    entry.counts.read += 1;
+    entry.counts[d.outcome] += 1;
+    if (name !== null) bump(labelsOf(entry), name);
+  }
+  // Object.fromEntries makes an own property of every name, even one a plain object has.
+  c.labels = Object.fromEntries(runLabels);
+  for (const [entry, m] of labLabels) entry.counts.labels = Object.fromEntries(m);
+}
+/** Takes back what `addTally` added for these decisions: a recheck decides a key again. */
+function subtractTallyFrom(run: CheckRun, old: Decided[]): void {
+  const c = run.counts;
+  const drop = (labels: Record<string, number>, name: string | undefined): Record<string, number> => {
+    if (name === undefined) return labels;
+    const m = new Map(Object.entries(labels));
+    const at = m.has(name) ? name : OTHER_LABEL;
+    const n = (m.get(at) ?? 0) - 1;
+    if (n > 0) m.set(at, n); else m.delete(at);
+    return Object.fromEntries(m);
+  };
+  for (const d of old) {
+    c.read -= 1;
+    c[d.outcome] -= 1;
+    c.labels = drop(c.labels, d.label);
+    const entry = run.laboratories?.find((l) => l.code === d.laboratory) ?? run.laboratories?.find((l) => l.code === null);
+    if (!entry) continue;
+    entry.counts.read -= 1;
+    entry.counts[d.outcome] -= 1;
+    entry.counts.labels = drop(entry.counts.labels, d.label);
+  }
 }
 
 /** One check per source copy: the first 32 hex characters of SHA-256 of `check|<copyId>`. */
@@ -172,6 +297,8 @@ const groupSchema = z.object({
   label: z.string().optional(),
   // Read with care in `validLaboratory`: a bad one is no laboratory, never a bad answer.
   laboratory: z.unknown().optional(),
+  // The values as read of the correctable fields. Read with care in `validFields`.
+  fields: z.unknown().optional(),
 });
 const decodeOutputSchema = z.object({ groups: z.array(groupSchema) });
 const twinKeysOutputSchema = z.object({ keys: z.array(z.string()) });
@@ -276,6 +403,25 @@ const notAllowed = (copyId: string): string =>
 const isDriven = (s: CheckStatus): boolean => s === 'running' || s === 'waiting' || s === 'stopping';
 const validLabel = (label: string | undefined): string | null => (label !== undefined && LABEL.test(label) ? label : null);
 /** The code of a group's `laboratory: { code }`, or null for anything else. */
+/** The values as read a held group sent: an object of short texts or nulls, else none. */
+function validFields(raw: unknown, declared: string[]): Record<string, string | null> | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw) || declared.length === 0) return null;
+  const out: Record<string, string | null> = {};
+  // Only the fields this request sent: a source kind may not have them all (review H2).
+  for (const name of declared) {
+    if (!Object.prototype.hasOwnProperty.call(raw, name)) continue;
+    const v = (raw as Record<string, unknown>)[name];
+    if (v === null) out[name] = null;
+    else if (typeof v === 'string') out[name] = storable(v.slice(0, CORRECTION_VALUE_MAX)) as string;
+  }
+  return out;
+}
+
+/** The fields a plugin lets a person correct. */
+function correctableOf(plugin: { source: { corrections?: { fields: string[] } } }): string[] {
+  return plugin.source.corrections?.fields ?? [];
+}
+
 function validLaboratory(raw: unknown): string | null {
   const code = raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? (raw as { code?: unknown }).code : undefined;
   return typeof code === 'string' && LABORATORY_CODE.test(code) ? code : null;
@@ -457,6 +603,12 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         sourceSystem: plugin.source.sourceSystem ?? plugin.id,
       };
       const useTwins = plugin.twinKeys !== null && run.referenceCopyId !== null;
+      /** The fields the plugin lets a person correct. None: no correction is read or sent. */
+      const correctable = correctableOf(plugin);
+      /** A recheck reads its keys once, then is done. */
+      let recheckRead = false;
+      /** Times a recheck found its done mark not yet stored. */
+      let unsavedTries = 0;
 
       /** A plugin call. A throw or a bad answer is a PluginCallFault with a fixed sentence. Only
        *  the runtime's own timeout is told apart from a refusal; the plugin's text is never kept. */
@@ -546,56 +698,8 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       /** What one page did: how each request ended, with its laboratory and the label it gave.
        *  Added to the run's counts only when the page is done, so a page tried again after a fault
        *  counts nothing twice. */
-      interface Decided { outcome: 'saved' | 'held' | 'failed'; laboratory: string | null; label: string | undefined }
-      interface Tally { resources: number; decided: Decided[] }
-      const freshTally = (): Tally => ({ resources: 0, decided: [] });
-      /** Each request counts once in the run and once in its laboratory, under the same label name,
-       *  so the laboratories always add up to the run. */
-      const addTally = (t: Tally): void => {
-        const c = run.counts;
-        c.resources += t.resources;
-        const labs = run.laboratories;
-        const byCode = new Map((labs ?? []).map((l) => [l.code, l]));
-        const entryFor = (code: string | null): CheckLaboratory => {
-          const named = byCode.size - (byCode.has(null) ? 1 : 0);
-          const at = code !== null && !byCode.has(code) && named >= MAX_LABORATORIES ? null : code;
-          let entry = byCode.get(at);
-          if (!entry) {
-            entry = { code: at, counts: { read: 0, saved: 0, held: 0, failed: 0, labels: {} } };
-            byCode.set(at, entry);
-            labs!.push(entry);
-          }
-          return entry;
-        };
-        // Labels are counted in maps, never by name on a plain object: a label such as
-        // `constructor` would read the object's own function. They go back as plain objects.
-        const runLabels = new Map(Object.entries(c.labels));
-        const labLabels = new Map<CheckLaboratory, Map<string, number>>();
-        const labelsOf = (entry: CheckLaboratory): Map<string, number> => {
-          let m = labLabels.get(entry);
-          if (!m) { m = new Map(Object.entries(entry.counts.labels)); labLabels.set(entry, m); }
-          return m;
-        };
-        const bump = (m: Map<string, number>, name: string): void => { m.set(name, (m.get(name) ?? 0) + 1); };
-        for (const d of t.decided) {
-          c.read += 1;
-          c[d.outcome] += 1;
-          let name: string | null = null;
-          if (d.label !== undefined) {
-            const named = runLabels.size - (runLabels.has(OTHER_LABEL) ? 1 : 0);
-            name = validLabel(d.label) !== null && (runLabels.has(d.label) || named < MAX_LABELS) ? d.label : OTHER_LABEL;
-            bump(runLabels, name);
-          }
-          if (!labs) continue;
-          const entry = entryFor(d.laboratory);
-          entry.counts.read += 1;
-          entry.counts[d.outcome] += 1;
-          if (name !== null) bump(labelsOf(entry), name);
-        }
-        // Object.fromEntries makes an own property of every name, even one a plain object has.
-        c.labels = Object.fromEntries(runLabels);
-        for (const [entry, m] of labLabels) entry.counts.labels = Object.fromEntries(m);
-      };
+      const addTally = (t: Tally): void => addTallyTo(run, t);
+      const subtractTally = (old: Decided[]): void => subtractTallyFrom(run, old);
       const keepFailed = async (key: string, error: string, label: string | null, laboratory: string | null): Promise<void> => {
         await ownDb('write', () => deps.held.put({
           copyId: run.copyId, key, runId: run.id, reason: 'error', label, laboratory, error, findings: null, check: null,
@@ -614,8 +718,46 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         await assertAllowed(run.pluginId, p.reference ? [p.source, p.reference] : [p.source]);
         await assertUnchanged(p.source);
         if (p.reference) await assertUnchanged(p.reference);
-        const keys = await ownDb('read', () => deps.copyStore.listKeys(run.copyId, REQUESTS, run.cursor, size));
+        const rechecking = run.recheck !== undefined;
+        if (rechecking && recheckRead) return 'done';
+        // A recheck decides and counts each key once. Its decisions are saved with the counts; only
+        // then does a saved key leave the held list. A key already decided only finishes that removal
+        // (review H3, re-review H3).
+        const done = new Map((run.recheck?.done ?? []).map((d) => [d.key, d.outcome]));
+        if (rechecking && done.size > 0) {
+          // Only what the stored run already says is done: an in-memory mark whose save failed does not
+          // count, so the page end is saved again first (re-review H3, writes).
+          const stored = await ownDb('read', () => readRun(run.pluginId, run.id));
+          const durable = new Map((stored?.recheck?.done ?? []).map((d) => [d.key, d.outcome]));
+          if ([...done].some(([k, o]) => durable.get(k) !== o)) {
+            unsavedTries += 1;
+            if (unsavedTries > MAX_DB_RETRIES) throw new CheckFault('the recheck could not save its counts, so the check stopped');
+            return 'next';
+          }
+          const savedKeys = [...done].filter(([, o]) => o === 'saved').map(([k]) => k);
+          if (savedKeys.length > 0) await ownDb('write', () => deps.held.remove(run.copyId, savedKeys));
+          recheckRead = true;
+          return 'done';
+        }
+        const before = rechecking
+          ? (await Promise.all(run.recheck!.keys.map((k) => ownDb('read', () => deps.held.get(run.copyId, k))))).filter((h): h is HeldItem => h !== null)
+          : [];
+        // The decision each key was counted with, as recorded when the recheck was queued; a record
+        // from before that was kept falls back to the held row.
+        const counted0 = new Map((run.recheck?.before ?? []).map((b) => [b.key, b]));
+        const decided = before.map((h) => counted0.get(h.key) ?? { key: h.key, label: h.label, laboratory: h.laboratory, pass: h.pass });
+        const passOf = new Map(decided.map((d) => [d.key, d.pass]));
+        const keys = rechecking
+          ? before.map((h) => h.key)
+          : await ownDb('read', () => deps.copyStore.listKeys(run.copyId, REQUESTS, run.cursor, size));
         if (keys.length === 0) return 'done';
+        // The corrections of the page's keys, sent only to a plugin that declares correctable fields.
+        const stored = correctable.length > 0 && deps.corrections
+          ? await ownDb('read', () => deps.corrections!.listFor(run.copyId, keys))
+          : new Map<string, Correction[]>();
+        const corrections = stored.size === 0 ? undefined : Object.fromEntries([...stored].map(([k, list]) => [k, list.map((c) => ({
+          field: c.field, value: c.value, original: c.original, reason: c.reason, by: c.correctedBy, at: c.correctedAt,
+        }))]));
         const rows = byDetail(await ownDb('read', () => deps.copyStore.read(run.copyId, REQUESTS, keys)), p.requestDetails);
 
         let groups: Map<string, Group> | null = null;
@@ -626,6 +768,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           const twins = await readTwins(keys, p.twinDetails);
           const answer = await callPlugin('decode', plugin.decode, {
             options: run.options, now: now().toISOString(), dictionaries: p.dictionaries, keys, rows, twins,
+            ...(corrections ? { corrections } : {}),
           }, decodeOutputSchema);
           groups = new Map();
           for (const g of answer.groups) {
@@ -649,6 +792,8 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
             goodInRow = 0;
             return 'next';
           }
+          // A recheck that the plugin could not decode leaves the request held as it was.
+          if (rechecking) { recheckRead = true; return 'next'; }
           await keepFailed(keys[0], 'DECODE_FAILED', null, null);
           t.decided.push({ outcome: 'failed', laboratory: null, label: undefined });
           addTally(t);
@@ -661,6 +806,14 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         goodInRow += 1;
         const grown = growPage(size, run.pageSize, goodInRow);
         if (grown !== size) { size = grown; goodInRow = 0; }
+
+        // A correction made while this recheck decoded would never reach the plugin: the recheck then
+        // decides nothing and writes nothing, and the request waits, held, for the next one (review H17).
+        if (rechecking && correctable.length > 0 && deps.corrections) {
+          const sig = (m: Map<string, Correction[]>) => JSON.stringify(keys.map((k) => (m.get(k) ?? []).map((c) => [c.field, c.value, c.correctedAt])));
+          const now2 = await ownDb('read', () => deps.corrections!.listFor(run.copyId, keys));
+          if (sig(now2) !== sig(stored)) { recheckRead = true; return 'next'; }
+        }
 
         const saved: string[] = [];
         for (const key of keys) {
@@ -681,6 +834,9 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
               // The store needs a value. A group that gave none is kept as null. Postgres jsonb
               // refuses a NUL or a lone surrogate, so those are replaced.
               findings: storable(group.findings ?? null), check: storable(group.check ?? null),
+              fields: validFields(group.fields, correctable),
+              // A recheck keeps the pass that first held it, so its count stays where it was made (re-review H4).
+              pass: rechecking ? passOf.get(key) ?? null : run.pass ?? null,
             }));
             decided('held');
             continue;
@@ -699,8 +855,21 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           decided('saved');
           t.resources += resources.length;
         }
-        // A request that passes now leaves the held-back store.
-        if (saved.length > 0) await ownDb('write', () => deps.held.remove(run.copyId, saved));
+        // A request that passes now leaves the held-back store. In a recheck that waits for the counts
+        // to be saved first (re-review H3).
+        if (saved.length > 0 && !rechecking) await ownDb('write', () => deps.held.remove(run.copyId, saved));
+        if (rechecking) {
+          // A key held in this pass was counted as held: take that away and count what it is now. A
+          // key held by an earlier pass is not in this pass's counts, so they stay as they are (review H4).
+          const counted = decided.every((d) => d.pass !== null && d.pass === run.pass);
+          if (counted && run.pass !== undefined) {
+            subtractTally(decided.map((d) => ({ outcome: 'held' as const, laboratory: d.laboratory, label: d.label ?? undefined })));
+            addTally(t);
+          }
+          // Saved with the counts at the page end; the next call removes the saved keys' held rows.
+          run.recheck = { ...run.recheck!, done: keys.map((k) => ({ key: k, outcome: saved.includes(k) ? 'saved' as const : 'other' as const })) };
+          return 'next';
+        }
         addTally(t);
         run.cursor = keys[keys.length - 1];
         return 'next';
@@ -762,6 +931,28 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
     await finishDrive(run, d, outcome);
   }
 
+  /** Brings the counts of a run whose recheck did not finish in line with its held rows. For each key
+   *  whose counts were not yet moved (no stored done mark) and that this pass counted, a held row
+   *  rewritten since the recheck was queued replaces the decision recorded then (re-review H3). */
+  /** A correction holds the run: a start or a recheck must wait (review H17). */
+  const correctionHeld = (run: CheckRun): boolean => run.correcting !== undefined && Date.parse(run.correcting.until) > now().getTime();
+  const CORRECTING_REFUSAL = 'a correction is being saved for this source; try again in a moment';
+
+  async function settleRecheck(run: CheckRun): Promise<void> {
+    const rc = run.recheck;
+    if (!rc || run.pass === undefined) return;
+    const done = new Set((rc.done ?? []).map((x) => x.key));
+    for (const b of rc.before ?? []) {
+      if (done.has(b.key) || b.pass === null || b.pass !== run.pass) continue;
+      const row = await ownDb('read', () => deps.held.get(run.copyId, b.key));
+      // A row the recheck kept failing to read is an error row: it counts as failed (re-review H3, A).
+      const outcome = row?.reason === 'error' ? 'failed' as const : 'held' as const;
+      if (!row || (outcome === 'held' && row.label === b.label && row.laboratory === b.laboratory)) continue;
+      subtractTallyFrom(run, [{ outcome: 'held', laboratory: b.laboratory, label: b.label ?? undefined }]);
+      addTallyTo(run, { resources: 0, decided: [{ outcome, laboratory: row.laboratory, label: row.label ?? undefined }] });
+    }
+  }
+
   async function finishDrive(run: CheckRun, d: ReturnType<typeof driving>, outcome: CheckOutcome): Promise<void> {
     d.rewind();
     if (outcome === 'lost') return;
@@ -769,11 +960,43 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       await d.saveInTurn().catch(() => false);
       return;
     }
-    run.status = outcome;
+    const recheck = run.recheck;
+    if (recheck && outcome !== 'completed') {
+      // A recheck that did not complete keeps only what is stored: its counts and done marks, settled
+      // against its held rows. If that cannot be read, the run is left as a cut leaves it, for the
+      // next driver to take over from what is stored (re-review H3, B).
+      try {
+        const stored = await readRun(run.pluginId, run.id);
+        if (!stored) return;
+        run.counts = stored.counts;
+        run.laboratories = stored.laboratories;
+        run.recheck = stored.recheck;
+        await settleRecheck(run);
+        d.markPageEnd();
+      } catch {
+        return;
+      }
+    }
+    // A removal the stored run marks done but that did not happen is done now; if it fails again the
+    // recheck stays on the run, and the next recheck finishes it first.
+    const pendingRemoval = (run.recheck?.done ?? []).filter((x) => x.outcome === 'saved').map((x) => x.key);
+    let removed = true;
+    if (recheck && pendingRemoval.length > 0) {
+      removed = await deps.held.remove(run.copyId, pendingRemoval).then(() => true, () => false);
+    }
+    run.status = recheck ? recheck.returnTo : outcome;
     run.waiting = null;
     run.driver = null;
-    run.finishedAt = now().toISOString();
+    run.finishedAt = recheck ? recheck.finishedAt : now().toISOString();
+    if (removed) delete run.recheck;
     if (!(await d.saveInTurn().catch(() => true))) return;
+    if (recheck) {
+      await auditQuietly(deps.audit, {
+        action: 'import.check.recheck', pluginId: run.pluginId, runId: run.id, actor: SYSTEM,
+        metadata: { status: outcome, copyId: run.copyId, keys: recheck.keys.length },
+      });
+      return;
+    }
     const { read, saved, held, failed, resources } = run.counts;
     await auditQuietly(deps.audit, {
       action: 'import.check.finish', pluginId: run.pluginId, runId: run.id, actor: SYSTEM,
@@ -898,6 +1121,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         if (existing && isLive(existing.status)) {
           throw new Error(`check ${id} is ${existing.status}; stop it before starting it again`);
         }
+        if (existing && correctionHeld(existing)) throw new Error(CORRECTING_REFUSAL);
         const at = now().toISOString();
         // A stopped or failed run carries on from its last page, with its counts and its held rows,
         // while it would read the same copies the same way. Anything else begins at the first key.
@@ -913,7 +1137,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           return {
             ...existing, pluginVersion: plugin.version, status: 'queued', pageSize: pageSize ?? existing.pageSize,
             waiting: null, driver: null, startedAt: at, updatedAt: at, finishedAt: null, lastError: null,
-            startedBy: input.actor.name, carriedOn: true,
+            startedBy: input.actor.name, carriedOn: true, pass: existing.pass ?? randomUUID(),
           };
         }
         return {
@@ -921,7 +1145,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           copyId: input.copyId, referenceCopyId, status: 'queued', options, pageSize: pageSize ?? DEFAULT_PAGE_SIZE,
           cursor: null, counts: freshCounts(), laboratories: [], waiting: null, driver: null,
           startedAt: at, updatedAt: at, finishedAt: null, lastError: null, startedBy: input.actor.name,
-          copyFinishedAt, carriedOn: false,
+          copyFinishedAt, carriedOn: false, pass: randomUUID(),
         };
       }, (next) => auditOrRefuse(deps.audit, {
         action: 'import.check.start', pluginId: plugin.id, runId: id, actor: input.actor,
@@ -965,7 +1189,104 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
 
     async heldItem(pluginId, copyId, key) {
       await ownCopy(pluginId, copyId);
-      return ownDb('read', () => deps.held.get(copyId, key));
+      const item = await ownDb('read', () => deps.held.get(copyId, key));
+      if (!item) return null;
+      const correctable = correctableOf(await resolveChecker(pluginId));
+      const corrections = deps.corrections ? (await ownDb('read', () => deps.corrections!.listFor(copyId, [key]))).get(key) ?? [] : [];
+      return { ...item, corrections, correctable };
+    },
+
+    async correct(input) {
+      const { pluginId, copyId, key, actor } = input;
+      await ownCopy(pluginId, copyId);
+      if (!deps.corrections) throw new Error('corrections are not available on this server');
+      const correctable = correctableOf(await resolveChecker(pluginId));
+      if (correctable.length === 0) throw new Error(`plugin ${pluginId} declares no fields a person may correct`);
+      const reason = input.reason.trim();
+      if (reason === '') throw new Error('a correction needs a reason');
+      if (reason.length > CORRECTION_REASON_MAX) throw new Error(`a reason is at most ${CORRECTION_REASON_MAX} characters`);
+      const fields = Object.keys(input.values);
+      if (fields.length === 0) throw new Error('name at least one field to correct');
+      for (const field of fields) {
+        if (!correctable.includes(field)) throw new Error(`${field} cannot be corrected; the plugin allows ${correctable.join(', ')}`);
+        const v = input.values[field];
+        if (v !== null && v.length > CORRECTION_VALUE_MAX) throw new Error(`a corrected value is at most ${CORRECTION_VALUE_MAX} characters`);
+      }
+      const held = await ownDb('read', () => deps.held.get(copyId, key));
+      if (!held || held.reason !== 'held') throw new Error('that request is not held back by the check, so it cannot be corrected');
+      // A source kind may not have every declared field: only those this request sent (review H2).
+      for (const field of fields) {
+        if (!held.fields || !Object.prototype.hasOwnProperty.call(held.fields, field)) {
+          throw new Error(`${field} cannot be corrected for this request`);
+        }
+      }
+      // A correction and a check take turns on the run (review H17). The claim is taken by compare-and-
+      // swap, as a recheck or a start is queued, so the two can never overlap: a live run refuses the
+      // claim, and a held claim refuses a recheck or a start until it is cleared.
+      const runId = checkIdOf(copyId);
+      const token = randomUUID();
+      await changeRun(pluginId, runId, async (stored) => {
+        if (!stored) throw new Error(`check ${runId} not found`);
+        if (isLive(stored.status)) throw new Error(`check ${runId} is ${stored.status}; correct the request once it has ended`);
+        if (correctionHeld(stored)) throw new Error(`another ${CORRECTING_REFUSAL}`);
+        // A recheck that already saved it, with its held row still to remove, has the last word.
+        if ((stored.recheck?.done ?? []).some((x) => x.key === key && x.outcome === 'saved')) {
+          throw new Error('that request was already saved by a recheck; check it again to take it off the held list');
+        }
+        return { ...stored, correcting: { token, until: new Date(now().getTime() + CORRECTING_MS).toISOString() } };
+      });
+      try {
+        // The audit row first: a correction is stored only once it is on the record (review H6). It
+        // names the copy and the fields, never the key or a value: both come from the source.
+        await auditOrRefuse(deps.audit, { action: 'import.check.correct', pluginId, actor, metadata: { copyId, fields: [...fields].sort() } });
+        const at = now();
+        const rows = fields.sort().map((field) => ({
+          copyId, key, field, value: input.values[field] ?? null, original: held.fields?.[field] ?? null,
+          reason, correctedBy: actor.name, correctedAt: at,
+        }));
+        // Written only while the claim is still this correction's, checked in the same transaction as
+        // the write: a correction that paused past its claim writes nothing (review H17).
+        const wrote = await ownDb('write', () => deps.corrections!.putUnderClaim({
+          pluginId, collection: CHECKS, runKey: runId, token, nowMs: now().getTime(),
+          liveStatuses: ['queued', 'running', 'waiting', 'stopping'],
+        }, rows));
+        if (!wrote) throw new Error('the correction was not saved: a check of this source ran meanwhile, or the request is no longer held. Open it again and try again');
+      } finally {
+        await changeRun(pluginId, runId, async (stored) => {
+          if (!stored) throw new Error(`check ${runId} not found`);
+          if (stored.correcting?.token !== token) return stored;
+          const { correcting: _c, ...rest } = stored;
+          return rest as CheckRun;
+        }).catch(() => {});
+      }
+      return { corrections: (await ownDb('read', () => deps.corrections!.listFor(copyId, [key]))).get(key) ?? [] };
+    },
+
+    async recheck(input) {
+      const { pluginId, copyId, key, actor } = input;
+      await ownCopy(pluginId, copyId);
+      const held = await ownDb('read', () => deps.held.get(copyId, key));
+      if (!held || held.reason !== 'held') throw new Error('that request is not held back by the check, so it cannot be checked again');
+      const runId = checkIdOf(copyId);
+      const run = await changeRun(pluginId, runId, async (stored) => {
+        if (!stored) throw new Error(`check ${runId} not found; start the check again first`);
+        if (isLive(stored.status)) throw new Error(`check ${runId} is ${stored.status}; wait for it to end, then check the request again`);
+        if (correctionHeld(stored)) throw new Error(CORRECTING_REFUSAL);
+        // A recheck that did not finish is settled first: its counts brought in line with its held
+        // rows, and a removal still to do done (re-review H3).
+        const settled: CheckRun = { ...stored, counts: { ...stored.counts, labels: { ...stored.counts.labels } }, laboratories: stored.laboratories && structuredClone(stored.laboratories) };
+        await settleRecheck(settled);
+        const pending = (stored.recheck?.done ?? []).filter((x) => x.outcome === 'saved').map((x) => x.key);
+        if (pending.length > 0) await ownDb('write', () => deps.held.remove(copyId, pending));
+        return {
+          ...settled, status: 'queued', driver: null, waiting: null,
+          recheck: {
+            keys: [key], returnTo: stored.status, finishedAt: stored.finishedAt,
+            before: [{ key, label: held.label, laboratory: held.laboratory, pass: held.pass }],
+          },
+        };
+      }, () => auditOrRefuse(deps.audit, { action: 'import.check.recheck', pluginId, runId, actor, metadata: { copyId } }));
+      return run;
     },
 
     async heldItems(pluginId, copyId, opts) {

@@ -16,6 +16,32 @@ export interface BrokerPrincipal {
   roles: string[];
   /** Display name for the audit trail; falls back to id when absent. */
   username?: string;
+  /** The caller's capabilities. A holder of `imports.correct_held` may use the Feedback tab of an
+   *  import plugin without the plugin's role (design 2026-11-18-held-corrections). */
+  capabilities?: string[];
+}
+
+/** The capability that lets a person correct held requests without the import plugin's role. */
+export const CORRECTOR_CAPABILITY = 'imports.correct_held';
+/** The only calls a corrector may make: what the Feedback tab reads, and correcting. */
+const CORRECTOR_OPS = new Set([
+  // `import.allowed` gives the connector names the tab shows beside each copy.
+  'import.allowed', 'import.copy.list', 'import.check.list', 'import.check.status', 'import.check.held', 'import.check.heldItem', 'import.check.heldItems',
+  'import.check.correct', 'import.check.recheck', 'import.check.access',
+]);
+const isCorrector = (p: { capabilities?: string[] }): boolean => (p.capabilities ?? []).includes(CORRECTOR_CAPABILITY);
+
+/** May this caller open a plugin's page at all? A listed role, or a listed capability, or no list. */
+export function uiAllows(
+  ui: { requiredRoles?: string[]; requiredCapabilities?: string[] } | undefined,
+  caller: { roles: string[]; capabilities?: string[] },
+): { allowed: boolean; byRole: boolean } {
+  const roles = ui?.requiredRoles ?? [];
+  const caps = ui?.requiredCapabilities ?? [];
+  if (roles.length === 0 && caps.length === 0) return { allowed: true, byRole: true };
+  if (roles.some((r) => caller.roles.includes(r))) return { allowed: true, byRole: true };
+  if (caps.some((c) => (caller.capabilities ?? []).includes(c))) return { allowed: true, byRole: false };
+  return { allowed: false, byRole: false };
 }
 
 /** A security-relevant broker event for the audit trail. `outcome:'denied'` is a blocked op
@@ -74,6 +100,9 @@ export type BrokerOp =
   | { kind: 'import.check.stop'; runId: string }
   | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }
   | { kind: 'import.check.heldItem'; copyId: string; key: string }
+  | { kind: 'import.check.correct'; copyId: string; key: string; values: Record<string, string | null>; reason: string }
+  | { kind: 'import.check.recheck'; copyId: string; key: string }
+  | { kind: 'import.check.access' }
   // By offset, or by key with `after` (a key, or null for the start). `offset` is needed only without `after`.
   | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset?: number; after?: string | null; limit: number };
 
@@ -99,7 +128,7 @@ export function copyForPage(run: CopyRun): PageCopyRun {
 /** A check run as a plugin page sees it: no `cursor`, which is a source key, no `driver`, which
  *  names a server process, and none of the record's own bookkeeping. A page tells a start that
  *  carried on by its counts: such a run has requests already read. */
-export type PageCheckRun = Omit<CheckRun, 'driver' | 'rev' | 'kind' | 'pluginId' | 'pluginVersion' | 'cursor' | 'startedBy' | 'copyFinishedAt' | 'carriedOn'>;
+export type PageCheckRun = Omit<CheckRun, 'driver' | 'rev' | 'kind' | 'pluginId' | 'pluginVersion' | 'cursor' | 'startedBy' | 'copyFinishedAt' | 'carriedOn' | 'recheck' | 'pass' | 'correcting'>;
 
 /** The one place a check run is cut down for a plugin page. Every check op's answer goes through it.
  *  A run where no request named a laboratory has only the null entry: the page gets an empty list,
@@ -107,7 +136,7 @@ export type PageCheckRun = Omit<CheckRun, 'driver' | 'rev' | 'kind' | 'pluginId'
 export function checkForPage(run: CheckRun): PageCheckRun {
   const {
     driver: _driver, rev: _rev, kind: _kind, pluginId: _pluginId, pluginVersion: _pluginVersion, cursor: _cursor, startedBy: _startedBy,
-    copyFinishedAt: _copyFinishedAt, carriedOn: _carriedOn, laboratories, ...rest
+    copyFinishedAt: _copyFinishedAt, carriedOn: _carriedOn, recheck: _recheck, pass: _pass, correcting: _correcting, laboratories, ...rest
   } = run;
   if (laboratories === undefined) return rest;
   return { ...rest, laboratories: laboratories.some((l) => l.code !== null) ? laboratories : [] };
@@ -200,6 +229,16 @@ export function buildBrokerOpSchema(maxDocBytes: number) {
       laboratory: LABORATORY.optional(), offset: z.number().int().min(0), limit: z.number().int().min(1).max(HELD_LIST_LIMIT_MAX),
     }),
     z.object({ kind: z.literal('import.check.heldItem'), copyId: ID, key: z.string().min(1).max(200) }),
+    // Held corrections (design 2026-11-18-held-corrections). The service checks the fields against
+    // what the plugin declares; here only the shape and the sizes.
+    z.object({
+      kind: z.literal('import.check.correct'), copyId: ID, key: z.string().min(1).max(200),
+      values: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), z.string().max(200).nullable())
+        .refine((v) => Object.keys(v).length >= 1 && Object.keys(v).length <= 40, { message: 'name 1 to 40 fields' }),
+      reason: z.string().trim().min(1).max(500),
+    }),
+    z.object({ kind: z.literal('import.check.recheck'), copyId: ID, key: z.string().min(1).max(200) }),
+    z.object({ kind: z.literal('import.check.access') }),
     // Each item carries its findings and check, so a page reads a batch of up to 200 in one call.
     // `after` reads by key, as an export must while rows come and go. Without it, `offset` is needed.
     z.object({
@@ -225,7 +264,7 @@ function gateFor(op: BrokerOp): string | undefined {
     case 'import.list': case 'import.failures': case 'import.stop': case 'import.resume':
     case 'import.copy.start': case 'import.copy.list': case 'import.copy.status': case 'import.copy.stop': case 'import.copy.delete':
     case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop': case 'import.check.held': case 'import.check.heldItem':
-    case 'import.check.heldItems':
+    case 'import.check.heldItems': case 'import.check.correct': case 'import.check.recheck': case 'import.check.access':
       return 'host:import';
     default: return undefined; // storage.*, invoke
   }
@@ -267,7 +306,7 @@ function rolesFor(op: BrokerOp): string[] {
     // Copies read a database connector the same way, so the same rule holds.
     case 'import.copy.start': case 'import.copy.list': case 'import.copy.status': case 'import.copy.stop': case 'import.copy.delete':
     case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop': case 'import.check.held': case 'import.check.heldItem':
-    case 'import.check.heldItems':
+    case 'import.check.heldItems': case 'import.check.correct': case 'import.check.recheck': case 'import.check.access':
       return ['lab_admin'];
     // storage.*, invoke, reports.*, fhir.* — reports/fhir reads are broadly readable (native routes have no role gate).
     default: return [];
@@ -306,7 +345,7 @@ export interface PluginBrokerDeps {
   /** The copy service (import-copy.ts). When absent, copy ops return a structured error. */
   copies?: Pick<ImportCopyService, 'start' | 'get' | 'list' | 'stop' | 'remove'>;
   /** The check service (import-check.ts). When absent, check ops return a structured error. */
-  checks?: Pick<ImportCheckService, 'start' | 'get' | 'list' | 'stop' | 'held' | 'heldItem' | 'heldItems'>;
+  checks?: Pick<ImportCheckService, 'start' | 'get' | 'list' | 'stop' | 'held' | 'heldItem' | 'heldItems' | 'correct' | 'recheck'>;
   /** Step-by-step check of a host connector (connector-diagnose.ts), by connector id. */
   diagnoseConnector?: (id: string) => Promise<unknown>;
   policy: () => PluginPolicy;
@@ -363,9 +402,15 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
         // independent of and in addition to the per-op rolesFor() gate below. This is the
         // authorization boundary the native DHIS2 routes had: a plugin declaring
         // ui.requiredRoles:['lab_admin'] is fully off-limits to callers lacking those roles.
-        const requiredRoles = (row.manifest as { payload?: { ui?: { requiredRoles?: string[] } } }).payload?.ui?.requiredRoles;
-        if (requiredRoles?.length && !requiredRoles.some((r) => principal.roles.includes(r))) {
-          return deny(op.kind, `plugin ${pluginId} requires one of roles: ${requiredRoles.join(', ')}`);
+        // A plugin may also name capabilities that open it; a caller let in only by one of those
+        // may make only the corrector's calls (design 2026-11-18-held-corrections).
+        const ui = (row.manifest as { payload?: { ui?: { requiredRoles?: string[]; requiredCapabilities?: string[] } } }).payload?.ui;
+        const opened = uiAllows(ui, principal);
+        if (!opened.allowed) {
+          return deny(op.kind, `plugin ${pluginId} requires one of roles: ${(ui?.requiredRoles ?? []).join(', ')}`);
+        }
+        if (!opened.byRole && !CORRECTOR_OPS.has(op.kind)) {
+          return deny(op.kind, `operation ${op.kind} is not open to a caller without the plugin's role`);
         }
 
         // 2. Global policy (kill-switches) — checked on EVERY call.
@@ -391,7 +436,8 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
 
         // Role gate: capability is the plugin's ceiling; the CALLER's role is a separate axis.
         const need = rolesFor(op);
-        if (need.length > 0 && !need.some((r) => principal.roles.includes(r))) {
+        const asCorrector = isCorrector(principal) && CORRECTOR_OPS.has(op.kind);
+        if (need.length > 0 && !need.some((r) => principal.roles.includes(r)) && !asCorrector) {
           return deny(op.kind, `operation ${op.kind} requires one of roles: ${need.join(', ')}`);
         }
 
@@ -539,7 +585,8 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
             return { ok: false, error: 'unknown operation' };
           }
           case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop':
-          case 'import.check.held': case 'import.check.heldItem': case 'import.check.heldItems': {
+          case 'import.check.held': case 'import.check.heldItem': case 'import.check.heldItems':
+          case 'import.check.correct': case 'import.check.recheck': case 'import.check.access': {
             const checks = deps.checks;
             if (!checks) return { ok: false, error: 'checks are unavailable' };
             const actor: ImportActor = { type: 'user', id: principal.id, name: principal.username ?? principal.id };
@@ -585,6 +632,19 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
                 // As for heldItem: the operation and the copy, never a key, a value or the size.
                 await emit(pluginId, principal, checkReadOp('heldItems', op.copyId), 'ok');
                 return { ok: true, data };
+              }
+              case 'import.check.correct': {
+                const data = await checks.correct({ pluginId, copyId: op.copyId, key: op.key, values: op.values, reason: op.reason, actor });
+                return { ok: true, data };
+              }
+              case 'import.check.recheck': {
+                const run = await checks.recheck({ pluginId, copyId: op.copyId, key: op.key, actor });
+                return { ok: true, data: checkForPage(run) };
+              }
+              case 'import.check.access': {
+                // `full`: the whole page. `correct`: the Correct action on the Feedback tab.
+                const full = principal.roles.includes('lab_admin');
+                return { ok: true, data: { full, correct: full || isCorrector(principal) } };
               }
             }
             return { ok: false, error: 'unknown operation' };

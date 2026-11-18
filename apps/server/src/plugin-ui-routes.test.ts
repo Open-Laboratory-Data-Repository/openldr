@@ -22,9 +22,9 @@ function fakeCtx(over: Partial<any> = {}) {
   } as any;
 }
 
-function build(ctx: any, roles: string[] = ['lab_admin']): FastifyInstance {
+function build(ctx: any, roles: string[] = ['lab_admin'], capabilities: string[] = []): FastifyInstance {
   const app = Fastify();
-  app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u1', username: 'admin', displayName: null, roles }; });
+  app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u1', username: 'admin', displayName: null, roles, capabilities }; });
   registerPluginUiRoutes(app, ctx);
   return app;
 }
@@ -108,6 +108,24 @@ describe('plugin-ui routes', () => {
     const lowPriv = build(fakeCtx(), ['lab_technician']);
     const res = await lowPriv.inject({ method: 'GET', url: '/api/plugins/dhis2-sink/ui/asset' });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('a holder of a listed capability sees and loads a page whose role they lack, and passes their capabilities to the broker (held corrections)', async () => {
+    const withCaps = fakeCtx();
+    const rows = await withCaps.plugins.list();
+    withCaps.plugins.list = async () => rows.map((r: any) => r.id === 'dhis2-sink'
+      ? { ...r, manifest: { payload: { ...r.manifest.payload, ui: { ...r.manifest.payload.ui, requiredCapabilities: ['imports.correct_held'] } } } }
+      : r);
+    let seen: any = null;
+    withCaps.pluginBroker = { handle: async (_id: string, p: unknown) => { seen = p; return { ok: true, data: null }; } };
+    const corrector = build(withCaps, ['data_corrector'], ['imports.correct_held']);
+    expect((await corrector.inject({ method: 'GET', url: '/api/plugins/ui' })).json().map((p: any) => p.id)).toContain('dhis2-sink');
+    expect((await corrector.inject({ method: 'GET', url: '/api/plugins/dhis2-sink/ui/asset' })).statusCode).toBe(200);
+    await corrector.inject({ method: 'POST', url: '/api/plugins/dhis2-sink/broker', payload: { op: { kind: 'import.check.access' } } });
+    expect(seen).toMatchObject({ roles: ['data_corrector'], capabilities: ['imports.correct_held'] });
+    const neither = build(withCaps, ['lab_technician'], ['reports.view']);
+    expect((await neither.inject({ method: 'GET', url: '/api/plugins/ui' })).json().map((p: any) => p.id)).not.toContain('dhis2-sink');
+    expect((await neither.inject({ method: 'GET', url: '/api/plugins/dhis2-sink/ui/asset' })).statusCode).toBe(404);
   });
 
   it('GET asset serves the html for an admin on a requiredRoles plugin', async () => {

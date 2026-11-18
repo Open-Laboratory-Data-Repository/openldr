@@ -47,7 +47,7 @@ import { checkCustomQueryFile, importCustomQueries } from './custom-query-transf
 import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -1892,6 +1892,7 @@ const reporting: ReportingApi = {
   // the driver below drives them, and the id here is what each drive writes on the copy it holds.
   const importCopyStore = createImportCopyStore(internal.db);
   const importHeld = createImportCheckHeldStore(internal.db);
+  const importCorrections = createImportCheckCorrectionStore(internal.db);
   const importDriverId = randomUUID();
   const importCopies = createImportCopyService({
     interruptions: { store: jobInterruptions, now: () => new Date(), processStartedAt },
@@ -1908,7 +1909,8 @@ const reporting: ReportingApi = {
     // imports the check service.
     checks: {
       liveCheckStatus: (pluginId, copyId) => liveCheckStatus(pluginData, pluginId, copyId),
-      deleteHeld: (copyId, limit) => importHeld.deleteSome(copyId, limit),
+      // A copy's held requests and the corrections made to them go together (design 2026-11-18-held-corrections).
+      deleteHeld: async (copyId, limit) => (await importHeld.deleteSome(copyId, limit)) + (await importCorrections.deleteSome(copyId, limit)),
       deleteCheck: (pluginId, copyId) => deleteCheckRecord(pluginData, pluginId, copyId),
     },
   });
@@ -1923,6 +1925,7 @@ const reporting: ReportingApi = {
     persist: workflowPersist,
     copyStore: importCopyStore,
     held: importHeld,
+    corrections: importCorrections,
     copies: importCopies,
     // A check stops when the plugin may no longer read the connector of its source or reference.
     allowed: (pluginId) => imports.allowed(pluginId),

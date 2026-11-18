@@ -921,6 +921,21 @@ export interface ImportCheckHeldTable {
   findings: ColumnType<unknown, string, string>;
   check: ColumnType<unknown, string, string>;
   held_at: Generated<Date>;
+  /** The values as read of the fields a plugin lets a person correct (migration 124). */
+  fields: ColumnType<unknown, string | null | undefined, string | null>;
+  /** The check pass that held the request (migration 124). */
+  pass: ColumnType<string | null, string | null | undefined, string | null>;
+}
+
+export interface ImportCheckCorrectionsTable {
+  copy_id: string;
+  key: string;
+  field: string;
+  value: string | null;
+  original: string | null;
+  reason: string;
+  corrected_by: string;
+  corrected_at: ColumnType<Date, Date | undefined, Date>;
 }
 
 export interface AppSettingsTable {
@@ -1135,6 +1150,7 @@ export interface InternalSchema {
   plugin_data: PluginDataTable;
   import_copy_rows: ImportCopyRowsTable;
   import_check_held: ImportCheckHeldTable;
+  import_check_corrections: ImportCheckCorrectionsTable;
   app_settings: AppSettingsTable;
   report_designs: ReportDesignsTable;
   report_design_versions: ReportDesignVersionsTable;

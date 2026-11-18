@@ -40,6 +40,9 @@ export const uiContributionSchema = z.object({
   // fetch its UI asset, or invoke ANY broker op (incl. storage.*/invoke). Empty/absent ⇒ any
   // authenticated user (back-compat). The broker enforces this independently of the per-op gate.
   requiredRoles: z.array(z.string().min(1)).optional(),
+  // A caller holding one of these capabilities may open the page too, but the broker lets them make
+  // only the calls the capability is for (design 2026-11-18-held-corrections).
+  requiredCapabilities: z.array(z.string().min(1)).optional(),
   sites: uiSitesSchema.optional(),
 }).refine((u) => (u.entry === undefined) === (u.sha256 === undefined), {
   message: 'ui.entry and ui.sha256 must be provided together (webview tier) or both omitted (declarative tier)',
@@ -83,6 +86,9 @@ export const importSourceSchema = z.object({
   }),
   // Stamped on every saved record as its source system. Defaults to the plugin id.
   sourceSystem: z.string().min(1).max(64).optional(),
+  // The fields of a held request a person may correct before checking it again (design
+  // 2026-11-18-held-corrections). The plugin names them; CE offers only these. Needs `decode`.
+  corrections: z.object({ fields: z.array(z.string().regex(/^[a-z][a-z0-9_]{0,39}$/)).min(1).max(40) }).optional(),
 });
 export type ImportSource = z.infer<typeof importSourceSchema>;
 

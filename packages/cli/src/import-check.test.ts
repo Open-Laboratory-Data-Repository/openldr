@@ -27,7 +27,7 @@ vi.mock('@openldr/bootstrap', () => ({
 
 import { COMMAND_META } from './command-meta';
 import {
-  formatCheckRun, runImportCheckHeld, runImportCheckStart, runImportCheckStatus, runImportCheckStop,
+  formatCheckRun, runImportCheckCorrect, runImportCheckHeld, runImportCheckRecheck, runImportCheckStart, runImportCheckStatus, runImportCheckStop,
 } from './import-check';
 
 // A source key and a patient value that must never be printed from a run. The key sits in the cursor.
@@ -76,6 +76,8 @@ describe('import check CLI', () => {
       stop: vi.fn(async () => run({ status: 'stopping' })),
       held: vi.fn(async () => ({ rows: [heldRow(1), heldRow(2, { reason: 'error', label: null, laboratory: null, error: 'DECODE_FAILED' })], total: 2 })),
       heldItems: vi.fn(async () => ({ items: [], total: 0 })),
+      correct: vi.fn(async () => ({ corrections: [{ field: 'dob_age', value: '2023-03-11', original: '2024-03-11', reason: 'typed wrong', correctedBy: 'cli', correctedAt: 'x' }] })),
+      recheck: vi.fn(async () => run({ status: 'queued', driver: null })),
     };
     mocks.createAppContext.mockResolvedValue({ importChecks: checks, close: async () => { closed += 1; } });
   });
@@ -216,6 +218,34 @@ describe('import check CLI', () => {
       const parsed = JSON.parse(out.join(''));
       expect(parsed.status).toBe('stopping');
       expect(parsed).not.toHaveProperty('cursor');
+    });
+  });
+
+  describe('correct and recheck (held corrections)', () => {
+    it('correct sends each --set as a field, an empty value as null, the reason and the cli actor, and prints no value', async () => {
+      expect(await runImportCheckCorrect('v1-check', 'c0ffee', SECRET_KEY, { set: ['dob_age=2023-03-11', 'sex='], reason: 'typed wrong', json: false })).toBe(0);
+      expect(checks.correct).toHaveBeenCalledWith({ pluginId: 'v1-check', copyId: 'c0ffee', key: SECRET_KEY, values: { dob_age: '2023-03-11', sex: null }, reason: 'typed wrong', actor: cli });
+      expect(out.join('')).toBe('corrected 2 fields: dob_age, sex\n');
+      expect(out.join('')).not.toContain('2023-03-11');
+    });
+
+    it('correct refuses a --set with no field and a missing reason before calling the service', async () => {
+      await expect(runImportCheckCorrect('v1-check', 'c0ffee', SECRET_KEY, { set: ['=x'], reason: 'r', json: false })).rejects.toThrow(/field=value/);
+      await expect(runImportCheckCorrect('v1-check', 'c0ffee', SECRET_KEY, { set: ['sex=F'], reason: '', json: false })).rejects.toThrow(/--reason/);
+      expect(checks.correct).not.toHaveBeenCalled();
+    });
+
+    it('recheck --json prints no key the recheck names (review H5)', async () => {
+      checks.recheck = vi.fn(async () => run({ status: 'queued', driver: null, recheck: { keys: [SECRET_KEY], returnTo: 'completed', finishedAt: null } } as never));
+      expect(await runImportCheckRecheck('v1-check', 'c0ffee', SECRET_KEY, { json: true })).toBe(0);
+      expect(out.join('')).not.toContain(SECRET_KEY);
+    });
+
+    it('recheck queues the run and prints it', async () => {
+      expect(await runImportCheckRecheck('v1-check', 'c0ffee', SECRET_KEY, { json: false })).toBe(0);
+      expect(checks.recheck).toHaveBeenCalledWith({ pluginId: 'v1-check', copyId: 'c0ffee', key: SECRET_KEY, actor: cli });
+      expect(out.join('')).toContain('queued');
+      expect(out.join('')).not.toContain(SECRET_KEY);
     });
   });
 
