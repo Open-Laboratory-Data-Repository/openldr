@@ -531,6 +531,7 @@ openldr dashboards share default --clear
 | `--facility <ids>` | Ids d'établissements du registre, séparés par des virgules. |
 | `--district <pairs>` | Districts sous la forme `Region/District`, séparés par des virgules, car des régions différentes ont des districts du même nom. |
 | `--region <regions>` | Régions, séparées par des virgules. |
+| `--none` | Limité sans aucun lieu : l'utilisateur ne voit aucun chiffre de tableau de bord. Il faut `--force`. |
 | `--force` | Nécessaire pour poser une limite, car elle retire des droits. |
 | `--all` | Retire la limite : l'utilisateur voit tout. |
 | `--json` | Affiche la limite en JSON. |

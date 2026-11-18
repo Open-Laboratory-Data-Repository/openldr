@@ -96,4 +96,16 @@ describe('runUsersScope', () => {
     expect(await runUsersScope('sub-1', { ...base, json: true })).toBe(0);
     expect(JSON.parse(out())).toEqual({ subject: 'sub-1', dataScope: { limited: false } });
   });
+
+  // Review C1: the CLI sets Limited with nothing listed, as the Users sheet can.
+  it('--none sets Limited with nothing listed, needs --force, and refuses a list or --all beside it', async () => {
+    expect(await runUsersScope('sub-1', { ...base, none: true })).toBe(1);
+    expect(mocks.saved.size).toBe(0);
+    expect(await runUsersScope('sub-1', { ...base, none: true, force: true, region: 'Dodoma' })).toBe(1);
+    expect(await runUsersScope('sub-1', { ...base, none: true, all: true, force: true })).toBe(1);
+    expect(mocks.saved.size).toBe(0);
+    expect(await runUsersScope('sub-1', { ...base, none: true, force: true })).toBe(0);
+    expect(mocks.saved.get('sub-1')).toEqual({ limited: true, facilities: [], districts: [], regions: [] });
+    expect(out()).toContain('sub-1: limited, with nothing listed, so no dashboard numbers');
+  });
 });

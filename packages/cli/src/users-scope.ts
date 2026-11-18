@@ -7,6 +7,8 @@ export interface UsersScopeOpts {
   json: boolean;
   all: boolean;
   force: boolean;
+  /** Limited with nothing listed: the user sees no dashboard numbers (review C1). */
+  none?: boolean;
   /** Register facility ids, comma separated. */
   facility?: string;
   /** Region/District pairs, comma separated. */
@@ -20,18 +22,23 @@ const list = (v?: string) => (v ?? '').split(',').map((x) => x.trim()).filter(Bo
 /**
  * Show or set a user's data limit (roles part 3). With no option it shows it. `--all` sets
  * Everything. `--facility`, `--district Region/District` and `--region` set Limited to those places,
- * which takes permissions away, so it needs `--force`. The subject is the user's role subject, as
+ * and `--none` sets Limited with nothing listed. Both take permissions away, so they need `--force`. The subject is the user's role subject, as
  * the Users sheet sends it. The route and this command call the same setter.
  */
 export async function runUsersScope(subject: string, opts: UsersScopeOpts): Promise<number> {
   const facilities = list(opts.facility);
   const regions = list(opts.region);
   const districtArgs = list(opts.district);
-  const limiting = facilities.length + regions.length + districtArgs.length > 0;
-  if (opts.all && limiting) {
-    process.stderr.write('--all means everything; do not give --facility, --district or --region with it\n');
+  const listed = facilities.length + regions.length + districtArgs.length > 0;
+  if (opts.all && (listed || opts.none)) {
+    process.stderr.write('--all means everything; do not give --none, --facility, --district or --region with it\n');
     return 1;
   }
+  if (opts.none && listed) {
+    process.stderr.write('--none means nothing listed; do not give --facility, --district or --region with it\n');
+    return 1;
+  }
+  const limiting = listed || opts.none === true;
   const districts: Array<{ region: string; district: string }> = [];
   for (const d of districtArgs) {
     const at = d.indexOf('/');

@@ -549,6 +549,7 @@ openldr dashboards share default --clear
 | `--facility <ids>` | Register facility ids, comma separated. |
 | `--district <pairs>` | Districts as `Region/District`, comma separated, because district names repeat across regions. |
 | `--region <regions>` | Regions, comma separated. |
+| `--none` | Limited with nothing listed, so the user sees no dashboard numbers. Needs `--force`. |
 | `--force` | Needed to set a limit, because it takes permissions away. |
 | `--all` | Remove the limit, so the user sees everything. |
 | `--json` | Print the limit as JSON. |

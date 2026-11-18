@@ -1398,6 +1398,7 @@ export function buildProgram(): Command {
     .option('--facility <ids>', 'register facility ids, comma separated')
     .option('--district <pairs>', 'districts as Region/District, comma separated')
     .option('--region <regions>', 'regions, comma separated')
+    .option('--none', 'limited with nothing listed: the user sees no dashboard numbers', false)
     .option('--force', 'confirm the limit takes permissions away from this user', false)
     .option('--json', 'emit JSON', false)
     .action(async (subject: string, opts: UsersScopeOpts) => {
