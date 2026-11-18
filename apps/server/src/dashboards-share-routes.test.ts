@@ -100,7 +100,9 @@ describe('dashboard sharing', () => {
     const put = await asOwner.inject({ method: 'PUT', url: '/api/dashboards/district/share', payload: { roles: ['region', 'r-district'] } });
     expect(put.statusCode).toBe(200);
     expect(lists.district).toEqual(['r-district', 'r-region']);
-    expect(audit).toContainEqual(expect.objectContaining({ action: 'dashboard.share.set', entityId: 'district', before: ['r-district'], after: ['r-district', 'r-region'] }));
+    // Objects, not bare arrays: node-pg sends an array as a Postgres array literal, which the jsonb
+    // audit columns refuse (found on the scratch-server screen check).
+    expect(audit).toContainEqual(expect.objectContaining({ action: 'dashboard.share.set', entityId: 'district', before: { roles: ['r-district'] }, after: { roles: ['r-district', 'r-region'] } }));
     expect((await asOwner.inject({ method: 'PUT', url: '/api/dashboards/district/share', payload: { roles: ['ghost'] } })).statusCode).toBe(400);
     expect((await setup(admin).app.inject({ method: 'PUT', url: '/api/dashboards/open/share', payload: { roles: ['district'] } })).statusCode).toBe(200);
   });

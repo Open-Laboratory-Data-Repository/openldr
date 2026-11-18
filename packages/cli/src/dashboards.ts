@@ -1,7 +1,7 @@
-import { createAppContext, DashboardShareError, formUserOf, recordAuditEvent, setDashboardShare } from '@openldr/bootstrap';
+import { createAppContext, DashboardShareError, recordAuditEvent, setDashboardShare } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { cliActor } from './cli-actor';
-import { servedHandoff } from './served';
+import { servedCaller } from './served-caller';
 
 /**
  * Show or set who may see a dashboard (design 2026-11-18-roles-scope, part 2). With no list option
@@ -23,11 +23,10 @@ export async function runDashboardsShare(
   const ctx = await createAppContext(loadConfig());
   try {
     const d = await ctx.dashboards.store.get(id);
-    const handoff = servedHandoff();
-    const caller = handoff ? await formUserOf(ctx, handoff.caller.id) : null;
-    const asUser = handoff && caller ? { id: handoff.caller.id, ...caller } : null;
+    const caller = await servedCaller(ctx);
+    const asUser = caller === 'local' ? null : caller;
     const ref = d ? { id: d.id, ownerId: d.ownerId ?? null } : null;
-    if (!d || !ref || (handoff && (!asUser || !(await ctx.dashboardAccess.maySee(asUser, ref))))) {
+    if (!d || !ref || (caller !== 'local' && (!asUser || !(await ctx.dashboardAccess.maySee(asUser, ref))))) {
       process.stderr.write(`no dashboard with id ${id}\n`);
       return 1;
     }
@@ -40,7 +39,8 @@ export async function runDashboardsShare(
       const names = opts.clear ? [] : (opts.roles ?? '').split(',').map((x) => x.trim()).filter(Boolean);
       try {
         const { before, after } = await setDashboardShare({ access: ctx.dashboardAccessStore, dashboards: ctx.dashboards.store, roles: ctx.roles }, id, names);
-        await recordAuditEvent(ctx, cliActor(), { action: 'dashboard.share.set', entityType: 'dashboard', entityId: id, before, after });
+        // Objects, not bare arrays, so the jsonb audit columns accept them (as the route does).
+        await recordAuditEvent(ctx, cliActor(), { action: 'dashboard.share.set', entityType: 'dashboard', entityId: id, before: { roles: before }, after: { roles: after } });
         roles = after;
       } catch (err) {
         if (!(err instanceof DashboardShareError)) throw err;

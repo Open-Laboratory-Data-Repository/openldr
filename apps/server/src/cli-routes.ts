@@ -682,7 +682,12 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       const handoff: ServedHandoff = {
         path: start.path,
         argv: start.argv.map((token) => substitute(token, real)),
-        caller: { id: user.id, username: user.username, displayName: user.displayName || null, keyName: user.accessKey?.name || null },
+        // Role ids and capabilities as worked out for this request, so the command checks per-item
+        // access (forms, dashboards) for the same caller the routes would (roles part 2).
+        caller: {
+          id: user.id, username: user.username, displayName: user.displayName || null, keyName: user.accessKey?.name || null,
+          roleIds: user.roleIds ?? [], capabilities: user.capabilities ?? [],
+        },
         runDir,
         keptDirs: [...keptMade],
       };

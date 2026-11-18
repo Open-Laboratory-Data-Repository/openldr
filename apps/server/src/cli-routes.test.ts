@@ -603,7 +603,7 @@ describe('POST /api/cli/run', () => {
     });
     expect(r.exit).toBe(0);
     const seen = JSON.parse(r.stdout) as { argv: string[]; env: Record<string, string>; handoff: { caller: unknown; argv: string[]; path: string } };
-    expect(seen.handoff.caller).toEqual({ id: 'u-bot', username: 'bot', displayName: null, keyName: 'backup job' });
+    expect(seen.handoff.caller).toEqual({ id: 'u-bot', username: 'bot', displayName: null, keyName: 'backup job', roleIds: [], capabilities: expect.any(Array) });
     expect(seen.handoff.path).toBe('connectors add');
     expect(seen.handoff.argv).toEqual(['self', secret, '@@f']);
     // The process's own command line is node and the entry file, and nothing else.
@@ -1465,7 +1465,12 @@ describe('the hand-off between server and child', () => {
       expect(r.exit, name).toBe(0);
       const { handoff } = JSON.parse(r.stdout) as { handoff: { runDir: string } };
       expect(handoff.runDir.startsWith(join(h.work, 'cli-runs'))).toBe(true);
-      expect({ ...handoff, runDir: '<runDir>' }, name).toEqual(fixture.handoffs[name]);
+      // The caller's role ids and capabilities ride along (roles part 2). They depend on the test user,
+      // so they are checked here, not pinned in the shared fixture.
+      const { caller } = handoff as unknown as { caller: { roleIds: unknown; capabilities: unknown } };
+      expect(Array.isArray(caller.roleIds) && Array.isArray(caller.capabilities), name).toBe(true);
+      const { roleIds: _r, capabilities: _c, ...pinned } = (handoff as unknown as { caller: Record<string, unknown> }).caller;
+      expect({ ...handoff, caller: pinned, runDir: '<runDir>' }, name).toEqual(fixture.handoffs[name]);
     }
   });
 });

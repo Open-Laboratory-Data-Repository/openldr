@@ -170,7 +170,9 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
     try {
       const { before, after } = await setDashboardShare({ access: ctx.dashboardAccessStore, dashboards: ctx.dashboards.store, roles: ctx.roles }, id, p.data.roles);
-      await recordAudit(ctx, req, { action: 'dashboard.share.set', entityType: 'dashboard', entityId: id, before, after });
+      // Objects, not bare arrays: node-pg would send an array as a Postgres array literal, which the
+      // jsonb audit columns refuse.
+      await recordAudit(ctx, req, { action: 'dashboard.share.set', entityType: 'dashboard', entityId: id, before: { roles: before }, after: { roles: after } });
       return { roles: after };
     } catch (err) {
       if (!(err instanceof DashboardShareError)) throw err;

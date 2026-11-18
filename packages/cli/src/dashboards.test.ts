@@ -27,7 +27,7 @@ vi.mock('@openldr/bootstrap', async () => {
       dashboards: { store: { async get(id: string) { return dashboards.find((d) => d.id === id); } } },
       dashboardAccessStore: store,
       dashboardAccess: dash.dashboardAccess({ access: store }),
-      users: { async get(id: string) { return { id, subject: null }; } },
+      users: { async get(id: string) { return id.startsWith('dev:') ? undefined : { id, subject: null }; } },
       roles: {
         async list() { return [{ id: 'r-district', slug: 'district', name: 'District' }, { id: 'r-region', slug: 'region', name: 'Region' }]; },
         async resolveCapabilities() { return mocks.caller.capabilities; },
@@ -67,7 +67,7 @@ describe('runDashboardsShare', () => {
     expect(await runDashboardsShare('d1', { json: false, clear: false, roles: 'region,district' })).toBe(0);
     expect(mocks.lists.d1).toEqual(['r-district', 'r-region']);
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({
-      action: 'dashboard.share.set', entityId: 'd1', before: ['r-district'], after: ['r-district', 'r-region'],
+      action: 'dashboard.share.set', entityId: 'd1', before: { roles: ['r-district'] }, after: { roles: ['r-district', 'r-region'] },
     }));
   });
 
@@ -91,6 +91,12 @@ describe('runDashboardsShare', () => {
     serveAs('u-viewer');
     expect(await runDashboardsShare('d1', { json: false, clear: false })).toBe(1);
     expect(mocks.lists.d1).toEqual(['r-district']);
+  });
+
+  it('checks a served caller by the role ids and capabilities the server sent, even one the users table lacks', async () => {
+    setServedHandoff({ path: 'dashboards share', argv: [], caller: { id: 'dev:dev-admin', username: 'dev-admin', displayName: null, keyName: null, roleIds: [], capabilities: ['dashboards.view', 'roles.manage'] }, runDir: '/tmp/x', keptDirs: [] });
+    expect(await runDashboardsShare('d1', { json: false, clear: false, roles: 'region' })).toBe(0);
+    expect(mocks.lists.d1).toEqual(['r-region']);
   });
 
   it('refuses an unknown dashboard or role, changing nothing', async () => {
