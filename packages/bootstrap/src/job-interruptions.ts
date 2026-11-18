@@ -44,7 +44,8 @@ export async function takeBack(deps: InterruptionDeps, input: TakeBackInput): Pr
   }
   const cuts = await deps.store.inARow(input.kind, input.jobId, input.phase);
   if (!input.selfResume || cuts > MAX_SELF_RESUMES) {
-    await input.wait();
+    // Met again at the cap, the job already waits: nothing more to do.
+    if (inserted) await input.wait();
     return 'waiting';
   }
   await input.resume();

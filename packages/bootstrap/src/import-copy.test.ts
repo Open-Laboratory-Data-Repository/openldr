@@ -1235,6 +1235,19 @@ describe('copy: who drives', () => {
     ]);
   });
 
+  it('leaves an orphan cut three times with no progress for a person (review R10)', async () => {
+    const w = await world(keysOf(4));
+    await orphan(w, { updatedAt: at(w.clock.now - STALE_MS - 1) });
+    const stored = (await w.stored())!;
+    const phase = Object.entries(stored.sets).map(([k, p]) => `${k}:${p.cursor ?? ''}:${p.keys}`).join('|');
+    for (let i = 1; i <= 3; i += 1) {
+      await w.interruptions.record('cdr-run', COPY, { at: new Date(Date.UTC(2026, 0, 1, 0, i)), cause: 'server-restart', phase });
+    }
+    await w.svc.tick();
+    expect((await w.stored())!.driver).not.toBe('server-1');
+    expect(w.audited.find((e) => e.action === 'import.copy.takeover')).toBeUndefined();
+  });
+
   it('a release during a takeover audit write launches no drive, and idle resolves', async () => {
     const w = await world(keysOf(4));
     await orphan(w, { updatedAt: at(w.clock.now - STALE_MS - 1) });

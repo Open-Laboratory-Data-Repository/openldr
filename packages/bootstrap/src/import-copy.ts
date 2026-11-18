@@ -1,4 +1,4 @@
-import { recordSelfResume } from './job-interruptions';
+import { takeBack } from './job-interruptions';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { redact } from '@openldr/core';
@@ -39,6 +39,10 @@ const SYSTEM: ImportActor = { type: 'system', id: null, name: 'system' };
 const PLUGIN_FAILED = "the plugin's copy entrypoint failed";
 
 export type CopyStatus = 'queued' | 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed' | 'deleting';
+
+/** How far a copy got, as a cut's phase: a cut after more rows were read starts the count again. */
+const cutPhase = (run: { sets: Record<string, { cursor: string | null; keys: number }> }): string =>
+  Object.entries(run.sets).map(([k, p]) => `${k}:${p.cursor ?? ''}:${p.keys}`).join('|');
 
 export interface CopySetProgress {
   /** The last key done. The next page starts after it. */
@@ -776,24 +780,43 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
         // Its driver has gone: no write for 2 minutes, and not driven here.
         const orphaned = isDriven(stored.status) && now().getTime() - Date.parse(stored.updatedAt) > STALE_MS;
         if (!unclaimed && !orphaned) continue;
-        const previous = stored.driver ?? null;
-        const run: CopyRun = {
-          ...stored, driver: deps.driverId, waiting: null,
-          status: stored.status === 'queued' || stored.status === 'waiting' ? 'running' : stored.status,
+        const claim = async (): Promise<boolean> => {
+          const previous = stored.driver ?? null;
+          const run: CopyRun = {
+            ...stored, driver: deps.driverId, waiting: null,
+            status: stored.status === 'queued' || stored.status === 'waiting' ? 'running' : stored.status,
+          };
+          // A claim is a compare-and-swap too. The one that loses does not drive.
+          if (!(await writeIfRev(run, stored.rev))) return false;
+          // A release that came while the claim was written: the claim stands, nobody here drives it,
+          // and the next server takes it by the 2-minute rule.
+          if (released) return true;
+          if (!unclaimed && previous !== null && previous !== deps.driverId) {
+            await auditQuietly(deps.audit, {
+              action: 'import.copy.takeover', pluginId: run.pluginId, connectorId: run.connectorId, runId: run.id, actor: SYSTEM,
+              metadata: { status: stored.status },
+            });
+          }
+          launch(run);
+          return true;
         };
-        // A claim is a compare-and-swap too. The one that loses does not drive.
-        if (!(await writeIfRev(run, stored.rev))) continue;
-        if (!unclaimed) await recordSelfResume(deps.interruptions, 'cdr-run', run.id, new Date(stored.updatedAt));
-        // A release that came while the claim was written: the claim stands, nobody here drives it,
-        // and the next server takes it by the 2-minute rule.
-        if (released) return;
-        if (!unclaimed && previous !== null && previous !== deps.driverId) {
-          await auditQuietly(deps.audit, {
-            action: 'import.copy.takeover', pluginId: run.pluginId, connectorId: run.connectorId, runId: run.id, actor: SYSTEM,
-            metadata: { status: stored.status },
-          });
+        if (unclaimed || !deps.interruptions) {
+          await claim();
+          if (released) return;
+          continue;
         }
-        launch(run);
+        // An orphan: the cut is recorded open and resolved only once this driver's claim went
+        // through (review R7). Three cuts with no progress between them leave it for a person
+        // (review R10): its progress is the phase, so a cut after progress starts the count again.
+        const at = new Date(stored.updatedAt);
+        await takeBack(deps.interruptions, {
+          kind: 'cdr-run', jobId: stored.id, phase: cutPhase(stored), at,
+          cause: at.getTime() < deps.interruptions.processStartedAt.getTime() ? 'server-restart' : 'lease-expired',
+          selfResume: true,
+          resume: async () => { if (!(await claim())) throw new Error('another driver claimed the run'); },
+          wait: async () => {},
+        }).catch(() => {});
+        if (released) return;
       }
     }
   }

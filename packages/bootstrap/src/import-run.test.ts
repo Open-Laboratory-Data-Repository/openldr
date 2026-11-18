@@ -815,6 +815,29 @@ describe('import run: adopt', () => {
     ]);
   });
 
+  it('a refused resume leaves the cut open, never marked carried on (review R7)', async () => {
+    const h = await harness(keysOf(4), { origin: 'server' });
+    await storeRun(h, { status: 'waiting', waiting: { since: new Date(h.clock.now).toISOString(), attempt: 2, error: 'Connection lost' } });
+    h.clock.now += STALE_MS + 1;
+    h.failAuditOn('import.resume');
+    expect(await h.svc.adopt()).toEqual([]);
+    expect((await h.interruptions.listFor('cdr-run', ['dead'])).get('dead')).toEqual([
+      expect.objectContaining({ resumedBy: null, resumedAt: null }),
+    ]);
+  });
+
+  it('after three cuts at the same saved cursor, adopt leaves the run interrupted (review R10)', async () => {
+    const h = await harness(keysOf(4), { origin: 'server' });
+    await storeRun(h, { status: 'waiting', waiting: { since: new Date(h.clock.now).toISOString(), attempt: 2, error: 'Connection lost' } });
+    const run = await rawRun('dead');
+    for (let i = 1; i <= 3; i += 1) {
+      await h.interruptions.record('cdr-run', 'dead', { at: new Date(Date.UTC(2026, 0, 1, 0, i)), cause: 'server-restart', phase: run.cursor ?? null });
+    }
+    h.clock.now += STALE_MS + 1;
+    expect(await h.svc.adopt()).toEqual([]);
+    expect(h.mapInputs).toEqual([]);
+  });
+
   it('adopt leaves a run that a CLI process started', async () => {
     const h = await harness(keysOf(4), { origin: 'server' });
     await storeRun(h, { origin: 'cli' });

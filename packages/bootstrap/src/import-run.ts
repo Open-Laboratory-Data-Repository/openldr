@@ -8,7 +8,7 @@ import { createConnectorDb, type ConnectorDb } from './connector-db';
 import { growPage, isStorageDown, retryWaitMs } from './import-retry';
 import { createSourceReader, type SourceReader } from './import-source-reader';
 import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, fillDetailQuery, fillKeyQuery, toPluginRow } from './import-sql';
-import { recordSelfResume, type SelfResumeDeps } from './job-interruptions';
+import { takeBack, type SelfResumeDeps } from './job-interruptions';
 
 // Runs an import for a plugin that declares `payload.importSource` (see the marketplace manifest).
 //
@@ -796,10 +796,24 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
           // Asked before each run, so a server that is shutting down resumes nothing more.
           if (opts.signal?.aborted) return out;
           if (!needsAdopting(stored)) continue;
-          await recordSelfResume(deps.interruptions, 'cdr-run', stored.id, new Date(stored.updatedAt));
-          try {
+          const takeOver = async (): Promise<void> => {
             out.push(stored.status === 'stopping' ? await finishStop(stored) : await service.resume(stored.pluginId, stored.id, SYSTEM));
             unadoptable.delete(stored.id);
+          };
+          try {
+            if (deps.interruptions) {
+              // The cut is recorded open and resolved only once the resume went through, so a refused
+              // resume never reads as carried on (review R7). Three cuts at the same saved cursor
+              // leave the run interrupted for a person's Resume (review R10).
+              const at = new Date(stored.updatedAt);
+              await takeBack(deps.interruptions, {
+                kind: 'cdr-run', jobId: stored.id, phase: stored.cursor ?? null, at,
+                cause: at.getTime() < deps.interruptions.processStartedAt.getTime() ? 'server-restart' : 'lease-expired',
+                selfResume: true, resume: takeOver, wait: async () => {},
+              });
+            } else {
+              await takeOver();
+            }
           } catch {
             // A plugin that is now disabled, a connector no longer allowed, or the audit log down.
             // The run stays as it is and reads as interrupted, so a person can see it and resume

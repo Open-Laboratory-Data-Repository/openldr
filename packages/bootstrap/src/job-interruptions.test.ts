@@ -67,6 +67,17 @@ describe('takeBack after a take-back that did not finish (review R1)', () => {
     ]);
   });
 
+  it('a job left waiting at the cap is not resumed when its cut is met again, and wait runs once', async () => {
+    const { deps } = await setup();
+    for (let i = 0; i < MAX_SELF_RESUMES; i += 1) await takeBack(deps, cut({ at: at(i) }));
+    const capped = cut({ at: at(9) });
+    expect(await takeBack(deps, capped)).toBe('waiting');
+    const metAgain = cut({ at: at(9) });
+    expect(await takeBack(deps, metAgain)).toBe('waiting');
+    expect(metAgain.resume).not.toHaveBeenCalled();
+    expect(metAgain.wait).not.toHaveBeenCalled();
+  });
+
   it('does not resume again a cut that was already resolved', async () => {
     const { deps } = await setup();
     await takeBack(deps, cut());
