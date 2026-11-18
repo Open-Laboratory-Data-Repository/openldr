@@ -60,9 +60,8 @@ export async function setFormAccess(
   };
   const resolve = (names: string[]) => [...new Set(names.map(idOf))];
   const next = { open: resolve(input.open), submit: resolve(input.submit) };
-  const before = await deps.access.get(formId);
-  await deps.access.set(formId, next);
-  return { before, after: await deps.access.get(formId) };
+  // Before and after come from the save itself, read under its lock (roles review FR10).
+  return deps.access.set(formId, next);
 }
 
 /** A person's role ids and capabilities by their user id, found as sign-in finds them: by the

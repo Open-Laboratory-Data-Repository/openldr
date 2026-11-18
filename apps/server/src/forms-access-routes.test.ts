@@ -8,7 +8,7 @@ import { registerFormsRoutes } from './forms-routes';
 function memStore(lists: Record<string, FormAccess>): FormAccessStore {
   return {
     async get(id) { return lists[id] ?? { open: [], submit: [] }; },
-    async set(id, a) { lists[id] = { open: [...a.open].sort(), submit: [...a.submit].sort() }; },
+    async set(id, a) { const before = lists[id] ?? { open: [], submit: [] }; lists[id] = { open: [...a.open].sort(), submit: [...a.submit].sort() }; return { before, after: lists[id]! }; },
     async forForms(ids) { return new Map(ids.filter((id) => lists[id]).map((id) => [id, lists[id]!])); },
     async removeRole() {},
   };

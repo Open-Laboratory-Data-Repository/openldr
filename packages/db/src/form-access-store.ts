@@ -6,8 +6,9 @@ export interface FormAccess { open: string[]; submit: string[] }
 
 export interface FormAccessStore {
   get(formId: string): Promise<FormAccess>;
-  /** Replaces both lists. */
-  set(formId: string, access: FormAccess): Promise<void>;
+  /** Replaces both lists, and returns them as they were and as they are now, both read under the
+   *  lock the save holds, so another save cannot slip between them (roles review FR10). */
+  set(formId: string, access: FormAccess): Promise<{ before: FormAccess; after: FormAccess }>;
   /** The lists of the given forms. A form with no row is absent. */
   forForms(formIds: string[]): Promise<Map<string, FormAccess>>;
   /** Takes a deleted role off every form. */
@@ -34,17 +35,21 @@ export function createFormAccessStore(db: Kysely<InternalSchema>): FormAccessSto
       return collect(rows).get(formId) ?? { open: [], submit: [] };
     },
     async set(formId, access) {
-      await db.transaction().execute(async (trx) => {
+      return db.transaction().execute(async (trx) => {
         // Saves of one form take turns: each holds the form's row until it commits, so the next
         // one deletes this one's rows before it inserts its own. Without it two saves at once
         // both delete, then both insert, and the lists merge (roles review FR5).
         await trx.selectFrom('form_definitions').select('id').where('id', '=', formId).forUpdate().execute();
+        const read = async () => collect(await trx.selectFrom('form_access').select(['form_id', 'role_id', 'mode'])
+          .where('form_id', '=', formId).execute()).get(formId) ?? { open: [], submit: [] };
+        const before = await read();
         await trx.deleteFrom('form_access').where('form_id', '=', formId).execute();
         const rows = [
           ...[...new Set(access.open)].map((role_id) => ({ form_id: formId, role_id, mode: 'open' })),
           ...[...new Set(access.submit)].map((role_id) => ({ form_id: formId, role_id, mode: 'submit' })),
         ];
         if (rows.length > 0) await trx.insertInto('form_access').values(rows).execute();
+        return { before, after: await read() };
       });
     },
     async forForms(formIds) {

@@ -52,6 +52,21 @@ describe.skipIf(!url)('form access saves on disposable PostgreSQL', () => {
     }
   });
 
+  it('returns each save its own before and after, read under the same lock (roles review FR10)', async () => {
+    const store = createFormAccessStore(db);
+    for (let i = 0; i < 20; i += 1) {
+      await store.set('f1', { open: [], submit: [] });
+      const [a, b] = await Promise.all([
+        store.set('f1', { open: ['role-a'], submit: [] }),
+        store.set('f1', { open: ['role-b'], submit: [] }),
+      ]);
+      expect(a.after.open).toEqual(['role-a']);
+      expect(b.after.open).toEqual(['role-b']);
+      // One went first from the empty lists; the other found the first one's lists.
+      expect([a.before.open, b.before.open].sort()).toEqual([[], a.before.open.length ? ['role-b'] : ['role-a']].sort());
+    }
+  });
+
   it('keeps one of two saves made at once, never both merged', async () => {
     const store = createFormAccessStore(db);
     for (let i = 0; i < 20; i += 1) {

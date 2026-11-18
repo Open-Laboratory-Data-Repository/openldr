@@ -19,7 +19,7 @@ vi.mock('@openldr/bootstrap', async () => {
       roles: { async list() { return [{ id: 'r-tech', slug: 'lab_technician', name: 'Lab Technician' }, { id: 'r-mgr', slug: 'lab_manager', name: 'Lab Manager' }]; } },
       formAccessStore: {
         async get(id: string) { return mocks.lists[id] ?? { open: [], submit: [] }; },
-        async set(id: string, a: { open: string[]; submit: string[] }) { mocks.lists[id] = a; },
+        async set(id: string, a: { open: string[]; submit: string[] }) { const before = mocks.lists[id] ?? { open: [], submit: [] }; mocks.lists[id] = a; return { before, after: a }; },
       },
       close: mocks.close,
     }),

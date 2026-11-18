@@ -10,7 +10,7 @@ import { registerFormsRoutes } from './forms-routes';
 /** No form limited to any role: today's rule for every form (design 2026-11-18-roles-scope). */
 const noLists = {
   async get() { return { open: [], submit: [] }; },
-  async set() {},
+  async set() { return { before: { open: [], submit: [] }, after: { open: [], submit: [] } }; },
   async forForms() { return new Map(); },
   async removeRole() {},
 };
