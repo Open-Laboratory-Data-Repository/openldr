@@ -542,6 +542,7 @@ Only the dashboard's owner or an admin sees **Share**. A dashboard made before s
 An administrator can limit a person to some facilities, districts or regions in **Users**. For that person, every widget counts only requests sent from those places, or tested at them. Results and reports count through their request.
 
 - A widget written in SQL shows **Not available with your data limit**. SQL cannot be limited safely, so it does not run.
+- On **Lab Overview (Sample)**, only **Order → Report Pipeline** and **Recent Orders** are SQL, so only those two show the note.
 - A filter whose choices come from SQL offers no choices. Type the value instead.
 - Patients, specimens and facilities are not offered as data, because their rows name no facility.
 - A request whose facility is not known yet is not counted. A new facility code counts once it is mapped in **Facilities** and the report facilities show **Current**.

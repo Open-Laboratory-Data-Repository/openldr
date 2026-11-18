@@ -542,6 +542,7 @@ Só o proprietário do painel ou um administrador vê **Partilhar**. Um painel c
 Um administrador pode limitar uma pessoa a algumas unidades, distritos ou regiões em **Users**. Para essa pessoa, cada widget conta apenas pedidos enviados desses locais, ou analisados neles. Resultados e relatórios contam pelo seu pedido.
 
 - Um widget escrito em SQL mostra **Não disponível com o seu limite de dados**. O SQL não pode ser limitado com segurança, por isso não é executado.
+- Em **Lab Overview (Sample)**, só **Order → Report Pipeline** e **Recent Orders** são SQL, por isso só esses dois mostram a nota.
 - Um filtro cujas opções vêm do SQL não oferece opções. Escreva o valor.
 - Pacientes, amostras e unidades não são oferecidos como dados, porque as suas linhas não indicam nenhuma unidade.
 - Um pedido cuja unidade ainda não é conhecida não é contado. Um novo código de unidade conta depois de ser mapeado em **Facilities** e de as unidades dos relatórios mostrarem **Current**.
