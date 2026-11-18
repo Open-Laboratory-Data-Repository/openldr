@@ -489,4 +489,5 @@ A long job cut off by a restart records it. Most carry on by themselves; these c
 - `openldr terminology job <system>` shows the latest distribution import and its interruptions. `openldr terminology job-continue <id>` continues one that waits after three cuts.
 - `openldr workflows receipts list <workflowId>` shows each run's interruptions. `openldr workflows run-continue <workflowId> <requestId>` starts a new run from an interrupted one; a workflow run never restarts by itself.
 - `openldr facilities jobs --retry <id>` continues an interrupted facility map rebuild.
+- `openldr facilities import-run-continue <runId>` continues a waiting register import from its saved file. Add `--json` for JSON output. A previously confirmed apply runs again without another confirmation. A file check stops at the usual confirmation.
 - `openldr import status`, `import copy status`, `import check status`, `facilities import-run <id>` and `pipeline status` list the interruptions of each run.

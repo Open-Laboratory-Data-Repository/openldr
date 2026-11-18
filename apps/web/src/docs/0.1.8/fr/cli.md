@@ -471,4 +471,5 @@ Une tâche longue coupée par un redémarrage l’enregistre. La plupart reprenn
 - `openldr terminology job <system>` affiche le dernier import de distribution et ses interruptions. `openldr terminology job-continue <id>` reprend celui qui attend après trois coupures.
 - `openldr workflows receipts list <workflowId>` affiche les interruptions de chaque exécution. `openldr workflows run-continue <workflowId> <requestId>` lance une nouvelle exécution à partir d’une exécution interrompue ; une exécution de workflow ne redémarre jamais toute seule.
 - `openldr facilities jobs --retry <id>` reprend une reconstruction de la carte des établissements interrompue.
+- `openldr facilities import-run-continue <runId>` reprend un import de registre en attente depuis son fichier enregistré. Ajoutez `--json` pour une sortie JSON. Une application déjà confirmée reprend sans nouvelle confirmation. Une vérification du fichier s'arrête à la confirmation habituelle.
 - `openldr import status`, `import copy status`, `import check status`, `facilities import-run <id>` et `pipeline status` listent les interruptions de chaque exécution.

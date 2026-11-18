@@ -592,4 +592,9 @@ Um ficheiro parcial não avalia as unidades ausentes. Marque uma versão complet
 
 Uma importação de registo cortada por um reinício do servidor continua sozinha quando o servidor volta, a partir do ficheiro enviado. Uma importação cortada enquanto aplicava aplica de novo sem pedir uma segunda confirmação. Uma importação cortada enquanto verificava o ficheiro verifica-o de novo e para na confirmação habitual.
 
-A importação mostra então um distintivo **Interrompido**; aponte para ele para ver quando. Se uma importação for cortada três vezes na mesma etapa, para com uma mensagem que o diz. Envie de novo o ficheiro para recomeçar.
+A importação mostra um distintivo **Interrompido**; aponte para ele para ver quando. O servidor pode retomar automaticamente três vezes na mesma etapa. Se ocorrer outra interrupção nessa etapa, a importação aguarda a sua ação. O registo permanece reservado enquanto aguarda.
+
+1. Abra o menu **⋯** no canto superior direito do painel de importação.
+2. Selecione **Continuar importação**.
+
+**Resultado esperado:** a importação retoma a partir do ficheiro guardado, sem outro envio.

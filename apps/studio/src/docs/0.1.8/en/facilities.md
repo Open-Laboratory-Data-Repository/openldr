@@ -592,4 +592,9 @@ A partial file does not evaluate facilities absent from the file. Only mark a fi
 
 A register import that a server restart cuts off carries on by itself when the server is back, from the file you uploaded. An import cut while it was applying applies again without asking you to confirm a second time. An import cut while it was checking the file checks it again and stops at the usual confirm.
 
-The run then shows an **Interrupted** badge; point at it to see when. If an import is cut three times at the same stage, it stops with a message saying so. Upload the file again to start over.
+The import shows an **Interrupted** badge; point at it to see when. The server can carry on automatically three times at the same stage. If another interruption happens there, the import waits for you. The register stays reserved while it waits.
+
+1. Open the import sheet's **⋯** menu at the top right.
+2. Select **Continue import**.
+
+**Expected result:** the import runs again from the saved file, without another upload.
