@@ -968,7 +968,7 @@ export const fr: EnShape = {
       invalidUi: 'Ressource UI modifiée', // review
       invalidPayload: 'Charge utile modifiée', // review
       invalidFingerprint: 'Clé de l’éditeur non concordante', // review
-      notConfigured: 'Aucun registre marketplace configuré (définir MARKETPLACE_REGISTRY_DIR).',
+      notConfigured: 'Aucun registre marketplace pour l’instant. Ouvrez l’onglet Registres et choisissez Ajouter un registre dans son menu ⋯.',
       consentTitle: 'Vérifier et approuver : {{id}}',
       requestedCapabilities: 'Capacités demandées',
       approveInstall: 'Approuver et installer',

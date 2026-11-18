@@ -128,7 +128,7 @@ describe('Marketplace', () => {
     (api.listAvailableArtifacts as any).mockResolvedValue({ configured: false, source: null, host: null, bundles: [] });
     (api.listInstalledArtifacts as any).mockResolvedValue([]);
     render(<MemoryRouter><Marketplace /></MemoryRouter>);
-    expect(await screen.findByText(/No marketplace registry configured/i)).toBeTruthy();
+    expect(await screen.findByText(/No marketplace registry yet. Open the Registries tab/i)).toBeTruthy();
   });
 
   it('keeps the selected installed version while refreshed flags change', async () => {

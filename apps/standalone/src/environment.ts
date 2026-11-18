@@ -33,6 +33,9 @@ export interface EnvironmentInput {
  * Throws on unusable input. The message names the field and never its value, since some values
  * are secrets.
  */
+/** The public marketplace's raw base URL. */
+export const PUBLIC_MARKETPLACE_URL = 'https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr_ce-marketplace/main';
+
 export function buildEnvironment(input: EnvironmentInput): Record<string, string> {
   check(input);
   const { paths, state } = input;
@@ -62,6 +65,9 @@ export function buildEnvironment(input: EnvironmentInput): Record<string, string
     WEB_DIST_DIR: input.studioDist,
     APP_VERSION: input.appVersion,
     CLI_ENTRY: input.cliEntry,
+    // The public marketplace, as the Docker installer sets it (install/install.sh). It is added as
+    // the default registry on first start only, so a registry list someone changed stays theirs.
+    MARKETPLACE_REGISTRY_URL: PUBLIC_MARKETPLACE_URL,
   };
 }
 

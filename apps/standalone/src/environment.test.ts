@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigSchema, DEV_SECRETS_ENCRYPTION_KEY, loadConfig } from '@openldr/config';
@@ -42,7 +43,7 @@ const EXPECTED_KEYS = [
   'AUTH_ADAPTER', 'AUTH_DEV_BYPASS', 'BLOB_ADAPTER', 'BLOB_DIR', 'EVENTING_ADAPTER',
   'TARGET_STORE_ADAPTER', 'INTERNAL_DATABASE_URL', 'TARGET_DATABASE_URL', 'MIGRATE_ON_START',
   'SEED_ON_START', 'SECRETS_ENCRYPTION_KEY', 'PLUGIN_CRASH_LOG_DIR', 'TERMINOLOGY_WORK_DIR',
-  'WEB_DIST_DIR', 'APP_VERSION', 'OPENLDR_SKIP_ENV_FILE', 'CLI_ENTRY',
+  'WEB_DIST_DIR', 'APP_VERSION', 'OPENLDR_SKIP_ENV_FILE', 'CLI_ENTRY', 'MARKETPLACE_REGISTRY_URL',
 ];
 
 /** A setting whose name says it holds a path. */
@@ -98,6 +99,14 @@ describe('buildEnvironment', () => {
     expect(cfg.TARGET_STORE_ADAPTER).toBe('pg');
     expect(cfg.EVENTING_ADAPTER).toBe('pg');
     expect(cfg.AUTH_DEV_BYPASS).toBe(false);
+  });
+
+  it('points at the public marketplace, the same one the Docker installer sets', () => {
+    const cfg = loadConfig(buildEnvironment(input));
+    const installer = readFileSync(new URL('../../../install/install.sh', import.meta.url), 'utf8');
+    const fromInstaller = /^MARKETPLACE_REGISTRY_URL=(\S+)$/m.exec(installer)?.[1];
+    expect(fromInstaller).toBeTruthy();
+    expect(cfg.MARKETPLACE_REGISTRY_URL).toBe(fromInstaller);
   });
 
   it('returns exactly the expected keys', () => {

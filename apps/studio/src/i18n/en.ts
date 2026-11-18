@@ -972,7 +972,7 @@ export const en = {
       invalidUi: 'UI asset modified',
       invalidPayload: 'Payload modified',
       invalidFingerprint: 'Publisher key mismatch',
-      notConfigured: 'No marketplace registry configured (set MARKETPLACE_REGISTRY_DIR).',
+      notConfigured: 'No marketplace registry yet. Open the Registries tab and choose Add registry from its ⋯ menu.',
       consentTitle: 'Review & approve: {{id}}',
       requestedCapabilities: 'Requested capabilities',
       approveInstall: 'Approve & install',
