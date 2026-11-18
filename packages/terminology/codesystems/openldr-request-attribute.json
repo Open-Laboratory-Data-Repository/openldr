@@ -36,6 +36,8 @@
     { "code": "reference-numbers", "display": "Reference numbers" },
     { "code": "unique-id", "display": "Unique ID" },
     { "code": "v1-check", "display": "Check against OpenLDR v1" },
-    { "code": "birth-date-estimated", "display": "Date of birth worked out from the stored age" }
+    { "code": "birth-date-estimated", "display": "Date of birth worked out from the stored age" },
+    { "code": "v1-flags", "display": "Data quality flags from the source check" },
+    { "code": "v1-findings", "display": "Data quality findings from the source check" }
   ]
 }
