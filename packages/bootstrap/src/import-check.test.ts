@@ -2027,6 +2027,21 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     await expect(w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN })).resolves.toMatchObject({ status: 'queued' });
   });
 
+  it('a correction whose claim lapsed while it was paused writes nothing when it resumes (review H17, expired owner)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput());
+    const release = w.gateAudit('import.check.correct');
+    const late = w.svc.correct(correctInput({ values: { dob_age: '2022-03-11' } })).then(() => 'accepted', (e: Error) => e.message);
+    await new Promise((r) => setTimeout(r, 20));
+    w.clock.now += 61_000;
+    const other = w.service('server-2');
+    await other.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    release();
+    expect(await late).toMatch(/not saved/);
+    expect((await w.corrections.listFor(SRC, ['REQ0001'])).get('REQ0001')!.map((c) => c.value)).toEqual(['2023-03-11']);
+  });
+
   it('a correction claim left by a crash lapses after a minute (review H17, order)', async () => {
     const w = await world({ corrections: FIELDS });
     await heldRun(w);

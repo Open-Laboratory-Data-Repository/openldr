@@ -1240,12 +1240,17 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         // names the copy and the fields, never the key or a value: both come from the source.
         await auditOrRefuse(deps.audit, { action: 'import.check.correct', pluginId, actor, metadata: { copyId, fields: [...fields].sort() } });
         const at = now();
-        for (const field of fields.sort()) {
-          await ownDb('write', () => deps.corrections!.put({
-            copyId, key, field, value: input.values[field] ?? null, original: held.fields?.[field] ?? null,
-            reason, correctedBy: actor.name, correctedAt: at,
-          }));
-        }
+        const rows = fields.sort().map((field) => ({
+          copyId, key, field, value: input.values[field] ?? null, original: held.fields?.[field] ?? null,
+          reason, correctedBy: actor.name, correctedAt: at,
+        }));
+        // Written only while the claim is still this correction's, checked in the same transaction as
+        // the write: a correction that paused past its claim writes nothing (review H17).
+        const wrote = await ownDb('write', () => deps.corrections!.putUnderClaim({
+          pluginId, collection: CHECKS, runKey: runId, token, nowMs: now().getTime(),
+          liveStatuses: ['queued', 'running', 'waiting', 'stopping'],
+        }, rows));
+        if (!wrote) throw new Error('the correction took too long and was not saved; a check of this source started meanwhile. Try again');
       } finally {
         await changeRun(pluginId, runId, async (stored) => {
           if (!stored) throw new Error(`check ${runId} not found`);
