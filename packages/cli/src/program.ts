@@ -8,6 +8,7 @@ import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed, runDbReproject } from './db';
 import { runAuthRebindIssuer, runAuthSetupCode } from './auth';
 import { runDashboardsShare } from './dashboards';
+import { runUsersScope, type UsersScopeOpts } from './users-scope';
 import { runFormsExtract, runFormsList, runFormsLint, runFormsVersions, runFormsRestore, runFormsAccess } from './forms';
 import { runList as runReportDesignList, runDelete as runReportDesignDelete, runPublish as runReportDesignPublish, runVersions as runReportDesignVersions } from './report-design';
 import { runList as runReportDefList, runDelete as runReportDefDelete } from './report-def';
@@ -1390,6 +1391,19 @@ export function buildProgram(): Command {
   users.command('list').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
     try { process.exitCode = await runUsersList(opts); } catch (err) { process.stderr.write(`users list failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
+  users
+    .command('scope <subject>')
+    .description('Show or set a user\'s data limit: dashboards count only rows from the listed facilities, districts and regions of the register (setting a limit refuses without --force)')
+    .option('--all', 'no limit: the user sees everything', false)
+    .option('--facility <ids>', 'register facility ids, comma separated')
+    .option('--district <pairs>', 'districts as Region/District, comma separated')
+    .option('--region <regions>', 'regions, comma separated')
+    .option('--force', 'confirm the limit takes permissions away from this user', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (subject: string, opts: UsersScopeOpts) => {
+      try { process.exitCode = await runUsersScope(subject, opts); }
+      catch (err) { process.stderr.write(`users scope failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
 
   const user = program.command('user').description('Local user management (decoupled from the IdP)');
   user.command('list').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {

@@ -239,6 +239,7 @@ const REASON: Record<string, string> = {
   '--start-page': 'a Studio page route, not a file', '--status': CHOICE, '--submit': 'role slugs or ids, comma separated', '--survivor': ID, '--system': URI,
   '--timezone': 'an IANA time zone name', '--to': WHEN, '--url': URI, '--username': ID, '--valueset': URI,
   '--version': 'a version number', '--where': FILTER, '--year': WHEN,
+  '--facility': 'register facility ids, comma separated', '--district': 'Region/District names, comma separated', '--region': 'region names, comma separated',
 };
 // Per command, so a new option is reviewed for that command and not let through by its name alone.
 const NOT_A_PATH: Record<string, string[]> = {
@@ -349,6 +350,7 @@ const NOT_A_PATH: Record<string, string[]> = {
   'terminology ontology unlink': ['systemId'],
   'forms lint': ['id'],
   'dashboards share': ['id', '--roles'],
+  'users scope': ['subject', '--facility', '--district', '--region'],
   'forms access': ['id', '--open', '--submit'],
   'forms versions': ['id'],
   'forms restore': ['id', 'version'],
