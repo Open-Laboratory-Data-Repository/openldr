@@ -83,6 +83,9 @@ export const importSourceSchema = z.object({
   }),
   // Stamped on every saved record as its source system. Defaults to the plugin id.
   sourceSystem: z.string().min(1).max(64).optional(),
+  // The fields of a held request a person may correct before checking it again (design
+  // 2026-11-18-held-corrections). The plugin names them; CE offers only these. Needs `decode`.
+  corrections: z.object({ fields: z.array(z.string().regex(/^[a-z][a-z0-9_]{0,39}$/)).min(1).max(40) }).optional(),
 });
 export type ImportSource = z.infer<typeof importSourceSchema>;
 

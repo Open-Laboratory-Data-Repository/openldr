@@ -80,7 +80,8 @@ export interface ImportActor { type: 'user' | 'cli' | 'system'; id: string | nul
 export interface ImportAuditEvent {
   action: 'import.allow' | 'import.revoke' | 'import.start' | 'import.stop' | 'import.resume' | 'import.finish'
     | 'import.copy.start' | 'import.copy.stop' | 'import.copy.takeover' | 'import.copy.finish' | 'import.copy.delete'
-    | 'import.check.start' | 'import.check.stop' | 'import.check.takeover' | 'import.check.finish';
+    | 'import.check.start' | 'import.check.stop' | 'import.check.takeover' | 'import.check.finish'
+    | 'import.check.correct' | 'import.check.recheck';
   pluginId: string;
   connectorId?: string;
   runId?: string;

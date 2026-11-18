@@ -117,10 +117,13 @@ the outcome.
   "As read" without reading the source again.
 - **Which held rows.** Only rows held by rules or by the check (`reason = 'held'`). A row that could not
   be read (`reason = 'error'`) has no fields to correct.
-- **What "check again" runs under.** The held row's own check run: its options, reference copy and
-  provenance. A pass is saved under that run, which moves one from held to saved in its counts. It is
-  refused while a check of the same copy is live, and when that run no longer exists ("Start the check
-  again first").
+- **What "check again" runs under (ruling made while building).** The held row's own check run is queued in
+  a recheck mode that names only the corrected key. The normal driver decodes that key, with the run's
+  options, reference and provenance, through the same code as every page. A pass is saved and leaves the held
+  list; the key's earlier held count is taken back and the new decision counted. After, the run returns to
+  the status and finish time it had. It is refused while a check of the same copy is live, and when the run
+  no longer exists ("start the check again first"). Copying the page logic into a second path was the
+  alternative; it would have doubled the riskiest code.
 - **Later full runs.** A full check run sends the stored corrections for the keys on each page, so a
   corrected request stays corrected when the copy is checked again.
 - **Keeping and removing.** Corrections are deleted with the held rows they belong to and with the copy.
