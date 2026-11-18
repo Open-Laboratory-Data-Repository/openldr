@@ -922,11 +922,29 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       return;
     }
     const recheck = run.recheck;
+    if (recheck && outcome !== 'completed') {
+      // A recheck that did not complete keeps only what is stored: its counts and done marks. Counts it
+      // could not save are dropped with it, so they never disagree with the held list (re-review H3).
+      const stored = await readRun(run.pluginId, run.id).catch(() => null);
+      if (stored) {
+        run.counts = stored.counts;
+        run.laboratories = stored.laboratories;
+        run.recheck = stored.recheck;
+        d.markPageEnd();
+      }
+    }
+    // A removal the stored run marks done but that did not happen is done now; if it fails again the
+    // recheck stays on the run, and the next recheck finishes it first.
+    const pendingRemoval = (run.recheck?.done ?? []).filter((x) => x.outcome === 'saved').map((x) => x.key);
+    let removed = true;
+    if (recheck && pendingRemoval.length > 0) {
+      removed = await deps.held.remove(run.copyId, pendingRemoval).then(() => true, () => false);
+    }
     run.status = recheck ? recheck.returnTo : outcome;
     run.waiting = null;
     run.driver = null;
     run.finishedAt = recheck ? recheck.finishedAt : now().toISOString();
-    delete run.recheck;
+    if (removed) delete run.recheck;
     if (!(await d.saveInTurn().catch(() => true))) return;
     if (recheck) {
       await auditQuietly(deps.audit, {
@@ -1179,6 +1197,9 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       const run = await changeRun(pluginId, runId, async (stored) => {
         if (!stored) throw new Error(`check ${runId} not found; start the check again first`);
         if (isLive(stored.status)) throw new Error(`check ${runId} is ${stored.status}; wait for it to end, then check the request again`);
+        // A recheck that ended with a removal still to do finishes it first (re-review H3).
+        const pending = (stored.recheck?.done ?? []).filter((x) => x.outcome === 'saved').map((x) => x.key);
+        if (pending.length > 0) await ownDb('write', () => deps.held.remove(copyId, pending));
         return {
           ...stored, status: 'queued', driver: null, waiting: null,
           recheck: {

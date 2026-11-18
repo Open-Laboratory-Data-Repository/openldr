@@ -1853,6 +1853,25 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     expect((await w.stored())!).toMatchObject({ status: 'completed', counts: { read: 2, saved: 1, held: 1 } });
   });
 
+  it('a recheck that gives up on unsaved counts leaves the counts and the held list agreeing, and a later recheck works (re-review H3, give up)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput());
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    w.failRunWrites((doc) => (doc.recheck?.done?.length ?? 0) > 0);
+    await drive(w.svc);
+    const after = (await w.stored())!;
+    expect(after.recheck).toBeUndefined();
+    expect(after.counts).toMatchObject({ read: 2, saved: 0, held: 2 });
+    expect((await w.heldAll()).total).toBe(2);
+    // The writes work again: checking it again saves it, once.
+    w.failRunWrites(null);
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    await drive(w.svc);
+    expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0001')).toBeNull();
+    expect((await w.stored())!.counts).toMatchObject({ read: 2, saved: 1, held: 1 });
+  });
+
   it('a full run sends the stored corrections of its page, and none when the plugin declares no fields', async () => {
     const w = await world({ corrections: FIELDS });
     await heldRun(w);
