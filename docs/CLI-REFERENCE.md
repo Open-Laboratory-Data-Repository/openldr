@@ -125,7 +125,8 @@ The plugin and the sample file below are repository files, so this example is a 
 # FHIR Bundle (default converter)
 pnpm openldr ingest bundle.json --json
 # WHONET SQLite via a converter plugin (must be installed first)
-pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
+pnpm fetch:whonet
+pnpm openldr market install reference-plugins/whonet-sqlite --approve
 pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 # Inspect / retry the resulting batch
 pnpm openldr pipeline status --json

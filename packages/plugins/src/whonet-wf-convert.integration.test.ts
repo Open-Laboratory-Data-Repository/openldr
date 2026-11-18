@@ -7,7 +7,7 @@ import { createWasmSink } from './wasm-sink';
 import { parseManifest } from './manifest';
 import { sha256Hex } from './hash';
 
-// reference-plugins/whonet-sqlite/plugin.wasm is a (re)built bundle exposing the
+// reference-plugins/whonet-sqlite/plugin.wasm is the marketplace bundle `pnpm fetch:whonet` downloads, exposing the
 // `wf_convert` (bytes ABI) entrypoint; samples/whonet-sample.sqlite is produced by
 // `pnpm make:whonet-sample`. If either is absent ⇒ the whole suite skips.
 const here = dirname(fileURLToPath(import.meta.url));

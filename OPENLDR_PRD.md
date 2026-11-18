@@ -189,7 +189,7 @@ marketplace, workflows, plugin-ui-sdk, bootstrap, cli}` + adapters
 | P1-PLUG-1 Extism/WASM runtime + host-function interface | ✅ | `packages/plugins`. |
 | P1-PLUG-2 plugins fetched by id+version; provenance ties output to version | ✅ | |
 | P1-PLUG-3 permissively-licensed plugin SDK | ✅ | TS SDK + `wasm/openldr-plugin-sdk` (Rust). |
-| P1-PLUG-4 WHONET SQLite reference plugin | ✅ | `wasm/whonet-sqlite`. |
+| P1-PLUG-4 WHONET SQLite reference plugin | ✅ | Own repository since 2026-11-18 (`openldr-ce-plugin-whonet-sqlite`); published in the marketplace. |
 
 ### 5.6 Domain reporting & dashboard
 | Req | Status | Notes |

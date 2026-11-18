@@ -181,7 +181,8 @@ The plugin and the sample file below are repository files, so this example is a 
 pnpm openldr ingest bundle.json --json
 
 # A WHONET SQLite export via a converter plugin
-pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
+pnpm fetch:whonet
+pnpm openldr market install reference-plugins/whonet-sqlite --approve
 pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 
 # Inspect / retry the batch it created

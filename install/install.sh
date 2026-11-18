@@ -1025,7 +1025,7 @@ SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
 MIGRATE_ON_START=true
 SEED_ON_START=$SEED_ON_START_VAL
 LETSENCRYPT_EMAIL=$LE_EMAIL
-MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/marketplace/main
+MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr_ce-marketplace/main
 EOF
   echo "→ Wrote $DIR/.env (generated secrets, compose project '$PROJECT_NAME')"
 else

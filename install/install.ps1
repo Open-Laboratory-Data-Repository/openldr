@@ -620,7 +620,7 @@ NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem
 SECRETS_ENCRYPTION_KEY=$secretsKey
 MIGRATE_ON_START=true
 SEED_ON_START=$seedOnStart
-MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/marketplace/main
+MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr_ce-marketplace/main
 "@ | Out-File -FilePath $envPath -Encoding ascii
   # Lock the secrets file down to the current user (drop inherited ACLs). Grant Modify
   # (M) rather than just (R,W) so the same user can later delete the install dir during
