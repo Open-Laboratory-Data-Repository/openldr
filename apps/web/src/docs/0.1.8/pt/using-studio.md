@@ -20,6 +20,8 @@ A pessoa que prepara uma instalação nova cria o primeiro administrador. Para e
 
 Pode usar os seus próprios dados. Os dados de exemplo são opcionais.
 
+A lista de guias mostra apenas os guias das páginas que pode usar. Se faltar um guia, peça a permissão ao seu administrador. Uma ligação para um guia abre-o na mesma.
+
 ## Terminar a primeira configuração
 
 Numa instalação nova, siga os passos do primeiro arranque do Studio. Incluem o nome do laboratório, fuso horário, dados de exemplo opcionais e verificações de configuração.
