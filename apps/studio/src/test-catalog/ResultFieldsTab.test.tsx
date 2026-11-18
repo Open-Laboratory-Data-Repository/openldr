@@ -36,7 +36,7 @@ describe('ResultFieldsTab', () => {
   it('says no dictionary is loaded, with stripes and no table', async () => {
     vi.mocked(api.listResultFields).mockResolvedValue(list({ rows: [], total: 0, loaded: false }));
     render(<ResultFieldsTab canManage loinc={null} />);
-    expect(await screen.findByText('No result dictionary is loaded. Import one with openldr terminology import parameters <file>.')).toBeTruthy();
+    expect(await screen.findByText('No result dictionary is loaded. Import one with openldr terminology import resource <file>.')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
   });
 

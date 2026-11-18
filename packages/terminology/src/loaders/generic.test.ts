@@ -32,3 +32,19 @@ describe('importTerminologyResource names the system from the resource', () => {
     expect(saveSystem).toHaveBeenCalledWith('urn:test:cs:sites', null, 'CodeSystem', 'r1', { name: 'TestSites' });
   });
 });
+
+describe('importTerminologyResource keeps concept properties', () => {
+  it('stores each FHIR concept property as properties[code], and null when there are none', async () => {
+    const { store } = fakeStore();
+    await importTerminologyResource(cs({ concept: [
+      { code: 'CD4', display: 'CD4 Count', property: [{ code: 'result_role', valueCode: 'result' }, { code: 'units', valueString: 'cells/uL' }, { code: 'rank', valueInteger: 2 }] },
+      { code: 'B', display: 'Plain' },
+      { code: 'C', property: [{ code: 'empty' }] },
+    ] }), store);
+    expect(store.upsertConcepts).toHaveBeenCalledWith([
+      { system: 'urn:test:cs:sites', code: 'CD4', display: 'CD4 Count', status: null, properties: { result_role: 'result', units: 'cells/uL', rank: 2 } },
+      { system: 'urn:test:cs:sites', code: 'B', display: 'Plain', status: null, properties: null },
+      { system: 'urn:test:cs:sites', code: 'C', display: null, status: null, properties: null },
+    ]);
+  });
+});

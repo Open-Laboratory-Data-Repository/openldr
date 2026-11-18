@@ -35,9 +35,27 @@ type TerminologyResource = {
   name?: string;
   title?: string;
   description?: string;
-  concept?: { code: string; display?: string }[];
+  concept?: { code: string; display?: string; property?: ConceptProperty[] }[];
   group?: { source?: string; target?: string; element: { code: string; target?: { code: string; equivalence?: string }[] }[] }[];
 };
+
+/** A FHIR CodeSystem concept property. One `value[x]` is set. */
+type ConceptProperty = {
+  code: string;
+  valueCode?: string; valueString?: string; valueInteger?: number; valueDecimal?: number; valueBoolean?: boolean;
+};
+
+/** A concept's FHIR properties as the stored `properties` object, keyed by property code. A
+ *  property with no value is left out. No properties gives null, as before. */
+export function conceptProperties(props: ConceptProperty[] | undefined): Record<string, unknown> | null {
+  const out: Record<string, unknown> = {};
+  for (const p of props ?? []) {
+    if (!p || typeof p.code !== 'string' || !p.code) continue;
+    const v = p.valueCode ?? p.valueString ?? p.valueInteger ?? p.valueDecimal ?? p.valueBoolean;
+    if (v !== undefined) out[p.code] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
 
 /** The checks `importTerminologyResource` runs before it writes anything. Throws `OpenLdrError`. */
 export function checkTerminologyResource(json: unknown): TerminologyResource & { url: string } {
@@ -67,7 +85,7 @@ export async function importTerminologyResource(json: unknown, store: LoaderStor
       code: c.code,
       display: c.display ?? null,
       status: null,
-      properties: null,
+      properties: conceptProperties(c.property),
     }));
     await store.upsertConcepts(rows);
     conceptsLoaded = rows.length;

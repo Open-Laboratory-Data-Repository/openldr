@@ -20,8 +20,6 @@ const mocks = vi.hoisted(() => ({
       loinc: vi.fn(),
       amr: vi.fn(),
       resource: vi.fn(),
-      organisms: vi.fn(),
-      parameters: vi.fn(),
     },
     audit: {},
     logger: {},
@@ -133,42 +131,44 @@ describe('terminology CLI audit', () => {
     );
   });
 
-  it('terminology import parameters audits coding_system.import (entityId "parameters"), matching the organisms branch', async () => {
-    const result = { system: 'urn:openldr:default_result', conceptsLoaded: 2, resourceUrl: 'urn:openldr:default_result', byRole: { result: 1, metadata: 1 }, skipped: 0 };
-    mocks.termCtx.loaders.parameters.mockResolvedValue(result);
-    // readFileSync(path) is invoked inside runTerminologyImport to build the parameters JSON argument
-    // before loaders.parameters (mocked above) is called.
-    mocks.readFileSync.mockReturnValue('[]');
+  it('a resource import of the lab result codes rebuilds test_map', async () => {
+    const result = { system: 'urn:openldr:default_result', conceptsLoaded: 2, resourceUrl: 'urn:openldr:default_result' };
+    mocks.termCtx.loaders.resource.mockResolvedValue(result);
+    mocks.readFileSync.mockReturnValue('{}');
 
-    const code = await runTerminologyImport('parameters', '/some/file.json', { json: true });
+    const code = await runTerminologyImport('resource', '/some/file.json', { json: true });
 
     expect(code).toBe(0);
-    expect(mocks.termCtx.loaders.parameters).toHaveBeenCalledTimes(1);
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       mocks.termCtx,
       expect.objectContaining({ actorType: 'cli' }),
-      expect.objectContaining({
-        action: 'coding_system.import',
-        entityType: 'coding_system',
-        entityId: 'parameters',
-        metadata: { source: 'parameters', result },
-      }),
+      expect.objectContaining({ action: 'term.import', entityType: 'term', entityId: 'urn:openldr:default_result' }),
     );
     // The import runs through a context with no warehouse, so the CLI rebuilds test_map itself.
     expect(mocks.appCtx.testMapping.rebuildNow).toHaveBeenCalledTimes(1);
     expect(mocks.appCtx.close).toHaveBeenCalledTimes(1);
   });
 
-  describe('parameters import when the test_map rebuild goes wrong', () => {
+  it('a resource import of any other system does not rebuild test_map', async () => {
+    mocks.termCtx.loaders.resource.mockResolvedValue({ system: 'urn:test', conceptsLoaded: 2, resourceUrl: 'urn:test' });
+    mocks.readFileSync.mockReturnValue('{}');
+
+    const code = await runTerminologyImport('resource', '/some/file.json', { json: true });
+
+    expect(code).toBe(0);
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+  });
+
+  describe('result codes import when the test_map rebuild goes wrong', () => {
     const stale = (reason: string) => `the warehouse copy test_map is out of date: ${reason}. Run openldr test-catalog map rebuild --apply.\n`;
-    const loaded = { system: 'urn:openldr:default_result', conceptsLoaded: 2, resourceUrl: 'urn:openldr:default_result', byRole: { result: 1, metadata: 1 }, skipped: 0 };
+    const loaded = { system: 'urn:openldr:default_result', conceptsLoaded: 2, resourceUrl: 'urn:openldr:default_result' };
 
     it('warns and still exits 0 when the rebuild reports a failure', async () => {
-      mocks.termCtx.loaders.parameters.mockResolvedValue(loaded);
-      mocks.readFileSync.mockReturnValue('[]');
+      mocks.termCtx.loaders.resource.mockResolvedValue(loaded);
+      mocks.readFileSync.mockReturnValue('{}');
       mocks.appCtx.testMapping.rebuildNow.mockResolvedValue({ ok: false, error: 'boom' });
 
-      const code = await runTerminologyImport('parameters', '/some/file.json', { json: true });
+      const code = await runTerminologyImport('resource', '/some/file.json', { json: true });
 
       expect(code).toBe(0);
       expect(process.stderr.write).toHaveBeenCalledWith(stale('boom'));
@@ -176,11 +176,11 @@ describe('terminology CLI audit', () => {
     });
 
     it('warns and still exits 0 when the app context cannot be opened', async () => {
-      mocks.termCtx.loaders.parameters.mockResolvedValue(loaded);
-      mocks.readFileSync.mockReturnValue('[]');
+      mocks.termCtx.loaders.resource.mockResolvedValue(loaded);
+      mocks.readFileSync.mockReturnValue('{}');
       mocks.createAppContext.mockRejectedValue(new Error('no warehouse'));
 
-      const code = await runTerminologyImport('parameters', '/some/file.json', { json: true });
+      const code = await runTerminologyImport('resource', '/some/file.json', { json: true });
 
       expect(code).toBe(0);
       expect(process.stderr.write).toHaveBeenCalledWith(stale('no warehouse'));

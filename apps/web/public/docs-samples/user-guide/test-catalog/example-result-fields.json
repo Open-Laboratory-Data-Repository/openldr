@@ -1,8 +1,22 @@
-[
-  {
-    "code": "EXAMPLE-RESULT",
-    "description": "Example numeric result",
-    "result_role": "result",
-    "units": "example units"
-  }
-]
+{
+  "resourceType": "CodeSystem",
+  "url": "urn:openldr:default_result",
+  "name": "ExampleResultFields",
+  "title": "Example result fields",
+  "status": "active",
+  "content": "complete",
+  "property": [
+    { "code": "result_role", "type": "code", "description": "result, specimen, metadata or admin" },
+    { "code": "parm_units", "type": "string", "description": "The unit the lab reports" }
+  ],
+  "concept": [
+    {
+      "code": "EXAMPLE-RESULT",
+      "display": "Example numeric result",
+      "property": [
+        { "code": "result_role", "valueCode": "result" },
+        { "code": "parm_units", "valueString": "example units" }
+      ]
+    }
+  ]
+}

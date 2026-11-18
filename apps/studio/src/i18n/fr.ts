@@ -1336,7 +1336,7 @@ export const fr: EnShape = {
       role: { all: 'Tous les rôles', result: 'Résultat', specimen: 'Échantillon', metadata: 'Métadonnée', admin: 'Administratif' },
       col: { code: 'Code', name: 'Nom', role: 'Rôle', units: 'Unités', loinc: 'LOINC' },
       fromCentral: 'Ce dictionnaire de résultats vient du central. Seul le central peut modifier ses liens LOINC.',
-      notLoaded: 'Aucun dictionnaire de résultats n’est chargé. Importez-en un avec openldr terminology import parameters <fichier>.',
+      notLoaded: 'Aucun dictionnaire de résultats n’est chargé. Importez-en un avec openldr terminology import resource <fichier>.',
       noMatch: 'Aucun champ de résultat ne correspond.',
       count_one: '{{count}} champ de résultat',
       count_other: '{{count}} champs de résultat',

@@ -1,8 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { createFhirStore, createTerminologyStore, createTerminologyAdminStore, type ValueSetProjection } from '@openldr/db';
-import { importResultParameters, type LoaderStore } from '@openldr/terminology';
-import { reexpandValueSetsForSystem, createResultParametersLoader } from './reexpand-value-sets';
+import { importTerminologyResource, RESULT_PARAM_SYSTEM, type LoaderStore } from '@openldr/terminology';
+import { reexpandValueSetsForSystem, createResourceLoader } from './reexpand-value-sets';
+
+/** The lab's result codes as a FHIR CodeSystem, each concept carrying its result_role property. */
+function resultCodes(rows: { code: string; display: string; role: string }[]) {
+  return {
+    resourceType: 'CodeSystem', url: RESULT_PARAM_SYSTEM, status: 'active', content: 'complete',
+    concept: rows.map((r) => ({ code: r.code, display: r.display, property: [{ code: 'result_role', valueCode: r.role }] })),
+  };
+}
+const CD4 = { code: 'CD4', display: 'CD4 Count', role: 'result' };
+const COLBY = { code: 'COLBY', display: 'Collected By', role: 'metadata' };
 
 // Mirrors bootstrap's exact terminology-context.ts construction (createTerminologyContext can't run
 // against pg-mem itself — see index.test.ts's reference-capture describe block for why): a real
@@ -45,13 +55,7 @@ describe('reexpandValueSetsForSystem (Task 4, S2b)', () => {
   it('re-expands the intensional sets after an import, so they are not empty', async () => {
     const { admin, loaderStore, codesIn } = await buildContext();
 
-    const result = await importResultParameters(
-      [
-        { code: 'CD4', description: 'CD4 Count', result_role: 'result' },
-        { code: 'COLBY', description: 'Collected By', result_role: 'metadata' },
-      ],
-      loaderStore,
-    );
+    const result = await importTerminologyResource(resultCodes([CD4, COLBY]), loaderStore);
 
     await reexpandValueSetsForSystem(admin, result.system);
 
@@ -63,10 +67,7 @@ describe('reexpandValueSetsForSystem (Task 4, S2b)', () => {
   it('projects through valueSets.save() — a fhir.change_log row lands for each re-expanded set (not just expand())', async () => {
     const { db, admin, loaderStore } = await buildContext();
 
-    await importResultParameters(
-      [{ code: 'CD4', description: 'CD4 Count', result_role: 'result' }],
-      loaderStore,
-    );
+    await importTerminologyResource(resultCodes([CD4]), loaderStore);
     await reexpandValueSetsForSystem(admin, 'urn:openldr:default_result');
 
     const vsIds = ['vs-result-observation', 'vs-reportable-result', 'vs-non-reportable'];
@@ -80,13 +81,7 @@ describe('reexpandValueSetsForSystem (Task 4, S2b)', () => {
   it('leaves the sets empty when the re-expansion call never runs (import alone is not enough)', async () => {
     const { loaderStore, codesIn } = await buildContext();
 
-    await importResultParameters(
-      [
-        { code: 'CD4', description: 'CD4 Count', result_role: 'result' },
-        { code: 'COLBY', description: 'Collected By', result_role: 'metadata' },
-      ],
-      loaderStore,
-    );
+    await importTerminologyResource(resultCodes([CD4, COLBY]), loaderStore);
     // Deliberately no reexpandValueSetsForSystem call here — migration 069 seeded these sets with
     // expanded_at: null and zero valueset_expansions rows, and an import alone never touches them.
 
@@ -95,25 +90,26 @@ describe('reexpandValueSetsForSystem (Task 4, S2b)', () => {
   });
 });
 
-describe('createResultParametersLoader (F3: the actual boot wiring, not the helper directly)', () => {
-  // The three cases above call `reexpandValueSetsForSystem` directly, which proves the helper
-  // itself works — but not that either boot path (`terminology-context.ts`'s
-  // `createTerminologyContext` or `index.ts`'s `createAppContext`) actually calls it. Both files now
-  // build their `loaders.parameters` closure from this same factory (see reexpand-value-sets.ts), so
-  // driving `loaders.parameters(...)` here — the real seam this task owns — exercises the exact code
-  // both boot paths run, not a hand-rolled equivalent.
-  it('drives loaders.parameters(...) end to end and leaves the result-role sets expanded', async () => {
+describe('createResourceLoader (the boot wiring both boot paths use)', () => {
+  // terminology-context.ts and index.ts both build loaders.resource from this factory, so driving it
+  // here runs the same code a CodeSystem import runs in the app.
+  it('a CodeSystem import of the result codes leaves the result-role sets expanded', async () => {
     const { admin, loaderStore, codesIn } = await buildContext();
-    const loaders = { parameters: createResultParametersLoader(admin, loaderStore) };
+    const loaders = { resource: createResourceLoader(admin, loaderStore) };
 
-    const result = await loaders.parameters([
-      { code: 'CD4', description: 'CD4 Count', result_role: 'result' },
-      { code: 'COLBY', description: 'Collected By', result_role: 'metadata' },
-    ]);
+    const result = await loaders.resource(resultCodes([CD4, COLBY]));
 
-    expect(result.system).toBe('urn:openldr:default_result');
+    expect(result.system).toBe(RESULT_PARAM_SYSTEM);
     expect(await codesIn('urn:openldr:valueset:non-reportable')).toEqual(['COLBY']);
     expect(await codesIn('urn:openldr:valueset:reportable-result')).toEqual(['CD4']);
     expect(await codesIn('urn:openldr:valueset:result-observation')).toEqual(['CD4', 'COLBY']);
+  });
+
+  it('a ConceptMap import re-expands nothing', async () => {
+    const { admin, loaderStore, codesIn } = await buildContext();
+    const loaders = { resource: createResourceLoader(admin, loaderStore) };
+    await loaders.resource(resultCodes([CD4]));
+    await loaders.resource({ resourceType: 'ConceptMap', url: 'urn:test:map', status: 'active', group: [] });
+    expect(await codesIn('urn:openldr:valueset:reportable-result')).toEqual(['CD4']);
   });
 });

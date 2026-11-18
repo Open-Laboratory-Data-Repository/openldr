@@ -436,18 +436,6 @@ function buildFakeLoaders(): FakeLoaders {
       if (!acceptLicense) throw new Error('LOINC import requires accepting the LOINC license (--accept-license)');
       return { system: 'http://loinc.org', conceptsLoaded: dir.includes('empty') ? 0 : 2, resourceUrl: 'http://loinc.org' };
     },
-    async organisms() {
-      return {
-        system: 'urn:openldr:default_org', conceptsLoaded: 2, resourceUrl: 'urn:openldr:default_org',
-        byType: { bacteria: 1, none: 1 }, skipped: 0,
-      };
-    },
-    async parameters() {
-      return {
-        system: 'urn:openldr:default_result', conceptsLoaded: 2, resourceUrl: 'urn:openldr:default_result',
-        byRole: { result: 1, metadata: 1 }, skipped: 0,
-      };
-    },
     async amr() {
       return [];
     },

@@ -1348,7 +1348,7 @@ export const en = {
       role: { all: 'All roles', result: 'Result', specimen: 'Specimen', metadata: 'Metadata', admin: 'Admin' },
       col: { code: 'Code', name: 'Name', role: 'Role', units: 'Units', loinc: 'LOINC' },
       fromCentral: 'This result dictionary comes from central. Only central can change its LOINC links.',
-      notLoaded: 'No result dictionary is loaded. Import one with openldr terminology import parameters <file>.',
+      notLoaded: 'No result dictionary is loaded. Import one with openldr terminology import resource <file>.',
       noMatch: 'No result fields match.',
       count_one: '{{count}} result field',
       count_other: '{{count}} result fields',

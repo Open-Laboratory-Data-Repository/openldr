@@ -59,7 +59,7 @@ import { createRetryQuarantine } from './sync-retry-quarantine';
 import { createSyncActivityTracker } from './sync-activity-tracker';
 import { encodePushBody, advertisesGzip } from './sync-gzip';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
-import { createResultParametersLoader } from './reexpand-value-sets';
+import { createResourceLoader } from './reexpand-value-sets';
 
 import { checkForActivity, copyForActivity, createActivityService, type ActivityCheckRun, type ActivityCopyRun, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
@@ -110,7 +110,7 @@ import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry, CE_VERSION } from './plugin-registry';
 import { createProjectionWorker } from './projection-worker';
-import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importTerminologyResource, checkTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type ImportOrigin, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importTerminologyResource, checkTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type ImportOrigin, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorkerIfEnabled } from './terminology-ingest-worker';
 import { createRunIngest } from './terminology-ingest-shared';
 import { recordAuditEvent, type AuditDetails } from './record-audit';
@@ -514,8 +514,6 @@ export interface AppContext {
     loaders: {
       loinc(dir: string, acceptLicense: boolean): Promise<LoadResult>;
       amr(sqlitePath: string): Promise<LoadResult[]>;
-      organisms(json: unknown): Promise<OrganismImportResult>;
-      parameters(json: unknown): Promise<ResultParamImportResult>;
       resource(json: unknown, from?: ImportOrigin): Promise<LoadResult>;
     };
     ingestOntologyWithConcepts(systemType: string, systemId: string, dir: string, onProgress: (p: { phase: string; processed: number; total: number | null }) => void): Promise<{ conceptsLoaded: number }>;
@@ -1094,14 +1092,8 @@ const reporting: ReportingApi = {
     loaders: {
       loinc: (dir, acceptLicense) => loadLoinc(dir, { acceptLicense }, loaderStore),
       amr: (p) => loadWhonetAmr(p, loaderStore),
-      // An admin import unless the caller says otherwise (CE's seed passes 'core', a pack 'pack').
-      resource: (json, from) => importTerminologyResource(json, loaderStore, from ?? { origin: 'import' }),
-      organisms: (json) => importOrganismDictionary(json, loaderStore),
-      // Task 4 (S2b): the intensional result-role ValueSets (Task 3's migration 069) are seeded with
-      // no expansion — their concepts arrive here, not at migration time. Re-expand + reproject them
-      // (via valueSets.save(), not expand() — see reexpand-value-sets.ts) every time this import runs,
-      // or they stay empty forever and nothing reaches terminology_codes.
-      parameters: createResultParametersLoader(termAdmin, loaderStore),
+      // A CodeSystem import re-expands the ValueSets built on its system (reexpand-value-sets.ts).
+      resource: createResourceLoader(termAdmin, loaderStore),
     },
     async ingestOntologyWithConcepts(systemType, systemId, dir, onProgress) {
       const url = canonicalSystemUrl(systemType);

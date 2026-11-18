@@ -494,7 +494,7 @@ For the optional dictionary and lab-data bundle, first follow [Start here](/docs
 
 ```shell
 cd ~/Downloads/openldr_ce
-pnpm openldr terminology import parameters data/example-result-fields.json
+pnpm openldr terminology import resource data/example-result-fields.json
 pnpm openldr ingest data/example-lab-data.json
 ```
 

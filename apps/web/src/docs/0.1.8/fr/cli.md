@@ -442,7 +442,7 @@ Lier les champs de résultat à LOINC :
 
 - `result-fields list` liste les champs avec leur rôle, leurs unités et leur lien LOINC. `--loinc` accepte `linked`, `none` ou `all`, et `--role` accepte `result`, `specimen`, `metadata` ou `admin`.
 - `result-fields unlink` refuse de s'exécuter sans `--force`. `result-fields import` affiche un aperçu, sauf si `--apply --force` est donné. Un laboratoire qui reçoit son dictionnaire du central ne peut pas modifier les liens.
-- `openldr terminology import parameters <file>` reconstruit `test_map` après avoir chargé le dictionnaire.
+- `openldr terminology import resource <file>` charge un CodeSystem FHIR. Quand son `url` est `urn:openldr:default_result`, c’est le dictionnaire de résultats : chaque concept porte une propriété `result_role`, et peut porter `parm_units`. La commande reconstruit alors `test_map`.
 
 Chaque changement est enregistré dans le journal d'audit au nom du compte connecté.
 

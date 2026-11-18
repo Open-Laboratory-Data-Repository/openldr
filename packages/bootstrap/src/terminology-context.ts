@@ -3,11 +3,11 @@ import type { Config } from '@openldr/config';
 import { redact, createLogger, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
 import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, referenceCapture, markTerminologyChanged, createTerminologyIngestJobStore, type TerminologyAdminStore, type InternalSchema, type OntologyStore, type TerminologyIngestJobStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
-import { buildOntologyDistribution, canonicalSystemUrl, createOperations, type Operations, type LoaderStore, type ImportOrigin, loadLoinc, loadWhonetAmr, importTerminologyResource, importOrganismDictionary, stalenessReason, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, type Operations, type LoaderStore, type ImportOrigin, loadLoinc, loadWhonetAmr, importTerminologyResource, stalenessReason, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType } from '@openldr/terminology';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 import type { BlobStoragePort } from '@openldr/ports';
 import { createBlobFromConfig } from './s3-config';
-import { createResultParametersLoader } from './reexpand-value-sets';
+import { createResourceLoader } from './reexpand-value-sets';
 import { withLabTestsList } from './test-catalog';
 
 function createOntologyApi(ontologyStore: OntologyStore) {
@@ -43,8 +43,6 @@ export interface TerminologyContext {
   loaders: {
     loinc(dir: string, acceptLicense: boolean): Promise<LoadResult>;
     amr(sqlitePath: string): Promise<LoadResult[]>;
-    organisms(json: unknown): Promise<OrganismImportResult>;
-    parameters(json: unknown): Promise<ResultParamImportResult>;
     resource(json: unknown, from?: ImportOrigin): Promise<LoadResult>;
   };
   ingestOntologyWithConcepts(systemType: string, systemId: string, dir: string, onProgress: (p: { phase: string; processed: number; total: number | null }) => void): Promise<{ conceptsLoaded: number }>;
@@ -127,14 +125,8 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
     loaders: {
       loinc: (dir, acceptLicense) => loadLoinc(dir, { acceptLicense }, loaderStore),
       amr: (p) => loadWhonetAmr(p, loaderStore),
-      // An admin import unless the caller says otherwise (CE's seed passes 'core', a pack 'pack').
-      resource: (json, from) => importTerminologyResource(json, loaderStore, from ?? { origin: 'import' }),
-      organisms: (json) => importOrganismDictionary(json, loaderStore),
-      // Task 4 (S2b): the intensional result-role ValueSets (Task 3's migration 069) are seeded with
-      // no expansion — their concepts arrive here, not at migration time. Re-expand + reproject them
-      // (via valueSets.save(), not expand() — see reexpand-value-sets.ts) every time this import runs,
-      // or they stay empty forever and nothing reaches terminology_codes.
-      parameters: createResultParametersLoader(admin, loaderStore),
+      // A CodeSystem import re-expands the ValueSets built on its system (reexpand-value-sets.ts).
+      resource: createResourceLoader(admin, loaderStore),
     },
     async ingestOntologyWithConcepts(systemType, systemId, dir, onProgress) {
       const url = canonicalSystemUrl(systemType);

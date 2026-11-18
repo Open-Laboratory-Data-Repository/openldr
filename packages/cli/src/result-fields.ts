@@ -24,7 +24,7 @@ export async function runResultFieldsList(opts: ResultFieldsListOpts): Promise<n
   try {
     const out = await ctx.resultFields.list(parsed.query);
     if (opts.json) { process.stdout.write(JSON.stringify(out, null, 2) + '\n'); return 0; }
-    if (!out.loaded) { process.stdout.write('No result dictionary is loaded. Import one with openldr terminology import parameters <file>.\n'); return 0; }
+    if (!out.loaded) { process.stdout.write('No result dictionary is loaded. Import one with openldr terminology import resource <file>.\n'); return 0; }
     const lines = out.rows.map((f) => `${f.code}  ${f.display ?? ''}  ${f.role ?? ''}  ${f.units ?? ''}  ${f.loinc ? `LOINC ${f.loinc}` : 'no LOINC'}`);
     process.stdout.write([...lines, `${out.rows.length} of ${out.total} field(s)${out.ownedHere ? '' : ' (from central, read-only here)'}`].join('\n') + '\n');
     return 0;

@@ -5,6 +5,7 @@ import { createAppContext, createTerminologyContext, resolveCodingSystemId, crea
 import { callerName, cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 import { validateDistributionImportArgs, isActiveJobConflict } from './distribution-args';
+import { RESULT_PARAM_SYSTEM } from '@openldr/terminology';
 
 function out(json: boolean, obj: unknown, human: string): void {
   process.stdout.write((json ? JSON.stringify(obj, null, 2) : human) + '\n');
@@ -27,41 +28,23 @@ export async function runTerminologyImport(kind: string, path: string, opts: { a
       const r = await ctx.loaders.resource(JSON.parse(readFileSync(path, 'utf8')));
       out(opts.json, r, `imported ${r.resourceUrl} (${r.conceptsLoaded} concepts)`);
       await recordAuditEvent(ctx, cliActor(), { action: 'term.import', entityType: 'term', entityId: r.resourceUrl, metadata: { result: r } });
-    } else if (kind === 'organisms') {
-      // A site's organism dictionary (DISA COMMDICT CONTEXT=50) as a CodeSystem carrying
-      // properties.organism_type. Deliberately an IMPORT and not a seed: the dictionary is
-      // site-specific, so shipping one deployment's codes as a product default would make every
-      // other deployment silently wrong. See importOrganismDictionary's comment.
-      const r = await ctx.loaders.organisms(JSON.parse(readFileSync(path, 'utf8')));
-      out(opts.json, r, `loaded ${r.conceptsLoaded} organism concepts into ${r.system}\n` +
-        Object.entries(r.byType).map(([t, n]) => `  ${t}: ${n}`).join('\n') +
-        (r.skipped ? `\n  skipped (no code): ${r.skipped}` : ''));
-      await recordAuditEvent(ctx, cliActor(), { action: 'coding_system.import', entityType: 'coding_system', entityId: 'organisms', metadata: { source: 'organisms', result: r } });
-    } else if (kind === 'parameters') {
-      // A site's result-parameter dictionary (DISA PARMDICT) as a CodeSystem carrying
-      // properties.result_role. Deliberately an IMPORT and not a seed: the dictionary is
-      // site-specific, so shipping one deployment's codes as a product default would make every
-      // other deployment silently wrong. See importResultParameters's comment.
-      const r = await ctx.loaders.parameters(JSON.parse(readFileSync(path, 'utf8')));
-      out(opts.json, r, `loaded ${r.conceptsLoaded} result parameter concepts into ${r.system}\n` +
-        Object.entries(r.byRole).map(([t, n]) => `  ${t}: ${n}`).join('\n') +
-        (r.skipped ? `\n  skipped (no code): ${r.skipped}` : ''));
-      await recordAuditEvent(ctx, cliActor(), { action: 'coding_system.import', entityType: 'coding_system', entityId: 'parameters', metadata: { source: 'parameters', result: r } });
-      // The dictionary's fields get self rows in test_map, and their LOINC links fill its loinc column.
-      // This context opens no warehouse, so open the app context and rebuild once.
-      // The import is already committed, so a failure here only leaves test_map stale. It must not fail the command.
-      const stale = (reason: string) => process.stderr.write(`the warehouse copy test_map is out of date: ${reason}. Run openldr test-catalog map rebuild --apply.\n`);
-      let app: Awaited<ReturnType<typeof createAppContext>> | undefined;
-      try {
-        app = await createAppContext(loadConfig());
-        const rebuilt = await app.testMapping.rebuildNow();
-        if (!rebuilt.ok) stale(rebuilt.error);
-      } catch (err) {
-        stale(redactError(err));
-      } finally {
-        await app?.close();
+      if (r.system === RESULT_PARAM_SYSTEM && r.conceptsLoaded > 0) {
+        // The dictionary's fields get self rows in test_map, and their LOINC links fill its loinc column.
+        // This context opens no warehouse, so open the app context and rebuild once.
+        // The import is already committed, so a failure here only leaves test_map stale. It must not fail the command.
+        const stale = (reason: string) => process.stderr.write(`the warehouse copy test_map is out of date: ${reason}. Run openldr test-catalog map rebuild --apply.\n`);
+        let app: Awaited<ReturnType<typeof createAppContext>> | undefined;
+        try {
+          app = await createAppContext(loadConfig());
+          const rebuilt = await app.testMapping.rebuildNow();
+          if (!rebuilt.ok) stale(rebuilt.error);
+        } catch (err) {
+          stale(redactError(err));
+        } finally {
+          await app?.close();
+        }
       }
-    } else { process.stderr.write(`unknown import kind '${kind}' (loinc|amr|organisms|parameters|resource)\n`); return 1; }
+    } else { process.stderr.write(`unknown import kind '${kind}' (loinc|amr|resource)\n`); return 1; }
     return 0;
   } catch (err) { process.stderr.write(`terminology import failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }

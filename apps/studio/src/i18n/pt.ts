@@ -1336,7 +1336,7 @@ export const pt: EnShape = {
       role: { all: 'Todas as funções', result: 'Resultado', specimen: 'Amostra', metadata: 'Metadado', admin: 'Administrativo' },
       col: { code: 'Código', name: 'Nome', role: 'Função', units: 'Unidades', loinc: 'LOINC' },
       fromCentral: 'Este dicionário de resultados vem do central. Só o central pode alterar as suas ligações LOINC.',
-      notLoaded: 'Nenhum dicionário de resultados está carregado. Importe um com openldr terminology import parameters <ficheiro>.',
+      notLoaded: 'Nenhum dicionário de resultados está carregado. Importe um com openldr terminology import resource <ficheiro>.',
       noMatch: 'Nenhum campo de resultado corresponde.',
       count_one: '{{count}} campo de resultado',
       count_other: '{{count}} campos de resultado',

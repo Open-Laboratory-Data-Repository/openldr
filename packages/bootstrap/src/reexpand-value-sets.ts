@@ -1,5 +1,5 @@
 import type { TerminologyAdminStore } from '@openldr/db';
-import { importResultParameters, type LoaderStore, type ResultParamImportResult } from '@openldr/terminology';
+import { importTerminologyResource, type ImportOrigin, type LoaderStore, type LoadResult } from '@openldr/terminology';
 
 /**
  * Task 4 (S2b, result-classification): re-expands and reprojects every ValueSet whose compose
@@ -9,7 +9,7 @@ import { importResultParameters, type LoaderStore, type ResultParamImportResult 
  * concepts it filters over do not exist yet at migration time. Task 3's migration
  * (069_result_role_valuesets) seeds `urn:openldr:valueset:{result-observation,reportable-result,
  * non-reportable}` with `expanded_at: null` and zero `valueset_expansions` rows for exactly this
- * reason — the concepts arrive later, via `importResultParameters`. If nothing re-expands those sets
+ * reason — the concepts arrive later, through a CodeSystem import. If nothing re-expands those sets
  * after an import, they stay empty forever: nothing projects into `terminology_codes`, and the whole
  * slice looks configured while doing nothing.
  *
@@ -28,7 +28,7 @@ import { importResultParameters, type LoaderStore, type ResultParamImportResult 
  * purely to trigger that recompute-and-project path — this is not an edit.
  *
  * Plain `save(input)` — no `activeOnly` override. Every @openldr/terminology loader
- * (result-parameters included) writes `status: null` for imported concepts by design, but
+ * writes `status: null` for imported concepts by design, but
  * `terminology-admin-store.ts`'s `vsDeps.listSystemConcepts`/`filterConcepts` now treat NULL status
  * as active (same convention `termRow` already applies for display), so the store's default
  * `activeOnly: true` expansion picks up loader-fed concepts without an opt-in override. A concept an
@@ -55,23 +55,19 @@ export async function reexpandValueSetsForSystem(admin: TerminologyAdminStore, s
 }
 
 /**
- * The actual `loaders.parameters` wiring, shared by `terminology-context.ts` (lab/single-tenant
- * boot) and `index.ts` (`createAppContext`'s `terminology.loaders`) so there is exactly one place
- * that pairs `importResultParameters` with the `reexpandValueSetsForSystem` call above — previously
- * each file duplicated this closure inline (with only the `admin` binding differing), which let the
- * two copies silently drift and left the re-expansion call itself untested: a unit test that invokes
- * `reexpandValueSetsForSystem` directly (see `reexpand-value-sets.test.ts`'s first three cases)
- * proves the helper works, but not that either boot path actually calls it. A test that builds this
- * factory the same way production does and calls the resulting `loaders.parameters` closure exercises
- * the real seam.
+ * The `loaders.resource` wiring, shared by `terminology-context.ts` (lab boot) and `index.ts`
+ * (`createAppContext`), so both boot paths re-expand the same way. A CodeSystem import re-expands
+ * every ValueSet built on that system. Without it, migration 069's result-role sets stay empty after
+ * a lab imports its result codes. An admin import unless the caller says otherwise (CE's seed passes
+ * 'core', a pack 'pack').
  */
-export function createResultParametersLoader(
+export function createResourceLoader(
   admin: TerminologyAdminStore,
   loaderStore: LoaderStore,
-): (json: unknown) => Promise<ResultParamImportResult> {
-  return async (json) => {
-    const result = await importResultParameters(json, loaderStore);
-    await reexpandValueSetsForSystem(admin, result.system);
+): (json: unknown, from?: ImportOrigin) => Promise<LoadResult> {
+  return async (json, from) => {
+    const result = await importTerminologyResource(json, loaderStore, from ?? { origin: 'import' });
+    if ((json as { resourceType?: unknown }).resourceType === 'CodeSystem') await reexpandValueSetsForSystem(admin, result.system);
     return result;
   };
 }
