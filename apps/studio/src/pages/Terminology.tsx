@@ -505,10 +505,10 @@ export function Terminology(): JSX.Element {
         try {
           const job = await getTerminologyIngestJob(pub.id, systemType);
           if (cancelled || !importPollMountedRef.current) return;
-          if (job.status === 'queued' || job.status === 'running') {
-            setImportJobs((prev) => ({ ...prev, [pub.id]: job }));
-            startPollingImportJob(pub.id, systemType);
-          }
+          // Keep every job found: an interrupted one shows its badge and Continue import, and a
+          // finished one its record of interruptions (review R4). Only a live one is polled.
+          setImportJobs((prev) => ({ ...prev, [pub.id]: job }));
+          if (job.status === 'queued' || job.status === 'running') startPollingImportJob(pub.id, systemType);
         } catch { /* no job for this system → nothing to resume */ }
       }
     })();
