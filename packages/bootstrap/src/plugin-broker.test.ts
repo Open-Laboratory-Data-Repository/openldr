@@ -895,14 +895,14 @@ describe('plugin broker: checks', () => {
       return checks;
     };
     const gated = (checks: ReturnType<typeof fakeChecks>) => broker({
-      caps: IMPORT_CAPS, checks: checks.api, copies: { list: async () => [] }, requiredRoles: ['lab_admin'], requiredCapabilities: ['imports.correct_held'],
+      caps: IMPORT_CAPS, checks: checks.api, copies: { list: async () => [] }, imports: { allowed: async () => [] }, requiredRoles: ['lab_admin'], requiredCapabilities: ['imports.correct_held'],
     });
 
     it('lets a corrector open the page, read the Feedback tab, correct and check again, and nothing more', async () => {
       const checks = withCorrections();
       const { b } = gated(checks);
       for (const op of [
-        { kind: 'import.copy.list' }, { kind: 'import.check.list' },
+        { kind: 'import.allowed' }, { kind: 'import.copy.list' }, { kind: 'import.check.list' },
         { kind: 'import.check.held', copyId: 'cp1', offset: 0, limit: 50 },
         { kind: 'import.check.heldItem', copyId: 'cp1', key: SECRET_KEY },
         { kind: 'import.check.heldItems', copyId: 'cp1', offset: 0, limit: 200 },

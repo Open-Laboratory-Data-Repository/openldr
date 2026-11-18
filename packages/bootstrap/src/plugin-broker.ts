@@ -25,7 +25,8 @@ export interface BrokerPrincipal {
 export const CORRECTOR_CAPABILITY = 'imports.correct_held';
 /** The only calls a corrector may make: what the Feedback tab reads, and correcting. */
 const CORRECTOR_OPS = new Set([
-  'import.copy.list', 'import.check.list', 'import.check.held', 'import.check.heldItem', 'import.check.heldItems',
+  // `import.allowed` gives the connector names the tab shows beside each copy.
+  'import.allowed', 'import.copy.list', 'import.check.list', 'import.check.held', 'import.check.heldItem', 'import.check.heldItems',
   'import.check.correct', 'import.check.recheck', 'import.check.access',
 ]);
 const isCorrector = (p: { capabilities?: string[] }): boolean => (p.capabilities ?? []).includes(CORRECTOR_CAPABILITY);
