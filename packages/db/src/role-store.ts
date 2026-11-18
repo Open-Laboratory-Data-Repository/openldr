@@ -253,6 +253,7 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
       await db.deleteFrom('user_roles').where('role_id', '=', id).execute();
       // A deleted role leaves every form's access list (design 2026-11-18-roles-scope).
       await db.deleteFrom('form_access').where('role_id', '=', id).execute();
+      await db.deleteFrom('dashboard_access').where('role_id', '=', id).execute();
       await db.deleteFrom('roles').where('id', '=', id).execute();
     },
     async resolveCapabilities(subject) {
