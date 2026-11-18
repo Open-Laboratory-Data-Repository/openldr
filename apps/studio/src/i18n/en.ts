@@ -71,7 +71,22 @@ export const en = {
   "mapped": "{{count}} mapped",
   "persisted": "{{count}} persisted"
   },
+  interruptions: {
+  "badgeOnce": "Interrupted once",
+  "badgeMany": "Interrupted {{count}} times",
+  "carriedOn": "Interrupted at {{at}}. Carried on by itself at {{back}}.",
+  "continued": "Interrupted at {{at}}. Continued by a person at {{back}}.",
+  "waiting": "Interrupted at {{at}}. Waiting for Continue.",
+  "continueImport": "Continue import",
+  "importWaiting": "Import interrupted",
+  "importContinued": "Import is back in the queue.",
+  "continueFailed": "Could not continue: {{error}}"
+  },
   workflowReceipts: {
+  "continue": "Continue",
+  "continued": "Started run {{runId}} with the same input.",
+  "continuedChanged": "Started run {{runId}} with the same input. The workflow changed since the interrupted run started, so the new run uses it as it is now.",
+  "continueFailed": "Could not continue: {{error}}",
   "title": "Webhook receipts",
   "runs": "Runs",
   "detail": "Receipt details",

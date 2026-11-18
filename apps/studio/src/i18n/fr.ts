@@ -73,7 +73,22 @@ export const fr: EnShape = {
   "mapped": "{{count}} mappées",
   "persisted": "{{count}} stockées"
   },
+  interruptions: {
+  "badgeOnce": "Interrompu une fois",
+  "badgeMany": "Interrompu {{count}} fois",
+  "carriedOn": "Interrompu à {{at}}. A repris tout seul à {{back}}.",
+  "continued": "Interrompu à {{at}}. Repris par une personne à {{back}}.",
+  "waiting": "Interrompu à {{at}}. En attente de Continuer.",
+  "continueImport": "Continuer l’import",
+  "importWaiting": "Import interrompu",
+  "importContinued": "L’import est de nouveau dans la file.",
+  "continueFailed": "Impossible de continuer : {{error}}"
+  },
   workflowReceipts: {
+  "continue": "Continuer",
+  "continued": "Exécution {{runId}} lancée avec les mêmes données.",
+  "continuedChanged": "Exécution {{runId}} lancée avec les mêmes données. Le workflow a changé depuis le début de l’exécution interrompue, la nouvelle exécution l’utilise tel qu’il est maintenant.",
+  "continueFailed": "Impossible de continuer : {{error}}",
   "title": "Reçus webhook",
   "runs": "Exécutions",
   "detail": "Détails du reçu",

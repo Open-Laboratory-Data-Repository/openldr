@@ -47,6 +47,7 @@ import {
 import { ImportSteps } from './ImportSteps';
 import { RegisterSourceDialog } from './RegisterSourceDialog';
 import { canGoBack, clampStep, furthestStep, type ImportStep } from './stepModel';
+import { InterruptionBadge } from '@/components/ui/interruption-badge';
 
 
 /** Task 8: the reset value for a freshly picked file — no header has been mapped, constant-filled or
@@ -1678,7 +1679,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           )}
           {step === 3 && run && RUN_ACTIVE_STATUSES.includes(run.status) && (
             <div className="mx-6 mt-4 rounded-md border border-border px-3 py-2 text-xs space-y-1">
-              <p className="font-medium">{t(`facilities.import.runStatus.${run.status}`)}</p>
+              <div className="flex flex-wrap items-center gap-2"><p className="font-medium">{t(`facilities.import.runStatus.${run.status}`)}</p><InterruptionBadge interruptions={run.interruptions} /></div>
               {run.phase && <p className="text-muted-foreground">{t('facilities.import.runPhase', { phase: run.phase })}</p>}
               {run.total !== null && run.total > 0 && (
                 <p className="text-muted-foreground">
