@@ -519,6 +519,8 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
       upsert: async () => undefined,
     } as never,
     forms: {} as never,
+    formAccessStore: {} as never,
+    formAccess: {} as never,
     starterPacks: {} as never,
     plugins: {} as never,
     pluginData: {} as never,

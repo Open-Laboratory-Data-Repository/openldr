@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import AdmZip from 'adm-zip';
 import { TEST_CATALOG_SYSTEM, findCatalogBand, type AppContext, type ResultBand } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
@@ -181,12 +181,50 @@ function parseVersionParam(raw: string): number | null {
   return parsed;
 }
 
+const formAccessInput = z.object({
+  open: z.array(z.string().min(1).max(100)).max(200),
+  submit: z.array(z.string().min(1).max(100)).max(200),
+});
+
 export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
-  app.get('/api/forms', VIEW, async () => ctx.forms.list());
+  // Per-form access (design 2026-11-18-roles-scope, part 1). An editor manages every form, so sees
+  // every form; anyone else sees and opens only the forms their roles may open.
+  const formUser = (req: FastifyRequest) => ({ roleIds: req.user?.roleIds ?? [], capabilities: req.user?.capabilities ?? [] });
+  const isEditor = (req: FastifyRequest) => (req.user?.capabilities ?? []).includes('forms.edit');
+  const mayOpen = async (req: FastifyRequest, id: string) => isEditor(req) || ctx.formAccess.mayOpen(formUser(req), id);
+  async function openable<T extends { id: string }>(req: FastifyRequest, forms: T[]): Promise<T[]> {
+    if (isEditor(req)) return forms;
+    const seen = await ctx.formAccess.visible(formUser(req), forms.map((f) => f.id));
+    return forms.filter((f) => seen.has(f.id));
+  }
+
+  app.get('/api/forms', VIEW, async (req) => openable(req, await ctx.forms.list()));
 
   app.get('/api/forms/published', VIEW, async (req) => {
     const query = req.query as Record<string, string | undefined>;
-    return ctx.forms.listPublished(query.targetPage || undefined);
+    return openable(req, await ctx.forms.listPublished(query.targetPage || undefined));
+  });
+
+  // Who may open and submit this form. Empty lists: every role with the permission.
+  app.get('/api/forms/:id/access', EDIT, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    if (!(await ctx.forms.get(id))) { reply.code(404); return { error: 'not found' }; }
+    return ctx.formAccessStore.get(id);
+  });
+
+  app.put('/api/forms/:id/access', EDIT, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const p = formAccessInput.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    if (!(await ctx.forms.get(id))) { reply.code(404); return { error: 'not found' }; }
+    for (const roleId of [...p.data.open, ...p.data.submit]) {
+      if (!(await ctx.roles.get(roleId))) { reply.code(400); return { error: `no role ${roleId}` }; }
+    }
+    const before = await ctx.formAccessStore.get(id);
+    await ctx.formAccessStore.set(id, p.data);
+    const after = await ctx.formAccessStore.get(id);
+    await recordAudit(ctx, req, { action: 'form.access.set', entityType: 'form', entityId: id, before, after });
+    return after;
   });
 
   // Starter packs: read-only seeded data for the builder (spec S5). Static segments, so find-my-way
@@ -211,7 +249,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
 
   app.get('/api/forms/:id', VIEW, async (req, reply) => {
     const f = await ctx.forms.get((req.params as { id: string }).id);
-    if (!f) {
+    if (!f || !(await mayOpen(req, f.id))) {
       reply.code(404);
       return { error: 'not found' };
     }
@@ -300,7 +338,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
 
   app.get('/api/forms/:id/versions', VIEW, async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    if (!(await ctx.forms.get(id))) {
+    if (!(await ctx.forms.get(id)) || !(await mayOpen(req, id))) {
       reply.code(404);
       return { error: 'not found' };
     }
@@ -314,7 +352,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       reply.code(400);
       return { error: 'version must be a positive integer' };
     }
-    if (!(await ctx.forms.get(id))) {
+    if (!(await ctx.forms.get(id)) || !(await mayOpen(req, id))) {
       reply.code(404);
       return { error: 'not found' };
     }
@@ -367,7 +405,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
 
   app.get('/api/forms/:id/questionnaire', VIEW, async (req, reply) => {
     const f = await ctx.forms.get((req.params as { id: string }).id);
-    if (!f) {
+    if (!f || !(await mayOpen(req, f.id))) {
       reply.code(404);
       return { error: 'not found' };
     }
@@ -427,6 +465,11 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
   });
 
   app.post('/api/forms/:id/responses', SUBMIT, async (req, reply) => {
+    const formId = (req.params as { id: string }).id;
+    if (!isEditor(req) && !(await ctx.formAccess.maySubmit(formUser(req), formId))) {
+      reply.code(403);
+      return { error: 'you may not submit this form' };
+    }
     const p = responseInput.safeParse(req.body);
     if (!p.success) {
       reply.code(400);
