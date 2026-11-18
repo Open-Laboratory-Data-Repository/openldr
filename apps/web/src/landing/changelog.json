@@ -6,6 +6,90 @@
       "version": null,
       "entries": [
         {
+          "hash": "f091224d",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "A limited query sends register codes as one JSON array value per branch, read with each engine's JSON function, so any number stays under MSSQL's 2100 bound values (roles part 3 review E1)"
+        },
+        {
+          "hash": "1b35bfb8",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "A limited query binds only the register codes studio orders carry, and one limit lists at most 300 places, so it stays under MSSQL's 2100 bound values (roles part 3 review E1)"
+        },
+        {
+          "hash": "eb4eb7ac",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Openldr users scope --none sets Limited with nothing listed, as the Users sheet can (roles part 3 review C1)"
+        },
+        {
+          "hash": "a9562452",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A later widget error replaces an earlier Not available with your data limit note (roles part 3 review U1)"
+        },
+        {
+          "hash": "410979a5",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "A limited user's query with a user join is Not available, since a user join may match any column and its rows are not limited (roles part 3 review Q1)"
+        },
+        {
+          "hash": "c54dfe17",
+          "type": "fix",
+          "scope": "db",
+          "title": "A data limit save takes the row lock even when the row exists, and Everything keeps the row, so two saves at once never leave a limit read back as Everything (roles part 3 review S1)"
+        },
+        {
+          "hash": "4972f309",
+          "type": "feat",
+          "scope": "dashboards",
+          "title": "The sample dashboard is rebuilt as builder widgets, so a limited user sees it limited, with the same numbers for everyone else (roles part 3 task 5)"
+        },
+        {
+          "hash": "67245d87",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "A builder date filter compares the day, so a period ending 31 Jan includes it; day trends group by day in SQL; results join their request by its id; and filters gain neq (keeps empty) and set (roles part 3 task 5)"
+        },
+        {
+          "hash": "fa88d859",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr users scope shows or sets a user's data limit, through the same setter as the Users sheet (roles part 3 task 7)"
+        },
+        {
+          "hash": "8aeb7341",
+          "type": "feat",
+          "scope": "studio",
+          "title": "The Users sheet sets a user's data limit from the register, and a widget a limited user cannot run says Not available with your data limit (roles part 3 task 6)"
+        },
+        {
+          "hash": "11e1f0cf",
+          "type": "feat",
+          "scope": "server",
+          "title": "Dashboard routes pass the caller's data limit, the plugin broker refuses a limited caller every report and data call, and a user's data limit can be read and set (roles part 3 task 4)"
+        },
+        {
+          "hash": "262b953c",
+          "type": "feat",
+          "scope": "dashboards",
+          "title": "A limited user's builder queries count only rows whose requesting facility or testing lab is in scope, and SQL is refused (roles part 3 task 3)"
+        },
+        {
+          "hash": "dd9fec9b",
+          "type": "feat",
+          "scope": "rbac",
+          "title": "A limited user loses the capabilities that read unlimited data, and every sign-in and served command carries the data limit (roles part 3 task 2)"
+        },
+        {
+          "hash": "95d99dd9",
+          "type": "feat",
+          "scope": "db",
+          "title": "A user's data limit, Everything or Limited to register facilities, districts and regions, with one shared setter (roles part 3 task 1)"
+        },
+        {
           "hash": "1caac78b",
           "type": "fix",
           "scope": "studio",
