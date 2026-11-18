@@ -1940,6 +1940,20 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     expect((await w.stored())!.counts).toMatchObject({ read: 2, held: 2, labels: { held_rules: 1, held_check: 1 } });
   });
 
+  it('refuses a correction to a request a recheck already saved but has not yet taken off the held list (review H17)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput());
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    w.failHeldRemoves(100);
+    await drive(w.svc);
+    expect((await w.stored())!.recheck?.done).toEqual([{ key: 'REQ0001', outcome: 'saved' }]);
+    expect(await w.realHeld.get(SRC, 'REQ0001')).not.toBeNull();
+    w.failHeldRemoves(0);
+    await expect(w.svc.correct(correctInput({ values: { dob_age: '2022-03-11' } }))).rejects.toThrow(/already saved/);
+    expect((await w.corrections.listFor(SRC, ['REQ0001'])).get('REQ0001')!.map((c) => c.value)).toEqual(['2023-03-11']);
+  });
+
   it('a full run sends the stored corrections of its page, and none when the plugin declares no fields', async () => {
     const w = await world({ corrections: FIELDS });
     await heldRun(w);

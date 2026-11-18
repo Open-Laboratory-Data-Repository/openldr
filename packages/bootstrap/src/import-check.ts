@@ -1195,6 +1195,12 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       }
       const held = await ownDb('read', () => deps.held.get(copyId, key));
       if (!held || held.reason !== 'held') throw new Error('that request is not held back by the check, so it cannot be corrected');
+      // A recheck that already saved it, with its held row still to remove, has the last word: a newer
+      // correction would never reach the plugin (review H17).
+      const run = await ownDb('read', () => readRun(pluginId, checkIdOf(copyId)));
+      if ((run?.recheck?.done ?? []).some((x) => x.key === key && x.outcome === 'saved')) {
+        throw new Error('that request was already saved by a recheck; check it again to take it off the held list');
+      }
       // A source kind may not have every declared field: only those this request sent (review H2).
       for (const field of fields) {
         if (!held.fields || !Object.prototype.hasOwnProperty.call(held.fields, field)) {
