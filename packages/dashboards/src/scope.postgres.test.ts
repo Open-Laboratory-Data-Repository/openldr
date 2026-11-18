@@ -96,6 +96,11 @@ suite('the data limit on PostgreSQL', () => {
     expect(await count('service_requests', { ...none, registryCodes: ['FAC-2'] })).toBe(0);
   });
 
+  it('matches studio orders against 1500 register codes, sent as one value (review E1)', async () => {
+    const codes = [...Array.from({ length: 1499 }, (_, i) => `X${i}`), 'FAC-1'];
+    expect(await count('service_requests', { ...none, registryCodes: codes })).toBe(1);
+  });
+
   it('cannot be widened by an OR filter tree', async () => {
     const clinicA: ResolvedScope = { ...none, registryIds: ['reg-a'] };
     const tree = { filterTree: { kind: 'group', combinator: 'or', children: [

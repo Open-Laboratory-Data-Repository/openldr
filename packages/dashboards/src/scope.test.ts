@@ -15,10 +15,13 @@ const count = { key: 'count', agg: 'count' as const };
 describe('scopeCondition', () => {
   it('binds every scope value and never inlines one', () => {
     const { sql, parameters } = db.selectFrom('lab_requests').select('id').where(scopeCondition('request', 'lab_requests', scope)).compile();
-    for (const v of ['reg-1', 'Dodoma', 'Arusha', 'Kondoa', 'FAC-1']) {
+    for (const v of ['reg-1', 'Dodoma', 'Arusha', 'Kondoa']) {
       expect(parameters).toContain(v);
       expect(sql).not.toContain(v);
     }
+    // Register codes go as one JSON array value (review E1).
+    expect(parameters).toContain('["FAC-1"]');
+    expect(sql).not.toContain('FAC-1');
     expect(sql).toContain('exists');
     expect(sql).not.toMatch(/\bjoin\b/);
   });
@@ -75,5 +78,21 @@ describe('compileBuilderQuery with a scope', () => {
     } as never;
     expect(() => compileBuilderQuery(db, getModel('service_requests')!, q, undefined, scope)).toThrow(NO_SCOPE_LINK);
     expect(compileBuilderQuery(db, getModel('service_requests')!, q).compile().sql).toContain('"u1"');
+  });
+
+  // Review E1: MSSQL takes at most 2100 bound values. The register codes of a region can number over a
+  // thousand, so they go as one JSON array value per branch, read by each engine's JSON function.
+  it('binds any number of register codes as one value per branch, on every engine', () => {
+    const many: ResolvedScope = { ...scope, registryCodes: Array.from({ length: 1500 }, (_, i) => `C${i}`) };
+    const json = JSON.stringify(many.registryCodes);
+    const fns = { postgres: 'json_array_elements_text', mssql: 'openjson', mysql: 'json_contains' } as const;
+    for (const engine of ['postgres', 'mssql', 'mysql'] as const) {
+      for (const id of ['service_requests', 'observations', 'diagnostic_reports']) {
+        const { sql, parameters } = compileBuilderQuery(db, getModel(id)!, { mode: 'builder', model: id, metric: count, filters: [] } as never, undefined, many, engine).compile();
+        expect(parameters.length, `${engine} ${id}`).toBeLessThan(30);
+        expect(parameters.filter((p) => p === json).length, `${engine} ${id}`).toBeGreaterThan(0);
+        expect(sql, `${engine} ${id}`).toContain(fns[engine]);
+      }
+    }
   });
 });

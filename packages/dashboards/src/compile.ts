@@ -328,7 +328,7 @@ export function collectUsedJoins(model: QueryModel, q: BuilderQuery): ModelJoin[
 }
 
 /** Build the Kysely query (no grain bucketing — date grain is applied in JS after fetch). */
-export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy, scope?: ResolvedScope): AnyQB {
+export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy, scope?: ResolvedScope, engine: SqlDialect = 'postgres'): AnyQB {
   // A limited user's query must carry the limit. A model with no facility link cannot (roles part 3).
   // Nor can a user join: it may match any column, so its rows are not limited (review Q1).
   if (scope && (!model.scopeLink || (q.userJoins?.length ?? 0) > 0)) throw new Error(NO_SCOPE_LINK);
@@ -404,7 +404,7 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
     qb = applyFilters(qb, model, q.filters ?? [], qualify);
   }
   // The data limit goes last, as its own AND term, so no filter of the user's can widen it.
-  if (scope) qb = qb.where(scopeCondition(model.scopeLink!, model.table, scope) as never) as AnyQB;
+  if (scope) qb = qb.where(scopeCondition(model.scopeLink!, model.table, scope, engine) as never) as AnyQB;
   return qb;
 }
 
@@ -439,7 +439,7 @@ async function fetchBuilderGroups(
   if (!Number.isSafeInteger(opts.rowCap) || opts.rowCap < 1 || opts.rowCap >= Number.MAX_SAFE_INTEGER) {
     throw new Error('rowCap must be a positive safe integer');
   }
-  const query = compileBuilderQuery(db, model, q, policy, scope);
+  const query = compileBuilderQuery(db, model, q, policy, scope, engine);
   const rows = await runReadQuery(db, query.compile(), { ...opts, rowCap: opts.rowCap + 1 }, engine);
   if (rows.length > opts.rowCap) {
     throw new Error(`Builder query exceeds the group limit of ${opts.rowCap}. Narrow the filters or reduce grouping.`);
