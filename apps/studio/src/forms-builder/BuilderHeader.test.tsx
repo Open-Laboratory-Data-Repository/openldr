@@ -86,6 +86,23 @@ describe('BuilderHeader', () => {
     });
   });
 
+  describe('Access', () => {
+    // Shown only when the page passes onAccess, which it does for a holder of forms.edit.
+    it('is absent from the actions menu without onAccess', () => {
+      renderHeader();
+      const trigger = screen.getByLabelText('Builder actions');
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByText('Save draft')) fireEvent.keyDown(trigger, { key: 'Enter' });
+      expect(screen.queryByText('Access')).not.toBeInTheDocument();
+    });
+    it('calls onAccess from the actions menu', () => {
+      const onAccess = vi.fn();
+      renderHeader({ onAccess });
+      openMenuAndClick('Builder actions', 'Access');
+      expect(onAccess).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('Cancel', () => {
     it('is absent from the actions menu when onCancel is not provided', () => {
       renderHeader();

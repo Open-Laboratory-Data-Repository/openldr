@@ -102,6 +102,8 @@ export interface BuilderHeaderProps {
   onPublish: () => void;
   onCompare: () => void;
   onVersions: () => void;
+  /** Open the Access sheet: who may open and submit the form. Absent for a user without forms.edit. */
+  onAccess?: () => void;
   onAddField: () => void;
   /** Open the form preview sheet. */
   onPreview: () => void;
@@ -144,6 +146,7 @@ export function BuilderHeader({
   onPublish,
   onCompare,
   onVersions,
+  onAccess,
   onAddField,
   onPreview,
   onStartFromPack,
@@ -394,6 +397,11 @@ export function BuilderHeader({
               <DropdownMenuItem disabled={!formId} onSelect={() => onVersions()}>
                 {t('formBuilder.header.versions')}
               </DropdownMenuItem>
+              {onAccess ? (
+                <DropdownMenuItem disabled={!formId} onSelect={() => onAccess()}>
+                  {t('formBuilder.header.access')}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuSeparator />
               <DropdownMenuItem disabled={!formId} onSelect={() => onArchive()}>
                 {t('formBuilder.header.archive')}

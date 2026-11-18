@@ -14,6 +14,8 @@ import type { RepeatNode } from './fieldTree';
 import { CompareDialog } from './CompareDialog';
 import { FieldEditorSheet } from './FieldEditorSheet';
 import { VersionHistorySheet } from './VersionHistorySheet';
+import { FormAccessSheet } from './FormAccessSheet';
+import { useAuth } from '@/auth/AuthProvider';
 import { useTemplateHistory } from './useTemplateHistory';
 import { useBuilderKeyboard } from './useBuilderKeyboard';
 import { BuilderHeader } from './BuilderHeader';
@@ -65,6 +67,10 @@ export function FormBuilderPage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [accessOpen, setAccessOpen] = useState(false);
+  // Only an editor may set who uses a form; the route refuses anyone else too.
+  const { hasCapability } = useAuth();
+  const canSetAccess = hasCapability('forms.edit');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [pane, setPane] = useState<'form' | 'library'>('form');
   const [workspaceRef, workspaceWidth] = useElementWidth<HTMLDivElement>();
@@ -574,6 +580,7 @@ export function FormBuilderPage(): JSX.Element {
           onPublish={() => { void publish(); }}
           onCompare={() => setCompareOpen(true)}
           onVersions={() => setVersionsOpen(true)}
+          onAccess={canSetAccess ? () => setAccessOpen(true) : undefined}
           onAddField={addField}
           onPreview={() => setPreviewOpen(true)}
           onStartFromPack={pack ? () => setPackChooserOpen(true) : undefined}
@@ -696,6 +703,7 @@ export function FormBuilderPage(): JSX.Element {
         onOpenChange={setCompareOpen}
       />
 
+      <FormAccessSheet formId={formId ?? null} open={accessOpen} onOpenChange={setAccessOpen} />
       <VersionHistorySheet
         formId={formId}
         open={versionsOpen}
