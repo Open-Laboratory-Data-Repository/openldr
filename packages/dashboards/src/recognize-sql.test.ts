@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { recognizeSql } from './recognize-sql';
-import board from './samples/openldr-general.json';
+// The sample's SQL tiles as they were before the roles part 3 rebuild: a fixed corpus of real SQL.
+import board from './samples/__fixtures__/openldr-general-sql.json';
 
 describe('recognizeSql — core shape', () => {
   it('recognizes a plain COUNT(*) KPI', () => {
