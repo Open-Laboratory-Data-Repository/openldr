@@ -91,7 +91,8 @@ function droppedPaths(given: unknown, kept: unknown, at = ''): string[] {
   const out: string[] = [];
   for (const key of Object.keys(given as Record<string, unknown>)) {
     const path = Array.isArray(given) ? `${at}[${key}]` : at ? `${at}.${key}` : key;
-    if (!(key in (kept as Record<string, unknown>))) { out.push(path); continue; }
+    // Own keys only: `in` would also find inherited names such as toString (review I1).
+    if (!Object.prototype.hasOwnProperty.call(kept, key)) { out.push(path); continue; }
     out.push(...droppedPaths((given as Record<string, unknown>)[key], (kept as Record<string, unknown>)[key], path));
   }
   return out;

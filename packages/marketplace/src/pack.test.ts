@@ -43,6 +43,17 @@ describe('packBundle', () => {
     expect(existsSync(out)).toBe(false);
   });
 
+  it('refuses unknown keys named like built-in object properties too (review I1)', async () => {
+    for (const key of ['toString', 'constructor', '__proto__']) {
+      const out = join(await mkdtemp(join(tmpdir(), 'pack-')), 'bundle');
+      const kp = generatePublisherKeypair();
+      const manifest = JSON.parse(`{"${key}": "x", ${JSON.stringify(baseManifest).slice(1)}`) as Record<string, unknown>;
+      await expect(packBundle({ manifest, payload: new Uint8Array([1]), outDir: out, privateKeyDer: kp.privateKeyDer, publicKeyDer: kp.publicKeyDer }), key)
+        .rejects.toThrow(new RegExp(key.replace(/_/g, '_')));
+      expect(existsSync(out), key).toBe(false);
+    }
+  });
+
   it('a tampered written manifest fails verification', async () => {
     const out = await mkdtemp(join(tmpdir(), 'pack-'));
     const kp = generatePublisherKeypair();
