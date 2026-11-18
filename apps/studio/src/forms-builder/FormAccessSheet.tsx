@@ -81,22 +81,26 @@ export function FormAccessSheet({ formId, open, onOpenChange }: FormAccessSheetP
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="gap-0 overflow-y-auto p-0">
         <SheetHeader className="border-b border-border px-6 py-4">
-          <div className="flex items-start justify-between gap-2">
-            <SheetTitle>{t('formBuilder.access.title')}</SheetTitle>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t('formBuilder.access.actions')}>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem disabled={!access || saving} onClick={() => void save()}>{t('formBuilder.access.save')}</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onOpenChange(false)}>{t('formBuilder.access.cancel')}</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <SheetTitle>{t('formBuilder.access.title')}</SheetTitle>
           <SheetDescription>{t('formBuilder.access.description')}</SheetDescription>
         </SheetHeader>
+
+        {/* The actions sit on the section row, as in FieldEditorSheet, clear of the sheet's close button. */}
+        <div className="flex items-center justify-between px-6 py-3">
+          <h3 className="text-sm font-medium text-foreground">{t('formBuilder.access.roles')}</h3>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t('formBuilder.access.actions')}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled={!access || saving} onClick={() => void save()}>{t('formBuilder.access.save')}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onOpenChange(false)}>{t('formBuilder.access.cancel')}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="border-t border-border" />
 
         {access === null ? (
           <LoadingState />

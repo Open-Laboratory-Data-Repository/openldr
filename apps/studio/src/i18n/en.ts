@@ -2932,6 +2932,7 @@ export const en = {
       systemAria: 'Terminology system',
     },
     access: {
+      roles: 'Roles',
       title: 'Who may use this form',
       description: 'Pick the roles that may open and submit this form. A list left empty means everyone with the permission.',
       actions: 'Access actions',

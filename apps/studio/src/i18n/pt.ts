@@ -2814,6 +2814,7 @@ export const pt: EnShape = {
       systemAria: 'Sistema de terminologia',
     },
     access: {
+      roles: 'Funções',
       title: 'Quem pode usar este formulário',
       description: 'Escolha as funções que podem abrir e submeter este formulário. Uma lista vazia significa todos com a permissão.',
       actions: 'Ações de acesso',
