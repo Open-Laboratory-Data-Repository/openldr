@@ -46,6 +46,10 @@ export function DashboardPage() {
   // Only the owner or an admin may share a dashboard; the server checks the same (roles part 2).
   const { user, hasCapability } = useAuth();
   const mayShare = !!current && (hasCapability('roles.manage') || (!!user && current.ownerId === user.id));
+  // Editing runs free-form queries, which need dashboards.edit; a viewer who could enter edit mode
+  // would lose their widgets to 403s (review DS2). Creating and importing need dashboards.create.
+  const mayEdit = hasCapability('dashboards.edit');
+  const mayCreate = hasCapability('dashboards.create');
   const [shareOpen, setShareOpen] = useState(false);
   const [all, setAll] = useState<Dashboard[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
@@ -267,15 +271,19 @@ export function DashboardPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled={creating || dirty || editorOpen || filterEditorOpen} onSelect={() => void handleNewDashboard()}>
-                <Plus className="mr-2 h-4 w-4" />
-                {t(creating ? 'dashboard.creating' : 'dashboard.newDashboard')}
-              </DropdownMenuItem>
+              {mayCreate ? (
+                <DropdownMenuItem disabled={creating || dirty || editorOpen || filterEditorOpen} onSelect={() => void handleNewDashboard()}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t(creating ? 'dashboard.creating' : 'dashboard.newDashboard')}
+                </DropdownMenuItem>
+              ) : null}
               {dirty && <p className="max-w-56 px-2 py-1 text-xs text-muted-foreground">{t('dashboard.waitForSave')}</p>}
-              <DropdownMenuItem disabled={creating || dirty} onSelect={() => setRenameOpen(true)}>
-                <Pencil className="mr-2 h-4 w-4" />
-                {t('dashboard.rename')}
-              </DropdownMenuItem>
+              {mayEdit ? (
+                <DropdownMenuItem disabled={creating || dirty} onSelect={() => setRenameOpen(true)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  {t('dashboard.rename')}
+                </DropdownMenuItem>
+              ) : null}
               {mayShare ? (
                 <DropdownMenuItem disabled={creating || dirty} onSelect={() => setShareOpen(true)}>
                   <Share2 className="mr-2 h-4 w-4" />
@@ -322,21 +330,23 @@ export function DashboardPage() {
                     {t('dashboard.delete')}
                   </DropdownMenuItem>
                 </>
-              ) : (
+              ) : mayEdit ? (
                 <DropdownMenuItem onSelect={() => setEditing(true)}>
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit
                 </DropdownMenuItem>
-              )}
+              ) : null}
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={handleExport}>
                 <Download className="mr-2 h-4 w-4" />
                 {t('dashboard.exportDashboard')}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
-                <Upload className="mr-2 h-4 w-4" />
-                {t('dashboard.importDashboard')}
-              </DropdownMenuItem>
+              {mayCreate ? (
+                <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  {t('dashboard.importDashboard')}
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
           </div>

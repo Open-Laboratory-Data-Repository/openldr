@@ -53,4 +53,21 @@ describe('Share in the dashboard menu', () => {
     serve();
     expect(await menuItems()).not.toContain('Share');
   });
+
+  it('offers a viewer no Edit, Rename, New dashboard or Import, so their widgets keep the saved route (review DS2)', async () => {
+    auth.user = { id: 'u-viewer', username: 'v', displayName: null, roles: [] };
+    auth.caps = ['dashboards.view'];
+    serve();
+    const items = await menuItems();
+    for (const hidden of ['Edit', 'Rename', 'New dashboard', 'Import']) expect(items, hidden).not.toContain(hidden);
+    expect(items).toContain('Export');
+  });
+
+  it('offers an editor Edit and Rename, and a creator New dashboard and Import', async () => {
+    auth.user = { id: 'u-editor', username: 'e', displayName: null, roles: [] };
+    auth.caps = ['dashboards.view', 'dashboards.edit', 'dashboards.create'];
+    serve();
+    const items = await menuItems();
+    for (const shown of ['Edit', 'Rename', 'New dashboard', 'Import']) expect(items, shown).toContain(shown);
+  });
 });
