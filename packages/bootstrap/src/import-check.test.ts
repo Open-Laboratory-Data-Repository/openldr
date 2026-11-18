@@ -1872,6 +1872,26 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     expect((await w.stored())!.counts).toMatchObject({ read: 2, saved: 1, held: 1 });
   });
 
+  it('a still-held recheck that gives up keeps counts matching its rewritten row, and a later recheck counts once (re-review H3, held give up)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput({ values: { sex: 'M' } }));
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ key, held: true, findings: [], check: { status: 'failed' }, label: 'held_check', fields: { dob_age: '2024-03-11', sex: 'F' } })) }));
+    w.failRunWrites((doc) => (doc.recheck?.done?.length ?? 0) > 0);
+    await drive(w.svc);
+    const labelsOfRows = (await w.heldAll()).rows.map((r) => r.label).sort();
+    const counts = (await w.stored())!.counts;
+    const expected: Record<string, number> = {};
+    for (const l of labelsOfRows) expected[l!] = (expected[l!] ?? 0) + 1;
+    expect(counts.labels).toEqual(expected);
+    expect(counts).toMatchObject({ read: 2, held: 2 });
+    w.failRunWrites(null);
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    await drive(w.svc);
+    expect((await w.stored())!.counts).toMatchObject({ read: 2, held: 2, labels: { held_rules: 1, held_check: 1 } });
+  });
+
   it('a full run sends the stored corrections of its page, and none when the plugin declares no fields', async () => {
     const w = await world({ corrections: FIELDS });
     await heldRun(w);

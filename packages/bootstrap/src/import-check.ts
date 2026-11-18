@@ -203,6 +203,79 @@ export interface HeldItemView extends HeldItem {
 const CORRECTION_VALUE_MAX = 200;
 const CORRECTION_REASON_MAX = 500;
 
+interface Decided { outcome: 'saved' | 'held' | 'failed'; laboratory: string | null; label: string | undefined }
+interface Tally { resources: number; decided: Decided[] }
+const freshTally = (): Tally => ({ resources: 0, decided: [] });
+/** Each request counts once in the run and once in its laboratory, under the same label name,
+ *  so the laboratories always add up to the run. */
+function addTallyTo(run: CheckRun, t: Tally): void {
+  const c = run.counts;
+  c.resources += t.resources;
+  const labs = run.laboratories;
+  const byCode = new Map((labs ?? []).map((l) => [l.code, l]));
+  const entryFor = (code: string | null): CheckLaboratory => {
+    const named = byCode.size - (byCode.has(null) ? 1 : 0);
+    const at = code !== null && !byCode.has(code) && named >= MAX_LABORATORIES ? null : code;
+    let entry = byCode.get(at);
+    if (!entry) {
+      entry = { code: at, counts: { read: 0, saved: 0, held: 0, failed: 0, labels: {} } };
+      byCode.set(at, entry);
+      labs!.push(entry);
+    }
+    return entry;
+  };
+  // Labels are counted in maps, never by name on a plain object: a label such as
+  // `constructor` would read the object's own function. They go back as plain objects.
+  const runLabels = new Map(Object.entries(c.labels));
+  const labLabels = new Map<CheckLaboratory, Map<string, number>>();
+  const labelsOf = (entry: CheckLaboratory): Map<string, number> => {
+    let m = labLabels.get(entry);
+    if (!m) { m = new Map(Object.entries(entry.counts.labels)); labLabels.set(entry, m); }
+    return m;
+  };
+  const bump = (m: Map<string, number>, name: string): void => { m.set(name, (m.get(name) ?? 0) + 1); };
+  for (const d of t.decided) {
+    c.read += 1;
+    c[d.outcome] += 1;
+    let name: string | null = null;
+    if (d.label !== undefined) {
+      const named = runLabels.size - (runLabels.has(OTHER_LABEL) ? 1 : 0);
+      name = validLabel(d.label) !== null && (runLabels.has(d.label) || named < MAX_LABELS) ? d.label : OTHER_LABEL;
+      bump(runLabels, name);
+    }
+    if (!labs) continue;
+    const entry = entryFor(d.laboratory);
+    entry.counts.read += 1;
+    entry.counts[d.outcome] += 1;
+    if (name !== null) bump(labelsOf(entry), name);
+  }
+  // Object.fromEntries makes an own property of every name, even one a plain object has.
+  c.labels = Object.fromEntries(runLabels);
+  for (const [entry, m] of labLabels) entry.counts.labels = Object.fromEntries(m);
+}
+/** Takes back what `addTally` added for these decisions: a recheck decides a key again. */
+function subtractTallyFrom(run: CheckRun, old: Decided[]): void {
+  const c = run.counts;
+  const drop = (labels: Record<string, number>, name: string | undefined): Record<string, number> => {
+    if (name === undefined) return labels;
+    const m = new Map(Object.entries(labels));
+    const at = m.has(name) ? name : OTHER_LABEL;
+    const n = (m.get(at) ?? 0) - 1;
+    if (n > 0) m.set(at, n); else m.delete(at);
+    return Object.fromEntries(m);
+  };
+  for (const d of old) {
+    c.read -= 1;
+    c[d.outcome] -= 1;
+    c.labels = drop(c.labels, d.label);
+    const entry = run.laboratories?.find((l) => l.code === d.laboratory) ?? run.laboratories?.find((l) => l.code === null);
+    if (!entry) continue;
+    entry.counts.read -= 1;
+    entry.counts[d.outcome] -= 1;
+    entry.counts.labels = drop(entry.counts.labels, d.label);
+  }
+}
+
 /** One check per source copy: the first 32 hex characters of SHA-256 of `check|<copyId>`. */
 export function checkIdOf(copyId: string): string {
   return createHash('sha256').update(`check|${copyId}`).digest('hex').slice(0, 32);
@@ -619,78 +692,8 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       /** What one page did: how each request ended, with its laboratory and the label it gave.
        *  Added to the run's counts only when the page is done, so a page tried again after a fault
        *  counts nothing twice. */
-      interface Decided { outcome: 'saved' | 'held' | 'failed'; laboratory: string | null; label: string | undefined }
-      interface Tally { resources: number; decided: Decided[] }
-      const freshTally = (): Tally => ({ resources: 0, decided: [] });
-      /** Each request counts once in the run and once in its laboratory, under the same label name,
-       *  so the laboratories always add up to the run. */
-      const addTally = (t: Tally): void => {
-        const c = run.counts;
-        c.resources += t.resources;
-        const labs = run.laboratories;
-        const byCode = new Map((labs ?? []).map((l) => [l.code, l]));
-        const entryFor = (code: string | null): CheckLaboratory => {
-          const named = byCode.size - (byCode.has(null) ? 1 : 0);
-          const at = code !== null && !byCode.has(code) && named >= MAX_LABORATORIES ? null : code;
-          let entry = byCode.get(at);
-          if (!entry) {
-            entry = { code: at, counts: { read: 0, saved: 0, held: 0, failed: 0, labels: {} } };
-            byCode.set(at, entry);
-            labs!.push(entry);
-          }
-          return entry;
-        };
-        // Labels are counted in maps, never by name on a plain object: a label such as
-        // `constructor` would read the object's own function. They go back as plain objects.
-        const runLabels = new Map(Object.entries(c.labels));
-        const labLabels = new Map<CheckLaboratory, Map<string, number>>();
-        const labelsOf = (entry: CheckLaboratory): Map<string, number> => {
-          let m = labLabels.get(entry);
-          if (!m) { m = new Map(Object.entries(entry.counts.labels)); labLabels.set(entry, m); }
-          return m;
-        };
-        const bump = (m: Map<string, number>, name: string): void => { m.set(name, (m.get(name) ?? 0) + 1); };
-        for (const d of t.decided) {
-          c.read += 1;
-          c[d.outcome] += 1;
-          let name: string | null = null;
-          if (d.label !== undefined) {
-            const named = runLabels.size - (runLabels.has(OTHER_LABEL) ? 1 : 0);
-            name = validLabel(d.label) !== null && (runLabels.has(d.label) || named < MAX_LABELS) ? d.label : OTHER_LABEL;
-            bump(runLabels, name);
-          }
-          if (!labs) continue;
-          const entry = entryFor(d.laboratory);
-          entry.counts.read += 1;
-          entry.counts[d.outcome] += 1;
-          if (name !== null) bump(labelsOf(entry), name);
-        }
-        // Object.fromEntries makes an own property of every name, even one a plain object has.
-        c.labels = Object.fromEntries(runLabels);
-        for (const [entry, m] of labLabels) entry.counts.labels = Object.fromEntries(m);
-      };
-      /** Takes back what `addTally` added for these decisions: a recheck decides a key again. */
-      const subtractTally = (old: Decided[]): void => {
-        const c = run.counts;
-        const drop = (labels: Record<string, number>, name: string | undefined): Record<string, number> => {
-          if (name === undefined) return labels;
-          const m = new Map(Object.entries(labels));
-          const at = m.has(name) ? name : OTHER_LABEL;
-          const n = (m.get(at) ?? 0) - 1;
-          if (n > 0) m.set(at, n); else m.delete(at);
-          return Object.fromEntries(m);
-        };
-        for (const d of old) {
-          c.read -= 1;
-          c[d.outcome] -= 1;
-          c.labels = drop(c.labels, d.label);
-          const entry = run.laboratories?.find((l) => l.code === d.laboratory) ?? run.laboratories?.find((l) => l.code === null);
-          if (!entry) continue;
-          entry.counts.read -= 1;
-          entry.counts[d.outcome] -= 1;
-          entry.counts.labels = drop(entry.counts.labels, d.label);
-        }
-      };
+      const addTally = (t: Tally): void => addTallyTo(run, t);
+      const subtractTally = (old: Decided[]): void => subtractTallyFrom(run, old);
       const keepFailed = async (key: string, error: string, label: string | null, laboratory: string | null): Promise<void> => {
         await ownDb('write', () => deps.held.put({
           copyId: run.copyId, key, runId: run.id, reason: 'error', label, laboratory, error, findings: null, check: null,
@@ -914,6 +917,22 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
     await finishDrive(run, d, outcome);
   }
 
+  /** Brings the counts of a run whose recheck did not finish in line with its held rows. For each key
+   *  whose counts were not yet moved (no stored done mark) and that this pass counted, a held row
+   *  rewritten since the recheck was queued replaces the decision recorded then (re-review H3). */
+  async function settleRecheck(run: CheckRun): Promise<void> {
+    const rc = run.recheck;
+    if (!rc || run.pass === undefined) return;
+    const done = new Set((rc.done ?? []).map((x) => x.key));
+    for (const b of rc.before ?? []) {
+      if (done.has(b.key) || b.pass === null || b.pass !== run.pass) continue;
+      const row = await ownDb('read', () => deps.held.get(run.copyId, b.key));
+      if (!row || (row.label === b.label && row.laboratory === b.laboratory)) continue;
+      subtractTallyFrom(run, [{ outcome: 'held', laboratory: b.laboratory, label: b.label ?? undefined }]);
+      addTallyTo(run, { resources: 0, decided: [{ outcome: 'held', laboratory: row.laboratory, label: row.label ?? undefined }] });
+    }
+  }
+
   async function finishDrive(run: CheckRun, d: ReturnType<typeof driving>, outcome: CheckOutcome): Promise<void> {
     d.rewind();
     if (outcome === 'lost') return;
@@ -930,6 +949,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         run.counts = stored.counts;
         run.laboratories = stored.laboratories;
         run.recheck = stored.recheck;
+        await settleRecheck(run).catch(() => {});
         d.markPageEnd();
       }
     }
@@ -1197,11 +1217,14 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       const run = await changeRun(pluginId, runId, async (stored) => {
         if (!stored) throw new Error(`check ${runId} not found; start the check again first`);
         if (isLive(stored.status)) throw new Error(`check ${runId} is ${stored.status}; wait for it to end, then check the request again`);
-        // A recheck that ended with a removal still to do finishes it first (re-review H3).
+        // A recheck that did not finish is settled first: its counts brought in line with its held
+        // rows, and a removal still to do done (re-review H3).
+        const settled: CheckRun = { ...stored, counts: { ...stored.counts, labels: { ...stored.counts.labels } }, laboratories: stored.laboratories && structuredClone(stored.laboratories) };
+        await settleRecheck(settled);
         const pending = (stored.recheck?.done ?? []).filter((x) => x.outcome === 'saved').map((x) => x.key);
         if (pending.length > 0) await ownDb('write', () => deps.held.remove(copyId, pending));
         return {
-          ...stored, status: 'queued', driver: null, waiting: null,
+          ...settled, status: 'queued', driver: null, waiting: null,
           recheck: {
             keys: [key], returnTo: stored.status, finishedAt: stored.finishedAt,
             before: [{ key, label: held.label, laboratory: held.laboratory, pass: held.pass }],
