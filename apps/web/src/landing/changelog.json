@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "94c57700",
+          "type": "fix",
+          "scope": "docs",
+          "title": "The report-pipeline guide follows workflow access, and the plugin panels and terminology guides stay open to everyone (roles part 4 review D1-D3)"
+        },
+        {
+          "hash": "d880e13d",
+          "type": "feat",
+          "scope": "docs",
+          "title": "The in-app docs list and search show only the guides for pages a person can use; a link still opens any guide (roles part 4)"
+        },
+        {
           "hash": "f091224d",
           "type": "fix",
           "scope": "dashboards",
