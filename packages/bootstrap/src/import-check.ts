@@ -927,9 +927,11 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
     for (const b of rc.before ?? []) {
       if (done.has(b.key) || b.pass === null || b.pass !== run.pass) continue;
       const row = await ownDb('read', () => deps.held.get(run.copyId, b.key));
-      if (!row || (row.label === b.label && row.laboratory === b.laboratory)) continue;
+      // A row the recheck kept failing to read is an error row: it counts as failed (re-review H3, A).
+      const outcome = row?.reason === 'error' ? 'failed' as const : 'held' as const;
+      if (!row || (outcome === 'held' && row.label === b.label && row.laboratory === b.laboratory)) continue;
       subtractTallyFrom(run, [{ outcome: 'held', laboratory: b.laboratory, label: b.label ?? undefined }]);
-      addTallyTo(run, { resources: 0, decided: [{ outcome: 'held', laboratory: row.laboratory, label: row.label ?? undefined }] });
+      addTallyTo(run, { resources: 0, decided: [{ outcome, laboratory: row.laboratory, label: row.label ?? undefined }] });
     }
   }
 
@@ -942,15 +944,19 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
     }
     const recheck = run.recheck;
     if (recheck && outcome !== 'completed') {
-      // A recheck that did not complete keeps only what is stored: its counts and done marks. Counts it
-      // could not save are dropped with it, so they never disagree with the held list (re-review H3).
-      const stored = await readRun(run.pluginId, run.id).catch(() => null);
-      if (stored) {
+      // A recheck that did not complete keeps only what is stored: its counts and done marks, settled
+      // against its held rows. If that cannot be read, the run is left as a cut leaves it, for the
+      // next driver to take over from what is stored (re-review H3, B).
+      try {
+        const stored = await readRun(run.pluginId, run.id);
+        if (!stored) return;
         run.counts = stored.counts;
         run.laboratories = stored.laboratories;
         run.recheck = stored.recheck;
-        await settleRecheck(run).catch(() => {});
+        await settleRecheck(run);
         d.markPageEnd();
+      } catch {
+        return;
       }
     }
     // A removal the stored run marks done but that did not happen is done now; if it fails again the

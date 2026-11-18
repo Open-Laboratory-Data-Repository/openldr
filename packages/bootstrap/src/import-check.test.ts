@@ -103,6 +103,7 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
   const realHeld = createImportCheckHeldStore(internalDb);
   let heldPutFaults = 0;
   let heldRemoveFaults = 0;
+  let heldGetFaults = 0;
   let onHeldRemove: ((copyId: string, keys: string[]) => Promise<void>) | null = null;
   const heldPuts: unknown[] = [];
   const held: ImportCheckHeldStore = {
@@ -115,6 +116,13 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
         throw Object.assign(new Error('could not extend file: No space left on device'), { code: '53100', detail: `Failing row contains (${SECRET})` });
       }
       return realHeld.put(item);
+    },
+    async get(copyId, key) {
+      if (heldGetFaults > 0) {
+        heldGetFaults -= 1;
+        throw Object.assign(new Error('could not read block'), { code: '53100' });
+      }
+      return realHeld.get(copyId, key);
     },
     async remove(copyId, keys) {
       await onHeldRemove?.(copyId, keys);
@@ -239,6 +247,7 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
     failReadSet: (fn: ((set: string, maxBytes: number) => unknown) | null) => { readSetFault = fn; },
     failHeldPuts: (n: number) => { heldPutFaults = n; },
     failHeldRemoves: (n: number) => { heldRemoveFaults = n; },
+    failHeldGets: (n: number) => { heldGetFaults = n; },
     failRunWrites: (fn: ((doc: CheckRun) => boolean) | null) => { runWriteFault = fn; },
     watchHeldRemoves: (fn: ((copyId: string, keys: string[]) => Promise<void>) | null) => { onHeldRemove = fn; },
     stored: async () => (await raw.get(PLUGIN, '__import-checks', CHECK)) as CheckRun | null,
@@ -1889,6 +1898,45 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     w.failRunWrites(null);
     await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
     await drive(w.svc);
+    expect((await w.stored())!.counts).toMatchObject({ read: 2, held: 2, labels: { held_rules: 1, held_check: 1 } });
+  });
+
+  it('settling a recheck that gave up counts an error row as failed (re-review H3, A)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput());
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    w.failPersist(() => Object.assign(new Error('disk full'), { code: '53100' }));
+    w.failRunWrites((doc) => (doc.recheck?.done?.length ?? 0) > 0);
+    await drive(w.svc);
+    const rows = (await w.heldAll()).rows;
+    const counts = (await w.stored())!.counts;
+    expect(counts.failed).toBe(rows.filter((r) => r.reason === 'error').length);
+    expect(counts.held).toBe(rows.filter((r) => r.reason === 'held').length);
+  });
+
+  it('a settle that cannot read the held rows leaves the recheck to be taken over, and the counts end right (re-review H3, B)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput({ values: { sex: 'M' } }));
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ key, held: true, findings: [], check: { status: 'failed' }, label: 'held_check', fields: { dob_age: '2024-03-11', sex: 'F' } })) }));
+    let failing = true;
+    let armed = false;
+    // Every write carrying the done mark fails; the first one also makes the next held read fail.
+    w.failRunWrites((doc) => {
+      const reject = failing && (doc.recheck?.done?.length ?? 0) > 0;
+      if (reject && !armed) { armed = true; w.failHeldGets(1); }
+      return reject;
+    });
+    await w.svc.tick();
+    await w.svc.idle();
+    // Whatever the first driver managed, writes and reads recover and another driver takes over.
+    failing = false;
+    w.clock.now += STALE_MS + 1000;
+    await drive(w.service('server-2'));
+    const rows = (await w.heldAll()).rows.map((r) => r.label).sort();
+    expect(rows).toEqual(['held_check', 'held_rules']);
     expect((await w.stored())!.counts).toMatchObject({ read: 2, held: 2, labels: { held_rules: 1, held_check: 1 } });
   });
 
