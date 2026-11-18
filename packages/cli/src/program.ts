@@ -7,6 +7,7 @@ import { sendLogsToStderr } from '@openldr/core';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed, runDbReproject } from './db';
 import { runAuthRebindIssuer, runAuthSetupCode } from './auth';
+import { runDashboardsShare } from './dashboards';
 import { runFormsExtract, runFormsList, runFormsLint, runFormsVersions, runFormsRestore, runFormsAccess } from './forms';
 import { runList as runReportDesignList, runDelete as runReportDesignDelete, runPublish as runReportDesignPublish, runVersions as runReportDesignVersions } from './report-design';
 import { runList as runReportDefList, runDelete as runReportDefDelete } from './report-def';
@@ -1176,6 +1177,17 @@ export function buildProgram(): Command {
       try { process.exitCode = await runOntologyUnlink(systemId, opts); } catch (err) { process.stderr.write(`terminology ontology unlink failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 
+  const dashboards = program.command('dashboards').description('Dashboards: who may see each one');
+  dashboards
+    .command('share <id>')
+    .description('Show or set which roles may see a dashboard and its data. An empty list means every role with the permission')
+    .option('--roles <roles>', 'roles that may see it, slugs or ids, comma separated')
+    .option('--clear', 'empty the list, so every role with the permission may see it', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (id: string, opts: { json: boolean; clear: boolean; roles?: string }) => {
+      try { process.exitCode = await runDashboardsShare(id, opts); }
+      catch (err) { process.stderr.write(`dashboards share failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
   const forms = program.command('forms').description('FHIR forms (Questionnaire) utilities');
   forms.command('list').description('List persisted form definitions').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
     try { process.exitCode = await runFormsList(opts); } catch (err) { process.stderr.write(`forms list failed: ${redactError(err)}\n`); process.exitCode = 1; }
