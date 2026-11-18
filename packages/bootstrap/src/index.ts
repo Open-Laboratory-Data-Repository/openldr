@@ -2158,6 +2158,7 @@ export {
 export * from './test-mapping';
 export * from './result-fields';
 export * from './job-continue';
+export * from './form-access';
 export { MAX_SELF_RESUMES } from './job-interruptions';
 export * from './patient-identifier-systems';
 export * from './patient-index';
