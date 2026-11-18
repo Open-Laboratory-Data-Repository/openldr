@@ -1828,6 +1828,7 @@ function fakeImportCtx(db: any) {
   const audit: any[] = [];
   return {
     internalDb: db,
+    jobInterruptions: createJobInterruptionStore(db),
     // Fix 1 (mapping-ux report): the import route now passes `admin` through to `importFacilities`
     // so a CSV upload projects into FACILITY_REGISTRY_SYSTEM too. Real projection behaviour is
     // exercised for real against `createTerminologyAdminStore` in `packages/bootstrap`'s own
@@ -2456,6 +2457,7 @@ describe('POST /api/facilities/import', () => {
       // above ("dry-run (no `apply`) returns the full summary…"); re-pinning it here would just be a
       // second, driftable copy of that same assertion.
       expect(runRes.json()).toEqual({
+        interruptions: [],
         id: runId,
         nationalSystem: SYSTEM,
         sourceFormat: 'csv',
@@ -2527,6 +2529,7 @@ describe('POST /api/facilities/import', () => {
       const runRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` });
       expect(runRes.statusCode).toBe(200);
       expect(runRes.json()).toEqual({
+        interruptions: [],
         id: runId,
         nationalSystem: SYSTEM,
         sourceFormat: 'csv',
@@ -3893,6 +3896,7 @@ describe('POST /api/facilities/import/upload', () => {
     // field that differs from an inline preview's row (blobKey, status, previewedAt, summary) is a
     // field a reader will rely on.
     expect(runRes.json()).toEqual({
+        interruptions: [],
       id: runId,
       nationalSystem: SYSTEM,
       sourceFormat: 'csv',

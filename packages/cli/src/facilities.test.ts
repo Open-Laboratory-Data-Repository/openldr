@@ -2057,7 +2057,7 @@ describe('facilities import-run CLI', () => {
     const code = await runFacilitiesImportRun('fir_a', { json: true });
 
     expect(code).toBe(0);
-    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify(RUN_DETAIL, null, 2) + '\n');
+    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify({ ...RUN_DETAIL, interruptions: [] }, null, 2) + '\n');
   });
 
   // ⛔ The `--json` assertion above compares against `JSON.stringify(<the fixture>)`, so it agrees

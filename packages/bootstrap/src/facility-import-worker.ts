@@ -1,3 +1,4 @@
+import { MAX_SELF_RESUMES, takeBack, type InterruptionDeps } from './job-interruptions';
 import { constants as bufferConstants } from 'node:buffer';
 import { redact } from '@openldr/core';
 import type { AuditStore } from '@openldr/audit';
@@ -11,6 +12,11 @@ import {
 } from './facility-import';
 
 export interface FacilityImportWorkerDeps {
+  /** Takes back runs a dead process left RUNNING, recording each cut (design
+   *  2026-11-18-interrupted-jobs). Absent, the sweep fails them as before. */
+  interruptions?: InterruptionDeps;
+  /** When this server process started: a run silent since before it was cut by a restart. */
+  processStartedAt?: Date;
   runs: FacilityImportRunStore;
   blob: Pick<BlobStoragePort, 'getStream' | 'delete'>;
   /** Exactly the deps the INLINE route builds for `importFacilities` (`db`/`capture`/`admin`/
@@ -182,6 +188,7 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
   );
   let stopped = false;
   let running = false;
+  const processStartedAt = deps.processStartedAt ?? new Date();
 
   /** Release every run whose RUNNING status has outlived the lease, recording `error` as the reason.
    *
@@ -193,6 +200,21 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
    *  RUNNING run — which is precisely the unscoped statement this argument exists to stop being. */
   async function sweepStale(error: string): Promise<void> {
     try {
+      if (deps.interruptions) {
+        // Each run past the lease goes back to the state its phase claims from, so this worker
+        // validates or applies it again from its stored file. A confirmed apply does not ask again.
+        // After MAX_SELF_RESUMES cuts in one phase it fails as before, and says why.
+        for (const run of await deps.runs.listStaleRunning(staleLeaseMs)) {
+          await takeBack(deps.interruptions, {
+            kind: 'facility-import', jobId: run.id, phase: run.status, at: run.startedAt,
+            cause: run.startedAt.getTime() < processStartedAt.getTime() ? 'server-restart' : 'lease-expired',
+            selfResume: true,
+            resume: async () => { await deps.runs.returnToClaimable(run.id); },
+            wait: async () => { await deps.runs.failRunning(run.id, `${error}; interrupted ${MAX_SELF_RESUMES + 1} times while ${run.status}, so it stopped. Start the import again.`); },
+          });
+        }
+        return;
+      }
       const n = await deps.runs.failStaleRunning(error, staleLeaseMs);
       if (n > 0) deps.logger.info({ count: n, leaseMs: staleLeaseMs, error }, 'failed orphaned facility import runs');
     } catch (err) {
@@ -506,6 +528,8 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
     if (running) return;
     running = true;
     try {
+      // The start-up sweep finishes before any claim, so a run it takes back is claimable here.
+      await crashRecovery;
       // ⛔ BEFORE either claim, and that ordering is what makes the lease a recovery mechanism rather
       // than a boot formality: a run whose owning process died is released as soon as it ages past
       // the lease, not only at the next restart. It cannot reach THIS worker's own run — `running`

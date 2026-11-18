@@ -51,6 +51,7 @@ import { FACILITY_COLUMNS } from '@openldr/table-query';
 import { parseWhereFlags } from './table-query-flags';
 import { callerName, cliActor, cliNamedActor } from './cli-actor';
 import { redactError } from './redact-error';
+import { describeInterruption } from './interruptions';
 
 export interface FacilitiesImportOpts {
   nationalSystem: string;
@@ -1078,10 +1079,11 @@ export async function runFacilitiesImportRun(id: string, opts: FacilitiesImportR
       else process.stderr.write(`facilities import-run failed: ${msg}\n`);
       return 1;
     }
+    const interruptions = (await ctx.jobInterruptions.listFor('facility-import', [run.id])).get(run.id) ?? [];
     if (opts.json) {
-      process.stdout.write(JSON.stringify(run, null, 2) + '\n');
+      process.stdout.write(JSON.stringify({ ...run, interruptions }, null, 2) + '\n');
     } else {
-      process.stdout.write(formatImportRunHuman(run) + '\n');
+      process.stdout.write([formatImportRunHuman(run), ...interruptions.map(describeInterruption)].join('\n') + '\n');
     }
     return 0;
   } catch (err) {

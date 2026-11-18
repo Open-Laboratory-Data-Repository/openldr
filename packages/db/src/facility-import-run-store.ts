@@ -150,6 +150,14 @@ export interface FacilityImportRunStore {
    *  not a property of this statement. The default preserves the behaviour of a caller that names no
    *  lease; it is not a safe value for a caller that shares this table with a live worker. */
   failStaleRunning(error: string, minAgeMs?: number): Promise<number>;
+  /** RUNNING runs that started at least `minAgeMs` ago, by the database clock: the runs a worker
+   *  takes back after an interruption (design 2026-11-18-interrupted-jobs). */
+  listStaleRunning(minAgeMs: number): Promise<{ id: string; status: FacilityImportRunStatus; startedAt: Date }[]>;
+  /** Puts a RUNNING run back in the state its phase claims from (`validating` to `queued`,
+   *  `applying` to `confirmed`), keeping its register. False when it is not running. */
+  returnToClaimable(id: string): Promise<boolean>;
+  /** Fails one RUNNING run and releases its register. False when it is not running. */
+  failRunning(id: string, error: string): Promise<boolean>;
 
   get(id: string): Promise<FacilityImportRun | null>;
   list(nationalSystem?: string, limit?: number): Promise<FacilityImportRun[]>;
@@ -520,6 +528,38 @@ export function createFacilityImportRunStore(db: Kysely<InternalSchema>): Facili
         ]))
         .executeTakeFirst();
       return Number(res?.numUpdatedRows ?? 0);
+    },
+
+    async listStaleRunning(minAgeMs) {
+      const ms = Math.max(0, Math.floor(minAgeMs));
+      const olderThanLease = sql.raw(`interval '${ms} milliseconds'`);
+      const rows = await db.selectFrom('facility_import_runs').select(['id', 'status', 'started_at', 'created_at'] as never)
+        .where('status', 'in', [...RUNNING_RUN_STATES])
+        .where((eb) => eb.or([
+          eb('started_at', 'is', null),
+          eb('started_at', '<=', sql`now() - ${olderThanLease}` as never),
+        ]))
+        .execute() as unknown as Array<{ id: string; status: FacilityImportRunStatus; started_at: Date | null; created_at: Date }>;
+      return rows.map((r) => ({ id: r.id, status: r.status, startedAt: new Date(r.started_at ?? r.created_at) }));
+    },
+
+    async returnToClaimable(id) {
+      for (const phase of [VALIDATE_PHASE, APPLY_PHASE]) {
+        const res = await db.updateTable('facility_import_runs')
+          .set({ status: phase.from } as never)
+          .where('id', '=', id).where('status', '=', phase.to)
+          .executeTakeFirst();
+        if (Number(res?.numUpdatedRows ?? 0) > 0) return true;
+      }
+      return false;
+    },
+
+    async failRunning(id, error) {
+      const res = await db.updateTable('facility_import_runs')
+        .set({ status: 'failed', error, finished_at: sql`now()` as never, active_key: null } as never)
+        .where('id', '=', id).where('status', 'in', [...RUNNING_RUN_STATES])
+        .executeTakeFirst();
+      return Number(res?.numUpdatedRows ?? 0) > 0;
     },
 
     async get(id) {

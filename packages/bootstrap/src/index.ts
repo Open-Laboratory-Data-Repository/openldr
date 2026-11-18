@@ -1190,6 +1190,8 @@ const reporting: ReportingApi = {
   // (`runTerminologyIngestWorker`).
   const facilityImportRuns: FacilityImportRunStore = createFacilityImportRunStore(internal.db);
   const facilityImportWorker = createFacilityImportWorkerIfEnabled(opts.runFacilityImportWorker === true, {
+    interruptions: interruptionDeps,
+    processStartedAt,
     runs: facilityImportRuns,
     blob,
     // ⛔ `audit` belongs on BOTH this literal and the worker's own `audit` below, and they are not the

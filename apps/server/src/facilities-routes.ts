@@ -3071,7 +3071,9 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const { id } = req.params as { id: string };
     const run = await importRuns.get(id);
     if (!run) { reply.code(404); return { error: 'not found' }; }
-    return run;
+    // Each time a restart cut the run and it carried on (design 2026-11-18-interrupted-jobs).
+    const interruptions = (await ctx.jobInterruptions.listFor('facility-import', [run.id])).get(run.id) ?? [];
+    return { ...run, interruptions };
   });
 
   // Task 2 (mapping-answers-back, Slice B): one column's vocabulary, so the mapping step can check
