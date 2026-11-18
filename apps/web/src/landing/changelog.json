@@ -6,6 +6,54 @@
       "version": null,
       "entries": [
         {
+          "hash": "b5e6ee52",
+          "type": "fix",
+          "scope": "forms",
+          "title": "A save of a form's access lists returns its own before and after, read under its lock, so the audit names the lists that save wrote (roles review FR10)"
+        },
+        {
+          "hash": "a1a8c4b1",
+          "type": "fix",
+          "scope": "db",
+          "title": "Saves of one form's access lists take turns on the form row, so two at once never merge (roles review FR5)"
+        },
+        {
+          "hash": "907f12c7",
+          "type": "fix",
+          "scope": "cli",
+          "title": "A served forms list, lint or versions shows only the forms the caller may open (roles review FR4)"
+        },
+        {
+          "hash": "e7a4e5b0",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Reference search answers 404 for a form the person may not open (roles review FR3)"
+        },
+        {
+          "hash": "e3b4ee3d",
+          "type": "fix",
+          "scope": "forms",
+          "title": "An editor obeys the submit list, and the Access sheet gets role names with the lists so a Lab Manager can use it (roles review FR1, FR2)"
+        },
+        {
+          "hash": "6c950c53",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr forms access shows and sets which roles may open and submit a form, through the same bootstrap check as the route (roles part 1 task 5)"
+        },
+        {
+          "hash": "02447aaa",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The Access sheet's actions sit on a section row, clear of the close button"
+        },
+        {
+          "hash": "2a14c5f3",
+          "type": "feat",
+          "scope": "studio",
+          "title": "An Access sheet in the form builder sets which roles may open and submit a form (roles part 1 task 4)"
+        },
+        {
           "hash": "058fe876",
           "type": "fix",
           "scope": "import",
@@ -60,6 +108,12 @@
           "title": "A recheck removes a held row only once the stored run shows its key done (held corrections re-review H3, failed writes)"
         },
         {
+          "hash": "62d96abb",
+          "type": "feat",
+          "scope": "forms",
+          "title": "The form routes open and accept a form only for the roles allowed, and an editor sets the lists (roles part 1 task 3)"
+        },
+        {
           "hash": "ea0787f1",
           "type": "fix",
           "scope": "import",
@@ -76,6 +130,18 @@
           "type": "fix",
           "scope": "import",
           "title": "Held corrections review H1-H6: a corrector reads run status, the form offers only a request's own fields, a recheck counts once and only in its pass, no recheck key reaches a page or terminal, the audit row comes before the correction"
+        },
+        {
+          "hash": "6b330ac1",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "One check of who may open and submit a form (roles part 1 task 2)"
+        },
+        {
+          "hash": "52367543",
+          "type": "feat",
+          "scope": "db",
+          "title": "Which roles may open and submit each form (migration 125, roles part 1 task 1)"
         },
         {
           "hash": "314f4e01",
