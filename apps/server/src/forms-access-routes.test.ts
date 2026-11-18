@@ -29,7 +29,10 @@ function app(user: { capabilities: string[]; roleIds: string[] }) {
     },
     formAccessStore: store,
     formAccess: formAccess({ access: store }),
-    roles: { get: async (id: string) => (id.startsWith('r-') ? { id } : null) },
+    roles: {
+      get: async (id: string) => (id.startsWith('r-') ? { id } : null),
+      list: async () => ['r-clerk', 'r-lead', 'r-nurse', 'r-tech'].map((id) => ({ id, slug: id })),
+    },
     audit,
     logger: { warn: () => {}, error: () => {}, info: () => {} },
   };
