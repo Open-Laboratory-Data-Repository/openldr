@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { AppContext } from '@openldr/bootstrap';
+import { DataScopeError, setUserDataScope, type AppContext } from '@openldr/bootstrap';
 import { redact, OpenLdrError } from '@openldr/core';
 import { CAPABILITY_GROUPS } from '@openldr/rbac';
 import { z } from 'zod';
@@ -13,6 +13,17 @@ const roleInput = z.object({
   capabilities: z.array(z.string()).default([]),
 });
 const assignInput = z.object({ roleIds: z.array(z.string()) });
+// A user's data limit (roles part 3): Everything, or Limited to places picked from the register.
+const name = z.string().min(1).max(200);
+const dataScopeInput = z.discriminatedUnion('limited', [
+  z.object({ limited: z.literal(false) }),
+  z.object({
+    limited: z.literal(true),
+    facilities: z.array(name).max(1000),
+    districts: z.array(z.object({ region: name, district: name })).max(1000),
+    regions: z.array(name).max(1000),
+  }),
+]);
 
 function isInvariant(e: unknown): e is OpenLdrError {
   return e instanceof OpenLdrError;
@@ -133,6 +144,41 @@ export function registerRolesRoutes(app: FastifyInstance<any, any, any, any>, ct
     { preHandler: requireAnyCapability('roles.view', 'users.view') },
     async (req) => ctx.roles.rolesForUser((req.params as { id: string }).id),
   );
+
+  // A user's data limit, by role subject (roles part 3).
+  app.get(
+    '/api/users/:id/data-scope',
+    { preHandler: requireAnyCapability('roles.view', 'users.view') },
+    async (req) => ctx.dataScopes.get((req.params as { id: string }).id),
+  );
+
+  app.put('/api/users/:id/data-scope', MANAGE, async (req, reply) => {
+    const subject = (req.params as { id: string }).id;
+    const p = dataScopeInput.safeParse(req.body);
+    if (!p.success) {
+      reply.code(400);
+      return { error: p.error.message };
+    }
+    try {
+      // Before and after come from the save itself, read under its lock (roles review FR10).
+      const { before, after } = await setUserDataScope(ctx, subject, p.data);
+      await recordAudit(ctx, req, {
+        action: 'user.data_scope.set',
+        entityType: 'user',
+        entityId: subject,
+        before: before as unknown as Record<string, unknown>,
+        after: after as unknown as Record<string, unknown>,
+      });
+      return after;
+    } catch (e) {
+      if (e instanceof DataScopeError) {
+        reply.code(e.reason === 'no-user' ? 404 : 400);
+        return { error: e.message };
+      }
+      reply.code(500);
+      return { error: redact(e instanceof Error ? e.message : String(e)) };
+    }
+  });
 
   app.put('/api/users/:id/roles', MANAGE, async (req, reply) => {
     const subject = (req.params as { id: string }).id;

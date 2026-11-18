@@ -39,3 +39,25 @@ describe('the data limit on the signed-in request', () => {
     expect(res.json().dataScope).toEqual({ limited: false });
   });
 });
+
+// Review P3-02: sync shows incoming clinical bodies and `sync export` writes a bundle. A limited
+// user loses sync.view and sync.manage where capabilities are resolved, so the routes and the CLI
+// check refuse alike. Layer: the real sign-in hook and route guard over pg-mem; for the CLI, the
+// command's declared capability, which the /api/cli route checks against these same capabilities.
+describe('sync for a limited user', () => {
+  it('refuses the divergence bodies route and drops what sync export needs', async () => {
+    const { COMMAND_META } = await import('@openldr/cli/meta');
+    const f = await setup();
+    await f.roles.update(f.managers.id, { capabilities: ['users.manage', 'users.view', 'sync.view', 'sync.manage'] });
+    const url = '/api/settings/sync/divergences/Observation/o1/1';
+    expect((await f.app.inject({ url, headers: bearer(TOKENS.admin) })).statusCode).not.toBe(403);
+    await f.dataScopes.set('admin-sub', limit);
+    const res = await f.app.inject({ url, headers: bearer(TOKENS.admin) });
+    expect(res.statusCode).toBe(403);
+    const caps = (await me(f, TOKENS.admin)).json().capabilities as string[];
+    const need = COMMAND_META['sync export']!;
+    expect(need.kind === 'app' && need.capability).toBe('sync.manage');
+    expect(caps).not.toContain('sync.manage');
+    expect(caps).not.toContain('sync.view');
+  });
+});

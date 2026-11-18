@@ -1269,3 +1269,30 @@ describe('plugin broker: checks', () => {
     await db.destroy();
   });
 });
+
+// Roles part 3 (review P3-01): the broker runs reports and reads data without the caller's report
+// permission, so a limited caller may make only the calls that read no warehouse or source data.
+describe('plugin broker under a data limit', () => {
+  const limited = { id: 'u1', roles: ['lab_admin'], dataScope: { limited: true as const, facilities: ['f1'], districts: [], regions: [] } };
+  const caps = [{ kind: 'host:reports' }, { kind: 'host:connectors' }, { kind: 'host:import' }, { kind: 'host:schedule' }];
+
+  it('refuses a limited caller every report, connector, import and schedule call, and audits it', async () => {
+    const run = vi.fn(async () => ({ columns: [], rows: [], meta: {} }));
+    const { b, audited } = broker({ caps, reporting: { list: () => [{ id: 'r1' }], run } });
+    for (const op of [
+      { kind: 'reports.list' }, { kind: 'reports.run', id: 'r1' }, { kind: 'reports.columns', id: 'r1' },
+      { kind: 'connectors.list' }, { kind: 'import.list' }, { kind: 'import.check.held', copyId: 'c1', offset: 0, limit: 10 }, { kind: 'schedule.list' },
+    ]) {
+      const r = await b.handle('p1', limited, op);
+      expect(r, op.kind).toEqual({ ok: false, error: `operation ${op.kind} is not available with your data limit` });
+    }
+    expect(run).not.toHaveBeenCalled();
+    expect(audited.every((a) => a.outcome === 'denied')).toBe(true);
+  });
+
+  it('lets a limited caller use the plugin\'s own storage, and an unlimited caller run a report', async () => {
+    const { b } = broker({ caps, reporting: { list: () => [{ id: 'r1' }] } });
+    expect((await b.handle('p1', limited, { kind: 'storage.put', collection: 'c', key: 'k', doc: { n: 1 } })).ok).toBe(true);
+    expect(await b.handle('p1', { ...limited, dataScope: { limited: false } }, { kind: 'reports.list' })).toEqual({ ok: true, data: [{ id: 'r1' }] });
+  });
+});

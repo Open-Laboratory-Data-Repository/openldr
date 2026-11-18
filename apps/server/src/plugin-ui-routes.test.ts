@@ -22,9 +22,9 @@ function fakeCtx(over: Partial<any> = {}) {
   } as any;
 }
 
-function build(ctx: any, roles: string[] = ['lab_admin'], capabilities: string[] = []): FastifyInstance {
+function build(ctx: any, roles: string[] = ['lab_admin'], capabilities: string[] = [], dataScope?: unknown): FastifyInstance {
   const app = Fastify();
-  app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u1', username: 'admin', displayName: null, roles, capabilities }; });
+  app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u1', username: 'admin', displayName: null, roles, capabilities, dataScope }; });
   registerPluginUiRoutes(app, ctx);
   return app;
 }
@@ -126,6 +126,17 @@ describe('plugin-ui routes', () => {
     const neither = build(withCaps, ['lab_technician'], ['reports.view']);
     expect((await neither.inject({ method: 'GET', url: '/api/plugins/ui' })).json().map((p: any) => p.id)).not.toContain('dhis2-sink');
     expect((await neither.inject({ method: 'GET', url: '/api/plugins/dhis2-sink/ui/asset' })).statusCode).toBe(404);
+  });
+
+  it('passes the caller\'s data limit to the broker, and Everything when there is none (roles part 3)', async () => {
+    const ctx = fakeCtx();
+    let seen: any = null;
+    ctx.pluginBroker = { handle: async (_id: string, p: unknown) => { seen = p; return { ok: true, data: null }; } };
+    const limit = { limited: true, facilities: ['f1'], districts: [], regions: [] };
+    await build(ctx, ['lab_admin'], [], limit).inject({ method: 'POST', url: '/api/plugins/dhis2-sink/broker', payload: { op: { kind: 'reports.list' } } });
+    expect(seen.dataScope).toEqual(limit);
+    await build(ctx).inject({ method: 'POST', url: '/api/plugins/dhis2-sink/broker', payload: { op: { kind: 'reports.list' } } });
+    expect(seen.dataScope).toEqual({ limited: false });
   });
 
   it('GET asset serves the html for an admin on a requiredRoles plugin', async () => {

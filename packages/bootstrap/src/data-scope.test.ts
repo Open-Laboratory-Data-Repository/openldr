@@ -16,7 +16,7 @@ const facilities = [
   { id: 'f2', region: 'Arusha', district: 'Kondoa' },
 ];
 const deps = (store = memStore()) => ({
-  scopes: store,
+  dataScopes: store,
   users: {
     async get(id: string) { return id === 'local-1' ? { id } : undefined; },
     async getBySubject(s: string) { return s === 'kc-sub' ? { id: 'u2' } : undefined; },

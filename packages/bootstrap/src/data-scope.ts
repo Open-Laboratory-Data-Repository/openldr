@@ -10,7 +10,7 @@ export class DataScopeError extends Error {
 }
 
 export interface DataScopeDeps {
-  scopes: UserDataScopeStore;
+  dataScopes: UserDataScopeStore;
   users: { get(id: string): Promise<unknown | undefined>; getBySubject(subject: string): Promise<unknown | undefined> };
   roles: { rolesForUser(subject: string): Promise<unknown[]> };
   facilityRegistry: {
@@ -45,7 +45,7 @@ export async function setUserDataScope(
       }
     }
   }
-  return deps.scopes.set(subject, scope);
+  return deps.dataScopes.set(subject, scope);
 }
 
 /** A register row, as resolving a data limit needs it. */
