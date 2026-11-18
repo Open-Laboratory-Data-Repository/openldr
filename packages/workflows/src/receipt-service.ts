@@ -93,6 +93,10 @@ export function createWorkflowReceiptService(deps: ReceiptDeps): WorkflowReceipt
     if (!ids.length) return;
     // Receipts whose dispatch has ended: their outbox event is done, failed or gone.
     const ended = await db.selectFrom('workflow_webhook_receipts').select(['id', 'status', 'started_at', 'event_id'])
+      // The event's last update: the bus renews it while a worker owns the run, so it is the last
+      // time CE heard of the run (re-review R6). Null when the event is gone.
+      .select(eb => eb.selectFrom('outbox_events').select('outbox_events.updated_at')
+        .whereRef('outbox_events.id', '=', 'workflow_webhook_receipts.event_id').as('event_updated_at'))
       .where('id', 'in', ids).where('status', 'in', ['queued', 'running'])
       .where(eb => eb.not(eb.exists(eb.selectFrom('outbox_events').select('id')
         .whereRef('outbox_events.id', '=', 'workflow_webhook_receipts.event_id')
@@ -105,19 +109,21 @@ export function createWorkflowReceiptService(deps: ReceiptDeps): WorkflowReceipt
           const changed = await trx.updateTable('workflow_webhook_receipts')
             .set({ status: 'interrupted', reason: 'Worker ownership ended after execution started; outcome is uncertain', finished_at: new Date(), claim_token: null })
             .where('id', '=', row.id).where('status', '=', 'running').where('event_id', '=', row.event_id).returning('id').executeTakeFirst();
-          if (changed) await recordCut(trx, row.id, row.started_at ? new Date(row.started_at) : new Date(), 'lease-expired', null);
+          if (changed) await recordCut(trx, row.id, row.event_updated_at ? new Date(row.event_updated_at) : new Date(), 'lease-expired', null);
         });
         continue;
       }
       // Never started, so running it cannot do anything twice: requeue it with a fresh event and
-      // record the cut as carried on (review R11). After MAX_REQUEUES it is cancelled as before.
+      // record the cut as carried on (review R11). After MAX_REQUEUES it waits for Continue, with the
+      // cut left open (re-review R11).
       const cuts = await db.selectFrom('job_interruptions').select(eb => eb.fn.countAll<string>().as('n'))
         .where('job_kind', '=', 'workflow-receipt').where('job_id', '=', row.id).executeTakeFirstOrThrow();
       await db.transaction().execute(async trx => {
         if (Number(cuts.n) >= MAX_REQUEUES) {
-          await trx.updateTable('workflow_webhook_receipts')
-            .set({ status: 'cancelled', reason: `Dispatch ended before execution ${MAX_REQUEUES + 1} times; no workflow started`, finished_at: new Date(), claim_token: null })
-            .where('id', '=', row.id).where('status', '=', 'queued').where('event_id', '=', row.event_id).execute();
+          const changed = await trx.updateTable('workflow_webhook_receipts')
+            .set({ status: 'interrupted', reason: `Dispatch ended before execution ${MAX_REQUEUES + 1} times; no workflow started. Use Continue to run it.`, finished_at: new Date(), claim_token: null })
+            .where('id', '=', row.id).where('status', '=', 'queued').where('event_id', '=', row.event_id).returning('id').executeTakeFirst();
+          if (changed) await recordCut(trx, row.id, new Date(), 'attempts-exhausted', null);
           return;
         }
         const eventId = randomUUID();
@@ -159,7 +165,9 @@ export function createWorkflowReceiptService(deps: ReceiptDeps): WorkflowReceipt
       if (row.status === 'running') {
         if (row.claim_token !== event.claim_token) {
           await trx.updateTable('workflow_webhook_receipts').set({ status: 'interrupted', reason: 'Worker ownership changed after execution started; outcome is uncertain', finished_at: new Date(), claim_token: null }).where('id', '=', id).execute();
-          await recordCut(trx as unknown as Kysely<InternalSchema>, id, row.started_at ? new Date(row.started_at) : new Date(), 'lease-expired', null);
+          // The bus already moved the event's last update to this claim, so the old owner's last
+          // word is gone: the cut is dated when CE found it (re-review R6).
+          await recordCut(trx as unknown as Kysely<InternalSchema>, id, new Date(), 'lease-expired', null);
         }
         return;
       }

@@ -195,14 +195,17 @@ describe.skipIf(!url)('durable webhook receipts on disposable PostgreSQL', () =>
   });
   it('records the cut when a started receipt becomes interrupted, left open for Continue (review R6)', async () => {
     const { receipt } = await service.accept({ workflowId: 'w', input: {} });
-    await sql`update workflow_webhook_receipts set status='running',started_at=now(),claim_token='dead' where id=${receipt.id}`.execute(db);
-    await sql`update outbox_events set status='failed'`.execute(db);
+    await sql`update workflow_webhook_receipts set status='running',started_at='2001-01-01T00:00:00Z',claim_token='dead' where id=${receipt.id}`.execute(db);
+    await sql`update outbox_events set status='failed',updated_at='2026-11-18T08:00:00Z'`.execute(db);
     expect((await service.get(receipt.id))?.status).toBe('interrupted');
     const cuts = await db.selectFrom('job_interruptions').selectAll().where('job_id', '=', receipt.id).execute();
     expect(cuts).toHaveLength(1);
     expect(cuts[0]).toMatchObject({ job_kind: 'workflow-receipt', resumed_by: null });
+    // The cut is dated by the event's last update, the last time CE heard of the run, not by when
+    // the run started (re-review R6).
+    expect(new Date(cuts[0].at).toISOString()).toBe('2026-11-18T08:00:00.000Z');
   });
-  it('requeues a queued receipt whose dispatch ended, recorded as carried on, and cancels it after three (review R11)', async () => {
+  it('requeues a queued receipt whose dispatch ended, recorded as carried on, and leaves it for Continue after three (review R11)', async () => {
     const { receipt } = await service.accept({ workflowId: 'w', input: {} });
     for (let round = 1; round <= 3; round += 1) {
       await sql`update outbox_events set status='failed'`.execute(db);
@@ -214,7 +217,12 @@ describe.skipIf(!url)('durable webhook receipts on disposable PostgreSQL', () =>
     expect(cuts).toHaveLength(3);
     expect(cuts.every((c) => c.resumed_by === 'self')).toBe(true);
     await sql`update outbox_events set status='failed'`.execute(db);
-    expect((await service.get(receipt.id))?.status).toBe('cancelled');
+    expect((await service.get(receipt.id))?.status).toBe('interrupted');
+    const open = await db.selectFrom('job_interruptions').selectAll().where('job_id', '=', receipt.id).where('resumed_by', 'is', null).execute();
+    expect(open).toHaveLength(1);
+    // Continue starts its run (re-review R11).
+    const continued = await service.continueFrom('w', receipt.id);
+    expect(continued).not.toBe('not-waiting');
   });
   it('says before Continue whether the workflow changed since the cut, and starts nothing (review R5)', async () => {
     const { receipt } = await service.accept({ workflowId: 'w', input: { a: 1 } });
