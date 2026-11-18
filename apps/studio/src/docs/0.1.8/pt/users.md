@@ -272,7 +272,7 @@ Faça isto quando uma pessoa só deve ver números dos painéis da sua unidade, 
 
 **Resultado esperado:** a folha fecha. Na próxima vez que a pessoa entrar, os painéis contam apenas pedidos enviados dos locais listados, ou analisados neles. Escolha **Tudo** em **Dados** para tirar o limite.
 
-Os locais vêm do registo de unidades, por isso são escolhidos, nunca escritos. Um distrito aparece com a sua região, porque duas regiões podem ter um distrito com o mesmo nome. **Limitado** sem nenhum local não mostra números nos painéis.
+Os locais vêm do registo de unidades, por isso são escolhidos, nunca escritos. Um distrito aparece com a sua região, porque duas regiões podem ter um distrito com o mesmo nome. Um limite lista no máximo 300 locais; para mais, escolha o distrito ou a região. **Limitado** sem nenhum local não mostra números nos painéis.
 
 Um utilizador limitado perde estas permissões, seja qual for a sua função: relatórios, pacientes, consultas, exportações, fluxos de trabalho, conectores, auditoria, atividade, correções retidas, o registo de unidades e a sincronização. Não pode criar nem editar painéis, e um widget escrito em SQL mostra **Não disponível com o seu limite de dados**. Mantém os formulários, incluindo a pesquisa de pacientes dentro de um formulário, que o limite não cobre.
 

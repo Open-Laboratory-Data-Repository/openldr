@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { DataScope, UserDataScopeStore } from '@openldr/db';
-import { DataScopeError, dataScopeChoices, resolveDataScope, setUserDataScope } from './data-scope';
+import { DataScopeError, dataScopeChoices, MAX_SCOPE_PLACES, resolveDataScope, setUserDataScope } from './data-scope';
 
 // Design 2026-11-18-roles-scope, part 3: the one setter the route and the CLI call.
 function memStore(): UserDataScopeStore & { saved: Map<string, DataScope> } {
@@ -123,5 +123,28 @@ describe('dataScopeChoices', () => {
         { id: 'r4', name: 'D clinic', region: null, district: null },
       ],
     });
+  });
+});
+
+// Review E1: MSSQL takes at most 2100 bound values. A region of the register can hold over a thousand
+// facilities, so only the register codes studio orders really carry are bound, and one limit lists
+// at most MAX_SCOPE_PLACES places.
+describe('the data limit stays within MSSQL\'s bound values', () => {
+  const big = Array.from({ length: 1200 }, (_, i) => ({ id: `r${i}`, name: `HC ${i}`, facility_code: `C${i}`, region: 'Big', district: 'D' }));
+
+  it('binds only the register codes the warehouse uses', async () => {
+    const r = await resolveDataScope({ registryRows: async () => big, usedRegistryCodes: async () => ['C7', 'C11', 'NOT-IN-SCOPE'] },
+      { limited: true, facilities: [], districts: [], regions: ['Big'] });
+    expect(r?.registryCodes).toEqual(['C11', 'C7']);
+  });
+
+  it('refuses a limit that lists more than MAX_SCOPE_PLACES places, and saves nothing', async () => {
+    const store = memStore();
+    const many = Array.from({ length: MAX_SCOPE_PLACES + 1 }, (_, i) => `r${i}`);
+    const err = await setUserDataScope({ ...deps(store), facilityRegistry: { async get() { return {}; }, async list() { return { total: 1 }; } } },
+      'kc-sub', { limited: true, facilities: many, districts: [], regions: [] }).catch((e) => e);
+    expect(err).toBeInstanceOf(DataScopeError);
+    expect(err.reason).toBe('too-many');
+    expect(store.saved.size).toBe(0);
   });
 });

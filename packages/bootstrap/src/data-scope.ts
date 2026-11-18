@@ -8,8 +8,12 @@ import { registryConceptCodeById } from './facility-reconcile';
 
 /** A refused change of a data limit: the user is unknown, or a place is not in the register. */
 export class DataScopeError extends Error {
-  constructor(message: string, readonly reason: 'no-user' | 'not-in-register') { super(message); }
+  constructor(message: string, readonly reason: 'no-user' | 'not-in-register' | 'too-many') { super(message); }
 }
+
+/** The most places one data limit may list. Each is bound into every limited query, twice (the
+ *  requesting facility and the testing lab), and MSSQL takes at most 2100 bound values (review E1). */
+export const MAX_SCOPE_PLACES = 300;
 
 export interface DataScopeDeps {
   dataScopes: UserDataScopeStore;
@@ -33,6 +37,10 @@ export async function setUserDataScope(
     ?? ((await deps.roles.rolesForUser(subject)).length > 0 ? subject : undefined);
   if (!known) throw new DataScopeError(`no user ${subject}`, 'no-user');
   if (scope.limited) {
+    const places = scope.facilities.length + scope.districts.length + scope.regions.length;
+    if (places > MAX_SCOPE_PLACES) {
+      throw new DataScopeError(`a data limit lists at most ${MAX_SCOPE_PLACES} places; this one lists ${places}. Pick a district or region instead`, 'too-many');
+    }
     for (const id of scope.facilities) {
       if (!(await deps.facilityRegistry.get(id))) throw new DataScopeError(`no facility ${id} in the register`, 'not-in-register');
     }
@@ -59,7 +67,12 @@ export interface ScopeRegistryRow { id: string; name: string; facility_code: str
  *  every in-scope register row are added, worked out as the projection does (a code two registers
  *  share becomes each row's own id). */
 export async function resolveDataScope(
-  deps: { registryRows(): Promise<ScopeRegistryRow[]> },
+  deps: {
+    registryRows(): Promise<ScopeRegistryRow[]>;
+    /** The register codes studio orders and reports in the warehouse carry. Only those are bound,
+     *  so a region of a thousand facilities binds the few studio ones really used (review E1). */
+    usedRegistryCodes?(): Promise<string[]>;
+  },
   scope: DataScope,
 ): Promise<{ registryIds: string[]; regions: string[]; districts: Array<{ region: string; district: string }>; registryCodes: string[] } | undefined> {
   if (!scope.limited) return undefined;
@@ -70,8 +83,12 @@ export async function resolveDataScope(
   const inScope = (r: ScopeRegistryRow) => scope.facilities.includes(r.id)
     || (r.region !== null && scope.regions.includes(r.region))
     || scope.districts.some((d) => d.region === r.region && d.district === r.district);
-  const registryCodes = [...new Set(rows.filter(inScope).map((r) => codeById.get(r.id)!))].sort();
-  return { ...base, registryCodes };
+  let codes = new Set(rows.filter(inScope).map((r) => codeById.get(r.id)!));
+  if (deps.usedRegistryCodes) {
+    const used = new Set(await deps.usedRegistryCodes());
+    codes = new Set([...codes].filter((c) => used.has(c)));
+  }
+  return { ...base, registryCodes: [...codes].sort() };
 }
 
 /** The register rows a data limit is resolved against and picked from. */

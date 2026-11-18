@@ -536,7 +536,7 @@ openldr dashboards share default --clear
 | `--all` | Retire la limite : l'utilisateur voit tout. |
 | `--json` | Affiche la limite en JSON. |
 
-Il faut `roles.manage`. Chaque lieu doit être dans le registre des établissements, sinon la commande est refusée et rien ne change. Lancée localement sur le serveur, l'acteur est enregistré comme `cli`. Chaque changement est audité comme `user.data_scope.set`.
+Il faut `roles.manage`. Une limite liste au plus 300 lieux. Chaque lieu doit être dans le registre des établissements, sinon la commande est refusée et rien ne change. Lancée localement sur le serveur, l'acteur est enregistré comme `cli`. Chaque changement est audité comme `user.data_scope.set`.
 
 Un utilisateur limité perd les rapports, les patients, les requêtes, les exports, les workflows, les connecteurs, l'audit, l'activité, les corrections en attente, le registre des établissements et la synchronisation, et ne peut ni créer ni modifier de tableau de bord. Il n'exécute jamais de widget SQL. Il garde les formulaires, y compris la recherche de patients dans un formulaire, que la limite ne couvre pas. Un nouveau code d'établissement ne compte qu'après la reconstruction de la table des établissements.
 

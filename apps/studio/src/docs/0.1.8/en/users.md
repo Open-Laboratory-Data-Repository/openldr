@@ -272,7 +272,7 @@ Use this when a person should see dashboard numbers for their own facility, dist
 
 **Expected result:** the sheet closes. The next time the person signs in, dashboards count only requests sent from the listed places, or tested at them. Choose **Everything** under **Data** to remove the limit.
 
-Places come from the facility register, so they are picked, never typed. A district is listed with its region, because two regions can have a district of the same name. **Limited** with no place listed shows the person no dashboard numbers.
+Places come from the facility register, so they are picked, never typed. A district is listed with its region, because two regions can have a district of the same name. One limit lists at most 300 places; for more, pick their district or region. **Limited** with no place listed shows the person no dashboard numbers.
 
 A limited user loses these permissions, whatever their role gives: reports, patients, queries, exports, workflows, connectors, audit, activity, held corrections, the facility register and sync. They cannot create or edit dashboards, and a widget written in SQL shows **Not available with your data limit**. They keep forms, including patient search inside a form, which the limit does not cover.
 

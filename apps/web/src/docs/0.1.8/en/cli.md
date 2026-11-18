@@ -554,7 +554,7 @@ openldr dashboards share default --clear
 | `--all` | Remove the limit, so the user sees everything. |
 | `--json` | Print the limit as JSON. |
 
-It needs `roles.manage`. Every place must be in the facility register, or the command is refused and nothing changes. Run locally on the server, the actor is recorded as `cli`. Each change is audited as `user.data_scope.set`.
+It needs `roles.manage`. One limit lists at most 300 places. Every place must be in the facility register, or the command is refused and nothing changes. Run locally on the server, the actor is recorded as `cli`. Each change is audited as `user.data_scope.set`.
 
 A limited user loses reports, patients, queries, exports, workflows, connectors, audit, activity, held corrections, the facility register and sync, and cannot create or edit dashboards. They never run SQL widgets. They keep forms, including patient search inside a form, which the limit does not cover. A new facility code counts only after the facility map is rebuilt.
 

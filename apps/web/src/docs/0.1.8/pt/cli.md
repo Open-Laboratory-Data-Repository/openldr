@@ -561,7 +561,7 @@ openldr dashboards share default --clear
 | `--all` | Tira o limite: o utilizador vê tudo. |
 | `--json` | Mostra o limite em JSON. |
 
-Precisa de `roles.manage`. Cada local tem de estar no registo de unidades, senão o comando é recusado e nada muda. Executado localmente no servidor, o ator fica registado como `cli`. Cada mudança é auditada como `user.data_scope.set`.
+Precisa de `roles.manage`. Um limite lista no máximo 300 locais. Cada local tem de estar no registo de unidades, senão o comando é recusado e nada muda. Executado localmente no servidor, o ator fica registado como `cli`. Cada mudança é auditada como `user.data_scope.set`.
 
 Um utilizador limitado perde relatórios, pacientes, consultas, exportações, fluxos de trabalho, conectores, auditoria, atividade, correções retidas, o registo de unidades e a sincronização, e não pode criar nem editar painéis. Nunca executa widgets SQL. Mantém os formulários, incluindo a pesquisa de pacientes dentro de um formulário, que o limite não cobre. Um novo código de unidade só conta depois de a tabela de unidades ser reconstruída.
 

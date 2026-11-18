@@ -50,7 +50,7 @@ import { checkCustomQueryFile, importCustomQueries } from './custom-query-transf
 import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore, type DataScope } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore, type DataScope, FACILITY_REGISTRY_SYSTEM } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -955,6 +955,14 @@ const reporting: ReportingApi = {
   });
   // The register rows a data limit is resolved against (roles part 3).
   const scopeRegistryRows = () => readScopeRegistryRows(internal.db as unknown as Kysely<InternalSchema>);
+  // The register codes studio orders and reports carry in the warehouse (review E1).
+  const scopeUsedRegistryCodes = async (): Promise<string[]> => {
+    const requests = await reportingDb.selectFrom('lab_requests').select('requester_code as code').distinct()
+      .where('requester_system', '=', FACILITY_REGISTRY_SYSTEM).where('requester_code', 'is not', null).execute();
+    const labs = await reportingDb.selectFrom('diagnostic_reports').select('performer as code').distinct()
+      .where('performer_system', '=', FACILITY_REGISTRY_SYSTEM).where('performer', 'is not', null).execute();
+    return [...new Set([...requests, ...labs].map((r) => String(r.code)))];
+  };
   const runDashboardQuery = async (q: WidgetQuery, scope?: DataScope): Promise<ReportResult> => {
     let data;
     // A limited user never runs SQL: a placeholder cannot guarantee the limit (roles part 3).
@@ -963,7 +971,7 @@ const reporting: ReportingApi = {
       const model = getModel(q.model);
       if (!model) throw new DashboardQueryError(`unknown model: ${q.model}`);
       if (scope?.limited && !model.scopeLink) throw new DashboardQueryError(NO_SCOPE_LINK);
-      const limit = scope ? await resolveDataScope({ registryRows: scopeRegistryRows }, scope) : undefined;
+      const limit = scope ? await resolveDataScope({ registryRows: scopeRegistryRows, usedRegistryCodes: scopeUsedRegistryCodes }, scope) : undefined;
       data = await runBuilderQuery(reportingDb, model, q, policyCache, {
         timeoutMs: await numberSettings.get('dashboard.sql_timeout_ms'),
         rowCap: await numberSettings.get('dashboard.sql_row_cap'),
