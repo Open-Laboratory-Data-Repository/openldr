@@ -23,7 +23,7 @@ import {
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
 import { runStorageCopy } from './storage';
-import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge } from './terminology';
+import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge, runTerminologyJobStatus, runTerminologyJobContinue } from './terminology';
 import { runMarketVerify, runMarketInstall, runMarketUpdate, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runMarketSites } from './market-sites';
 import { runLayoutsList, runLayoutsSet, runLayoutsDelete } from './layouts';
@@ -1109,6 +1109,16 @@ export function buildProgram(): Command {
     });
 
 
+  term.command('job <system>').description('show the latest distribution upload for a system, with its interruptions')
+    .option('--json', 'emit JSON', false)
+    .action(async (system: string, opts: { json: boolean }) => {
+      process.exitCode = await runTerminologyJobStatus(system, opts);
+    });
+  term.command('job-continue <id>').description('continue an upload that waits after being interrupted too many times')
+    .option('--json', 'emit JSON', false)
+    .action(async (id: string, opts: { json: boolean }) => {
+      process.exitCode = await runTerminologyJobContinue(id, opts);
+    });
   const tdist = term.command('distribution').description('Import/purge terminology distributions (zip → flat terms + ontology)');
   tdist.command('import <system>').description('import a loinc|snomed|rxnorm distribution zip inline')
     .requiredOption('--file <path>', 'path to the distribution .zip')

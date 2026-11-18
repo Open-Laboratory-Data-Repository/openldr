@@ -56,3 +56,38 @@ export async function continueJob(
     resumedBy: 'person', resumedAt: deps.now(), ...(typeof continuedAs === 'string' ? { continuedAs } : {}),
   });
 }
+
+/** A running job writes a heartbeat this often. */
+export const HEARTBEAT_MS = 30_000;
+/** A running job silent for longer than this has nothing working on it any more, so a worker
+ *  takes it back. Four missed heartbeats, the same rule as cdr-source runs (`import-run.ts`). */
+export const STALE_JOB_MS = 2 * 60_000;
+
+/** Calls `beat` every `everyMs` until the returned stop is called. A failed beat is ignored: the
+ *  next one tries again, and a job that cannot beat for STALE_JOB_MS is taken back, which is safe. */
+export function startHeartbeat(beat: () => Promise<void>, everyMs: number = HEARTBEAT_MS): () => void {
+  const timer = setInterval(() => { void beat().catch(() => {}); }, everyMs);
+  return () => clearInterval(timer);
+}
+
+/** Takes back every job `listStale` finds silent for longer than STALE_JOB_MS. The cause is
+ *  `server-restart` when the job went silent before this process started, else `lease-expired`.
+ *  Returns how many jobs it took back. */
+export async function sweepStale(deps: InterruptionDeps, input: {
+  kind: JobKind;
+  processStartedAt: Date;
+  selfResume: boolean;
+  listStale(olderThan: Date): Promise<{ id: string; phase: string | null; at: Date }[]>;
+  resume(id: string): Promise<void>;
+  wait(id: string): Promise<void>;
+}): Promise<number> {
+  const stale = await input.listStale(new Date(deps.now().getTime() - STALE_JOB_MS));
+  for (const job of stale) {
+    await takeBack(deps, {
+      kind: input.kind, jobId: job.id, phase: job.phase, at: job.at,
+      cause: job.at.getTime() < input.processStartedAt.getTime() ? 'server-restart' : 'lease-expired',
+      selfResume: input.selfResume, resume: () => input.resume(job.id), wait: () => input.wait(job.id),
+    });
+  }
+  return stale.length;
+}

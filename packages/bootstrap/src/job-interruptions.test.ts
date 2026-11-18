@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createJobInterruptionStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { takeBack, continueJob, MAX_SELF_RESUMES } from './job-interruptions';
+import { takeBack, continueJob, sweepStale, startHeartbeat, MAX_SELF_RESUMES, STALE_JOB_MS } from './job-interruptions';
 
 const NOW = new Date('2026-11-18T06:00:00.000Z');
 const at = (min: number) => new Date(Date.UTC(2026, 10, 18, 5, min));
@@ -63,5 +63,39 @@ describe('continueJob', () => {
     await continueJob(deps, { kind: 'workflow-receipt', jobId: 'j1', interruptionId: rec!.id, start });
     expect(start).toHaveBeenCalledTimes(1);
     expect((await store.listFor('workflow-receipt', ['j1'])).get('j1')![0]).toMatchObject({ resumedBy: 'person', resumedAt: NOW.toISOString(), continuedAs: 'run-2' });
+  });
+});
+
+describe('sweepStale', () => {
+  it('takes back every job silent for longer than STALE_JOB_MS, naming a restart when it went silent before this process', async () => {
+    const { store, deps } = await setup();
+    const processStartedAt = new Date(NOW.getTime() - 10 * 60_000);
+    const listStale = vi.fn(async (olderThan: Date) => {
+      expect(olderThan.getTime()).toBe(NOW.getTime() - STALE_JOB_MS);
+      return [
+        { id: 'old', phase: null, at: new Date(processStartedAt.getTime() - 1000) },
+        { id: 'new', phase: null, at: new Date(NOW.getTime() - STALE_JOB_MS - 1) },
+      ];
+    });
+    const resume = vi.fn(async (_id: string) => {});
+    const n = await sweepStale(deps, { kind: 'facility-job', processStartedAt, selfResume: true, listStale, resume, wait: vi.fn(async () => {}) });
+    expect(n).toBe(2);
+    expect(resume.mock.calls.map((c) => c[0])).toEqual(['old', 'new']);
+    const map = await store.listFor('facility-job', ['old', 'new']);
+    expect(map.get('old')![0].cause).toBe('server-restart');
+    expect(map.get('new')![0].cause).toBe('lease-expired');
+  });
+});
+
+describe('startHeartbeat', () => {
+  it('beats on the interval until stopped', async () => {
+    vi.useFakeTimers();
+    const beat = vi.fn(async () => {});
+    const stop = startHeartbeat(beat, 1000);
+    await vi.advanceTimersByTimeAsync(3500);
+    stop();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(beat).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
   });
 });

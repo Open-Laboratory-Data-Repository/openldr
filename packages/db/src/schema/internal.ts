@@ -346,6 +346,7 @@ export interface FacilityJobsTable {
   requested_by: string | null;
   requested_at: Generated<Date>;
   started_at: Date | null;
+  heartbeat_at: Date | null;
   finished_at: Date | null;
   active_key: string | null;
 }
@@ -1024,6 +1025,7 @@ export interface TerminologyIngestJobsTable {
   created_by: string | null;
   created_at: Generated<Date>;
   started_at: Date | null;
+  heartbeat_at: Date | null;
   finished_at: Date | null;
   // Mirrors `system_type` while the job is queued|running, NULL once finished; backs the
   // "one active job per system" unique index. See the 061 migration for why.

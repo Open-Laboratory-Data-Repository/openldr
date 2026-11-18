@@ -2,7 +2,7 @@ import { Kysely } from 'kysely';
 import type { Config } from '@openldr/config';
 import { redact, createLogger, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
-import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, referenceCapture, markTerminologyChanged, createTerminologyIngestJobStore, type TerminologyAdminStore, type InternalSchema, type OntologyStore, type TerminologyIngestJobStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, referenceCapture, markTerminologyChanged, createTerminologyIngestJobStore, createJobInterruptionStore, type JobInterruptionStore, type TerminologyAdminStore, type InternalSchema, type OntologyStore, type TerminologyIngestJobStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
 import { buildOntologyDistribution, canonicalSystemUrl, createOperations, type Operations, type LoaderStore, type ImportOrigin, loadLoinc, loadWhonetAmr, importTerminologyResource, stalenessReason, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType } from '@openldr/terminology';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 import type { BlobStoragePort } from '@openldr/ports';
@@ -49,6 +49,8 @@ export interface TerminologyContext {
   audit: AuditStore;
   logger: Logger;
   jobs: TerminologyIngestJobStore;
+  /** Each upload's recorded interruptions (design 2026-11-18-interrupted-jobs). */
+  jobInterruptions: JobInterruptionStore;
   blob: BlobStoragePort;
   close(): Promise<void>;
 }
@@ -88,6 +90,7 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
   const ontologyStore = createOntologyStore(db);
   const ontology = createOntologyApi(ontologyStore);
   const jobs = createTerminologyIngestJobStore(db);
+  const jobInterruptions = createJobInterruptionStore(db);
   const blob = createBlobFromConfig(cfg);
   const loaderStore: LoaderStore = {
     upsertConcepts: (r) => store.upsertConcepts(r),
@@ -150,6 +153,7 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
     audit,
     logger,
     jobs,
+    jobInterruptions,
     blob,
     async close() { await internal.close(); },
   };

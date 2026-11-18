@@ -24,6 +24,7 @@ import {
   facilityRegisterSourceInputSchema,
   type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict, type FacilityHealth,
   type FacilityImportResult, type ColumnSuggestion, type ValueMappingEntry, type ControlledField,
+  resolveByPerson,
 } from '@openldr/bootstrap';
 import {
   referenceCapture, createFacilityImportRunStore, createFacilityRegisterSourceStore,
@@ -1864,6 +1865,8 @@ export async function runFacilitiesJobs(opts: FacilitiesJobsOpts): Promise<numbe
       // nothing was re-queued. The HTTP route answers 404/409 for these two; this is their exit-code
       // equivalent, since a CLI has no status line to carry them.
       const outcome = await ctx.facilityJobs.retry(opts.retry);
+      // Retry is also Continue for a job that stopped carrying on by itself after interruptions.
+      if (outcome === 'requeued') await resolveByPerson(ctx.jobInterruptions, 'facility-job', opts.retry, new Date());
       if (outcome !== 'requeued') {
         const why = outcome === 'running'
           ? `job ${opts.retry} is already running; wait for it to finish before retrying it`

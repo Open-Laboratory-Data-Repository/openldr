@@ -133,15 +133,21 @@ describe('createFacilityJobStore', () => {
     expect((await store.latest(REBUILD))?.resultCount).toBe(88);
   });
 
-  it('failStaleRunning marks an orphaned running job failed so it becomes visible', async () => {
+  it('a stale running job is listed, requeued with its attempts kept, or left interrupted', async () => {
     const store = createFacilityJobStore(await makeMigratedDb());
     await store.enqueue({ kind: REBUILD });
+    const job = (await store.claimNext())!;
+    expect(await store.listStaleRunning(new Date(Date.now() - 60_000))).toEqual([]);
+    expect((await store.listStaleRunning(new Date(Date.now() + 60_000))).map((j) => j.id)).toEqual([job.id]);
+
+    expect(await store.requeueStale(job.id)).toBe(true);
+    expect(await store.latest(REBUILD)).toMatchObject({ status: 'queued', attempts: 1 });
+    expect(await store.requeueStale(job.id)).toBe(false);
+
     await store.claimNext();
-
-    expect(await store.failStaleRunning('server restarted')).toBe(1);
-
-    const latest = await store.latest(REBUILD);
-    expect(latest).toMatchObject({ status: 'failed', lastError: 'server restarted' });
+    await store.markInterrupted(job.id, 'interrupted three times');
+    expect(await store.latest(REBUILD)).toMatchObject({ status: 'interrupted', lastError: 'interrupted three times' });
+    expect(await store.retry(job.id)).toBe('requeued');
   });
 
   it('retry re-queues a failed job and resets attempts so a fixed cause is not locked out', async () => {

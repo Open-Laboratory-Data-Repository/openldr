@@ -85,27 +85,40 @@ describe('terminology ingest job store', () => {
     await db.destroy();
   });
 
-  it('failStaleRunning fails only running jobs, clears active_key, and returns the count', async () => {
+  it('lists only running jobs whose last sign of life is older than the cut-off', async () => {
     const db = await makeMigratedDb();
     const store = createTerminologyIngestJobStore(db as never);
     const running = await store.insertRunning({ systemType: 'snomed', codingSystemId: 'cs_1', blobKey: 'k/a.zip', version: null, createdBy: 'cli' });
-    const n = await store.failStaleRunning('interrupted');
-    expect(n).toBe(1);
-    const after = await store.get(running.id);
-    expect(after?.status).toBe('failed');
-    expect(after?.error).toBe('interrupted');
-    // active_key cleared → a fresh job for the system may now be inserted
-    await expect(store.insertRunning({ systemType: 'snomed', codingSystemId: 'cs_1', blobKey: 'k/c.zip', version: null, createdBy: 'cli' })).resolves.toBeDefined();
+    await store.enqueue({ systemType: 'loinc', codingSystemId: 'cs_2', blobKey: 'k/q.zip', version: null, createdBy: null });
+    expect(await store.listStaleRunning(new Date(Date.now() - 60_000))).toEqual([]);
+    const stale = await store.listStaleRunning(new Date(Date.now() + 60_000));
+    expect(stale.map((j) => j.id)).toEqual([running.id]);
     await db.destroy();
   });
 
-  it('failStaleRunning leaves queued jobs untouched and returns 0', async () => {
+  it('requeue puts a running job back in the queue and keeps its one-active slot', async () => {
     const db = await makeMigratedDb();
     const store = createTerminologyIngestJobStore(db as never);
-    const q = await store.enqueue({ systemType: 'loinc', codingSystemId: 'cs_2', blobKey: 'k/q.zip', version: null, createdBy: null });
-    const n = await store.failStaleRunning('interrupted');
-    expect(n).toBe(0);
-    expect((await store.get(q.id))?.status).toBe('queued');
+    const running = await store.insertRunning({ systemType: 'snomed', codingSystemId: 'cs_1', blobKey: 'k/a.zip', version: null, createdBy: 'cli' });
+    expect(await store.requeue(running.id)).toBe(true);
+    expect((await store.get(running.id))?.status).toBe('queued');
+    expect(await store.requeue(running.id)).toBe(false);
+    await expect(store.enqueue({ systemType: 'snomed', codingSystemId: 'cs_1', blobKey: 'k/b.zip', version: null, createdBy: null })).rejects.toThrow(/already active/);
+    await db.destroy();
+  });
+
+  it('an interrupted job frees its slot; Continue requeues it, or says why not', async () => {
+    const db = await makeMigratedDb();
+    const store = createTerminologyIngestJobStore(db as never);
+    const running = await store.insertRunning({ systemType: 'snomed', codingSystemId: 'cs_1', blobKey: 'k/a.zip', version: null, createdBy: 'cli' });
+    await store.markInterrupted(running.id, 'interrupted three times while loading');
+    expect((await store.get(running.id))?.status).toBe('interrupted');
+    const other = await store.insertRunning({ systemType: 'snomed', codingSystemId: 'cs_1', blobKey: 'k/c.zip', version: null, createdBy: 'cli' });
+    expect(await store.continueInterrupted(running.id)).toBe('busy');
+    await store.finish(other.id, 'ready', null);
+    expect(await store.continueInterrupted(running.id)).toBe('requeued');
+    expect((await store.get(running.id))?.status).toBe('queued');
+    expect(await store.continueInterrupted(running.id)).toBe('not-waiting');
     await db.destroy();
   });
 

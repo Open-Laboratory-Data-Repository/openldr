@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { createFacilityJobStore } from '@openldr/db';
+import { createFacilityJobStore, createJobInterruptionStore } from '@openldr/db';
+import { sql } from 'kysely';
 import { createFacilityJobWorker, createFacilityJobWorkerIfEnabled } from './facility-job-worker';
 
 const fakeLogger = () => ({ info: vi.fn(), error: vi.fn() });
@@ -76,56 +77,44 @@ describe('createFacilityJobWorker', () => {
     expect(seen).toEqual(['fac-A']);
   });
 
-  it('crash recovery: an orphaned running job becomes failed at startup', async () => {
+  it('takes back a job whose heartbeat stopped: requeued, run, and the cut recorded as a restart', async () => {
     const db = await makeMigratedDb();
     const jobs = createFacilityJobStore(db);
+    const store = createJobInterruptionStore(db);
     await jobs.enqueue({ kind: 'facility-map-rebuild' });
-    await jobs.claimNext();                     // simulates a process killed mid-run
+    const job = (await jobs.claimNext())!;      // a process killed mid-run
+    await sql`update facility_jobs set heartbeat_at = now() - interval '10 minutes' where id = ${job.id}`.execute(db);
 
     const worker = createFacilityJobWorker({
-      jobs, runRebuild: async () => ({ written: 0 }), runProjection: async () => {},
+      jobs, runRebuild: async () => ({ written: 3 }), runProjection: async () => {},
+      interruptions: { store, now: () => new Date() }, processStartedAt: new Date(Date.now() - 60_000),
       intervalMs: 10_000, logger: fakeLogger(),
     });
-    await worker.stop();                        // stop() awaits the crash-recovery handle
+    await worker.tickOnce();
+    await worker.stop();
 
-    expect((await jobs.latest('facility-map-rebuild'))?.status).toBe('failed');
+    expect(await jobs.latest('facility-map-rebuild')).toMatchObject({ status: 'done', resultCount: 3 });
+    expect((await store.listFor('facility-job', [job.id])).get(job.id)).toEqual([
+      expect.objectContaining({ cause: 'server-restart', resumedBy: 'self' }),
+    ]);
   });
 
-  it('stop() genuinely AWAITS the crash-recovery handle rather than merely firing it', async () => {
-    // The plain crash-recovery test above does NOT pin this: with a real timer-backed delay removed
-    // it still passes whether or not stop() awaits, because enough real microtask turns elapse
-    // between worker construction and the assertion for an un-awaited recovery to finish anyway
-    // (measured directly: mutating stop() to `void crashRecovery` still left the suite green,
-    // repeatably, across 3 runs). This test makes the ordering deterministic instead of hoping for
-    // it: failStaleRunning is wrapped with a real setTimeout delay, so a stop() that does not await
-    // the handle returns to the caller BEFORE the delayed write lands, and the very next read
-    // observes the pre-recovery state deterministically rather than by timing luck.
+  it('leaves a running job with a live heartbeat alone', async () => {
     const db = await makeMigratedDb();
     const jobs = createFacilityJobStore(db);
     await jobs.enqueue({ kind: 'facility-map-rebuild' });
     await jobs.claimNext();
-
-    const delayedJobs: typeof jobs = {
-      ...jobs,
-      failStaleRunning: (error: string) =>
-        new Promise((resolve) => setTimeout(() => resolve(jobs.failStaleRunning(error)), 30)),
-    };
-
     const worker = createFacilityJobWorker({
-      jobs: delayedJobs, runRebuild: async () => ({ written: 0 }), runProjection: async () => {},
+      jobs, runRebuild: async () => ({ written: 0 }), runProjection: async () => {},
+      interruptions: { store: createJobInterruptionStore(db), now: () => new Date() },
       intervalMs: 10_000, logger: fakeLogger(),
     });
+    await worker.tickOnce();
     await worker.stop();
-
-    expect((await jobs.latest('facility-map-rebuild'))?.status).toBe('failed');
+    expect((await jobs.latest('facility-map-rebuild'))?.status).toBe('running');
   });
 });
 
-// ── 2026-10-07: `openldr market install` lost its DB connection mid-job ─────────────────────────
-//
-// The CLI's own worker claimed the boot rebuild, then `close()` stopped the worker and destroyed the
-// DB while the rebuild was still running. `finish()` threw "driver has already been destroyed" and
-// the row stayed `running` for good, so the Facilities chip read "Updating" forever.
 describe('createFacilityJobWorker — shutdown and ownership', () => {
   const deferred = () => {
     let resolve!: () => void;
@@ -191,10 +180,12 @@ describe('createFacilityJobWorker — shutdown and ownership', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect((await jobs.latest('facility-map-rebuild'))?.status).toBe('running');
 
-    // The server's shape over the SAME row does sweep it, so the assertion above is not vacuous.
+    // The server's shape is a real worker, and it too leaves a job with a live heartbeat running:
+    // only a job silent for STALE_JOB_MS is taken back (design 2026-11-18-interrupted-jobs).
     const serving = createFacilityJobWorkerIfEnabled(true, deps);
     expect(serving).not.toBeNull();
+    await serving!.tickOnce();
     await serving!.stop();
-    expect((await jobs.latest('facility-map-rebuild'))?.status).toBe('failed');
+    expect((await jobs.latest('facility-map-rebuild'))?.status).toBe('running');
   });
 });

@@ -9,7 +9,7 @@ import './auth-plugin';
 
 function fakeCtx() {
   const auditEvents: Array<{ action: string; entityType: string; entityId: string; actorId: string | null; before?: unknown; after?: unknown; metadata?: unknown }> = [];
-  const ctxState = { active: false, enqueued: [] as any[], latest: null as any, put: [] as string[], deleted: [] as string[], codingSystem: null as any, upserts: [] as any[], jobsForSystem: [] as any[], deleteThrows: null as any, unlinked: [] as string[] };
+  const ctxState = { active: false, enqueued: [] as any[], latest: null as any, put: [] as string[], deleted: [] as string[], codingSystem: null as any, upserts: [] as any[], jobsForSystem: [] as any[], deleteThrows: null as any, unlinked: [] as string[], continueOutcome: 'not-waiting' as string };
   const admin = {
     publishers: {
       create: async (d: any) => ({ id: 'pub1', ...d }),
@@ -37,12 +37,14 @@ function fakeCtx() {
     audit: { record: async (e: any) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
     testMapping: { requestRebuild: async () => {} },
+    jobInterruptions: { record: async () => ({ id: 'i', inserted: true }), resolve: async () => {}, listFor: async () => new Map(), inARow: async () => 0 },
     terminologyJobs: {
       hasActive: async () => ctxState.active,
       enqueue: async (input: any) => { ctxState.enqueued.push(input); return { id: 'tij_1', status: 'queued', ...input }; },
       latestForSystem: async () => ctxState.latest,
       listForCodingSystem: async (_id: string) => ctxState.jobsForSystem,
       get: async () => ctxState.latest,
+      continueInterrupted: async () => ctxState.continueOutcome,
     },
     blob: {
       putStream: async (key: string) => { ctxState.put.push(key); },
@@ -223,6 +225,27 @@ describe('terminology distribution upload/status/purge (publisher-scoped)', () =
     const res = await appWith(ctx).inject({ method: 'GET', url: '/api/terminology/publishers/pub-loinc/distribution/job?systemType=loinc' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ status: 'ready', processed: 5 });
+  });
+
+  it('GET job carries the job\'s interruptions (design 2026-11-18-interrupted-jobs)', async () => {
+    const { ctx, ctxState } = fakeCtx();
+    ctxState.latest = { id: 'tij_1', status: 'running', phase: 'concepts', processed: 1, total: 5, error: null, version: null, finishedAt: null };
+    const rec = { id: 'i1', at: '2026-11-18T05:00:00.000Z', cause: 'server-restart', phase: 'concepts', resumedAt: '2026-11-18T05:02:00.000Z', resumedBy: 'self', continuedAs: null };
+    (ctx as any).jobInterruptions.listFor = async () => new Map([['tij_1', [rec]]]);
+    const res = await appWith(ctx).inject({ method: 'GET', url: '/api/terminology/publishers/pub-loinc/distribution/job?systemType=loinc' });
+    expect(res.json().interruptions).toEqual([rec]);
+  });
+
+  it('POST continue requeues a waiting upload, and refuses one that is not waiting (409)', async () => {
+    const { ctx, ctxState, auditEvents } = fakeCtx();
+    const refused = await appWith(ctx).inject({ method: 'POST', url: '/api/terminology/jobs/tij_1/continue' });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toEqual({ error: 'this job is not waiting to continue' });
+    ctxState.continueOutcome = 'requeued';
+    const ok = await appWith(ctx).inject({ method: 'POST', url: '/api/terminology/jobs/tij_1/continue' });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toEqual({ id: 'tij_1', status: 'queued' });
+    expect(auditEvents.at(-1)).toMatchObject({ action: 'terminology.import.continued', entityId: 'tij_1' });
   });
 
   it('DELETE purges the retained blob', async () => {

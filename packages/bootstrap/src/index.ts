@@ -47,7 +47,7 @@ import { checkCustomQueryFile, importCustomQueries } from './custom-query-transf
 import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -603,6 +603,8 @@ export interface AppContext {
    *  retain-latest). The worker built alongside it (see `terminologyIngestWorker` in
    *  `createAppContext`) polls this store; Task 7's routes read/enqueue against it. */
   terminologyJobs: TerminologyIngestJobStore;
+  /** Each long job's recorded interruptions (design 2026-11-18-interrupted-jobs). */
+  jobInterruptions: JobInterruptionStore;
   /** Facility durable-updates (Task 4): queue/claim/progress store for facility-map rebuilds and
    *  per-registry-row projections. The polling worker that drains it (`facilityJobWorker`, built
    *  alongside it in `createAppContext`) is not exposed here — only the store is, since routes and
@@ -1137,8 +1139,11 @@ const reporting: ReportingApi = {
   const terminologyJobs = createTerminologyIngestJobStore(internal.db);
   const terminologyWorkDirBase = cfg.TERMINOLOGY_WORK_DIR ?? tmpdir();
   // ⛔ Built only where it drains the queue. See `AppContextOptions.runTerminologyIngestWorker`.
+  const jobInterruptions = createJobInterruptionStore(internal.db);
+  const interruptionDeps = { store: jobInterruptions, now: () => new Date() };
   const terminologyIngestWorker = createTerminologyIngestWorkerIfEnabled(opts.runTerminologyIngestWorker === true, {
     jobs: terminologyJobs,
+    interruptions: interruptionDeps,
     blob,
     audit,
     workDirBase: terminologyWorkDirBase,
@@ -1155,6 +1160,7 @@ const reporting: ReportingApi = {
   // ⛔ Built only where it drains the queue. See `AppContextOptions.runFacilityJobWorker`.
   const facilityJobWorker = createFacilityJobWorkerIfEnabled(opts.runFacilityJobWorker === true, {
     jobs: facilityJobs,
+    interruptions: interruptionDeps,
     ...createFacilityJobRunners({
       internalDb: internal.db, externalDb, admin: termAdmin,
       publishFacilityMap, projectRegistryRows,
@@ -2063,6 +2069,7 @@ const reporting: ReportingApi = {
     syncActivity,
     syncRuntime,
     terminologyJobs,
+    jobInterruptions,
     cfg,
     close() {
       closePromise ??= (async () => {
@@ -2137,6 +2144,8 @@ export {
 } from './test-catalog';
 export * from './test-mapping';
 export * from './result-fields';
+export * from './job-continue';
+export { MAX_SELF_RESUMES } from './job-interruptions';
 export * from './patient-identifier-systems';
 export * from './patient-index';
 export * from './patient-duplicates';

@@ -420,6 +420,8 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // read, so reads take the area's view key. reproject is db reproject under its old name.
   'terminology distribution import': { kind: 'app', capability: 'terminology.manage', paths: [inFile('--file')] }, // admin :458, :461
   'terminology distribution purge': { kind: 'app', capability: 'terminology.manage', destructive: true }, // admin :495
+  'terminology job': { kind: 'app', capability: 'terminology.manage' },
+  'terminology job-continue': { kind: 'app', capability: 'terminology.manage' },
   'terminology expand': { kind: 'app', capability: 'terminology.view' }, // terminology-routes.ts:25
   'terminology import': { kind: 'app', capability: 'terminology.manage', paths: [{ target: 'path', kind: terminologyImportPath }] }, // admin :193, :432
   'terminology lookup': { kind: 'app', capability: 'terminology.view' }, // terminology-routes.ts:8

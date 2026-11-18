@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
     // (the OPERATOR's action, never `retryPreservingAttempts` — see facility-job-store.ts).
     // `enqueue` is here for the import command, which must hand this store to `importFacilities`.
     facilityJobs: { retry: vi.fn(), enqueue: vi.fn() },
+    jobInterruptions: { listFor: vi.fn(async () => new Map()), resolve: vi.fn() },
     // Task 4: `openldr facilities list` calls `ctx.facilityRegistry.list` directly — the same
     // store method Task 3's HTTP route reads (apps/server/src/facilities-routes.ts).
     facilityRegistry: { list: vi.fn(), idsMatching: vi.fn(), removeMany: vi.fn() },
@@ -93,6 +94,7 @@ vi.mock('@openldr/bootstrap', async () => {
   const actual = await vi.importActual<typeof import('@openldr/bootstrap')>('@openldr/bootstrap');
   return {
     createAppContext: mocks.createAppContext,
+    resolveByPerson: actual.resolveByPerson,
     importFacilities: mocks.importFacilities,
     scanObservedFacilities: mocks.scanObservedFacilities,
     publishFacilityMap: mocks.publishFacilityMap,
@@ -2598,6 +2600,7 @@ describe('facilities jobs CLI', () => {
     mocks.createAppContext.mockResolvedValue(mocks.ctx);
     mocks.ctx.close.mockResolvedValue(undefined);
     mocks.ctx.facilityJobs.retry.mockResolvedValue('requeued');
+    mocks.ctx.jobInterruptions.listFor.mockResolvedValue(new Map());
   });
 
   afterEach(() => {

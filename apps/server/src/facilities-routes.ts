@@ -23,7 +23,7 @@ import {
   facilityXlsxToCsv, facilityXlsxTooLarge, FacilityXlsxError, FACILITY_IMPORT_MAX_XLSX_BYTES,
   linkMatchingFacilityCodes,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
-  type ValueMappingEntry, type FacilityXlsxCsv, type LinkMatchingResult, facilityRegisterSourceInputSchema } from '@openldr/bootstrap';
+  type ValueMappingEntry, type FacilityXlsxCsv, type LinkMatchingResult, facilityRegisterSourceInputSchema, resolveByPerson } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
   FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
@@ -1214,6 +1214,8 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       reply.code(409);
       return { error: 'this job is already running; wait for it to finish before retrying it' };
     }
+    // Retry is also Continue for a job that stopped carrying on by itself after interruptions.
+    await resolveByPerson(ctx.jobInterruptions, 'facility-job', id, new Date());
 
     const after = await ctx.internalDb
       .selectFrom('facility_jobs')

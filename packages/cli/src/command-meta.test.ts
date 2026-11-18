@@ -338,6 +338,8 @@ const NOT_A_PATH: Record<string, string[]> = {
   'terminology valueset list': ['--publisher'],
   'terminology distribution import': ['system', '--version'],
   'terminology distribution purge': ['system'],
+  'terminology job': ['system'],
+  'terminology job-continue': ['id'],
   'terminology ontology build': ['systemId'],
   'terminology ontology rebuild': ['systemId'],
   'terminology ontology unlink': ['systemId'],

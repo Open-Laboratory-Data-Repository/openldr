@@ -1,0 +1,37 @@
+// Continue for jobs that wait after an interruption (design 2026-11-18-interrupted-jobs). The page's
+// row menu and the CLI both call these, so a Continue runs the same code wherever it starts.
+import type { JobInterruption, JobInterruptionStore, JobKind, TerminologyIngestJobStore } from '@openldr/db';
+
+/** The job's newest record that nothing has resolved yet: the cut a Continue answers. */
+export async function openInterruption(store: JobInterruptionStore, kind: JobKind, jobId: string): Promise<JobInterruption | null> {
+  const records = (await store.listFor(kind, [jobId])).get(jobId) ?? [];
+  return [...records].reverse().find((r) => r.resumedBy === null) ?? null;
+}
+
+/** Marks the job's open cut as brought back by a person. Nothing to mark is fine: a failed job
+ *  retried by a person had no cut. */
+export async function resolveByPerson(store: JobInterruptionStore, kind: JobKind, jobId: string, now: Date, continuedAs?: string): Promise<void> {
+  const open = await openInterruption(store, kind, jobId);
+  if (open) await store.resolve(open.id, { resumedBy: 'person', resumedAt: now, ...(continuedAs ? { continuedAs } : {}) });
+}
+
+export type ContinueOutcome = 'requeued' | 'not-waiting' | 'busy';
+
+/** Continue on an interrupted terminology upload: back in the queue, with the cut marked as
+ *  brought back by a person. `busy` when another upload for the same system is active. */
+export async function continueTerminologyIngestJob(
+  ctx: { terminologyJobs: TerminologyIngestJobStore; jobInterruptions: JobInterruptionStore },
+  id: string,
+  now: Date = new Date(),
+): Promise<ContinueOutcome> {
+  const outcome = await ctx.terminologyJobs.continueInterrupted(id);
+  if (outcome === 'requeued') await resolveByPerson(ctx.jobInterruptions, 'terminology-ingest', id, now);
+  return outcome;
+}
+
+/** The words for an outcome that did not requeue, shared by the route and the CLI. */
+export function continueRefusal(outcome: Exclude<ContinueOutcome, 'requeued'>): string {
+  return outcome === 'busy'
+    ? 'another job for the same system is running; continue this one when it finishes'
+    : 'this job is not waiting to continue';
+}

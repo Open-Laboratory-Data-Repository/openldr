@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
 
-export type IngestJobStatus = 'queued' | 'running' | 'ready' | 'failed';
+export type IngestJobStatus = 'queued' | 'running' | 'ready' | 'failed' | 'interrupted';
 
 export interface TerminologyIngestJob {
   id: string;
@@ -32,7 +32,19 @@ export interface TerminologyIngestJobStore {
   listForCodingSystem(codingSystemId: string): Promise<TerminologyIngestJob[]>;
   latestReadyForSystem(systemType: string): Promise<TerminologyIngestJob | null>;
   hasActive(systemType: string): Promise<boolean>;
-  failStaleRunning(error: string): Promise<number>;
+  /** A running job's heartbeat: the job is still being worked on. */
+  beat(id: string): Promise<void>;
+  /** Running jobs whose heartbeat (or start, before the first beat) is older than `olderThan`:
+   *  nothing is working on them any more. `at` is that last sign of life. */
+  listStaleRunning(olderThan: Date): Promise<{ id: string; phase: string | null; at: Date }[]>;
+  /** Puts a stale running job back in the queue, keeping its one-active slot. False when it is no
+   *  longer running. */
+  requeue(id: string): Promise<boolean>;
+  /** Leaves a stale running job waiting for Continue and frees its one-active slot. */
+  markInterrupted(id: string, error: string): Promise<void>;
+  /** Continue: an interrupted job goes back in the queue. `busy` when another job for the same
+   *  system is active, `not-waiting` when the job is not interrupted. */
+  continueInterrupted(id: string): Promise<'requeued' | 'not-waiting' | 'busy'>;
 }
 
 type Row = {
@@ -84,7 +96,7 @@ export function createTerminologyIngestJobStore(db: Kysely<InternalSchema>): Ter
       await db.insertInto('terminology_ingest_jobs')
         .values({
           id, system_type: input.systemType, coding_system_id: input.codingSystemId, blob_key: input.blobKey,
-          version: input.version, status: 'running', started_at: sql`now()` as never, created_by: input.createdBy,
+          version: input.version, status: 'running', started_at: sql`now()` as never, heartbeat_at: sql`now()` as never, created_by: input.createdBy,
           active_key: input.systemType,
         } as never)
         .execute();
@@ -102,7 +114,7 @@ export function createTerminologyIngestJobStore(db: Kysely<InternalSchema>): Ter
       if (!next) return null;
       const rows = await sql<Row>`
         update terminology_ingest_jobs
-        set status = 'running', started_at = now()
+        set status = 'running', started_at = now(), heartbeat_at = now()
         where id = ${next.id} and status = 'queued'
         returning *
       `.execute(db);
@@ -147,16 +159,39 @@ export function createTerminologyIngestJobStore(db: Kysely<InternalSchema>): Ter
         .where('system_type', '=', systemType).where('status', 'in', ['queued', 'running']).executeTakeFirst();
       return !!r;
     },
-    async failStaleRunning(error) {
-      // Crash recovery: on a single-worker install any job left 'running' is orphaned. Fail it and
-      // clear active_key so its one-active slot frees up. Returns how many were reset.
+    async beat(id) {
+      await db.updateTable('terminology_ingest_jobs').set({ heartbeat_at: sql`now()` as never })
+        .where('id', '=', id).where('status', '=', 'running').execute();
+    },
+    async listStaleRunning(olderThan) {
+      const rows = await db.selectFrom('terminology_ingest_jobs').select(['id', 'phase', 'heartbeat_at', 'started_at', 'created_at'])
+        .where('status', '=', 'running').execute();
+      return rows
+        .map((r) => ({ id: r.id, phase: r.phase, at: new Date((r.heartbeat_at ?? r.started_at ?? r.created_at) as Date) }))
+        .filter((r) => r.at.getTime() < olderThan.getTime());
+    },
+    async requeue(id) {
       const rows = await sql<{ id: string }>`
         update terminology_ingest_jobs
-        set status = 'failed', error = ${error}, finished_at = now(), active_key = null
-        where status = 'running'
+        set status = 'queued', started_at = null, heartbeat_at = null, phase = null, processed = 0, total = null
+        where id = ${id} and status = 'running'
         returning id
       `.execute(db);
-      return rows.rows.length;
+      return rows.rows.length > 0;
+    },
+    async markInterrupted(id, error) {
+      await db.updateTable('terminology_ingest_jobs')
+        .set({ status: 'interrupted', error, finished_at: sql`now()` as never, active_key: null })
+        .where('id', '=', id).where('status', '=', 'running').execute();
+    },
+    async continueInterrupted(id) {
+      const job = await store.get(id);
+      if (!job || job.status !== 'interrupted') return 'not-waiting';
+      if (await store.hasActive(job.systemType)) return 'busy';
+      await db.updateTable('terminology_ingest_jobs')
+        .set({ status: 'queued', error: null, finished_at: null, started_at: null, heartbeat_at: null, phase: null, processed: 0 as never, total: null, active_key: job.systemType })
+        .where('id', '=', id).where('status', '=', 'interrupted').execute();
+      return 'requeued';
     },
   };
   return store;

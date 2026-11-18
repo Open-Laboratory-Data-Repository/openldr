@@ -9,8 +9,7 @@ import {
   createTerminologyAdminStore, createFacilityRegistryStore, createFacilityJobStore,
   createFacilityRegisterSourceStore,
   DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, APPLY_PHASE,
-  VALIDATE_PHASE,
-} from '@openldr/db';
+  VALIDATE_PHASE, createJobInterruptionStore } from '@openldr/db';
 import {
   projectRegistryRows, observedFieldSystem, addRegisterFacilityType, CONTROLLED_VALUE_SETS,
   suggestColumns, FACILITY_IMPORT_MAX_XLSX_BYTES,
@@ -195,6 +194,7 @@ function fakeCtx() {
     logger: { error() {}, warn() {}, info() {} },
     forms: { get: async (formId: string) => forms[formId] },
     facilityJobs: fakeFacilityJobStore(),
+    jobInterruptions: { record: async () => ({ id: 'i', inserted: true }), resolve: async () => {}, listFor: async () => new Map(), inARow: async () => 0 },
     facilityRegistry: {
       // Task 3: `list()`'s real contract (Task 1) is `{ rows, total }`, not a bare array — this
       // fake must match it or the route's `const { rows, total } = await ...list(...)` destructures
@@ -5454,6 +5454,7 @@ function fakeReconcileCtx(internalDb: any, externalDb: any) {
   const audit: any[] = [];
   return {
     internalDb,
+    jobInterruptions: createJobInterruptionStore(internalDb),
     store: { db: externalDb },
     terminology: { admin: createTerminologyAdminStore(internalDb) },
     audit: { record: async (e: any) => { audit.push(e); return e; } },
