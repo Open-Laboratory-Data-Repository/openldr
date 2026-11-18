@@ -501,7 +501,7 @@ Uma tarefa longa cortada por um reinício regista-o. A maioria continua sozinha;
 
 ## Corrigir pedidos retidos
 
-Uma verificação de fonte retém um pedido quando as suas regras encontram um erro. Uma pessoa com a permissão **Correct held requests** pode corrigir os campos do pedido e verificá-lo de novo. As linhas da fonte não mudam; a correção fica guardada ao lado, com quem, quando e porquê.
+Uma verificação de fonte retém um pedido quando as suas regras encontram um erro. Uma pessoa com a permissão **Corrigir pedidos retidos** pode corrigir os campos do pedido e verificá-lo de novo. As linhas da fonte não mudam; a correção fica guardada ao lado, com quem, quando e porquê.
 
 - `openldr import check correct <plugin> <copy> <key> --set campo=valor --reason "porquê"` corrige um ou mais campos. Repita `--set` para cada campo. Um valor vazio limpa o campo. O plugin decide que campos podem ser corrigidos.
 - `openldr import check recheck <plugin> <copy> <key>` verifica o pedido de novo na execução que o reteve. Se passar, é gravado e sai da lista de pedidos retidos. Execute `import check held` para ver o resultado.

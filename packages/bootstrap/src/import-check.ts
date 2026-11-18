@@ -27,7 +27,8 @@ import { PAGE_SIZE_MAX, PAGE_SIZE_MIN } from './import-sql';
 // process. Every write of the run is a compare-and-swap on its `rev`.
 //
 // CE reads `key`, `held`, `resources`, `error`, `label` and `laboratory` of a group, and nothing
-// inside `findings` or `check`. Those two are kept as the plugin gave them, only in the held-back store.
+// inside `findings` or `check`. Those two are kept as the plugin gave them, only in the held-back store,
+// and so are `fields`, the values as read a person may correct (design 2026-11-18-held-corrections).
 // No row value reaches a log, an audit row or an error text: a plugin's error is kept as a bare
 // code, a save error as its code, and an error from CE's own database as its SQLSTATE.
 
