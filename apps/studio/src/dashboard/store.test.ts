@@ -6,6 +6,14 @@ const blank = { id: 'd', ownerId: null, name: 'D', layout: [], widgets: [], filt
 beforeEach(() => useDashboardStore.setState({ current: structuredClone(blank), editing: false, dirty: false }));
 
 describe('dashboard store', () => {
+  it('changes the filters and marks dirty, so the edit is saved and previewed (review DS3)', () => {
+    useDashboardStore.getState().setCurrent({ id: 'd', ownerId: null, name: 'D', layout: [], widgets: [], filters: [], refreshIntervalSec: 0, isDefault: false } as never);
+    const filters = [{ id: 'f', label: 'F', type: 'text', optionsSql: 'select 2' }] as never;
+    useDashboardStore.getState().setFilters(filters);
+    expect(useDashboardStore.getState().current?.filters).toBe(filters);
+    expect(useDashboardStore.getState().dirty).toBe(true);
+  });
+
   it('adds a widget and marks dirty', () => {
     useDashboardStore.getState().addWidget({ id: 'w1', type: 'kpi', title: 'X', refreshIntervalSec: 0, visual: {}, query: { mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [] } });
     expect(useDashboardStore.getState().current!.widgets.length).toBe(1);

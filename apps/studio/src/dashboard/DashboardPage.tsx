@@ -407,7 +407,7 @@ export function DashboardPage() {
           open
           filters={current.filters}
           onClose={() => setFilterEditorOpen(false)}
-          onSave={(f) => setCurrent({ ...current, filters: f })}
+          onSave={(f) => useDashboardStore.getState().setFilters(f)}
         />
       )}
       {renameOpen && current && (
