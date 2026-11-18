@@ -932,6 +932,21 @@ export interface DashboardAccessTable {
   role_id: string;
 }
 
+/** A user's data limit, by role subject (migration 127). */
+export interface UserDataScopesTable {
+  subject: string;
+  limited: Generated<boolean>;
+  updated_at: Generated<Date>;
+}
+
+/** One facility, district or region of a user's data limit (migration 127). */
+export interface UserDataScopeItemsTable {
+  subject: string;
+  kind: string;
+  region: Generated<string>;
+  value: string;
+}
+
 export interface FormAccessTable {
   form_id: string;
   role_id: string;
@@ -1164,6 +1179,8 @@ export interface InternalSchema {
   import_check_corrections: ImportCheckCorrectionsTable;
   form_access: FormAccessTable;
   dashboard_access: DashboardAccessTable;
+  user_data_scopes: UserDataScopesTable;
+  user_data_scope_items: UserDataScopeItemsTable;
   app_settings: AppSettingsTable;
   report_designs: ReportDesignsTable;
   report_design_versions: ReportDesignVersionsTable;

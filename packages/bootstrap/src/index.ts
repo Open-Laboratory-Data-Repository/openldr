@@ -49,7 +49,7 @@ import { checkCustomQueryFile, importCustomQueries } from './custom-query-transf
 import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -508,6 +508,8 @@ export interface AppContext {
   formAccess: FormAccessCheck;
   /** Which roles may see each dashboard (design 2026-11-18-roles-scope, part 2). */
   dashboardAccessStore: DashboardAccessStore;
+  /** Each user's data limit, by role subject (roles part 3). */
+  dataScopes: UserDataScopeStore;
   /** The one check of who may see and share a dashboard. */
   dashboardAccess: DashboardAccessCheck;
   /** Read-only starter packs for the form builder. Rewritten from source on every boot. */
@@ -809,6 +811,7 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const formAccessCheck = formAccess({ access: formAccessStore });
   const dashboardAccessStore = createDashboardAccessStore(internal.db as unknown as Kysely<InternalSchema>);
   const dashboardAccessCheck = dashboardAccess({ access: dashboardAccessStore });
+  const dataScopes = createUserDataScopeStore(internal.db as unknown as Kysely<InternalSchema>);
   const starterPacks = createStarterPackStore(internal.db);
   // Starter packs are read-only seeded data, rewritten on every boot from
   // `packages/forms/src/samples/starter-packs.ts` so a release that changes one reaches every
@@ -2058,6 +2061,7 @@ const reporting: ReportingApi = {
     formAccessStore,
     formAccess: formAccessCheck,
     dashboardAccessStore,
+    dataScopes,
     dashboardAccess: dashboardAccessCheck,
     starterPacks,
     marketplaceForms,
@@ -2178,6 +2182,7 @@ export * from './result-fields';
 export * from './job-continue';
 export * from './form-access';
 export * from './dashboard-access';
+export * from './data-scope';
 export { MAX_SELF_RESUMES } from './job-interruptions';
 export * from './patient-identifier-systems';
 export * from './patient-index';
