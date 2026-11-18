@@ -587,3 +587,9 @@ Um ficheiro parcial não avalia as unidades ausentes. Marque uma versão complet
 ## Guias relacionados
 
 [Terminology](/docs/terminology) explica as listas e os códigos. [Start here](/docs/start-here) explica a CLI. [Dashboards](/docs/dashboard) trata de gráficos e prática opcional. [Your preferences](/docs/user-preferences) trata das definições pessoais.
+
+## Quando uma importação de registo é interrompida
+
+Uma importação de registo cortada por um reinício do servidor continua sozinha quando o servidor volta, a partir do ficheiro enviado. Uma importação cortada enquanto aplicava aplica de novo sem pedir uma segunda confirmação. Uma importação cortada enquanto verificava o ficheiro verifica-o de novo e para na confirmação habitual.
+
+A importação mostra então um distintivo **Interrompido**; aponte para ele para ver quando. Se uma importação for cortada três vezes na mesma etapa, para com uma mensagem que o diz. Envie de novo o ficheiro para recomeçar.

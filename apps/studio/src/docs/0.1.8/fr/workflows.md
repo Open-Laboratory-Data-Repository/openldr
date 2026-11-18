@@ -387,3 +387,13 @@ La réinitialisation conserve normalement le secret webhook existant. Si l'avert
 ## Guides associés
 
 [Activité](/docs/activity) suit le parcours du contenu. [Rapports planifiés](/docs/report-pipeline) construit les données enregistrées et les classeurs de sortie. [Connecteurs](/docs/connectors) configure les systèmes externes. [Map to FHIR](/docs/map-to-fhir) mappe les lignes propres à un laboratoire.
+
+## Quand une exécution est interrompue
+
+Une exécution peut être coupée quand le serveur redémarre ou s’arrête. Une exécution de workflow ne recommence jamais toute seule, car elle a peut-être déjà envoyé un e-mail ou appelé un autre système avant la coupure.
+
+1. Ouvrez le workflow et son **Historique**.
+2. Une exécution interrompue affiche le statut **Interrompu**. Pointez le badge **Interrompu** pour voir quand cela s’est produit.
+3. Pour la relancer, ouvrez le menu **⋯** de la ligne et sélectionnez **Continuer**. Une nouvelle exécution démarre avec les mêmes données. Si le workflow a changé depuis le début de l’exécution interrompue, le message le dit et la nouvelle exécution l’utilise tel qu’il est maintenant.
+
+En ligne de commande : `openldr workflows run-continue <workflowId> <requestId>`.

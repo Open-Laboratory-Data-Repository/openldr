@@ -488,3 +488,12 @@ Cada alteração fica no registo de auditoria com a conta com sessão iniciada.
 O guia **As suas preferências** do Studio encontra-se em **Preferências pessoais**. Mostra as escolhas de idioma, tema, página inicial e barra lateral, com uma captura para cada passo. As preferências ficam guardadas na conta de cada utilizador. Uma página inicial pessoal tem prioridade sobre a página da disposição. O painel é a última opção predefinida.
 
 Para operadores, `user preferences show <user-id>` lê os valores guardados e `user preferences set <user-id> startPage none` limpa a escolha pessoal da página inicial. Use a forma do comando instalado ou de desenvolvimento descrita acima. Limpar a escolha permite voltar a usar a página inicial da disposição, quando está configurada.
+
+## Tarefas interrompidas
+
+Uma tarefa longa cortada por um reinício regista-o. A maioria continua sozinha; estes comandos mostram o registo e continuam uma tarefa que espera.
+
+- `openldr terminology job <system>` mostra a última importação de distribuição e as suas interrupções. `openldr terminology job-continue <id>` continua a que espera depois de três cortes.
+- `openldr workflows receipts list <workflowId>` mostra as interrupções de cada execução. `openldr workflows run-continue <workflowId> <requestId>` inicia uma nova execução a partir de uma interrompida; uma execução de workflow nunca recomeça sozinha.
+- `openldr facilities jobs --retry <id>` continua uma reconstrução do mapa de estabelecimentos interrompida.
+- `openldr import status`, `import copy status`, `import check status`, `facilities import-run <id>` e `pipeline status` listam as interrupções de cada execução.

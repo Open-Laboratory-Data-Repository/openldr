@@ -463,3 +463,12 @@ Chaque changement est enregistré dans le journal d'audit au nom du compte conne
 Le guide **Vos préférences** de Studio se trouve dans **Préférences personnelles**. Il montre les choix de langue, thème, page de démarrage et barre latérale, avec une capture pour chaque étape. Les préférences sont enregistrées dans le compte de chaque utilisateur. Une page de démarrage personnelle passe avant celle de la disposition. Le tableau de bord est le dernier choix par défaut.
 
 Pour les opérateurs, `user preferences show <user-id>` lit les valeurs enregistrées et `user preferences set <user-id> startPage none` efface le choix personnel de page de démarrage. Utilisez la commande de l'installation ou de développement décrite plus haut. Effacer le choix permet de réutiliser la page de démarrage de la disposition lorsqu'elle est configurée.
+
+## Tâches interrompues
+
+Une tâche longue coupée par un redémarrage l’enregistre. La plupart reprennent toutes seules ; ces commandes montrent l’enregistrement et reprennent une tâche qui attend.
+
+- `openldr terminology job <system>` affiche le dernier import de distribution et ses interruptions. `openldr terminology job-continue <id>` reprend celui qui attend après trois coupures.
+- `openldr workflows receipts list <workflowId>` affiche les interruptions de chaque exécution. `openldr workflows run-continue <workflowId> <requestId>` lance une nouvelle exécution à partir d’une exécution interrompue ; une exécution de workflow ne redémarre jamais toute seule.
+- `openldr facilities jobs --retry <id>` reprend une reconstruction de la carte des établissements interrompue.
+- `openldr import status`, `import copy status`, `import check status`, `facilities import-run <id>` et `pipeline status` listent les interruptions de chaque exécution.

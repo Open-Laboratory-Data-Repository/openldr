@@ -404,3 +404,14 @@ Verifique as regras Include, o sistema escolhido e o estado dos termos. Um conju
 [Começar aqui](/docs/start-here) explica o CLI instalado e o CLI de desenvolvimento, incluindo as pastas de exemplo `openldr_ce`. Consulte esse guia antes de executar comandos de terminologia num terminal.
 
 [Formulários](/docs/forms) · [Catálogo de testes](/docs/test-catalog) · [Unidades de saúde](/docs/facilities) · [As suas preferências](/docs/user-preferences)
+
+## Quando uma importação é interrompida
+
+Uma importação de distribuição cortada por um reinício do servidor volta sozinha à fila e corre de novo. O cabeçalho do editor mostra então um distintivo **Interrompido**; aponte para ele para ver quando, e como a importação voltou.
+
+Se uma importação for cortada três vezes na mesma etapa, para e espera. O cabeçalho mostra **Importação interrompida**.
+
+1. Selecione o editor.
+2. Abra o menu **⋯** da página e selecione **Continuar importação**.
+
+Na linha de comandos: `openldr terminology job <system>` mostra a última importação e as suas interrupções, e `openldr terminology job-continue <id>` continua-a.

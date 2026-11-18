@@ -404,3 +404,14 @@ Vérifiez les règles Include, le système choisi et le statut des termes. Un je
 [Commencer ici](/docs/start-here) explique le CLI installé et le CLI de développement, avec les dossiers d'exemple `openldr_ce`. Consultez ce guide avant d'exécuter les commandes de terminologie dans un terminal.
 
 [Formulaires](/docs/forms) · [Catalogue de tests](/docs/test-catalog) · [Établissements](/docs/facilities) · [Vos préférences](/docs/user-preferences)
+
+## Quand un import est interrompu
+
+Un import de distribution coupé par un redémarrage du serveur revient tout seul dans la file et recommence. L’en-tête de l’éditeur affiche alors un badge **Interrompu** ; pointez-le pour voir quand, et comment l’import a repris.
+
+Si un import est coupé trois fois à la même étape, il s’arrête et attend. L’en-tête affiche **Import interrompu**.
+
+1. Sélectionnez l’éditeur.
+2. Ouvrez le menu **⋯** de la page et sélectionnez **Continuer l’import**.
+
+En ligne de commande : `openldr terminology job <system>` affiche le dernier import et ses interruptions, et `openldr terminology job-continue <id>` le reprend.

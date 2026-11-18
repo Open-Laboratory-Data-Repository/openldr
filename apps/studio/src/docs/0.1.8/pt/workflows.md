@@ -387,3 +387,13 @@ A reposição normalmente mantém o segredo webhook existente. Se o aviso indica
 ## Guias relacionados
 
 [Atividade](/docs/activity) acompanha o ciclo do conteúdo. [Relatórios agendados](/docs/report-pipeline) cria dados guardados e saída em livros Excel. [Conectores](/docs/connectors) configura sistemas externos. [Map to FHIR](/docs/map-to-fhir) mapeia as linhas próprias de um laboratório.
+
+## Quando uma execução é interrompida
+
+Uma execução pode ser cortada quando o servidor reinicia ou para. Uma execução de workflow nunca recomeça sozinha, porque pode já ter enviado um e-mail ou chamado outro sistema antes do corte.
+
+1. Abra o workflow e o seu **Histórico**.
+2. Uma execução interrompida mostra o estado **Interrompido**. Aponte para o distintivo **Interrompido** para ver quando aconteceu.
+3. Para a executar de novo, abra o menu **⋯** da linha e selecione **Continuar**. Uma nova execução começa com os mesmos dados. Se o workflow mudou desde o início da execução interrompida, a mensagem diz isso e a nova execução usa-o como está agora.
+
+Na linha de comandos: `openldr workflows run-continue <workflowId> <requestId>`.

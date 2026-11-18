@@ -587,3 +587,9 @@ Un fichier partiel n'évalue pas les établissements absents du fichier. Indique
 ## Guides associés
 
 [Terminology](/docs/terminology) explique les listes et les codes. [Start here](/docs/start-here) explique la CLI. [Dashboards](/docs/dashboard) traite des graphiques et de la pratique facultative. [Your preferences](/docs/user-preferences) traite des réglages personnels.
+
+## Quand un import de registre est interrompu
+
+Un import de registre coupé par un redémarrage du serveur reprend tout seul quand le serveur revient, à partir du fichier envoyé. Un import coupé pendant l’application s’applique de nouveau sans vous demander une seconde confirmation. Un import coupé pendant la vérification du fichier le vérifie de nouveau et s’arrête à la confirmation habituelle.
+
+L’import affiche alors un badge **Interrompu** ; pointez-le pour voir quand. Si un import est coupé trois fois à la même étape, il s’arrête avec un message qui le dit. Envoyez de nouveau le fichier pour recommencer.
