@@ -276,6 +276,9 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'import check start': { kind: 'app', capability: 'connectors.manage', alsoRequires: ['ingest.run'] },
   'import check status': { kind: 'app', capability: 'connectors.manage' },
   'import check stop': { kind: 'app', capability: 'connectors.manage' },
+  // Held corrections: a corrector needs only this key, not connectors.manage (design 2026-11-18-held-corrections).
+  'import check correct': { kind: 'app', capability: 'imports.correct_held' },
+  'import check recheck': { kind: 'app', capability: 'imports.correct_held' },
   'import check held': { kind: 'app', capability: 'connectors.manage', destructive: true, paths: [outFile('--export', { private: true, keepExistingUnless: '--force' })] },
 
   // No route sends a file through the pipeline with any converter. It writes clinical records.

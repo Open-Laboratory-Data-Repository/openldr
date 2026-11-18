@@ -36,6 +36,7 @@ function broker(opts: {
   facilities?: any;
   schedules?: any;
   requiredRoles?: string[];
+  requiredCapabilities?: string[];
   maxDocBytes?: number;
   imports?: any;
   copies?: any;
@@ -44,7 +45,7 @@ function broker(opts: {
 }) {
   const data = memData();
   const manifest: any = opts.caps === undefined ? {} : { capabilities: opts.caps };
-  if (opts.requiredRoles) manifest.payload = { ui: { requiredRoles: opts.requiredRoles } };
+  if (opts.requiredRoles) manifest.payload = { ui: { requiredRoles: opts.requiredRoles, ...(opts.requiredCapabilities ? { requiredCapabilities: opts.requiredCapabilities } : {}) } };
   const row = { id: 'p1', version: '1.0.0', enabled: true, manifest };
   const audited: Array<{ pluginId: string; op: string; outcome: string; reason?: string }> = [];
   const logged: Array<{ obj: any; msg: string }> = [];
@@ -882,6 +883,69 @@ describe('plugin broker: checks', () => {
     expect(await b.handle('p1', admin, { kind: 'import.check.status', runId: 'nope' })).toEqual({ ok: true, data: null });
     checks.api.heldItem = async () => null;
     expect(await b.handle('p1', admin, { kind: 'import.check.heldItem', copyId: 'cp1', key: 'nope' })).toEqual({ ok: true, data: null });
+  });
+
+  describe('held corrections (design 2026-11-18-held-corrections)', () => {
+    const corrector = { id: 'u2', roles: ['data_corrector'], capabilities: ['imports.correct_held'], username: 'baraka' };
+    const nobody = { id: 'u3', roles: ['data_analyst'], capabilities: ['reports.view'] };
+    const withCorrections = () => {
+      const checks = fakeChecks();
+      checks.api.correct = async (...args: unknown[]) => { checks.calls.push(['correct', args]); return { corrections: [{ field: 'dob_age' }] }; };
+      checks.api.recheck = async (...args: unknown[]) => { checks.calls.push(['recheck', args]); return checkRun({ status: 'queued', driver: null }); };
+      return checks;
+    };
+    const gated = (checks: ReturnType<typeof fakeChecks>) => broker({
+      caps: IMPORT_CAPS, checks: checks.api, copies: { list: async () => [] }, imports: { allowed: async () => [] }, requiredRoles: ['lab_admin'], requiredCapabilities: ['imports.correct_held'],
+    });
+
+    it('lets a corrector open the page, read the Feedback tab, correct and check again, and nothing more', async () => {
+      const checks = withCorrections();
+      const { b } = gated(checks);
+      for (const op of [
+        { kind: 'import.allowed' }, { kind: 'import.copy.list' }, { kind: 'import.check.list' },
+        { kind: 'import.check.held', copyId: 'cp1', offset: 0, limit: 50 },
+        { kind: 'import.check.heldItem', copyId: 'cp1', key: SECRET_KEY },
+        { kind: 'import.check.heldItems', copyId: 'cp1', offset: 0, limit: 200 },
+        { kind: 'import.check.correct', copyId: 'cp1', key: SECRET_KEY, values: { dob_age: '2023-03-11' }, reason: 'typed wrong' },
+        { kind: 'import.check.recheck', copyId: 'cp1', key: SECRET_KEY },
+        { kind: 'import.check.access' },
+      ]) {
+        expect(await b.handle('p1', corrector, op), op.kind).toMatchObject({ ok: true });
+      }
+      for (const op of [
+        { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: {} },
+        { kind: 'import.check.stop', runId: 'ck1' },
+        { kind: 'import.copy.delete', copyId: 'cp1', confirm: true },
+        { kind: 'storage.get', key: 'k' },
+      ]) {
+        expect(await b.handle('p1', corrector, op), op.kind).toMatchObject({ ok: false });
+      }
+      expect(checks.calls.find(([n]) => n === 'correct')).toEqual(['correct', [{
+        pluginId: 'p1', copyId: 'cp1', key: SECRET_KEY, values: { dob_age: '2023-03-11' }, reason: 'typed wrong', actor: { type: 'user', id: 'u2', name: 'baraka' },
+      }]]);
+    });
+
+    it('refuses everything to a caller with neither the role nor the permission', async () => {
+      const { b } = gated(withCorrections());
+      for (const op of [{ kind: 'import.check.heldItem', copyId: 'cp1', key: SECRET_KEY }, { kind: 'import.check.correct', copyId: 'cp1', key: SECRET_KEY, values: { sex: 'F' }, reason: 'r' }, { kind: 'import.check.access' }]) {
+        expect(await b.handle('p1', nobody, op)).toMatchObject({ ok: false });
+      }
+    });
+
+    it('access tells the page what to show', async () => {
+      const { b } = gated(withCorrections());
+      expect(await b.handle('p1', admin, { kind: 'import.check.access' })).toEqual({ ok: true, data: { full: true, correct: true } });
+      expect(await b.handle('p1', corrector, { kind: 'import.check.access' })).toEqual({ ok: true, data: { full: false, correct: true } });
+    });
+
+    it('refuses a correction with no field, a long value or no reason before it reaches the service', async () => {
+      const checks = withCorrections();
+      const { b } = gated(checks);
+      for (const bad of [{ values: {}, reason: 'r' }, { values: { sex: 'x'.repeat(201) }, reason: 'r' }, { values: { sex: 'F' }, reason: '' }]) {
+        expect(await b.handle('p1', admin, { kind: 'import.check.correct', copyId: 'cp1', key: SECRET_KEY, ...bad })).toMatchObject({ ok: false, error: expect.stringMatching(/^invalid operation/) });
+      }
+      expect(checks.calls.filter(([n]) => n === 'correct')).toEqual([]);
+    });
   });
 
   it('a plugin without host:import is denied every check op, and so is a caller below lab_admin', async () => {

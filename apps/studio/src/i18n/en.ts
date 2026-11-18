@@ -521,6 +521,9 @@ export const en = {
       data: {
         export: { label: 'Export all data', description: 'Write every FHIR resource and every warehouse table to files, patient details included.' },
       },
+      imports: {
+        correct_held: { label: 'Correct held requests', description: 'Open the held requests of a source check, correct their fields and check them again. Sees patient details.' },
+      },
     },
   },
   forms: {

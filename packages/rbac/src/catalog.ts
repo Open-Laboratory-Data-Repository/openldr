@@ -77,6 +77,8 @@ const RAW: Omit<CapabilityMeta, never>[] = [
   // Ingest and Data: CLI commands that no Studio screen covers (openldr ingest, pipeline retry, export).
   { key: 'ingest.run', group: 'ingest', label: 'Run the ingest pipeline', description: 'Send files through the ingest pipeline and retry failed batches. Both write clinical records.' },
   { key: 'data.export', group: 'data', label: 'Export all data', description: 'Write every FHIR resource and every warehouse table to files, patient details included.' },
+  // Imports: a held request's fields can be corrected and checked again (design 2026-11-18-held-corrections).
+  { key: 'imports.correct_held', group: 'imports', label: 'Correct held requests', description: 'Open the held requests of a source check, correct their fields and check them again. Sees patient details.' },
 ];
 
 const GROUP_LABELS: Record<string, string> = {
@@ -99,6 +101,7 @@ const GROUP_LABELS: Record<string, string> = {
   audit: 'Audit',
   ingest: 'Ingest',
   data: 'Data',
+  imports: 'Imports',
 };
 
 export const CAPABILITIES: CapabilityMeta[] = RAW;

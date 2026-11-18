@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  CopySetTooLargeError, createImportCheckHeldStore, createImportCopyStore, createJobInterruptionStore, createPluginDataStore,
+  CopySetTooLargeError, createImportCheckCorrectionStore, createImportCheckHeldStore, createImportCopyStore, createJobInterruptionStore, createPluginDataStore,
   type CopyRow, type ImportCheckHeldStore, type ImportCopyStore, type PluginDataStore,
 } from '@openldr/db';
 import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
@@ -26,7 +26,7 @@ const SECRET = 'Maria Santos';
 const CAP = 64 * 1024 * 1024;
 
 type Row = Record<string, unknown>;
-type Group = { key: string; held?: boolean; findings?: unknown; check?: unknown; resources?: unknown[]; error?: string; label?: string; laboratory?: unknown };
+type Group = { key: string; held?: boolean; findings?: unknown; check?: unknown; resources?: unknown[]; error?: string; label?: string; laboratory?: unknown; fields?: unknown };
 interface DecodeInput {
   options: Record<string, string>; now: string; dictionaries: Record<string, Row[]>; keys: string[];
   rows: Record<string, Row[]>; twins: Record<string, Row[]>;
@@ -49,13 +49,13 @@ const setSpec = (name: string, details: string[]) => ({
 });
 const pass = (key: string): Group => ({ key, resources: [{ resourceType: 'ServiceRequest', id: key }], label: 'passed' });
 
-function manifest(entrypoints: Record<string, string>, id = PLUGIN) {
+function manifest(entrypoints: Record<string, string>, id = PLUGIN, corrections?: string[]) {
   return {
     schemaVersion: 1, type: 'plugin', id, version: '1.2.0',
     capabilities: [{ kind: 'host:import' }, { kind: 'emit-fhir', resourceTypes: ['ServiceRequest', 'Patient'] }],
     payload: {
       kind: 'plugin', entrypoints: Object.values(entrypoints),
-      importSource: { connectorTypes: ['microsoft-sql'], sourceSystem: 'openldr-v1', entrypoints },
+      importSource: { connectorTypes: ['microsoft-sql'], sourceSystem: 'openldr-v1', entrypoints, ...(corrections ? { corrections: { fields: corrections } } : {}) },
     },
   };
 }
@@ -63,7 +63,7 @@ const CHECKER = { copy: 'import_copy', decode: 'import_decode', twinKeys: 'impor
 
 let internalDb: Awaited<ReturnType<typeof makeMigratedDb>>;
 
-async function world(opts: { entrypoints?: Record<string, string> } = {}) {
+async function world(opts: { entrypoints?: Record<string, string>; corrections?: string[] } = {}) {
   const raw = createPluginDataStore(internalDb);
   const plainCheckPuts: string[] = [];
   const runSaves: CheckRun[] = [];
@@ -113,7 +113,7 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
   const audited: ImportAuditEvent[] = [];
   const audit = async (e: ImportAuditEvent) => { audited.push(structuredClone(e)); };
   const plugins: Array<{ id: string; version: string; enabled: boolean; manifest: Record<string, unknown> }> = [
-    { id: PLUGIN, version: '1.2.0', enabled: true, manifest: manifest(opts.entrypoints ?? CHECKER) },
+    { id: PLUGIN, version: '1.2.0', enabled: true, manifest: manifest(opts.entrypoints ?? CHECKER, PLUGIN, opts.corrections) },
     { id: OTHER, version: '1.0.0', enabled: true, manifest: manifest({ copy: 'import_copy' }, OTHER) },
   ];
   const decodeCalls: DecodeInput[] = [];
@@ -171,8 +171,9 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
     },
   });
   const interruptions = createJobInterruptionStore(internalDb);
+  const corrections = createImportCheckCorrectionStore(internalDb);
   const service = (driverId = 'server-1'): ImportCheckService => createImportCheckService({
-    plugins: pluginsDep, pluginData, audit, persist, copyStore, held, copies, driverId, allowed,
+    plugins: pluginsDep, pluginData, audit, persist, copyStore, held, copies, driverId, allowed, corrections,
     interruptions: { store: interruptions, now: () => new Date(clock.now), processStartedAt: new Date(clock.now) },
     now: () => new Date(clock.now),
     sleep: async (ms) => { sleeps.push(ms); },
@@ -207,7 +208,7 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
   };
 
   return {
-    interruptions,
+    interruptions, corrections,
     svc, service, copies, raw, audited, runSaves, decodeCalls, twinCalls, invoke, persisted, clock, sleeps, plugins,
     readSetCalls, readCalls, heldPuts, copyCalls, allowedCalls,
     revoke: (connectorId: string) => { allowedConnectors.delete(connectorId); },
@@ -233,6 +234,13 @@ async function drive(svc: ImportCheckService) {
   await svc.idle();
 }
 const actions = (w: World) => w.audited.map((e) => e.action).filter((a) => a.startsWith('import.check.'));
+/** A held request as `heldItems` gives it: `heldItem` without the corrections it adds. */
+async function plainHeld(w: World, key: string) {
+  const item = await w.svc.heldItem(PLUGIN, SRC, key);
+  if (!item) return item;
+  const { corrections: _c, correctable: _f, ...rest } = item;
+  return rest;
+}
 
 let worlds: Array<{ plainCheckPuts: string[] }> = [];
 beforeEach(async () => { internalDb = await makeMigratedDb(); worlds = []; });
@@ -332,7 +340,7 @@ describe('check: one page', () => {
     // In batches: the same rows as held, in the same order, each with its findings and check.
     const batch = await w.svc.heldItems(PLUGIN, SRC, { offset: 0, limit: 10 });
     expect(batch.total).toBe(2);
-    expect(batch.items).toEqual([await w.svc.heldItem(PLUGIN, SRC, 'REQ0002'), await w.svc.heldItem(PLUGIN, SRC, 'REQ0003')]);
+    expect(batch.items).toEqual([await plainHeld(w, 'REQ0002'), await plainHeld(w, 'REQ0003')]);
     expect(batch.items.map((i) => i.key)).toEqual(list.rows.map((r) => r.key));
     expect(await w.svc.heldItems(PLUGIN, SRC, { offset: 1, limit: 1 })).toEqual({ items: [batch.items[1]], total: 2 });
     expect(await w.svc.heldItems(PLUGIN, SRC, { label: 'held_by_check', offset: 0, limit: 10 })).toEqual({ items: [batch.items[0]], total: 1 });
@@ -1109,7 +1117,7 @@ describe('check: by laboratory', () => {
     const bPassed = await w.svc.held(PLUGIN, SRC, { laboratory: 'LAB.B_2', label: 'passed', offset: 0, limit: 10 });
     expect([bPassed.rows.map((r) => r.key), bPassed.total]).toEqual([['REQ0007'], 1]);
     const aItems = await w.svc.heldItems(PLUGIN, SRC, { laboratory: 'LAB-A', offset: 0, limit: 10 });
-    expect(aItems).toEqual({ items: [await w.svc.heldItem(PLUGIN, SRC, 'REQ0002')], total: 1 });
+    expect(aItems).toEqual({ items: [await plainHeld(w, 'REQ0002')], total: 1 });
     expect(aItems.items[0]).toMatchObject({ laboratory: 'LAB-A', findings: [1] });
     expect((await w.svc.heldItems(PLUGIN, SRC, { laboratory: 'LAB-A', reason: 'error', offset: 0, limit: 10 })).total).toBe(0);
     // A laboratory code never reaches an audit row.
@@ -1573,7 +1581,7 @@ describe('check: final fix wave, held requests read by key, and the copy remove 
     expect([p1.items.map((i) => i.key), p1.total, p1.next]).toEqual([['REQ0001', 'REQ0002'], 5, 'REQ0002']);
     const p3 = await w.svc.heldItems(PLUGIN, SRC, { after: 'REQ0004', limit: 2 });
     expect([p3.items.map((i) => i.key), p3.next]).toEqual([['REQ0005'], null]);
-    expect(await w.svc.heldItems(PLUGIN, SRC, { offset: 1, limit: 1 })).toEqual({ items: [await w.svc.heldItem(PLUGIN, SRC, 'REQ0002')], total: 5 });
+    expect(await w.svc.heldItems(PLUGIN, SRC, { offset: 1, limit: 1 })).toEqual({ items: [await plainHeld(w, 'REQ0002')], total: 5 });
     await expect(w.svc.heldItems(PLUGIN, 'nope', { after: null, limit: 2 })).rejects.toThrow('copy nope not found');
   });
 
@@ -1597,5 +1605,112 @@ describe('check: final fix wave, held requests read by key, and the copy remove 
     // A copy made again on the same connector shows no old run.
     await sourceCopy(w, keysOf(3));
     expect(await w.svc.list(PLUGIN)).toEqual([]);
+  });
+});
+
+describe('held corrections (design 2026-11-18-held-corrections)', () => {
+  const FIELDS = ['dob_age', 'sex'];
+  /** The plugin holds a request unless its decode input corrects dob_age, and sends the values as read. */
+  const holdUnlessCorrected = (input: DecodeInput & { corrections?: Record<string, Array<{ field: string; value: string | null }>> }) => ({
+    groups: input.keys.map((key): Group => {
+      const fixed = (input.corrections?.[key] ?? []).some((c) => c.field === 'dob_age');
+      return fixed
+        ? pass(key)
+        : { key, held: true, findings: [{ class: 'dob_after_specimen_date' }], check: null, label: 'held_rules', fields: { dob_age: '2024-03-11', sex: 'F' } };
+    }),
+  });
+  async function heldRun(w: World, keys = keysOf(2)) {
+    await sourceCopy(w, keys);
+    w.setDecode(holdUnlessCorrected);
+    await w.svc.start({ ...START, pageSize: 10 });
+    await drive(w.svc);
+  }
+  const correctInput = (over: Record<string, unknown> = {}) => ({
+    pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', values: { dob_age: '2023-03-11' }, reason: 'Year typed wrong', actor: ADMIN, ...over,
+  });
+
+  it('keeps the values as read with a held request, and offers the declared fields', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    const item = await w.svc.heldItem(PLUGIN, SRC, 'REQ0001');
+    expect(item).toMatchObject({ reason: 'held', fields: { dob_age: '2024-03-11', sex: 'F' }, corrections: [], correctable: FIELDS });
+  });
+
+  it('stores a correction with the value it replaces, and audits it without the key', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    const out = await w.svc.correct(correctInput());
+    expect(out.corrections).toEqual([expect.objectContaining({ field: 'dob_age', value: '2023-03-11', original: '2024-03-11', reason: 'Year typed wrong', correctedBy: 'admin' })]);
+    const audit = w.audited.find((e) => e.action === 'import.check.correct')!;
+    expect(audit).toMatchObject({ pluginId: PLUGIN, actor: ADMIN, metadata: { copyId: SRC, fields: ['dob_age'] } });
+    expect(JSON.stringify(audit)).not.toContain('REQ0001');
+    expect(JSON.stringify(audit)).not.toContain('2023-03-11');
+  });
+
+  it('refuses an undeclared field, an empty reason, a request that is not held, and a plugin that declares none', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await expect(w.svc.correct(correctInput({ values: { therapy: 'ART' } }))).rejects.toThrow(/therapy cannot be corrected/);
+    await expect(w.svc.correct(correctInput({ reason: '  ' }))).rejects.toThrow(/reason/);
+    await expect(w.svc.correct(correctInput({ key: 'REQ9999' }))).rejects.toThrow(/not held/);
+    const plain = await world();
+    await heldRun(plain);
+    await expect(plain.svc.correct(correctInput())).rejects.toThrow(/declares no fields/);
+  });
+
+  it('checks a corrected request again: it is saved, leaves the held list, and the counts move from held to saved', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    const before = (await w.stored())!;
+    expect(before).toMatchObject({ status: 'completed', counts: { read: 2, held: 2, saved: 0 } });
+    await w.svc.correct(correctInput());
+    const queued = await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    expect(queued.status).toBe('queued');
+    const callsBefore = w.decodeCalls.length;
+    await drive(w.svc);
+    const calls = w.decodeCalls.slice(callsBefore) as Array<DecodeInput & { corrections?: unknown }>;
+    expect(calls.map((c) => c.keys)).toEqual([['REQ0001']]);
+    expect(calls[0]!.corrections).toEqual({ REQ0001: [expect.objectContaining({ field: 'dob_age', value: '2023-03-11', original: '2024-03-11', reason: 'Year typed wrong', by: 'admin' })] });
+    const after = (await w.stored())!;
+    expect(after).toMatchObject({ status: 'completed', cursor: before.cursor, finishedAt: before.finishedAt, counts: { read: 2, held: 1, saved: 1 } });
+    expect(after.recheck).toBeUndefined();
+    expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0001')).toBeNull();
+    expect(w.persisted.at(-1)!.resources).toEqual([{ resourceType: 'ServiceRequest', id: 'REQ0001' }]);
+    expect(actions(w)).toContain('import.check.recheck');
+  });
+
+  it('a recheck that still fails leaves the request held with its new findings, and the counts as they were', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput({ values: { sex: 'M' } }));
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    await drive(w.svc);
+    expect((await w.stored())!).toMatchObject({ status: 'completed', counts: { read: 2, held: 2, saved: 0 } });
+    expect((await w.svc.heldItem(PLUGIN, SRC, 'REQ0001'))).toMatchObject({ reason: 'held', corrections: [expect.objectContaining({ field: 'sex', value: 'M' })] });
+  });
+
+  it('refuses a recheck while a check of the copy is live, and of a key that is not held', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await expect(w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ9999', actor: ADMIN })).rejects.toThrow(/not held/);
+    await w.svc.start({ ...START, pageSize: 10, fromStart: true });
+    await expect(w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN })).rejects.toThrow(/is queued/);
+  });
+
+  it('a full run sends the stored corrections of its page, and none when the plugin declares no fields', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput());
+    await w.svc.start({ ...START, pageSize: 10, fromStart: true });
+    const callsBefore = w.decodeCalls.length;
+    await drive(w.svc);
+    const call = w.decodeCalls[callsBefore] as DecodeInput & { corrections?: Record<string, unknown> };
+    expect(Object.keys(call.corrections ?? {})).toEqual(['REQ0001']);
+    expect((await w.stored())!.counts).toMatchObject({ saved: 1, held: 1 });
+    const plain = await world();
+    await sourceCopy(plain, keysOf(1));
+    await plain.svc.start({ ...START, pageSize: 10 });
+    await drive(plain.svc);
+    expect('corrections' in (plain.decodeCalls[0] as object)).toBe(false);
   });
 });

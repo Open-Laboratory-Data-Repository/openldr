@@ -517,6 +517,9 @@ export const fr: EnShape = {
       data: {
         export: { label: 'Exporter toutes les données', description: 'Écrire chaque ressource FHIR et chaque table de l’entrepôt dans des fichiers, données des patients comprises.' },
       },
+      imports: {
+        correct_held: { label: 'Corriger les demandes retenues', description: 'Ouvrir les demandes retenues d’une vérification de source, corriger leurs champs et les vérifier à nouveau. Voit les données des patients.' },
+      },
     },
   },
   forms: {

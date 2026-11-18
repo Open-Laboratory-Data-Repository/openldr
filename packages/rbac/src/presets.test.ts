@@ -44,7 +44,7 @@ describe('system role presets', () => {
   // so lab_admin holds them and every other preset stays exactly as it was.
   it('lab_admin holds every new key and the other presets are unchanged unless listed', () => {
     const role = (slug: string) => SYSTEM_ROLES.find((r) => r.slug === slug)!.capabilities;
-    for (const key of ['ingest.run', 'data.export']) {
+    for (const key of ['ingest.run', 'data.export', 'imports.correct_held']) {
       expect(role('lab_admin')).toContain(key);
       expect(SYSTEM_ROLES.filter((r) => r.capabilities.includes(key)).map((r) => r.slug)).toEqual(['lab_admin']);
     }

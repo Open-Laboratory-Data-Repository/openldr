@@ -12,9 +12,16 @@ describe('capability catalog', () => {
   // 38 -> 40: facilities.view and facilities.manage were added for the Facilities workspace.
   // 40 -> 43: patients.view, patients.view_identifiers and patients.manage for the Patient Index.
   // 43 -> 45: ingest.run and data.export, for CLI commands that no Studio screen covers.
-  it('exposes 45 unique capability keys', () => {
-    expect(CAPABILITY_KEYS.length).toBe(45);
-    expect(new Set(CAPABILITY_KEYS).size).toBe(45);
+  // 45 -> 46: imports.correct_held, for correcting held requests (design 2026-11-18-held-corrections).
+  it('exposes 46 unique capability keys', () => {
+    expect(CAPABILITY_KEYS.length).toBe(46);
+    expect(new Set(CAPABILITY_KEYS).size).toBe(46);
+  });
+
+  it('has imports.correct_held in its own group', () => {
+    const find = (k: string) => CAPABILITIES.find((c) => c.key === k);
+    expect(find('imports.correct_held')).toMatchObject({ group: 'imports', label: 'Correct held requests' });
+    expect(CAPABILITY_GROUPS.find((g) => g.key === 'imports')?.label).toBe('Imports');
   });
 
   it('separates submitting a form from viewing one', () => {
