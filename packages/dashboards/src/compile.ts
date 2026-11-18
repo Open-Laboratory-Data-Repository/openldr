@@ -330,7 +330,8 @@ export function collectUsedJoins(model: QueryModel, q: BuilderQuery): ModelJoin[
 /** Build the Kysely query (no grain bucketing — date grain is applied in JS after fetch). */
 export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy, scope?: ResolvedScope): AnyQB {
   // A limited user's query must carry the limit. A model with no facility link cannot (roles part 3).
-  if (scope && !model.scopeLink) throw new Error(NO_SCOPE_LINK);
+  // Nor can a user join: it may match any column, so its rows are not limited (review Q1).
+  if (scope && (!model.scopeLink || (q.userJoins?.length ?? 0) > 0)) throw new Error(NO_SCOPE_LINK);
   model = effectiveModel(model, q, policy);
   const wide = !!(q.metrics && q.metrics.length > 0);
   let qb = db.selectFrom(model.table) as unknown as AnyQB;
@@ -503,7 +504,7 @@ export async function runBuilderQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy,
   opts: SqlRunOpts = { timeoutMs: 5000, rowCap: 10_000 }, engine: SqlDialect = 'postgres', scope?: ResolvedScope,
 ): Promise<ReportResultData> {
-  if (scope && !model.scopeLink) throw new Error(NO_SCOPE_LINK);
+  if (scope && (!model.scopeLink || (q.userJoins?.length ?? 0) > 0)) throw new Error(NO_SCOPE_LINK);
   model = effectiveModel(model, q, policy);
   if (!hasMeasure(q)) return { columns: [], rows: [], chart: { type: 'stat', value: '', label: 'No measure' } };
   if (q.metrics && q.metrics.length > 0) return runWideQuery(db, model, q, policy, opts, engine, scope);

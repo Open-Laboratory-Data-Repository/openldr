@@ -63,4 +63,17 @@ describe('compileBuilderQuery with a scope', () => {
         .toThrow(NO_SCOPE_LINK);
     }
   });
+
+  // Review Q1: a user join can match any column, so the joined rows are not limited. A limited user
+  // gets "Not available" for a query with one; the built-in joins follow the base row's own keys.
+  it('refuses a user join for a limited user, and keeps it for everyone else', () => {
+    const q = {
+      mode: 'builder', model: 'service_requests', metric: count, filters: [],
+      dimension: { key: 'joined_lab' },
+      userJoins: [{ id: 'u1', table: 'diagnostic_reports', left: 'status', right: 'status' }],
+      adhocDimensions: [{ key: 'joined_lab', label: 'Joined lab', join: 'u1', column: 'performer', kind: 'string' }],
+    } as never;
+    expect(() => compileBuilderQuery(db, getModel('service_requests')!, q, undefined, scope)).toThrow(NO_SCOPE_LINK);
+    expect(compileBuilderQuery(db, getModel('service_requests')!, q).compile().sql).toContain('"u1"');
+  });
 });
