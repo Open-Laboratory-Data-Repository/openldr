@@ -6,6 +6,42 @@
       "version": null,
       "entries": [
         {
+          "hash": "1bdbc281",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Restoring a version whose schema has no name keeps the form's own name (open-items review I2)"
+        },
+        {
+          "hash": "6151c774",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "A plugin whose UI is declared only in its manifest packs and verifies; the ui.html hash is checked only for a webview UI (open-items review F1)"
+        },
+        {
+          "hash": "f22b7935",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "The packer's unknown-key check looks at own keys only, so a key named like toString is refused too (open-items review I1)"
+        },
+        {
+          "hash": "c8b413fe",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A role chip's remove button is 24px, large enough to tap on a phone"
+        },
+        {
+          "hash": "d863d7c9",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The form builder shows the form's own name when its stored schema has none, instead of Untitled form"
+        },
+        {
+          "hash": "532697ee",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "Packing refuses a manifest with keys the packer does not know, naming them, instead of signing a manifest that lost them"
+        },
+        {
           "hash": "94c57700",
           "type": "fix",
           "scope": "docs",
