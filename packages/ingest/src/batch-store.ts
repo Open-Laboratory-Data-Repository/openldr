@@ -13,6 +13,8 @@ export interface IngestBatch {
   last_error: string | null;
   config: Record<string, string> | null;
   created_at: Date;
+  /** Last status change: for a batch left `processing`, when its worker was last heard from. */
+  updated_at: Date;
 }
 
 export interface BatchStore {
@@ -26,7 +28,7 @@ export interface BatchStore {
   provenanceGaps(): Promise<{ resource_type: string; id: string }[]>;
 }
 
-const COLUMNS = ['batch_id', 'source', 'blob_key', 'content_type', 'converter', 'status', 'resource_count', 'attempts', 'last_error', 'config', 'created_at'] as const;
+const COLUMNS = ['batch_id', 'source', 'blob_key', 'content_type', 'converter', 'status', 'resource_count', 'attempts', 'last_error', 'config', 'created_at', 'updated_at'] as const;
 
 export function createBatchStore(db: Kysely<InternalSchema>): BatchStore {
   return {

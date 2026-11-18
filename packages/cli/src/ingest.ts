@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { createIngestContext, ingestAndWait, type IngestWait } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
+import { describeInterruption } from './interruptions';
 
 interface JsonOpt {
   json: boolean;
@@ -46,10 +47,12 @@ export async function runPipelineStatus(opts: JsonOpt): Promise<number> {
   const ctx = await createIngestContext(loadConfig());
   try {
     const rows = await ctx.batches.list();
+    const cuts = rows.length > 0 ? await ctx.jobInterruptions.listFor('ingest-batch', rows.map((r) => r.batch_id)) : new Map();
     emit(
       opts.json,
-      rows,
-      rows.map((r) => `  ${r.batch_id.slice(0, 8)}  ${r.status.padEnd(10)} ${r.converter.padEnd(22)} ${r.resource_count} res  ${r.last_error ?? ''}`).join('\n') || '  (no batches)',
+      rows.map((r) => ({ ...r, interruptions: cuts.get(r.batch_id) ?? [] })),
+      rows.map((r) => [`  ${r.batch_id.slice(0, 8)}  ${r.status.padEnd(10)} ${r.converter.padEnd(22)} ${r.resource_count} res  ${r.last_error ?? ''}`,
+        ...(cuts.get(r.batch_id) ?? []).map(describeInterruption)].join('\n')).join('\n') || '  (no batches)',
     );
     return 0;
   } finally {

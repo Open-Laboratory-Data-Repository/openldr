@@ -1,6 +1,6 @@
 import { type Logger, errorMessage, redact } from '@openldr/core';
 import type { BlobStoragePort, EventEnvelope } from '@openldr/ports';
-import type { Provenance, PersistResult } from '@openldr/db';
+import type { JobInterruptionStore, Provenance, PersistResult } from '@openldr/db';
 import type { ConverterResolver } from './resolver';
 import type { BatchStore } from './batch-store';
 
@@ -21,6 +21,9 @@ export interface HandleDeps {
   batches: BatchStore;
   logger: Logger;
   audit?: AuditHook;
+  /** Records a batch the queue hands back while still `processing`: its worker died mid-batch
+   *  (design 2026-11-18-interrupted-jobs). Absent, nothing is recorded. */
+  interruptions?: { store: Pick<JobInterruptionStore, 'record' | 'resolve'>; now: () => Date };
   onBatchDone?: (info: { batchId: string; source: string; converter: string; count: number; blobKey: string; byteSize: number }) => Promise<void>;
 }
 
@@ -34,6 +37,7 @@ interface IngestPayload {
 
 export async function handleIngestEvent(deps: HandleDeps, event: EventEnvelope): Promise<void> {
   const { batchId, blobKey, source, converter, config } = event.payload as IngestPayload;
+  await recordRedelivery(deps, batchId);
   await deps.batches.markProcessing(batchId);
   try {
     const raw = await deps.blob.get(blobKey);
@@ -66,5 +70,22 @@ export async function handleIngestEvent(deps: HandleDeps, event: EventEnvelope):
       metadata: { source, converter, error: msg },
     });
     throw err;
+  }
+}
+
+/** A batch still `processing` when its event arrives was cut off: the queue took the event back
+ *  after the worker that held it died, and this delivery carries it on. The cut is recorded, and a
+ *  failure to record never stops the batch. */
+async function recordRedelivery(deps: HandleDeps, batchId: string): Promise<void> {
+  if (!deps.interruptions) return;
+  try {
+    const before = await deps.batches.get(batchId);
+    if (before?.status !== 'processing') return;
+    const { id, inserted } = await deps.interruptions.store.record('ingest-batch', batchId, {
+      at: new Date(before.updated_at), cause: 'lease-expired', phase: null,
+    });
+    if (inserted) await deps.interruptions.store.resolve(id, { resumedBy: 'self', resumedAt: deps.interruptions.now() });
+  } catch {
+    // The batch runs either way; the page then shows no record of this cut.
   }
 }

@@ -13,6 +13,7 @@ import {
   externalMigrations,
   type ExternalSchema,
   type Provenance,
+  createJobInterruptionStore, type JobInterruptionStore,
 } from '@openldr/db';
 import { createValidationStrictness } from './validation-settings';
 import {
@@ -38,6 +39,8 @@ export interface IngestContext {
   drain(): Promise<{ processed: number; failed: number }>;
   startWorker(): { stop(): Promise<void> };
   batches: BatchStore;
+  /** Each batch's recorded interruptions (design 2026-11-18-interrupted-jobs). */
+  jobInterruptions: JobInterruptionStore;
   plugins: PluginRuntime;
   eventing: EventingPort;
   republish(batch: { batch_id: string; blob_key: string; source: string | null; converter: string; config?: Record<string, string> | null }): Promise<void>;
@@ -64,6 +67,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
     });
   const converters = defaultConverters();
   const batches = createBatchStore(internal.db);
+  const jobInterruptions = createJobInterruptionStore(internal.db);
   const audit = createAuditStore(internal.db);
 
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
@@ -75,6 +79,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
     handleIngestEvent(
       {
         blob, persist, resolver, batches, logger,
+        interruptions: { store: jobInterruptions, now: () => new Date() },
         audit: (e) => safeRecord(audit, logger, e),
         onBatchDone: (info) => eventing.publish({ type: 'ingest.batch.done', payload: info }),
       },
@@ -91,6 +96,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
     drain: () => eventing.drain(),
     startWorker: () => eventing.startWorker(),
     batches,
+    jobInterruptions,
     eventing,
     plugins,
     async republish(batch) {
