@@ -1,4 +1,5 @@
 // Sign-in with an access key. The sign-in hook in auth-plugin.ts calls this for a bearer value
+import type { DataScope } from '@openldr/rbac';
 // that has the key prefix, instead of verifyToken. The key is checked by resolveAccessKey; this
 // file checks the account behind it, on every request, so a disable, a block or a role change
 // takes effect on the next request. Nothing here is cached between requests.
@@ -18,6 +19,8 @@ export interface KeyActor {
   accessKey: { id: string; name: string };
   /** The ids of the account's roles (design 2026-11-18-roles-scope). */
   roleIds: string[];
+  /** The account's data limit (roles part 3). */
+  dataScope: DataScope;
 }
 
 export type KeySignIn =
@@ -30,7 +33,7 @@ export type KeySignIn =
 export const INVALID_ACCESS_KEY = { ok: false, status: 401, error: 'invalid access key' } as const;
 const ACCOUNT_DISABLED = { ok: false, status: 403, error: 'account disabled' } as const;
 
-type KeySignInContext = Pick<AppContext, 'accessKeys' | 'users' | 'roles' | 'audit' | 'logger' | 'cfg'>;
+type KeySignInContext = Pick<AppContext, 'accessKeys' | 'users' | 'roles' | 'audit' | 'logger' | 'cfg' | 'dataScopes'>;
 
 export async function signInWithAccessKey(ctx: KeySignInContext, key: string, now: Date = new Date()): Promise<KeySignIn> {
   const record = await resolveAccessKey(ctx, key, now);
@@ -53,6 +56,7 @@ export async function signInWithAccessKey(ctx: KeySignInContext, key: string, no
     ok: true,
     user: {
       id: u.id, username: u.username, displayName: u.displayName, roles, capabilities, roleIds: held.map((r) => r.id),
+      dataScope: await ctx.dataScopes.get(subject),
       accessKey: { id: record.id, name: record.name },
     },
   };

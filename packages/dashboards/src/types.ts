@@ -9,7 +9,8 @@ export type WidgetType = (typeof WIDGET_TYPES)[number];
 export const AGGS = ['count', 'count_distinct', 'sum', 'avg', 'min', 'max'] as const;
 export type Agg = (typeof AGGS)[number];
 
-export const FILTER_OPS = ['eq', 'in', 'contains', 'gte', 'lte', 'between'] as const;
+// neq keeps rows with no value (status is empty or not cancelled); set means the column has a value.
+export const FILTER_OPS = ['eq', 'neq', 'in', 'contains', 'gte', 'lte', 'between', 'set'] as const;
 export type FilterOp = (typeof FILTER_OPS)[number];
 
 export type DimensionKind = 'string' | 'date' | 'number';

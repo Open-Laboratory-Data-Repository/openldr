@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { declaredSites, getSitesOff, uiAllows, visibleSites, type AppContext } from '@openldr/bootstrap';
+import { EVERYTHING } from '@openldr/rbac';
 
 interface UiPluginRow {
   id: string;
@@ -102,7 +103,8 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
     }
     // The broker parses + validates the op itself (zod schema + size bounds), returning a
     // structured invalid-operation error for anything malformed.
-    const principal = { id: req.user.id, roles: req.user.roles, username: req.user.username, capabilities: req.user.capabilities ?? [] };
+    // The data limit goes too: a limited caller may make no report or data call (roles part 3).
+    const principal = { id: req.user.id, roles: req.user.roles, username: req.user.username, capabilities: req.user.capabilities ?? [], dataScope: req.user.dataScope ?? EVERYTHING };
     return ctx.pluginBroker.handle(req.params.id, principal, op);
   });
 }

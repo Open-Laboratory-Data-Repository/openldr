@@ -142,6 +142,7 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `report` | `list` et `run` pour les rapports analytiques ; `glass-export`. |
 | `audit` | Lit le journal d'audit, en ajout seul. |
 | `user` | Gère les utilisateurs : `list`, `show`, `create`, `set-role`, `activate`, `deactivate`. Les changements de statut mettent aussi à jour les comptes liés chez le fournisseur. `export` est une commande de jeu de données de premier niveau. |
+| `users` | Liste les utilisateurs ; affiche ou règle la limite de données d'un utilisateur (`scope`). |
 | `market` | Artefacts de la marketplace : `verify`, `install`, `update`, `list`, `rollback`, `enable`, `disable`, `remove`. |
 | `artifact` | Création d'artefacts : `keygen`, `new`, `build`, `pack`, `sign`, `test`, `publish`. |
 | `sync` | Synchronisation distribuée (laboratoire⇄central) : `status`, `now`, et côté central `enroll`, `list`, `rotate`, `revoke`. |
@@ -519,4 +520,28 @@ Une personne qui peut seulement consulter les tableaux de bord ne voit les donn�
 openldr dashboards share default
 openldr dashboards share default --roles lab_manager,data_analyst
 openldr dashboards share default --clear
+```
+
+## La limite de données d'un utilisateur
+
+`openldr users scope <subject>` affiche la limite de données d'un utilisateur. C'est le côté CLI de la ligne **Données** de la feuille Users. Le sujet est le sujet de connexion de l'utilisateur, ou son id pour un compte qui n'en a pas. Avec une limite, les tableaux de bord ne comptent que les demandes envoyées depuis les lieux listés, ou analysées dans ces lieux.
+
+| Option | Ce qu'elle fait |
+| --- | --- |
+| `--facility <ids>` | Ids d'établissements du registre, séparés par des virgules. |
+| `--district <pairs>` | Districts sous la forme `Region/District`, séparés par des virgules, car des régions différentes ont des districts du même nom. |
+| `--region <regions>` | Régions, séparées par des virgules. |
+| `--none` | Limité sans aucun lieu : l'utilisateur ne voit aucun chiffre de tableau de bord. Il faut `--force`. |
+| `--force` | Nécessaire pour poser une limite, car elle retire des droits. |
+| `--all` | Retire la limite : l'utilisateur voit tout. |
+| `--json` | Affiche la limite en JSON. |
+
+Il faut `roles.manage`. Une limite liste au plus 300 lieux. Chaque lieu doit être dans le registre des établissements, sinon la commande est refusée et rien ne change. Lancée localement sur le serveur, l'acteur est enregistré comme `cli`. Chaque changement est audité comme `user.data_scope.set`.
+
+Un utilisateur limité perd les rapports, les patients, les requêtes, les exports, les workflows, les connecteurs, l'audit, l'activité, les corrections en attente, le registre des établissements et la synchronisation, et ne peut ni créer ni modifier de tableau de bord. Il n'exécute jamais de widget SQL. Il garde les formulaires, y compris la recherche de patients dans un formulaire, que la limite ne couvre pas. Un nouveau code d'établissement ne compte qu'après la reconstruction de la table des établissements.
+
+```
+openldr users scope 3f2a9c1e
+openldr users scope 3f2a9c1e --region Dodoma --district Arusha/Arumeru --force
+openldr users scope 3f2a9c1e --all
 ```

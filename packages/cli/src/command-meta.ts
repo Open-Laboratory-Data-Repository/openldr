@@ -502,6 +502,9 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'user show': { kind: 'app', capability: 'users.view' }, // users :156
   'user unassign-role': { kind: 'app', capability: 'roles.manage', destructive: true }, // roles :137
   'users list': { kind: 'app', capability: 'users.view' }, // users :134
+  // GET and PUT /api/users/:id/data-scope (roles-routes.ts). A limit takes permissions away, so it
+  // needs --force; the PUT route's key is roles.manage (roles part 3).
+  'users scope': { kind: 'app', capability: 'roles.manage', destructive: true },
 
   // Runs the Test route's api (POST /api/workflows/map/test, workflows-routes.ts:224, guard EDIT :157).
   // It stores nothing, but it takes the route's key. It also loads the workflow to read the node,

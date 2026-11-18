@@ -14,3 +14,4 @@ export { formatSql } from './format-sql';
 export { createColumnPolicyStore, seedColumnExposurePolicy, type ColumnPolicyStore } from './column-policy-store';
 export { HARDCODED_DENY_UNION, PII_COLUMNS, type ColumnPolicy } from './models/registry';
 export { bindQuery, bindFilterTree } from './bind';
+export * from './scope';

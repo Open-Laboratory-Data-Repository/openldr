@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
 import { OpenLdrError } from '@openldr/core';
-import { CAPABILITY_KEYS, SYSTEM_ROLES, slugify } from '@openldr/rbac';
+import { CAPABILITY_KEYS, SYSTEM_ROLES, slugify, capabilitiesUnderScope } from '@openldr/rbac';
 import type { InternalSchema } from './schema/internal';
 
 export interface RoleRecord {
@@ -263,7 +263,11 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
         .select('role_capabilities.capability')
         .where('user_roles.user_id', '=', subject)
         .execute();
-      return [...new Set(rows.map((r) => r.capability))];
+      const caps = [...new Set(rows.map((r) => r.capability))];
+      // A limited user loses the capabilities that read unlimited data (roles part 3), here, so
+      // every route and served command refuses alike.
+      const scope = await db.selectFrom('user_data_scopes').select('limited').where('subject', '=', subject).executeTakeFirst();
+      return scope?.limited ? capabilitiesUnderScope(caps, { limited: true, facilities: [], districts: [], regions: [] }) : caps;
     },
     async rolesForUser(subject) {
       const rows = await db

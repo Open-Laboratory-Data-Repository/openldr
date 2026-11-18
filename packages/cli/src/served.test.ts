@@ -238,6 +238,16 @@ describe('checking the shape of the hand-off', () => {
     expect(() => parseHandoff(text({ ...GOOD, caller: { ...CALLER, capabilities: 'all' } }))).toThrow(HandoffError);
   });
 
+  it('keeps the caller\'s data limit and refuses a malformed one (roles part 3)', () => {
+    const limit = { limited: true, facilities: ['f1'], districts: [{ region: 'R', district: 'D' }], regions: [], extra: 1 };
+    expect(parseHandoff(text({ ...GOOD, caller: { ...CALLER, dataScope: limit } })).caller.dataScope)
+      .toEqual({ limited: true, facilities: ['f1'], districts: [{ region: 'R', district: 'D' }], regions: [] });
+    expect(parseHandoff(text({ ...GOOD, caller: { ...CALLER, dataScope: { limited: false } } })).caller.dataScope).toEqual({ limited: false });
+    for (const bad of [{}, { limited: 'yes' }, { limited: true, facilities: [] }, { limited: true, facilities: [], regions: [], districts: [{ region: 'R' }] }]) {
+      expect(() => parseHandoff(text({ ...GOOD, caller: { ...CALLER, dataScope: bad } }))).toThrow(HandoffError);
+    }
+  });
+
   it('refuses every wrong shape', () => {
     const bad: unknown[] = [
       null, [], 'x', 1,

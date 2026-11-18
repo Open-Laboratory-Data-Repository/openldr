@@ -8,6 +8,7 @@ import { customColumnKind } from './types';
 import type { ReportResultData, ReportColumn, ChartHint } from '@openldr/reporting';
 import { ageBandArms } from './age-band';
 import { runReadQuery, type SqlRunOpts, type SqlDialect } from './sql-runner';
+import { scopeCondition, NO_SCOPE_LINK, type ResolvedScope } from './scope';
 
 type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 type AnyQB = SelectQueryBuilder<ExternalSchema, keyof ExternalSchema, unknown>;
@@ -34,6 +35,27 @@ function colName(model: QueryModel, dimKey: string, qualify: boolean): string {
   if (d.join) return `${d.join}.${d.column}`;
   return qualify ? `${model.table}.${d.column}` : d.column;
 }
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The left side of a filter. A model's own date column holds ISO text with a time, so a filter by
+ *  day compares its first ten characters, as the SQL tiles do: a period ending 31 Jan includes
+ *  31 Jan. Joined and computed dimensions, and values with a time, compare the column as it is. */
+function filterLhs(model: QueryModel, f: { dimension: string; value: unknown }, qualify: boolean) {
+  const d = dim(model, f.dimension);
+  const ref = sql.ref(colName(model, f.dimension, qualify));
+  const values = Array.isArray(f.value) ? f.value : [f.value];
+  const byDay = d.kind === 'date' && !d.join && !d.compute && values.length > 0 && values.every((v) => typeof v === 'string' && DAY.test(v));
+  return byDay ? sql`substring(${ref}, 1, 10)` : ref;
+}
+
+/** A model's own date column grouped by its day, so groups are days and not timestamps. */
+function dayGroup(d: ModelDimension, ref: string) {
+  return !d.join && !d.compute && d.kind === 'date' ? sql`substring(${sql.ref(ref)}, 1, 10)` : null;
+}
+
+/** A filter op that needs no value: set means the column has one. */
+const needsValue = (op: string) => op !== 'set';
+
 // A raw base-table column (metric columns): qualified only when a join is active.
 function baseCol(model: QueryModel, col: string, qualify: boolean): string {
   return qualify ? `${model.table}.${col}` : col;
@@ -43,10 +65,12 @@ function baseCol(model: QueryModel, col: string, qualify: boolean): string {
 function condExpr(model: QueryModel, where: QueryFilter[], qualify: boolean) {
   const frags: ReturnType<typeof sql> [] = [];
   for (const f of where) {
-    if (f.value === null) continue;
-    const ref = sql.ref(colName(model, f.dimension, qualify)); // throws on unknown dimension (via dim in colName)
+    if (f.value === null && needsValue(f.op)) continue;
+    const ref = filterLhs(model, f, qualify); // throws on unknown dimension (via dim in colName)
     switch (f.op) {
       case 'eq': frags.push(sql`${ref} = ${f.value}`); break;
+      case 'neq': frags.push(sql`(${ref} is null or ${ref} <> ${f.value})`); break;
+      case 'set': frags.push(sql`${ref} is not null`); break;
       case 'in': {
         const arr = Array.isArray(f.value) ? f.value : [f.value];
         frags.push(sql`${ref} in (${sql.join(arr)})`);
@@ -106,10 +130,12 @@ function grainKey(value: unknown, grain: DateGrain): string {
 function applyFilters(qb: AnyQB, model: QueryModel, filters: QueryFilter[], qualify: boolean): AnyQB {
   let q = qb;
   for (const f of filters) {
-    if (f.value === null) continue;
-    const ref = colName(model, f.dimension, qualify) as never;
+    if (f.value === null && needsValue(f.op)) continue;
+    const ref = filterLhs(model, f, qualify) as never;
     switch (f.op) {
       case 'eq': q = q.where(ref, '=', f.value as never); break;
+      case 'neq': q = q.where((eb: any) => eb.or([eb(ref, 'is', null), eb(ref, '<>', f.value)])) as AnyQB; break;
+      case 'set': q = q.where(ref, 'is not', null); break;
       case 'in': q = q.where(ref, 'in', (Array.isArray(f.value) ? f.value : [f.value]) as never); break;
       case 'contains': {
         q = q.where(ref, 'like', likePattern(f.value) as never);
@@ -129,9 +155,11 @@ function applyFilters(qb: AnyQB, model: QueryModel, filters: QueryFilter[], qual
 
 // Compile one rule to a Kysely expression, mirroring applyFilters' operator logic.
 function compileRule(eb: any, model: QueryModel, rule: ConditionRule, qualify: boolean): any {
-  const ref = colName(model, rule.dimension, qualify) as never;
+  const ref = filterLhs(model, rule, qualify) as never;
   const v = rule.value;
   switch (rule.op) {
+    case 'neq': return eb.or([eb(ref, 'is', null), eb(ref, '<>', v as never)]);
+    case 'set': return eb(ref, 'is not', null);
     case 'in': return eb(ref, 'in', (Array.isArray(v) ? v : [v]) as never);
     case 'contains': return eb(ref, 'like', likePattern(v) as never);
     case 'gte': return eb(ref, '>=', v as never);
@@ -147,7 +175,7 @@ function compileRule(eb: any, model: QueryModel, rule: ConditionRule, qualify: b
 
 // Compile a node; returns null for an empty group (no rule descendants) so callers can skip it.
 function compileNode(eb: any, model: QueryModel, node: ConditionNode, qualify: boolean): any {
-  if (node.kind === 'rule') return node.value === null ? null : compileRule(eb, model, node, qualify);
+  if (node.kind === 'rule') return node.value === null && needsValue(node.op) ? null : compileRule(eb, model, node, qualify);
   const parts = node.children.map((c) => compileNode(eb, model, c, qualify)).filter((p: any) => p != null);
   if (parts.length === 0) return null;
   return node.combinator === 'or' ? eb.or(parts) : eb.and(parts);
@@ -300,7 +328,10 @@ export function collectUsedJoins(model: QueryModel, q: BuilderQuery): ModelJoin[
 }
 
 /** Build the Kysely query (no grain bucketing — date grain is applied in JS after fetch). */
-export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy): AnyQB {
+export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy, scope?: ResolvedScope, engine: SqlDialect = 'postgres'): AnyQB {
+  // A limited user's query must carry the limit. A model with no facility link cannot (roles part 3).
+  // Nor can a user join: it may match any column, so its rows are not limited (review Q1).
+  if (scope && (!model.scopeLink || (q.userJoins?.length ?? 0) > 0)) throw new Error(NO_SCOPE_LINK);
   model = effectiveModel(model, q, policy);
   const wide = !!(q.metrics && q.metrics.length > 0);
   let qb = db.selectFrom(model.table) as unknown as AnyQB;
@@ -344,7 +375,11 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
       qb = qb.select(e.as('label') as never).groupBy(e as never).orderBy(e as never);
     } else {
       const ref = colName(model, q.dimension.key, qualify);
-      qb = qb.select(sql.ref(ref).as('label')).groupBy(ref as never).orderBy(ref as never);
+      // With a grain, a date groups by its day in SQL; the grain then buckets the days in JS.
+      const day = q.dimension.grain ? dayGroup(d, ref) : null;
+      qb = day
+        ? qb.select(day.as('label') as never).groupBy(day as never).orderBy(day as never)
+        : qb.select(sql.ref(ref).as('label')).groupBy(ref as never).orderBy(ref as never);
     }
   }
   if (!wide && q.breakdown) {
@@ -368,6 +403,8 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
   } else {
     qb = applyFilters(qb, model, q.filters ?? [], qualify);
   }
+  // The data limit goes last, as its own AND term, so no filter of the user's can widen it.
+  if (scope) qb = qb.where(scopeCondition(model.scopeLink!, model.table, scope, engine) as never) as AnyQB;
   return qb;
 }
 
@@ -397,12 +434,12 @@ function applyTopN(
 /** Fetch one extra group beyond the cap. Never shape a partial aggregate result. */
 async function fetchBuilderGroups(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy: ColumnPolicy | undefined,
-  opts: SqlRunOpts, engine: SqlDialect,
+  opts: SqlRunOpts, engine: SqlDialect, scope?: ResolvedScope,
 ): Promise<Record<string, unknown>[]> {
   if (!Number.isSafeInteger(opts.rowCap) || opts.rowCap < 1 || opts.rowCap >= Number.MAX_SAFE_INTEGER) {
     throw new Error('rowCap must be a positive safe integer');
   }
-  const query = compileBuilderQuery(db, model, q, policy);
+  const query = compileBuilderQuery(db, model, q, policy, scope, engine);
   const rows = await runReadQuery(db, query.compile(), { ...opts, rowCap: opts.rowCap + 1 }, engine);
   if (rows.length > opts.rowCap) {
     throw new Error(`Builder query exceeds the group limit of ${opts.rowCap}. Narrow the filters or reduce grouping.`);
@@ -413,13 +450,13 @@ async function fetchBuilderGroups(
 /** Shape a multi-metric (wide) query into a table: label + one column per metric (aggregate or derived). */
 async function runWideQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy,
-  opts: SqlRunOpts = { timeoutMs: 5000, rowCap: 10_000 }, engine: SqlDialect = 'postgres',
+  opts: SqlRunOpts = { timeoutMs: 5000, rowCap: 10_000 }, engine: SqlDialect = 'postgres', scope?: ResolvedScope,
 ): Promise<ReportResultData> {
   model = effectiveModel(model, q, policy);
   const metrics = q.metrics!;
   const aggKeys = metrics.filter((m) => !m.derived).map((m) => m.key);
   const derivedMetrics = metrics.filter((m) => m.derived);
-  const rows = (await fetchBuilderGroups(db, model, q, policy, opts, engine)) as Record<string, unknown>[];
+  const rows = (await fetchBuilderGroups(db, model, q, policy, opts, engine, scope)) as Record<string, unknown>[];
   const d = q.dimension ? dim(model, q.dimension.key) : undefined;
 
   let shaped: Record<string, unknown>[];
@@ -465,12 +502,13 @@ async function runWideQuery(
 /** Execute and shape into ReportResultData, applying date-grain bucketing in JS. */
 export async function runBuilderQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy,
-  opts: SqlRunOpts = { timeoutMs: 5000, rowCap: 10_000 }, engine: SqlDialect = 'postgres',
+  opts: SqlRunOpts = { timeoutMs: 5000, rowCap: 10_000 }, engine: SqlDialect = 'postgres', scope?: ResolvedScope,
 ): Promise<ReportResultData> {
+  if (scope && (!model.scopeLink || (q.userJoins?.length ?? 0) > 0)) throw new Error(NO_SCOPE_LINK);
   model = effectiveModel(model, q, policy);
   if (!hasMeasure(q)) return { columns: [], rows: [], chart: { type: 'stat', value: '', label: 'No measure' } };
-  if (q.metrics && q.metrics.length > 0) return runWideQuery(db, model, q, policy, opts, engine);
-  const rows = (await fetchBuilderGroups(db, model, q, policy, opts, engine)) as { value: number; label?: unknown; series?: unknown }[];
+  if (q.metrics && q.metrics.length > 0) return runWideQuery(db, model, q, policy, opts, engine, scope);
+  const rows = (await fetchBuilderGroups(db, model, q, policy, opts, engine, scope)) as { value: number; label?: unknown; series?: unknown }[];
   const d = q.dimension ? dim(model, q.dimension.key) : undefined;
 
   if (q.breakdown) {

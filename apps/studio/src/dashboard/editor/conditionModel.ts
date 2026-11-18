@@ -8,7 +8,8 @@ export interface FilterCondition {
   value: unknown;
 }
 
-export const OPS = ['eq', 'in', 'contains', 'gte', 'lte', 'between'] as const;
+// neq keeps rows with no value; set means the column has one (roles part 3, sample rebuild).
+export const OPS = ['eq', 'neq', 'in', 'contains', 'gte', 'lte', 'between', 'set'] as const;
 
 /** Parse a raw input-box string into the value shape a given operator expects. */
 export function toValue(op: string, raw: string): unknown {

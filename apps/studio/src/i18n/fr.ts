@@ -259,6 +259,23 @@ export const fr: EnShape = {
     noRolesAvailable: 'Aucun rôle défini pour le moment. Créez-en un dans Paramètres → Rôles.',
     selectRolePlaceholder: 'Sélectionner un rôle',
     rolesSaveError: "Utilisateur enregistré, mais l'attribution des rôles a échoué : {{error}}",
+    dataScope: {
+      label: 'Données',
+      everything: 'Tout',
+      limited: 'Limité',
+      regions: 'Régions',
+      districts: 'Districts',
+      facilities: 'Établissements',
+      addRegion: 'Ajouter une région',
+      addDistrict: 'Ajouter un district',
+      addFacility: 'Ajouter un établissement',
+      searchFacility: 'Rechercher un établissement',
+      remove: 'Retirer {{name}}',
+      seesNothing: "Sans aucun lieu, cet utilisateur ne voit aucun chiffre de tableau de bord.",
+      seesListed: 'Les tableaux de bord ne comptent que les demandes envoyées depuis les lieux listés, ou analysées dans ces lieux.',
+      removes: "Un utilisateur limité ne peut pas ouvrir les rapports, les patients, les requêtes, les exports, les workflows, les connecteurs, l'audit, l'activité, les corrections en attente, le registre des établissements ni la synchronisation, et n'exécute jamais de widget SQL. Les formulaires restent.",
+      saveError: "Utilisateur enregistré, mais la limite de données a échoué : {{error}}",
+    },
     roleNames: {
       lab_admin: 'Admin laboratoire',
       lab_manager: 'Responsable laboratoire',
@@ -2016,6 +2033,9 @@ export const fr: EnShape = {
     },
   },
   dashboard: {
+    dataLimit: {
+      notAvailable: 'Non disponible avec votre limite de données',
+    },
     share: {
       menu: 'Partager',
       title: 'Qui peut voir ce tableau de bord',

@@ -259,6 +259,23 @@ export const pt: EnShape = {
     noRolesAvailable: 'Ainda não há funções definidas. Crie uma em Definições → Funções.',
     selectRolePlaceholder: 'Selecionar uma função',
     rolesSaveError: 'Utilizador guardado, mas a atribuição de funções falhou: {{error}}',
+    dataScope: {
+      label: 'Dados',
+      everything: 'Tudo',
+      limited: 'Limitado',
+      regions: 'Regiões',
+      districts: 'Distritos',
+      facilities: 'Unidades',
+      addRegion: 'Adicionar uma região',
+      addDistrict: 'Adicionar um distrito',
+      addFacility: 'Adicionar uma unidade',
+      searchFacility: 'Procurar unidades',
+      remove: 'Remover {{name}}',
+      seesNothing: 'Sem nenhum local, este utilizador não vê números nos painéis.',
+      seesListed: 'Os painéis contam apenas pedidos enviados dos locais listados, ou analisados neles.',
+      removes: 'Um utilizador limitado não pode abrir relatórios, pacientes, consultas, exportações, fluxos de trabalho, conectores, auditoria, atividade, correções retidas, o registo de unidades nem a sincronização, e nunca executa widgets SQL. Os formulários ficam.',
+      saveError: 'Utilizador guardado, mas o limite de dados falhou: {{error}}',
+    },
     roleNames: {
       lab_admin: 'Administrador do laboratório',
       lab_manager: 'Gestor do laboratório',
@@ -2016,6 +2033,9 @@ export const pt: EnShape = {
     },
   },
   dashboard: {
+    dataLimit: {
+      notAvailable: 'Não disponível com o seu limite de dados',
+    },
     share: {
       menu: 'Partilhar',
       title: 'Quem pode ver este painel',

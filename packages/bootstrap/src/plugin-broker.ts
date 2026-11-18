@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { beginOp } from '@openldr/core';
 import { readGrant, type Capability } from '@openldr/marketplace';
-import type { JobInterruption, JobInterruptionStore, PluginDataStore } from '@openldr/db';
+import type { DataScope, JobInterruption, JobInterruptionStore, PluginDataStore } from '@openldr/db';
 import type { PluginPolicy } from './policy';
 import { policyAllows } from './policy';
 import { checkReadOp } from './check-read-audit';
@@ -19,7 +19,14 @@ export interface BrokerPrincipal {
   /** The caller's capabilities. A holder of `imports.correct_held` may use the Feedback tab of an
    *  import plugin without the plugin's role (design 2026-11-18-held-corrections). */
   capabilities?: string[];
+  /** The caller's data limit (roles part 3). A limited caller may make only LIMITED_OPS. */
+  dataScope?: DataScope;
 }
+
+/** The only calls a caller with a data limit may make: the plugin's own storage, its wasm, and the
+ *  facility register. Reports, connectors, imports and schedules read warehouse or source data the
+ *  limit does not cover, and the broker does not check the caller's report permission (review P3-01). */
+const LIMITED_OPS = new Set(['storage.get', 'storage.put', 'storage.delete', 'storage.list', 'invoke', 'fhir.facilities']);
 
 /** The capability that lets a person correct held requests without the import plugin's role. */
 export const CORRECTOR_CAPABILITY = 'imports.correct_held';
@@ -392,6 +399,9 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
         return deny('(unparsed)', `invalid operation: ${msg}`);
       }
       const op: BrokerOp = parsed.data as BrokerOp;
+      if (principal.dataScope?.limited && !LIMITED_OPS.has(op.kind)) {
+        return deny(op.kind, `operation ${op.kind} is not available with your data limit`);
+      }
       try {
         // 1. Plugin must be installed + enabled.
         const rows = await deps.plugins.list();

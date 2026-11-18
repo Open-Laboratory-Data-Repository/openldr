@@ -9,7 +9,7 @@ import { cn } from '@/lib/cn';
 export interface ComboboxOption { value: string; label: string }
 
 export function Combobox({
-  options, value, onChange, placeholder, searchPlaceholder, disabled,
+  options, value, onChange, placeholder, searchPlaceholder, disabled, limit,
 }: {
   options: ComboboxOption[];
   value: string | null;
@@ -17,14 +17,17 @@ export function Combobox({
   placeholder: string;
   searchPlaceholder: string;
   disabled?: boolean;
+  /** Show at most this many matches, for a long list such as a national register. Typing narrows it. */
+  limit?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const selected = options.find((o) => o.value === value) ?? null;
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
-  }, [options, query]);
+    const matched = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
+    return limit ? matched.slice(0, limit) : matched;
+  }, [options, query, limit]);
 
   return (
     // `modal`: inside a Sheet, react-remove-scroll only lets the Sheet's own subtree scroll, so the

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { createAppSettingsStore, createReportStore, createRoleStore, referenceCapture } from '@openldr/db';
-import { createDashboardStore, createColumnPolicyStore, joinableTablesForClient } from '@openldr/dashboards';
+import { createDashboardStore, createColumnPolicyStore, joinableTablesForClient, NO_SCOPE_LINK } from '@openldr/dashboards';
 import { createFormStore } from '@openldr/forms';
 import type { Config } from '@openldr/config';
 import { createAppContext, capabilityBackfillEvents, buildReportingForTest, widgetSqlToRun, checkedWidgetSqlToRun, DashboardQueryError, type AppContext } from './index';
@@ -65,6 +65,18 @@ describe('createAppContext', () => {
     expect(jp?.label).toBe('Patient');
     expect(jp?.exposableColumns).toContain('managing_organization');
     expect(jp?.exposableColumns).not.toContain('surname'); // denied PII absent
+  }, 20000);
+
+  // Roles part 3: the real wiring refuses SQL and unlinked models for a limited user before any
+  // database is reached, and offers a limited user only the models with a facility link.
+  it('dashboards refuse SQL and unlinked models for a limited user, and hide those models (roles part 3)', async () => {
+    ctx = await createAppContext(cfg);
+    const limited = { limited: true as const, facilities: ['f1'], districts: [], regions: [] };
+    await expect(ctx.dashboards.query({ mode: 'sql', sql: 'select 1' }, limited)).rejects.toThrow(NO_SCOPE_LINK);
+    await expect(ctx.dashboards.query({ mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, filters: [] } as never, limited))
+      .rejects.toThrow(NO_SCOPE_LINK);
+    expect(ctx.dashboards.models(limited).map((m) => m.id).sort()).toEqual(['diagnostic_reports', 'observations', 'service_requests']);
+    expect(ctx.dashboards.models({ limited: false }).map((m) => m.id)).toContain('patients');
   }, 20000);
 
   // Data Exposure Task 5: DashboardsApi grows a `columnPolicy` store handle + `reloadColumnPolicy()`

@@ -117,6 +117,27 @@ const isFolder = (v: unknown): v is string =>
 
 /** Checks the message strictly and keeps only the known fields. Throws HandoffError naming the bad
  *  field, never its value. */
+type Scope = NonNullable<ServedHandoff['caller']['dataScope']>;
+
+/** A data limit as the server sends it: Everything, or Limited with three lists. */
+function isScope(v: unknown): v is Scope {
+  if (!isObject(v)) return false;
+  if (v.limited === false) return true;
+  if (v.limited !== true) return false;
+  return isStrings(v.facilities) && isStrings(v.regions) && Array.isArray(v.districts)
+    && v.districts.every((d) => isObject(d) && isText(d.region) && isText(d.district));
+}
+
+function copyScope(s: Scope): Scope {
+  if (!s.limited) return { limited: false };
+  return {
+    limited: true,
+    facilities: [...s.facilities],
+    districts: s.districts.map((d) => ({ region: d.region, district: d.district })),
+    regions: [...s.regions],
+  };
+}
+
 export function parseHandoff(text: string): ServedHandoff {
   let raw: unknown;
   try { raw = JSON.parse(text); } catch { throw new HandoffError('The hand-off is not JSON.'); }
@@ -132,6 +153,7 @@ export function parseHandoff(text: string): ServedHandoff {
   if (!isTextOrNull(caller.keyName)) bad('caller.keyName');
   if (caller.roleIds !== undefined && !isStrings(caller.roleIds)) bad('caller.roleIds');
   if (caller.capabilities !== undefined && !isStrings(caller.capabilities)) bad('caller.capabilities');
+  if (caller.dataScope !== undefined && !isScope(caller.dataScope)) bad('caller.dataScope');
   if (!isFolder(runDir)) bad('runDir');
   if (!Array.isArray(keptDirs) || !keptDirs.every(isFolder)) bad('keptDirs');
   return {
@@ -144,6 +166,7 @@ export function parseHandoff(text: string): ServedHandoff {
       keyName: caller.keyName as string | null,
       ...(caller.roleIds !== undefined ? { roleIds: [...(caller.roleIds as string[])] } : {}),
       ...(caller.capabilities !== undefined ? { capabilities: [...(caller.capabilities as string[])] } : {}),
+      ...(caller.dataScope !== undefined ? { dataScope: copyScope(caller.dataScope as Scope) } : {}),
     },
     runDir: runDir as string,
     keptDirs: [...(keptDirs as string[])],

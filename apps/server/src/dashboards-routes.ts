@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z, ZodError } from 'zod';
 import { DashboardQueryError, DashboardShareError, setDashboardShare, type AppContext } from '@openldr/bootstrap';
-import { DashboardSchema, WidgetQuerySchema, PII_COLUMNS, bindQuery, type Dashboard } from '@openldr/dashboards';
+import { DashboardSchema, WidgetQuerySchema, PII_COLUMNS, bindQuery, NO_SCOPE_LINK, type Dashboard } from '@openldr/dashboards';
 import { EXTERNAL_TABLE_COLUMNS } from '@openldr/db/schema/external';
+import { EVERYTHING, type DataScope } from '@openldr/rbac';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
 
@@ -97,7 +98,10 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
     return d;
   }
 
-  app.get('/api/dashboards/models', VIEW, async () => ctx.dashboards.models());
+  // The caller's data limit (roles part 3). Every sign-in sets it; a request without one is unlimited.
+  const scopeOf = (req: { user?: { dataScope?: DataScope } }): DataScope => req.user?.dataScope ?? EVERYTHING;
+
+  app.get('/api/dashboards/models', VIEW, async (req) => ctx.dashboards.models(scopeOf(req)));
 
   // Global admin-governed universe of joinable tables (not per-model), for the join-picker UI.
   app.get('/api/dashboards/joinable-tables', VIEW, async () => ctx.dashboards.joinableTables());
@@ -107,7 +111,7 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
   app.post('/api/dashboards/query', EDIT, async (req, reply) => {
     try {
       const q = WidgetQuerySchema.parse(req.body);
-      return await ctx.dashboards.query(q);
+      return await ctx.dashboards.query(q, scopeOf(req));
     } catch (err) { return mapError(err, reply); }
   });
 
@@ -147,7 +151,7 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
       const known = new Set(d.filters.map((f) => f.id));
       const unknown = Object.keys(filterValues).find((k) => !known.has(k));
       if (unknown) { reply.code(400); return { error: `no filter ${unknown} on this dashboard` }; }
-      return await ctx.dashboards.query(bindQuery(w.query, filterValues));
+      return await ctx.dashboards.query(bindQuery(w.query, filterValues), scopeOf(req));
     } catch (err) { return mapError(err, reply); }
   });
 
@@ -158,7 +162,7 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
       const d = await seen(req, id);
       const f = d?.filters.find((x) => x.id === filterId);
       if (!d || !f || !f.optionsSql) { reply.code(404); return { error: 'unknown dashboard or filter' }; }
-      return await ctx.dashboards.query({ mode: 'sql', sql: f.optionsSql });
+      return await ctx.dashboards.query({ mode: 'sql', sql: f.optionsSql }, scopeOf(req));
     } catch (err) { return mapError(err, reply); }
   });
 
@@ -284,6 +288,8 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
 
 function mapError(err: unknown, reply: FastifyReply): { error: string } {
   if (err instanceof ZodError) { reply.code(400); return { error: 'invalid payload' }; }
+  // Refused by the caller's data limit (roles part 3): not a bad request, a permission.
+  if (err instanceof Error && err.message === NO_SCOPE_LINK) { reply.code(403); return { error: NO_SCOPE_LINK, code: 'data_limit' } as { error: string }; }
   if (err instanceof DashboardQueryError || (err instanceof Error && err.name === 'DashboardQueryError')) {
     reply.code(400); return { error: (err as Error).message };
   }

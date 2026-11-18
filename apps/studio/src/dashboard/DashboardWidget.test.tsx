@@ -179,3 +179,34 @@ describe('DashboardWidget saved runs', () => {
     expect(String(fetch.mock.calls[0]![0])).toContain('/api/dashboards/query');
   });
 });
+
+// Roles part 3: a widget a limited user cannot run says so plainly, not as a red error.
+describe('DashboardWidget under a data limit', () => {
+  it('says "Not available with your data limit" when the server refuses for the limit', async () => {
+    await import('@/i18n');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ error: 'Not available with your data limit', code: 'data_limit' }), { status: 403 }));
+    const view = render(<DashboardWidget config={cfg} filterValues={{}} savedDashboardId="d1" />);
+    const note = await view.findByText('Not available with your data limit');
+    expect(note.className).not.toContain('text-destructive');
+  });
+
+  it('still shows any other refusal as an error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ error: 'boom' }), { status: 500 }));
+    const view = render(<DashboardWidget config={cfg} filterValues={{}} savedDashboardId="d1" />);
+    await waitFor(() => expect(view.container.querySelector('.text-destructive')).toBeTruthy());
+  });
+
+  // Review U1: a later error is shown, not hidden behind an earlier data limit note.
+  it('shows a later error instead of an earlier data limit note', async () => {
+    await import('@/i18n');
+    const fetch = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Not available with your data limit', code: 'data_limit' }), { status: 403 }))
+      .mockResolvedValue(new Response(JSON.stringify({ error: 'boom' }), { status: 500 }));
+    const view = render(<DashboardWidget config={cfg} filterValues={{}} savedDashboardId="d1" />);
+    await view.findByText('Not available with your data limit');
+    view.rerender(<DashboardWidget config={cfg} filterValues={{}} savedDashboardId="d2" />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(view.container.querySelector('.text-destructive')).toBeTruthy());
+    expect(view.queryByText('Not available with your data limit')).toBeNull();
+  });
+});

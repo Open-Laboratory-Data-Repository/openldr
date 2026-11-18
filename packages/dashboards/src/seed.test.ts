@@ -16,11 +16,14 @@ describe('DEFAULT_DASHBOARD', () => {
 });
 
 describe('SAMPLE_DASHBOARD', () => {
-  it('is a valid "default" dashboard with sql widgets', () => {
+  it('is a valid "default" dashboard built in the builder, with only the funnel and the table in SQL', () => {
     expect(SAMPLE_DASHBOARD.id).toBe('default');
     expect(SAMPLE_DASHBOARD.isDefault).toBe(true);
     expect(SAMPLE_DASHBOARD.name).toBe('Lab Overview (Sample)');
-    expect(SAMPLE_DASHBOARD.widgets.every((w) => w.query.mode === 'sql')).toBe(true);
+    // Roles part 3: a limited user runs builder widgets only. The funnel counts specimens, which
+    // name no facility, and the table lists rows, which the builder cannot.
+    const sql = SAMPLE_DASHBOARD.widgets.filter((w) => w.query.mode === 'sql').map((w) => w.title);
+    expect(sql).toEqual(['Order → Report Pipeline', 'Recent Orders']);
   });
 
   it('declares the period variable as date-range (not text) on every widget that uses it', () => {
@@ -137,8 +140,9 @@ describe('vetted SQL execution', () => {
     const set = collectVettedSqlTemplates([SAMPLE_DASHBOARD, DEFAULT_DASHBOARD]);
     const sampleOptionsSql = SAMPLE_DASHBOARD.filters.filter((f) => f.optionsSql).length;
     // Sample: every sql widget + each filter's optionsSql. DEFAULT_DASHBOARD is all builder, filters [] → none.
-    expect(set.size).toBe(SAMPLE_DASHBOARD.widgets.length + sampleOptionsSql);
-    expect(set.has(String((SAMPLE_DASHBOARD.widgets[0].query as { sql: string }).sql).trim())).toBe(true);
+    const sqlWidgets = SAMPLE_DASHBOARD.widgets.filter((w) => w.query.mode === 'sql');
+    expect(set.size).toBe(sqlWidgets.length + sampleOptionsSql);
+    expect(set.has(String((sqlWidgets[0]!.query as { sql: string }).sql).trim())).toBe(true);
   });
 
   it('collects optionsSql from dashboard filters (first-party filter dropdowns execute with the flag off)', () => {
@@ -171,8 +175,24 @@ describe('vetted SQL execution', () => {
 
   it('with the flag off, allows only a template that matches the vetted set (trim-insensitive)', () => {
     const vetted = collectVettedSqlTemplates([SAMPLE_DASHBOARD]);
-    const template = String((SAMPLE_DASHBOARD.widgets[0].query as { sql: string }).sql);
+    const template = String((SAMPLE_DASHBOARD.widgets.find((w) => w.query.mode === 'sql')!.query as { sql: string }).sql);
     expect(isSqlExecutionAllowed(false, `  ${template}  `, vetted)).toBe(true);
     expect(isSqlExecutionAllowed(false, 'select * from users', vetted)).toBe(false);
+  });
+});
+
+// Roles part 3: an install still holding the all-SQL sample gets the rebuilt one on the next boot.
+describe('seedDefaultDashboard after the builder rebuild', () => {
+  it('replaces a stored all-SQL sample with the builder sample', async () => {
+    const { default: oldSample } = await import('./samples/__fixtures__/openldr-general-sql.json');
+    let stored: any = { ...SAMPLE_DASHBOARD, ...(oldSample as object) };
+    const store = {
+      get: async () => stored,
+      create: async (d: any) => { stored = d; return d; },
+      update: async (_id: string, d: any) => { stored = d; return d; },
+    };
+    expect(await seedDefaultDashboard(store as never)).toBe(1);
+    expect(stored.widgets.filter((w: any) => w.query.mode === 'builder')).toHaveLength(11);
+    expect(await seedDefaultDashboard(store as never)).toBe(0);
   });
 });

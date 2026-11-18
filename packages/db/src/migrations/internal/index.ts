@@ -125,6 +125,7 @@ import * as m123 from './123_job_heartbeats';
 import * as m124 from './124_import_check_corrections';
 import * as m125 from './125_form_access';
 import * as m126 from './126_dashboard_access';
+import * as m127 from './127_user_data_scopes';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -254,4 +255,5 @@ export const internalMigrations: Record<string, Migration> = {
   '124_import_check_corrections': { up: m124.up, down: m124.down },
   '125_form_access': { up: m125.up, down: m125.down },
   '126_dashboard_access': { up: m126.up, down: m126.down },
+  '127_user_data_scopes': { up: m127.up, down: m127.down },
 };
