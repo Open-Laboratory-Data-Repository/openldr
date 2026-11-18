@@ -1,44 +1,10 @@
 import { useEffect, useState } from 'react';
 import { runWidgetQuery, type ReportResult, type WidgetConfig, type WidgetQuery } from '../api';
 import { renderWidget } from './widgets';
-import { bindFilterTree } from './editor/conditionTree.model';
 
-export function bindQuery(q: WidgetQuery, filterValues: Record<string, unknown>): WidgetQuery {
-  if (q.mode === 'builder') {
-    if (!q.variableBindings) return q;
-    if (q.filterTree) {
-      const filterTree = bindFilterTree(q.filterTree as any, q.variableBindings, filterValues);
-      return { ...q, filterTree } as WidgetQuery;
-    }
-    // A bound row's own literal filter (e.g. {dimension:'authored_on', op:'eq', value:''}) stays
-    // in q.filters until the row is deleted — drop it here so the derived binding filter(s)
-    // REPLACE it instead of being ANDed alongside it (which zeroes out results / type-errors).
-    const bound = new Set(Object.keys(q.variableBindings));
-    const filters = q.filters.filter((f) => !bound.has(f.dimension));
-    for (const [dimKey, filterId] of Object.entries(q.variableBindings)) {
-      const v = filterValues[filterId];
-      if (v == null || v === '') continue;
-      if (typeof v === 'object' && 'from' in v && 'to' in v) {
-        const range = v as { from: string; to: string };
-        if (range.from) filters.push({ dimension: dimKey, op: 'gte', value: range.from });
-        if (range.to) filters.push({ dimension: dimKey, op: 'lte', value: range.to });
-      } else {
-        filters.push({ dimension: dimKey, op: 'eq', value: v as string | number });
-      }
-    }
-    return { ...q, filters };
-  }
-  // SQL mode: send the STORED template `sql` verbatim plus the resolved dashboard-filter values.
-  // The SERVER applies the {{var}} / [[ ... ]] substitution — so the submitted `sql` stays
-  // byte-identical to the persisted widget and the server can vet it against stored dashboards
-  // even when filters are set (execution of vetted SQL is allowed with the `dashboard.raw_sql` flag off).
-  const values: Record<string, string | number | null | { from: string; to: string }> = {};
-  for (const [varName, filterId] of Object.entries(q.variableBindings ?? {})) {
-    const v = filterValues[filterId];
-    values[varName] = (v ?? null) as string | number | null | { from: string; to: string };
-  }
-  return { ...q, values };
-}
+// Binding lives in @openldr/dashboards so the server binds a saved widget the same way (roles part 2).
+export { bindQuery } from '@openldr/dashboards/pure';
+import { bindQuery } from '@openldr/dashboards/pure';
 
 export function DashboardWidget({ config, filterValues }: { config: WidgetConfig; filterValues: Record<string, unknown> }) {
   const [result, setResult] = useState<ReportResult>();

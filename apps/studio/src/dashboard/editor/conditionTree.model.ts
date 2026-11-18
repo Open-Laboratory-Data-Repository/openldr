@@ -82,27 +82,5 @@ export function pruneDimensions(root: TreeGroup, keys: Set<string>): TreeGroup {
   return pruneBound(root, keys) as TreeGroup;
 }
 
-/**
- * Runtime binding: replace bound-dimension rules with the resolved dashboard-filter value(s),
- * ANDed with the rest of the tree. ANDing at a fresh root keeps the injected value correct even
- * when the user's own root group is an OR. Mirrors the flat bindQuery logic.
- */
-export function bindFilterTree(tree: TreeGroup, bindings: Record<string, string>, filterValues: Record<string, unknown>): TreeGroup {
-  const bound = new Set(Object.keys(bindings));
-  const pruned = pruneBound(tree, bound) as TreeGroup;
-  const injected: TreeRule[] = [];
-  for (const [dimKey, filterId] of Object.entries(bindings)) {
-    const v = filterValues[filterId];
-    if (v == null || v === '') continue;
-    if (typeof v === 'object' && 'from' in v && 'to' in v) {
-      const range = v as { from: string; to: string };
-      if (range.from) injected.push({ kind: 'rule', dimension: dimKey, op: 'gte', value: range.from });
-      if (range.to) injected.push({ kind: 'rule', dimension: dimKey, op: 'lte', value: range.to });
-    } else {
-      injected.push({ kind: 'rule', dimension: dimKey, op: 'eq', value: v });
-    }
-  }
-  if (injected.length === 0) return pruned;
-  const base = hasRules(pruned) ? [pruned] : [];
-  return { kind: 'group', combinator: 'and', children: [...base, ...injected] };
-}
+/** Runtime binding, shared with the server (roles part 2): see @openldr/dashboards bind.ts. */
+export { bindFilterTree } from '@openldr/dashboards/pure';

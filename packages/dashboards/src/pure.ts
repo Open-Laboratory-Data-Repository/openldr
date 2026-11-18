@@ -8,3 +8,4 @@
 export { recognizeSql, type RecognizeResult, type RecognizeCode } from './recognize-sql';
 export * from './models/registry';
 export * from './types';
+export { bindQuery, bindFilterTree } from './bind';
