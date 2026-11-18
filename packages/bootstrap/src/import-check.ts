@@ -1250,7 +1250,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           pluginId, collection: CHECKS, runKey: runId, token, nowMs: now().getTime(),
           liveStatuses: ['queued', 'running', 'waiting', 'stopping'],
         }, rows));
-        if (!wrote) throw new Error('the correction took too long and was not saved; a check of this source started meanwhile. Try again');
+        if (!wrote) throw new Error('the correction was not saved: a check of this source ran meanwhile, or the request is no longer held. Open it again and try again');
       } finally {
         await changeRun(pluginId, runId, async (stored) => {
           if (!stored) throw new Error(`check ${runId} not found`);

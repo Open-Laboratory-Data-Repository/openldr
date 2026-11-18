@@ -27,8 +27,9 @@ export interface ImportCheckCorrectionStore {
    *  2026-11-18-held-corrections, review H17). In one transaction it locks the run's row in
    *  `plugin_data`, checks that `correcting.token` is `token`, that `correcting.until` is after
    *  `nowMs`, and that the run's status is not one of `liveStatuses`, and only then writes. A check
-   *  is queued by updating that same row, so the two are ordered by the database. False: nothing
-   *  was written. */
+   *  is queued by updating that same row, so the two are ordered by the database. It also locks the
+   *  request's held row and checks it is still held, so a request saved since it was read is not
+   *  corrected (review H17). False: nothing was written. */
   putUnderClaim(claim: { pluginId: string; collection: string; runKey: string; token: string; nowMs: number; liveStatuses: string[] },
     rows: Array<Omit<Correction, 'correctedAt'> & { correctedAt: Date }>): Promise<boolean>;
 }
@@ -94,6 +95,14 @@ export function createImportCheckCorrectionStore(db: Kysely<InternalSchema>): Im
           && Date.parse(doc.correcting.until ?? '') > claim.nowMs
           && !claim.liveStatuses.includes(doc.status ?? '');
         if (!held) return false;
+        // The request must still be held when the correction is written, read under a lock too.
+        const keys = [...new Set(rows.map((c) => `${c.copyId}\u0000${c.key}`))];
+        for (const k of keys) {
+          const [copyId, key] = k.split('\u0000') as [string, string];
+          const row = await trx.selectFrom('import_check_held').select('reason')
+            .where('copy_id', '=', copyId).where('key', '=', key).forUpdate().executeTakeFirst();
+          if (!row || row.reason !== 'held') return false;
+        }
         for (const c of rows) {
           await trx.insertInto('import_check_corrections')
             .values({

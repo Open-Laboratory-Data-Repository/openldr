@@ -104,6 +104,8 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
   let heldPutFaults = 0;
   let heldRemoveFaults = 0;
   let heldGetFaults = 0;
+  /** When set, the next held read captures its row, then waits for this before answering. */
+  let heldGetGate: Promise<void> | null = null;
   let onHeldRemove: ((copyId: string, keys: string[]) => Promise<void>) | null = null;
   const heldPuts: unknown[] = [];
   const held: ImportCheckHeldStore = {
@@ -118,6 +120,8 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
       return realHeld.put(item);
     },
     async get(copyId, key) {
+      const gate = heldGetGate;
+      if (gate) { heldGetGate = null; const row = await realHeld.get(copyId, key); await gate; return row; }
       if (heldGetFaults > 0) {
         heldGetFaults -= 1;
         throw Object.assign(new Error('could not read block'), { code: '53100' });
@@ -253,6 +257,7 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
     failHeldPuts: (n: number) => { heldPutFaults = n; },
     failHeldRemoves: (n: number) => { heldRemoveFaults = n; },
     failHeldGets: (n: number) => { heldGetFaults = n; },
+    gateNextHeldGet: () => { let release!: () => void; heldGetGate = new Promise<void>((r) => { release = r; }); return release; },
     failRunWrites: (fn: ((doc: CheckRun) => boolean) | null) => { runWriteFault = fn; },
     watchHeldRemoves: (fn: ((copyId: string, keys: string[]) => Promise<void>) | null) => { onHeldRemove = fn; },
     stored: async () => (await raw.get(PLUGIN, '__import-checks', CHECK)) as CheckRun | null,
@@ -2039,6 +2044,22 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     await other.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
     release();
     expect(await late).toMatch(/not saved/);
+    expect((await w.corrections.listFor(SRC, ['REQ0001'])).get('REQ0001')!.map((c) => c.value)).toEqual(['2023-03-11']);
+  });
+
+  it('a correction that read the row before another instance saved it is refused at its write (review H17, stale row)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput());
+    const release = w.gateNextHeldGet();
+    const late = w.svc.correct(correctInput({ values: { dob_age: '2022-03-11' } })).then(() => 'accepted', (e: Error) => e.message);
+    await new Promise((r) => setTimeout(r, 20));
+    const other = w.service('server-2');
+    await other.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    await drive(other);
+    expect(await w.realHeld.get(SRC, 'REQ0001')).toBeNull();
+    release();
+    expect(await late).toMatch(/not held|not saved/);
     expect((await w.corrections.listFor(SRC, ['REQ0001'])).get('REQ0001')!.map((c) => c.value)).toEqual(['2023-03-11']);
   });
 
