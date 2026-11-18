@@ -39,9 +39,9 @@ describe('the request attribute CodeSystem file', () => {
     expect(cs.url).toBe(REQUEST_ATTRIBUTE_SYSTEM);
   });
 
-  it('has 29 concepts, each with a lowercase-hyphen code and a display', () => {
+  it('has 31 concepts, each with a lowercase-hyphen code and a display', () => {
     const cs = readCodeSystem();
-    expect(cs.concept).toHaveLength(29);
+    expect(cs.concept).toHaveLength(31);
     for (const c of cs.concept) {
       expect(c.code).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
       expect(c.display).toBeTruthy();
@@ -61,23 +61,29 @@ describe('the request attribute CodeSystem file', () => {
     });
   });
 
+  it('has the v1-flags and v1-findings concepts (design 2026-11-18-anomaly-flags)', () => {
+    const cs = readCodeSystem();
+    expect(cs.concept.find((c) => c.code === 'v1-flags')).toEqual({ code: 'v1-flags', display: 'Data quality flags from the source check' });
+    expect(cs.concept.find((c) => c.code === 'v1-findings')).toEqual({ code: 'v1-findings', display: 'Data quality findings from the source check' });
+  });
+
   it('has unique codes', () => {
     const cs = readCodeSystem();
     const codes = cs.concept.map((c) => c.code);
     expect(new Set(codes).size).toBe(codes.length);
   });
 
-  it('imports 29 concepts through the loader openldr terminology import resource uses', async () => {
+  it('imports 31 concepts through the loader openldr terminology import resource uses', async () => {
     const { store, concepts, marks } = memoryStore();
     const cs = readCodeSystem();
     const result = await importTerminologyResource(cs, store);
 
     expect(result.system).toBe(REQUEST_ATTRIBUTE_SYSTEM);
-    expect(result.conceptsLoaded).toBe(29);
+    expect(result.conceptsLoaded).toBe(31);
     expect(marks).toEqual([REQUEST_ATTRIBUTE_SYSTEM]);
 
     const rows = concepts[0] as { system: string; code: string }[];
-    expect(rows).toHaveLength(29);
+    expect(rows).toHaveLength(31);
     expect(rows.every((r) => r.system === REQUEST_ATTRIBUTE_SYSTEM)).toBe(true);
     expect(rows.find((r) => r.code === 'therapy')).toBeTruthy();
     expect(rows.find((r) => r.code === 'target-time-mins')).toBeTruthy();
