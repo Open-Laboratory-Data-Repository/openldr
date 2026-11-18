@@ -6,6 +6,72 @@
       "version": null,
       "entries": [
         {
+          "hash": "1caac78b",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The empty dashboards screen offers New and Import only with create permission (roles part 2 review DS2, empty state)"
+        },
+        {
+          "hash": "a5f0d94c",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "With raw SQL off, a filter cannot get new or changed options SQL, as a widget cannot (roles part 2 review DS4)"
+        },
+        {
+          "hash": "ee15ac29",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A filter edit marks the dashboard unsaved, so it is saved and its options run from the edit (roles part 2 review DS3)"
+        },
+        {
+          "hash": "6e067c80",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Only an editor sees Edit and Rename, and only a creator New and Import, so a viewer's widgets keep the saved route (roles part 2 review DS2)"
+        },
+        {
+          "hash": "5f3fda3f",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "Creating with an existing id is refused and returns nothing of that dashboard (roles part 2 review DS1)"
+        },
+        {
+          "hash": "74cc73c6",
+          "type": "fix",
+          "scope": "cli",
+          "title": "A served command checks the caller's role ids and capabilities the server worked out, and dashboard share audits objects the jsonb columns accept (roles part 2 screen check)"
+        },
+        {
+          "hash": "8a900d1a",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr dashboards share shows and sets who may see a dashboard, by the same rules as the routes (roles part 2 task 5)"
+        },
+        {
+          "hash": "df30e130",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Share a dashboard with roles from its menu, and run saved widgets by id so a viewer sees only shared data (roles part 2 task 4)"
+        },
+        {
+          "hash": "d2b43cf8",
+          "type": "feat",
+          "scope": "dashboards",
+          "title": "Share a dashboard with roles, and lock its data: a viewer runs only saved widgets of dashboards they may see (roles part 2 task 3)"
+        },
+        {
+          "hash": "ceb7719d",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "One check of who may see and share a dashboard (roles part 2 task 2)"
+        },
+        {
+          "hash": "bb25b497",
+          "type": "feat",
+          "scope": "db",
+          "title": "Which roles may see each dashboard (migration 126, roles part 2 task 1)"
+        },
+        {
           "hash": "b5e6ee52",
           "type": "fix",
           "scope": "forms",
