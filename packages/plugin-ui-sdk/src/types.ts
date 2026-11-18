@@ -54,6 +54,9 @@ export type PluginBrokerOp =
   | { kind: 'import.check.stop'; runId: string }
   | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }
   | { kind: 'import.check.heldItem'; copyId: string; key: string }
+  | { kind: 'import.check.correct'; copyId: string; key: string; values: Record<string, string | null>; reason: string }
+  | { kind: 'import.check.recheck'; copyId: string; key: string }
+  | { kind: 'import.check.access' }
   | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset?: number; after?: string | null; limit: number };
 
 /** The types of file a page may ask the host to save. */
@@ -159,6 +162,26 @@ export type PluginHeldItemsInput = { copyId: string; reason?: 'held' | 'error'; 
 export interface PluginHeldItem extends PluginHeldRow {
   findings: unknown;
   check: unknown;
+  /** The values as read of the fields a person may correct, as the plugin sent them, or null. */
+  fields?: Record<string, string | null> | null;
+}
+
+/** One field a person corrected in a held request. */
+export interface PluginHeldCorrection {
+  field: string;
+  value: string | null;
+  /** The value as read, which this one replaces. */
+  original: string | null;
+  reason: string;
+  correctedBy: string;
+  correctedAt: string;
+}
+
+/** A held request as `heldItem` gives it: with its corrections and the fields the plugin lets a
+ *  person correct (empty when it declares none). */
+export interface PluginHeldItemView extends PluginHeldItem {
+  corrections: PluginHeldCorrection[];
+  correctable: string[];
 }
 
 export type PluginRpcResult = { ok: true; data: unknown } | { ok: false; error: string };
@@ -237,7 +260,15 @@ export interface OpenLdrPluginApi {
       stop(runId: string): Promise<PluginCheckRun>;
       /** `laboratory` is a code of 1 to 32 of A-Z a-z 0-9 . _ -; the host refuses any other. */
       held(input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }): Promise<{ rows: PluginHeldRow[]; total: number }>;
-      heldItem(input: { copyId: string; key: string }): Promise<PluginHeldItem | null>;
+      heldItem(input: { copyId: string; key: string }): Promise<PluginHeldItemView | null>;
+      /** Stores corrections to a held request. `values` maps a field the plugin declares to its new
+       *  value, null to clear it. Needs a reason. Fails with a sentence for any other field. */
+      correct(input: { copyId: string; key: string; values: Record<string, string | null>; reason: string }): Promise<{ corrections: PluginHeldCorrection[] }>;
+      /** Checks one corrected held request again, in the run that held it. Answers the run, queued.
+       *  Read `heldItem` again once the run is no longer live: null means the request was saved. */
+      recheck(input: { copyId: string; key: string }): Promise<PluginCheckRun>;
+      /** What this person may do: `full`, every tab; `correct`, correct held requests. */
+      access(): Promise<{ full: boolean; correct: boolean }>;
       /** The same rows as `held`, in the same order, each with its findings and check. `limit` is 1 to 200.
        *  Give `after` to read by key, as an export should: null for the first page, then the `next` of the
        *  page before. `offset` is then ignored, and the answer adds `next`, the last key of the page or null

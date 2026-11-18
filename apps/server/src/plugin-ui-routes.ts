@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { declaredSites, getSitesOff, visibleSites, type AppContext } from '@openldr/bootstrap';
+import { declaredSites, getSitesOff, uiAllows, visibleSites, type AppContext } from '@openldr/bootstrap';
 
 interface UiPluginRow {
   id: string;
@@ -16,6 +16,7 @@ interface UiPluginRow {
         uiSdkVersion: string;
         declarative?: unknown;
         requiredRoles?: string[];
+        requiredCapabilities?: string[];
       };
     };
   };
@@ -30,7 +31,7 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
       return reply.send({ error: 'authentication required' });
     }
     if (!ctx.cfg.PLUGIN_UI_ENABLED) return [];
-    const userRoles = req.user.roles;
+    const caller = { roles: req.user.roles, capabilities: req.user.capabilities ?? [] };
     const rows = (await ctx.plugins.list()) as unknown as UiPluginRow[];
     const off = await getSitesOff(ctx.appSettings);
     return rows
@@ -40,10 +41,7 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
       .filter((r) => r.enabled && r.manifest.payload?.kind === 'plugin' && r.manifest.payload.ui)
       // Authorization boundary: hide a plugin's nav entry from callers lacking its required roles
       // (so e.g. a lab_technician never sees the lab_admin-gated DHIS2 entry).
-      .filter((r) => {
-        const need = r.manifest.payload!.ui!.requiredRoles;
-        return !(need?.length && !need.some((role) => userRoles.includes(role)));
-      })
+      .filter((r) => uiAllows(r.manifest.payload!.ui!, caller).allowed)
       .map((r) => {
         const ui = r.manifest.payload!.ui!;
         return {
@@ -71,8 +69,7 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
     // required roles. 404 (not 403) so the asset's existence isn't disclosed.
     const rows = (await ctx.plugins.list()) as unknown as UiPluginRow[];
     const row = rows.find((r) => r.id === req.params.id);
-    const need = row?.manifest.payload?.ui?.requiredRoles;
-    if (need?.length && !need.some((role) => req.user!.roles.includes(role))) {
+    if (!uiAllows(row?.manifest.payload?.ui, { roles: req.user.roles, capabilities: req.user.capabilities ?? [] }).allowed) {
       reply.code(404);
       return reply.send({ error: 'no ui asset' });
     }
@@ -105,7 +102,7 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
     }
     // The broker parses + validates the op itself (zod schema + size bounds), returning a
     // structured invalid-operation error for anything malformed.
-    const principal = { id: req.user.id, roles: req.user.roles, username: req.user.username };
+    const principal = { id: req.user.id, roles: req.user.roles, username: req.user.username, capabilities: req.user.capabilities ?? [] };
     return ctx.pluginBroker.handle(req.params.id, principal, op);
   });
 }

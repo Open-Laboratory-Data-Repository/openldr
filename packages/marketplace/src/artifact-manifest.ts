@@ -40,6 +40,9 @@ export const uiContributionSchema = z.object({
   // fetch its UI asset, or invoke ANY broker op (incl. storage.*/invoke). Empty/absent ⇒ any
   // authenticated user (back-compat). The broker enforces this independently of the per-op gate.
   requiredRoles: z.array(z.string().min(1)).optional(),
+  // A caller holding one of these capabilities may open the page too, but the broker lets them make
+  // only the calls the capability is for (design 2026-11-18-held-corrections).
+  requiredCapabilities: z.array(z.string().min(1)).optional(),
   sites: uiSitesSchema.optional(),
 }).refine((u) => (u.entry === undefined) === (u.sha256 === undefined), {
   message: 'ui.entry and ui.sha256 must be provided together (webview tier) or both omitted (declarative tier)',

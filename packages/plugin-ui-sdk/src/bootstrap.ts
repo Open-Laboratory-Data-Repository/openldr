@@ -124,6 +124,10 @@ function pluginBootstrapV1(): void {
         held: (input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }) =>
           call({ kind: 'import.check.held', copyId: input.copyId, reason: input.reason, label: input.label, laboratory: input.laboratory, offset: input.offset, limit: input.limit }),
         heldItem: (input: { copyId: string; key: string }) => call({ kind: 'import.check.heldItem', copyId: input.copyId, key: input.key }),
+        correct: (input: { copyId: string; key: string; values: Record<string, string | null>; reason: string }) =>
+          call({ kind: 'import.check.correct', copyId: input.copyId, key: input.key, values: input.values, reason: input.reason }),
+        recheck: (input: { copyId: string; key: string }) => call({ kind: 'import.check.recheck', copyId: input.copyId, key: input.key }),
+        access: () => call({ kind: 'import.check.access' }),
         heldItems: (input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset?: number; after?: string | null; limit: number }) =>
           call({ kind: 'import.check.heldItems', copyId: input.copyId, reason: input.reason, label: input.label, laboratory: input.laboratory, offset: input.offset, after: input.after, limit: input.limit }),
       },
