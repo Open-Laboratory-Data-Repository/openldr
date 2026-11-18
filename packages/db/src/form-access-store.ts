@@ -35,6 +35,10 @@ export function createFormAccessStore(db: Kysely<InternalSchema>): FormAccessSto
     },
     async set(formId, access) {
       await db.transaction().execute(async (trx) => {
+        // Saves of one form take turns: each holds the form's row until it commits, so the next
+        // one deletes this one's rows before it inserts its own. Without it two saves at once
+        // both delete, then both insert, and the lists merge (roles review FR5).
+        await trx.selectFrom('form_definitions').select('id').where('id', '=', formId).forUpdate().execute();
         await trx.deleteFrom('form_access').where('form_id', '=', formId).execute();
         const rows = [
           ...[...new Set(access.open)].map((role_id) => ({ form_id: formId, role_id, mode: 'open' })),
