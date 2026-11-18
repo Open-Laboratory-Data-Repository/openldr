@@ -2,6 +2,7 @@ import { CopySetChangedError, createAppContext, type CopyRun, type ImportActor }
 import { loadConfig } from '@openldr/config';
 import { cliActor } from './cli-actor';
 import { parseImportOptions } from './import';
+import { withCdrCuts } from './interruptions';
 
 // `openldr import copy ...`: copy the rows of a source database to CE's own disk with a plugin that
 // names the rows to copy. Every command calls the copy service the plugin page uses
@@ -98,7 +99,8 @@ export async function runImportCopyStatus(pluginId: string, copyId: string | und
   try {
     if (copyId === undefined) {
       const runs = await ctx.importCopies.list(pluginId);
-      emit(opts.json, runs.map(copyRunForJson), runs.map(formatCopyRun).join('\n') || '(no copies)');
+      const shown = await withCdrCuts(ctx.jobInterruptions, runs, copyRunForJson, formatCopyRun);
+      emit(opts.json, shown.json, shown.text || '(no copies)');
       return 0;
     }
     const run = await ctx.importCopies.get(pluginId, copyId);
@@ -106,7 +108,8 @@ export async function runImportCopyStatus(pluginId: string, copyId: string | und
       emit(opts.json, { error: 'copy not found' }, `copy ${copyId} not found`);
       return 1;
     }
-    emit(opts.json, copyRunForJson(run), formatCopyRun(run));
+    const shown = await withCdrCuts(ctx.jobInterruptions, [run], copyRunForJson, formatCopyRun);
+    emit(opts.json, shown.json[0], shown.text);
     return 0;
   } finally { await ctx.close(); }
 }

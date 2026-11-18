@@ -1,6 +1,7 @@
 import { createAppContext, type ImportActor, type ImportRun } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { cliActor } from './cli-actor';
+import { withCdrCuts } from './interruptions';
 
 // `openldr import ...`: run an import from a host database connector with a plugin that declares
 // an import source. Every command calls the same import service the studio uses
@@ -149,7 +150,8 @@ export async function runImportStatus(pluginId: string, runId: string | undefine
   try {
     if (runId === undefined) {
       const runs = await ctx.imports.list(pluginId);
-      emit(opts.json, runs, runs.map(formatImportRun).join('\n') || '(no import runs)');
+      const shown = await withCdrCuts(ctx.jobInterruptions, runs, (r) => r, formatImportRun);
+      emit(opts.json, shown.json, shown.text || '(no import runs)');
       return 0;
     }
     const run = await ctx.imports.get(pluginId, runId);
@@ -157,7 +159,8 @@ export async function runImportStatus(pluginId: string, runId: string | undefine
       emit(opts.json, { error: 'import run not found' }, `import run ${runId} not found`);
       return 1;
     }
-    emit(opts.json, run, formatImportRun(run));
+    const shown = await withCdrCuts(ctx.jobInterruptions, [run], (r) => r, formatImportRun);
+    emit(opts.json, shown.json[0], shown.text);
     return 0;
   } finally { await ctx.close(); }
 }

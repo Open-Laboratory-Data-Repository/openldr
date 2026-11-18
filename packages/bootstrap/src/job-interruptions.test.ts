@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createJobInterruptionStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { takeBack, continueJob, sweepStale, startHeartbeat, MAX_SELF_RESUMES, STALE_JOB_MS } from './job-interruptions';
+import { takeBack, continueJob, sweepStale, startHeartbeat, recordSelfResume, MAX_SELF_RESUMES, STALE_JOB_MS } from './job-interruptions';
 
 const NOW = new Date('2026-11-18T06:00:00.000Z');
 const at = (min: number) => new Date(Date.UTC(2026, 10, 18, 5, min));
@@ -97,5 +97,20 @@ describe('startHeartbeat', () => {
     await vi.advanceTimersByTimeAsync(3000);
     expect(beat).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
+  });
+});
+
+describe('recordSelfResume', () => {
+  it('records a cut a job carried on through by itself, once, and never throws', async () => {
+    const { store, deps } = await setup();
+    const processStartedAt = new Date(NOW.getTime() - 60_000);
+    await recordSelfResume({ ...deps, processStartedAt }, 'cdr-run', 'run1', at(0));
+    await recordSelfResume({ ...deps, processStartedAt }, 'cdr-run', 'run1', at(0));
+    expect((await store.listFor('cdr-run', ['run1'])).get('run1')).toEqual([
+      expect.objectContaining({ cause: 'server-restart', resumedBy: 'self', resumedAt: NOW.toISOString() }),
+    ]);
+    const broken = { store: { ...store, record: async () => { throw new Error('db down'); } }, now: () => NOW, processStartedAt };
+    await expect(recordSelfResume(broken, 'cdr-run', 'run2', at(1))).resolves.toBeUndefined();
+    await expect(recordSelfResume(undefined, 'cdr-run', 'run3', at(1))).resolves.toBeUndefined();
   });
 });

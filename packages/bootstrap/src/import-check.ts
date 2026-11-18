@@ -1,3 +1,4 @@
+import { recordSelfResume } from './job-interruptions';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { redact } from '@openldr/core';
@@ -137,7 +138,7 @@ export interface ImportCheckService {
   release(): Promise<void>;
 }
 
-export interface ImportCheckServiceDeps extends Pick<ImportServiceDeps, 'plugins' | 'pluginData' | 'audit' | 'persist' | 'now'> {
+export interface ImportCheckServiceDeps extends Pick<ImportServiceDeps, 'plugins' | 'pluginData' | 'audit' | 'persist' | 'now' | 'interruptions'> {
   /** The copy rows, read only. */
   copyStore: ImportCopyStore;
   held: ImportCheckHeldStore;
@@ -790,6 +791,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           status: stored.status === 'queued' || stored.status === 'waiting' ? 'running' : stored.status,
         };
         if (!(await writeIfRev(run, stored.rev))) continue;
+        if (!unclaimed) await recordSelfResume(deps.interruptions, 'cdr-run', run.id, new Date(stored.updatedAt));
         if (released) return;
         if (!unclaimed && previous !== null && previous !== deps.driverId) {
           await auditQuietly(deps.audit, {

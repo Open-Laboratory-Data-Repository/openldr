@@ -1,3 +1,4 @@
+import { recordSelfResume } from './job-interruptions';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { redact } from '@openldr/core';
@@ -100,7 +101,7 @@ export class CopySetChangedError extends Error {
 }
 
 export interface ImportCopyServiceDeps
-  extends Pick<ImportServiceDeps, 'plugins' | 'connectors' | 'secretsKey' | 'pluginData' | 'audit' | 'createDb' | 'now'> {
+  extends Pick<ImportServiceDeps, 'plugins' | 'connectors' | 'secretsKey' | 'pluginData' | 'audit' | 'createDb' | 'now' | 'interruptions'> {
   store: ImportCopyStore;
   /** The connectors an admin allowed the plugin to read (`ImportService.allowed`). */
   allowed(pluginId: string): Promise<string[]>;
@@ -782,6 +783,7 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
         };
         // A claim is a compare-and-swap too. The one that loses does not drive.
         if (!(await writeIfRev(run, stored.rev))) continue;
+        if (!unclaimed) await recordSelfResume(deps.interruptions, 'cdr-run', run.id, new Date(stored.updatedAt));
         // A release that came while the claim was written: the claim stands, nobody here drives it,
         // and the next server takes it by the 2-minute rule.
         if (released) return;

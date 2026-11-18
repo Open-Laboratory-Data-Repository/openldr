@@ -91,3 +91,21 @@ export async function sweepStale(deps: InterruptionDeps, input: {
   }
   return stale.length;
 }
+
+/** What a service that takes over its own orphaned work needs to record it. */
+export type SelfResumeDeps = InterruptionDeps & { processStartedAt: Date };
+
+/** Records a cut that a job carried on through by itself: cdr-source copies, checks and imports,
+ *  which resume from their saved cursor, so every resume makes progress and no cap applies.
+ *  Recording never stops the takeover: a failure here is swallowed, as is a missing store. */
+export async function recordSelfResume(deps: SelfResumeDeps | undefined, kind: JobKind, jobId: string, at: Date): Promise<void> {
+  if (!deps) return;
+  try {
+    const { id, inserted } = await deps.store.record(kind, jobId, {
+      at, phase: null, cause: at.getTime() < deps.processStartedAt.getTime() ? 'server-restart' : 'lease-expired',
+    });
+    if (inserted) await deps.store.resolve(id, { resumedBy: 'self', resumedAt: deps.now() });
+  } catch {
+    // The run carries on either way; the page then shows no record of this cut.
+  }
+}

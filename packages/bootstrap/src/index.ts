@@ -1140,10 +1140,13 @@ const reporting: ReportingApi = {
   const terminologyWorkDirBase = cfg.TERMINOLOGY_WORK_DIR ?? tmpdir();
   // ⛔ Built only where it drains the queue. See `AppContextOptions.runTerminologyIngestWorker`.
   const jobInterruptions = createJobInterruptionStore(internal.db);
+  // When this process started: a job silent since before then was cut by a restart.
+  const processStartedAt = new Date();
   const interruptionDeps = { store: jobInterruptions, now: () => new Date() };
   const terminologyIngestWorker = createTerminologyIngestWorkerIfEnabled(opts.runTerminologyIngestWorker === true, {
     jobs: terminologyJobs,
     interruptions: interruptionDeps,
+    processStartedAt,
     blob,
     audit,
     workDirBase: terminologyWorkDirBase,
@@ -1161,6 +1164,7 @@ const reporting: ReportingApi = {
   const facilityJobWorker = createFacilityJobWorkerIfEnabled(opts.runFacilityJobWorker === true, {
     jobs: facilityJobs,
     interruptions: interruptionDeps,
+    processStartedAt,
     ...createFacilityJobRunners({
       internalDb: internal.db, externalDb, admin: termAdmin,
       publishFacilityMap, projectRegistryRows,
@@ -1872,6 +1876,7 @@ const reporting: ReportingApi = {
   // A run records whether a server or a CLI process started it. The server adopts only its own.
   const importOrigin = opts.runImportDriver === true ? 'server' : 'cli';
   const imports = createImportService({
+    interruptions: { store: jobInterruptions, now: () => new Date(), processStartedAt },
     plugins,
     connectors: connectorStore,
     secretsKey: cfg.SECRETS_ENCRYPTION_KEY,
@@ -1887,6 +1892,7 @@ const reporting: ReportingApi = {
   const importHeld = createImportCheckHeldStore(internal.db);
   const importDriverId = randomUUID();
   const importCopies = createImportCopyService({
+    interruptions: { store: jobInterruptions, now: () => new Date(), processStartedAt },
     plugins,
     connectors: connectorStore,
     secretsKey: cfg.SECRETS_ENCRYPTION_KEY,
@@ -1908,6 +1914,7 @@ const reporting: ReportingApi = {
   // they open no connector, but they ask the allow list as a copy does. Saves go through the same
   // path as an import.
   const importChecks = createImportCheckService({
+    interruptions: { store: jobInterruptions, now: () => new Date(), processStartedAt },
     plugins,
     pluginData,
     audit: importAudit,
@@ -1925,6 +1932,7 @@ const reporting: ReportingApi = {
     imports,
     copies: importCopies,
     checks: importChecks,
+    jobInterruptions,
     // Step-by-step connection check for the import page. The broker only calls this for a
     // connector the admin allowed for the calling plugin.
     diagnoseConnector: async (id: string) => {

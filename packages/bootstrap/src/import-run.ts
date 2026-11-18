@@ -8,6 +8,7 @@ import { createConnectorDb, type ConnectorDb } from './connector-db';
 import { growPage, isStorageDown, retryWaitMs } from './import-retry';
 import { createSourceReader, type SourceReader } from './import-source-reader';
 import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, fillDetailQuery, fillKeyQuery, toPluginRow } from './import-sql';
+import { recordSelfResume, type SelfResumeDeps } from './job-interruptions';
 
 // Runs an import for a plugin that declares `payload.importSource` (see the marketplace manifest).
 //
@@ -87,6 +88,8 @@ export interface ImportAuditEvent {
 }
 
 export interface ImportServiceDeps {
+  /** Records each cut a run, copy or check carried on through (design 2026-11-18-interrupted-jobs). */
+  interruptions?: SelfResumeDeps;
   plugins: {
     list(): Promise<Array<{ id: string; version: string; enabled: boolean; manifest: Record<string, unknown> }>>;
     loadSink(id: string, version?: string): Promise<{ invoke(entrypoint: string, input: unknown): Promise<unknown> } | undefined>;
@@ -793,6 +796,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
           // Asked before each run, so a server that is shutting down resumes nothing more.
           if (opts.signal?.aborted) return out;
           if (!needsAdopting(stored)) continue;
+          await recordSelfResume(deps.interruptions, 'cdr-run', stored.id, new Date(stored.updatedAt));
           try {
             out.push(stored.status === 'stopping' ? await finishStop(stored) : await service.resume(stored.pluginId, stored.id, SYSTEM));
             unadoptable.delete(stored.id);
