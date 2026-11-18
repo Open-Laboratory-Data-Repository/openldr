@@ -14,7 +14,7 @@
 
 - Correctable fields are declared by the plugin, per source kind, in the manifest: `importSource.corrections.fields` (DISA: `dob_age`, `sex`, `specimen`, `taken`, `collected`, `received_in_lab`, `registered`; OpenLDR v1: the date fields its date rule reads).
 - Source rows (`import_copy_rows`) are never written by this feature.
-- Capability `imports.correct_held`, label "Correct held requests". In no preset role.
+- Capability `imports.correct_held`, label "Correct held requests". Held by `lab_admin` (as every key is), by no other preset.
 - Audit actions: `import.check.correct`, `import.check.recheck`; CLI acts as `cli`.
 - Only held rows with `reason = 'held'` can be corrected.
 - Migration 124. Check open branches for 124 before merging.
@@ -42,7 +42,7 @@
 
 ### Task 2: Capability (CE)
 
-**Files:** `packages/rbac/src/catalog.ts` (group `imports`), its test, presets test (no preset grants it), studio role labels if the catalog needs i18n keys.
+**Files:** `packages/rbac/src/catalog.ts` (group `imports`), its test (46 keys), presets test (only `lab_admin` holds it).
 
 - [ ] Test, implement, run rbac tests, commit.
 
@@ -55,9 +55,9 @@
 
 ### Task 4: Host calls and SDK (CE)
 
-**Files:** `packages/bootstrap/src/plugin-broker.ts` (ops `import.check.correct`, `import.check.recheck`, zod schemas, capability check `imports.correct_held`), `packages/plugin-ui-sdk/src/types.ts` and `mock.ts` (`correct`, `recheck` on `checks`), broker tests.
+**Files:** `packages/bootstrap/src/plugin-broker.ts` (ops `import.check.correct`, `import.check.recheck`, `import.check.access`; `BrokerPrincipal.capabilities`; a holder of `imports.correct_held` passes the role gate for the Feedback-tab reads and the two new ops only; the page-level gate accepts `ui.requiredCapabilities`), `apps/server/src/plugin-ui-routes.ts` (principal capabilities; nav list and page serve accept `requiredCapabilities`), `packages/marketplace/src/artifact-manifest.ts` (`requiredCapabilities` optional), `packages/plugin-ui-sdk/src/types.ts` and `mock.ts` (`correct`, `recheck`, `access`), tests.
 
-- [ ] Tests: both ops refused without the capability; pass-through with it; `heldItem` carries the new fields.
+- [ ] Tests: a corrector (no lab_admin role, has the capability) passes the page gate, the five reads and the two new ops, and is refused `import.check.start` and every copy write; a user with neither is refused all; `access` answers `{ full, correct }`; the nav lists the page for a corrector; `heldItem` carries the new fields.
 - [ ] Implement, run broker and SDK tests, commit.
 
 ### Task 5: CLI and CE docs

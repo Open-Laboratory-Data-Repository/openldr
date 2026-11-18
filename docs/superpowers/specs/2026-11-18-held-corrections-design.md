@@ -73,9 +73,22 @@ field with its original value, new value, reason, who and when).
 CE saves its resources as a normal check run would and removes it from the held list. If it still fails,
 it stays held with its new findings, and the corrections stay for the next try.
 
-### Who may correct (my call)
+### Who may correct (operator, 2026-11-18: "a new permission")
 
-A new capability `imports.correct_held`, "Correct held requests". No preset role gets it; an admin grants it.
+A new capability `imports.correct_held`, "Correct held requests". `lab_admin` holds it, as it holds every
+capability; no other preset does. A country gives it to the role its correctors have.
+
+Today the whole CDR source page is `lab_admin` only (`payload.ui.requiredRoles`), and so is every import
+host call (`plugin-broker.ts` `rolesFor`). So a corrector who is not a lab admin needs three changes:
+
+- A plugin page manifest may name `requiredCapabilities` beside `requiredRoles`; a person with any listed
+  role or any listed capability may open the page. The plugin lists `imports.correct_held`.
+- The broker lets a holder of `imports.correct_held` make only the calls the Feedback tab needs
+  (`import.copy.list`, `import.check.list`, `import.check.held`, `heldItem`, `heldItems`) and
+  `import.check.correct` and `import.check.recheck`. Every other import call stays `lab_admin` only.
+  The broker principal carries the caller's capabilities for this.
+- A new host call, `import.check.access`, answers `{ full, correct }`, so the page shows every tab to a lab
+  admin and only the Feedback tab to a corrector.
 
 ### The screen
 
