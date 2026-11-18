@@ -62,6 +62,25 @@ owner and admins always see it. Set from the dashboard's ⋯ menu, **Share**, in
   "Not available with your data limit."
 - An unlimited user sees no change.
 
+### Settled after the builder check
+
+- **Which facility a row belongs to (operator, 2026-11-18: "either one").** A row counts for a limited user
+  when its requesting facility or its testing lab is in their scope. A health centre sees what it sent, a
+  lab sees what it tested, a district sees both for its facilities.
+- **Rows with no known facility (my call).** Hidden from limited users. Fails closed.
+- **Capabilities that read unlimited data (my call).** A limited user's effective capabilities drop
+  `reports.*`, `patients.*`, `query.*`, `data.export` and every other capability that reads data the limit
+  does not cover, and also `dashboards.create` and `dashboards.edit`. This is enforced where capabilities are
+  resolved, so every route refuses alike. The Users sheet says which permissions the limit removes.
+- **Roles (my call).** Lists store role ids. A user passes when any of their roles is listed. Deleting a role
+  removes it from every list.
+- **Dashboards with no owner (my call).** Only admins count as owner. The shared-role check applies to the
+  list, the get-by-id route and every widget query of that dashboard.
+- **Resolving a scope (my call).** Facilities, districts and regions are picked from the register in the
+  Users sheet, never typed. A facility in scope brings all its mapped source codes from `facility_map`.
+- **The two states (my call).** A user is either **Everything** or **Limited**, stored explicitly. Limited
+  with an empty list sees nothing. Fails closed.
+
 ### 4. Docs that show what a person can do (optional, my call to keep it small)
 
 Each in-app doc page may name the capability it needs. The docs list hides a page whose capability the
@@ -76,10 +95,8 @@ in `@openldr/bootstrap`, audited as `cli`.
 
 ## Constraints
 
-- The data limit covers dashboards only, as asked. Reports, the patient and lab request pages, exports and
-  the CLI still show every facility. A limited user must therefore get a role without `reports.*`,
-  `patients.*` and export capabilities. The Users sheet warns when a limited user has a role that can see
-  unlimited data, and the docs say so plainly.
+- The data limit covers dashboards only, as asked. Every page and route that would show unlimited data is
+  closed to a limited user, by removing its capability (see above), and the docs say so plainly.
 - Upgrades keep today's access: empty lists and no scope mean what they mean now.
 - AGENTS.md section 5 (sheets, ⋯ menus, label-left forms, pagination), section 6 (CLI, docs en/fr/pt,
   mobile, changelog), section 8 (no hard-coded facilities).
