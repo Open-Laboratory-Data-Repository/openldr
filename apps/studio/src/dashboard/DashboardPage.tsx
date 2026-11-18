@@ -217,12 +217,15 @@ export function DashboardPage() {
                 <LayoutDashboard className="h-6 w-6 text-muted-foreground" />
                 <p className="text-sm font-medium">{t('dashboard.emptyTitle')}</p>
                 <p className="max-w-sm text-xs text-muted-foreground">{t('dashboard.emptyBody')}</p>
-                <div className="flex items-center gap-2 pt-1">
-                  <Button disabled={creating} onClick={() => void handleNewDashboard()}>{t('dashboard.newDashboard')}</Button>
-                  <Button variant="secondary" className="bg-secondary text-secondary-foreground hover:bg-secondary/80" onClick={() => fileInput.current?.click()}>
-                    {t('dashboard.importDashboard')}
-                  </Button>
-                </div>
+                {/* Creating and importing need dashboards.create, as in the menu (review DS2). */}
+                {mayCreate ? (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button disabled={creating} onClick={() => void handleNewDashboard()}>{t('dashboard.newDashboard')}</Button>
+                    <Button variant="secondary" className="bg-secondary text-secondary-foreground hover:bg-secondary/80" onClick={() => fileInput.current?.click()}>
+                      {t('dashboard.importDashboard')}
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             </StripedEmpty>
           ) : (

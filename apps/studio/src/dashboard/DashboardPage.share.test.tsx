@@ -70,4 +70,17 @@ describe('Share in the dashboard menu', () => {
     const items = await menuItems();
     for (const shown of ['Edit', 'Rename', 'New dashboard', 'Import']) expect(items, shown).toContain(shown);
   });
+
+  it('offers a viewer with no dashboards no New dashboard or Import buttons either (review DS2, empty state)', async () => {
+    auth.user = { id: 'u-viewer', username: 'v', displayName: null, roles: [] };
+    auth.caps = ['dashboards.view'];
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url: any) => {
+      if (String(url) === '/api/config') return Promise.resolve(new Response(JSON.stringify({ dashboardSqlEnabled: false }), { status: 200 }));
+      return Promise.resolve(new Response('[]', { status: 200 }));
+    });
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByText('No dashboards yet.')).toBeTruthy());
+    expect(screen.queryByRole('button', { name: 'New dashboard' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Import' })).toBeNull();
+  });
 });
