@@ -592,4 +592,9 @@ Un fichier partiel n'évalue pas les établissements absents du fichier. Indique
 
 Un import de registre coupé par un redémarrage du serveur reprend tout seul quand le serveur revient, à partir du fichier envoyé. Un import coupé pendant l’application s’applique de nouveau sans vous demander une seconde confirmation. Un import coupé pendant la vérification du fichier le vérifie de nouveau et s’arrête à la confirmation habituelle.
 
-L’import affiche alors un badge **Interrompu** ; pointez-le pour voir quand. Si un import est coupé trois fois à la même étape, il s’arrête avec un message qui le dit. Envoyez de nouveau le fichier pour recommencer.
+L'import affiche un badge **Interrompu** ; pointez-le pour voir quand. Le serveur peut reprendre automatiquement trois fois à la même étape. À l'interruption suivante à cette étape, l'import attend votre action. Le registre reste réservé pendant l'attente.
+
+1. Ouvrez le menu **⋯** en haut à droite du panneau d'import.
+2. Sélectionnez **Continuer l'import**.
+
+**Résultat attendu :** l'import reprend à partir du fichier enregistré, sans nouvel envoi.

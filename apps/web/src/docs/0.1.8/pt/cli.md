@@ -496,4 +496,5 @@ Uma tarefa longa cortada por um reinício regista-o. A maioria continua sozinha;
 - `openldr terminology job <system>` mostra a última importação de distribuição e as suas interrupções. `openldr terminology job-continue <id>` continua a que espera depois de três cortes.
 - `openldr workflows receipts list <workflowId>` mostra as interrupções de cada execução. `openldr workflows run-continue <workflowId> <requestId>` inicia uma nova execução a partir de uma interrompida; uma execução de workflow nunca recomeça sozinha.
 - `openldr facilities jobs --retry <id>` continua uma reconstrução do mapa de estabelecimentos interrompida.
+- `openldr facilities import-run-continue <runId>` retoma uma importação de registo em espera a partir do ficheiro guardado. Acrescente `--json` para obter JSON. Uma aplicação já confirmada retoma sem outra confirmação. Uma verificação do ficheiro para na confirmação habitual.
 - `openldr import status`, `import copy status`, `import check status`, `facilities import-run <id>` e `pipeline status` listam as interrupções de cada execução.
