@@ -1,3 +1,0 @@
-# Preserve exported evidence byte for byte across platforms.
-*.pdf binary
-*.xlsx binary

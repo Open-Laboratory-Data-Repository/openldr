@@ -8,12 +8,12 @@ vi.mock('react-router-dom', async (orig) => {
   const actual = await orig<typeof import('react-router-dom')>();
   return { ...actual, useNavigate: () => navigate };
 });
-const authState = vi.hoisted(() => ({ authMode: 'keycloak' as 'keycloak' | 'oidc' | 'local' }));
+const authState = vi.hoisted(() => ({ authMode: 'keycloak' as 'keycloak' | 'oidc' | 'local', caps: null as string[] | null }));
 vi.mock('@/auth/AuthProvider', () => ({
   useAuth: () => ({
     user: { id: 'me', username: 'admin', displayName: null, roles: ['lab_admin'] },
     loading: false,
-    hasCapability: () => true,
+    hasCapability: (c: string) => authState.caps === null || authState.caps.includes(c),
     signOut: vi.fn(),
     authMode: authState.authMode,
   }),
@@ -27,6 +27,43 @@ import { AppShell } from './AppShell';
 import { setLanguage } from '@/i18n/language';
 
 describe('AppShell settings entry', () => {
+  function openUserMenu() {
+    const trigger = screen.getByText('admin');
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Sign out')) fireEvent.keyDown(trigger, { key: 'Enter' });
+  }
+
+  it('shows Settings to a user who can reach only one Settings section', () => {
+    authState.caps = ['notifications.view'];
+    try {
+      render(
+        <MemoryRouter>
+          <AppShell title="Dashboard"><div>content</div></AppShell>
+        </MemoryRouter>,
+      );
+      openUserMenu();
+      fireEvent.click(screen.getByText('Settings'));
+      expect(navigate).toHaveBeenCalledWith('/settings');
+    } finally {
+      authState.caps = null;
+    }
+  });
+
+  it('hides Settings from a user who can reach no Settings section', () => {
+    authState.caps = ['dashboards.view'];
+    try {
+      render(
+        <MemoryRouter>
+          <AppShell title="Dashboard"><div>content</div></AppShell>
+        </MemoryRouter>,
+      );
+      openUserMenu();
+      expect(screen.queryByText('Settings')).toBeNull();
+    } finally {
+      authState.caps = null;
+    }
+  });
+
   it('navigates to /settings from the user dropdown for an admin', () => {
     render(
       <MemoryRouter>

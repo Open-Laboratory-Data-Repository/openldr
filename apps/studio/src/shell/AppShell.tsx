@@ -28,6 +28,7 @@ import { onPluginsChanged } from '@/plugins/pluginEvents';
 import { NotificationBell } from './NotificationBell';
 import { NotificationToaster } from './NotificationToaster';
 import { SidebarNav } from './SidebarNav';
+import { SETTINGS_CAPS } from '@/pages/settings/settingsNav';
 
 // Exported for the first-page choice: StartPageGate only redirects to a page listed here.
 export const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; caps?: string[] }[] = [
@@ -287,9 +288,8 @@ export function AppShell({
                 </DropdownMenuSub>
               )}
               <DropdownMenuSeparator />
-              {/* TODO(phase3): generalize to "user can see >=1 Settings sub-nav section" once
-                  General/Marketplace (broader-role) sections land; for SP-0 DHIS2 is admin-only. */}
-              {hasCapability('settings.view') && (
+              {/* Shown when the user can open at least one Settings section, the same rule as the /settings route. */}
+              {SETTINGS_CAPS.some((c) => hasCapability(c)) && (
                 <DropdownMenuItem onClick={() => navigate('/settings')}>
                   <Settings className="mr-2 h-4 w-4" />
                   {t('layout.settings')}

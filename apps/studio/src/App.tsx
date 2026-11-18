@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { Reports } from './pages/Reports';
 import { Terminology } from './pages/Terminology';
 import { Docs } from './pages/Docs';
@@ -36,6 +36,7 @@ import { Layouts } from '@/pages/settings/Layouts';
 import { CallbackPage } from './auth/CallbackPage';
 import { AccessDeniedPage } from './auth/AccessDeniedPage';
 import { StartPageGate, UserPreferencesSync } from './shell/UserPreferencesSync';
+import { SETTINGS_CAPS } from './pages/settings/settingsNav';
 
 export function App() {
   return (
@@ -57,11 +58,8 @@ export function App() {
       <Route path="/facilities" element={<RequireCapability cap="facilities.view"><Facilities /></RequireCapability>} />
       <Route path="/test-catalog" element={<RequireCapability cap="terminology.view"><TestCatalog /></RequireCapability>} />
       <Route path="/patients" element={<RequireCapability cap="patients.view"><Patients /></RequireCapability>} />
-      {/* Sites moved under Settings (was top-level /sites) so it isn't confused with a future
-          Facilities / master facility list. The old path redirects so existing links keep working. */}
-      <Route path="/sites" element={<Navigate to="/settings/sites" replace />} />
       {/* Children are reached through this parent, so its gate must be an OR of every
-          child sub-page's cap (kept in sync with SettingsShell's SUB_NAV) — not just
+          child sub-page's cap (SETTINGS_CAPS, derived from SUB_NAV) — not just
           settings.view — or a non-admin who can reach one sub-page (e.g. notifications.view)
           would be denied before ever getting to it. Each child route keeps its own,
           narrower cap below. */}
@@ -69,7 +67,7 @@ export function App() {
         path="/settings"
         element={
           <RequireCapability
-            caps={['settings.view', 'notifications.view', 'sync.view', 'sync.manage', 'marketplace.view', 'connectors.manage', 'roles.view', 'data_exposure.manage', 'settings.edit_general']}
+            caps={SETTINGS_CAPS}
           >
             <SettingsShell />
           </RequireCapability>

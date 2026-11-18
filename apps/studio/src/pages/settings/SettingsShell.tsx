@@ -3,27 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AppShell } from '@/shell/AppShell';
 import { useAuth } from '@/auth/AuthProvider';
 import { cn } from '@/lib/cn';
-
-interface SubNavItem {
-  labelKey: string;
-  to: string;
-  /** Capability gate — missing means visible to everyone who can see /settings. */
-  caps?: string[];
-}
-
-const SUB_NAV: SubNavItem[] = [
-  { labelKey: 'settings.subNav.general', to: '/settings/general', caps: ['settings.view'] },
-  { labelKey: 'settings.subNav.setup', to: '/settings/setup', caps: ['settings.view'] },
-  { labelKey: 'settings.subNav.laboratory', to: '/settings/laboratory', caps: ['settings.view'] },
-  { labelKey: 'settings.subNav.notifications', to: '/settings/notifications', caps: ['notifications.view'] },
-  { labelKey: 'settings.subNav.sites', to: '/settings/sites', caps: ['sync.manage'] },
-  { labelKey: 'settings.subNav.sync', to: '/settings/sync', caps: ['sync.view'] },
-  { labelKey: 'settings.subNav.connectors', to: '/settings/connectors', caps: ['connectors.manage'] },
-  { labelKey: 'settings.subNav.marketplace', to: '/settings/marketplace', caps: ['marketplace.view'] },
-  { labelKey: 'settings.subNav.roles', to: '/settings/roles', caps: ['roles.view'] },
-  { labelKey: 'settings.subNav.layouts', to: '/settings/layouts', caps: ['settings.edit_general'] },
-  { labelKey: 'settings.subNav.dataExposure', to: '/settings/data-exposure', caps: ['data_exposure.manage'] },
-];
+import { SUB_NAV } from './settingsNav';
 
 /**
  * Default landing page for bare `/settings`. The parent route admits anyone who
@@ -42,7 +22,7 @@ export function SettingsIndexRedirect() {
 /**
  * Settings shell with a left-hand section selector, mirroring corlix's
  * SettingsPage. The active sub-page renders in the right pane via <Outlet />.
- * New sections slot in by adding one SUB_NAV entry and one nested <Route> in
+ * New sections slot in by adding one SUB_NAV entry (settingsNav.ts) and one nested <Route> in
  * App.tsx — no further plumbing. The Marketplace UI (Phase 3 SP-4) lands here.
  */
 export function SettingsShell() {
