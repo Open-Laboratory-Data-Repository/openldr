@@ -129,7 +129,7 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `settings` | `flags list` / `flags set` pour les fonctionnalités, `danger <action>`, et `sync show` / `sync set` (configuration de la synchronisation laboratoire⇄central). |
 | `terminology` | Importe et interroge des CodeSystems, ValueSets, ConceptMaps et ontologies. |
 | `fhir` | Valide des ressources FHIR R4. |
-| `forms` | Liste les définitions de formulaires ; extrait les réponses d'une QuestionnaireResponse. |
+| `forms` | Liste les définitions de formulaires ; extrait les réponses d'une QuestionnaireResponse ; choisit les rôles qui peuvent ouvrir et soumettre un formulaire. |
 | `ingest` | Ingère un fichier par le pipeline (en option via un plugin). |
 | `facilities` | Importe un registre national d'établissements : `suggest-map`, `suggest-values`, `import` (correspondance des colonnes et des valeurs, voir **Établissements** dans la documentation du studio). |
 | `test-catalog` | Le catalogue national des examens : `list` liste les examens, `import` importe une liste depuis un fichier CSV ou Excel, `export` l'exporte en CSV, `enable` ou `disable` active ou désactive un examen dans ce laboratoire, et `retire` ou `restore` retire ou rétablit un examen là où cette installation possède le catalogue. |
@@ -480,3 +480,22 @@ Une vérification de source retient une demande quand ses règles trouvent une e
 
 - `openldr import check correct <plugin> <copy> <key> --set champ=valeur --reason "pourquoi"` corrige un ou plusieurs champs. Répétez `--set` pour chaque champ. Une valeur vide efface le champ. Le plugin décide quels champs peuvent être corrigés.
 - `openldr import check recheck <plugin> <copy> <key>` vérifie à nouveau la demande dans l'exécution qui l'a retenue. Si elle passe, elle est enregistrée et quitte la liste des demandes retenues. Lancez `import check held` pour voir le résultat.
+
+## Qui peut ouvrir et soumettre un formulaire
+
+`openldr forms access <form-id>` affiche les rôles qui peuvent ouvrir et soumettre un formulaire. C'est le pendant CLI du panneau **Accès** du constructeur de formulaires. Une liste vide signifie tous les rôles qui ont la permission. Pour soumettre, il faut aussi pouvoir ouvrir le formulaire. Un gestionnaire des rôles ouvre toujours tous les formulaires. Il faut la permission `forms.edit`.
+
+| Option | Effet |
+| --- | --- |
+| `--open <roles>` | Rôles qui peuvent ouvrir le formulaire, en slugs ou identifiants séparés par des virgules. Remplace la liste d'ouverture. |
+| `--submit <roles>` | Rôles qui peuvent soumettre le formulaire, en slugs ou identifiants séparés par des virgules. Remplace la liste de soumission. |
+| `--clear` | Vide les deux listes : tous les rôles qui ont la permission peuvent de nouveau ouvrir et soumettre. |
+| `--json` | Affiche les listes en JSON, avec les identifiants des rôles. |
+
+Une liste que vous ne nommez pas reste telle quelle. Un rôle ou un formulaire inconnu est refusé et rien ne change. Chaque modification est auditée comme `form.access.set`. En local, la CLI enregistre l'acteur `cli`.
+
+```
+openldr forms access form-sample-order
+openldr forms access form-sample-order --open lab_technician,lab_manager --submit lab_manager
+openldr forms access form-sample-order --clear
+```

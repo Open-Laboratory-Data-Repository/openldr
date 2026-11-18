@@ -129,7 +129,7 @@ Estes casos foram reproduzidos em Linux com o iniciador instalado e a CLI real n
 | `settings` | Indicadores de funcionalidades `flags list` / `flags set`, `danger <action>`, e `sync show` / `sync set` (configuração da sincronização laboratório⇄central). |
 | `terminology` | Importa e consulta CodeSystems, ValueSets, ConceptMaps e ontologias. |
 | `fhir` | Valida recursos FHIR R4. |
-| `forms` | Lista definições de formulários; extrai respostas de um QuestionnaireResponse. |
+| `forms` | Lista definições de formulários; extrai respostas de um QuestionnaireResponse; escolhe as funções que podem abrir e submeter um formulário. |
 | `ingest` | Carrega um ficheiro através do pipeline (opcionalmente com um plugin). |
 | `facilities` | Importa um registo nacional de unidades: `suggest-map`, `suggest-values`, `import` (mapeamento de colunas e valores; consulte **Unidades** na Documentação do estúdio). |
 | `test-catalog` | O catálogo nacional de exames: `list` dos testes, `import` de uma lista a partir de CSV ou Excel, `export` em CSV, `enable` ou `disable` de um teste neste laboratório, e `retire` ou `restore` de um teste quando esta instalação é dona do catálogo. |
@@ -505,3 +505,22 @@ Uma verificação de fonte retém um pedido quando as suas regras encontram um e
 
 - `openldr import check correct <plugin> <copy> <key> --set campo=valor --reason "porquê"` corrige um ou mais campos. Repita `--set` para cada campo. Um valor vazio limpa o campo. O plugin decide que campos podem ser corrigidos.
 - `openldr import check recheck <plugin> <copy> <key>` verifica o pedido de novo na execução que o reteve. Se passar, é gravado e sai da lista de pedidos retidos. Execute `import check held` para ver o resultado.
+
+## Quem pode abrir e submeter um formulário
+
+`openldr forms access <form-id>` mostra as funções que podem abrir e submeter um formulário. É o lado CLI do painel **Acesso** do construtor de formulários. Uma lista vazia significa todas as funções com a permissão. Para submeter, a pessoa também tem de poder abrir o formulário. Quem gere funções abre sempre todos os formulários. Precisa da permissão `forms.edit`.
+
+| Opção | O que faz |
+| --- | --- |
+| `--open <roles>` | Funções que podem abrir o formulário, como slugs ou identificadores separados por vírgulas. Substitui a lista de abertura. |
+| `--submit <roles>` | Funções que podem submeter o formulário, como slugs ou identificadores separados por vírgulas. Substitui a lista de submissão. |
+| `--clear` | Esvazia as duas listas: todas as funções com a permissão voltam a poder abrir e submeter. |
+| `--json` | Mostra as listas em JSON, com os identificadores das funções. |
+
+Uma lista que não indica fica como está. Uma função ou formulário desconhecido é recusado e nada muda. Cada alteração é auditada como `form.access.set`. Em modo local, a CLI regista o ator como `cli`.
+
+```
+openldr forms access form-sample-order
+openldr forms access form-sample-order --open lab_technician,lab_manager --submit lab_manager
+openldr forms access form-sample-order --clear
+```

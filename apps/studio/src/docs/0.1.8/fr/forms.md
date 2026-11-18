@@ -430,6 +430,32 @@ Lisez la version publiée dans l'en-tête. Republier crée l'instantané suivant
 
 **Résultat attendu :** le modèle restauré est de nouveau Published. L'installation d'exemple a les instantanés 1 à 4. Ces numéros sont illustratifs.
 
+## Choisir qui peut ouvrir et soumettre un formulaire
+
+Faites-le quand seuls certains rôles doivent utiliser un formulaire, par exemple un formulaire de suivi des échantillons pour une équipe.
+
+### 1. Ouvrir les actions du constructeur
+
+Ouvrez le formulaire dans le constructeur, puis ouvrez le menu à points en haut à droite.
+
+### 2. Choisir Accès
+
+Sélectionnez **Accès**. Le panneau **Qui peut utiliser ce formulaire** s’ouvre.
+
+### 3. Ajouter les rôles qui peuvent l’ouvrir
+
+Sous **Qui peut ouvrir**, sélectionnez **Ajouter un rôle** et choisissez un rôle. Répétez pour chaque rôle.
+
+### 4. Ajouter les rôles qui peuvent le soumettre
+
+Sous **Qui peut soumettre**, sélectionnez **Ajouter un rôle** et choisissez un rôle. Répétez pour chaque rôle.
+
+### 5. Enregistrer
+
+Ouvrez le menu à points de la ligne **Rôles** et sélectionnez **Enregistrer**.
+
+**Résultat attendu :** **Accès enregistré** s’affiche. Les personnes sans aucun des rôles listés ne voient plus le formulaire dans Formulaires. Une liste vide affiche **Tous ceux qui ont la permission**.
+
 ## Exporter la définition du formulaire
 
 Utilisez cette tâche pour obtenir un fichier JSON FHIR Questionnaire. Cet export contient la définition, pas les réponses envoyées.
@@ -547,6 +573,8 @@ Lisez l'aperçu et faites défiler ses champs. Preview actions reste dans les po
 ## Limites
 
 Ce parcours saisit une demande et un choix de prélèvement. Il ne montre ni la saisie de résultats de laboratoire ni le rejet d'une demande.
+
+Les listes d’accès nomment des rôles. Une personne passe quand l’un de ses rôles est listé. Pour soumettre, il faut aussi pouvoir ouvrir le formulaire. Un gestionnaire des rôles ouvre toujours tous les formulaires, et seuls les éditeurs de formulaires voient **Accès**.
 
 Save de l'éditeur de champ applique une modification locale du créateur. Save draft du créateur enregistre la définition. Publish enregistre le modèle et crée une version. Les actions Preview ne font aucune de ces écritures.
 
