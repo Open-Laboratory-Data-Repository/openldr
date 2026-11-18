@@ -109,6 +109,10 @@ export interface CheckRun {
     /** The keys already decided and counted, saved with the counts. A saved one's held row is
      *  removed only after that save, so a cut between the two only finishes the removal (re-review H3). */
     done?: Array<{ key: string; outcome: 'saved' | 'other' }>;
+    /** Each key's counted decision as it stood when the recheck was queued: what the recheck takes
+     *  away from the counts. Kept here, not read from the held row, which the recheck rewrites
+     *  before its counts are saved (re-review H3). Codes only, no source value. */
+    before?: Array<{ key: string; label: string | null; laboratory: string | null; pass: string | null }>;
   };
   /** Names one pass from the first key, carried on through a stop. A held row records the pass that
    *  counted it, so a recheck moves only this pass's counts (review H4). Absent on older records. */
@@ -718,7 +722,11 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         const before = rechecking
           ? (await Promise.all(run.recheck!.keys.map((k) => ownDb('read', () => deps.held.get(run.copyId, k))))).filter((h): h is HeldItem => h !== null)
           : [];
-        const passOf = new Map(before.map((h) => [h.key, h.pass]));
+        // The decision each key was counted with, as recorded when the recheck was queued; a record
+        // from before that was kept falls back to the held row.
+        const counted0 = new Map((run.recheck?.before ?? []).map((b) => [b.key, b]));
+        const decided = before.map((h) => counted0.get(h.key) ?? { key: h.key, label: h.label, laboratory: h.laboratory, pass: h.pass });
+        const passOf = new Map(decided.map((d) => [d.key, d.pass]));
         const keys = rechecking
           ? before.map((h) => h.key)
           : await ownDb('read', () => deps.copyStore.listKeys(run.copyId, REQUESTS, run.cursor, size));
@@ -825,9 +833,9 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         if (rechecking) {
           // A key held in this pass was counted as held: take that away and count what it is now. A
           // key held by an earlier pass is not in this pass's counts, so they stay as they are (review H4).
-          const counted = before.every((h) => h.pass !== null && h.pass === run.pass);
+          const counted = decided.every((d) => d.pass !== null && d.pass === run.pass);
           if (counted && run.pass !== undefined) {
-            subtractTally(before.map((h) => ({ outcome: 'held' as const, laboratory: h.laboratory, label: h.label ?? undefined })));
+            subtractTally(decided.map((d) => ({ outcome: 'held' as const, laboratory: d.laboratory, label: d.label ?? undefined })));
             addTally(t);
           }
           // Saved with the counts at the page end; the next call removes the saved keys' held rows.
@@ -1162,7 +1170,10 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         if (isLive(stored.status)) throw new Error(`check ${runId} is ${stored.status}; wait for it to end, then check the request again`);
         return {
           ...stored, status: 'queued', driver: null, waiting: null,
-          recheck: { keys: [key], returnTo: stored.status, finishedAt: stored.finishedAt },
+          recheck: {
+            keys: [key], returnTo: stored.status, finishedAt: stored.finishedAt,
+            before: [{ key, label: held.label, laboratory: held.laboratory, pass: held.pass }],
+          },
         };
       }, () => auditOrRefuse(deps.audit, { action: 'import.check.recheck', pluginId, runId, actor, metadata: { copyId } }));
       return run;

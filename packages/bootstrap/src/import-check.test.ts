@@ -1805,6 +1805,23 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     expect((await w.stored())!).toMatchObject({ status: 'completed', counts: { read: 2, saved: 1, held: 1 } });
   });
 
+  it('a cut after a still-held recheck rewrote its row takes away the decision it replaced, not the new one (re-review H3, labels)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    expect((await w.stored())!.counts.labels).toEqual({ held_rules: 2 });
+    await w.svc.correct(correctInput({ values: { sex: 'M' } }));
+    const queued = await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    // The plugin still holds it, now for the check rather than the rules.
+    w.setDecode((input) => ({ groups: input.keys.map((key) => ({ key, held: true, findings: [], check: { status: 'failed' }, label: 'held_check', fields: { dob_age: '2024-03-11', sex: 'F' } })) }));
+    // A cut after the held row was rewritten but before the counts were saved.
+    const pre = (await w.stored())!;
+    await w.realHeld.put({ ...(await w.realHeld.get(SRC, 'REQ0001'))!, label: 'held_check' });
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, { ...pre, rev: pre.rev + 1 });
+    expect(queued.status).toBe('queued');
+    await drive(w.svc);
+    expect((await w.stored())!.counts).toMatchObject({ read: 2, held: 2, labels: { held_rules: 1, held_check: 1 } });
+  });
+
   it('a full run sends the stored corrections of its page, and none when the plugin declares no fields', async () => {
     const w = await world({ corrections: FIELDS });
     await heldRun(w);
