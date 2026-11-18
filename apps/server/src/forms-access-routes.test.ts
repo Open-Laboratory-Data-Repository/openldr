@@ -31,7 +31,7 @@ function app(user: { capabilities: string[]; roleIds: string[] }) {
     formAccess: formAccess({ access: store }),
     roles: {
       get: async (id: string) => (id.startsWith('r-') ? { id } : null),
-      list: async () => ['r-clerk', 'r-lead', 'r-nurse', 'r-tech'].map((id) => ({ id, slug: id })),
+      list: async () => ['r-clerk', 'r-lead', 'r-nurse', 'r-tech'].map((id) => ({ id, slug: id, name: `Name ${id}` })),
     },
     audit,
     logger: { warn: () => {}, error: () => {}, info: () => {} },
@@ -44,6 +44,8 @@ function app(user: { capabilities: string[]; roleIds: string[] }) {
 const viewer = { capabilities: ['forms.view', 'forms.submit'], roleIds: ['r-viewer'] };
 const clerk = { capabilities: ['forms.view', 'forms.submit'], roleIds: ['r-clerk'] };
 const editor = { capabilities: ['forms.view', 'forms.edit'], roleIds: ['r-editor'] };
+// The shipped Lab Manager: forms.edit and forms.submit, but no roles.view (Codex review FR1, FR2).
+const manager = { capabilities: ['forms.view', 'forms.submit', 'forms.edit', 'forms.publish'], roleIds: ['r-manager'] };
 
 describe('form access on the form routes', () => {
   it('lists only the forms a person may open, and every form to an editor', async () => {
@@ -69,7 +71,7 @@ describe('form access on the form routes', () => {
 
   it('lets an editor read and set the lists, refuses unknown roles, and audits the change', async () => {
     const { a, lists, audit } = app(editor);
-    expect((await a.inject({ url: '/api/forms/tracking/access' })).json()).toEqual({ open: ['r-clerk'], submit: [] });
+    expect((await a.inject({ url: '/api/forms/tracking/access' })).json()).toMatchObject({ open: ['r-clerk'], submit: [] });
     const put = await a.inject({ method: 'PUT', url: '/api/forms/tracking/access', payload: { open: ['r-clerk', 'r-lead'], submit: ['r-lead'] } });
     expect(put.statusCode).toBe(200);
     expect(lists.tracking).toEqual({ open: ['r-clerk', 'r-lead'], submit: ['r-lead'] });
@@ -77,5 +79,16 @@ describe('form access on the form routes', () => {
     const bad = await a.inject({ method: 'PUT', url: '/api/forms/tracking/access', payload: { open: ['no-such-role'], submit: [] } });
     expect(bad.statusCode).toBe(400);
     expect((await app(viewer).a.inject({ method: 'PUT', url: '/api/forms/tracking/access', payload: { open: [], submit: [] } })).statusCode).toBe(403);
+  });
+
+  it('refuses a submission from an editor whose roles the lists leave out (FR1)', async () => {
+    const res = await app(manager).a.inject({ method: 'POST', url: '/api/forms/tracking/responses', payload: { answers: {} } });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('names every role with the lists, so an editor without roles.view can pick them (FR2)', async () => {
+    const body = (await app(manager).a.inject({ url: '/api/forms/tracking/access' })).json();
+    expect(body.roles).toContainEqual({ id: 'r-clerk', slug: 'r-clerk', name: 'Name r-clerk' });
+    expect(body.roles).toHaveLength(4);
   });
 });

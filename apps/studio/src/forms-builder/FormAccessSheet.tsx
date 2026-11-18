@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { getFormAccess, listRoles, setFormAccess, type FormAccess, type RoleRecord } from '../api';
+import { getFormAccess, setFormAccess, type FormAccess, type FormAccessWithRoles } from '../api';
 
 export interface FormAccessSheetProps {
   formId: string | null;
@@ -24,7 +24,7 @@ type Mode = keyof FormAccess;
  *  part 1). An empty list keeps the old rule: every role with the permission. */
 export function FormAccessSheet({ formId, open, onOpenChange }: FormAccessSheetProps): JSX.Element {
   const { t } = useTranslation();
-  const [roles, setRoles] = useState<RoleRecord[]>([]);
+  const [roles, setRoles] = useState<FormAccessWithRoles['roles']>([]);
   const [access, setAccess] = useState<FormAccess | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -32,8 +32,10 @@ export function FormAccessSheet({ formId, open, onOpenChange }: FormAccessSheetP
     if (!open || !formId) return;
     let live = true;
     setAccess(null);
-    Promise.all([getFormAccess(formId), listRoles()]).then(
-      ([a, r]) => { if (live) { setAccess(a); setRoles(r); } },
+    // The role names come with the lists: the role list itself needs roles.view, which a Lab
+    // Manager does not hold (Codex FR2).
+    getFormAccess(formId).then(
+      ({ roles: r, ...a }) => { if (live) { setAccess(a); setRoles(r); } },
       () => { if (live) toast.error(t('formBuilder.access.loadFailed')); },
     );
     return () => { live = false; };
@@ -50,7 +52,8 @@ export function FormAccessSheet({ formId, open, onOpenChange }: FormAccessSheetP
     if (!formId || !access) return;
     setSaving(true);
     try {
-      setAccess(await setFormAccess(formId, access));
+      const saved = await setFormAccess(formId, access);
+      setAccess({ open: saved.open, submit: saved.submit });
       toast.success(t('formBuilder.access.saved'));
       onOpenChange(false);
     } catch (err) {

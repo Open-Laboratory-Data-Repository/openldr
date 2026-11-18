@@ -209,7 +209,10 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
   app.get('/api/forms/:id/access', EDIT, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     if (!(await ctx.forms.get(id))) { reply.code(404); return { error: 'not found' }; }
-    return ctx.formAccessStore.get(id);
+    // The role names come with the lists, so an editor without roles.view (Lab Manager) can pick
+    // roles in the Access sheet (Codex FR2). Names and slugs only, no capabilities.
+    const roles = (await ctx.roles.list()).map((r) => ({ id: r.id, slug: r.slug, name: r.name }));
+    return { ...(await ctx.formAccessStore.get(id)), roles };
   });
 
   app.put('/api/forms/:id/access', EDIT, async (req, reply) => {
@@ -468,7 +471,8 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
 
   app.post('/api/forms/:id/responses', SUBMIT, async (req, reply) => {
     const formId = (req.params as { id: string }).id;
-    if (!isEditor(req) && !(await ctx.formAccess.maySubmit(formUser(req), formId))) {
+    // No editor bypass here: seeing every form in the builder does not mean submitting to it (Codex FR1).
+    if (!(await ctx.formAccess.maySubmit(formUser(req), formId))) {
       reply.code(403);
       return { error: 'you may not submit this form' };
     }

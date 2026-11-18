@@ -2041,7 +2041,9 @@ export const listForms = (): Promise<FormSummary[]> => apiGet('/api/forms', 'lis
 export const getForm = (id: string): Promise<FormDefinition> => apiGet(`/api/forms/${id}`, 'get form');
 /** Who may open and submit a form, as role ids. An empty list means every role with the permission. */
 export interface FormAccess { open: string[]; submit: string[] }
-export const getFormAccess = (id: string): Promise<FormAccess> => apiGet(`/api/forms/${id}/access`, 'get form access');
+/** The lists plus every role's id, slug and name, so an editor without roles.view can pick roles. */
+export interface FormAccessWithRoles extends FormAccess { roles: Array<{ id: string; slug: string; name: string }> }
+export const getFormAccess = (id: string): Promise<FormAccessWithRoles> => apiGet(`/api/forms/${id}/access`, 'get form access');
 export const setFormAccess = (id: string, access: FormAccess): Promise<FormAccess> =>
   authFetch(`/api/forms/${id}/access`, jbody(access, 'PUT')).then((r) => okJson<FormAccess>(r, 'set form access'));
 export const createForm = (i: CreateFormInput): Promise<FormDefinition> =>

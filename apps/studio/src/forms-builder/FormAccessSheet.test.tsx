@@ -12,10 +12,12 @@ function role(id: string, name: string) {
 const ROLES = [role('r-nurse', 'Nurse'), role('r-clerk', 'Clerk'), role('r-tech', 'Lab technician')];
 
 async function openSheet(access: { open: string[]; submit: string[] }) {
-  vi.spyOn(api, 'listRoles').mockResolvedValue(ROLES);
-  vi.spyOn(api, 'getFormAccess').mockResolvedValue(access);
+  // The role names come with the lists: a Lab Manager has forms.edit but no roles.view (Codex FR2).
+  const listRoles = vi.spyOn(api, 'listRoles').mockRejectedValue(new Error('403 roles.view'));
+  vi.spyOn(api, 'getFormAccess').mockResolvedValue({ ...access, roles: ROLES.map(({ id, slug, name }) => ({ id, slug, name })) });
   render(<FormAccessSheet formId="form-1" open onOpenChange={() => {}} />);
   await screen.findByTestId('form-access-open');
+  expect(listRoles).not.toHaveBeenCalled();
 }
 
 function pressSave() {
