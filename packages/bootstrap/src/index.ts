@@ -16,6 +16,7 @@ import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { formAccess, type FormAccessCheck } from './form-access';
+import { dashboardAccess, type DashboardAccessCheck } from './dashboard-access';
 import { createFormStore, createStarterPackStore, seededStarterPacks, type FormStore, type StarterPackStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
 import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, validateSelectSql, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, StoredQueryRowLimitError, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type SqlDialect, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
@@ -48,7 +49,7 @@ import { checkCustomQueryFile, importCustomQueries } from './custom-query-transf
 import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -505,6 +506,10 @@ export interface AppContext {
   formAccessStore: FormAccessStore;
   /** The one check of who may open and submit a form. */
   formAccess: FormAccessCheck;
+  /** Which roles may see each dashboard (design 2026-11-18-roles-scope, part 2). */
+  dashboardAccessStore: DashboardAccessStore;
+  /** The one check of who may see and share a dashboard. */
+  dashboardAccess: DashboardAccessCheck;
   /** Read-only starter packs for the form builder. Rewritten from source on every boot. */
   starterPacks: StarterPackStore;
   marketplaceForms: FormArtifactInstaller;
@@ -802,6 +807,8 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const forms = createFormStore(internal.db, referenceCapture);
   const formAccessStore = createFormAccessStore(internal.db as unknown as Kysely<InternalSchema>);
   const formAccessCheck = formAccess({ access: formAccessStore });
+  const dashboardAccessStore = createDashboardAccessStore(internal.db as unknown as Kysely<InternalSchema>);
+  const dashboardAccessCheck = dashboardAccess({ access: dashboardAccessStore });
   const starterPacks = createStarterPackStore(internal.db);
   // Starter packs are read-only seeded data, rewritten on every boot from
   // `packages/forms/src/samples/starter-packs.ts` so a release that changes one reaches every
@@ -2050,6 +2057,8 @@ const reporting: ReportingApi = {
     forms,
     formAccessStore,
     formAccess: formAccessCheck,
+    dashboardAccessStore,
+    dashboardAccess: dashboardAccessCheck,
     starterPacks,
     marketplaceForms,
     marketplacePacks,
@@ -2168,6 +2177,7 @@ export * from './test-mapping';
 export * from './result-fields';
 export * from './job-continue';
 export * from './form-access';
+export * from './dashboard-access';
 export { MAX_SELF_RESUMES } from './job-interruptions';
 export * from './patient-identifier-systems';
 export * from './patient-index';
