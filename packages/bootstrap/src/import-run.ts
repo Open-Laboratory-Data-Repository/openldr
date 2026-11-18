@@ -9,6 +9,7 @@ import { growPage, isStorageDown, retryWaitMs } from './import-retry';
 import { createSourceReader, type SourceReader } from './import-source-reader';
 import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, fillDetailQuery, fillKeyQuery, toPluginRow } from './import-sql';
 import { takeBack, type SelfResumeDeps } from './job-interruptions';
+import { resolveByPerson } from './job-continue';
 
 // Runs an import for a plugin that declares `payload.importSource` (see the marketplace manifest).
 //
@@ -779,6 +780,11 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
         ...(actor.type === 'system' ? {} : { metadata: { cursor: run.cursor } }),
       });
       await save(run);
+      // A person's Resume closes the cut the run waited on, so its record stops reading as waiting.
+      // adopt resumes as the system and its cut is resolved as self by takeBack (third review R10).
+      if (actor.type !== 'system' && deps.interruptions) {
+        await resolveByPerson(deps.interruptions.store, 'cdr-run', runId, now()).catch(() => {});
+      }
       // A resume by hand and adopt can both pass the checks above before either launches. The
       // second one does not start a second drive in this process.
       if (local.has(runId)) return { ...run };

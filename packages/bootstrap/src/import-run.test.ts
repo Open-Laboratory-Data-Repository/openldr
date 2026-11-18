@@ -831,11 +831,19 @@ describe('import run: adopt', () => {
     await storeRun(h, { status: 'waiting', waiting: { since: new Date(h.clock.now).toISOString(), attempt: 2, error: 'Connection lost' } });
     const run = await rawRun('dead');
     for (let i = 1; i <= 3; i += 1) {
-      await h.interruptions.record('cdr-run', 'dead', { at: new Date(Date.UTC(2026, 0, 1, 0, i)), cause: 'server-restart', phase: run.cursor ?? null });
+      const cut = await h.interruptions.record('cdr-run', 'dead', { at: new Date(Date.UTC(2026, 0, 1, 0, i)), cause: 'server-restart', phase: run.cursor ?? null });
+      await h.interruptions.resolve(cut.id, { resumedBy: 'self', resumedAt: new Date(Date.UTC(2026, 0, 1, 0, i, 30)) });
     }
     h.clock.now += STALE_MS + 1;
     expect(await h.svc.adopt()).toEqual([]);
     expect(h.mapInputs).toEqual([]);
+    // A person's Resume carries it on and closes the open cut, so it no longer reads as waiting
+    // (third review R10).
+    await h.svc.resume('v1-import', 'dead', ADMIN);
+    expect(await h.svc.wait('dead')).toMatchObject({ status: 'completed' });
+    const records = (await h.interruptions.listFor('cdr-run', ['dead'])).get('dead') ?? [];
+    expect(records.filter((r) => r.resumedBy === null)).toEqual([]);
+    expect(records.at(-1)).toMatchObject({ resumedBy: 'person' });
   });
 
   it('adopt leaves a run that a CLI process started', async () => {
