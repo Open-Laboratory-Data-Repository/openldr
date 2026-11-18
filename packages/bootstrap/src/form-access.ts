@@ -34,3 +34,33 @@ export function formAccess(deps: { access: FormAccessStore }) {
   };
 }
 export type FormAccessCheck = ReturnType<typeof formAccess>;
+
+/** A refused change of a form's lists: the form or a role does not exist. */
+export class FormAccessError extends Error {
+  constructor(message: string, readonly reason: 'no-form' | 'no-role') { super(message); }
+}
+
+/** Set who may open and submit a form. A role is named by its id or its slug and stored by id,
+ *  each once. The route and the CLI both call this, then audit `before` and `after`. */
+export async function setFormAccess(
+  deps: {
+    access: FormAccessStore;
+    forms: { get(id: string): Promise<unknown | null> };
+    roles: { list(): Promise<Array<{ id: string; slug: string }>> };
+  },
+  formId: string,
+  input: FormAccess,
+): Promise<{ before: FormAccess; after: FormAccess }> {
+  if (!(await deps.forms.get(formId))) throw new FormAccessError(`no form ${formId}`, 'no-form');
+  const roles = await deps.roles.list();
+  const idOf = (name: string): string => {
+    const role = roles.find((r) => r.id === name) ?? roles.find((r) => r.slug === name);
+    if (!role) throw new FormAccessError(`no role ${name}`, 'no-role');
+    return role.id;
+  };
+  const resolve = (names: string[]) => [...new Set(names.map(idOf))];
+  const next = { open: resolve(input.open), submit: resolve(input.submit) };
+  const before = await deps.access.get(formId);
+  await deps.access.set(formId, next);
+  return { before, after: await deps.access.get(formId) };
+}

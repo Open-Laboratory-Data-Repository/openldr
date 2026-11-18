@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { FormAccess, FormAccessStore } from '@openldr/db';
-import { formAccess } from './form-access';
+import { formAccess, FormAccessError, setFormAccess } from './form-access';
 
 // Design 2026-11-18-roles-scope, part 1: the one check the form routes, the CLI and the list use.
 function memStore(lists: Record<string, FormAccess>): FormAccessStore {
@@ -53,5 +53,34 @@ describe('formAccess', () => {
   it('says which of many forms a person may open', async () => {
     expect([...(await access.visible(viewer, ['open', 'tracking', 'locked']))]).toEqual(['open']);
     expect([...(await access.visible(clerk, ['open', 'tracking', 'locked']))].sort()).toEqual(['locked', 'open', 'tracking']);
+  });
+});
+
+// The route and the CLI set the lists through one function, so they check the same things.
+describe('setFormAccess', () => {
+  const roles = [{ id: 'r-clerk', slug: 'clerk' }, { id: 'r-nurse', slug: 'nurse' }];
+  const deps = (lists: Record<string, FormAccess> = {}) => ({
+    access: memStore(lists),
+    forms: { async get(id: string) { return id === 'f1' ? { id } : null; } },
+    roles: { async list() { return roles; } },
+  });
+
+  it('saves the lists, taking a role by id or by slug, and returns them before and after', async () => {
+    const lists: Record<string, FormAccess> = { f1: { open: ['r-nurse'], submit: [] } };
+    const out = await setFormAccess(deps(lists), 'f1', { open: ['clerk', 'r-nurse'], submit: [] });
+    expect(out.before).toEqual({ open: ['r-nurse'], submit: [] });
+    expect(out.after).toEqual({ open: ['r-clerk', 'r-nurse'], submit: [] });
+  });
+
+  it('refuses a form that does not exist and a role that does not exist, saving nothing', async () => {
+    const lists: Record<string, FormAccess> = { f1: { open: [], submit: [] } };
+    await expect(setFormAccess(deps(lists), 'nope', { open: [], submit: [] })).rejects.toThrow(FormAccessError);
+    await expect(setFormAccess(deps(lists), 'f1', { open: ['ghost'], submit: [] })).rejects.toThrow(/no role ghost/);
+    expect(lists.f1).toEqual({ open: [], submit: [] });
+  });
+
+  it('keeps each role once in a list', async () => {
+    const out = await setFormAccess(deps(), 'f1', { open: ['clerk', 'r-clerk'], submit: [] });
+    expect(out.after.open).toEqual(['r-clerk']);
   });
 });

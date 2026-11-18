@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import AdmZip from 'adm-zip';
-import { TEST_CATALOG_SYSTEM, findCatalogBand, type AppContext, type ResultBand } from '@openldr/bootstrap';
+import { FormAccessError, TEST_CATALOG_SYSTEM, findCatalogBand, setFormAccess, type AppContext, type ResultBand } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import type { ExtractionContext, FormSchema } from '@openldr/forms';
 import { extractorsForForm, isEntityAnswer, linkToOrder, isCodingAnswer, parseTestDetails, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
@@ -216,13 +216,15 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     const id = (req.params as { id: string }).id;
     const p = formAccessInput.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
-    if (!(await ctx.forms.get(id))) { reply.code(404); return { error: 'not found' }; }
-    for (const roleId of [...p.data.open, ...p.data.submit]) {
-      if (!(await ctx.roles.get(roleId))) { reply.code(400); return { error: `no role ${roleId}` }; }
+    let changed;
+    try {
+      changed = await setFormAccess({ access: ctx.formAccessStore, forms: ctx.forms, roles: ctx.roles }, id, p.data);
+    } catch (err) {
+      if (!(err instanceof FormAccessError)) throw err;
+      reply.code(err.reason === 'no-form' ? 404 : 400);
+      return { error: err.reason === 'no-form' ? 'not found' : err.message };
     }
-    const before = await ctx.formAccessStore.get(id);
-    await ctx.formAccessStore.set(id, p.data);
-    const after = await ctx.formAccessStore.get(id);
+    const { before, after } = changed;
     await recordAudit(ctx, req, { action: 'form.access.set', entityType: 'form', entityId: id, before, after });
     return after;
   });

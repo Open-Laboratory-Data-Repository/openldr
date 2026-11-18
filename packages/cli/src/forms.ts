@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { createAppContext, recordAuditEvent } from '@openldr/bootstrap';
+import { createAppContext, FormAccessError, recordAuditEvent, setFormAccess } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { ObservationExtractor, ServiceRequestExtractor, toTransactionBundle, lintFormSchema, type ExtractionContext } from '@openldr/forms';
 import type { Questionnaire, QuestionnaireResponse } from '@openldr/fhir';
@@ -144,6 +144,58 @@ export async function runFormsRestore(
     } else {
       process.stdout.write(`restored ${id} to version ${parsed} (now ${restored.status})\n`);
     }
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+/**
+ * Show or set which roles may open and submit a form (design 2026-11-18-roles-scope, part 1).
+ * With no list option it shows them. `--open` and `--submit` take role slugs or ids, comma
+ * separated, and leave the other list as it is; `--clear` empties both, which means every role
+ * with the permission again. Checked by the same bootstrap function as PUT /api/forms/:id/access.
+ */
+export async function runFormsAccess(
+  id: string,
+  opts: { json: boolean; clear: boolean; open?: string; submit?: string },
+): Promise<number> {
+  const setting = opts.clear || opts.open !== undefined || opts.submit !== undefined;
+  if (opts.clear && (opts.open !== undefined || opts.submit !== undefined)) {
+    process.stderr.write('--clear empties both lists; do not give --open or --submit with it\n');
+    return 1;
+  }
+  const names = (text: string | undefined) => (text ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  const ctx = await createAppContext(loadConfig());
+  try {
+    if (!(await ctx.forms.get(id))) {
+      process.stderr.write(`no form with id ${id}\n`);
+      return 1;
+    }
+    let access = await ctx.formAccessStore.get(id);
+    if (setting) {
+      const next = opts.clear
+        ? { open: [], submit: [] }
+        : { open: opts.open !== undefined ? names(opts.open) : access.open, submit: opts.submit !== undefined ? names(opts.submit) : access.submit };
+      try {
+        const { before, after } = await setFormAccess({ access: ctx.formAccessStore, forms: ctx.forms, roles: ctx.roles }, id, next);
+        await recordAuditEvent(ctx, cliActor(), { action: 'form.access.set', entityType: 'form', entityId: id, before, after });
+        access = after;
+      } catch (err) {
+        if (!(err instanceof FormAccessError)) throw err;
+        process.stderr.write(`${err.message}\n`);
+        return 1;
+      }
+    }
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(access, null, 2) + '\n');
+      return 0;
+    }
+    const roles = await ctx.roles.list();
+    const show = (list: string[]) => list.length === 0
+      ? 'everyone with the permission'
+      : list.map((rid) => { const r = roles.find((x) => x.id === rid); return r ? `${r.name} (${r.slug})` : rid; }).join(', ');
+    process.stdout.write(`open: ${show(access.open)}\nsubmit: ${show(access.submit)}\n`);
     return 0;
   } finally {
     await ctx.close();
