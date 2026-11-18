@@ -430,6 +430,32 @@ Leia a versão publicada no cabeçalho. Publicar novamente cria o instantâneo s
 
 **Resultado esperado:** o desenho restaurado volta a Published. A instalação de exemplo tem instantâneos 1 a 4. Os números são ilustrativos.
 
+## Escolher quem pode abrir e submeter um formulário
+
+Faça isto quando só algumas funções devem usar um formulário, por exemplo um formulário de seguimento de amostras para uma equipa.
+
+### 1. Abrir as ações do construtor
+
+Abra o formulário no construtor e depois abra o menu de pontos no canto superior direito.
+
+### 2. Escolher Acesso
+
+Selecione **Acesso**. Abre-se o painel **Quem pode usar este formulário**.
+
+### 3. Adicionar as funções que o podem abrir
+
+Em **Quem pode abrir**, selecione **Adicionar uma função** e escolha uma função. Repita para cada função.
+
+### 4. Adicionar as funções que o podem submeter
+
+Em **Quem pode submeter**, selecione **Adicionar uma função** e escolha uma função. Repita para cada função.
+
+### 5. Guardar
+
+Abra o menu de pontos da linha **Funções** e selecione **Guardar**.
+
+**Resultado esperado:** aparece **Acesso guardado**. Quem não tem nenhuma das funções listadas deixa de ver o formulário em Formulários. Uma lista vazia mostra **Todos com a permissão**.
+
 ## Exportar a definição do formulário
 
 Use esta tarefa para obter um ficheiro JSON FHIR Questionnaire. A exportação contém a definição, não as respostas enviadas.
@@ -547,6 +573,8 @@ Leia a pré-visualização e desloque os campos. Preview actions continua nos po
 ## Limites
 
 Este percurso recolhe um pedido e uma escolha de amostra. Não demonstra a introdução de valores de resultados laboratoriais nem a rejeição de um pedido.
+
+As listas de acesso nomeiam funções. Uma pessoa passa quando uma das suas funções está listada. Para submeter, a pessoa também tem de poder abrir o formulário. Quem gere funções abre sempre todos os formulários, e só os editores de formulários veem **Acesso**.
 
 Save do editor de campo aplica uma edição local do construtor. Save draft do construtor guarda a definição. Publish guarda o desenho e cria uma versão. As ações de Preview não fazem nenhuma destas escritas.
 

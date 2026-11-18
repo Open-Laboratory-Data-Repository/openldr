@@ -11,6 +11,9 @@ export interface RequestActor {
   displayName: string | null;
   roles: string[];
   capabilities: string[];
+  /** The ids of the account's roles in the database, for the per-form access lists (design
+   *  2026-11-18-roles-scope). Empty for the dev bypass, whose capabilities include roles.manage. */
+  roleIds?: string[];
   /** Set when the request signed in with an access key. The key's row ID and name, never the key. */
   accessKey?: { id: string; name: string };
 }
@@ -219,7 +222,8 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
       }
       const subject = u.subject ?? (claims as { sub?: string }).sub ?? u.id;
       const capabilities = await ctx.roles.resolveCapabilities(subject);
-      req.user = { id: u.id, username: u.username, displayName: u.displayName, roles: legacyRoles, capabilities };
+      const roleIds = (await ctx.roles.rolesForUser(subject)).map((r) => r.id);
+      req.user = { id: u.id, username: u.username, displayName: u.displayName, roles: legacyRoles, capabilities, roleIds };
     } catch (e) {
       ctx.logger.error({ error: e instanceof Error ? e.message : String(e) }, 'user sync failed');
       recordAuthFailed(req, 'sync-failed', (claims as { sub?: string }).sub ?? null);

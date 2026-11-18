@@ -430,6 +430,32 @@ Read the published version in the header. Republishing creates the next snapshot
 
 **Expected result:** The restored design is Published again. The example installation has snapshots 1 through 4; those numbers are illustrative.
 
+## Choose who may open and submit a form
+
+Do this when only some roles should use a form, such as a sample-tracking form for one team.
+
+### 1. Open the builder actions
+
+Open the form in the builder, then open the dots menu at the top right.
+
+### 2. Choose Access
+
+Select **Access**. The **Who may use this form** sheet opens.
+
+### 3. Add the roles that may open it
+
+Under **Who may open**, select **Add a role** and choose a role. Repeat for each role.
+
+### 4. Add the roles that may submit it
+
+Under **Who may submit**, select **Add a role** and choose a role. Repeat for each role.
+
+### 5. Save
+
+Open the dots menu on the **Roles** row and select **Save**.
+
+**Expected result:** **Access saved** appears. People with none of the listed roles no longer see the form in Forms. A list left empty shows **Everyone with the permission**.
+
 ## Export the form definition
 
 Use this when you need the form as a FHIR Questionnaire JSON file. This export contains the definition, not submitted answers.
@@ -547,6 +573,8 @@ Read the preview and scroll its fields. Preview actions remains in its header do
 ## Limits
 
 This walkthrough captures an order and specimen choice. It does not demonstrate entering laboratory result values or rejecting an order.
+
+Access lists name roles. A person passes when one of their roles is listed. To submit, a person must also be able to open the form. A role manager always opens every form, and only form editors see **Access**.
 
 Field-editor Save applies a local builder edit. Builder Save draft stores the definition. Publish stores the design and creates a version. Preview actions do none of these writes.
 

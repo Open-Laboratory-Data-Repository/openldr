@@ -129,7 +129,7 @@ These cases were reproduced on Linux with the installed launcher and real CLI in
 | `settings` | Feature `flags list` / `flags set`, `danger <action>`, and `sync show` / `sync set` (lab⇄central sync config). |
 | `terminology` | Import and query CodeSystems, ValueSets, ConceptMaps, ontologies. |
 | `fhir` | Validate FHIR R4 resources. |
-| `forms` | List form definitions; extract answers from a QuestionnaireResponse. |
+| `forms` | List form definitions; extract answers from a QuestionnaireResponse; set which roles may open and submit a form. |
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
 | `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see **Facilities** in the studio's Docs). |
 | `test-catalog` | The national test catalog: `list` the tests, `import` a list from CSV or Excel, `export` it as CSV, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog. |
@@ -498,3 +498,22 @@ A source check holds a request back when its rules find an error. Someone with t
 
 - `openldr import check correct <plugin> <copy> <key> --set field=value --reason "why"` corrects one or more fields. Repeat `--set` for each field. An empty value clears the field. The plugin decides which fields can be corrected.
 - `openldr import check recheck <plugin> <copy> <key>` checks the request again in the run that held it. If it now passes it is saved and leaves the held list. Run `import check held` to see the result.
+
+## Who may open and submit a form
+
+`openldr forms access <form-id>` shows which roles may open and submit a form. It is the CLI side of the form builder's **Access** sheet. A list left empty means every role with the permission. To submit, a person must also be able to open the form. A role manager always opens every form. You need the `forms.edit` permission.
+
+| Flag | What it does |
+| --- | --- |
+| `--open <roles>` | Roles that may open the form, as slugs or ids, comma separated. Replaces the open list. |
+| `--submit <roles>` | Roles that may submit the form, as slugs or ids, comma separated. Replaces the submit list. |
+| `--clear` | Empty both lists, so every role with the permission may open and submit again. |
+| `--json` | Print the lists as JSON, as role ids. |
+
+A list you do not name stays as it is. An unknown role or form is refused and nothing changes. Each change is audited as `form.access.set`. Run locally, the CLI records the actor as `cli`.
+
+```
+openldr forms access form-sample-order
+openldr forms access form-sample-order --open lab_technician,lab_manager --submit lab_manager
+openldr forms access form-sample-order --clear
+```

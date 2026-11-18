@@ -16,6 +16,8 @@ export interface KeyActor {
   roles: string[];
   capabilities: string[];
   accessKey: { id: string; name: string };
+  /** The ids of the account's roles (design 2026-11-18-roles-scope). */
+  roleIds: string[];
 }
 
 export type KeySignIn =
@@ -45,11 +47,12 @@ export async function signInWithAccessKey(ctx: KeySignInContext, key: string, no
   // account's role slugs (packages/adapter-auth/src/local/sign-in.ts), and a Keycloak token
   // carries realm roles that were copied into user_roles on first sign-in. A generic OIDC token
   // carries none (auth-plugin.ts). The key has no token, so it reads the slugs from user_roles.
-  const roles = ctx.cfg.AUTH_ADAPTER === 'oidc' ? [] : (await ctx.roles.rolesForUser(subject)).map((r) => r.slug);
+  const held = await ctx.roles.rolesForUser(subject);
+  const roles = ctx.cfg.AUTH_ADAPTER === 'oidc' ? [] : held.map((r) => r.slug);
   return {
     ok: true,
     user: {
-      id: u.id, username: u.username, displayName: u.displayName, roles, capabilities,
+      id: u.id, username: u.username, displayName: u.displayName, roles, capabilities, roleIds: held.map((r) => r.id),
       accessKey: { id: record.id, name: record.name },
     },
   };

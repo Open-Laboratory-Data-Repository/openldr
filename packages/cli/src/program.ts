@@ -7,7 +7,7 @@ import { sendLogsToStderr } from '@openldr/core';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed, runDbReproject } from './db';
 import { runAuthRebindIssuer, runAuthSetupCode } from './auth';
-import { runFormsExtract, runFormsList, runFormsLint, runFormsVersions, runFormsRestore } from './forms';
+import { runFormsExtract, runFormsList, runFormsLint, runFormsVersions, runFormsRestore, runFormsAccess } from './forms';
 import { runList as runReportDesignList, runDelete as runReportDesignDelete, runPublish as runReportDesignPublish, runVersions as runReportDesignVersions } from './report-design';
 import { runList as runReportDefList, runDelete as runReportDefDelete } from './report-def';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
@@ -1215,6 +1215,17 @@ export function buildProgram(): Command {
     .action(async (id: string, opts: { json: boolean }) => {
       try { process.exitCode = await runFormsVersions(id, opts); }
       catch (err) { process.stderr.write(`forms versions failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  forms
+    .command('access <id>')
+    .description('Show or set which roles may open and submit a form. An empty list means every role with the permission')
+    .option('--open <roles>', 'roles that may open the form, slugs or ids, comma separated')
+    .option('--submit <roles>', 'roles that may submit the form, slugs or ids, comma separated')
+    .option('--clear', 'empty both lists, so every role with the permission may open and submit', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (id: string, opts: { json: boolean; clear: boolean; open?: string; submit?: string }) => {
+      try { process.exitCode = await runFormsAccess(id, opts); }
+      catch (err) { process.stderr.write(`forms access failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
   forms
     .command('restore <id> <version>')

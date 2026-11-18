@@ -927,6 +927,12 @@ export interface ImportCheckHeldTable {
   pass: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
+export interface FormAccessTable {
+  form_id: string;
+  role_id: string;
+  mode: string;
+}
+
 export interface ImportCheckCorrectionsTable {
   copy_id: string;
   key: string;
@@ -1151,6 +1157,7 @@ export interface InternalSchema {
   import_copy_rows: ImportCopyRowsTable;
   import_check_held: ImportCheckHeldTable;
   import_check_corrections: ImportCheckCorrectionsTable;
+  form_access: FormAccessTable;
   app_settings: AppSettingsTable;
   report_designs: ReportDesignsTable;
   report_design_versions: ReportDesignVersionsTable;

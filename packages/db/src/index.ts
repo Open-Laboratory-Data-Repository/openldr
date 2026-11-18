@@ -40,6 +40,7 @@ export * from './plugin-data-store';
 export * from './import-copy-store';
 export * from './import-check-held-store';
 export * from './import-check-correction-store';
+export * from './form-access-store';
 export * from './app-settings-store';
 export * from './reference-change-log';
 export * from './terminology-sync';

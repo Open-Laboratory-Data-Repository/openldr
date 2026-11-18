@@ -4,7 +4,17 @@ import AdmZip from 'adm-zip';
 import type { AppContext } from '@openldr/bootstrap';
 import { sampleForms, type FormDefinition, type FormInput, type FormVersion, type FormVersionSummary } from '@openldr/forms';
 import { projectServiceRequest } from '@openldr/db';
+import { formAccess } from '@openldr/bootstrap';
 import { registerFormsRoutes } from './forms-routes';
+
+/** No form limited to any role: today's rule for every form (design 2026-11-18-roles-scope). */
+const noLists = {
+  async get() { return { open: [], submit: [] }; },
+  async set() { return { before: { open: [], submit: [] }, after: { open: [], submit: [] } }; },
+  async forForms() { return new Map(); },
+  async removeRole() {},
+};
+const withAccess = <T extends object>(ctx: T): T => ({ formAccessStore: noLists, formAccess: formAccess({ access: noLists }), ...ctx });
 import './auth-plugin';
 
 // forms.submit joined this list when POST /:id/responses stopped being a read-only echo and
@@ -18,7 +28,7 @@ function appWithForms(ctx: Record<string, unknown>, roles: string[] = ['lab_admi
   app.addHook('onRequest', async (req) => {
     req.user = { id: 'admin', username: 'admin', displayName: null, roles, capabilities } as never;
   });
-  registerFormsRoutes(app, ctx as never);
+  registerFormsRoutes(app, withAccess(ctx) as never);
   return app;
 }
 
@@ -30,7 +40,7 @@ function authedApp(ctx: AppContext, capabilities: string[] = ALL_FORMS_CAPS) {
   app.addHook('onRequest', async (req) => {
     req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities } as never;
   });
-  registerFormsRoutes(app, ctx);
+  registerFormsRoutes(app, withAccess(ctx));
   return app;
 }
 
