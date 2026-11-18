@@ -1893,7 +1893,7 @@ export async function runFacilitiesJobs(opts: FacilitiesJobsOpts): Promise<numbe
       }
     }
 
-    const health: FacilityHealth = await facilityHealth({ internalDb: ctx.internalDb, jobs: ctx.facilityJobs });
+    const health: FacilityHealth = await facilityHealth({ internalDb: ctx.internalDb, jobs: ctx.facilityJobs, interruptions: ctx.jobInterruptions });
 
     if (opts.json) {
       process.stdout.write(JSON.stringify(health, null, 2) + '\n');
@@ -1922,6 +1922,7 @@ function formatJobsHuman(health: FacilityHealth): string {
   lines.push(`last successful rebuild: ${dim.lastSuccessAt ?? 'never'}${dim.rows != null ? ` (${dim.rows} rows)` : ''}`);
   if (dim.error) lines.push(`last error: ${dim.error}`);
   if (dim.jobId) lines.push(`retry with: openldr facilities jobs --retry ${dim.jobId}`);
+  for (const r of dim.interruptions ?? []) lines.push(`interrupted: ${describeInterruption(r)}`);
   lines.push(`failed projection retries: ${projection.failedCount}`);
   for (const job of projection.failed) {
     lines.push(`  facility ${job.registryId ?? '(unnamed)'}: ${job.lastError ?? 'no error recorded'}`);

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { sql } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { createFacilityJobStore } from '@openldr/db';
+import { createFacilityJobStore, createJobInterruptionStore } from '@openldr/db';
 import { facilityHealth } from './facility-health';
 
 const REBUILD = 'facility-map-rebuild' as const;
@@ -70,6 +70,19 @@ describe('facilityHealth', () => {
     const dim = (await facilityHealth(deps)).reportDimension;
     expect(dim).toMatchObject({ state: 'failed', jobId: claimed!.id });
     expect(dim.error).toMatch(/interrupted/);
+  });
+
+  it("carries the latest rebuild's interruptions, so the chip and the CLI can say what happened (re-review R3)", async () => {
+    const deps = await withCompletedRebuild();
+    const interruptions = createJobInterruptionStore(deps.internalDb);
+    await deps.jobs.enqueue({ kind: REBUILD });
+    const claimed = await deps.jobs.claimNext();
+    const cut = await interruptions.record('facility-job', claimed!.id, { at: new Date('2026-11-18T05:00:00Z'), cause: 'server-restart', phase: null });
+    await interruptions.resolve(cut.id, { resumedBy: 'self', resumedAt: new Date('2026-11-18T05:02:00Z') });
+    const dim = (await facilityHealth({ ...deps, interruptions })).reportDimension;
+    expect(dim.interruptions).toEqual([expect.objectContaining({ cause: 'server-restart', resumedBy: 'self' })]);
+    // Without the store the field is an empty list, never missing.
+    expect((await facilityHealth(deps)).reportDimension.interruptions).toEqual([]);
   });
 
   it('leaves jobId null when the dimension is not failed', async () => {

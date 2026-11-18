@@ -2613,11 +2613,24 @@ describe('facilities jobs CLI', () => {
     const code = await runFacilitiesJobs({ json: false });
 
     expect(code).toBe(0);
-    expect(mocks.facilityHealth).toHaveBeenCalledWith({ internalDb: mocks.ctx.internalDb, jobs: mocks.ctx.facilityJobs });
+    expect(mocks.facilityHealth).toHaveBeenCalledWith({ internalDb: mocks.ctx.internalDb, jobs: mocks.ctx.facilityJobs, interruptions: mocks.ctx.jobInterruptions });
     const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(human).toMatch(/current/);
     expect(human).toMatch(/88/);
     expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("prints each of the latest rebuild's interruptions (re-review R3)", async () => {
+    mocks.facilityHealth.mockResolvedValue({
+      ...HEALTH_CURRENT,
+      reportDimension: {
+        ...HEALTH_CURRENT.reportDimension,
+        interruptions: [{ id: 'i1', at: '2026-11-18T05:00:00.000Z', cause: 'server-restart', phase: null, resumedAt: '2026-11-18T05:02:00.000Z', resumedBy: 'self', continuedAs: null }],
+      },
+    });
+    expect(await runFacilitiesJobs({ json: false })).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/interrupted: .*carried on by itself/);
   });
 
   it('prints a failed state with its error and the separate projection-failure count', async () => {

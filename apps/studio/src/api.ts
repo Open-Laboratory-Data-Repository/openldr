@@ -1918,6 +1918,8 @@ export interface FacilityHealth {
      *  the ONLY place the chip can get an id to retry: the route this hits has no other listing
      *  endpoint that exposes `facility_jobs` ids. */
     jobId: string | null;
+    /** The latest rebuild's cuts (design 2026-11-18-interrupted-jobs, re-review R3). */
+    interruptions?: JobInterruption[];
   };
   projection: {
     /** Always `failed.length` — the server derives it from the rows below rather than counting

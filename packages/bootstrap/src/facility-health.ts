@@ -1,5 +1,5 @@
 import type { Kysely } from 'kysely';
-import type { InternalSchema, FacilityJobStore } from '@openldr/db';
+import type { InternalSchema, FacilityJobStore, JobInterruption, JobInterruptionStore } from '@openldr/db';
 
 export type FacilityDimensionState = 'current' | 'updating' | 'failed' | 'stale';
 
@@ -11,6 +11,9 @@ export interface FacilityHealth {
      *  chip, the CLI) has something to pass to `POST /api/facilities/jobs/:id/retry` without a second
      *  request. Null whenever `error` is null, for the same reason. */
     jobId: string | null;
+    /** The latest rebuild's cuts, oldest first (design 2026-11-18-interrupted-jobs, re-review R3):
+     *  what the chip's badge and `openldr facilities jobs` show. Empty when it was never cut. */
+    interruptions: JobInterruption[];
   };
   projection: {
     /** Always `failed.length` — derived, never counted separately, so the number on the chip and the
@@ -37,7 +40,7 @@ export interface FacilityHealth {
  * the two tables whose contents determine what a rebuild would produce. Both already carry
  * `updated_at`, so this needs no new bookkeeping and cannot drift from the thing it describes.
  */
-export async function facilityHealth(deps: { internalDb: Kysely<InternalSchema>; jobs: FacilityJobStore }): Promise<FacilityHealth> {
+export async function facilityHealth(deps: { internalDb: Kysely<InternalSchema>; jobs: FacilityJobStore; interruptions?: JobInterruptionStore }): Promise<FacilityHealth> {
   const pending = await deps.jobs.listUnresolved();
   const latest = await deps.jobs.latest('facility-map-rebuild');
   const failedProjections = await deps.jobs.listFailed('registry-projection');
@@ -60,6 +63,10 @@ export async function facilityHealth(deps: { internalDb: Kysely<InternalSchema>;
     ? { finishedAt: new Date(successRow.finished_at as Date).toISOString(), resultCount: successRow.result_count }
     : null;
 
+  const interruptions = latest && deps.interruptions
+    ? (await deps.interruptions.listFor('facility-job', [latest.id])).get(latest.id) ?? []
+    : [];
+
   // An interrupted rebuild waits for the same Retry as a failed one (design 2026-11-18-interrupted-jobs).
   const needsRetry = latest?.status === 'failed' || latest?.status === 'interrupted';
   let state: FacilityDimensionState;
@@ -76,6 +83,7 @@ export async function facilityHealth(deps: { internalDb: Kysely<InternalSchema>;
       rows: lastSuccess?.resultCount == null ? null : Number(lastSuccess.resultCount),
       error: needsRetry ? latest!.lastError : null,
       jobId: needsRetry ? latest!.id : null,
+      interruptions,
     },
     projection: {
       failedCount: failedProjections.length,

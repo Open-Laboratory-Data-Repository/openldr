@@ -1158,7 +1158,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // segment over `/api/facilities/:id` regardless of registration order (measured there), so this
   // route's position here is for legibility, not correctness.
   app.get('/api/facilities/health', VIEW, async () => {
-    return facilityHealth({ internalDb: ctx.internalDb, jobs: ctx.facilityJobs });
+    return facilityHealth({ internalDb: ctx.internalDb, jobs: ctx.facilityJobs, interruptions: ctx.jobInterruptions });
   });
 
   // Task 10: the operator's manual retry for a failed facility job — `facility-map-rebuild` (the
