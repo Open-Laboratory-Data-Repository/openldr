@@ -49,6 +49,15 @@ describe('continueWorkflowReceipt', () => {
     ]);
   });
 
+  it('resolves the open record the receipt service wrote when the run was cut (review R6)', async () => {
+    const { ctx, jobInterruptions } = await ctxWith({ receipt: { runId: 'run-3' }, definitionChanged: false });
+    await jobInterruptions.record('workflow-receipt', 'rcpt1', { at: new Date('2026-11-18T05:30:00.000Z'), cause: 'lease-expired', phase: null });
+    await continueWorkflowReceipt(ctx, 'wf1', 'rcpt1', NOW);
+    expect((await jobInterruptions.listFor('workflow-receipt', ['rcpt1'])).get('rcpt1')).toEqual([
+      expect.objectContaining({ at: '2026-11-18T05:30:00.000Z', resumedBy: 'person', continuedAs: 'run-3' }),
+    ]);
+  });
+
   it('refuses a receipt that is not waiting, and records nothing', async () => {
     const { ctx, jobInterruptions } = await ctxWith('not-waiting');
     expect(await continueWorkflowReceipt(ctx, 'wf1', 'rcpt1', NOW)).toBe('not-waiting');

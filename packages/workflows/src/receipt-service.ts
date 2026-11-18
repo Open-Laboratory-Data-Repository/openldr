@@ -75,6 +75,8 @@ interface ReceiptDeps {
   execute: (workflow: ReturnType<typeof WorkflowDefinitionSchema.parse>, runId: string, workflowId: string, input: unknown, files: Record<string, BinaryRef>) => Promise<WorkflowRun>;
 }
 const EVENT = 'workflow.webhook.accepted';
+/** A queued receipt whose dispatch ended is requeued at most this many times (review R11). */
+const MAX_REQUEUES = 3;
 const publicColumns = ['id', 'workflow_id', 'status', 'run_id', 'created_at', 'started_at', 'finished_at', 'reason', 'outcome'] as const;
 const parseJson = <T = unknown>(v: unknown): T => (typeof v === 'string' ? JSON.parse(v) : v) as T;
 const iso = (v: unknown) => v == null ? null : new Date(v as string | Date).toISOString();
@@ -86,14 +88,52 @@ export function createWorkflowReceiptService(deps: ReceiptDeps): WorkflowReceipt
   // Terminal outbox failure can exhaust its attempts before another delivery occurs.
   async function reconcile(ids: string[]) {
     if (!ids.length) return;
-    await db.updateTable('workflow_webhook_receipts').set({
-      status: sql<string>`case when status='queued' then 'cancelled' else 'interrupted' end`,
-      reason: sql<string>`case when status='queued' then 'Dispatch ended before execution; no workflow started' else 'Worker ownership ended after execution started; outcome is uncertain' end`,
-      finished_at: new Date(), claim_token: null,
-    }).where('id', 'in', ids).where('status', 'in', ['queued', 'running'])
+    // Receipts whose dispatch has ended: their outbox event is done, failed or gone.
+    const ended = await db.selectFrom('workflow_webhook_receipts').select(['id', 'status', 'started_at', 'event_id'])
+      .where('id', 'in', ids).where('status', 'in', ['queued', 'running'])
       .where(eb => eb.not(eb.exists(eb.selectFrom('outbox_events').select('id')
         .whereRef('outbox_events.id', '=', 'workflow_webhook_receipts.event_id')
         .where('outbox_events.status', 'not in', ['failed', 'done'])))).execute();
+    for (const row of ended) {
+      if (row.status === 'running') {
+        // Started, so it may already have sent an email or called another system: it waits for a
+        // person's Continue, with the cut recorded and left open (design 2026-11-18, review R6).
+        await db.transaction().execute(async trx => {
+          const changed = await trx.updateTable('workflow_webhook_receipts')
+            .set({ status: 'interrupted', reason: 'Worker ownership ended after execution started; outcome is uncertain', finished_at: new Date(), claim_token: null })
+            .where('id', '=', row.id).where('status', '=', 'running').where('event_id', '=', row.event_id).returning('id').executeTakeFirst();
+          if (changed) await recordCut(trx, row.id, row.started_at ? new Date(row.started_at) : new Date(), 'lease-expired', null);
+        });
+        continue;
+      }
+      // Never started, so running it cannot do anything twice: requeue it with a fresh event and
+      // record the cut as carried on (review R11). After MAX_REQUEUES it is cancelled as before.
+      const cuts = await db.selectFrom('job_interruptions').select(eb => eb.fn.countAll<string>().as('n'))
+        .where('job_kind', '=', 'workflow-receipt').where('job_id', '=', row.id).executeTakeFirstOrThrow();
+      await db.transaction().execute(async trx => {
+        if (Number(cuts.n) >= MAX_REQUEUES) {
+          await trx.updateTable('workflow_webhook_receipts')
+            .set({ status: 'cancelled', reason: `Dispatch ended before execution ${MAX_REQUEUES + 1} times; no workflow started`, finished_at: new Date(), claim_token: null })
+            .where('id', '=', row.id).where('status', '=', 'queued').where('event_id', '=', row.event_id).execute();
+          return;
+        }
+        const eventId = randomUUID();
+        const moved = await trx.updateTable('workflow_webhook_receipts').set({ event_id: eventId })
+          .where('id', '=', row.id).where('status', '=', 'queued').where('event_id', '=', row.event_id).returning('id').executeTakeFirst();
+        if (!moved) return;
+        await trx.insertInto('outbox_events').values({ id: eventId, type: EVENT, payload: JSON.stringify({ receiptId: row.id }), claim_token: null, last_error: null, batch_id: null }).execute();
+        const now = new Date();
+        await recordCut(trx, row.id, now, 'attempts-exhausted', now);
+        await sql`select pg_notify('openldr_events', ${EVENT})`.execute(trx);
+      });
+    }
+  }
+  /** Records a cut of a receipt in job_interruptions; `resumedAt` set means it carried on by itself. */
+  async function recordCut(trx: Kysely<InternalSchema>, id: string, at: Date, cause: string, resumedAt: Date | null) {
+    await trx.insertInto('job_interruptions').values({
+      id: randomUUID(), job_kind: 'workflow-receipt', job_id: id, phase: null, at, cause,
+      resumed_at: resumedAt, resumed_by: resumedAt ? 'self' : null, continued_as: null,
+    }).onConflict(oc => oc.columns(['job_kind', 'job_id', 'at']).doNothing()).execute();
   }
   async function dispatch(id: string, delivery: { id: string; claimToken: string }): Promise<void> {
     const start = await db.transaction().execute(async trx => {
@@ -105,7 +145,10 @@ export function createWorkflowReceiptService(deps: ReceiptDeps): WorkflowReceipt
       const row = await trx.selectFrom('workflow_webhook_receipts').selectAll().where('id', '=', id).forUpdate().executeTakeFirst();
       if (!row) return;
       if (row.status === 'running') {
-        if (row.claim_token !== event.claim_token) await trx.updateTable('workflow_webhook_receipts').set({ status: 'interrupted', reason: 'Worker ownership changed after execution started; outcome is uncertain', finished_at: new Date(), claim_token: null }).where('id', '=', id).execute();
+        if (row.claim_token !== event.claim_token) {
+          await trx.updateTable('workflow_webhook_receipts').set({ status: 'interrupted', reason: 'Worker ownership changed after execution started; outcome is uncertain', finished_at: new Date(), claim_token: null }).where('id', '=', id).execute();
+          await recordCut(trx as unknown as Kysely<InternalSchema>, id, row.started_at ? new Date(row.started_at) : new Date(), 'lease-expired', null);
+        }
         return;
       }
       if (row.status !== 'queued') return;
@@ -167,7 +210,8 @@ export function createWorkflowReceiptService(deps: ReceiptDeps): WorkflowReceipt
       if (!row || row.workflow_id !== workflowId || row.status !== 'interrupted') return 'not-waiting';
       const wf = await db.selectFrom('workflows').select('definition').where('id', '=', workflowId).executeTakeFirst();
       const definitionChanged = !wf || digest(WorkflowDefinitionSchema.parse(parseJson(wf.definition))) !== row.definition_digest;
-      const { receipt } = await this.accept({ workflowId, input: parseJson(row.input), files: parseJson<Record<string, BinaryRef>>(row.files) });
+      // A fixed key per interrupted receipt: a second Continue returns the same run (review R2).
+      const { receipt } = await this.accept({ workflowId, input: parseJson(row.input), files: parseJson<Record<string, BinaryRef>>(row.files), idempotencyKey: `continue:${id}` });
       return { receipt, definitionChanged };
     },
     async get(id) {

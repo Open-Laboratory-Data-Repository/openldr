@@ -52,10 +52,12 @@ export async function continueWorkflowReceipt(
   const before = await ctx.workflows.receipts.get(receiptId);
   const result = await ctx.workflows.receipts.continueFrom(workflowId, receiptId);
   if (result === 'not-waiting') return result;
-  // The receipt's own `interrupted` status is the cut; the record says when it happened and links
-  // the run a person started from it.
-  const at = new Date(before?.startedAt ?? before?.createdAt ?? now);
-  const { id } = await ctx.jobInterruptions.record('workflow-receipt', receiptId, { at, cause: 'lease-expired', phase: null });
+  // The receipt service recorded the cut when the run became interrupted (review R6): resolve that
+  // record. A receipt interrupted before that existed has none, so record one now.
+  const open = await openInterruption(ctx.jobInterruptions, 'workflow-receipt', receiptId);
+  const id = open?.id ?? (await ctx.jobInterruptions.record('workflow-receipt', receiptId, {
+    at: new Date(before?.startedAt ?? before?.createdAt ?? now), cause: 'lease-expired', phase: null,
+  })).id;
   await ctx.jobInterruptions.resolve(id, { resumedBy: 'person', resumedAt: now, continuedAs: result.receipt.runId });
   return { runId: result.receipt.runId, definitionChanged: result.definitionChanged };
 }
