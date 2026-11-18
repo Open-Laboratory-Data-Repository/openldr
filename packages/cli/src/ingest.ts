@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { createIngestContext, ingestAndWait, type IngestWait } from '@openldr/bootstrap';
+import { createIngestContext, ingestAndWait, resolveByPerson, type IngestWait } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { describeInterruption } from './interruptions';
 
@@ -69,6 +69,8 @@ export async function runPipelineRetry(batchId: string, opts: JsonOpt): Promise<
       return 1;
     }
     await ctx.batches.reset(batchId);
+    // A person carrying on a cut batch closes its open interruption record.
+    await resolveByPerson(ctx.jobInterruptions, 'ingest-batch', batchId, new Date());
     await ctx.republish({ batch_id: batch.batch_id, blob_key: batch.blob_key, source: batch.source, converter: batch.converter, config: batch.config });
     await ctx.drain();
     const after = await ctx.batches.get(batchId);

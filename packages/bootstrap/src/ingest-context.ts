@@ -23,11 +23,16 @@ import {
   createBatchStore,
   registryResolver,
   chainResolvers,
+  sweepStuckBatches,
   type AcceptInput,
   type BatchStore,
   type Converter,
 } from '@openldr/ingest';
 import { type PluginRuntime } from '@openldr/plugins';
+
+/** Three event leases: a batch this quiet with no live event has no delivery left to carry it on. */
+const STUCK_BATCH_MS = 15 * 60_000;
+const STUCK_SWEEP_EVERY_MS = 60_000;
 import { createAuditStore, safeRecord } from '@openldr/audit';
 import { createPluginRegistry } from './plugin-registry';
 import type { EventingPort } from '@openldr/ports';
@@ -94,7 +99,20 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   return {
     accept: (input) => acceptPayload({ blob, eventing, batches, logger }, input),
     drain: () => eventing.drain(),
-    startWorker: () => eventing.startWorker(),
+    startWorker: () => {
+      const worker = eventing.startWorker();
+      // A batch whose event ran out of attempts is marked interrupted, so it does not sit at
+      // processing for ever (design 2026-11-18-interrupted-jobs, review R9).
+      const sweep = () => {
+        void sweepStuckBatches({ batches, interruptions: jobInterruptions, olderThanMs: STUCK_BATCH_MS })
+          .then((n) => { if (n > 0) logger.warn({ count: n }, 'ingest batches marked interrupted after their event ran out of attempts'); })
+          .catch(() => undefined);
+      };
+      sweep();
+      const timer = setInterval(sweep, STUCK_SWEEP_EVERY_MS);
+      timer.unref?.();
+      return { async stop() { clearInterval(timer); await worker.stop(); } };
+    },
     batches,
     jobInterruptions,
     eventing,

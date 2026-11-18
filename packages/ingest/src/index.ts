@@ -4,3 +4,4 @@ export * from './batch-store';
 export * from './accept';
 export * from './handle';
 export * from './resolver';
+export * from './stuck-batches';
