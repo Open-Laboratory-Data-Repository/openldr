@@ -1,4 +1,4 @@
-import type { FieldType, FormField, FormSchema } from '@openldr/forms/pure';
+import { normalizeFormSchema, type FieldType, type FormField, type FormSchema } from '@openldr/forms/pure';
 
 export function slugify(label: string): string {
   const s = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -48,4 +48,13 @@ export function newField(displayLabel: string, fieldType: FieldType): FormField 
     order: _orderCounter++,
     cardinality: { min: 0, max: '1' },
   };
+}
+
+/** A stored form's schema for the builder, named as the forms list names it: the schema's own name
+ *  when it has one, else the form row's name. A schema made outside the builder (API, import,
+ *  marketplace, an old version) may carry none. Load and restore both use this (review I2). */
+export function formSchemaOf(form: { name: string; schema: unknown }): FormSchema {
+  const stored = (form.schema ?? {}) as Record<string, unknown>;
+  const named = typeof stored.name === 'string' && stored.name.trim() ? stored : { ...stored, name: form.name };
+  return normalizeFormSchema(named);
 }

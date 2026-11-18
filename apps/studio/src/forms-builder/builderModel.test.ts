@@ -1,3 +1,4 @@
+import { formSchemaOf } from './builderModel';
 import { describe, expect, it } from 'vitest';
 import { createDefaultFormSchema, makeUniqueFieldId, newField } from './builderModel';
 
@@ -39,5 +40,17 @@ describe('builderModel', () => {
     expect(makeUniqueFieldId('new-text-field', existing)).toBe('new-text-field-2');
     existing.add('new-text-field-2');
     expect(makeUniqueFieldId('new-text-field', existing)).toBe('new-text-field-3');
+  });
+});
+
+// Load and restore take the form's name the same way (open-items review I2): the stored schema's
+// name when it has one, else the form row's name, which the forms list shows.
+describe('formSchemaOf', () => {
+  it('keeps a stored schema name', () => {
+    expect(formSchemaOf({ name: 'Row name', schema: { name: 'Schema name', fields: [] } }).name).toBe('Schema name');
+  });
+  it('uses the form row name when the stored schema has none or a blank one', () => {
+    expect(formSchemaOf({ name: 'Row name', schema: { fields: [] } }).name).toBe('Row name');
+    expect(formSchemaOf({ name: 'Row name', schema: { name: '  ', fields: [] } }).name).toBe('Row name');
   });
 });
