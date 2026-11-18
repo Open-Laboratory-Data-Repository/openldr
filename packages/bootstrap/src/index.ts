@@ -20,7 +20,7 @@ import { dashboardAccess, type DashboardAccessCheck } from './dashboard-access';
 import { createFormStore, createStarterPackStore, seededStarterPacks, type FormStore, type StarterPackStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
 import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, validateSelectSql, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, StoredQueryRowLimitError, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, NO_SCOPE_LINK, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type SqlDialect, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
-import { resolveDataScope } from './data-scope';
+import { readScopeRegistryRows, resolveDataScope } from './data-scope';
 import { runReportStoredQuery } from './report-query';
 import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
 import {
@@ -954,8 +954,7 @@ const reporting: ReportingApi = {
     logger.warn({ err }, 'column-exposure-policy cache load failed; falling back to HARDCODED_DENY_UNION per table');
   });
   // The register rows a data limit is resolved against (roles part 3).
-  const scopeRegistryRows = () => internal.db.selectFrom('facility_registry')
-    .select(['id', 'name', 'facility_code', 'region', 'district']).execute();
+  const scopeRegistryRows = () => readScopeRegistryRows(internal.db as unknown as Kysely<InternalSchema>);
   const runDashboardQuery = async (q: WidgetQuery, scope?: DataScope): Promise<ReportResult> => {
     let data;
     // A limited user never runs SQL: a placeholder cannot guarantee the limit (roles part 3).

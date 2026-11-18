@@ -208,8 +208,8 @@ export function Users() {
 
         <TablePagination page={page} pageSize={pageSize} total={null} rowCount={rows.length} hasMore={!loading && hasMore} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(0); }} />
 
-        <UserDialog open={createOpen} onOpenChange={setCreateOpen} user={null} onSaved={onSaved} />
-        <UserDialog identityAdmin={identityAdmin} open={editing !== null} onOpenChange={(o) => { if (!o) setEditing(null); }} user={editing} onSaved={onSaved} />
+        <UserDialog open={createOpen} onOpenChange={setCreateOpen} user={null} onSaved={onSaved} canSetDataScope={hasCapability('roles.manage')} />
+        <UserDialog identityAdmin={identityAdmin} open={editing !== null} onOpenChange={(o) => { if (!o) setEditing(null); }} user={editing} onSaved={onSaved} canSetDataScope={hasCapability('roles.manage')} />
         <ConfirmDialog
           open={pendingToggle !== null}
           onOpenChange={(o) => { if (!o) setPendingToggle(null); }}

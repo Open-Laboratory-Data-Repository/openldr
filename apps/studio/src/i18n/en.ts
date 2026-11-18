@@ -255,6 +255,23 @@ export const en = {
     noRolesAvailable: 'No roles defined yet. Create one in Settings → Roles.',
     selectRolePlaceholder: 'Select a role',
     rolesSaveError: 'User saved, but role assignment failed: {{error}}',
+    dataScope: {
+      label: 'Data',
+      everything: 'Everything',
+      limited: 'Limited',
+      regions: 'Regions',
+      districts: 'Districts',
+      facilities: 'Facilities',
+      addRegion: 'Add a region',
+      addDistrict: 'Add a district',
+      addFacility: 'Add a facility',
+      searchFacility: 'Search facilities',
+      remove: 'Remove {{name}}',
+      seesNothing: 'With nothing listed, this user sees no dashboard numbers.',
+      seesListed: 'Dashboards count only requests sent from, or tested at, the listed places.',
+      removes: 'A limited user cannot open reports, patients, queries, exports, workflows, connectors, audit, activity, held corrections, the facility register or sync, and never runs SQL widgets. Forms stay.',
+      saveError: 'User saved, but the data limit failed: {{error}}',
+    },
     roleNames: {
       lab_admin: 'Lab Admin',
       lab_manager: 'Lab Manager',
@@ -2126,6 +2143,9 @@ export const en = {
     },
   },
   dashboard: {
+    dataLimit: {
+      notAvailable: 'Not available with your data limit',
+    },
     share: {
       menu: 'Share',
       title: 'Who may see this dashboard',

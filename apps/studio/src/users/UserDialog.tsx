@@ -15,8 +15,10 @@ import {
 import {
   createUser, updateUser, listPublishedForms, getForm,
   listRoles, getUserRoles, setUserRoles, PasswordRuleError,
-  type UserSummary, type RoleRecord, type CreateUserPayload,
+  getUserDataScope, setUserDataScope, getDataScopeChoices,
+  type UserSummary, type RoleRecord, type CreateUserPayload, type DataScope, type DataScopeChoices,
 } from '@/api';
+import { DataScopeFields } from './DataScopeFields';
 import { PASSWORD_RULE_KEYS } from './ResetPasswordDialog';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
 import type { FormSchema, RuntimeAnswers } from '@/forms-runtime/types';
@@ -40,6 +42,8 @@ interface UserDialogProps {
   onOpenChange: (open: boolean) => void;
   user: UserSummary | null;
   onSaved: (user: UserSummary) => void;
+  /** Show and save the Data row (roles part 3). Needs roles.manage, as the server does. */
+  canSetDataScope?: boolean;
 }
 
 /** Build initialAnswers from a UserSummary, keyed by fieldId, using the schema fields. */
@@ -87,7 +91,7 @@ function splitAnswers(schema: FormSchema, answers: RuntimeAnswers) {
   return { identity, extras };
 }
 
-export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = true }: UserDialogProps) {
+export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = true, canSetDataScope = false }: UserDialogProps) {
   const { t } = useTranslation();
   const isEdit = user !== null;
 
@@ -115,6 +119,12 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [rolesLoading, setRolesLoading] = useState(false);
   const [selectedRoleId, setSelectedRoleId] = useState('');
+
+  // The user's data limit (roles part 3), saved after the role. `savedScope` is what the server
+  // holds, so an unchanged limit is not saved again.
+  const [scope, setScope] = useState<DataScope>({ limited: false });
+  const [savedScope, setSavedScope] = useState<DataScope>({ limited: false });
+  const [scopeChoices, setScopeChoices] = useState<DataScopeChoices | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -208,6 +218,23 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
     return () => { cancelled = true; };
   }, [open, user?.id, identityAdmin]);
 
+  useEffect(() => {
+    if (!open || !canSetDataScope) return;
+    let cancelled = false;
+    setScopeChoices(null);
+    setScope({ limited: false });
+    setSavedScope({ limited: false });
+    Promise.all([getDataScopeChoices(), user ? getUserDataScope(user.subject ?? user.id) : Promise.resolve<DataScope>({ limited: false })])
+      .then(([choices, current]) => {
+        if (cancelled) return;
+        setScopeChoices(choices);
+        setScope(current);
+        setSavedScope(current);
+      })
+      .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); });
+    return () => { cancelled = true; };
+  }, [open, user?.id, canSetDataScope]);
+
   /** Shared create-only validation for the fixed username/password fields above the form. */
   const validateCore = (): boolean => {
     if (!isEdit && !username.trim() && !savedIdentity) { setError('Username is required.'); return false; }
@@ -267,6 +294,14 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
         // the user can pick a valid role and retry (or close and fix it later by re-editing).
         setError(t('users.rolesSaveError', { error: roleErr instanceof Error ? roleErr.message : String(roleErr) }));
         return;
+      }
+      if (canSetDataScope && scopeChoices && JSON.stringify(scope) !== JSON.stringify(savedScope)) {
+        try {
+          setSavedScope(await setUserDataScope(saved.subject ?? saved.id, scope));
+        } catch (scopeErr) {
+          setError(t('users.dataScope.saveError', { error: scopeErr instanceof Error ? scopeErr.message : String(scopeErr) }));
+          return;
+        }
       }
       // Both the identity write and the role assignment succeeded — now signal success.
       onSaved(saved);
@@ -402,6 +437,10 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
               </Select>
             )}
           </div>
+
+          {canSetDataScope && scopeChoices ? (
+            <DataScopeFields scope={scope} choices={scopeChoices} onChange={setScope} />
+          ) : null}
 
           {/* Form-template body — the published Users form is optional enrichment on top of the
               core username/password/role above; it is never required to create or edit a user. */}

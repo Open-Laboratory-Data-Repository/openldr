@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { DataScopeError, setUserDataScope, type AppContext } from '@openldr/bootstrap';
+import { DataScopeError, dataScopeChoices, readScopeRegistryRows, setUserDataScope, type AppContext } from '@openldr/bootstrap';
 import { redact, OpenLdrError } from '@openldr/core';
 import { CAPABILITY_GROUPS } from '@openldr/rbac';
 import { z } from 'zod';
@@ -144,6 +144,9 @@ export function registerRolesRoutes(app: FastifyInstance<any, any, any, any>, ct
     { preHandler: requireAnyCapability('roles.view', 'users.view') },
     async (req) => ctx.roles.rolesForUser((req.params as { id: string }).id),
   );
+
+  // What a data limit may name: the register's regions, districts and facilities (roles part 3).
+  app.get('/api/data-scope/choices', MANAGE, async () => dataScopeChoices(await readScopeRegistryRows(ctx.internalDb)));
 
   // A user's data limit, by role subject (roles part 3).
   app.get(

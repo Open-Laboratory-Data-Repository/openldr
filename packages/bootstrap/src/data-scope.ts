@@ -1,4 +1,6 @@
 import type { DataScope, UserDataScopeStore } from '@openldr/db';
+import type { Kysely } from 'kysely';
+import type { InternalSchema } from '@openldr/db';
 import { registryConceptCodeById } from './facility-reconcile';
 
 // A user's data limit (design 2026-11-18-roles-scope, part 3). The route and the CLI both set it
@@ -70,4 +72,35 @@ export async function resolveDataScope(
     || scope.districts.some((d) => d.region === r.region && d.district === r.district);
   const registryCodes = [...new Set(rows.filter(inScope).map((r) => codeById.get(r.id)!))].sort();
   return { ...base, registryCodes };
+}
+
+/** The register rows a data limit is resolved against and picked from. */
+export function readScopeRegistryRows(db: Kysely<InternalSchema>): Promise<ScopeRegistryRow[]> {
+  return db.selectFrom('facility_registry').select(['id', 'name', 'facility_code', 'region', 'district']).execute();
+}
+
+export interface DataScopeChoices {
+  regions: string[];
+  districts: Array<{ region: string; district: string }>;
+  facilities: Array<{ id: string; name: string; region: string | null; district: string | null }>;
+}
+
+/** What the Users sheet and the CLI offer to pick from: every region, district (with its region)
+ *  and facility the register holds. Never typed in. */
+export function dataScopeChoices(rows: ScopeRegistryRow[]): DataScopeChoices {
+  const clean = (v: string | null) => (v && v.trim() ? v.trim() : null);
+  const regions = new Set<string>();
+  const districts = new Map<string, { region: string; district: string }>();
+  for (const r of rows) {
+    const region = clean(r.region);
+    const district = clean(r.district);
+    if (region) regions.add(region);
+    if (region && district) districts.set(JSON.stringify([region, district]), { region, district });
+  }
+  return {
+    regions: [...regions].sort(),
+    districts: [...districts.values()].sort((a, b) => a.region.localeCompare(b.region) || a.district.localeCompare(b.district)),
+    facilities: rows.map((r) => ({ id: r.id, name: r.name, region: clean(r.region), district: clean(r.district) }))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
+  };
 }

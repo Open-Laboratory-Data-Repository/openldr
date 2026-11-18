@@ -395,11 +395,23 @@ export async function listModels(): Promise<QueryModel[]> {
 export async function fetchJoinableTables(): Promise<ClientJoinableTable[]> {
   return authFetch('/api/dashboards/joinable-tables').then((r) => okJson<ClientJoinableTable[]>(r, 'load joinable tables'));
 }
+/** A widget refused because of the caller's data limit (roles part 3): SQL, or a model with no
+ *  facility link. The widget says "Not available with your data limit" instead of an error. */
+export class DataLimitError extends Error {
+  constructor() { super('Not available with your data limit'); this.name = 'DataLimitError'; }
+}
+async function widgetJson<T>(r: Response, what: string): Promise<T> {
+  if (r.status === 403) {
+    const body = await r.clone().json().catch(() => null) as { code?: unknown } | null;
+    if (body?.code === 'data_limit') throw new DataLimitError();
+  }
+  return okJson<T>(r, what);
+}
 /** Run one saved widget of a dashboard the person may see. The server builds the query from the stored
  *  widget; only the dashboard's filter values go up (roles part 2, "Also lock the data"). */
 export async function runSavedWidget(dashboardId: string, widgetId: string, filterValues: Record<string, unknown>, signal?: AbortSignal): Promise<ReportResult> {
   return authFetch(`/api/dashboards/${encodeURIComponent(dashboardId)}/widgets/${encodeURIComponent(widgetId)}/query`, { ...json({ filterValues }), signal })
-    .then((r) => okJson<ReportResult>(r, 'run widget'));
+    .then((r) => widgetJson<ReportResult>(r, 'run widget'));
 }
 /** A saved dashboard filter's option list. */
 export async function savedFilterOptions(dashboardId: string, filterId: string): Promise<ReportResult> {
@@ -412,7 +424,7 @@ export const getDashboardShare = (id: string): Promise<DashboardShare> => apiGet
 export const setDashboardShare = (id: string, roles: string[]): Promise<{ roles: string[] }> =>
   authFetch(`/api/dashboards/${encodeURIComponent(id)}/share`, jbody({ roles }, 'PUT')).then((r) => okJson<{ roles: string[] }>(r, 'share dashboard'));
 export async function runWidgetQuery(q: WidgetQuery, signal?: AbortSignal): Promise<ReportResult> {
-  return authFetch('/api/dashboards/query', { ...json(q), signal }).then((r) => okJson<ReportResult>(r, 'run query'));
+  return authFetch('/api/dashboards/query', { ...json(q), signal }).then((r) => widgetJson<ReportResult>(r, 'run query'));
 }
 /** Builder→SQL eject: compile a builder-mode query to its SQL text (display-only; never executed as returned). */
 export async function compileBuilderToSql(q: Extract<WidgetQuery, { mode: 'builder' }>): Promise<string> {
@@ -1996,6 +2008,21 @@ export const getUserRoles = (id: string): Promise<RoleRecord[]> => apiGet(`/api/
 export const setUserRoles = (id: string, roleIds: string[]): Promise<RoleRecord[]> =>
   authFetch(`/api/users/${id}/roles`, jbody({ roleIds }, 'PUT')).then((r) => okJson<RoleRecord[]>(r, 'set user roles'));
 
+
+/** A user's data limit (roles part 3): Everything, or Limited to places from the register. */
+export type DataScope =
+  | { limited: false }
+  | { limited: true; facilities: string[]; districts: Array<{ region: string; district: string }>; regions: string[] };
+export interface DataScopeChoices {
+  regions: string[];
+  districts: Array<{ region: string; district: string }>;
+  facilities: Array<{ id: string; name: string; region: string | null; district: string | null }>;
+}
+export const getUserDataScope = (subject: string): Promise<DataScope> =>
+  apiGet(`/api/users/${encodeURIComponent(subject)}/data-scope`, 'get user data limit');
+export const setUserDataScope = (subject: string, scope: DataScope): Promise<DataScope> =>
+  authFetch(`/api/users/${encodeURIComponent(subject)}/data-scope`, jbody(scope, 'PUT')).then((r) => okJson<DataScope>(r, 'set user data limit'));
+export const getDataScopeChoices = (): Promise<DataScopeChoices> => apiGet('/api/data-scope/choices', 'list data limit choices');
 // Forms
 export type FormStatus = 'draft' | 'published' | 'archived';
 export interface FormSummary {

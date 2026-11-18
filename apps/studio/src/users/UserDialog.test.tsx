@@ -13,6 +13,9 @@ vi.mock('@/api', async (orig) => {
     listRoles: vi.fn(),
     getUserRoles: vi.fn(),
     setUserRoles: vi.fn(),
+    getUserDataScope: vi.fn(),
+    setUserDataScope: vi.fn(),
+    getDataScopeChoices: vi.fn(),
   };
 });
 
@@ -292,5 +295,70 @@ describe('UserDialog — seedless (no published Users form)', () => {
     render(<UserDialog open user={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
     await screen.findByText(/no published users form/i);
     expect(screen.getAllByRole('button', { name: 'Actions' })).toHaveLength(1);
+  });
+});
+
+// Roles part 3: the Data row. Everything, or Limited to places from the register, saved after roles.
+describe('UserDialog — data limit', () => {
+  const choices = {
+    regions: ['Arusha', 'Dodoma'],
+    districts: [{ region: 'Dodoma', district: 'Kondoa' }],
+    facilities: [{ id: 'f1', name: 'Kondoa HC', region: 'Dodoma', district: 'Kondoa' }],
+  };
+  beforeEach(() => {
+    (api.getDataScopeChoices as ReturnType<typeof vi.fn>).mockResolvedValue(choices);
+    (api.getUserDataScope as ReturnType<typeof vi.fn>).mockResolvedValue({ limited: true, facilities: ['f1'], districts: [], regions: [] });
+    (api.setUserDataScope as ReturnType<typeof vi.fn>).mockImplementation(async (_s: string, scope: unknown) => scope);
+    (api.updateUser as ReturnType<typeof vi.fn>).mockResolvedValue({ ...editUser });
+  });
+
+  it('shows no Data row to someone who cannot set it', async () => {
+    render(<UserDialog open user={editUser} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+    await screen.findByRole('combobox', { name: 'Role' });
+    expect(screen.queryByTestId('user-data-scope')).toBeNull();
+    expect(api.getDataScopeChoices).not.toHaveBeenCalled();
+  });
+
+  it('loads the user\'s limit by subject, and saves a change after the roles', async () => {
+    (api.updateUser as ReturnType<typeof vi.fn>).mockResolvedValue({ ...editUser, subject: 'sub-1' });
+    const onSaved = vi.fn();
+    render(<UserDialog open user={{ ...editUser, subject: 'sub-1' } as UserSummary} onOpenChange={vi.fn()} onSaved={onSaved} canSetDataScope />);
+    await waitFor(() => expect(api.getUserDataScope).toHaveBeenCalledWith('sub-1'));
+    const row = await screen.findByTestId('user-data-scope');
+    expect(row).toHaveTextContent('Kondoa HC');
+    expect(screen.getByRole('combobox', { name: 'Data' })).toHaveTextContent('Limited');
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Regions' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Dodoma' }));
+
+    clickMenuItem(/^save$/i);
+    await waitFor(() => expect(api.setUserDataScope).toHaveBeenCalled());
+    expect(api.setUserDataScope).toHaveBeenCalledWith('sub-1', { limited: true, facilities: ['f1'], districts: [], regions: ['Dodoma'] });
+    const rolesAt = (api.setUserRoles as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]!;
+    const scopeAt = (api.setUserDataScope as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]!;
+    expect(rolesAt).toBeLessThan(scopeAt);
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  it('does not save an unchanged limit, and switching to Everything saves Everything', async () => {
+    render(<UserDialog open user={editUser} onOpenChange={vi.fn()} onSaved={vi.fn()} canSetDataScope />);
+    await screen.findByTestId('user-data-scope');
+    fireEvent.click(screen.getByRole('combobox', { name: 'Data' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Everything' }));
+    expect(screen.queryByRole('combobox', { name: 'Regions' })).toBeNull();
+    clickMenuItem(/^save$/i);
+    await waitFor(() => expect(api.setUserDataScope).toHaveBeenCalledWith('u1', { limited: false }));
+  });
+
+  it('keeps the sheet open and says so when the limit fails to save', async () => {
+    (api.setUserDataScope as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('no region Nowhere in the register'));
+    const onSaved = vi.fn();
+    render(<UserDialog open user={editUser} onOpenChange={vi.fn()} onSaved={onSaved} canSetDataScope />);
+    await screen.findByTestId('user-data-scope');
+    fireEvent.click(screen.getByRole('combobox', { name: 'Data' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Everything' }));
+    clickMenuItem(/^save$/i);
+    expect(await screen.findByText(/the data limit failed: no region Nowhere/)).toBeTruthy();
+    expect(onSaved).not.toHaveBeenCalled();
   });
 });

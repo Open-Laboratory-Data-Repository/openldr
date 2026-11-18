@@ -24,6 +24,7 @@ function setup(capabilities: string[]) {
         return { rows, total: rows.length };
       },
     },
+    internalDb: { selectFrom: () => ({ select: () => ({ execute: async () => [{ id: 'f1', name: 'Kondoa HC', facility_code: 'K', region: 'Dodoma', district: 'Kondoa' }] }) }) },
     audit: { record: async (e: any) => { audit.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
   } as any;
@@ -63,5 +64,15 @@ describe('user data limit routes', () => {
     expect(away.json().error).toMatch(/Nowhere/);
     expect(saved.size).toBe(0);
     expect(audit).toHaveLength(0);
+  });
+
+  it('offers the register\'s regions, districts and facilities to a role manager only', async () => {
+    const res = await setup(MANAGE).app.inject({ url: '/api/data-scope/choices' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      regions: ['Dodoma'], districts: [{ region: 'Dodoma', district: 'Kondoa' }],
+      facilities: [{ id: 'f1', name: 'Kondoa HC', region: 'Dodoma', district: 'Kondoa' }],
+    });
+    expect((await setup(['users.view']).app.inject({ url: '/api/data-scope/choices' })).statusCode).toBe(403);
   });
 });

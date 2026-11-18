@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { DataScope, UserDataScopeStore } from '@openldr/db';
-import { DataScopeError, resolveDataScope, setUserDataScope } from './data-scope';
+import { DataScopeError, dataScopeChoices, resolveDataScope, setUserDataScope } from './data-scope';
 
 // Design 2026-11-18-roles-scope, part 3: the one setter the route and the CLI call.
 function memStore(): UserDataScopeStore & { saved: Map<string, DataScope> } {
@@ -102,5 +102,26 @@ describe('resolveDataScope', () => {
   it('resolves Limited with nothing listed to nothing', async () => {
     expect(await resolveDataScope(deps, { limited: true, facilities: [], districts: [], regions: [] }))
       .toEqual({ registryIds: [], regions: [], districts: [], registryCodes: [] });
+  });
+});
+
+describe('dataScopeChoices', () => {
+  it('lists regions, districts with their region, and facilities, sorted, each once, skipping blanks', () => {
+    const rows = [
+      { id: 'r2', name: 'B clinic', facility_code: 'B', region: 'Arusha', district: 'Kondoa' },
+      { id: 'r1', name: 'A clinic', facility_code: 'A', region: 'Dodoma', district: 'Kondoa' },
+      { id: 'r3', name: 'C clinic', facility_code: 'C', region: 'Dodoma', district: 'Kondoa' },
+      { id: 'r4', name: 'D clinic', facility_code: 'D', region: null, district: ' ' },
+    ];
+    expect(dataScopeChoices(rows)).toEqual({
+      regions: ['Arusha', 'Dodoma'],
+      districts: [{ region: 'Arusha', district: 'Kondoa' }, { region: 'Dodoma', district: 'Kondoa' }],
+      facilities: [
+        { id: 'r1', name: 'A clinic', region: 'Dodoma', district: 'Kondoa' },
+        { id: 'r2', name: 'B clinic', region: 'Arusha', district: 'Kondoa' },
+        { id: 'r3', name: 'C clinic', region: 'Dodoma', district: 'Kondoa' },
+        { id: 'r4', name: 'D clinic', region: null, district: null },
+      ],
+    });
   });
 });
