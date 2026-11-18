@@ -23,6 +23,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { buildIndex, searchDocs } from '../docs/search';
+import { mayReadGuide } from '../docs/access';
+import { useAuth } from '../auth/AuthProvider';
 import { DocMarkdown } from '../docs/DocMarkdown';
 import { Lightbox, type LightboxImage } from '../docs/Lightbox';
 import { Badge } from '@/components/ui/badge';
@@ -216,11 +218,15 @@ export function Docs() {
   const [version, setVersion] = useState(DEFAULT_DOC_VERSION);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const sections = useMemo(() => list(locale, version), [locale, version]);
+  // The list and search show only the guides a person can use (roles part 4). A link to any guide
+  // still opens it, so the lookup by slug keeps them all.
+  const { hasCapability } = useAuth();
+  const allSections = useMemo(() => list(locale, version), [locale, version]);
+  const sections = useMemo(() => allSections.filter((candidate) => mayReadGuide(candidate, hasCapability)), [allSections, hasCapability]);
   const index = useMemo(() => buildIndex(sections), [sections]);
   const hits = useMemo(() => searchDocs(index, query), [index, query]);
   const sectionBySlug = useMemo(
-    () => new Map(sections.map((candidate) => [candidate.slug, candidate])),
+    () => new Map(allSections.map((candidate) => [candidate.slug, candidate])),
     [sections],
   );
 
@@ -250,9 +256,9 @@ export function Docs() {
   const orderedSections = useMemo(
     () =>
       DOC_GUIDES.map((guide) => sectionBySlug.get(guide.slug)).filter(
-        (candidate): candidate is DocSection => candidate != null,
+        (candidate): candidate is DocSection => candidate != null && mayReadGuide(candidate, hasCapability),
       ),
-    [sectionBySlug],
+    [sectionBySlug, hasCapability],
   );
   const activeIndex = orderedSections.findIndex((candidate) => candidate.slug === activeSlug);
   const previousSection = activeIndex > 0 ? orderedSections[activeIndex - 1] : null;
@@ -264,7 +270,7 @@ export function Docs() {
     ? section.relatedSlugs
         .filter((relatedSlug) => relatedSlug !== section.slug)
         .map((relatedSlug) => sectionBySlug.get(relatedSlug))
-        .filter((candidate): candidate is DocSection => candidate != null)
+        .filter((candidate): candidate is DocSection => candidate != null && mayReadGuide(candidate, hasCapability))
     : [];
 
   const onExport = (scope: ExportScope, format: ExportFormat) => {

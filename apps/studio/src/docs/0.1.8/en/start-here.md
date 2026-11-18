@@ -4,6 +4,8 @@ OpenLDR Studio is the browser app for your lab's records. Open it to use dashboa
 
 Start by getting access to Studio. If another guide asks you to run a command, use the CLI walkthrough below first. You do not need sample data to follow this page.
 
+The guide list shows only the guides for pages you can use. If you expect a guide that is not there, ask an administrator for the permission. A link to any guide still opens it.
+
 Facilities, Test catalog and patient settings are optional. OpenLDR can receive and process data before you configure them. We strongly recommend setting them up as you use the system. Start by reviewing [Terminology](/docs/terminology), then continue through **Set up your system** in the documentation menu.
 
 ## Open Studio
