@@ -104,7 +104,12 @@ export interface CheckRun {
   carriedOn?: boolean;
   /** Set while the run checks again only these held keys after a person corrected them (design
    *  2026-11-18-held-corrections). The run goes back to `returnTo` and `finishedAt` after. */
-  recheck?: { keys: string[]; returnTo: CheckStatus; finishedAt: string | null };
+  recheck?: {
+    keys: string[]; returnTo: CheckStatus; finishedAt: string | null;
+    /** The keys already decided and counted, saved with the counts. A saved one's held row is
+     *  removed only after that save, so a cut between the two only finishes the removal (re-review H3). */
+    done?: Array<{ key: string; outcome: 'saved' | 'other' }>;
+  };
   /** Names one pass from the first key, carried on through a stop. A held row records the pass that
    *  counted it, so a recheck moves only this pass's counts (review H4). Absent on older records. */
   pass?: string;
@@ -700,11 +705,20 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         if (p.reference) await assertUnchanged(p.reference);
         const rechecking = run.recheck !== undefined;
         if (rechecking && recheckRead) return 'done';
-        // A recheck reads only its keys that are still held: one already decided by an earlier try,
-        // before a cut, is not decided or counted again (review H3).
+        // A recheck decides and counts each key once. Its decisions are saved with the counts; only
+        // then does a saved key leave the held list. A key already decided only finishes that removal
+        // (review H3, re-review H3).
+        const done = new Map((run.recheck?.done ?? []).map((d) => [d.key, d.outcome]));
+        if (rechecking && done.size > 0) {
+          const savedKeys = [...done].filter(([, o]) => o === 'saved').map(([k]) => k);
+          if (savedKeys.length > 0) await ownDb('write', () => deps.held.remove(run.copyId, savedKeys));
+          recheckRead = true;
+          return 'done';
+        }
         const before = rechecking
           ? (await Promise.all(run.recheck!.keys.map((k) => ownDb('read', () => deps.held.get(run.copyId, k))))).filter((h): h is HeldItem => h !== null)
           : [];
+        const passOf = new Map(before.map((h) => [h.key, h.pass]));
         const keys = rechecking
           ? before.map((h) => h.key)
           : await ownDb('read', () => deps.copyStore.listKeys(run.copyId, REQUESTS, run.cursor, size));
@@ -785,7 +799,8 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
               // refuses a NUL or a lone surrogate, so those are replaced.
               findings: storable(group.findings ?? null), check: storable(group.check ?? null),
               fields: validFields(group.fields, correctable),
-              pass: run.pass ?? null,
+              // A recheck keeps the pass that first held it, so its count stays where it was made (re-review H4).
+              pass: rechecking ? passOf.get(key) ?? null : run.pass ?? null,
             }));
             decided('held');
             continue;
@@ -804,8 +819,9 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           decided('saved');
           t.resources += resources.length;
         }
-        // A request that passes now leaves the held-back store.
-        if (saved.length > 0) await ownDb('write', () => deps.held.remove(run.copyId, saved));
+        // A request that passes now leaves the held-back store. In a recheck that waits for the counts
+        // to be saved first (re-review H3).
+        if (saved.length > 0 && !rechecking) await ownDb('write', () => deps.held.remove(run.copyId, saved));
         if (rechecking) {
           // A key held in this pass was counted as held: take that away and count what it is now. A
           // key held by an earlier pass is not in this pass's counts, so they stay as they are (review H4).
@@ -814,7 +830,8 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
             subtractTally(before.map((h) => ({ outcome: 'held' as const, laboratory: h.laboratory, label: h.label ?? undefined })));
             addTally(t);
           }
-          recheckRead = true;
+          // Saved with the counts at the page end; the next call removes the saved keys' held rows.
+          run.recheck = { ...run.recheck!, done: keys.map((k) => ({ key: k, outcome: saved.includes(k) ? 'saved' as const : 'other' as const })) };
           return 'next';
         }
         addTally(t);

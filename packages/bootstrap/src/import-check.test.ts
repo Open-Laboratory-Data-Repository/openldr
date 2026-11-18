@@ -97,6 +97,7 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
   };
   const realHeld = createImportCheckHeldStore(internalDb);
   let heldPutFaults = 0;
+  let heldRemoveFaults = 0;
   const heldPuts: unknown[] = [];
   const held: ImportCheckHeldStore = {
     ...realHeld,
@@ -108,6 +109,13 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
         throw Object.assign(new Error('could not extend file: No space left on device'), { code: '53100', detail: `Failing row contains (${SECRET})` });
       }
       return realHeld.put(item);
+    },
+    async remove(copyId, keys) {
+      if (heldRemoveFaults > 0) {
+        heldRemoveFaults -= 1;
+        throw Object.assign(new Error('could not extend file: No space left on device'), { code: '53100' });
+      }
+      return realHeld.remove(copyId, keys);
     },
   };
   const audited: ImportAuditEvent[] = [];
@@ -223,6 +231,7 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
     failPersist: (fn: ((resources: unknown[]) => unknown) | null) => { persistFault = fn; },
     failReadSet: (fn: ((set: string, maxBytes: number) => unknown) | null) => { readSetFault = fn; },
     failHeldPuts: (n: number) => { heldPutFaults = n; },
+    failHeldRemoves: (n: number) => { heldRemoveFaults = n; },
     stored: async () => (await raw.get(PLUGIN, '__import-checks', CHECK)) as CheckRun | null,
     heldAll: async () => realHeld.list(SRC, { offset: 0, limit: 1000 }),
   };
@@ -1745,6 +1754,55 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     const after = (await w.stored())!;
     expect(after.counts).toMatchObject({ read: 0, saved: 0, held: 0 });
     expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0002')).toBeNull();
+  });
+
+  it('a cut after the counts were saved but before the held row went only finishes the removal (re-review H3)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput());
+    const run = (await w.stored())!;
+    // The state a cut leaves: the page's counts saved, its key marked done as saved, the held row still there.
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, {
+      ...run, rev: run.rev + 1, status: 'queued',
+      counts: { ...run.counts, held: run.counts.held - 1, saved: run.counts.saved + 1, labels: {} },
+      recheck: { keys: ['REQ0001'], returnTo: 'completed', finishedAt: run.finishedAt, done: [{ key: 'REQ0001', outcome: 'saved' }] },
+    });
+    const calls = w.decodeCalls.length;
+    await drive(w.svc);
+    expect(w.decodeCalls.length).toBe(calls);
+    expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0001')).toBeNull();
+    expect((await w.stored())!.counts).toMatchObject({ read: 2, saved: 1, held: 1 });
+  });
+
+  it('a recheck that keeps an earlier pass\'s request held keeps its pass, so a later recheck still leaves the counts alone (re-review H4)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w, keysOf(2));
+    const run = (await w.stored())!;
+    const oldPass = (await w.realHeld.get(SRC, 'REQ0002'))!.pass;
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, { ...run, rev: run.rev + 1, status: 'stopped', cursor: null, pass: 'a-later-pass',
+      counts: { read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: {} }, laboratories: [] });
+    // First recheck: a correction that does not fix it. Still held, still the old pass.
+    await w.svc.correct(correctInput({ key: 'REQ0002', values: { sex: 'M' } }));
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0002', actor: ADMIN });
+    await drive(w.svc);
+    expect((await w.realHeld.get(SRC, 'REQ0002'))!.pass).toBe(oldPass);
+    // Second recheck: fixed this time. Saved, and this pass's counts untouched.
+    await w.svc.correct(correctInput({ key: 'REQ0002' }));
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0002', actor: ADMIN });
+    await drive(w.svc);
+    expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0002')).toBeNull();
+    expect((await w.stored())!.counts).toMatchObject({ read: 0, saved: 0, held: 0 });
+  });
+
+  it('when removing the held row fails after the counts were saved, the retry removes it and counts once (re-review H3)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput());
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    w.failHeldRemoves(1);
+    await drive(w.svc);
+    expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0001')).toBeNull();
+    expect((await w.stored())!).toMatchObject({ status: 'completed', counts: { read: 2, saved: 1, held: 1 } });
   });
 
   it('a full run sends the stored corrections of its page, and none when the plugin declares no fields', async () => {
