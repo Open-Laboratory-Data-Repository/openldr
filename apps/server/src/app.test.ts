@@ -441,3 +441,17 @@ describe('ontology routes', () => {
   });
 });
 
+
+describe('long route parameters (real test 2026-11-18, F1)', () => {
+  it('routes a patient ref sealed from a 64-character id, instead of answering route-not-found', async () => {
+    // A Map to FHIR patient id is 64 hex characters; its sealed ref is 123 characters
+    // (patient-mask.ts). Fastify's default maxParamLength is 100, which left the route unmatched.
+    const app = await buildApp(ctxWith('up'));
+    const longRef = 'A'.repeat(123);
+    const res = await app.inject({ method: 'GET', url: `/api/patients/${longRef}` });
+    expect(res.json()).not.toEqual({ error: 'not found' });
+    const short = await app.inject({ method: 'GET', url: `/api/patients/${'A'.repeat(60)}` });
+    expect(res.statusCode).toBe(short.statusCode);
+    await app.close();
+  });
+});

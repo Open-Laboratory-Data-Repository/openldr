@@ -584,8 +584,17 @@ function codingsAt(resource: Resource, path: string): Coding[] {
   const isCoding = (v: unknown): v is Coding => !!v && typeof v === 'object' && typeof (v as Coding).code === 'string';
   for (const v of values) {
     const coding = v && typeof v === 'object' ? (v as { coding?: unknown }).coding : undefined;
-    if (Array.isArray(coding)) out.push(...coding.filter(isCoding));
-    else if (isCoding(v)) out.push(v);
+    // A lab's own code is { text, coding: [{ code }] }: its text becomes each coding's display, so a
+    // derived code keeps the name the lab sent. The warehouse reads an order's description from text
+    // or the first display (relational/extract.ts codeable); without it, charts by test skip the order.
+    const text = v && typeof v === 'object' ? (v as { text?: unknown }).text : undefined;
+    if (Array.isArray(coding)) {
+      for (const c of coding.filter(isCoding)) out.push(!c.display && typeof text === 'string' && text.trim() ? { ...c, display: text } : c);
+    } else if (isCoding(v)) out.push(v);
   }
-  return out.map((c) => (c.system ? { system: c.system, code: c.code } : { code: c.code! }));
+  return out.map((c) => ({
+    ...(c.system ? { system: c.system } : {}),
+    code: c.code!,
+    ...(c.display ? { display: c.display } : {}),
+  }));
 }

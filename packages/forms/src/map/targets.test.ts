@@ -631,6 +631,17 @@ describe('the order takes its results\' tests when its own Tests field is not ma
     expect(orderOf(res).code).toEqual({ text: 'TB', coding: [{ code: 'TB' }] });
   });
 
+  it('carries a lab code\'s own text into the order\'s derived codes, so the order has a description (real test F2)', async () => {
+    // A lab's own test codes are written as { text, coding: [{ code }] }. The warehouse reads the
+    // order's description from text or the first coding's display (relational/extract.ts codeable).
+    const res = await applyMapping(mapping([
+      { targetPath: 'Observation.code', from: { fields: ['t1', 't3'] } },
+      { targetPath: 'Observation.valueString', from: { fields: ['r1', 'r3'] } },
+    ]), target, row, deps());
+    if (!res.ok) throw new Error(res.reason);
+    expect(orderOf(res).code).toEqual({ coding: [{ code: 'TA', display: 'TA' }, { code: 'TB', display: 'TB' }] });
+  });
+
   it('gives the order the same id with and without the derived code', async () => {
     const rows: FieldMapping[] = [{ targetPath: 'Observation.code', from: { field: 't1' } }];
     const withIt = await applyMapping(mapping(rows), target, row, deps());
