@@ -31,6 +31,8 @@ export function DashboardWidget({ config, filterValues, savedDashboardId }: { co
       } catch (e) {
         if (controller.signal.aborted) return;
         if (e instanceof DataLimitError) { setLimited(true); setError(undefined); return; }
+        // Any other error replaces an earlier data limit note (review U1).
+        setLimited(false);
         setError(String(e instanceof Error ? e.message : e));
       } finally {
         if (!controller.signal.aborted && ms > 0) timer = setTimeout(run, ms);

@@ -195,4 +195,18 @@ describe('DashboardWidget under a data limit', () => {
     const view = render(<DashboardWidget config={cfg} filterValues={{}} savedDashboardId="d1" />);
     await waitFor(() => expect(view.container.querySelector('.text-destructive')).toBeTruthy());
   });
+
+  // Review U1: a later error is shown, not hidden behind an earlier data limit note.
+  it('shows a later error instead of an earlier data limit note', async () => {
+    await import('@/i18n');
+    const fetch = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Not available with your data limit', code: 'data_limit' }), { status: 403 }))
+      .mockResolvedValue(new Response(JSON.stringify({ error: 'boom' }), { status: 500 }));
+    const view = render(<DashboardWidget config={cfg} filterValues={{}} savedDashboardId="d1" />);
+    await view.findByText('Not available with your data limit');
+    view.rerender(<DashboardWidget config={cfg} filterValues={{}} savedDashboardId="d2" />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(view.container.querySelector('.text-destructive')).toBeTruthy());
+    expect(view.queryByText('Not available with your data limit')).toBeNull();
+  });
 });
