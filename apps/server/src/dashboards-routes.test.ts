@@ -154,6 +154,16 @@ describe('dashboard routes', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('authoring gate: new or changed filter options SQL is refused when the flag is off, unchanged is kept (review DS4)', async () => {
+    const withOptions = (sql: string) => ({ ...dashWithSql, widgets: [], filters: [{ id: 'f1', label: 'F', type: 'text', optionsSql: sql }] });
+    const ctx = fakeCtx({ DASHBOARD_SQL_ENABLED: false });
+    const app = appWith(ctx);
+    expect((await app.inject({ method: 'POST', url: '/api/dashboards', payload: withOptions('select 42') })).statusCode).toBe(400);
+    await ctx.dashboards.store.create(withOptions('select 1'));
+    expect((await app.inject({ method: 'PUT', url: '/api/dashboards/d1', payload: withOptions('select 2') })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'PUT', url: '/api/dashboards/d1', payload: { ...withOptions('select 1'), name: 'Renamed' } })).statusCode).toBe(200);
+  });
+
   it('authoring gate: allows updating an existing all-SQL dashboard with UNCHANGED sql (layout/chart edit) when the flag is off', async () => {
     const ctx = fakeCtx({ DASHBOARD_SQL_ENABLED: false });
     // Seed the store directly (bypasses the authoring route, like the server-seeded sample).

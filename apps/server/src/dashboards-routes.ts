@@ -43,6 +43,10 @@ function persistedSqlTemplates(prev: Dashboard | undefined): Set<string> {
   for (const w of prev.widgets) {
     if (w.query.mode === 'sql' && typeof w.query.sql === 'string') set.add(w.query.sql.trim());
   }
+  // A filter's options SQL runs too, so it is vetted the same way (roles part 2, review DS4).
+  for (const f of prev.filters ?? []) {
+    if (typeof f.optionsSql === 'string') set.add(f.optionsSql.trim());
+  }
   return set;
 }
 
@@ -65,6 +69,12 @@ function assertSqlAuthoringAllowed(sqlEnabled: boolean, d: Dashboard, prevTempla
       if (!prevTemplates.has(sql)) {
         throw new DashboardQueryError('raw SQL widgets are disabled');
       }
+    }
+  }
+  // New or changed filter options SQL is authoring too (review DS4); the stored one stays.
+  for (const f of d.filters ?? []) {
+    if (typeof f.optionsSql === 'string' && f.optionsSql.trim() !== '' && !prevTemplates.has(f.optionsSql.trim())) {
+      throw new DashboardQueryError('raw SQL is disabled, so a filter cannot get new options SQL');
     }
   }
 }
