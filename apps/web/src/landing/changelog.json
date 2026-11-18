@@ -6,6 +6,144 @@
       "version": null,
       "entries": [
         {
+          "hash": "26dfd154",
+          "type": "fix",
+          "scope": "import",
+          "title": "A person's Resume closes the cut an import waited on (third review R10)"
+        },
+        {
+          "hash": "02540ace",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The map rebuild status carries its interruptions, shown on the chip and by the CLI (re-review R3)"
+        },
+        {
+          "hash": "13e819d2",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "A queued run cut a fourth time waits for Continue, and a cut is dated by the run's last word (re-review R6, R11)"
+        },
+        {
+          "hash": "ff70bea4",
+          "type": "fix",
+          "scope": "import",
+          "title": "A copy or check cut three times with no progress stops for Continue (re-review R10)"
+        },
+        {
+          "hash": "30fa049b",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "A wait at the cap that was itself cut is tried again (re-review R1)"
+        },
+        {
+          "hash": "d1c3e93b",
+          "type": "feat",
+          "scope": "ingest",
+          "title": "A batch whose event ran out of attempts is marked interrupted (review R9)"
+        },
+        {
+          "hash": "a8c19b82",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "An import cut too often waits for Continue, holding its register (review R8)"
+        },
+        {
+          "hash": "0ef91e14",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The interruption badge takes keyboard focus and raises no ref warning"
+        },
+        {
+          "hash": "f4f71865",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Continue asks before running a workflow that changed since the cut (review R5)"
+        },
+        {
+          "hash": "42af9996",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "A cut run is recorded when it is cut, a queued one is requeued, and Continue starts one run (review R2, R6, R11)"
+        },
+        {
+          "hash": "650200aa",
+          "type": "fix",
+          "scope": "db",
+          "title": "Migration 123 adds the heartbeat columns only if missing, so a demo install upgrades cleanly"
+        },
+        {
+          "hash": "63283a6a",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A reloaded Terminology page keeps an interrupted import, its badge and Continue import (review R4)"
+        },
+        {
+          "hash": "880fae2e",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The health chip offers Retry for an interrupted map rebuild (review R3)"
+        },
+        {
+          "hash": "a9ebb2a0",
+          "type": "fix",
+          "scope": "import",
+          "title": "A cdr-source cut is marked carried on only after the takeover worked, and stops after three cuts with no progress (review R7, R10)"
+        },
+        {
+          "hash": "4a0cd294",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "A take-back that was itself cut is tried again (review R1)"
+        },
+        {
+          "hash": "06a11348",
+          "type": "feat",
+          "scope": "studio",
+          "title": "A badge for interrupted jobs, Continue in the row menu"
+        },
+        {
+          "hash": "3a2e0fbb",
+          "type": "feat",
+          "scope": "workflows",
+          "title": "An interrupted run waits for Continue and never re-runs alone"
+        },
+        {
+          "hash": "7d46df1c",
+          "type": "feat",
+          "scope": "ingest",
+          "title": "A batch says when it was interrupted"
+        },
+        {
+          "hash": "7ebf8b50",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A register import carries on after a restart"
+        },
+        {
+          "hash": "2939ca3a",
+          "type": "feat",
+          "scope": "import",
+          "title": "Runs record each interruption they carried on through"
+        },
+        {
+          "hash": "13d47373",
+          "type": "feat",
+          "scope": "",
+          "title": "Terminology uploads and map rebuilds carry on after a restart"
+        },
+        {
+          "hash": "65e013f6",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Take back an interrupted job and record it"
+        },
+        {
+          "hash": "e7087e9f",
+          "type": "feat",
+          "scope": "db",
+          "title": "A table for job interruptions"
+        },
+        {
           "hash": "b76f6d90",
           "type": "feat",
           "scope": "terminology",
