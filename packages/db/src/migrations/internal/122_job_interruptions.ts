@@ -21,15 +21,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addUniqueConstraint('job_interruptions_one_cut', ['job_kind', 'job_id', 'at'])
     .execute();
   await db.schema.createIndex('job_interruptions_job').on('job_interruptions').columns(['job_kind', 'job_id']).execute();
-  // A running job writes its heartbeat; a worker takes back only a job whose heartbeat is old, so a
-  // job a live process is still running (such as a CLI's inline terminology import) is never
-  // taken back and run a second time.
-  await db.schema.alterTable('terminology_ingest_jobs').addColumn('heartbeat_at', 'timestamptz').execute();
-  await db.schema.alterTable('facility_jobs').addColumn('heartbeat_at', 'timestamptz').execute();
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
-  await db.schema.alterTable('facility_jobs').dropColumn('heartbeat_at').execute();
-  await db.schema.alterTable('terminology_ingest_jobs').dropColumn('heartbeat_at').execute();
   await db.schema.dropTable('job_interruptions').execute();
 }

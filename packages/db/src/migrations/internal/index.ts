@@ -121,6 +121,7 @@ import * as m119 from './119_import_check_held';
 import * as m120 from './120_workflow_webhook_claims';
 import * as m121 from './121_workflow_version';
 import * as m122 from './122_job_interruptions';
+import * as m123 from './123_job_heartbeats';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -246,4 +247,5 @@ export const internalMigrations: Record<string, Migration> = {
   '120_workflow_webhook_claims': { up: m120.up, down: m120.down },
   '121_workflow_version': { up: m121.up, down: m121.down },
   '122_job_interruptions': { up: m122.up, down: m122.down },
+  '123_job_heartbeats': { up: m123.up, down: m123.down },
 };
