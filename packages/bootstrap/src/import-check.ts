@@ -1,6 +1,6 @@
 import { MAX_SELF_RESUMES, takeBack } from './job-interruptions';
 import { resolveByPerson } from './job-continue';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { redact } from '@openldr/core';
 import {
@@ -105,6 +105,9 @@ export interface CheckRun {
   /** Set while the run checks again only these held keys after a person corrected them (design
    *  2026-11-18-held-corrections). The run goes back to `returnTo` and `finishedAt` after. */
   recheck?: { keys: string[]; returnTo: CheckStatus; finishedAt: string | null };
+  /** Names one pass from the first key, carried on through a stop. A held row records the pass that
+   *  counted it, so a recheck moves only this pass's counts (review H4). Absent on older records. */
+  pass?: string;
 }
 
 export interface ImportCheckStartInput {
@@ -316,9 +319,11 @@ const validLabel = (label: string | undefined): string | null => (label !== unde
 function validFields(raw: unknown, declared: string[]): Record<string, string | null> | null {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw) || declared.length === 0) return null;
   const out: Record<string, string | null> = {};
+  // Only the fields this request sent: a source kind may not have them all (review H2).
   for (const name of declared) {
+    if (!Object.prototype.hasOwnProperty.call(raw, name)) continue;
     const v = (raw as Record<string, unknown>)[name];
-    if (v === null || v === undefined) out[name] = null;
+    if (v === null) out[name] = null;
     else if (typeof v === 'string') out[name] = storable(v.slice(0, CORRECTION_VALUE_MAX)) as string;
   }
   return out;
@@ -695,14 +700,15 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         if (p.reference) await assertUnchanged(p.reference);
         const rechecking = run.recheck !== undefined;
         if (rechecking && recheckRead) return 'done';
+        // A recheck reads only its keys that are still held: one already decided by an earlier try,
+        // before a cut, is not decided or counted again (review H3).
+        const before = rechecking
+          ? (await Promise.all(run.recheck!.keys.map((k) => ownDb('read', () => deps.held.get(run.copyId, k))))).filter((h): h is HeldItem => h !== null)
+          : [];
         const keys = rechecking
-          ? run.recheck!.keys
+          ? before.map((h) => h.key)
           : await ownDb('read', () => deps.copyStore.listKeys(run.copyId, REQUESTS, run.cursor, size));
         if (keys.length === 0) return 'done';
-        // A recheck replaces each key's earlier held count with what it decides now.
-        const before = rechecking
-          ? (await Promise.all(keys.map((k) => ownDb('read', () => deps.held.get(run.copyId, k))))).filter((h): h is HeldItem => h !== null)
-          : [];
         // The corrections of the page's keys, sent only to a plugin that declares correctable fields.
         const stored = correctable.length > 0 && deps.corrections
           ? await ownDb('read', () => deps.corrections!.listFor(run.copyId, keys))
@@ -779,6 +785,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
               // refuses a NUL or a lone surrogate, so those are replaced.
               findings: storable(group.findings ?? null), check: storable(group.check ?? null),
               fields: validFields(group.fields, correctable),
+              pass: run.pass ?? null,
             }));
             decided('held');
             continue;
@@ -800,9 +807,13 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         // A request that passes now leaves the held-back store.
         if (saved.length > 0) await ownDb('write', () => deps.held.remove(run.copyId, saved));
         if (rechecking) {
-          // Each key counted once already, as held. Take that count away before adding the new one.
-          subtractTally(before.map((h) => ({ outcome: 'held' as const, laboratory: h.laboratory, label: h.label ?? undefined })));
-          addTally(t);
+          // A key held in this pass was counted as held: take that away and count what it is now. A
+          // key held by an earlier pass is not in this pass's counts, so they stay as they are (review H4).
+          const counted = before.every((h) => h.pass !== null && h.pass === run.pass);
+          if (counted && run.pass !== undefined) {
+            subtractTally(before.map((h) => ({ outcome: 'held' as const, laboratory: h.laboratory, label: h.label ?? undefined })));
+            addTally(t);
+          }
           recheckRead = true;
           return 'next';
         }
@@ -1027,7 +1038,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           return {
             ...existing, pluginVersion: plugin.version, status: 'queued', pageSize: pageSize ?? existing.pageSize,
             waiting: null, driver: null, startedAt: at, updatedAt: at, finishedAt: null, lastError: null,
-            startedBy: input.actor.name, carriedOn: true,
+            startedBy: input.actor.name, carriedOn: true, pass: existing.pass ?? randomUUID(),
           };
         }
         return {
@@ -1035,7 +1046,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           copyId: input.copyId, referenceCopyId, status: 'queued', options, pageSize: pageSize ?? DEFAULT_PAGE_SIZE,
           cursor: null, counts: freshCounts(), laboratories: [], waiting: null, driver: null,
           startedAt: at, updatedAt: at, finishedAt: null, lastError: null, startedBy: input.actor.name,
-          copyFinishedAt, carriedOn: false,
+          copyFinishedAt, carriedOn: false, pass: randomUUID(),
         };
       }, (next) => auditOrRefuse(deps.audit, {
         action: 'import.check.start', pluginId: plugin.id, runId: id, actor: input.actor,
@@ -1104,6 +1115,15 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       }
       const held = await ownDb('read', () => deps.held.get(copyId, key));
       if (!held || held.reason !== 'held') throw new Error('that request is not held back by the check, so it cannot be corrected');
+      // A source kind may not have every declared field: only those this request sent (review H2).
+      for (const field of fields) {
+        if (!held.fields || !Object.prototype.hasOwnProperty.call(held.fields, field)) {
+          throw new Error(`${field} cannot be corrected for this request`);
+        }
+      }
+      // The audit row first: a correction is stored only once it is on the record (review H6). It
+      // names the copy and the fields, never the key or a value: both come from the source.
+      await auditOrRefuse(deps.audit, { action: 'import.check.correct', pluginId, actor, metadata: { copyId, fields: [...fields].sort() } });
       const at = now();
       for (const field of fields.sort()) {
         await ownDb('write', () => deps.corrections!.put({
@@ -1111,8 +1131,6 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           reason, correctedBy: actor.name, correctedAt: at,
         }));
       }
-      // The audit names the copy and the fields, never the key or a value: both come from the source.
-      await auditOrRefuse(deps.audit, { action: 'import.check.correct', pluginId, actor, metadata: { copyId, fields: fields.sort() } });
       return { corrections: (await ownDb('read', () => deps.corrections!.listFor(copyId, [key]))).get(key) ?? [] };
     },
 

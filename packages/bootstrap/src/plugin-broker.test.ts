@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { currentInFlight } from '@openldr/core';
 import { createImportCheckHeldStore, createImportCopyStore, createPluginDataStore } from '@openldr/db';
 import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
-import { createPluginBroker, buildBrokerOpSchema } from './plugin-broker';
+import { checkForPage, createPluginBroker, buildBrokerOpSchema } from './plugin-broker';
 import { CopySetChangedError, copySetHashes, copySpecSchema, createImportCopyService } from './import-copy';
 import { checkIdOf, createImportCheckService } from './import-check';
 
@@ -902,7 +902,7 @@ describe('plugin broker: checks', () => {
       const checks = withCorrections();
       const { b } = gated(checks);
       for (const op of [
-        { kind: 'import.allowed' }, { kind: 'import.copy.list' }, { kind: 'import.check.list' },
+        { kind: 'import.allowed' }, { kind: 'import.copy.list' }, { kind: 'import.check.list' }, { kind: 'import.check.status', runId: 'ck1' },
         { kind: 'import.check.held', copyId: 'cp1', offset: 0, limit: 50 },
         { kind: 'import.check.heldItem', copyId: 'cp1', key: SECRET_KEY },
         { kind: 'import.check.heldItems', copyId: 'cp1', offset: 0, limit: 200 },
@@ -930,6 +930,12 @@ describe('plugin broker: checks', () => {
       for (const op of [{ kind: 'import.check.heldItem', copyId: 'cp1', key: SECRET_KEY }, { kind: 'import.check.correct', copyId: 'cp1', key: SECRET_KEY, values: { sex: 'F' }, reason: 'r' }, { kind: 'import.check.access' }]) {
         expect(await b.handle('p1', nobody, op)).toMatchObject({ ok: false });
       }
+    });
+
+    it('never hands the page the keys a recheck names (review H5)', async () => {
+      const page = checkForPage(checkRun({ recheck: { keys: [SECRET_KEY], returnTo: 'completed', finishedAt: null } }) as never);
+      expect(JSON.stringify(page)).not.toContain(SECRET_KEY);
+      expect(page).not.toHaveProperty('recheck');
     });
 
     it('access tells the page what to show', async () => {

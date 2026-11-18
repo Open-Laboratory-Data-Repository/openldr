@@ -21,9 +21,13 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addPrimaryKeyConstraint('import_check_corrections_pk', ['copy_id', 'key', 'field'])
     .execute();
   await sql`alter table import_check_held add column if not exists fields jsonb`.execute(db);
+  // The pass of the check run that held the request, so a recheck moves the counts only of the pass
+  // that counted it (review H4). Null on rows held before passes were named.
+  await sql`alter table import_check_held add column if not exists pass text`.execute(db);
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
+  await sql`alter table import_check_held drop column if exists pass`.execute(db);
   await sql`alter table import_check_held drop column if exists fields`.execute(db);
   await db.schema.dropTable('import_check_corrections').ifExists().execute();
 }

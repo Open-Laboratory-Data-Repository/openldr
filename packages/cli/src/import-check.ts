@@ -41,9 +41,10 @@ function wholeNumber(flag: string, raw: string | undefined): number | undefined 
   return Number(raw);
 }
 
-/** The run as --json prints it: no cursor, no driver. */
-export function checkRunForJson(run: CheckRun): Omit<CheckRun, 'cursor' | 'driver'> {
-  const { cursor: _cursor, driver: _driver, ...rest } = run;
+/** The run as --json prints it: no cursor, no driver, no recheck keys. */
+export function checkRunForJson(run: CheckRun): Omit<CheckRun, 'cursor' | 'driver' | 'recheck'> {
+  // A recheck names source keys, so it is left out like the cursor (review H5).
+  const { cursor: _cursor, driver: _driver, recheck: _recheck, ...rest } = run;
   return rest;
 }
 

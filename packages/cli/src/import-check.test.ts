@@ -235,6 +235,12 @@ describe('import check CLI', () => {
       expect(checks.correct).not.toHaveBeenCalled();
     });
 
+    it('recheck --json prints no key the recheck names (review H5)', async () => {
+      checks.recheck = vi.fn(async () => run({ status: 'queued', driver: null, recheck: { keys: [SECRET_KEY], returnTo: 'completed', finishedAt: null } } as never));
+      expect(await runImportCheckRecheck('v1-check', 'c0ffee', SECRET_KEY, { json: true })).toBe(0);
+      expect(out.join('')).not.toContain(SECRET_KEY);
+    });
+
     it('recheck queues the run and prints it', async () => {
       expect(await runImportCheckRecheck('v1-check', 'c0ffee', SECRET_KEY, { json: false })).toBe(0);
       expect(checks.recheck).toHaveBeenCalledWith({ pluginId: 'v1-check', copyId: 'c0ffee', key: SECRET_KEY, actor: cli });

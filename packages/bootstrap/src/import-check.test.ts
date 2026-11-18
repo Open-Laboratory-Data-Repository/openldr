@@ -111,7 +111,12 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
     },
   };
   const audited: ImportAuditEvent[] = [];
-  const audit = async (e: ImportAuditEvent) => { audited.push(structuredClone(e)); };
+  /** Actions whose audit write fails, as the store does when it cannot write. */
+  const refuseAudit = new Set<string>();
+  const audit = async (e: ImportAuditEvent) => {
+    if (refuseAudit.has(e.action)) throw new Error('audit store unavailable');
+    audited.push(structuredClone(e));
+  };
   const plugins: Array<{ id: string; version: string; enabled: boolean; manifest: Record<string, unknown> }> = [
     { id: PLUGIN, version: '1.2.0', enabled: true, manifest: manifest(opts.entrypoints ?? CHECKER, PLUGIN, opts.corrections) },
     { id: OTHER, version: '1.0.0', enabled: true, manifest: manifest({ copy: 'import_copy' }, OTHER) },
@@ -208,7 +213,7 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
   };
 
   return {
-    interruptions, corrections,
+    interruptions, corrections, refuseAudit,
     svc, service, copies, raw, audited, runSaves, decodeCalls, twinCalls, invoke, persisted, clock, sleeps, plugins,
     readSetCalls, readCalls, heldPuts, copyCalls, allowedCalls,
     revoke: (connectorId: string) => { allowedConnectors.delete(connectorId); },
@@ -1695,6 +1700,51 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     await expect(w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ9999', actor: ADMIN })).rejects.toThrow(/not held/);
     await w.svc.start({ ...START, pageSize: 10, fromStart: true });
     await expect(w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN })).rejects.toThrow(/is queued/);
+  });
+
+  it('a refused audit stores no correction (review H6)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    w.refuseAudit.add('import.check.correct');
+    await expect(w.svc.correct(correctInput())).rejects.toThrow();
+    expect((await w.corrections.listFor(SRC, ['REQ0001'])).size).toBe(0);
+  });
+
+  it('keeps only the fields the request sent, and refuses a field this request does not have (review H2)', async () => {
+    const w = await world({ corrections: [...FIELDS, 'analysed'] });
+    await heldRun(w);
+    const item = await w.svc.heldItem(PLUGIN, SRC, 'REQ0001');
+    expect(Object.keys(item!.fields ?? {}).sort()).toEqual(['dob_age', 'sex']);
+    await expect(w.svc.correct(correctInput({ values: { analysed: '2024-01-01' } }))).rejects.toThrow(/analysed cannot be corrected for this request/);
+  });
+
+  it('a recheck replayed by a second driver after a cut counts nothing twice (review H3)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput());
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    await drive(w.svc);
+    const done = (await w.stored())!;
+    expect(done.counts).toMatchObject({ read: 2, saved: 1, held: 1 });
+    // A second driver meets the run as a cut left it: still rechecking, counts already moved.
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, { ...done, rev: done.rev + 1, status: 'queued', recheck: { keys: ['REQ0001'], returnTo: 'completed', finishedAt: done.finishedAt } });
+    await drive(w.service('server-2'));
+    expect((await w.stored())!.counts).toMatchObject({ read: 2, saved: 1, held: 1 });
+  });
+
+  it('rechecking a request held by an earlier pass leaves the counts of this pass alone (review H4)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w, keysOf(2));
+    // A new pass from the first key, stopped before it reached anything: its counts start at 0.
+    const run = (await w.stored())!;
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, { ...run, rev: run.rev + 1, status: 'stopped', cursor: null, pass: 'a-later-pass',
+      counts: { read: 0, saved: 0, held: 0, failed: 0, resources: 0, labels: {} }, laboratories: [] });
+    await w.svc.correct(correctInput({ key: 'REQ0002' }));
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0002', actor: ADMIN });
+    await drive(w.svc);
+    const after = (await w.stored())!;
+    expect(after.counts).toMatchObject({ read: 0, saved: 0, held: 0 });
+    expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0002')).toBeNull();
   });
 
   it('a full run sends the stored corrections of its page, and none when the plugin declares no fields', async () => {

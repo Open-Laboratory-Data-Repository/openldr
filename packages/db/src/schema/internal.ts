@@ -923,6 +923,8 @@ export interface ImportCheckHeldTable {
   held_at: Generated<Date>;
   /** The values as read of the fields a plugin lets a person correct (migration 124). */
   fields: ColumnType<unknown, string | null | undefined, string | null>;
+  /** The check pass that held the request (migration 124). */
+  pass: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 export interface ImportCheckCorrectionsTable {
