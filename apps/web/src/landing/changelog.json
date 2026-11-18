@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "0b5cf434",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "The public marketplace is the default registry, and the empty Marketplace points at the Registries tab"
+        },
+        {
           "hash": "26dfd154",
           "type": "fix",
           "scope": "import",
