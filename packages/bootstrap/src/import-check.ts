@@ -528,6 +528,8 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       const correctable = correctableOf(plugin);
       /** A recheck reads its keys once, then is done. */
       let recheckRead = false;
+      /** Times a recheck found its done mark not yet stored. */
+      let unsavedTries = 0;
 
       /** A plugin call. A throw or a bad answer is a PluginCallFault with a fixed sentence. Only
        *  the runtime's own timeout is told apart from a refusal; the plugin's text is never kept. */
@@ -714,6 +716,15 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         // (review H3, re-review H3).
         const done = new Map((run.recheck?.done ?? []).map((d) => [d.key, d.outcome]));
         if (rechecking && done.size > 0) {
+          // Only what the stored run already says is done: an in-memory mark whose save failed does not
+          // count, so the page end is saved again first (re-review H3, writes).
+          const stored = await ownDb('read', () => readRun(run.pluginId, run.id));
+          const durable = new Map((stored?.recheck?.done ?? []).map((d) => [d.key, d.outcome]));
+          if ([...done].some(([k, o]) => durable.get(k) !== o)) {
+            unsavedTries += 1;
+            if (unsavedTries > MAX_DB_RETRIES) throw new CheckFault('the recheck could not save its counts, so the check stopped');
+            return 'next';
+          }
           const savedKeys = [...done].filter(([, o]) => o === 'saved').map(([k]) => k);
           if (savedKeys.length > 0) await ownDb('write', () => deps.held.remove(run.copyId, savedKeys));
           recheckRead = true;

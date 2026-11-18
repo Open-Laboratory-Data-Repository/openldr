@@ -67,6 +67,8 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
   const raw = createPluginDataStore(internalDb);
   const plainCheckPuts: string[] = [];
   const runSaves: CheckRun[] = [];
+  /** Run writes that fail as a full disk does, while it answers true for the written run. */
+  let runWriteFault: ((doc: CheckRun) => boolean) | null = null;
   const pluginData: PluginDataStore = {
     ...raw,
     async put(pluginId, collection, key, doc) {
@@ -74,6 +76,9 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
       return raw.put(pluginId, collection, key, doc);
     },
     async putIfRev(pluginId, collection, key, doc, expectedRev) {
+      if (collection === '__import-checks' && runWriteFault?.(doc as CheckRun)) {
+        throw Object.assign(new Error('could not extend file: No space left on device'), { code: '53100' });
+      }
       const wrote = await raw.putIfRev(pluginId, collection, key, doc, expectedRev);
       if (wrote && collection === '__import-checks') runSaves.push(structuredClone(doc) as CheckRun);
       return wrote;
@@ -98,6 +103,7 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
   const realHeld = createImportCheckHeldStore(internalDb);
   let heldPutFaults = 0;
   let heldRemoveFaults = 0;
+  let onHeldRemove: ((copyId: string, keys: string[]) => Promise<void>) | null = null;
   const heldPuts: unknown[] = [];
   const held: ImportCheckHeldStore = {
     ...realHeld,
@@ -111,6 +117,7 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
       return realHeld.put(item);
     },
     async remove(copyId, keys) {
+      await onHeldRemove?.(copyId, keys);
       if (heldRemoveFaults > 0) {
         heldRemoveFaults -= 1;
         throw Object.assign(new Error('could not extend file: No space left on device'), { code: '53100' });
@@ -232,6 +239,8 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
     failReadSet: (fn: ((set: string, maxBytes: number) => unknown) | null) => { readSetFault = fn; },
     failHeldPuts: (n: number) => { heldPutFaults = n; },
     failHeldRemoves: (n: number) => { heldRemoveFaults = n; },
+    failRunWrites: (fn: ((doc: CheckRun) => boolean) | null) => { runWriteFault = fn; },
+    watchHeldRemoves: (fn: ((copyId: string, keys: string[]) => Promise<void>) | null) => { onHeldRemove = fn; },
     stored: async () => (await raw.get(PLUGIN, '__import-checks', CHECK)) as CheckRun | null,
     heldAll: async () => realHeld.list(SRC, { offset: 0, limit: 1000 }),
   };
@@ -1820,6 +1829,28 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     expect(queued.status).toBe('queued');
     await drive(w.svc);
     expect((await w.stored())!.counts).toMatchObject({ read: 2, held: 2, labels: { held_rules: 1, held_check: 1 } });
+  });
+
+  it('removes a held row only once the stored run already shows its key as done, even when run writes fail (re-review H3, writes)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput());
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    let left = 2;
+    w.failRunWrites((doc) => (doc.recheck?.done?.length ?? 0) > 0 && left-- > 0);
+    const stateAtRemoval: Array<CheckRun | null> = [];
+    w.watchHeldRemoves(async (_copy, keys) => { if (keys.includes('REQ0001')) stateAtRemoval.push(await w.stored()); });
+    await drive(w.svc);
+    // Whatever the faults left, another driver finishes it once the first has gone quiet.
+    w.clock.now += STALE_MS + 1000;
+    await drive(w.service('server-2'));
+    expect(stateAtRemoval.length).toBeGreaterThan(0);
+    for (const stored of stateAtRemoval) {
+      expect(stored?.recheck?.done).toEqual([{ key: 'REQ0001', outcome: 'saved' }]);
+      expect(stored?.counts).toMatchObject({ saved: 1, held: 1 });
+    }
+    expect(await w.svc.heldItem(PLUGIN, SRC, 'REQ0001')).toBeNull();
+    expect((await w.stored())!).toMatchObject({ status: 'completed', counts: { read: 2, saved: 1, held: 1 } });
   });
 
   it('a full run sends the stored corrections of its page, and none when the plugin declares no fields', async () => {
