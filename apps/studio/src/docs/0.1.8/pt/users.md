@@ -260,6 +260,22 @@ Use isto quando o trabalho da IA terminar, ou quando uma chave possa ter sido di
 
 **Resultado esperado:** o estado da chave passa a Revogada. Um programa que a use é recusado a partir da chamada seguinte. Um comando que já tenha iniciado continua até ao fim. Uma revogação não pode ser anulada. Crie uma chave nova se a IA voltar a precisar de acesso.
 
+## Limitar os dados de um utilizador a alguns locais
+
+Faça isto quando uma pessoa só deve ver números dos painéis da sua unidade, distrito ou região. É preciso a permissão de gerir funções.
+
+1. Selecione **Users** no menu principal.
+2. Encontre a conta, abra os pontos da linha e selecione **Edit**.
+3. Selecione **Dados** e escolha **Limitado**.
+4. Selecione **Adicionar uma região**, **Adicionar um distrito** ou **Adicionar uma unidade**, e escolha um local. Repita para cada local.
+5. Abra os pontos no canto superior direito da folha e selecione **Save**.
+
+**Resultado esperado:** a folha fecha. Na próxima vez que a pessoa entrar, os painéis contam apenas pedidos enviados dos locais listados, ou analisados neles. Escolha **Tudo** em **Dados** para tirar o limite.
+
+Os locais vêm do registo de unidades, por isso são escolhidos, nunca escritos. Um distrito aparece com a sua região, porque duas regiões podem ter um distrito com o mesmo nome. **Limitado** sem nenhum local não mostra números nos painéis.
+
+Um utilizador limitado perde estas permissões, seja qual for a sua função: relatórios, pacientes, consultas, exportações, fluxos de trabalho, conectores, auditoria, atividade, correções retidas, o registo de unidades e a sincronização. Não pode criar nem editar painéis, e um widget escrito em SQL mostra **Não disponível com o seu limite de dados**. Mantém os formulários, incluindo a pesquisa de pacientes dentro de um formulário, que o limite não cobre.
+
 ## Usar Users num telemóvel
 
 Use o mesmo diretório e painel de conta no telemóvel. Colunas largas podem exigir deslocamento horizontal.

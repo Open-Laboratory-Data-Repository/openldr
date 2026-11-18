@@ -537,6 +537,15 @@ Do this when only some roles should see a dashboard and its numbers, such as a d
 
 Only the dashboard's owner or an admin sees **Share**. A dashboard made before sharing existed has no owner, so only an admin can share it.
 
+## What a user with a data limit sees
+
+An administrator can limit a person to some facilities, districts or regions in **Users**. For that person, every widget counts only requests sent from those places, or tested at them. Results and reports count through their request.
+
+- A widget written in SQL shows **Not available with your data limit**. SQL cannot be limited safely, so it does not run.
+- A filter whose choices come from SQL offers no choices. Type the value instead.
+- Patients, specimens and facilities are not offered as data, because their rows name no facility.
+- A request whose facility is not known yet is not counted. A new facility code counts once it is mapped in **Facilities** and the report facilities show **Current**.
+
 ## Delete a dashboard
 
 1. Select the dashboard and enter edit mode.

@@ -142,6 +142,7 @@ Estes casos foram reproduzidos em Linux com o iniciador instalado e a CLI real n
 | `report` | `list` e `run` de relatórios analíticos; `glass-export`. |
 | `audit` | Lê o registo de auditoria, onde só se acrescentam entradas. |
 | `user` | Gere utilizadores: `list`, `show`, `create`, `set-role`, `activate`, `deactivate`. As mudanças de estado também atualizam as contas ligadas no fornecedor. `export` é um comando de dados de nível superior. |
+| `users` | Lista utilizadores; mostra ou define o limite de dados de um utilizador (`scope`). |
 | `market` | Artefactos do Marketplace: `verify`, `install`, `update`, `list`, `rollback`, `enable`, `disable`, `remove`. |
 | `artifact` | Criação de artefactos: `keygen`, `new`, `build`, `pack`, `sign`, `test`, `publish`. |
 | `sync` | Sincronização distribuída (laboratório⇄central): `status`, `now`, e, do lado central, `enroll`, `list`, `rotate`, `revoke`. |
@@ -544,4 +545,27 @@ Quem só pode consultar painéis vê dados apenas através dos painéis partilha
 openldr dashboards share default
 openldr dashboards share default --roles lab_manager,data_analyst
 openldr dashboards share default --clear
+```
+
+## O limite de dados de um utilizador
+
+`openldr users scope <subject>` mostra o limite de dados de um utilizador. É o lado CLI da linha **Dados** da folha Users. O sujeito é o sujeito de entrada do utilizador, ou o seu id numa conta que não o tem. Com um limite, os painéis contam apenas pedidos enviados dos locais listados, ou analisados neles.
+
+| Opção | O que faz |
+| --- | --- |
+| `--facility <ids>` | Ids de unidades do registo, separados por vírgulas. |
+| `--district <pairs>` | Distritos como `Region/District`, separados por vírgulas, porque regiões diferentes têm distritos com o mesmo nome. |
+| `--region <regions>` | Regiões, separadas por vírgulas. |
+| `--force` | Necessário para definir um limite, porque tira permissões. |
+| `--all` | Tira o limite: o utilizador vê tudo. |
+| `--json` | Mostra o limite em JSON. |
+
+Precisa de `roles.manage`. Cada local tem de estar no registo de unidades, senão o comando é recusado e nada muda. Executado localmente no servidor, o ator fica registado como `cli`. Cada mudança é auditada como `user.data_scope.set`.
+
+Um utilizador limitado perde relatórios, pacientes, consultas, exportações, fluxos de trabalho, conectores, auditoria, atividade, correções retidas, o registo de unidades e a sincronização, e não pode criar nem editar painéis. Nunca executa widgets SQL. Mantém os formulários, incluindo a pesquisa de pacientes dentro de um formulário, que o limite não cobre. Um novo código de unidade só conta depois de a tabela de unidades ser reconstruída.
+
+```
+openldr users scope 3f2a9c1e
+openldr users scope 3f2a9c1e --region Dodoma --district Arusha/Arumeru --force
+openldr users scope 3f2a9c1e --all
 ```

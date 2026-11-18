@@ -260,6 +260,22 @@ Effectuez cette tâche lorsque le travail de l'IA est terminé, ou lorsqu'une cl
 
 **Résultat attendu :** le statut de la clé passe à Révoquée. Un programme qui l'utilise est refusé dès son appel suivant. Une commande qu'il a déjà lancée continue jusqu'à sa fin. Une révocation est définitive. Créez une nouvelle clé si l'IA a de nouveau besoin d'accès.
 
+## Limiter les données d'un utilisateur à certains lieux
+
+Faites-le quand une personne ne doit voir les chiffres des tableaux de bord que pour son établissement, son district ou sa région. Il faut le droit de gérer les rôles.
+
+1. Sélectionnez **Users** dans le menu principal.
+2. Trouvez le compte, ouvrez les points de sa ligne et sélectionnez **Edit**.
+3. Sélectionnez **Données** et choisissez **Limité**.
+4. Sélectionnez **Ajouter une région**, **Ajouter un district** ou **Ajouter un établissement**, puis choisissez un lieu. Recommencez pour chaque lieu.
+5. Ouvrez les points en haut à droite de la feuille et sélectionnez **Save**.
+
+**Résultat attendu :** la feuille se ferme. À sa prochaine connexion, les tableaux de bord de la personne ne comptent que les demandes envoyées depuis les lieux listés, ou analysées dans ces lieux. Choisissez **Tout** sous **Données** pour retirer la limite.
+
+Les lieux viennent du registre des établissements : on les choisit, on ne les tape jamais. Un district est listé avec sa région, car deux régions peuvent avoir un district du même nom. **Limité** sans aucun lieu ne montre aucun chiffre de tableau de bord.
+
+Un utilisateur limité perd ces droits, quel que soit son rôle : rapports, patients, requêtes, exports, workflows, connecteurs, audit, activité, corrections en attente, registre des établissements et synchronisation. Il ne peut ni créer ni modifier de tableau de bord, et un widget écrit en SQL affiche **Non disponible avec votre limite de données**. Il garde les formulaires, y compris la recherche de patients dans un formulaire, que la limite ne couvre pas.
+
 ## Utiliser Users sur un téléphone
 
 Utilisez le même annuaire et le même panneau de compte sur un téléphone. Les colonnes larges peuvent nécessiter un défilement horizontal.

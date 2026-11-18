@@ -537,6 +537,15 @@ Faites-le quand seuls certains rôles doivent voir un tableau de bord et ses chi
 
 Seuls le propriétaire du tableau de bord ou un administrateur voient **Partager**. Un tableau de bord créé avant le partage n’a pas de propriétaire : seul un administrateur peut le partager.
 
+## Ce que voit un utilisateur avec une limite de données
+
+Un administrateur peut limiter une personne à certains établissements, districts ou régions dans **Users**. Pour cette personne, chaque widget ne compte que les demandes envoyées depuis ces lieux, ou analysées dans ces lieux. Les résultats et les rapports comptent par leur demande.
+
+- Un widget écrit en SQL affiche **Non disponible avec votre limite de données**. Le SQL ne peut pas être limité sans risque, donc il ne s'exécute pas.
+- Un filtre dont les choix viennent du SQL n'offre aucun choix. Tapez la valeur.
+- Les patients, les échantillons et les établissements ne sont pas proposés comme données, car leurs lignes ne nomment aucun établissement.
+- Une demande dont l'établissement n'est pas encore connu n'est pas comptée. Un nouveau code d'établissement compte une fois qu'il est mis en correspondance dans **Facilities** et que les établissements des rapports affichent **Current**.
+
 ## Supprimer un tableau de bord
 
 1. Sélectionnez le tableau de bord et passez en mode modification.

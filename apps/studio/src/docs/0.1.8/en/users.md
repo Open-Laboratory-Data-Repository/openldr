@@ -260,6 +260,22 @@ Use this when the AI's work is done, or when a key may have leaked.
 
 **Expected result:** the key's status changes to Revoked. A program that uses it is refused from its next call. A command it already started keeps running to its end. Revoking cannot be undone. Make a new key if the AI needs access again.
 
+## Limit a user's data to some places
+
+Use this when a person should see dashboard numbers for their own facility, district or region only. This requires Manage roles.
+
+1. Select **Users** in the main menu.
+2. Find the account, open its row dots and select **Edit**.
+3. Select **Data** and choose **Limited**.
+4. Select **Add a region**, **Add a district** or **Add a facility**, and choose a place. Repeat for each place.
+5. Open the dots at the top right of the sheet and select **Save**.
+
+**Expected result:** the sheet closes. The next time the person signs in, dashboards count only requests sent from the listed places, or tested at them. Choose **Everything** under **Data** to remove the limit.
+
+Places come from the facility register, so they are picked, never typed. A district is listed with its region, because two regions can have a district of the same name. **Limited** with no place listed shows the person no dashboard numbers.
+
+A limited user loses these permissions, whatever their role gives: reports, patients, queries, exports, workflows, connectors, audit, activity, held corrections, the facility register and sync. They cannot create or edit dashboards, and a widget written in SQL shows **Not available with your data limit**. They keep forms, including patient search inside a form, which the limit does not cover.
+
 ## Use Users on a phone
 
 Use the same directory and account sheet on a phone. Wide columns can require horizontal scrolling.

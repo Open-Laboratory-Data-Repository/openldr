@@ -142,6 +142,7 @@ These cases were reproduced on Linux with the installed launcher and real CLI in
 | `report` | `list` and `run` analytics reports; `glass-export`. |
 | `audit` | Read the append-only audit log. |
 | `user` | Manage users: `list`, `show`, `create`, `set-role`, `activate`, `deactivate`. Status changes also update linked provider accounts. `export` is a top-level dataset command. |
+| `users` | List users; show or set a user's data limit (`scope`). |
 | `market` | Marketplace artifacts: `verify`, `install`, `update`, `list`, `rollback`, `enable`, `disable`, `remove`. |
 | `artifact` | Author artifacts: `keygen`, `new`, `build`, `pack`, `sign`, `test`, `publish`. |
 | `sync` | Distributed (lab⇄central) sync: `status`, `now`, and central-side `enroll`, `list`, `rotate`, `revoke`. |
@@ -537,4 +538,27 @@ A person who can only view dashboards sees data only through the dashboards shar
 openldr dashboards share default
 openldr dashboards share default --roles lab_manager,data_analyst
 openldr dashboards share default --clear
+```
+
+## A user's data limit
+
+`openldr users scope <subject>` shows a user's data limit. It is the CLI side of the **Data** row in the Users sheet. The subject is the user's sign-in subject, or the user id for an account that has none. With a limit, dashboards count only requests sent from the listed places, or tested at them.
+
+| Flag | What it does |
+| --- | --- |
+| `--facility <ids>` | Register facility ids, comma separated. |
+| `--district <pairs>` | Districts as `Region/District`, comma separated, because district names repeat across regions. |
+| `--region <regions>` | Regions, comma separated. |
+| `--force` | Needed to set a limit, because it takes permissions away. |
+| `--all` | Remove the limit, so the user sees everything. |
+| `--json` | Print the limit as JSON. |
+
+It needs `roles.manage`. Every place must be in the facility register, or the command is refused and nothing changes. Run locally on the server, the actor is recorded as `cli`. Each change is audited as `user.data_scope.set`.
+
+A limited user loses reports, patients, queries, exports, workflows, connectors, audit, activity, held corrections, the facility register and sync, and cannot create or edit dashboards. They never run SQL widgets. They keep forms, including patient search inside a form, which the limit does not cover. A new facility code counts only after the facility map is rebuilt.
+
+```
+openldr users scope 3f2a9c1e
+openldr users scope 3f2a9c1e --region Dodoma --district Arusha/Arumeru --force
+openldr users scope 3f2a9c1e --all
 ```
