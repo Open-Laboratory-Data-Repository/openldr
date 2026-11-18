@@ -80,6 +80,14 @@ describe('dashboard sharing', () => {
     expect(data.map((d) => d.id)).toEqual(['open', 'district']);
   });
 
+  it('refuses to create a dashboard with an id that exists, returning nothing of it (review DS1)', async () => {
+    const { app, data } = setup(editor);
+    const res = await app.inject({ method: 'POST', url: '/api/dashboards', payload: { ...dash('district', null), name: 'mine', widgets: [] } });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.stringify(res.json())).not.toContain('Requests');
+    expect(data.filter((d) => d.id === 'district')).toHaveLength(1);
+  });
+
   it('sets the owner to the caller on create and keeps the stored owner on update, whatever the body says', async () => {
     const { app } = setup(editor);
     const made = await app.inject({ method: 'POST', url: '/api/dashboards', payload: { ...dash('mine', 'someone-else'), id: 'mine' } });

@@ -188,7 +188,11 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
       // CREATE: no prior dashboard, so no SQL is vetted — any sql-mode widget is new and gated.
       const sqlEnabled = await ctx.featureFlags.get('dashboard.raw_sql');
       assertSqlAuthoringAllowed(sqlEnabled, parsed, new Set());
+      // An id that exists is refused, and nothing of that dashboard is returned: the store hands back
+      // the existing row on a conflict, which would show a dashboard the caller may not see (review DS1).
+      if (await ctx.dashboards.store.get(parsed.id)) { reply.code(409); return { error: 'a dashboard with this id exists' }; }
       const created = await ctx.dashboards.store.create(parsed);
+      if ((created.ownerId ?? null) !== parsed.ownerId) { reply.code(409); return { error: 'a dashboard with this id exists' }; }
       await recordAudit(ctx, req, { action: 'dashboard.create', entityType: 'dashboard', entityId: created.id, before: null, after: created });
       return created;
     } catch (err) { return mapError(err, reply); }
