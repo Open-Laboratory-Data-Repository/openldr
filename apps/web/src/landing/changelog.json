@@ -6,6 +6,120 @@
       "version": null,
       "entries": [
         {
+          "hash": "058fe876",
+          "type": "fix",
+          "scope": "import",
+          "title": "The locked correction write also checks the request is still held (held corrections review H17, stale row)"
+        },
+        {
+          "hash": "70a66608",
+          "type": "fix",
+          "scope": "import",
+          "title": "A correction is written only while its claim is held, checked in the same transaction as the write (held corrections review H17, expired owner)"
+        },
+        {
+          "hash": "e8bed02c",
+          "type": "fix",
+          "scope": "import",
+          "title": "A correction and a check take turns on the run by compare-and-swap, so an accepted correction is never left unapplied (held corrections review H17, order)"
+        },
+        {
+          "hash": "3b092ac6",
+          "type": "fix",
+          "scope": "import",
+          "title": "No correction while a check of the source runs, and a recheck whose corrections changed under it decides nothing (held corrections review H17)"
+        },
+        {
+          "hash": "c32c55f8",
+          "type": "fix",
+          "scope": "import",
+          "title": "Refuse a correction to a request a recheck already saved, whose held row waits for cleanup (held corrections review H17)"
+        },
+        {
+          "hash": "8418fd78",
+          "type": "fix",
+          "scope": "import",
+          "title": "Settling counts an error row as failed, and a settle that cannot read leaves the run for takeover (held corrections re-review H3, A and B)"
+        },
+        {
+          "hash": "599b5439",
+          "type": "fix",
+          "scope": "import",
+          "title": "A recheck that did not finish is settled against its held rows, at its end and before the next recheck (held corrections re-review H3, held give up)"
+        },
+        {
+          "hash": "d11b8b2a",
+          "type": "fix",
+          "scope": "import",
+          "title": "A recheck that ends without completing keeps only its stored counts and finishes a stored removal, here or at the next recheck (held corrections re-review H3, give up)"
+        },
+        {
+          "hash": "8f824cee",
+          "type": "fix",
+          "scope": "import",
+          "title": "A recheck removes a held row only once the stored run shows its key done (held corrections re-review H3, failed writes)"
+        },
+        {
+          "hash": "ea0787f1",
+          "type": "fix",
+          "scope": "import",
+          "title": "A recheck takes away the decision it was queued with, recorded in the run, not the held row it rewrites (held corrections re-review H3)"
+        },
+        {
+          "hash": "bc7029da",
+          "type": "fix",
+          "scope": "import",
+          "title": "A recheck saves its counts before a held row leaves, and a re-held row keeps its first pass (held corrections re-review H3, H4)"
+        },
+        {
+          "hash": "58247b66",
+          "type": "fix",
+          "scope": "import",
+          "title": "Held corrections review H1-H6: a corrector reads run status, the form offers only a request's own fields, a recheck counts once and only in its pass, no recheck key reaches a page or terminal, the audit row comes before the correction"
+        },
+        {
+          "hash": "314f4e01",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "A corrector may read the connector names the Feedback tab shows"
+        },
+        {
+          "hash": "f0c1174c",
+          "type": "fix",
+          "scope": "",
+          "title": "Name the new permission in three languages, and count the new migration and commands (held corrections gate)"
+        },
+        {
+          "hash": "c385e96d",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Import check correct and recheck, with their docs in en, fr and pt (held corrections task 5)"
+        },
+        {
+          "hash": "99b62fff",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "A corrector may open an import plugin's Feedback tab, correct a held request and check it again (held corrections task 4)"
+        },
+        {
+          "hash": "e25cfdd3",
+          "type": "feat",
+          "scope": "import",
+          "title": "Correct a held request and check it again, in the run that held it (held corrections task 3)"
+        },
+        {
+          "hash": "dcc1acb3",
+          "type": "feat",
+          "scope": "rbac",
+          "title": "A Correct held requests permission (imports.correct_held)"
+        },
+        {
+          "hash": "578dc3a5",
+          "type": "feat",
+          "scope": "db",
+          "title": "Corrections to held requests, kept beside the source rows (migration 124)"
+        },
+        {
           "hash": "39247853",
           "type": "feat",
           "scope": "terminology",
