@@ -30,11 +30,18 @@ export interface TakeBackInput {
   wait(): Promise<void>;
 }
 
-/** Records the cut, then resumes the job or leaves it waiting. A cut already recorded runs nothing,
- *  so a worker that meets the same orphan twice does not start it twice. */
+/** Records the cut, then resumes the job or leaves it waiting. A cut already resolved runs nothing,
+ *  so a worker that meets the same orphan twice does not start it twice; one recorded but never
+ *  resolved is tried again. */
 export async function takeBack(deps: InterruptionDeps, input: TakeBackInput): Promise<'resumed' | 'waiting' | 'already-recorded'> {
   const { id, inserted } = await deps.store.record(input.kind, input.jobId, { at: input.at, cause: input.cause, phase: input.phase });
-  if (!inserted) return 'already-recorded';
+  if (!inserted) {
+    // The same cut met again. Done if it was resolved, or if it waits for a person. A cut a
+    // self-resuming job recorded but never resolved means the take-back itself was cut (a resume
+    // that threw, or a power cut between record and resolve): try it again (review R1).
+    const existing = ((await deps.store.listFor(input.kind, [input.jobId])).get(input.jobId) ?? []).find((r) => r.id === id);
+    if (!input.selfResume || existing?.resumedBy !== null) return 'already-recorded';
+  }
   const cuts = await deps.store.inARow(input.kind, input.jobId, input.phase);
   if (!input.selfResume || cuts > MAX_SELF_RESUMES) {
     await input.wait();

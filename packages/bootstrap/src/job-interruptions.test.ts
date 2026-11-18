@@ -54,6 +54,28 @@ describe('takeBack', () => {
   });
 });
 
+describe('takeBack after a take-back that did not finish (review R1)', () => {
+  it('tries the resume again when the cut is recorded but was never resolved', async () => {
+    const { store, deps } = await setup();
+    const failing = cut({ resume: vi.fn(async () => { throw new Error('connection lost'); }) });
+    await expect(takeBack(deps, failing)).rejects.toThrow('connection lost');
+    const again = cut();
+    expect(await takeBack(deps, again)).toBe('resumed');
+    expect(again.resume).toHaveBeenCalledTimes(1);
+    expect((await store.listFor('terminology-ingest', ['j1'])).get('j1')).toEqual([
+      expect.objectContaining({ resumedBy: 'self' }),
+    ]);
+  });
+
+  it('does not resume again a cut that was already resolved', async () => {
+    const { deps } = await setup();
+    await takeBack(deps, cut());
+    const again = cut();
+    expect(await takeBack(deps, again)).toBe('already-recorded');
+    expect(again.resume).not.toHaveBeenCalled();
+  });
+});
+
 describe('continueJob', () => {
   it('records a person brought the job back, and the new run when there is one', async () => {
     const { store, deps } = await setup();
