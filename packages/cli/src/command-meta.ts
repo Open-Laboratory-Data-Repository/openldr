@@ -503,6 +503,7 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // Enable and Disable in the studio row menu: PUT /api/workflows/:id/enabled, guard EDIT
   // (workflows-routes.ts). Only `enabled` changes; nothing is removed, so not destructive.
   'workflows enable': { kind: 'app', capability: 'workflows.edit' },
+  'workflows run-continue': { kind: 'app', capability: 'workflows.run' },
   'workflows disable': { kind: 'app', capability: 'workflows.edit' },
   'workflows receipts list': { kind: 'app', capability: 'workflows.view' },
   'workflows receipts show': { kind: 'app', capability: 'workflows.view' },

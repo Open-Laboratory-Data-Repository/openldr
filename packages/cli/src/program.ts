@@ -14,7 +14,7 @@ import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQue
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
 import { runReportList, runReportRun, runReportGlassExport } from './report';
 import { runAuditList } from './audit';
-import { runWorkflowReceiptsList, runWorkflowReceiptShow, runWorkflowSetEnabled } from './workflows';
+import { runWorkflowReceiptsList, runWorkflowReceiptShow, runWorkflowSetEnabled, runWorkflowRunContinue } from './workflows';
 import { runWorkflowMapTest } from './workflow-map';
 import {
   runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus, runUserPreferencesShow, runUserPreferencesSet,
@@ -103,6 +103,12 @@ export function buildProgram(): Command {
     .action(async (workflowId: string, nodeId: string, file: string, opts: { json: boolean }) => {
       try { process.exitCode = await runWorkflowMapTest(workflowId, nodeId, file, opts); }
       catch { process.stderr.write('Map test unavailable.\n'); process.exitCode = 1; }
+    });
+  workflows.command('run-continue <workflowId> <requestId>')
+    .description('Continue an interrupted run: start a new run with its stored input')
+    .option('--json', 'emit JSON', false)
+    .action(async (workflowId: string, requestId: string, opts: { json: boolean }) => {
+      process.exitCode = await runWorkflowRunContinue(workflowId, requestId, opts);
     });
   workflows.command('enable <workflowId>')
     .description('Turn a workflow on, as Enable in the studio. Refused when another enabled workflow uses its webhook path.')

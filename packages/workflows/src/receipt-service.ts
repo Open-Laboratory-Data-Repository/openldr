@@ -63,6 +63,11 @@ export interface WorkflowReceiptService {
   accept(input: { workflowId: string; input: unknown; files?: Record<string, BinaryRef>; idempotencyKey?: string }): Promise<{ receipt: WorkflowReceipt; created: boolean }>;
   get(id: string): Promise<WorkflowReceipt | undefined>;
   list(workflowId: string, opts?: { limit?: number; offset?: number }): Promise<WorkflowReceipt[]>;
+  /** Continue on an interrupted run (design 2026-11-18-interrupted-jobs): a new run of the
+   *  workflow's current definition with the stored input and files, under a fresh idempotency key.
+   *  `definitionChanged` says the workflow changed since the cut run was accepted. `not-waiting`
+   *  for any receipt that is not interrupted, or not this workflow's. */
+  continueFrom(workflowId: string, id: string): Promise<{ receipt: WorkflowReceipt; definitionChanged: boolean } | 'not-waiting'>;
 }
 interface ReceiptDeps {
   db: Kysely<InternalSchema>;
@@ -155,6 +160,15 @@ export function createWorkflowReceiptService(deps: ReceiptDeps): WorkflowReceipt
         await sql`select pg_notify('openldr_events', ${EVENT})`.execute(trx);
         return { receipt: publicReceipt(row), created: true };
       });
+    },
+    async continueFrom(workflowId, id) {
+      await reconcile([id]);
+      const row = await db.selectFrom('workflow_webhook_receipts').select(['workflow_id', 'status', 'input', 'files', 'definition_digest']).where('id', '=', id).executeTakeFirst();
+      if (!row || row.workflow_id !== workflowId || row.status !== 'interrupted') return 'not-waiting';
+      const wf = await db.selectFrom('workflows').select('definition').where('id', '=', workflowId).executeTakeFirst();
+      const definitionChanged = !wf || digest(WorkflowDefinitionSchema.parse(parseJson(wf.definition))) !== row.definition_digest;
+      const { receipt } = await this.accept({ workflowId, input: parseJson(row.input), files: parseJson<Record<string, BinaryRef>>(row.files) });
+      return { receipt, definitionChanged };
     },
     async get(id) {
       await reconcile([id]);

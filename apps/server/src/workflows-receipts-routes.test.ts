@@ -5,13 +5,15 @@ import { registerWorkflowRoutes } from './workflows-routes';
 
 const receipt: any = { id: 'request-1', workflowId: 'wf', status: 'queued', runId: null, createdAt: '2026-09-11T00:00:00Z', startedAt: null, finishedAt: null, reason: null, outcome: null };
 async function fixture(capabilities = ['workflows.view']) {
-  const receipts = { accept: vi.fn(async () => ({ receipt, created: true })), get: vi.fn(async () => receipt), list: vi.fn(async () => [receipt]) };
+  const receipts = { accept: vi.fn(async () => ({ receipt, created: true })), get: vi.fn(async () => receipt), list: vi.fn(async () => [receipt]), continueFrom: vi.fn(async (): Promise<unknown> => 'not-waiting') };
+  const jobInterruptions = { record: vi.fn(async () => ({ id: 'i1', inserted: true })), resolve: vi.fn(async () => {}), listFor: vi.fn(async () => new Map()), inARow: vi.fn(async () => 0) };
+  const audit = { record: vi.fn(async (e: unknown) => e) };
   const runAndRecord = vi.fn();
   const app = Fastify();
   app.addHook('onRequest', async req => { req.user = { id: 'operator', username: 'operator', roles: [], capabilities } as never; });
   const blob = {put: vi.fn().mockResolvedValue(undefined), delete: vi.fn().mockResolvedValue(undefined)};
-  registerWorkflowRoutes(app, { workflows: { receipts, webhooks: { resolve: async () => ({workflowId:'wf',secret:'token'}) }, runner: {runAndRecord} }, cfg: {WORKFLOW_FILE_MAX_BYTES:1024}, blob } as unknown as AppContext);
-  return {app,receipts,runAndRecord,blob};
+  registerWorkflowRoutes(app, { workflows: { receipts, webhooks: { resolve: async () => ({workflowId:'wf',secret:'token'}) }, runner: {runAndRecord} }, cfg: {WORKFLOW_FILE_MAX_BYTES:1024}, blob, jobInterruptions, audit, logger: { error() {}, warn() {}, info() {} } } as unknown as AppContext);
+  return {app,receipts,runAndRecord,blob,jobInterruptions};
 }
 describe('durable webhook receipt HTTP contract', () => {
   it('returns accepted identity without executing in the request handler', async () => {
@@ -186,5 +188,27 @@ describe('long whole numbers at the webhook', () => {
       expect((await post(app, '{4471200000000000123: 1}')).statusCode).toBe(400);
       expect(receipts.accept).not.toHaveBeenCalled();
     } finally { await app.close(); }
+  });
+  it('lists receipts with their interruptions, and Continue refuses a run that is not waiting (design 2026-11-18-interrupted-jobs)', async () => {
+    const {app,receipts,jobInterruptions}=await fixture(['workflows.view', 'workflows.run']);
+    const cut = { id: 'i1', at: '2026-11-18T05:00:00.000Z', cause: 'lease-expired', phase: null, resumedAt: '2026-11-18T06:00:00.000Z', resumedBy: 'person', continuedAs: 'run-2' };
+    jobInterruptions.listFor.mockResolvedValue(new Map([['request-1', [cut]]]));
+    try {
+      const list = await app.inject({ url: '/api/workflows/wf/receipts' });
+      expect(list.json()[0].interruptions).toEqual([cut]);
+      const refused = await app.inject({ method: 'POST', url: '/api/workflows/wf/receipts/request-1/continue' });
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json()).toEqual({ error: 'this run is not waiting to continue' });
+      receipts.continueFrom.mockResolvedValue({ receipt: { runId: 'run-2' }, definitionChanged: true });
+      const ok = await app.inject({ method: 'POST', url: '/api/workflows/wf/receipts/request-1/continue' });
+      expect(ok.statusCode).toBe(200);
+      expect(ok.json()).toEqual({ runId: 'run-2', definitionChanged: true });
+      expect(receipts.continueFrom).toHaveBeenLastCalledWith('wf', 'request-1');
+    } finally {await app.close();}
+  });
+  it('Continue needs the run capability', async () => {
+    const {app}=await fixture(['workflows.view']);
+    try { expect((await app.inject({ method: 'POST', url: '/api/workflows/wf/receipts/request-1/continue' })).statusCode).toBe(403); }
+    finally {await app.close();}
   });
 });

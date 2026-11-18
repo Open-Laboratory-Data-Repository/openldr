@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-const ctx = vi.hoisted(() => ({ close: vi.fn(), workflows: { receipts: { list: vi.fn(), get: vi.fn() } } }));
+const ctx = vi.hoisted(() => ({ close: vi.fn(), workflows: { receipts: { list: vi.fn(), get: vi.fn() } }, jobInterruptions: { listFor: vi.fn(async () => new Map()) } }));
 vi.mock('@openldr/config', () => ({ loadConfig: vi.fn(() => ({})) }));
 vi.mock('@openldr/bootstrap', () => ({ createAppContext: vi.fn(async () => ctx), dangerResetDashboards: vi.fn(), dangerClearAudit: vi.fn(), dangerFactoryReset: vi.fn() }));
 import { buildProgram } from './program';
@@ -16,7 +16,7 @@ describe('workflow receipt CLI', () => {
     ctx.workflows.receipts.list.mockResolvedValue([receipt]);
     await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'workflows', 'receipts', 'list', 'workflow-1', '--limit', '10', '--offset', '20', '--json']);
     expect(ctx.workflows.receipts.list).toHaveBeenCalledWith('workflow-1', { limit: 10, offset: 20 });
-    expect(process.stdout.write).toHaveBeenCalledWith(JSON.stringify([receipt], null, 2) + '\n');
+    expect(process.stdout.write).toHaveBeenCalledWith(JSON.stringify([{ ...receipt, interruptions: [] }], null, 2) + '\n');
     expect(ctx.close).toHaveBeenCalledOnce();
   });
   it('shows interruption details without invoking execution', async () => {

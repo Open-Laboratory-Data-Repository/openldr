@@ -1,7 +1,7 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z, ZodError } from 'zod';
-import { sealForSave, secretRefsOf, duplicateWorkflow, newWorkflowId, setWorkflowEnabled, MAP_TEST_MAX_ITEMS, MapConfigError, type AppContext } from '@openldr/bootstrap';
+import { sealForSave, secretRefsOf, duplicateWorkflow, newWorkflowId, setWorkflowEnabled, MAP_TEST_MAX_ITEMS, MapConfigError, continueWorkflowReceipt, type AppContext } from '@openldr/bootstrap';
 import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, isSecretRef } from '@openldr/workflows';
 import { ConfigError, appError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
@@ -615,8 +615,23 @@ export function registerWorkflowRoutes(
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 101 || !Number.isSafeInteger(offset) || offset < 0 || offset > 1_000_000) {
       return reply.code(400).send({ error: 'invalid receipt pagination' });
     }
-    try { return await ctx.workflows.receipts.list(id, { limit, offset }); }
+    try {
+      const receipts = await ctx.workflows.receipts.list(id, { limit, offset });
+      // Each run's recorded interruption, when a person continued it (design 2026-11-18-interrupted-jobs).
+      const cuts = receipts.length > 0 ? await ctx.jobInterruptions.listFor('workflow-receipt', receipts.map((r) => r.id)) : new Map();
+      return receipts.map((r) => ({ ...r, interruptions: cuts.get(r.id) ?? [] }));
+    }
     catch { return reply.code(503).send({ error: 'receipt status unavailable' }); }
+  });
+  // Continue on an interrupted run: a new run with the stored input. Never automatic: the cut run may
+  // already have sent an email or called another system. The CLI's `workflows run-continue` runs the
+  // same code.
+  app.post('/api/workflows/:id/receipts/:requestId/continue', RUN, async (req, reply) => {
+    const { id, requestId } = req.params as { id: string; requestId: string };
+    const result = await continueWorkflowReceipt(ctx, id, requestId);
+    if (result === 'not-waiting') return reply.code(409).send({ error: 'this run is not waiting to continue' });
+    await recordAudit(ctx, req, { action: 'workflow.run.continued', entityType: 'workflow', entityId: id, before: null, after: null, metadata: { receiptId: requestId, runId: result.runId } });
+    return result;
   });
   app.get('/api/workflows/:id/receipts/:requestId', VIEW, async (req, reply) => {
     const { id, requestId } = req.params as { id: string; requestId: string };
