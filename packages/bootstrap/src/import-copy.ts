@@ -1,4 +1,5 @@
-import { takeBack } from './job-interruptions';
+import { MAX_SELF_RESUMES, takeBack } from './job-interruptions';
+import { resolveByPerson } from './job-continue';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { redact } from '@openldr/core';
@@ -814,7 +815,14 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
           cause: at.getTime() < deps.interruptions.processStartedAt.getTime() ? 'server-restart' : 'lease-expired',
           selfResume: true,
           resume: async () => { if (!(await claim())) throw new Error('another driver claimed the run'); },
-          wait: async () => {},
+          // Stopped with a reason, so the plugin's page offers Continue, which carries on from the
+          // saved place (re-review R10). The rev guard makes a second wait on the same cut a no-op.
+          wait: async () => {
+            await writeIfRev({
+              ...stored, status: 'stopped', driver: null, waiting: null, finishedAt: now().toISOString(),
+              lastError: `the copy was cut ${MAX_SELF_RESUMES + 1} times with no progress; use Continue to carry it on`,
+            }, stored.rev);
+          },
         }).catch(() => {});
         if (released) return;
       }
@@ -864,7 +872,7 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
       /** How many sets this start empties, for the audit row. */
       let rereading = 0;
 
-      return changeRun(plugin.id, id, async (existing) => {
+      const started = await changeRun(plugin.id, id, async (existing) => {
         // A start empties or extends the rows a live check reads, so it waits for the check. Asked
         // first, so a copy that is new to this record, or read again, is refused all the same.
         const check = deps.checks ? await ownDb('read', () => deps.checks!.liveCheckStatus(plugin.id, id)) : null;
@@ -917,6 +925,11 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
         action: 'import.copy.start', pluginId: plugin.id, connectorId: input.connectorId, runId: id, actor: input.actor,
         metadata: { pageSize: next.pageSize, sets: names.length, reread: rereading },
       }));
+      // A person's start closes the cut the run stopped on, if any (re-review R10).
+      if (deps.interruptions && started.status === 'queued') {
+        await resolveByPerson(deps.interruptions.store, 'cdr-run', started.id, now()).catch(() => {});
+      }
+      return started;
     },
 
     async get(pluginId, copyId) {

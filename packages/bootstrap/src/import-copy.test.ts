@@ -1241,11 +1241,18 @@ describe('copy: who drives', () => {
     const stored = (await w.stored())!;
     const phase = Object.entries(stored.sets).map(([k, p]) => `${k}:${p.cursor ?? ''}:${p.keys}`).join('|');
     for (let i = 1; i <= 3; i += 1) {
-      await w.interruptions.record('cdr-run', COPY, { at: new Date(Date.UTC(2026, 0, 1, 0, i)), cause: 'server-restart', phase });
+      const cut = await w.interruptions.record('cdr-run', COPY, { at: new Date(Date.UTC(2026, 0, 1, 0, i)), cause: 'server-restart', phase });
+      await w.interruptions.resolve(cut.id, { resumedBy: 'self', resumedAt: new Date(Date.UTC(2026, 0, 1, 0, i, 30)) });
     }
     await w.svc.tick();
     expect((await w.stored())!.driver).not.toBe('server-1');
     expect(w.audited.find((e) => e.action === 'import.copy.takeover')).toBeUndefined();
+    // It stops with a reason, so the page offers Continue (re-review R10).
+    expect((await w.stored())!).toMatchObject({ status: 'stopped', driver: null, lastError: expect.stringContaining('Continue') });
+    // Continue is a start: it carries on from the saved cursor and closes the open cut.
+    const again = await w.svc.start({ ...START, pageSize: 2 });
+    expect(again).toMatchObject({ status: 'queued', sets: { requests: { cursor: 'REQ0002', keys: 2 } } });
+    expect(((await w.interruptions.listFor('cdr-run', [COPY])).get(COPY) ?? []).filter((r) => r.resumedBy === null)).toEqual([]);
   });
 
   it('a release during a takeover audit write launches no drive, and idle resolves', async () => {
