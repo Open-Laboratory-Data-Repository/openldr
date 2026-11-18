@@ -524,6 +524,19 @@ Use-os para:
 
 Importar um painel com widgets SQL falha enquanto **SQL bruto no painel** estiver desativada, com a mensagem `raw SQL widgets are disabled`. Isto inclui uma cópia do painel de exemplo. Ative primeiro a definição.
 
+## Partilhar um painel com algumas funções
+
+Faça isto quando só algumas funções devem ver um painel e os seus números, por exemplo o painel de um distrito.
+
+1. Selecione o painel.
+2. Abra o **menu do painel** e selecione **Partilhar**.
+3. Em **Quem pode ver**, selecione **Adicionar uma função** e escolha uma função. Repita para cada função.
+4. Abra o menu de pontos da linha **Funções** e selecione **Guardar**.
+
+**Resultado esperado:** aparece **Partilha guardada**. Quem não tem nenhuma das funções listadas deixa de ver o painel. Uma lista vazia mostra **Todos com a permissão**.
+
+Só o proprietário do painel ou um administrador vê **Partilhar**. Um painel criado antes da partilha não tem proprietário, por isso só um administrador o pode partilhar.
+
 ## Eliminar um painel
 
 1. Selecione o painel e entre no modo de edição.
@@ -543,6 +556,8 @@ Há quem use o Studio no telemóvel. Os painéis funcionam lá numa só coluna.
 Num telemóvel pode ler widgets, usar filtros, atualizar e exportar. Mover e redimensionar precisam de um computador. O editor de widgets funciona num telemóvel, com os seus quatro separadores.
 
 ## Limites e definições
+
+Quem só pode consultar painéis vê dados apenas através dos painéis partilhados consigo. Os seus widgets correm tal como foram guardados, com os filtros do painel. Escrever uma consulta própria exige a permissão de editar painéis.
 
 Estas definições são para administradores. Ficam em **Definições**, **Geral**.
 

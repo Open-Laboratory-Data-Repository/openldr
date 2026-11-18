@@ -524,6 +524,19 @@ Use them to:
 
 Importing a dashboard that holds SQL widgets fails while **Dashboard raw SQL** is off, with the message `raw SQL widgets are disabled`. That includes a copy of the sample dashboard. Turn the setting on first.
 
+## Share a dashboard with some roles
+
+Do this when only some roles should see a dashboard and its numbers, such as a district's own dashboard.
+
+1. Select the dashboard.
+2. Open the **Dashboard menu** and select **Share**.
+3. Under **Who may see**, select **Add a role** and choose a role. Repeat for each role.
+4. Open the dots menu on the **Roles** row and select **Save**.
+
+**Expected result:** **Sharing saved** appears. People with none of the listed roles no longer see the dashboard. A list left empty shows **Everyone with the permission**.
+
+Only the dashboard's owner or an admin sees **Share**. A dashboard made before sharing existed has no owner, so only an admin can share it.
+
 ## Delete a dashboard
 
 1. Select the dashboard and enter edit mode.
@@ -543,6 +556,8 @@ People use Studio on phones. Dashboards work there in one column.
 You can read widgets, use filters, refresh and export on a phone. Moving and resizing need a computer. The widget editor works on a phone, with its four tabs.
 
 ## Limits and settings
+
+People who can only view dashboards see data only through the dashboards shared with them. Their widgets run as saved, with the dashboard's filters. Writing a query of their own needs dashboard edit permission.
 
 These are for administrators. They live in **Settings**, **General**.
 

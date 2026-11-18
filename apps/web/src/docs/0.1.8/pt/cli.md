@@ -129,6 +129,7 @@ Estes casos foram reproduzidos em Linux com o iniciador instalado e a CLI real n
 | `settings` | Indicadores de funcionalidades `flags list` / `flags set`, `danger <action>`, e `sync show` / `sync set` (configuração da sincronização laboratório⇄central). |
 | `terminology` | Importa e consulta CodeSystems, ValueSets, ConceptMaps e ontologias. |
 | `fhir` | Valida recursos FHIR R4. |
+| `dashboards` | Mostra ou escolhe as funções que podem ver um painel e os seus dados. |
 | `forms` | Lista definições de formulários; extrai respostas de um QuestionnaireResponse; escolhe as funções que podem abrir e submeter um formulário. |
 | `ingest` | Carrega um ficheiro através do pipeline (opcionalmente com um plugin). |
 | `facilities` | Importa um registo nacional de unidades: `suggest-map`, `suggest-values`, `import` (mapeamento de colunas e valores; consulte **Unidades** na Documentação do estúdio). |
@@ -523,4 +524,24 @@ Uma lista que não indica fica como está. Uma função ou formulário desconhec
 openldr forms access form-sample-order
 openldr forms access form-sample-order --open lab_technician,lab_manager --submit lab_manager
 openldr forms access form-sample-order --clear
+```
+
+## Quem pode ver um painel
+
+`openldr dashboards share <dashboard-id>` mostra as funções que podem ver um painel e os seus dados. É o lado CLI do painel **Partilhar** do painel. Uma lista vazia significa todas as funções com a permissão. O proprietário e os administradores veem-no sempre.
+
+| Opção | O que faz |
+| --- | --- |
+| `--roles <roles>` | Funções que o podem ver, como slugs ou identificadores separados por vírgulas. Substitui a lista. |
+| `--clear` | Esvazia a lista: todas as funções com a permissão voltam a poder vê-lo. |
+| `--json` | Mostra a lista em JSON, com os identificadores das funções. |
+
+Com sessão iniciada, só vê os painéis que pode ver, e só o proprietário ou um administrador pode alterar a lista. Em modo local no servidor, a CLI age como administrador e regista o ator como `cli`. Uma função ou painel desconhecido é recusado e nada muda. Cada alteração é auditada como `dashboard.share.set`.
+
+Quem só pode consultar painéis vê dados apenas através dos painéis partilhados consigo. Os seus widgets correm tal como foram guardados. Escrever uma consulta própria exige `dashboards.edit`.
+
+```
+openldr dashboards share default
+openldr dashboards share default --roles lab_manager,data_analyst
+openldr dashboards share default --clear
 ```

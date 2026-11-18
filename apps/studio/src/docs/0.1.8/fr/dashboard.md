@@ -524,6 +524,19 @@ Servez-vous-en pour :
 
 Importer un tableau de bord qui contient des widgets SQL échoue tant que **SQL brut pour les tableaux de bord** est désactivé, avec le message `raw SQL widgets are disabled`. Cela vaut aussi pour une copie du tableau de bord d'exemple. Activez d'abord le paramètre.
 
+## Partager un tableau de bord avec certains rôles
+
+Faites-le quand seuls certains rôles doivent voir un tableau de bord et ses chiffres, par exemple le tableau de bord d’un district.
+
+1. Sélectionnez le tableau de bord.
+2. Ouvrez le **menu du tableau de bord** et sélectionnez **Partager**.
+3. Sous **Qui peut voir**, sélectionnez **Ajouter un rôle** et choisissez un rôle. Répétez pour chaque rôle.
+4. Ouvrez le menu à points de la ligne **Rôles** et sélectionnez **Enregistrer**.
+
+**Résultat attendu :** **Partage enregistré** s’affiche. Les personnes sans aucun des rôles listés ne voient plus le tableau de bord. Une liste vide affiche **Tous ceux qui ont la permission**.
+
+Seuls le propriétaire du tableau de bord ou un administrateur voient **Partager**. Un tableau de bord créé avant le partage n’a pas de propriétaire : seul un administrateur peut le partager.
+
 ## Supprimer un tableau de bord
 
 1. Sélectionnez le tableau de bord et passez en mode modification.
@@ -543,6 +556,8 @@ Des personnes utilisent Studio sur leur téléphone. Les tableaux de bord y fonc
 Sur un téléphone, vous pouvez lire les widgets, utiliser les filtres, actualiser et exporter. Déplacer et redimensionner demandent un ordinateur. L'éditeur de widget fonctionne sur un téléphone, avec ses quatre onglets.
 
 ## Limites et paramètres
+
+Les personnes qui peuvent seulement consulter les tableaux de bord ne voient les données qu’à travers les tableaux de bord partagés avec elles. Leurs widgets s’exécutent tels qu’enregistrés, avec les filtres du tableau de bord. Écrire leur propre requête demande la permission de modifier les tableaux de bord.
 
 Ces réglages sont réservés aux administrateurs. Ils se trouvent dans **Paramètres**, **Général**.
 

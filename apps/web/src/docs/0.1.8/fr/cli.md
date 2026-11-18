@@ -129,6 +129,7 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `settings` | `flags list` / `flags set` pour les fonctionnalités, `danger <action>`, et `sync show` / `sync set` (configuration de la synchronisation laboratoire⇄central). |
 | `terminology` | Importe et interroge des CodeSystems, ValueSets, ConceptMaps et ontologies. |
 | `fhir` | Valide des ressources FHIR R4. |
+| `dashboards` | Affiche ou choisit les rôles qui peuvent voir un tableau de bord et ses données. |
 | `forms` | Liste les définitions de formulaires ; extrait les réponses d'une QuestionnaireResponse ; choisit les rôles qui peuvent ouvrir et soumettre un formulaire. |
 | `ingest` | Ingère un fichier par le pipeline (en option via un plugin). |
 | `facilities` | Importe un registre national d'établissements : `suggest-map`, `suggest-values`, `import` (correspondance des colonnes et des valeurs, voir **Établissements** dans la documentation du studio). |
@@ -498,4 +499,24 @@ Une liste que vous ne nommez pas reste telle quelle. Un rôle ou un formulaire i
 openldr forms access form-sample-order
 openldr forms access form-sample-order --open lab_technician,lab_manager --submit lab_manager
 openldr forms access form-sample-order --clear
+```
+
+## Qui peut voir un tableau de bord
+
+`openldr dashboards share <dashboard-id>` affiche les rôles qui peuvent voir un tableau de bord et ses données. C'est le pendant CLI du panneau **Partager** du tableau de bord. Une liste vide signifie tous les rôles qui ont la permission. Le propriétaire et les administrateurs le voient toujours.
+
+| Option | Effet |
+| --- | --- |
+| `--roles <roles>` | Rôles qui peuvent le voir, en slugs ou identifiants séparés par des virgules. Remplace la liste. |
+| `--clear` | Vide la liste : tous les rôles qui ont la permission peuvent de nouveau le voir. |
+| `--json` | Affiche la liste en JSON, avec les identifiants des rôles. |
+
+Connecté, vous ne voyez que les tableaux de bord que vous pouvez voir, et seuls le propriétaire ou un administrateur peuvent modifier la liste. En local sur le serveur, la CLI agit comme un administrateur et enregistre l'acteur `cli`. Un rôle ou un tableau de bord inconnu est refusé et rien ne change. Chaque modification est auditée comme `dashboard.share.set`.
+
+Une personne qui peut seulement consulter les tableaux de bord ne voit les données qu'à travers les tableaux de bord partagés avec elle. Ses widgets s'exécutent tels qu'enregistrés. Écrire sa propre requête demande `dashboards.edit`.
+
+```
+openldr dashboards share default
+openldr dashboards share default --roles lab_manager,data_analyst
+openldr dashboards share default --clear
 ```

@@ -129,6 +129,7 @@ These cases were reproduced on Linux with the installed launcher and real CLI in
 | `settings` | Feature `flags list` / `flags set`, `danger <action>`, and `sync show` / `sync set` (lab⇄central sync config). |
 | `terminology` | Import and query CodeSystems, ValueSets, ConceptMaps, ontologies. |
 | `fhir` | Validate FHIR R4 resources. |
+| `dashboards` | Show or set which roles may see a dashboard and its data. |
 | `forms` | List form definitions; extract answers from a QuestionnaireResponse; set which roles may open and submit a form. |
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
 | `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see **Facilities** in the studio's Docs). |
@@ -516,4 +517,24 @@ A list you do not name stays as it is. An unknown role or form is refused and no
 openldr forms access form-sample-order
 openldr forms access form-sample-order --open lab_technician,lab_manager --submit lab_manager
 openldr forms access form-sample-order --clear
+```
+
+## Who may see a dashboard
+
+`openldr dashboards share <dashboard-id>` shows which roles may see a dashboard and its data. It is the CLI side of the dashboard's **Share** sheet. A list left empty means every role with the permission. The owner and admins always see it.
+
+| Flag | What it does |
+| --- | --- |
+| `--roles <roles>` | Roles that may see it, as slugs or ids, comma separated. Replaces the list. |
+| `--clear` | Empty the list, so every role with the permission may see it again. |
+| `--json` | Print the list as JSON, as role ids. |
+
+Signed in, you see only dashboards you may see, and only the owner or an admin may change the list. Run locally on the server, the CLI acts as an admin and records the actor as `cli`. An unknown role or dashboard is refused and nothing changes. Each change is audited as `dashboard.share.set`.
+
+A person who can only view dashboards sees data only through the dashboards shared with them. Their widgets run as saved. Writing a query of their own needs `dashboards.edit`.
+
+```
+openldr dashboards share default
+openldr dashboards share default --roles lab_manager,data_analyst
+openldr dashboards share default --clear
 ```
