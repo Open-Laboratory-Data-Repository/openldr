@@ -8,6 +8,52 @@ Não precisa dos dados de exemplo da documentação. As capturas usam uma lista 
 
 A leitura exige permissão para consultar terminologia. Criar, alterar e importar exige permissão para gerir terminologia.
 
+## Abrir o navegador de ontologia
+
+Uma ontologia organiza conceitos relacionados numa hierarquia. O navegador permite explorar um sistema de códigos importado sem o alterar. O administrador tem de carregar primeiro uma distribuição com a sua ontologia.
+
+1. Abra **Terminology** no menu principal.
+2. Selecione o publicador do sistema instalado, por exemplo **LOINC**.
+3. Abra os pontos à direita da linha desse sistema de códigos na tabela.
+4. Abra **Ontology** no menu da linha.
+5. Selecione **Browse**.
+
+**Resultado esperado:** abre uma ficha **Browse** com o nome do sistema. À esquerda estão a pesquisa e a hierarquia. À direita, uma mensagem pede que selecione um nó para ver os detalhes.
+
+Selecionar o nome do sistema abre antes a lista simples de termos. Use o menu da linha para abrir o navegador de ontologia.
+
+## Pesquisar na ontologia
+
+Use o seu código ou nome de termo. O exemplo LOINC usa a entrada real `718-7`, apresentada como `Hgb Bld-mCnc` na distribuição carregada.
+
+1. Abra o navegador de ontologia como acima.
+2. Escreva um código ou parte do nome em **Search the ontology...**, acima da hierarquia.
+3. Espere pelas entradas correspondentes.
+4. Selecione a entrada pretendida depois de conferir o código completo. No exemplo, escolha `Hgb Bld-mCnc` com o código `718-7`.
+5. Leia os detalhes do conceito selecionado à direita.
+
+**Resultado esperado:** selecionar um resultado limpa a pesquisa e mostra a sua posição na hierarquia. O nome e o código aparecem nos detalhes. Pesquisar `718-7` também pode encontrar códigos maiores que contenham esses caracteres. Confira o código completo.
+
+## Percorrer uma hierarquia
+
+1. Limpe o texto da pesquisa se ainda estiver presente.
+2. Selecione a pequena seta à esquerda de uma categoria para a expandir.
+3. Expanda outra categoria abaixo para seguir um ramo.
+4. Selecione o nome de uma entrada para ler os detalhes à direita.
+5. Selecione novamente a seta de uma categoria expandida para recolher esse ramo.
+
+**Resultado esperado:** as entradas filhas aparecem recuadas sob a entrada principal. A seta altera a árvore. Selecionar um nome altera os detalhes. No exemplo LOINC, `Hgb Bld-mCnc` fica sob o ramo Hemoglobin.
+
+## Ler e copiar um conceito
+
+1. Selecione a linha do conceito na árvore ou nos resultados da pesquisa.
+2. Confira o nome apresentado e o código completo nos detalhes.
+3. Leia o tipo, por exemplo **CATEGORY** ou **TERM**, e a contagem **Children**.
+4. Selecione **Copy code** para o código apenas, ou **Copy code + display** para o código e o nome.
+5. Selecione **Close** no canto superior direito quando terminar.
+
+**Resultado esperado:** o conceito selecionado é copiado. No exemplo LOINC, **Copy code** dá `718-7`. **Copy code + display** dá `718-7  Hgb Bld-mCnc`. Consultar e copiar não cria um termo local nem altera as respostas permitidas num formulário.
+
 ## Encontrar um código e consultar os detalhes
 
 Procure um código existente antes de criar outro. Este exemplo encontra um motivo de rejeição de teste no sistema integrado REJECT-TEST.
@@ -375,7 +421,21 @@ Selecione **Hide publishers** para devolver a largura à tabela.
 
 **Resultado esperado:** o publicador escolhido mantém-se no percurso. Desloque a tabela horizontalmente para alcançar as colunas fora do ecrã.
 
+## Limites
+
+- A ontologia mostra a distribuição carregada nesta instalação. As versões podem ter nomes ou ramos diferentes.
+- Uma pesquisa pode corresponder a parte do código ou nome. Confira o código completo antes de copiar.
+- Os detalhes mantêm o último conceito selecionado enquanto pesquisa. Selecione um resultado correspondente antes de usar os botões de cópia.
+
 ## Resolução de problemas
+
+### Não consigo abrir o navegador de ontologia
+
+Use os pontos da linha do sistema de códigos, depois **Ontology** e **Browse**. Se faltar o sistema ou a sua ontologia pronta, peça ao administrador que prepare a distribuição aprovada. Os pontos do publicador servem para outras ações.
+
+### A pesquisa na ontologia mostra No matches
+
+Encurte a pesquisa ou confira o código. Limpe o texto para voltar à árvore. Os detalhes podem ainda mostrar a seleção anterior.
 
 ### A importação indica displayName required
 

@@ -8,6 +8,52 @@ Les données d'exemple de la documentation ne sont pas nécessaires. Les capture
 
 La lecture nécessite l'autorisation de consulter la terminologie. La création, la modification et l'import nécessitent l'autorisation de gérer la terminologie.
 
+## Ouvrir le navigateur d'ontologie
+
+Une ontologie organise les concepts liés dans une hiérarchie. Son navigateur permet d'explorer un système de codes importé sans le modifier. Votre administrateur doit d'abord charger une distribution avec son ontologie.
+
+1. Ouvrez **Terminology** dans le menu principal.
+2. Sélectionnez l'éditeur du système installé, par exemple **LOINC**.
+3. Ouvrez les points à droite de la ligne du système de codes dans le tableau.
+4. Ouvrez **Ontology** dans le menu de la ligne.
+5. Sélectionnez **Browse**.
+
+**Résultat attendu :** une fiche **Browse** s'ouvre avec le nom du système. À gauche se trouvent la recherche et la hiérarchie. À droite, un message demande de sélectionner un nœud pour lire ses détails.
+
+Sélectionner le nom du système ouvre plutôt la liste simple des termes. Utilisez le menu de sa ligne pour le navigateur d'ontologie.
+
+## Rechercher dans l'ontologie
+
+Utilisez votre code ou votre nom de terme. L'exemple LOINC utilise l'entrée réelle `718-7`, affichée comme `Hgb Bld-mCnc` dans la distribution chargée.
+
+1. Ouvrez le navigateur d'ontologie comme ci-dessus.
+2. Saisissez un code ou une partie du nom dans **Search the ontology...**, au-dessus de la hiérarchie.
+3. Attendez les entrées correspondantes.
+4. Sélectionnez l'entrée voulue après avoir vérifié son code complet. Pour l'exemple, choisissez `Hgb Bld-mCnc` avec le code `718-7`.
+5. Lisez les détails du concept sélectionné à droite.
+
+**Résultat attendu :** sélectionner un résultat efface la recherche et révèle sa place dans la hiérarchie. Son nom et son code apparaissent dans les détails. La recherche `718-7` peut aussi retrouver des codes plus longs contenant ces caractères. Vérifiez donc le code complet.
+
+## Parcourir une hiérarchie
+
+1. Effacez le texte de recherche s'il est encore présent.
+2. Sélectionnez la petite flèche à gauche d'une catégorie pour la développer.
+3. Développez une autre catégorie en dessous pour suivre une branche.
+4. Sélectionnez le nom d'une entrée pour lire ses détails à droite.
+5. Sélectionnez à nouveau la flèche d'une catégorie développée pour replier cette branche.
+
+**Résultat attendu :** les entrées enfants apparaissent en retrait sous leur parent. La flèche change l'arbre. Sélectionner un nom change les détails. Dans l'exemple LOINC, `Hgb Bld-mCnc` se trouve sous la branche Hemoglobin.
+
+## Lire et copier un concept
+
+1. Sélectionnez la ligne du concept dans l'arbre ou les résultats de recherche.
+2. Vérifiez le nom affiché et le code complet dans les détails.
+3. Lisez le badge de type, par exemple **CATEGORY** ou **TERM**, et le nombre **Children**.
+4. Sélectionnez **Copy code** pour le code seul ou **Copy code + display** pour le code et le nom.
+5. Sélectionnez **Close** en haut à droite lorsque vous avez terminé.
+
+**Résultat attendu :** le concept sélectionné est copié. Dans l'exemple LOINC, **Copy code** donne `718-7`. **Copy code + display** donne `718-7  Hgb Bld-mCnc`. La consultation et la copie ne créent pas de terme local et ne changent pas les réponses autorisées d'un formulaire.
+
 ## Trouver un code et lire ses détails
 
 Recherchez un code existant avant d'en créer un autre. Cet exemple retrouve un motif de rejet de test dans le système intégré REJECT-TEST.
@@ -375,7 +421,21 @@ Sélectionnez **Hide publishers** pour redonner la largeur au tableau.
 
 **Résultat attendu :** l'éditeur choisi reste dans le fil d'Ariane. Faites défiler le tableau horizontalement pour atteindre les colonnes hors écran.
 
+## Limites
+
+- L'ontologie montre la distribution chargée sur cette installation. Les versions peuvent avoir des noms ou des branches différents.
+- Une recherche peut correspondre à une partie du code ou du nom. Vérifiez le code complet avant de copier.
+- Les détails gardent le dernier concept sélectionné pendant la recherche. Sélectionnez un résultat correspondant avant d'utiliser ses boutons de copie.
+
 ## Dépannage
+
+### Je ne peux pas ouvrir le navigateur d'ontologie
+
+Utilisez les points de la ligne du système de codes, puis **Ontology**, puis **Browse**. Si le système ou son ontologie prête est absent, demandez à votre administrateur de préparer la distribution approuvée. Les points de l'éditeur servent à d'autres actions.
+
+### La recherche dans l'ontologie affiche No matches
+
+Raccourcissez la recherche ou vérifiez le code. Effacez le texte pour revenir à l'arbre. Les détails peuvent encore montrer votre sélection précédente.
 
 ### L'import indique displayName required
 

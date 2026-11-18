@@ -8,6 +8,94 @@ Utilisez vos propres enregistrements et requêtes de rapport. Aucun jeu de donn�
 
 Le workflow fourni **Ingest** traite aussi les soumissions Forms. Sur une nouvelle installation, il fait passer ce qu'il reçoit par [Map to FHIR](/docs/map-to-fhir). Gardez-le activé. Le modifier affecte chaque émetteur utilisant son webhook. Remplacez un secret seulement lorsque vous êtes prêt à mettre ces émetteurs à jour.
 
+## Envoyer une ligne d'essai au workflow Ingest fourni
+
+Vous pouvez utiliser **Ingest** sans créer de workflow ni connaître FHIR. FHIR est le format standard des enregistrements utilisé par OpenLDR. Sur une nouvelle installation, les étapes sont **Ingest received**, **Map to FHIR**, **Persist store** et **Log persisted**. Map to FHIR transforme vos champs en patient, prélèvement, demande et résultat liés. Persist store enregistre ces données.
+
+Utilisez la ligne fictive ci-dessous sur une installation de test. Gardez le workflow existant activé. Une ancienne installation peut avoir un autre graphe. Ne réinitialisez pas un workflow opérationnel pour essayer cet exemple.
+
+1. Ouvrez **Workflows** dans le menu principal et sélectionnez **Ingest**.
+2. Sélectionnez **Ingest received**, puis l'engrenage **Configure** au-dessus.
+3. Copiez **URL**. Le chemin fourni est `/api/workflows/hooks/ingest`.
+4. Demandez le secret enregistré à votre administrateur. Il ne peut pas être affiché. La tâche de configuration du secret Ingest ci-dessous explique son remplacement si nécessaire.
+5. Remplacez l'URL et `YOUR_SECRET` ci-dessous, puis exécutez la commande dans votre terminal.
+6. Ouvrez **History** dans la barre du workflow et sélectionnez la nouvelle exécution.
+
+```shell
+curl -i -X POST 'https://your-host/api/workflows/hooks/ingest' \
+  -H 'Content-Type: application/json' \
+  -H 'X-Webhook-Token: YOUR_SECRET' \
+  --data-binary '{
+    "patient_no": "DOCS-INGEST-001",
+    "patient_system": "urn:example:lab:patients",
+    "first_name": "Docs",
+    "surname": "Example",
+    "sample_no": "DOCS-SAMPLE-001",
+    "collected": "2026-11-18T09:00:00+02:00",
+    "test_code": "DEMO-TEST",
+    "result": 14.9,
+    "unit": "g/dL"
+  }'
+```
+
+**Résultat attendu :** le message apparaît dans History. Sans mappage enregistré correspondant, cette première exécution échoue et ne stocke rien. Elle fournit l'échantillon pour la tâche suivante. Envoyez seulement la ligne ci-dessus. Le webhook la place sous `body`.
+
+Vous envoyez déjà du FHIR ? Ingest accepte les enregistrements FHIR pris en charge sans mappage des champs source. Pour vos propres noms de champs, continuez ci-dessous.
+
+## Mapper la ligne d'essai
+
+Choisissez vos champs source à côté des libellés de laboratoire. Vous n'avez pas à saisir de chemins FHIR.
+
+1. Fermez History si ce panneau est ouvert.
+2. Sélectionnez **Map to FHIR**, puis **Configure**.
+3. Vérifiez que **Chemin source** vaut `body` et que la **Cible** est le résultat de laboratoire.
+4. Ouvrez **Actions du nœud**, les points près du titre, puis **Ouvrir le mappage**.
+5. Ouvrez **Actions du mappage**, les points en haut à droite, puis **Utiliser la dernière exécution enregistrée**.
+6. Choisissez les champs ci-dessous sous **Depuis vos données**. Gardez **Aucune règle** pour leurs règles.
+7. Laissez les autres champs **Non mappé**.
+8. Ouvrez **Actions du mappage** et sélectionnez **Tester**.
+
+| Destination | Depuis vos données |
+|-------------|--------------------|
+| Identifiant patient | `patient_no` |
+| Système de l'identifiant patient | `patient_system` |
+| Prénom | `first_name` |
+| Nom de famille | `surname` |
+| Date de prélèvement | `collected` |
+| Numéro d'échantillon | `sample_no` |
+| Examen | `test_code` |
+| Résultat (nombre) | `result` |
+| Unité | `unit` |
+
+**Résultat attendu :** les trois champs obligatoires sont mappés et la première ligne passe. Tester prévisualise la conversion sans stocker d'enregistrements. [Map to FHIR](/docs/map-to-fhir) explique les règles, les listes et les aperçus des enregistrements générés.
+
+## Enregistrer le mappage et renvoyer la ligne
+
+1. Ouvrez **Actions du mappage** et sélectionnez **Enregistrer**.
+2. Fermez le panneau de mappage.
+3. Sélectionnez **Save** dans la barre du workflow.
+4. Lisez l'avertissement du workflow système et sélectionnez **Save anyway** pour cette modification voulue.
+5. Envoyez à nouveau la même commande curl.
+6. Ouvrez **History** et choisissez la nouvelle exécution selon son heure.
+7. Sélectionnez **Persist store** pour consulter sa sortie enregistrée.
+
+**Résultat attendu :** la nouvelle exécution affiche **Completed**, une ligne mappée, aucune ligne retenue et quatre enregistrements stockés. Renvoyer cette même ligne met à jour les mêmes enregistrements. Cela n'ajoute ni patient ni résultat.
+
+## Retrouver les enregistrements d'essai stockés
+
+1. Ouvrez **Patients** dans le menu principal.
+2. Saisissez `Docs Example` dans **Search name or identifier**.
+3. Sélectionnez le patient et consultez **Identifiers** et **Requests** dans sa fiche.
+4. Ouvrez **Dashboard** dans le menu principal.
+5. Choisissez **Lab Overview (Sample)** dans le sélecteur de tableau de bord, si disponible.
+6. Sélectionnez **Refresh** et recherchez `DEMO-TEST` dans **Recent Orders**.
+
+**Résultat attendu :** le patient a un identifiant et une demande avec un résultat. Le tableau de bord peut afficher la demande sous son nom d'examen. Une cellule Identifiers vide dans la liste des patients ne signifie pas que la fiche est vide.
+
+La ligne d'essai a une date de prélèvement mais aucune date de demande. Effacez le filtre Period du tableau de bord pour la chercher. Un tableau peut montrer seulement ses examens les plus fréquents. Une nouvelle demande peut donc être absente de **Orders by Test**. Vérifiez d'abord le stockage dans History et la fiche du patient.
+
+Si Map to FHIR retient une ligne, consultez cette étape dans History pour en connaître la raison. Une structure source inconnue demande un mappage enregistré. Un identifiant patient manquant demande des données corrigées. Dans Ingest fourni, **retenus** reste volontairement sans connexion. Une ligne retenue fait échouer tout le message, sans rien stocker. Corrigez les données ou le mappage, puis renvoyez. [Map to FHIR](/docs/map-to-fhir) explique les raisons et les workflows qui gardent les bonnes lignes séparément.
+
 ## Trouver un workflow
 
 Ouvrez une définition existante avant de l'inspecter ou de la modifier.
