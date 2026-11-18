@@ -67,7 +67,7 @@ describe('takeBack after a take-back that did not finish (review R1)', () => {
     ]);
   });
 
-  it('a job left waiting at the cap is not resumed when its cut is met again, and wait runs once', async () => {
+  it('a job left waiting at the cap is not resumed when its cut is met again', async () => {
     const { deps } = await setup();
     for (let i = 0; i < MAX_SELF_RESUMES; i += 1) await takeBack(deps, cut({ at: at(i) }));
     const capped = cut({ at: at(9) });
@@ -75,7 +75,17 @@ describe('takeBack after a take-back that did not finish (review R1)', () => {
     const metAgain = cut({ at: at(9) });
     expect(await takeBack(deps, metAgain)).toBe('waiting');
     expect(metAgain.resume).not.toHaveBeenCalled();
-    expect(metAgain.wait).not.toHaveBeenCalled();
+  });
+
+  it('a wait at the cap that was itself cut is tried again when the cut is met again (re-review R1)', async () => {
+    const { deps } = await setup();
+    for (let i = 0; i < MAX_SELF_RESUMES; i += 1) await takeBack(deps, cut({ at: at(i) }));
+    const failing = cut({ at: at(9), wait: vi.fn(async () => { throw new Error('connection lost'); }) });
+    await expect(takeBack(deps, failing)).rejects.toThrow('connection lost');
+    const metAgain = cut({ at: at(9) });
+    expect(await takeBack(deps, metAgain)).toBe('waiting');
+    expect(metAgain.wait).toHaveBeenCalledTimes(1);
+    expect(metAgain.resume).not.toHaveBeenCalled();
   });
 
   it('does not resume again a cut that was already resolved', async () => {

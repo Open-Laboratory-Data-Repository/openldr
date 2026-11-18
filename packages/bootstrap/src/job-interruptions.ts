@@ -44,8 +44,9 @@ export async function takeBack(deps: InterruptionDeps, input: TakeBackInput): Pr
   }
   const cuts = await deps.store.inARow(input.kind, input.jobId, input.phase);
   if (!input.selfResume || cuts > MAX_SELF_RESUMES) {
-    // Met again at the cap, the job already waits: nothing more to do.
-    if (inserted) await input.wait();
+    // Every wait is a status change guarded on the job's current state, so running it again on a
+    // cut met again is safe, and it finishes a wait that was itself cut (re-review R1).
+    await input.wait();
     return 'waiting';
   }
   await input.resume();
