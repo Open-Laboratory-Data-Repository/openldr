@@ -28,6 +28,7 @@ vi.mock('@openldr/bootstrap', async () => {
       dashboardAccessStore: store,
       dashboardAccess: dash.dashboardAccess({ access: store }),
       users: { async get(id: string) { return id.startsWith('dev:') ? undefined : { id, subject: null }; } },
+      dataScopes: { async get() { return { limited: false }; } },
       roles: {
         async list() { return [{ id: 'r-district', slug: 'district', name: 'District' }, { id: 'r-region', slug: 'region', name: 'Region' }]; },
         async resolveCapabilities() { return mocks.caller.capabilities; },

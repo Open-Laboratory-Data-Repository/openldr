@@ -41,6 +41,7 @@ function ctx(opts: {
       backfillUserFromRoleNames: opts.roles?.backfillUserFromRoleNames ?? (async () => {}),
       rolesForUser: async () => [],
     },
+    dataScopes: { get: async () => ({ limited: false }) },
     users: {
       isSubjectBlocked: async () => false,
       syncFromClaims: async () => u,
@@ -222,6 +223,7 @@ describe('registerAuth', () => {
       auth: { verifyToken: async () => ({ sub: 's1', realm_access: { roles: realmRoles } }) },
       audit: { record: vi.fn(async (e: unknown) => ({ ...(e as object), id: 'x', occurredAt: 't' })) },
       roles: { resolveCapabilities, backfillUserFromRoleNames, rolesForUser: async () => [] },
+      dataScopes: { get: async () => ({ limited: false }) },
       users: {
         isSubjectBlocked: async () => false,
         syncFromClaims: async () => ({ id: 'u1', username: 'ada', displayName: 'Ada', roles: [], status: 'active', subject: 's1', rbacInitialized }),

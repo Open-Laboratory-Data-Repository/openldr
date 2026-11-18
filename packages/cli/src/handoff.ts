@@ -14,6 +14,9 @@ export interface ServedHandoff {
     /** The caller's role ids and capabilities as the server worked them out for this request, so a
      *  command checks per-item access for the same caller (roles part 2). Absent from older servers. */
     roleIds?: string[]; capabilities?: string[];
+    /** The caller's data limit (roles part 3), the same shape as DataScope in @openldr/rbac. Absent
+     *  from older servers, and then the command looks it up. */
+    dataScope?: { limited: false } | { limited: true; facilities: string[]; districts: Array<{ region: string; district: string }>; regions: string[] };
   };
   /** The folder made for this one request. */
   runDir: string;

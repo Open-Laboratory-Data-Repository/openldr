@@ -13,6 +13,7 @@ async function setup(generic = false) {
     cfg: { AUTH_DEV_BYPASS: false, AUTH_ADAPTER: generic ? 'oidc' : 'keycloak', KEYCLOAK_ADMIN_CLIENT_ID: 'fixture', KEYCLOAK_ADMIN_CLIENT_SECRET: 'fixture' },
     auth: { ...f.ctx.auth, verifyToken: async () => claims },
     roles: { resolveCapabilities: async () => ['users.view'], backfillUserFromRoleNames: async () => {}, rolesForUser: async () => [] },
+    dataScopes: { get: async () => ({ limited: false }) },
     userProfiles: { get: async () => undefined },
   } as AppContext;
   const admin = Fastify();

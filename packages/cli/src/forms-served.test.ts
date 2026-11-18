@@ -24,6 +24,7 @@ vi.mock('@openldr/bootstrap', async () => {
         async listVersions() { return [{ version: 1, versionLabel: 'v1', publishedAt: '2026-01-01T00:00:00.000Z' }]; },
       },
       users: { async get(id: string) { return id === 'u1' ? { id: 'u1', subject: null } : null; } },
+      dataScopes: { async get() { return { limited: false }; } },
       roles: {
         async resolveCapabilities() { return mocks.user.capabilities; },
         async rolesForUser() { return mocks.user.roleIds.map((id) => ({ id })); },

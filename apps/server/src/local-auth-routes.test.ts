@@ -49,6 +49,7 @@ function fakeCtx(opts: { localSignIn?: LocalSignIn; claims?: () => Record<string
     auth: { verifyToken: vi.fn(async () => (opts.claims ? opts.claims() : { sub: 'u1', sid: 's1' })) },
     audit: { record: vi.fn(async (e: Record<string, unknown>) => { events.push(e); return { ...e, id: 'x', occurredAt: 't' }; }) },
     roles: { resolveCapabilities: async () => [], backfillUserFromRoleNames: async () => {}, rolesForUser: async () => [] },
+    dataScopes: { get: async () => ({ limited: false }) },
     users: {
       isSubjectBlocked: async () => false,
       syncFromClaims: async () => ({ id: 'u1', username: 'ada', displayName: 'Ada', roles: [], status: 'active', subject: 'u1', rbacInitialized: true }),

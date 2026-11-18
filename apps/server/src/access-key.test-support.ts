@@ -2,7 +2,7 @@
 // user and audit stores. Not real Postgres. Token sign-in is faked by verifyToken only.
 import { vi } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { createAccessKeyStore, createRoleStore } from '@openldr/db';
+import { createAccessKeyStore, createRoleStore, createUserDataScopeStore } from '@openldr/db';
 import { createAuditStore } from '@openldr/audit';
 import { createLogger, type Logger } from '@openldr/core';
 import type { AppContext } from '@openldr/bootstrap';
@@ -37,6 +37,7 @@ export async function keyFixture(opts: { devBypass?: boolean; logger?: Logger; a
   const roles = createRoleStore(db);
   const accessKeys = createAccessKeyStore(db);
   const audit = createAuditStore(db);
+  const dataScopes = createUserDataScopeStore(db);
   const verifyToken = vi.fn(async (token: string) => {
     const claims = CLAIMS[token];
     if (!claims) throw new Error('bad token');
@@ -68,7 +69,7 @@ export async function keyFixture(opts: { devBypass?: boolean; logger?: Logger; a
     ...base,
     logger: opts.logger ?? createLogger({ level: 'silent' }),
     internalDb: db as never,
-    users, roles, accessKeys, audit,
+    users, roles, accessKeys, audit, dataScopes,
     auth: { ...(base.auth as object), verifyToken, directory },
     cfg: { ...(base.cfg as object), AUTH_DEV_BYPASS: opts.devBypass ?? false, AUTH_ADAPTER: opts.adapter ?? 'keycloak', ...adminCfg, ...opts.cfg },
   } as unknown as AppContext;
@@ -82,5 +83,5 @@ export async function keyFixture(opts: { devBypass?: boolean; logger?: Logger; a
   };
   const allAuditRows = () => db.selectFrom('audit_events').selectAll().execute();
 
-  return { app, ctx, db, users, roles, accessKeys, audit, verifyToken, directoryGet, managers, viewers, makeKey, allAuditRows, close: () => app.close() };
+  return { app, ctx, db, users, roles, accessKeys, audit, dataScopes, verifyToken, directoryGet, managers, viewers, makeKey, allAuditRows, close: () => app.close() };
 }

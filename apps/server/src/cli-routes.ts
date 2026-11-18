@@ -687,6 +687,8 @@ export function registerCliRoutes(app: FastifyInstance<any, any, any, any>, ctx:
         caller: {
           id: user.id, username: user.username, displayName: user.displayName || null, keyName: user.accessKey?.name || null,
           roleIds: user.roleIds ?? [], capabilities: user.capabilities ?? [],
+          // The data limit, so a served dashboard command counts the same rows the route would (roles part 3).
+          dataScope: user.dataScope ?? { limited: false },
         },
         runDir,
         keptDirs: [...keptMade],

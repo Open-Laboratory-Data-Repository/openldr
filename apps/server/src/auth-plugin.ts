@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { looksLikeAccessKey, type AppContext } from '@openldr/bootstrap';
 import { safeRecord } from '@openldr/audit';
-import { CAPABILITY_KEYS } from '@openldr/rbac';
+import { CAPABILITY_KEYS, EVERYTHING, type DataScope } from '@openldr/rbac';
 import { reasonFromError, createAuthFailedThrottle, subFromUnverifiedToken, type AuthFailReason } from './auth-failed';
 import { INVALID_ACCESS_KEY, signInWithAccessKey } from './access-key-auth';
 
@@ -14,6 +14,9 @@ export interface RequestActor {
   /** The ids of the account's roles in the database, for the per-form access lists (design
    *  2026-11-18-roles-scope). Empty for the dev bypass, whose capabilities include roles.manage. */
   roleIds?: string[];
+  /** The account's data limit (roles part 3). Everything for the dev bypass. Dashboard queries
+   *  read it; the capabilities above already lack what a limited user loses. */
+  dataScope?: DataScope;
   /** Set when the request signed in with an access key. The key's row ID and name, never the key. */
   accessKey?: { id: string; name: string };
 }
@@ -90,10 +93,10 @@ async function devActor(ctx: AppContext): Promise<RequestActor> {
   try {
     const existing = await ctx.users.getByUsername(username);
     const u = existing ?? (await ctx.users.create({ username, displayName: 'Dev Admin', roles }));
-    return { id: u.id, username: u.username, displayName: u.displayName, roles: u.roles.length > 0 ? u.roles : roles, capabilities: [...CAPABILITY_KEYS] };
+    return { id: u.id, username: u.username, displayName: u.displayName, roles: u.roles.length > 0 ? u.roles : roles, capabilities: [...CAPABILITY_KEYS], dataScope: EVERYTHING };
   } catch (e) {
     ctx.logger.warn({ error: e instanceof Error ? e.message : String(e) }, 'dev-bypass actor fell back to synthetic (user store unavailable)');
-    return { id: `dev:${username}`, username, displayName: 'Dev Admin', roles, capabilities: [...CAPABILITY_KEYS] };
+    return { id: `dev:${username}`, username, displayName: 'Dev Admin', roles, capabilities: [...CAPABILITY_KEYS], dataScope: EVERYTHING };
   }
 }
 
@@ -223,7 +226,8 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
       const subject = u.subject ?? (claims as { sub?: string }).sub ?? u.id;
       const capabilities = await ctx.roles.resolveCapabilities(subject);
       const roleIds = (await ctx.roles.rolesForUser(subject)).map((r) => r.id);
-      req.user = { id: u.id, username: u.username, displayName: u.displayName, roles: legacyRoles, capabilities, roleIds };
+      const dataScope = await ctx.dataScopes.get(subject);
+      req.user = { id: u.id, username: u.username, displayName: u.displayName, roles: legacyRoles, capabilities, roleIds, dataScope };
     } catch (e) {
       ctx.logger.error({ error: e instanceof Error ? e.message : String(e) }, 'user sync failed');
       recordAuthFailed(req, 'sync-failed', (claims as { sub?: string }).sub ?? null);

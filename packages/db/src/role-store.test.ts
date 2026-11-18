@@ -390,3 +390,24 @@ describe('RoleStore', () => {
     await db.destroy();
   });
 });
+
+describe('RoleStore under a data limit (roles part 3)', () => {
+  it('a limited subject loses exactly the dropped list and keeps the rest; an unlimited one is unchanged', async () => {
+    const { LIMITED_SCOPE_DROPS } = await import('@openldr/rbac');
+    const { createUserDataScopeStore } = await import('./user-data-scope-store');
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles();
+    const admin = (await store.getBySlug('lab_admin'))!;
+    await store.assignRole('sub-limited', admin.id);
+    await store.assignRole('sub-free', admin.id);
+    const full = await store.resolveCapabilities('sub-free');
+    await createUserDataScopeStore(db).set('sub-limited', { limited: true, facilities: [], districts: [], regions: [] });
+    const limited = await store.resolveCapabilities('sub-limited');
+    expect(full.filter((c) => !limited.includes(c)).sort()).toEqual(full.filter((c) => LIMITED_SCOPE_DROPS.includes(c)).sort());
+    expect(limited.some((c) => LIMITED_SCOPE_DROPS.includes(c))).toBe(false);
+    expect(limited).toContain('dashboards.view');
+    expect(await store.resolveCapabilities('sub-free')).toEqual(full);
+    await db.destroy();
+  });
+});
