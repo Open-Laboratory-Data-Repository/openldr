@@ -4,7 +4,7 @@
 
 **Goal:** a user can be limited to some facilities, districts or regions; every dashboard number they see then counts only rows from those places.
 
-**Architecture:** a `user_data_scopes` table read where capabilities are resolved, so a limited user loses the permissions that read unlimited data everywhere at once. One scope-predicate builder in `@openldr/dashboards` is used by the builder compiler and by a SQL placeholder that the server fills. The Users sheet and `openldr users scope` set it.
+**Architecture:** a `user_data_scopes` table read where capabilities are resolved, so a limited user loses the permissions that read unlimited data everywhere at once. One scope condition in `@openldr/dashboards` is ANDed into every builder query; a limited user never runs SQL. The Users sheet and `openldr users scope` set it.
 
 **Spec:** `docs/superpowers/specs/2026-11-18-roles-scope-design.md`, section 3 and "Settled after the builder check".
 
@@ -84,6 +84,6 @@
 
 ### Task 7: CLI and docs
 
-**Files:** `packages/cli/src/user.ts` (`openldr users scope <subject>` shows; `--all`; `--facility id,id --district Region/District --region R` sets), command-meta (`roles.manage`), program; users guide, dashboard guide (placeholders, what a limited user loses, the rebuild delay, forms keep patient search) and web CLI docs, en/fr/pt.
+**Files:** `packages/cli/src/user.ts` (`openldr users scope <subject>` shows; `--all`; `--facility id,id --district Region/District --region R` sets), command-meta (`roles.manage`), program; users guide, dashboard guide (what a limited user loses, that they never run SQL, the rebuild delay, forms keep patient search) and web CLI docs, en/fr/pt.
 
 - [ ] Tests, docs (what a limited user loses, that they never run SQL, the rebuild delay, forms keep patient search), commit. Full gate. Codex review.
