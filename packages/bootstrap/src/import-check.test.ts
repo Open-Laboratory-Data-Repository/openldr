@@ -1954,6 +1954,40 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     expect((await w.corrections.listFor(SRC, ['REQ0001'])).get('REQ0001')!.map((c) => c.value)).toEqual(['2023-03-11']);
   });
 
+  it('refuses a correction while a recheck of the source is running, so no edit goes unapplied (review H17, live)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput());
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    let second: string | null = null;
+    w.setDecode(async (input) => {
+      // While the recheck decodes, another person tries a newer value, and the decode waits for it.
+      second ??= await w.svc.correct(correctInput({ values: { dob_age: '2022-03-11' } })).then(() => 'accepted', (e: Error) => e.message);
+      return holdUnlessCorrected(input);
+    });
+    await drive(w.svc);
+    expect(second).toMatch(/is running|is queued/);
+    expect((await w.corrections.listFor(SRC, ['REQ0001'])).get('REQ0001')!.map((c) => c.value)).toEqual(['2023-03-11']);
+  });
+
+  it('a recheck whose corrections changed while it decoded decides nothing for that request (review H17, window)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput());
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    const before = (await w.stored())!.counts;
+    w.setDecode(async (input) => {
+      // A correction written in the window between another person's check and their write.
+      await w.corrections.put({ copyId: SRC, key: 'REQ0001', field: 'dob_age', value: '2022-03-11', original: '2024-03-11', reason: 'later', correctedBy: 'baraka', correctedAt: new Date(w.clock.now + 1000) });
+      return holdUnlessCorrected(input);
+    });
+    const persisted = w.persisted.length;
+    await drive(w.svc);
+    expect(w.persisted.length).toBe(persisted);
+    expect(await w.realHeld.get(SRC, 'REQ0001')).not.toBeNull();
+    expect((await w.stored())!.counts).toMatchObject({ read: before.read, saved: before.saved, held: before.held });
+  });
+
   it('a full run sends the stored corrections of its page, and none when the plugin declares no fields', async () => {
     const w = await world({ corrections: FIELDS });
     await heldRun(w);

@@ -801,6 +801,14 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         const grown = growPage(size, run.pageSize, goodInRow);
         if (grown !== size) { size = grown; goodInRow = 0; }
 
+        // A correction made while this recheck decoded would never reach the plugin: the recheck then
+        // decides nothing and writes nothing, and the request waits, held, for the next one (review H17).
+        if (rechecking && correctable.length > 0 && deps.corrections) {
+          const sig = (m: Map<string, Correction[]>) => JSON.stringify(keys.map((k) => (m.get(k) ?? []).map((c) => [c.field, c.value, c.correctedAt])));
+          const now2 = await ownDb('read', () => deps.corrections!.listFor(run.copyId, keys));
+          if (sig(now2) !== sig(stored)) { recheckRead = true; return 'next'; }
+        }
+
         const saved: string[] = [];
         for (const key of keys) {
           const group = groups.get(key);
@@ -1198,6 +1206,11 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       // A recheck that already saved it, with its held row still to remove, has the last word: a newer
       // correction would never reach the plugin (review H17).
       const run = await ownDb('read', () => readRun(pluginId, checkIdOf(copyId)));
+      // While a check of the source runs, a recheck included, a new value could be read after the run
+      // took the old one: corrections wait for it to end (review H17).
+      if (run && isLive(run.status)) {
+        throw new Error(`check ${run.id} is ${run.status}; correct the request once it has ended`);
+      }
       if ((run?.recheck?.done ?? []).some((x) => x.key === key && x.outcome === 'saved')) {
         throw new Error('that request was already saved by a recheck; check it again to take it off the held list');
       }
