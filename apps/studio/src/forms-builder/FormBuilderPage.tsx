@@ -95,7 +95,11 @@ export function FormBuilderPage(): JSX.Element {
         if (cancelled) return;
         setFormId(loaded.id);
         setStatus(loaded.status);
-        setSchema(normalizeFormSchema(loaded.schema));
+        // The form's own name is what the forms list shows; a schema made outside the builder (API,
+        // import, marketplace) may carry none, and would otherwise open as "Untitled form".
+        const stored = (loaded.schema ?? {}) as Record<string, unknown>;
+        const named = typeof stored.name === 'string' && stored.name.trim() ? stored : { ...stored, name: loaded.name };
+        setSchema(normalizeFormSchema(named));
         void listFormVersions(loaded.id)
           .then((vs) => { if (!cancelled) setPublishedVersion(vs[0]?.version ?? null); })
           .catch(() => { /* the number is a nicety; a failure here must not break the builder */ });
