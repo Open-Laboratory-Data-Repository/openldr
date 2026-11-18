@@ -114,6 +114,9 @@ export interface CheckRun {
      *  before its counts are saved (re-review H3). Codes only, no source value. */
     before?: Array<{ key: string; label: string | null; laboratory: string | null; pass: string | null }>;
   };
+  /** A correction being saved: no recheck or start may begin until it is cleared or `until` passes
+   *  (review H17). Taken and cleared by compare-and-swap, as a start or a recheck is queued. */
+  correcting?: { token: string; until: string };
   /** Names one pass from the first key, carried on through a stop. A held row records the pass that
    *  counted it, so a recheck moves only this pass's counts (review H4). Absent on older records. */
   pass?: string;
@@ -198,6 +201,9 @@ export interface HeldItemView extends HeldItem {
   /** The fields the plugin lets a person correct. Empty when it declares none. */
   correctable: string[];
 }
+
+/** How long a correction's claim on its check run lasts if it is never cleared (a crash mid-save). */
+const CORRECTING_MS = 60_000;
 
 /** The longest corrected value and reason a person may give. */
 const CORRECTION_VALUE_MAX = 200;
@@ -928,6 +934,10 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
   /** Brings the counts of a run whose recheck did not finish in line with its held rows. For each key
    *  whose counts were not yet moved (no stored done mark) and that this pass counted, a held row
    *  rewritten since the recheck was queued replaces the decision recorded then (re-review H3). */
+  /** A correction holds the run: a start or a recheck must wait (review H17). */
+  const correctionHeld = (run: CheckRun): boolean => run.correcting !== undefined && Date.parse(run.correcting.until) > now().getTime();
+  const CORRECTING_REFUSAL = 'a correction is being saved for this source; try again in a moment';
+
   async function settleRecheck(run: CheckRun): Promise<void> {
     const rc = run.recheck;
     if (!rc || run.pass === undefined) return;
@@ -1111,6 +1121,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         if (existing && isLive(existing.status)) {
           throw new Error(`check ${id} is ${existing.status}; stop it before starting it again`);
         }
+        if (existing && correctionHeld(existing)) throw new Error(CORRECTING_REFUSAL);
         const at = now().toISOString();
         // A stopped or failed run carries on from its last page, with its counts and its held rows,
         // while it would read the same copies the same way. Anything else begins at the first key.
@@ -1203,32 +1214,45 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       }
       const held = await ownDb('read', () => deps.held.get(copyId, key));
       if (!held || held.reason !== 'held') throw new Error('that request is not held back by the check, so it cannot be corrected');
-      // A recheck that already saved it, with its held row still to remove, has the last word: a newer
-      // correction would never reach the plugin (review H17).
-      const run = await ownDb('read', () => readRun(pluginId, checkIdOf(copyId)));
-      // While a check of the source runs, a recheck included, a new value could be read after the run
-      // took the old one: corrections wait for it to end (review H17).
-      if (run && isLive(run.status)) {
-        throw new Error(`check ${run.id} is ${run.status}; correct the request once it has ended`);
-      }
-      if ((run?.recheck?.done ?? []).some((x) => x.key === key && x.outcome === 'saved')) {
-        throw new Error('that request was already saved by a recheck; check it again to take it off the held list');
-      }
       // A source kind may not have every declared field: only those this request sent (review H2).
       for (const field of fields) {
         if (!held.fields || !Object.prototype.hasOwnProperty.call(held.fields, field)) {
           throw new Error(`${field} cannot be corrected for this request`);
         }
       }
-      // The audit row first: a correction is stored only once it is on the record (review H6). It
-      // names the copy and the fields, never the key or a value: both come from the source.
-      await auditOrRefuse(deps.audit, { action: 'import.check.correct', pluginId, actor, metadata: { copyId, fields: [...fields].sort() } });
-      const at = now();
-      for (const field of fields.sort()) {
-        await ownDb('write', () => deps.corrections!.put({
-          copyId, key, field, value: input.values[field] ?? null, original: held.fields?.[field] ?? null,
-          reason, correctedBy: actor.name, correctedAt: at,
-        }));
+      // A correction and a check take turns on the run (review H17). The claim is taken by compare-and-
+      // swap, as a recheck or a start is queued, so the two can never overlap: a live run refuses the
+      // claim, and a held claim refuses a recheck or a start until it is cleared.
+      const runId = checkIdOf(copyId);
+      const token = randomUUID();
+      await changeRun(pluginId, runId, async (stored) => {
+        if (!stored) throw new Error(`check ${runId} not found`);
+        if (isLive(stored.status)) throw new Error(`check ${runId} is ${stored.status}; correct the request once it has ended`);
+        if (correctionHeld(stored)) throw new Error(`another ${CORRECTING_REFUSAL}`);
+        // A recheck that already saved it, with its held row still to remove, has the last word.
+        if ((stored.recheck?.done ?? []).some((x) => x.key === key && x.outcome === 'saved')) {
+          throw new Error('that request was already saved by a recheck; check it again to take it off the held list');
+        }
+        return { ...stored, correcting: { token, until: new Date(now().getTime() + CORRECTING_MS).toISOString() } };
+      });
+      try {
+        // The audit row first: a correction is stored only once it is on the record (review H6). It
+        // names the copy and the fields, never the key or a value: both come from the source.
+        await auditOrRefuse(deps.audit, { action: 'import.check.correct', pluginId, actor, metadata: { copyId, fields: [...fields].sort() } });
+        const at = now();
+        for (const field of fields.sort()) {
+          await ownDb('write', () => deps.corrections!.put({
+            copyId, key, field, value: input.values[field] ?? null, original: held.fields?.[field] ?? null,
+            reason, correctedBy: actor.name, correctedAt: at,
+          }));
+        }
+      } finally {
+        await changeRun(pluginId, runId, async (stored) => {
+          if (!stored) throw new Error(`check ${runId} not found`);
+          if (stored.correcting?.token !== token) return stored;
+          const { correcting: _c, ...rest } = stored;
+          return rest as CheckRun;
+        }).catch(() => {});
       }
       return { corrections: (await ownDb('read', () => deps.corrections!.listFor(copyId, [key]))).get(key) ?? [] };
     },
@@ -1242,6 +1266,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       const run = await changeRun(pluginId, runId, async (stored) => {
         if (!stored) throw new Error(`check ${runId} not found; start the check again first`);
         if (isLive(stored.status)) throw new Error(`check ${runId} is ${stored.status}; wait for it to end, then check the request again`);
+        if (correctionHeld(stored)) throw new Error(CORRECTING_REFUSAL);
         // A recheck that did not finish is settled first: its counts brought in line with its held
         // rows, and a removal still to do done (re-review H3).
         const settled: CheckRun = { ...stored, counts: { ...stored.counts, labels: { ...stored.counts.labels } }, laboratories: stored.laboratories && structuredClone(stored.laboratories) };

@@ -136,7 +136,11 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
   const audited: ImportAuditEvent[] = [];
   /** Actions whose audit write fails, as the store does when it cannot write. */
   const refuseAudit = new Set<string>();
+  /** Audit writes that wait until the test lets them go. */
+  const auditGates = new Map<string, Promise<void>>();
   const audit = async (e: ImportAuditEvent) => {
+    const gate = auditGates.get(e.action);
+    if (gate) await gate;
     if (refuseAudit.has(e.action)) throw new Error('audit store unavailable');
     audited.push(structuredClone(e));
   };
@@ -237,6 +241,7 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
 
   return {
     interruptions, corrections, refuseAudit,
+    gateAudit: (action: string) => { let release!: () => void; auditGates.set(action, new Promise<void>((r) => { release = r; })); return () => { auditGates.delete(action); release(); }; },
     svc, service, copies, raw, audited, runSaves, decodeCalls, twinCalls, invoke, persisted, clock, sleeps, plugins,
     readSetCalls, readCalls, heldPuts, copyCalls, allowedCalls,
     revoke: (connectorId: string) => { allowedConnectors.delete(connectorId); },
@@ -1986,6 +1991,37 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     expect(w.persisted.length).toBe(persisted);
     expect(await w.realHeld.get(SRC, 'REQ0001')).not.toBeNull();
     expect((await w.stored())!.counts).toMatchObject({ read: before.read, saved: before.saved, held: before.held });
+  });
+
+  it('a correction and a recheck take turns: a recheck cannot start while a correction is being saved (review H17, order)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    await w.svc.correct(correctInput());
+    // A second correction passes its checks, then waits inside its audit write before storing.
+    const release = w.gateAudit('import.check.correct');
+    const pending = w.svc.correct(correctInput({ values: { dob_age: '2022-03-11' } }));
+    await new Promise((r) => setTimeout(r, 20));
+    await expect(w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN })).rejects.toThrow(/correction is being saved/);
+    await expect(w.svc.start({ ...START, pageSize: 10 })).rejects.toThrow(/correction is being saved/);
+    release();
+    await pending;
+    // Now the recheck runs, with the newer value.
+    w.setDecode(holdUnlessCorrected);
+    const calls = w.decodeCalls.length;
+    await w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN });
+    await drive(w.svc);
+    const sent = (w.decodeCalls.slice(calls)[0] as DecodeInput & { corrections?: Record<string, Array<{ field: string; value: string }>> }).corrections;
+    expect(sent?.REQ0001?.find((c) => c.field === 'dob_age')?.value).toBe('2022-03-11');
+  });
+
+  it('a correction claim left by a crash lapses after a minute (review H17, order)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    const run = (await w.stored())!;
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, { ...run, rev: run.rev + 1, correcting: { token: 'gone', until: new Date(w.clock.now + 60_000).toISOString() } });
+    await expect(w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN })).rejects.toThrow(/correction is being saved/);
+    w.clock.now += 61_000;
+    await expect(w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN })).resolves.toMatchObject({ status: 'queued' });
   });
 
   it('a full run sends the stored corrections of its page, and none when the plugin declares no fields', async () => {
