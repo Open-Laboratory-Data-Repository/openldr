@@ -105,7 +105,8 @@ export async function buildApp(ctx: AppContext) {
     // A route parameter longer than this leaves the route unmatched (Fastify's default is 100). A
     // patient ref seals a FHIR id of up to 64 characters into 123 (patient-mask.ts), so a Map to FHIR
     // patient, whose id is a 64-character hash, could not be opened (real test 2026-11-18).
-    maxParamLength: 256,
+    // Under routerOptions: Fastify 5 deprecates the top-level option (warning FSTDEP022).
+    routerOptions: { maxParamLength: 256 },
   });
   registerErrorHandler(app);
 
