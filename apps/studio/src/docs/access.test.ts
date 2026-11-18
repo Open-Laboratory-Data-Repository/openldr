@@ -33,5 +33,9 @@ describe('the guides\' permissions', () => {
     expect(caps('reports')).toEqual(['reports.view']);
     expect(caps('audit')).toEqual(['audit.view']);
     for (const open of ['start-here', 'first-run', 'sign-in', 'user-preferences', 'upgrading']) expect(caps(open), open).toEqual([]);
+    // Review D1-D3: the guide follows where its steps happen and who can open that page.
+    expect(caps('report-pipeline')).toEqual(['workflows.view']);
+    expect(caps('plugin-sites')).toEqual([]);
+    expect(caps('terminology')).toEqual([]);
   });
 });
