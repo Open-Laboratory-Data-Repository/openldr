@@ -1,6 +1,6 @@
 {
   "name": "@openldr/cli",
-  "version": "0.1.11",
+  "version": "0.1.12-demo.4",
   "private": true,
   "type": "module",
   "bin": { "openldr": "./dist/index.js" },
