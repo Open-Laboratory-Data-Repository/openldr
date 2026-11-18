@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { FormAccess, FormAccessStore } from '@openldr/db';
-import { formAccess, FormAccessError, setFormAccess } from './form-access';
+import { formAccess, FormAccessError, formUserOf, setFormAccess } from './form-access';
 
 // Design 2026-11-18-roles-scope, part 1: the one check the form routes, the CLI and the list use.
 function memStore(lists: Record<string, FormAccess>): FormAccessStore {
@@ -82,5 +82,26 @@ describe('setFormAccess', () => {
   it('keeps each role once in a list', async () => {
     const out = await setFormAccess(deps(), 'f1', { open: ['clerk', 'r-clerk'], submit: [] });
     expect(out.after.open).toEqual(['r-clerk']);
+  });
+});
+
+// A served CLI command knows only the caller's id, so it looks their roles up as sign-in does
+// (roles review FR4).
+describe('formUserOf', () => {
+  const deps = {
+    users: { async get(id: string) { return id === 'u1' ? { id: 'u1', subject: 'kc-1' } : id === 'u2' ? { id: 'u2', subject: null } : null; } },
+    roles: {
+      async resolveCapabilities(subject: string) { return subject === 'kc-1' ? ['forms.view'] : ['forms.view', 'forms.edit']; },
+      async rolesForUser(subject: string) { return subject === 'kc-1' ? [{ id: 'r-clerk' }] : [{ id: 'r-lead' }]; },
+    },
+  };
+
+  it('finds role ids and capabilities by the subject, or the id when there is none', async () => {
+    expect(await formUserOf(deps, 'u1')).toEqual({ roleIds: ['r-clerk'], capabilities: ['forms.view'] });
+    expect(await formUserOf(deps, 'u2')).toEqual({ roleIds: ['r-lead'], capabilities: ['forms.view', 'forms.edit'] });
+  });
+
+  it('answers null for an unknown user', async () => {
+    expect(await formUserOf(deps, 'nobody')).toBeNull();
   });
 });

@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { createAppContext, FormAccessError, recordAuditEvent, setFormAccess } from '@openldr/bootstrap';
+import { createAppContext, FormAccessError, formUserOf, recordAuditEvent, setFormAccess } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { ObservationExtractor, ServiceRequestExtractor, toTransactionBundle, lintFormSchema, type ExtractionContext } from '@openldr/forms';
 import type { Questionnaire, QuestionnaireResponse } from '@openldr/fhir';
 import { cliActor } from './cli-actor';
+import { servedHandoff } from './served';
 
 export interface FormsExtractOutput {
   resourceTypes: string[];
@@ -26,10 +27,28 @@ export function runFormsExtract(questionnairePath: string, responsePath: string,
   };
 }
 
+type AppCtx = Awaited<ReturnType<typeof createAppContext>>;
+
+/**
+ * Which of `ids` the caller may open. A served command runs for a signed-in caller, so it obeys
+ * each form's open list as the form routes do; an editor manages every form (roles review FR4). A
+ * local run on the server is the machine's operator and sees every form, as before.
+ */
+async function formsCallerMayOpen(ctx: AppCtx, ids: string[]): Promise<Set<string>> {
+  const handoff = servedHandoff();
+  if (!handoff) return new Set(ids);
+  const user = await formUserOf(ctx, handoff.caller.id);
+  if (!user) return new Set();
+  if (user.capabilities.includes('forms.edit')) return new Set(ids);
+  return ctx.formAccess.visible(user, ids);
+}
+
 export async function runFormsList(opts: { json: boolean }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
-    const forms = await ctx.forms.list();
+    const all = await ctx.forms.list();
+    const open = await formsCallerMayOpen(ctx, all.map((f) => f.id));
+    const forms = all.filter((f) => open.has(f.id));
     if (opts.json) {
       process.stdout.write(JSON.stringify(forms, null, 2) + '\n');
     } else {
@@ -55,10 +74,11 @@ export async function runFormsList(opts: { json: boolean }): Promise<number> {
 export async function runFormsLint(id: string | undefined, opts: { json: boolean }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
-    const targets = id
-      ? [await ctx.forms.get(id)].filter((f): f is NonNullable<typeof f> => f !== null)
-      : await Promise.all((await ctx.forms.list()).map((s) => ctx.forms.get(s.id)))
-          .then((forms) => forms.filter((f): f is NonNullable<typeof f> => f !== null));
+    const ids = id ? [id] : (await ctx.forms.list()).map((s) => s.id);
+    const open = await formsCallerMayOpen(ctx, ids);
+    // A form the caller may not open is missing to them, as on GET /api/forms/:id.
+    const targets = await Promise.all(ids.filter((f) => open.has(f)).map((f) => ctx.forms.get(f)))
+      .then((forms) => forms.filter((f): f is NonNullable<typeof f> => f !== null));
 
     if (id && targets.length === 0) {
       process.stderr.write(`no form with id ${id}\n`);
@@ -92,6 +112,10 @@ export async function runFormsLint(id: string | undefined, opts: { json: boolean
 export async function runFormsVersions(id: string, opts: { json: boolean }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
+    if (!(await formsCallerMayOpen(ctx, [id])).has(id)) {
+      process.stderr.write(`no form with id ${id}\n`);
+      return 1;
+    }
     const versions = await ctx.forms.listVersions(id);
     if (opts.json) {
       process.stdout.write(JSON.stringify(versions, null, 2) + '\n');

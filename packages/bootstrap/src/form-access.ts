@@ -64,3 +64,22 @@ export async function setFormAccess(
   await deps.access.set(formId, next);
   return { before, after: await deps.access.get(formId) };
 }
+
+/** A person's role ids and capabilities by their user id, found as sign-in finds them: by the
+ *  user's subject, or the id when there is none. Null for an unknown user. A served CLI command
+ *  knows only the caller's id, so it asks here (roles review FR4). */
+export async function formUserOf(
+  deps: {
+    users: { get(id: string): Promise<{ id: string; subject?: string | null } | null | undefined> };
+    roles: { resolveCapabilities(subject: string): Promise<string[]>; rolesForUser(subject: string): Promise<Array<{ id: string }>> };
+  },
+  userId: string,
+): Promise<FormUser | null> {
+  const u = await deps.users.get(userId);
+  if (!u) return null;
+  const subject = u.subject ?? u.id;
+  return {
+    roleIds: (await deps.roles.rolesForUser(subject)).map((r) => r.id),
+    capabilities: await deps.roles.resolveCapabilities(subject),
+  };
+}
