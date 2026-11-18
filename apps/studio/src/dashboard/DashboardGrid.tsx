@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { MoreHorizontal, GripVertical, Pencil, Trash2 } from 'lucide-react';
 
 export function DashboardGrid({ filterValues, onEdit }: { filterValues: Record<string, unknown>; onEdit?: (id: string) => void }) {
-  const { current, editing, setLayout, removeWidget } = useDashboardStore();
+  const { current, editing, dirty, setLayout, removeWidget } = useDashboardStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [resizing, setResizing] = useState<{ i: string; w: number; h: number } | null>(null);
@@ -106,7 +106,7 @@ export function DashboardGrid({ filterValues, onEdit }: { filterValues: Record<s
                 )}
               </div>
               <div className={`min-h-0 flex-1 overflow-hidden rounded-b-lg ${editing ? 'pointer-events-none select-none' : ''}`}>
-                <DashboardWidget config={w} filterValues={filterValues} />
+                <DashboardWidget config={w} filterValues={filterValues} savedDashboardId={dirty ? undefined : current.id} />
               </div>
               {resizing?.i === w.id && (
                 <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">

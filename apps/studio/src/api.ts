@@ -395,6 +395,22 @@ export async function listModels(): Promise<QueryModel[]> {
 export async function fetchJoinableTables(): Promise<ClientJoinableTable[]> {
   return authFetch('/api/dashboards/joinable-tables').then((r) => okJson<ClientJoinableTable[]>(r, 'load joinable tables'));
 }
+/** Run one saved widget of a dashboard the person may see. The server builds the query from the stored
+ *  widget; only the dashboard's filter values go up (roles part 2, "Also lock the data"). */
+export async function runSavedWidget(dashboardId: string, widgetId: string, filterValues: Record<string, unknown>, signal?: AbortSignal): Promise<ReportResult> {
+  return authFetch(`/api/dashboards/${encodeURIComponent(dashboardId)}/widgets/${encodeURIComponent(widgetId)}/query`, { ...json({ filterValues }), signal })
+    .then((r) => okJson<ReportResult>(r, 'run widget'));
+}
+/** A saved dashboard filter's option list. */
+export async function savedFilterOptions(dashboardId: string, filterId: string): Promise<ReportResult> {
+  return authFetch(`/api/dashboards/${encodeURIComponent(dashboardId)}/filters/${encodeURIComponent(filterId)}/options`, json({}))
+    .then((r) => okJson<ReportResult>(r, 'filter options'));
+}
+/** Who a dashboard is shared with, with every role's name, and whether the caller may change it. */
+export interface DashboardShare { roles: string[]; choices: Array<{ id: string; slug: string; name: string }>; mayShare: boolean }
+export const getDashboardShare = (id: string): Promise<DashboardShare> => apiGet(`/api/dashboards/${encodeURIComponent(id)}/share`, 'get dashboard share');
+export const setDashboardShare = (id: string, roles: string[]): Promise<{ roles: string[] }> =>
+  authFetch(`/api/dashboards/${encodeURIComponent(id)}/share`, jbody({ roles }, 'PUT')).then((r) => okJson<{ roles: string[] }>(r, 'share dashboard'));
 export async function runWidgetQuery(q: WidgetQuery, signal?: AbortSignal): Promise<ReportResult> {
   return authFetch('/api/dashboards/query', { ...json(q), signal }).then((r) => okJson<ReportResult>(r, 'run query'));
 }

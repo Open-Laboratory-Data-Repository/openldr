@@ -12,7 +12,7 @@ import {
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/cn';
-import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal, Download, Upload, RefreshCw, Trash2, LayoutDashboard } from 'lucide-react';
+import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal, Download, Upload, RefreshCw, Trash2, LayoutDashboard, Share2 } from 'lucide-react';
 import { listDashboards, createDashboard, saveDashboard, deleteDashboard, fetchClientConfig, type Dashboard, type DashboardFilterDef, type WidgetConfig } from '../api';
 import { useDashboardStore } from './store';
 import { DashboardGrid } from './DashboardGrid';
@@ -25,6 +25,8 @@ import { StripedEmpty } from '@/components/ui/striped-empty';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { QueryNameSheet } from '../query/workspace/QueryNameSheet';
 import { randomId } from '@/lib/random-id';
+import { useAuth } from '@/auth/AuthProvider';
+import { ShareSheet } from './ShareSheet';
 
 function defaultsFor(filters: DashboardFilterDef[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -41,6 +43,10 @@ function defaultsFor(filters: DashboardFilterDef[]): Record<string, unknown> {
 export function DashboardPage() {
   const { t } = useTranslation();
   const { current, editing, dirty, setCurrent, setEditing, markClean, addWidget, updateWidget, removeWidget } = useDashboardStore();
+  // Only the owner or an admin may share a dashboard; the server checks the same (roles part 2).
+  const { user, hasCapability } = useAuth();
+  const mayShare = !!current && (hasCapability('roles.manage') || (!!user && current.ownerId === user.id));
+  const [shareOpen, setShareOpen] = useState(false);
   const [all, setAll] = useState<Dashboard[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [editorOpen, setEditorOpen] = useState(false);
@@ -270,6 +276,12 @@ export function DashboardPage() {
                 <Pencil className="mr-2 h-4 w-4" />
                 {t('dashboard.rename')}
               </DropdownMenuItem>
+              {mayShare ? (
+                <DropdownMenuItem disabled={creating || dirty} onSelect={() => setShareOpen(true)}>
+                  <Share2 className="mr-2 h-4 w-4" />
+                  {t('dashboard.share.menu')}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuSeparator />
               {editing ? (
                 <>
@@ -334,7 +346,7 @@ export function DashboardPage() {
         {current.filters.length > 0 && (
           <>
             <div className="px-4 py-3">
-              <DashboardFilterBar filters={current.filters} values={values} onChange={setValues} />
+              <DashboardFilterBar filters={current.filters} values={values} onChange={setValues} savedDashboardId={dirty ? undefined : current.id} />
             </div>
             <Separator />
           </>
@@ -402,6 +414,7 @@ export function DashboardPage() {
           }}
         />
       )}
+      {current ? <ShareSheet dashboardId={current.id} open={shareOpen} onOpenChange={setShareOpen} /> : null}
       <ConfirmDialog
         open={deleteConfirmOpen}
         onOpenChange={setDeleteConfirmOpen}
