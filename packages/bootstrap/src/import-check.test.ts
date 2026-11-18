@@ -2014,6 +2014,19 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     expect(sent?.REQ0001?.find((c) => c.field === 'dob_age')?.value).toBe('2022-03-11');
   });
 
+  it('the turn-taking holds across two service instances that share the stores, as the CLI and the server do (review H17, order)', async () => {
+    const w = await world({ corrections: FIELDS });
+    await heldRun(w);
+    const cli = w.service('cli-process');
+    const release = w.gateAudit('import.check.correct');
+    const pending = cli.correct(correctInput({ values: { dob_age: '2022-03-11' } }));
+    await new Promise((r) => setTimeout(r, 20));
+    await expect(w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN })).rejects.toThrow(/correction is being saved/);
+    release();
+    await pending;
+    await expect(w.svc.recheck({ pluginId: PLUGIN, copyId: SRC, key: 'REQ0001', actor: ADMIN })).resolves.toMatchObject({ status: 'queued' });
+  });
+
   it('a correction claim left by a crash lapses after a minute (review H17, order)', async () => {
     const w = await world({ corrections: FIELDS });
     await heldRun(w);
