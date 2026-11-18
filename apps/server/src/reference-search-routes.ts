@@ -92,6 +92,13 @@ export function registerReferenceSearchRoutes(
     // A draft/archived form is treated exactly like a missing one: the response must not let a
     // caller distinguish "no such form" from "exists but isn't published yet".
     if (!form || form.status !== 'published') { reply.code(404); return { error: 'form not found' }; }
+    // A form the person may not open is missing to them here too, as on GET /api/forms/:id (roles
+    // review FR3). An editor manages every form, as on the form routes.
+    const caps = req.user?.capabilities ?? [];
+    if (!caps.includes('forms.edit')
+      && !(await ctx.formAccess.mayOpen({ roleIds: req.user?.roleIds ?? [], capabilities: caps }, formId))) {
+      reply.code(404); return { error: 'form not found' };
+    }
 
     const field = form.schema.fields.find((f) => f.id === fieldId);
     if (!field) { reply.code(404); return { error: 'field not found' }; }

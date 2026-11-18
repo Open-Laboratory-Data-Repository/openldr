@@ -41,13 +41,14 @@ let opsExpand = vi.fn();
 /** Systems `terms.search` was actually called with, so the cs-url-* resolution can be asserted. */
 const searchedSystems: string[] = [];
 
-function makeApp(capabilities = ['forms.view', 'forms.edit']) {
+function makeApp(capabilities = ['forms.view', 'forms.edit'], mayOpen = true) {
   calls.length = 0;
   offsets.length = 0;
   searchedSystems.length = 0;
   opsExpand = vi.fn();
   const ctx = {
     forms: { get: async (id: string) => (id === FORM.id ? FORM : id === DRAFT_FORM.id ? DRAFT_FORM : null) },
+    formAccess: { mayOpen: async () => mayOpen },
     terminology: {
       ops: { expand: opsExpand },
       admin: {
@@ -105,6 +106,14 @@ describe('reference search', () => {
     const res = await makeApp().inject({ method: 'GET', url: url('tests', 'q=xx') });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toContain('ActivityDefinition');
+  });
+
+  it('404s for a form whose open list leaves the person out, without searching (roles review FR3)', async () => {
+    const res = await makeApp(['forms.view'], false).inject({ method: 'GET', url: url('patient', 'q=doe') });
+    expect(res.statusCode).toBe(404);
+    expect(calls).toHaveLength(0);
+    // An editor manages every form, as on the form routes.
+    expect((await makeApp(['forms.view', 'forms.edit'], false).inject({ method: 'GET', url: url('patient', 'q=doe') })).statusCode).toBe(200);
   });
 
   it('returns entity rows for a patient-bound field', async () => {
