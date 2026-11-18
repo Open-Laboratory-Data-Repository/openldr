@@ -54,6 +54,15 @@ describe('packBundle', () => {
     }
   });
 
+  it('packs and verifies a plugin whose UI is declared only in its manifest, with no ui.html (review F1)', async () => {
+    const out = await mkdtemp(join(tmpdir(), 'pack-'));
+    const kp = generatePublisherKeypair();
+    const manifest = { ...structuredClone(baseManifest), payload: { ...baseManifest.payload, ui: { nav: { label: 'Notes' }, declarative: { type: 'object', properties: { note: { type: 'string' } } } } } };
+    await packBundle({ manifest, payload: new Uint8Array([1]), outDir: out, privateKeyDer: kp.privateKeyDer, publicKeyDer: kp.publicKeyDer });
+    expect(verifyBundle(await readBundle(out))).toMatchObject({ valid: true });
+    await rm(out, { recursive: true, force: true });
+  });
+
   it('a tampered written manifest fails verification', async () => {
     const out = await mkdtemp(join(tmpdir(), 'pack-'));
     const kp = generatePublisherKeypair();
