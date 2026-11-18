@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "b3df6978",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Show Settings in the user menu for any Settings section"
+        },
+        {
           "hash": "1d9b2b1e",
           "type": "fix",
           "scope": "server",
