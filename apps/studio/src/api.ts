@@ -3278,6 +3278,13 @@ export async function fetchWorkflowReceipts(
   return res.json() as Promise<WorkflowReceipt[]>;
 }
 
+/** What Continue would do, without doing it: whether the workflow changed since the run was cut. */
+export async function checkWorkflowReceiptContinue(id: string, requestId: string): Promise<{ definitionChanged: boolean }> {
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}/receipts/${encodeURIComponent(requestId)}/continue`);
+  if (!res.ok) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? `continue check failed: ${res.status}`);
+  return res.json() as Promise<{ definitionChanged: boolean }>;
+}
+
 /** Continue on an interrupted run: a new run with its stored input. */
 export async function continueWorkflowReceipt(id: string, requestId: string): Promise<{ runId: string; definitionChanged: boolean }> {
   const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}/receipts/${encodeURIComponent(requestId)}/continue`, { method: 'POST' });

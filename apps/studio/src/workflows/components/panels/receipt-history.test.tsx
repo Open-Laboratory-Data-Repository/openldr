@@ -6,6 +6,7 @@ import { RunHistoryDrawer } from './run-history-drawer';
 vi.mock('@/api', () => ({
   fetchWorkflowRuns: vi.fn(), fetchWorkflowRun: vi.fn(), downloadWorkflowArtifact: vi.fn(),
   fetchWorkflowReceipts: vi.fn(), fetchWorkflowReceipt: vi.fn(),
+  checkWorkflowReceiptContinue: vi.fn(), continueWorkflowReceipt: vi.fn(),
 }));
 const receipt = (id: string, status = 'queued') => ({
   id, workflowId: 'workflow-1', status, runId: null, createdAt: '2026-09-11T10:00:00Z',
@@ -67,5 +68,27 @@ describe('webhook receipt history', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load webhook receipts');
     await menu('Receipt actions', 'Refresh');
     expect(await screen.findByText('Queued')).toBeInTheDocument();
+  });
+  it('asks before continuing a run of a workflow that changed, and runs only on confirm (review R5)', async () => {
+    vi.mocked(api.fetchWorkflowReceipts).mockResolvedValue([receipt('request-1', 'interrupted') as api.WorkflowReceipt]);
+    vi.mocked(api.checkWorkflowReceiptContinue).mockResolvedValue({ definitionChanged: true });
+    vi.mocked(api.continueWorkflowReceipt).mockResolvedValue({ runId: 'run-2', definitionChanged: true });
+    await openReceipts();
+    await screen.findByText('request-1');
+    await menu('Receipt actions for request-1', 'Continue');
+    expect(await screen.findByText('Run the changed workflow?')).toBeInTheDocument();
+    expect(api.continueWorkflowReceipt).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Continue' })); });
+    await waitFor(() => expect(api.continueWorkflowReceipt).toHaveBeenCalledWith('workflow-1', 'request-1'));
+  });
+  it('continues at once when the workflow did not change', async () => {
+    vi.mocked(api.fetchWorkflowReceipts).mockResolvedValue([receipt('request-1', 'interrupted') as api.WorkflowReceipt]);
+    vi.mocked(api.checkWorkflowReceiptContinue).mockResolvedValue({ definitionChanged: false });
+    vi.mocked(api.continueWorkflowReceipt).mockResolvedValue({ runId: 'run-2', definitionChanged: false });
+    await openReceipts();
+    await screen.findByText('request-1');
+    await menu('Receipt actions for request-1', 'Continue');
+    await waitFor(() => expect(api.continueWorkflowReceipt).toHaveBeenCalledWith('workflow-1', 'request-1'));
+    expect(screen.queryByText('Run the changed workflow?')).not.toBeInTheDocument();
   });
 });

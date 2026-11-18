@@ -5,7 +5,7 @@ import { registerWorkflowRoutes } from './workflows-routes';
 
 const receipt: any = { id: 'request-1', workflowId: 'wf', status: 'queued', runId: null, createdAt: '2026-09-11T00:00:00Z', startedAt: null, finishedAt: null, reason: null, outcome: null };
 async function fixture(capabilities = ['workflows.view']) {
-  const receipts = { accept: vi.fn(async () => ({ receipt, created: true })), get: vi.fn(async () => receipt), list: vi.fn(async () => [receipt]), continueFrom: vi.fn(async (): Promise<unknown> => 'not-waiting') };
+  const receipts = { accept: vi.fn(async () => ({ receipt, created: true })), get: vi.fn(async () => receipt), list: vi.fn(async () => [receipt]), continueFrom: vi.fn(async (): Promise<unknown> => 'not-waiting'), continueCheck: vi.fn(async (): Promise<unknown> => ({ definitionChanged: true })) };
   const jobInterruptions = { record: vi.fn(async () => ({ id: 'i1', inserted: true })), resolve: vi.fn(async () => {}), listFor: vi.fn(async () => new Map()), inARow: vi.fn(async () => 0) };
   const audit = { record: vi.fn(async (e: unknown) => e) };
   const runAndRecord = vi.fn();
@@ -210,5 +210,16 @@ describe('long whole numbers at the webhook', () => {
     const {app}=await fixture(['workflows.view']);
     try { expect((await app.inject({ method: 'POST', url: '/api/workflows/wf/receipts/request-1/continue' })).statusCode).toBe(403); }
     finally {await app.close();}
+  });
+  it('answers what Continue would do without running it (review R5)', async () => {
+    const {app,receipts}=await fixture(['workflows.view', 'workflows.run']);
+    try {
+      const check = await app.inject({ url: '/api/workflows/wf/receipts/request-1/continue' });
+      expect(check.statusCode).toBe(200);
+      expect(check.json()).toEqual({ definitionChanged: true });
+      expect(receipts.continueFrom).not.toHaveBeenCalled();
+      receipts.continueCheck.mockResolvedValue('not-waiting');
+      expect((await app.inject({ url: '/api/workflows/wf/receipts/request-1/continue' })).statusCode).toBe(409);
+    } finally {await app.close();}
   });
 });

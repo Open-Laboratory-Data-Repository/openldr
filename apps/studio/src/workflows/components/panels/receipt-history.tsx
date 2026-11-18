@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
-import { continueWorkflowReceipt, fetchWorkflowReceipt, fetchWorkflowReceipts, type WorkflowReceipt } from '@/api';
+import { checkWorkflowReceiptContinue, continueWorkflowReceipt, fetchWorkflowReceipt, fetchWorkflowReceipts, type WorkflowReceipt } from '@/api';
 import { InterruptionBadge } from '@/components/ui/interruption-badge';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -39,6 +40,17 @@ export function ReceiptHistory({ workflowId }: { workflowId: string }) {
   const visible = rows.slice(0, pageSize);
   // Continue on an interrupted run: a new run with the stored input. Never automatic, because the cut
   // run may already have sent an email or called another system (design 2026-11-18-interrupted-jobs).
+  // A run of a workflow that changed since the cut is asked about first (review R5).
+  const [confirmChanged, setConfirmChanged] = useState<WorkflowReceipt | null>(null);
+  const askThenContinue = async (receipt: WorkflowReceipt) => {
+    try {
+      const { definitionChanged } = await checkWorkflowReceiptContinue(workflowId, receipt.id);
+      if (definitionChanged) setConfirmChanged(receipt);
+      else await continueRun(receipt);
+    } catch (err) {
+      toast.error(t('workflowReceipts.continueFailed', { error: err instanceof Error ? err.message : String(err) }));
+    }
+  };
   const continueRun = async (receipt: WorkflowReceipt) => {
     try {
       const { runId, definitionChanged } = await continueWorkflowReceipt(workflowId, receipt.id);
@@ -56,6 +68,10 @@ export function ReceiptHistory({ workflowId }: { workflowId: string }) {
   );
 
   return <div className="flex min-h-0 flex-1 flex-col">
+    <ConfirmDialog open={confirmChanged !== null} onOpenChange={(o) => { if (!o) setConfirmChanged(null); }}
+      title={t('workflowReceipts.confirmChangedTitle')} description={t('workflowReceipts.confirmChangedBody')}
+      confirmLabel={t('workflowReceipts.continue')}
+      onConfirm={() => { const r = confirmChanged; setConfirmChanged(null); if (r) void continueRun(r); }} />
     <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2">
       <p className="text-xs text-muted-foreground">{t(requestId ? 'workflowReceipts.detail' : 'workflowReceipts.acceptedHint')}</p>
       <DropdownMenu>
@@ -95,7 +111,7 @@ export function ReceiptHistory({ workflowId }: { workflowId: string }) {
             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label={t('workflowReceipts.rowActions', { id: receipt.id })}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => { setDetail(null); setRequestId(receipt.id); }}>{t('workflowReceipts.view')}</DropdownMenuItem>
-              {receipt.status === 'interrupted' && <DropdownMenuItem onSelect={() => { void continueRun(receipt); }}>{t('workflowReceipts.continue')}</DropdownMenuItem>}
+              {receipt.status === 'interrupted' && <DropdownMenuItem onSelect={() => { void askThenContinue(receipt); }}>{t('workflowReceipts.continue')}</DropdownMenuItem>}
             </DropdownMenuContent>
           </DropdownMenu></TableCell>
         </TableRow>)}</TableBody>

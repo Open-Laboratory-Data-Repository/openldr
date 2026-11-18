@@ -85,6 +85,8 @@ export const fr: EnShape = {
   "continueFailed": "Impossible de continuer : {{error}}"
   },
   workflowReceipts: {
+  "confirmChangedTitle": "Exécuter le workflow modifié ?",
+  "confirmChangedBody": "Le workflow a changé après le début de cette exécution. Continuer l’exécute tel qu’il est maintenant, avec les mêmes données.",
   "continue": "Continuer",
   "continued": "Exécution {{runId}} lancée avec les mêmes données.",
   "continuedChanged": "Exécution {{runId}} lancée avec les mêmes données. Le workflow a changé depuis le début de l’exécution interrompue, la nouvelle exécution l’utilise tel qu’il est maintenant.",

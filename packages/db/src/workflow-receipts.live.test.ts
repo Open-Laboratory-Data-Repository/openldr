@@ -216,6 +216,15 @@ describe.skipIf(!url)('durable webhook receipts on disposable PostgreSQL', () =>
     await sql`update outbox_events set status='failed'`.execute(db);
     expect((await service.get(receipt.id))?.status).toBe('cancelled');
   });
+  it('says before Continue whether the workflow changed since the cut, and starts nothing (review R5)', async () => {
+    const { receipt } = await service.accept({ workflowId: 'w', input: { a: 1 } });
+    await sql`update workflow_webhook_receipts set status='interrupted',started_at=now() where id=${receipt.id}`.execute(db);
+    expect(await service.continueCheck('w', receipt.id)).toEqual({ definitionChanged: false });
+    await sql`update workflows set definition='{"nodes":[{"id":"x","type":"code","position":{"x":0,"y":0},"data":{}}],"edges":[]}' where id='w'`.execute(db);
+    expect(await service.continueCheck('w', receipt.id)).toEqual({ definitionChanged: true });
+    expect(await service.continueCheck('w', 'not-a-receipt')).toBe('not-waiting');
+    expect((await db.selectFrom('workflow_webhook_receipts').select('id').execute())).toHaveLength(1);
+  });
   it('Continue twice starts one run (review R2)', async () => {
     const { receipt } = await service.accept({ workflowId: 'w', input: { a: 1 } });
     await sql`update workflow_webhook_receipts set status='interrupted',started_at=now() where id=${receipt.id}`.execute(db);

@@ -68,6 +68,9 @@ export interface WorkflowReceiptService {
    *  `definitionChanged` says the workflow changed since the cut run was accepted. `not-waiting`
    *  for any receipt that is not interrupted, or not this workflow's. */
   continueFrom(workflowId: string, id: string): Promise<{ receipt: WorkflowReceipt; definitionChanged: boolean } | 'not-waiting'>;
+  /** What Continue would do, without doing it: whether the workflow changed since the cut run was
+   *  accepted, so the page can ask before running it (review R5). */
+  continueCheck(workflowId: string, id: string): Promise<{ definitionChanged: boolean } | 'not-waiting'>;
 }
 interface ReceiptDeps {
   db: Kysely<InternalSchema>;
@@ -127,6 +130,15 @@ export function createWorkflowReceiptService(deps: ReceiptDeps): WorkflowReceipt
         await sql`select pg_notify('openldr_events', ${EVENT})`.execute(trx);
       });
     }
+  }
+  /** An interrupted receipt of this workflow, and whether the workflow changed since it was accepted. */
+  async function waiting(workflowId: string, id: string) {
+    await reconcile([id]);
+    const row = await db.selectFrom('workflow_webhook_receipts').select(['workflow_id', 'status', 'input', 'files', 'definition_digest']).where('id', '=', id).executeTakeFirst();
+    if (!row || row.workflow_id !== workflowId || row.status !== 'interrupted') return 'not-waiting' as const;
+    const wf = await db.selectFrom('workflows').select('definition').where('id', '=', workflowId).executeTakeFirst();
+    const definitionChanged = !wf || digest(WorkflowDefinitionSchema.parse(parseJson(wf.definition))) !== row.definition_digest;
+    return { row, definitionChanged };
   }
   /** Records a cut of a receipt in job_interruptions; `resumedAt` set means it carried on by itself. */
   async function recordCut(trx: Kysely<InternalSchema>, id: string, at: Date, cause: string, resumedAt: Date | null) {
@@ -204,12 +216,14 @@ export function createWorkflowReceiptService(deps: ReceiptDeps): WorkflowReceipt
         return { receipt: publicReceipt(row), created: true };
       });
     },
+    async continueCheck(workflowId, id) {
+      const found = await waiting(workflowId, id);
+      return found === 'not-waiting' ? found : { definitionChanged: found.definitionChanged };
+    },
     async continueFrom(workflowId, id) {
-      await reconcile([id]);
-      const row = await db.selectFrom('workflow_webhook_receipts').select(['workflow_id', 'status', 'input', 'files', 'definition_digest']).where('id', '=', id).executeTakeFirst();
-      if (!row || row.workflow_id !== workflowId || row.status !== 'interrupted') return 'not-waiting';
-      const wf = await db.selectFrom('workflows').select('definition').where('id', '=', workflowId).executeTakeFirst();
-      const definitionChanged = !wf || digest(WorkflowDefinitionSchema.parse(parseJson(wf.definition))) !== row.definition_digest;
+      const found = await waiting(workflowId, id);
+      if (found === 'not-waiting') return found;
+      const { row, definitionChanged } = found;
       // A fixed key per interrupted receipt: a second Continue returns the same run (review R2).
       const { receipt } = await this.accept({ workflowId, input: parseJson(row.input), files: parseJson<Record<string, BinaryRef>>(row.files), idempotencyKey: `continue:${id}` });
       return { receipt, definitionChanged };

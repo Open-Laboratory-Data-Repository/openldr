@@ -83,6 +83,8 @@ export const en = {
   "continueFailed": "Could not continue: {{error}}"
   },
   workflowReceipts: {
+  "confirmChangedTitle": "Run the changed workflow?",
+  "confirmChangedBody": "The workflow changed after this run started. Continue runs it as it is now, with the same input.",
   "continue": "Continue",
   "continued": "Started run {{runId}} with the same input.",
   "continuedChanged": "Started run {{runId}} with the same input. The workflow changed since the interrupted run started, so the new run uses it as it is now.",

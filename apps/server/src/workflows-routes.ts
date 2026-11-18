@@ -626,6 +626,13 @@ export function registerWorkflowRoutes(
   // Continue on an interrupted run: a new run with the stored input. Never automatic: the cut run may
   // already have sent an email or called another system. The CLI's `workflows run-continue` runs the
   // same code.
+  // What Continue would do, without doing it: the page asks before running a changed workflow (review R5).
+  app.get('/api/workflows/:id/receipts/:requestId/continue', RUN, async (req, reply) => {
+    const { id, requestId } = req.params as { id: string; requestId: string };
+    const check = await ctx.workflows.receipts.continueCheck(id, requestId);
+    if (check === 'not-waiting') return reply.code(409).send({ error: 'this run is not waiting to continue' });
+    return check;
+  });
   app.post('/api/workflows/:id/receipts/:requestId/continue', RUN, async (req, reply) => {
     const { id, requestId } = req.params as { id: string; requestId: string };
     const result = await continueWorkflowReceipt(ctx, id, requestId);
