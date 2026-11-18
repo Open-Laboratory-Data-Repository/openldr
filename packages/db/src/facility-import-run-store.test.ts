@@ -371,6 +371,17 @@ describe('createFacilityImportRunStore', () => {
     expect(await store.returnToClaimable('fir_queued')).toBe(false);
   });
 
+  it('an interrupted run keeps its register; Continue takes it back to the claimable state (review R8)', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+    await insertRun(db, 'fir_a', 'applying');
+    expect(await store.markInterrupted('fir_a', 'interrupted four times while applying')).toBe(true);
+    expect(await row(db, 'fir_a')).toMatchObject({ status: 'interrupted', active_key: 'urn:sys:fir_a' });
+    expect(await store.continueInterrupted('fir_a', APPLY_PHASE.from)).toBe(true);
+    expect(await row(db, 'fir_a')).toMatchObject({ status: 'confirmed', error: null, active_key: 'urn:sys:fir_a' });
+    expect(await store.continueInterrupted('fir_a', APPLY_PHASE.from)).toBe(false);
+  });
+
   it('failRunning fails one RUNNING run and releases its key, and leaves any other state alone', async () => {
     const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
     const store = createFacilityImportRunStore(db);

@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   cancelFacilityImportRun,
+  continueFacilityImportRun,
   confirmFacilityImportRun,
   getFacilityImportRun,
   listFacilityImportSources,
@@ -934,6 +935,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     }
   };
 
+  // Continue on a run that waits after interruptions (review R8). The worker then validates or
+  // applies it again from the stored file.
+  const handleContinueRun = async (): Promise<void> => {
+    if (!runId) return;
+    setError(null);
+    try {
+      await continueFacilityImportRun(runId);
+      setRefreshNonce((n) => n + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   const handleCancelRun = async (): Promise<void> => {
     if (!runId) return;
     setCancelling(true);
@@ -1409,6 +1423,9 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   and an affordance that can only fail is worse than none. `storedRunCancellable` is
                   the OTHER live case, and the one `runActive` structurally cannot see: see its own
                   docblock. */}
+              {run?.status === 'interrupted' && (
+                <DropdownMenuItem onClick={() => void handleContinueRun()}>{t('facilities.import.continueRunAction')}</DropdownMenuItem>
+              )}
               {(runActive || storedRunCancellable) && (
                 <DropdownMenuItem disabled={cancelling || confirming} onClick={() => void handleCancelRun()}>
                   {cancelling ? t('facilities.import.cancellingAction') : t('facilities.import.cancelRunAction')}
@@ -1676,6 +1693,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               `summaryAt` together, so this shows exactly when it used to. */}
           {step === 3 && runId && !run && !error && (
             <p className="mx-6 mt-4 text-sm text-muted-foreground">{t('facilities.import.runLoading')}</p>
+          )}
+          {step === 3 && run && run.status === 'interrupted' && (
+            <div role="status" className="mx-6 mt-4 flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive">
+              <p>{t('facilities.import.interruptedNotice')}</p><InterruptionBadge interruptions={run.interruptions} />
+            </div>
           )}
           {step === 3 && run && RUN_ACTIVE_STATUSES.includes(run.status) && (
             <div className="mx-6 mt-4 rounded-md border border-border px-3 py-2 text-xs space-y-1">

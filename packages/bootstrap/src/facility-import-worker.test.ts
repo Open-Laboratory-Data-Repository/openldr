@@ -846,14 +846,14 @@ describe('createFacilityImportWorker — taking back a cut run', () => {
     expect((await runs.get(run.id))?.status).toBe('awaiting_confirmation');
   });
 
-  it('after three cuts in one phase, a fourth fails the run, says why, and releases the register', async () => {
+  it('after three cuts in one phase, a fourth leaves the run interrupted, holding its register (review R8)', async () => {
     const { db, runs, run, worker } = await cutRun('applying', 3);
     await worker.tickOnce();
     await worker.stop();
     const after = await runs.get(run.id);
-    expect(after?.status).toBe('failed');
-    expect(after?.error).toMatch(/interrupted 4 times while applying/);
-    expect((await rowFor(db, run.id)).active_key).toBeNull();
+    expect(after?.status).toBe('interrupted');
+    expect(after?.error).toMatch(/interrupted 4 times while applying\. Use Continue/);
+    expect((await rowFor(db, run.id)).active_key).not.toBeNull();
   });
 });
 

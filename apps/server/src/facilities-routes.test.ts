@@ -5347,6 +5347,22 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
 const cancelUrl = (runId: string) => `/api/facilities/import/runs/${runId}/cancel`;
 
 // A2b Task 6. The cancel surface, and the whole of it is about NOT overstating what happened.
+describe('POST /api/facilities/import/runs/:id/continue (design 2026-11-18, review R8)', () => {
+  it('sends an interrupted apply back to confirmed, and refuses a run that is not waiting', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+    const refused = await app.inject({ method: 'POST', url: `/api/facilities/import/runs/${runId}/continue`, payload: {} });
+    expect(refused.statusCode).toBe(409);
+    await db.updateTable('facility_import_runs').set({ status: 'interrupted' } as never).where('id', '=', runId).execute();
+    await ctx.jobInterruptions.record('facility-import', runId, { at: new Date('2026-11-18T05:00:00.000Z'), cause: 'server-restart', phase: 'applying' });
+    const ok = await app.inject({ method: 'POST', url: `/api/facilities/import/runs/${runId}/continue`, payload: {} });
+    expect(ok.statusCode).toBe(200);
+    expect((await db.selectFrom('facility_import_runs').select('status').where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('confirmed');
+  });
+});
+
 describe('POST /api/facilities/import/runs/:id/cancel', () => {
   it('gated on facilities.manage — a facilities.view-only user gets 403 and the run is untouched', async () => {
     const db = await importDb();

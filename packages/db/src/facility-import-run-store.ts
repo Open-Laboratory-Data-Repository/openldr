@@ -158,6 +158,11 @@ export interface FacilityImportRunStore {
   returnToClaimable(id: string): Promise<boolean>;
   /** Fails one RUNNING run and releases its register. False when it is not running. */
   failRunning(id: string, error: string): Promise<boolean>;
+  /** Leaves a RUNNING run waiting for Continue, still holding its register. False when not running. */
+  markInterrupted(id: string, error: string): Promise<boolean>;
+  /** Continue: an interrupted run goes back to `to` (the state its cut phase claims from). False
+   *  when it is not interrupted. */
+  continueInterrupted(id: string, to: FacilityImportRunStatus): Promise<boolean>;
 
   get(id: string): Promise<FacilityImportRun | null>;
   list(nationalSystem?: string, limit?: number): Promise<FacilityImportRun[]>;
@@ -558,6 +563,22 @@ export function createFacilityImportRunStore(db: Kysely<InternalSchema>): Facili
       const res = await db.updateTable('facility_import_runs')
         .set({ status: 'failed', error, finished_at: sql`now()` as never, active_key: null } as never)
         .where('id', '=', id).where('status', 'in', [...RUNNING_RUN_STATES])
+        .executeTakeFirst();
+      return Number(res?.numUpdatedRows ?? 0) > 0;
+    },
+
+    async markInterrupted(id, error) {
+      const res = await db.updateTable('facility_import_runs')
+        .set({ status: 'interrupted', error } as never)
+        .where('id', '=', id).where('status', 'in', [...RUNNING_RUN_STATES])
+        .executeTakeFirst();
+      return Number(res?.numUpdatedRows ?? 0) > 0;
+    },
+
+    async continueInterrupted(id, to) {
+      const res = await db.updateTable('facility_import_runs')
+        .set({ status: to, error: null } as never)
+        .where('id', '=', id).where('status', '=', 'interrupted')
         .executeTakeFirst();
       return Number(res?.numUpdatedRows ?? 0) > 0;
     },

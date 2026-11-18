@@ -23,7 +23,7 @@ import {
   facilityXlsxToCsv, facilityXlsxTooLarge, FacilityXlsxError, FACILITY_IMPORT_MAX_XLSX_BYTES,
   linkMatchingFacilityCodes,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
-  type ValueMappingEntry, type FacilityXlsxCsv, type LinkMatchingResult, facilityRegisterSourceInputSchema, resolveByPerson } from '@openldr/bootstrap';
+  type ValueMappingEntry, type FacilityXlsxCsv, type LinkMatchingResult, facilityRegisterSourceInputSchema, resolveByPerson, continueFacilityImportRun } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
   FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
@@ -3036,6 +3036,16 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
     reply.code(202);
     return { runId: id, status: VALIDATE_PHASE.from };
+  });
+
+  // Continue on a register import that waits after interruptions (design 2026-11-18, review R8). The
+  // CLI's `facilities import-run-continue` runs the same code.
+  app.post('/api/facilities/import/runs/:id/continue', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const outcome = await continueFacilityImportRun({ facilityImportRuns: importRuns, jobInterruptions: ctx.jobInterruptions }, id);
+    if (outcome === 'not-waiting') { reply.code(409); return { error: 'this import is not waiting to continue' }; }
+    await recordAudit(ctx, req, { action: 'facility.import.continued', entityType: 'facility_import_run', entityId: id, before: null, after: null });
+    return { id, status: 'continued' };
   });
 
   app.post('/api/facilities/import/runs/:id/cancel', MANAGE, async (req, reply) => {

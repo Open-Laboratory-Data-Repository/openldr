@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createJobInterruptionStore, createTerminologyIngestJobStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { continueTerminologyIngestJob, continueWorkflowReceipt, openInterruption, continueRefusal } from './job-continue';
+import { continueTerminologyIngestJob, continueWorkflowReceipt, continueFacilityImportRun, openInterruption, continueRefusal } from './job-continue';
 
 const NOW = new Date('2026-11-18T07:00:00.000Z');
 
@@ -62,5 +62,26 @@ describe('continueWorkflowReceipt', () => {
     const { ctx, jobInterruptions } = await ctxWith('not-waiting');
     expect(await continueWorkflowReceipt(ctx, 'wf1', 'rcpt1', NOW)).toBe('not-waiting');
     expect((await jobInterruptions.listFor('workflow-receipt', ['rcpt1'])).size).toBe(0);
+  });
+});
+
+describe('continueFacilityImportRun (review R8)', () => {
+  it('sends a run cut while applying back to confirmed, and one cut while validating back to queued', async () => {
+    const db = await makeMigratedDb();
+    const jobInterruptions = createJobInterruptionStore(db);
+    const continueInterrupted = vi.fn(async () => true);
+    const ctx = { facilityImportRuns: { continueInterrupted }, jobInterruptions };
+    await jobInterruptions.record('facility-import', 'r1', { at: new Date('2026-11-18T05:00:00.000Z'), cause: 'server-restart', phase: 'applying' });
+    expect(await continueFacilityImportRun(ctx, 'r1', NOW)).toBe('requeued');
+    expect(continueInterrupted).toHaveBeenLastCalledWith('r1', 'confirmed');
+    expect((await jobInterruptions.listFor('facility-import', ['r1'])).get('r1')![0]).toMatchObject({ resumedBy: 'person' });
+    await jobInterruptions.record('facility-import', 'r2', { at: new Date('2026-11-18T05:00:00.000Z'), cause: 'server-restart', phase: 'validating' });
+    await continueFacilityImportRun(ctx, 'r2', NOW);
+    expect(continueInterrupted).toHaveBeenLastCalledWith('r2', 'queued');
+  });
+
+  it('refuses a run that is not waiting', async () => {
+    const ctx = { facilityImportRuns: { continueInterrupted: vi.fn(async () => false) }, jobInterruptions: createJobInterruptionStore(await makeMigratedDb()) };
+    expect(await continueFacilityImportRun(ctx, 'r9', NOW)).toBe('not-waiting');
   });
 });

@@ -1804,6 +1804,8 @@ export const fr: EnShape = {
       runLoading: 'Vérification de l’exécution de l’import…',
       runPhase: 'Étape : {{phase}}',
       runProgress: '{{processed}} ligne(s) sur {{total}} traitées.',
+      continueRunAction: 'Continuer l’import',
+      interruptedNotice: 'Cet import a été interrompu trop de fois pendant son exécution, il s’est donc arrêté. Il garde le registre. Utilisez Continuer l’import dans le menu pour le relancer.',
       runStatus: {
         queued: 'En file d’attente — en attente d’un worker d’import.',
         validating: 'Validation du fichier téléversé.',

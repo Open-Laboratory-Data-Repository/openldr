@@ -36,7 +36,7 @@ import { runErrorsList } from './errors';
 import { runUpdateCheck, UPDATE_ERROR_EXIT } from './update';
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
-  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportRunRevalidate,
+  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportRunContinue, runFacilitiesImportRunRevalidate,
   runFacilitiesImportSources, runFacilitiesRegisterSource,
   runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList,
   runFacilitiesDelete, runFacilitiesAddType, runFacilitiesLinkMatching,
@@ -872,6 +872,13 @@ export function buildProgram(): Command {
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (id: string, opts: { json: boolean }) => {
       process.exitCode = await runFacilitiesImportRunCancel(id, opts);
+    });
+  facilities
+    .command('import-run-continue <id>')
+    .description('Continue a facility import that waits after being interrupted too many times. A cut apply applies again with no second confirm; a cut check stops at the usual confirm.')
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (id: string, opts: { json: boolean }) => {
+      process.exitCode = await runFacilitiesImportRunContinue(id, opts);
     });
   facilities
     .command('import-run-revalidate <id>')

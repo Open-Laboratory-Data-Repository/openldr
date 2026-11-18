@@ -227,6 +227,7 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'facilities import': { kind: 'app', capability: 'facilities.manage', destructive: true, paths: [inFile('path'), inFile('--column-map'), inFile('--value-map')] }, // :2118, :2035
   'facilities import-run': { kind: 'app', capability: 'facilities.view' }, // :3068
   'facilities import-run-cancel': { kind: 'app', capability: 'facilities.manage', destructive: true }, // :3039
+  'facilities import-run-continue': { kind: 'app', capability: 'facilities.manage' },
   'facilities import-run-revalidate': { kind: 'app', capability: 'facilities.manage', paths: [inFile('--column-map')] }, // :3013
   'facilities import-runs': { kind: 'app', capability: 'facilities.view' }, // :2790
   'facilities import-sources': { kind: 'app', capability: 'facilities.view' }, // :1926

@@ -1856,6 +1856,8 @@ export const en = {
       // dynamic key, and the block that renders it is gated on the same five (RUN_ACTIVE_STATUSES in
       // ImportFacilitiesSheet.tsx). A terminal run is described by its own block below instead, so
       // adding `applied`/`failed`/`cancelled` labels here would be dead copy.
+      continueRunAction: 'Continue import',
+      interruptedNotice: 'This import was interrupted too many times while it was running, so it stopped. It still holds the register. Use Continue import in the menu to run it again.',
       runStatus: {
         queued: 'Queued — waiting for an import worker.',
         validating: 'Validating the uploaded file.',

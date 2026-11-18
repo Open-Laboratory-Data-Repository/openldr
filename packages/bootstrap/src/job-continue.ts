@@ -1,6 +1,6 @@
 // Continue for jobs that wait after an interruption (design 2026-11-18-interrupted-jobs). The page's
 // row menu and the CLI both call these, so a Continue runs the same code wherever it starts.
-import type { JobInterruption, JobInterruptionStore, JobKind, TerminologyIngestJobStore } from '@openldr/db';
+import { APPLY_PHASE, VALIDATE_PHASE, type FacilityImportRunStore, type JobInterruption, type JobInterruptionStore, type JobKind, type TerminologyIngestJobStore } from '@openldr/db';
 
 /** The job's newest record that nothing has resolved yet: the cut a Continue answers. */
 export async function openInterruption(store: JobInterruptionStore, kind: JobKind, jobId: string): Promise<JobInterruption | null> {
@@ -60,4 +60,19 @@ export async function continueWorkflowReceipt(
   })).id;
   await ctx.jobInterruptions.resolve(id, { resumedBy: 'person', resumedAt: now, continuedAs: result.receipt.runId });
   return { runId: result.receipt.runId, definitionChanged: result.definitionChanged };
+}
+
+/** Continue on a facility import that waits after interruptions: back to the state its cut phase
+ *  claims from, so the worker validates again (stopping at the usual confirm) or, for a confirmed
+ *  apply, applies again with no second confirm (review R8). */
+export async function continueFacilityImportRun(
+  ctx: { facilityImportRuns: Pick<FacilityImportRunStore, 'continueInterrupted'>; jobInterruptions: JobInterruptionStore },
+  id: string,
+  now: Date = new Date(),
+): Promise<'requeued' | 'not-waiting'> {
+  const open = await openInterruption(ctx.jobInterruptions, 'facility-import', id);
+  const to = open?.phase === APPLY_PHASE.to ? APPLY_PHASE.from : VALIDATE_PHASE.from;
+  if (!(await ctx.facilityImportRuns.continueInterrupted(id, to))) return 'not-waiting';
+  if (open) await ctx.jobInterruptions.resolve(open.id, { resumedBy: 'person', resumedAt: now });
+  return 'requeued';
 }

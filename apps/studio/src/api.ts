@@ -1565,7 +1565,10 @@ export type FacilityImportRunStatus =
   // instead of `queued`, so it sits with no column map and no worker claim until something asks
   // for a real check. See `uploadFacilityImport`'s own `validate` parameter.
   | 'stored'
-  | 'previewed' | 'applied' | 'failed' | 'cancelled';
+  | 'previewed' | 'applied' | 'failed' | 'cancelled'
+  // Cut by restarts too many times in one phase: holds its register and waits for Continue
+  // (design 2026-11-18-interrupted-jobs, review R8).
+  | 'interrupted';
 
 /** One `facility_import_runs` row as `GET /api/facilities/import/runs/:id` returns it — mirrors the
  *  server's `FacilityImportRun` field for field, the same "mirrored, not shared" reasoning as
@@ -1794,6 +1797,11 @@ export const revalidateFacilityImportRun = (
  *
  *  The outcome is read off the body rather than the status code because both are 2xx and `okJson`
  *  does not expose which one arrived. */
+/** Continue on an import that waits after interruptions. */
+export const continueFacilityImportRun = (id: string): Promise<void> =>
+  authFetch(`/api/facilities/import/runs/${encodeURIComponent(id)}/continue`, { method: 'POST' })
+    .then((r) => okJson<unknown>(r, 'continue facility import')).then(() => undefined);
+
 export const cancelFacilityImportRun = (
   id: string,
 ): Promise<{ runId: string; outcome: 'cancelled' | 'requested' }> =>

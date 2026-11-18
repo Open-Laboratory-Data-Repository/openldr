@@ -1804,6 +1804,8 @@ export const pt: EnShape = {
       runLoading: 'A verificar a execução da importação…',
       runPhase: 'Fase: {{phase}}',
       runProgress: '{{processed}} de {{total}} linha(s) processadas.',
+      continueRunAction: 'Continuar importação',
+      interruptedNotice: 'Esta importação foi interrompida demasiadas vezes durante a execução, por isso parou. Mantém o registo. Use Continuar importação no menu para a executar de novo.',
       runStatus: {
         queued: 'Em fila — à espera de um worker de importação.',
         validating: 'A validar o ficheiro carregado.',

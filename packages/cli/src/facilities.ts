@@ -25,6 +25,7 @@ import {
   type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict, type FacilityHealth,
   type FacilityImportResult, type ColumnSuggestion, type ValueMappingEntry, type ControlledField,
   resolveByPerson,
+  continueFacilityImportRun,
 } from '@openldr/bootstrap';
 import {
   referenceCapture, createFacilityImportRunStore, createFacilityRegisterSourceStore,
@@ -1236,6 +1237,19 @@ export interface FacilitiesImportRunCancelOpts {
  * and routing it through the worker queue would cost it the exit code that is the whole point of
  * running an import from a script.
  */
+/** `facilities import-run-continue <id>`: Continue on a register import that waits after
+ *  interruptions, through the same shared code as the route (design 2026-11-18, review R8). */
+export async function runFacilitiesImportRunContinue(id: string, opts: { json: boolean }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const outcome = await continueFacilityImportRun({ facilityImportRuns: createFacilityImportRunStore(ctx.internalDb), jobInterruptions: ctx.jobInterruptions }, id);
+    if (outcome === 'not-waiting') { process.stderr.write('facilities import-run-continue refused: this import is not waiting to continue\n'); return 1; }
+    await recordAuditEvent(ctx, cliNamedActor(), { action: 'facility.import.continued', entityType: 'facility_import_run', entityId: id });
+    process.stdout.write(opts.json ? JSON.stringify({ id, status: 'continued' }) + '\n' : `${id} carries on; the server runs it next\n`);
+    return 0;
+  } finally { await ctx.close(); }
+}
+
 export async function runFacilitiesImportRunCancel(
   id: string, opts: FacilitiesImportRunCancelOpts,
 ): Promise<number> {

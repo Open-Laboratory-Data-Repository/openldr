@@ -203,14 +203,15 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
       if (deps.interruptions) {
         // Each run past the lease goes back to the state its phase claims from, so this worker
         // validates or applies it again from its stored file. A confirmed apply does not ask again.
-        // After MAX_SELF_RESUMES cuts in one phase it fails as before, and says why.
+        // After MAX_SELF_RESUMES cuts in one phase it waits for Continue, and says why.
         for (const run of await deps.runs.listStaleRunning(staleLeaseMs)) {
           await takeBack(deps.interruptions, {
             kind: 'facility-import', jobId: run.id, phase: run.status, at: run.startedAt,
             cause: run.startedAt.getTime() < processStartedAt.getTime() ? 'server-restart' : 'lease-expired',
             selfResume: true,
             resume: async () => { await deps.runs.returnToClaimable(run.id); },
-            wait: async () => { await deps.runs.failRunning(run.id, `${error}; interrupted ${MAX_SELF_RESUMES + 1} times while ${run.status}, so it stopped. Start the import again.`); },
+            // Waits for a person's Continue, still holding its register (review R8).
+            wait: async () => { await deps.runs.markInterrupted(run.id, `${error}; interrupted ${MAX_SELF_RESUMES + 1} times while ${run.status}. Use Continue to run it again.`); },
           });
         }
         return;

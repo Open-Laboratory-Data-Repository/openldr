@@ -312,6 +312,7 @@ const NOT_A_PATH: Record<string, string[]> = {
   'facilities import-runs': ['--national-system', '--limit'],
   'facilities import-run': ['id'],
   'facilities import-run-cancel': ['id'],
+  'facilities import-run-continue': ['id'],
   'facilities import-run-revalidate': ['id'],
   'facilities link-matching': ['--register'],
   'facilities delete': ['--where'],
