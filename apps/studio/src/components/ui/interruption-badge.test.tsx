@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { JobInterruption } from '@/api';
@@ -29,5 +29,14 @@ describe('InterruptionBadge', () => {
   it('says once for a single cut', () => {
     render(<InterruptionBadge interruptions={[cut()]} />);
     expect(screen.getByText('Interrupted once')).toBeInTheDocument();
+  });
+  it('opens its list from the keyboard, and raises no ref warning', async () => {
+    const errors: unknown[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a) => { errors.push(a); });
+    render(<InterruptionBadge interruptions={[cut()]} />);
+    await userEvent.tab();
+    expect((await screen.findAllByText(/Carried on by itself/)).length).toBeGreaterThan(0);
+    expect(errors.filter((e) => String(e).includes('ref'))).toEqual([]);
+    spy.mockRestore();
   });
 });

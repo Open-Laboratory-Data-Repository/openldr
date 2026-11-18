@@ -20,10 +20,13 @@ export function InterruptionBadge({ interruptions }: { interruptions: JobInterru
   return (
     <TooltipProvider>
       <Tooltip>
+        {/* A span takes the trigger's ref (Badge cannot) and keyboard focus, so the list opens from the keyboard too. */}
         <TooltipTrigger asChild>
-          <Badge variant="outline" className={waiting ? 'border-destructive/40 text-destructive' : 'text-muted-foreground'}>
-            {interruptions.length === 1 ? t('interruptions.badgeOnce') : t('interruptions.badgeMany', { count: interruptions.length })}
-          </Badge>
+          <span tabIndex={0} className="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Badge variant="outline" className={waiting ? 'border-destructive/40 text-destructive' : 'text-muted-foreground'}>
+              {interruptions.length === 1 ? t('interruptions.badgeOnce') : t('interruptions.badgeMany', { count: interruptions.length })}
+            </Badge>
+          </span>
         </TooltipTrigger>
         <TooltipContent className="max-w-xs">
           <ul className="space-y-1 text-xs">{interruptions.map((r) => <li key={r.id}>{line(r)}</li>)}</ul>
