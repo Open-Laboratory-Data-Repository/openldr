@@ -125,6 +125,18 @@ describe('projectServiceRequestAttributes', () => {
     expect(new Set(rows.map((r) => r.id)).size).toBe(4);
   });
 
+  it('writes a saved request\'s v1-flags and v1-findings as two text rows, the findings whole (design 2026-11-18-anomaly-flags)', () => {
+    const findings = JSON.stringify([{ class: 'dates_out_of_order', severity: 'warn', message: 'Collected after received.', details: { pairs: 1 } }]);
+    const rows = projectServiceRequestAttributes({
+      resourceType: 'ServiceRequest', id: 'sr-1',
+      extension: [attr('v1-flags', { valueString: 'dates_out_of_order' }), attr('v1-findings', { valueString: findings }), attr('v1-check', { valueString: 'passed' })],
+    }, {});
+    expect(rows.map((r) => [r.code, r.value_text])).toEqual([
+      ['v1-flags', 'dates_out_of_order'], ['v1-findings', findings], ['v1-check', 'passed'],
+    ]);
+    expect(JSON.parse(rows[1]!.value_text as string)).toEqual(JSON.parse(findings));
+  });
+
   it('writes the v1-check mark as one text row', () => {
     const rows = projectServiceRequestAttributes({
       resourceType: 'ServiceRequest', id: 'sr-1',

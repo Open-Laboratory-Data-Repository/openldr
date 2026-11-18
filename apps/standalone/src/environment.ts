@@ -66,7 +66,7 @@ export function buildEnvironment(input: EnvironmentInput): Record<string, string
     APP_VERSION: input.appVersion,
     CLI_ENTRY: input.cliEntry,
     // The public marketplace, as the Docker installer sets it (install/install.sh). It is added as
-    // the default registry on first start only, so a registry list someone changed stays theirs.
+    // the default registry whenever the registry list is empty, so a list someone changed stays theirs.
     MARKETPLACE_REGISTRY_URL: PUBLIC_MARKETPLACE_URL,
   };
 }
