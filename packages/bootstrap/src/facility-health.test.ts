@@ -62,6 +62,16 @@ describe('facilityHealth', () => {
     expect((await facilityHealth(deps)).reportDimension.jobId).toBe(claimed!.id);
   });
 
+  it('reports an interrupted rebuild like a failed one, so Retry continues it (review R3)', async () => {
+    const deps = await withCompletedRebuild();
+    await deps.jobs.enqueue({ kind: REBUILD });
+    const claimed = await deps.jobs.claimNext();
+    await deps.jobs.markInterrupted(claimed!.id, 'interrupted too many times in a row; use Continue to run it again');
+    const dim = (await facilityHealth(deps)).reportDimension;
+    expect(dim).toMatchObject({ state: 'failed', jobId: claimed!.id });
+    expect(dim.error).toMatch(/interrupted/);
+  });
+
   it('leaves jobId null when the dimension is not failed', async () => {
     const deps = await withCompletedRebuild();
     expect((await facilityHealth(deps)).reportDimension.jobId).toBeNull();

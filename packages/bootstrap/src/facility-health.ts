@@ -60,9 +60,11 @@ export async function facilityHealth(deps: { internalDb: Kysely<InternalSchema>;
     ? { finishedAt: new Date(successRow.finished_at as Date).toISOString(), resultCount: successRow.result_count }
     : null;
 
+  // An interrupted rebuild waits for the same Retry as a failed one (design 2026-11-18-interrupted-jobs).
+  const needsRetry = latest?.status === 'failed' || latest?.status === 'interrupted';
   let state: FacilityDimensionState;
   if (pending.some((j) => j.kind === 'facility-map-rebuild')) state = 'updating';
-  else if (latest?.status === 'failed') state = 'failed';
+  else if (needsRetry) state = 'failed';
   else if (lastSuccess && (!lastMutation || new Date(lastSuccess.finishedAt) >= lastMutation)) state = 'current';
   else state = 'stale';
 
@@ -72,8 +74,8 @@ export async function facilityHealth(deps: { internalDb: Kysely<InternalSchema>;
       // Populated even when `state === 'failed'` — see the query above.
       lastSuccessAt: lastSuccess?.finishedAt ?? null,
       rows: lastSuccess?.resultCount == null ? null : Number(lastSuccess.resultCount),
-      error: latest?.status === 'failed' ? latest.lastError : null,
-      jobId: latest?.status === 'failed' ? latest.id : null,
+      error: needsRetry ? latest!.lastError : null,
+      jobId: needsRetry ? latest!.id : null,
     },
     projection: {
       failedCount: failedProjections.length,
