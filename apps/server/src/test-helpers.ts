@@ -521,6 +521,8 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     forms: {} as never,
     formAccessStore: {} as never,
     formAccess: {} as never,
+    dashboardAccessStore: {} as never,
+    dashboardAccess: {} as never,
     starterPacks: {} as never,
     plugins: {} as never,
     pluginData: {} as never,

@@ -9,7 +9,12 @@ export interface ServedHandoff {
   path: string;
   /** The caller's tokens after the program name. Path values are real paths inside runDir. */
   argv: string[];
-  caller: { id: string; username: string; displayName: string | null; keyName: string | null };
+  caller: {
+    id: string; username: string; displayName: string | null; keyName: string | null;
+    /** The caller's role ids and capabilities as the server worked them out for this request, so a
+     *  command checks per-item access for the same caller (roles part 2). Absent from older servers. */
+    roleIds?: string[]; capabilities?: string[];
+  };
   /** The folder made for this one request. */
   runDir: string;
   /** Folders outside runDir that this request may also use, for kept uploads. */

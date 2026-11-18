@@ -348,6 +348,7 @@ const NOT_A_PATH: Record<string, string[]> = {
   'terminology ontology rebuild': ['systemId'],
   'terminology ontology unlink': ['systemId'],
   'forms lint': ['id'],
+  'dashboards share': ['id', '--roles'],
   'forms access': ['id', '--open', '--submit'],
   'forms versions': ['id'],
   'forms restore': ['id', 'version'],

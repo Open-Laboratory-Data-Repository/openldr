@@ -241,6 +241,8 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'facilities suggest-values': { kind: 'app', capability: 'facilities.manage', paths: [inFile('path'), inFile('--column-map')] }, // :1982
 
   // forms-routes.ts:171 (view) and :173 (edit). No route lints; lint reads forms as GET /api/forms/:id does (:212).
+  // dashboards-routes.ts /api/dashboards/:id/share; who may change it is checked inside (owner or admin).
+  'dashboards share': { kind: 'app', capability: 'dashboards.view' },
   // forms-routes.ts GET and PUT /api/forms/:id/access, both forms.edit.
   'forms access': { kind: 'app', capability: 'forms.edit' },
   'forms lint': { kind: 'app', capability: 'forms.view' },

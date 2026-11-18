@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { createAppContext, FormAccessError, formUserOf, recordAuditEvent, setFormAccess } from '@openldr/bootstrap';
+import { createAppContext, FormAccessError, recordAuditEvent, setFormAccess } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { ObservationExtractor, ServiceRequestExtractor, toTransactionBundle, lintFormSchema, type ExtractionContext } from '@openldr/forms';
 import type { Questionnaire, QuestionnaireResponse } from '@openldr/fhir';
 import { cliActor } from './cli-actor';
-import { servedHandoff } from './served';
+import { servedCaller } from './served-caller';
 
 export interface FormsExtractOutput {
   resourceTypes: string[];
@@ -35,12 +35,11 @@ type AppCtx = Awaited<ReturnType<typeof createAppContext>>;
  * local run on the server is the machine's operator and sees every form, as before.
  */
 async function formsCallerMayOpen(ctx: AppCtx, ids: string[]): Promise<Set<string>> {
-  const handoff = servedHandoff();
-  if (!handoff) return new Set(ids);
-  const user = await formUserOf(ctx, handoff.caller.id);
-  if (!user) return new Set();
-  if (user.capabilities.includes('forms.edit')) return new Set(ids);
-  return ctx.formAccess.visible(user, ids);
+  const caller = await servedCaller(ctx);
+  if (caller === 'local') return new Set(ids);
+  if (!caller) return new Set();
+  if (caller.capabilities.includes('forms.edit')) return new Set(ids);
+  return ctx.formAccess.visible(caller, ids);
 }
 
 export async function runFormsList(opts: { json: boolean }): Promise<number> {

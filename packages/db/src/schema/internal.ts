@@ -927,6 +927,11 @@ export interface ImportCheckHeldTable {
   pass: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
+export interface DashboardAccessTable {
+  dashboard_id: string;
+  role_id: string;
+}
+
 export interface FormAccessTable {
   form_id: string;
   role_id: string;
@@ -1158,6 +1163,7 @@ export interface InternalSchema {
   import_check_held: ImportCheckHeldTable;
   import_check_corrections: ImportCheckCorrectionsTable;
   form_access: FormAccessTable;
+  dashboard_access: DashboardAccessTable;
   app_settings: AppSettingsTable;
   report_designs: ReportDesignsTable;
   report_design_versions: ReportDesignVersionsTable;

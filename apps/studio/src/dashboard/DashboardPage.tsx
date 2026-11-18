@@ -12,7 +12,7 @@ import {
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/cn';
-import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal, Download, Upload, RefreshCw, Trash2, LayoutDashboard } from 'lucide-react';
+import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal, Download, Upload, RefreshCw, Trash2, LayoutDashboard, Share2 } from 'lucide-react';
 import { listDashboards, createDashboard, saveDashboard, deleteDashboard, fetchClientConfig, type Dashboard, type DashboardFilterDef, type WidgetConfig } from '../api';
 import { useDashboardStore } from './store';
 import { DashboardGrid } from './DashboardGrid';
@@ -25,6 +25,8 @@ import { StripedEmpty } from '@/components/ui/striped-empty';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { QueryNameSheet } from '../query/workspace/QueryNameSheet';
 import { randomId } from '@/lib/random-id';
+import { useAuth } from '@/auth/AuthProvider';
+import { ShareSheet } from './ShareSheet';
 
 function defaultsFor(filters: DashboardFilterDef[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -41,6 +43,14 @@ function defaultsFor(filters: DashboardFilterDef[]): Record<string, unknown> {
 export function DashboardPage() {
   const { t } = useTranslation();
   const { current, editing, dirty, setCurrent, setEditing, markClean, addWidget, updateWidget, removeWidget } = useDashboardStore();
+  // Only the owner or an admin may share a dashboard; the server checks the same (roles part 2).
+  const { user, hasCapability } = useAuth();
+  const mayShare = !!current && (hasCapability('roles.manage') || (!!user && current.ownerId === user.id));
+  // Editing runs free-form queries, which need dashboards.edit; a viewer who could enter edit mode
+  // would lose their widgets to 403s (review DS2). Creating and importing need dashboards.create.
+  const mayEdit = hasCapability('dashboards.edit');
+  const mayCreate = hasCapability('dashboards.create');
+  const [shareOpen, setShareOpen] = useState(false);
   const [all, setAll] = useState<Dashboard[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [editorOpen, setEditorOpen] = useState(false);
@@ -207,12 +217,15 @@ export function DashboardPage() {
                 <LayoutDashboard className="h-6 w-6 text-muted-foreground" />
                 <p className="text-sm font-medium">{t('dashboard.emptyTitle')}</p>
                 <p className="max-w-sm text-xs text-muted-foreground">{t('dashboard.emptyBody')}</p>
-                <div className="flex items-center gap-2 pt-1">
-                  <Button disabled={creating} onClick={() => void handleNewDashboard()}>{t('dashboard.newDashboard')}</Button>
-                  <Button variant="secondary" className="bg-secondary text-secondary-foreground hover:bg-secondary/80" onClick={() => fileInput.current?.click()}>
-                    {t('dashboard.importDashboard')}
-                  </Button>
-                </div>
+                {/* Creating and importing need dashboards.create, as in the menu (review DS2). */}
+                {mayCreate ? (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button disabled={creating} onClick={() => void handleNewDashboard()}>{t('dashboard.newDashboard')}</Button>
+                    <Button variant="secondary" className="bg-secondary text-secondary-foreground hover:bg-secondary/80" onClick={() => fileInput.current?.click()}>
+                      {t('dashboard.importDashboard')}
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             </StripedEmpty>
           ) : (
@@ -261,15 +274,25 @@ export function DashboardPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled={creating || dirty || editorOpen || filterEditorOpen} onSelect={() => void handleNewDashboard()}>
-                <Plus className="mr-2 h-4 w-4" />
-                {t(creating ? 'dashboard.creating' : 'dashboard.newDashboard')}
-              </DropdownMenuItem>
+              {mayCreate ? (
+                <DropdownMenuItem disabled={creating || dirty || editorOpen || filterEditorOpen} onSelect={() => void handleNewDashboard()}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t(creating ? 'dashboard.creating' : 'dashboard.newDashboard')}
+                </DropdownMenuItem>
+              ) : null}
               {dirty && <p className="max-w-56 px-2 py-1 text-xs text-muted-foreground">{t('dashboard.waitForSave')}</p>}
-              <DropdownMenuItem disabled={creating || dirty} onSelect={() => setRenameOpen(true)}>
-                <Pencil className="mr-2 h-4 w-4" />
-                {t('dashboard.rename')}
-              </DropdownMenuItem>
+              {mayEdit ? (
+                <DropdownMenuItem disabled={creating || dirty} onSelect={() => setRenameOpen(true)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  {t('dashboard.rename')}
+                </DropdownMenuItem>
+              ) : null}
+              {mayShare ? (
+                <DropdownMenuItem disabled={creating || dirty} onSelect={() => setShareOpen(true)}>
+                  <Share2 className="mr-2 h-4 w-4" />
+                  {t('dashboard.share.menu')}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuSeparator />
               {editing ? (
                 <>
@@ -310,21 +333,23 @@ export function DashboardPage() {
                     {t('dashboard.delete')}
                   </DropdownMenuItem>
                 </>
-              ) : (
+              ) : mayEdit ? (
                 <DropdownMenuItem onSelect={() => setEditing(true)}>
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit
                 </DropdownMenuItem>
-              )}
+              ) : null}
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={handleExport}>
                 <Download className="mr-2 h-4 w-4" />
                 {t('dashboard.exportDashboard')}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
-                <Upload className="mr-2 h-4 w-4" />
-                {t('dashboard.importDashboard')}
-              </DropdownMenuItem>
+              {mayCreate ? (
+                <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  {t('dashboard.importDashboard')}
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
           </div>
@@ -334,7 +359,7 @@ export function DashboardPage() {
         {current.filters.length > 0 && (
           <>
             <div className="px-4 py-3">
-              <DashboardFilterBar filters={current.filters} values={values} onChange={setValues} />
+              <DashboardFilterBar filters={current.filters} values={values} onChange={setValues} savedDashboardId={dirty ? undefined : current.id} />
             </div>
             <Separator />
           </>
@@ -385,7 +410,7 @@ export function DashboardPage() {
           open
           filters={current.filters}
           onClose={() => setFilterEditorOpen(false)}
-          onSave={(f) => setCurrent({ ...current, filters: f })}
+          onSave={(f) => useDashboardStore.getState().setFilters(f)}
         />
       )}
       {renameOpen && current && (
@@ -402,6 +427,7 @@ export function DashboardPage() {
           }}
         />
       )}
+      {current ? <ShareSheet dashboardId={current.id} open={shareOpen} onOpenChange={setShareOpen} /> : null}
       <ConfirmDialog
         open={deleteConfirmOpen}
         onOpenChange={setDeleteConfirmOpen}

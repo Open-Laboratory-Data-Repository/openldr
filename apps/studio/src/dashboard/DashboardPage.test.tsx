@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, waitFor, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+// These tests act as an editor: the menu offers Edit, Rename, New and Import only with the
+// permissions (roles part 2, review DS2).
+vi.mock('../auth/AuthProvider', async (orig) => ({
+  ...(await orig<typeof import('../auth/AuthProvider')>()),
+  useAuth: () => ({ user: { id: 'u1', username: 'u', displayName: null, roles: [] }, loading: false, hasCapability: () => true, signOut: () => {}, authEnforced: true, authMode: 'oidc' }),
+}));
 import { DashboardPage } from './DashboardPage';
 import { useDashboardStore } from './store';
 

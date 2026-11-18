@@ -13,6 +13,7 @@ interface State {
   setCurrent(d: Dashboard | null): void; setEditing(v: boolean): void; markClean(): void;
   addWidget(w: WidgetConfig): void; updateWidget(w: WidgetConfig): void; removeWidget(id: string): void;
   setLayout(layout: LayoutItem[]): void; rename(name: string): void;
+  setFilters(filters: Dashboard['filters']): void;
 }
 
 export const useDashboardStore = create<State>((set) => ({
@@ -30,4 +31,7 @@ export const useDashboardStore = create<State>((set) => ({
   removeWidget: (id) => set((s) => s.current ? { current: { ...s.current, widgets: s.current.widgets.filter((x) => x.id !== id), layout: s.current.layout.filter((l) => l.i !== id) }, dirty: true } : s),
   setLayout: (layout) => set((s) => s.current ? { current: { ...s.current, layout }, dirty: true } : s),
   rename: (name) => set((s) => s.current ? { current: { ...s.current, name }, dirty: true } : s),
+  // A filter edit is unsaved until the dashboard saves: dirty, so it is saved and its options run
+  // from the edit, not from the stored filter (roles part 2, review DS3).
+  setFilters: (filters) => set((s) => s.current ? { current: { ...s.current, filters }, dirty: true } : s),
 }));

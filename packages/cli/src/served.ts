@@ -130,6 +130,8 @@ export function parseHandoff(text: string): ServedHandoff {
   if (!isText(caller.username)) bad('caller.username');
   if (!isTextOrNull(caller.displayName)) bad('caller.displayName');
   if (!isTextOrNull(caller.keyName)) bad('caller.keyName');
+  if (caller.roleIds !== undefined && !isStrings(caller.roleIds)) bad('caller.roleIds');
+  if (caller.capabilities !== undefined && !isStrings(caller.capabilities)) bad('caller.capabilities');
   if (!isFolder(runDir)) bad('runDir');
   if (!Array.isArray(keptDirs) || !keptDirs.every(isFolder)) bad('keptDirs');
   return {
@@ -140,6 +142,8 @@ export function parseHandoff(text: string): ServedHandoff {
       username: caller.username as string,
       displayName: caller.displayName as string | null,
       keyName: caller.keyName as string | null,
+      ...(caller.roleIds !== undefined ? { roleIds: [...(caller.roleIds as string[])] } : {}),
+      ...(caller.capabilities !== undefined ? { capabilities: [...(caller.capabilities as string[])] } : {}),
     },
     runDir: runDir as string,
     keptDirs: [...(keptDirs as string[])],

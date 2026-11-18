@@ -230,6 +230,14 @@ describe('checking the shape of the hand-off', () => {
     expect(parseHandoff(text({ ...GOOD, caller: { ...CALLER, displayName: null, keyName: null } })).caller.keyName).toBeNull();
   });
 
+  it('keeps the caller\'s role ids and capabilities the server worked out, so a command checks the same caller (roles part 2)', () => {
+    const got = parseHandoff(text({ ...GOOD, caller: { ...CALLER, roleIds: ['r1'], capabilities: ['dashboards.view'] } }));
+    expect(got.caller.roleIds).toEqual(['r1']);
+    expect(got.caller.capabilities).toEqual(['dashboards.view']);
+    expect(() => parseHandoff(text({ ...GOOD, caller: { ...CALLER, roleIds: [1] } }))).toThrow(HandoffError);
+    expect(() => parseHandoff(text({ ...GOOD, caller: { ...CALLER, capabilities: 'all' } }))).toThrow(HandoffError);
+  });
+
   it('refuses every wrong shape', () => {
     const bad: unknown[] = [
       null, [], 'x', 1,

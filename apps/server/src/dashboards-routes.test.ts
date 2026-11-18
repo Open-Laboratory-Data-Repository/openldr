@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
 import { modelsForClient, joinableTablesForClient } from '@openldr/dashboards';
-import { checkedWidgetSqlToRun } from '@openldr/bootstrap';
+import { checkedWidgetSqlToRun, dashboardAccess } from '@openldr/bootstrap';
 import { registerDashboardRoutes } from './dashboards-routes';
 import './auth-plugin';
 
@@ -9,7 +9,14 @@ function fakeCtx(cfg: { DASHBOARD_SQL_ENABLED?: boolean } = {}) {
   const data: any[] = [];
   const auditEvents: any[] = [];
   const sqlEnabled = cfg.DASHBOARD_SQL_ENABLED ?? false;
+  // No dashboard is shared with anyone, so every dashboards.view holder sees each one (roles part 2).
+  const noLists = {
+    get: async () => [], set: async () => ({ before: [], after: [] }),
+    forDashboards: async () => new Map(), removeRole: async () => {},
+  };
   return {
+    dashboardAccessStore: noLists,
+    dashboardAccess: dashboardAccess({ access: noLists }),
     dashboards: {
       store: {
         list: async () => data,
@@ -139,9 +146,22 @@ describe('dashboard routes', () => {
   });
 
   it('authoring gate: rejects updating a dashboard to add a NEW sql widget when the flag is off', async () => {
-    const app = appWith(fakeCtx({ DASHBOARD_SQL_ENABLED: false }));
+    const ctx = fakeCtx({ DASHBOARD_SQL_ENABLED: false });
+    // The dashboard exists without SQL; updating a missing one is 404 since roles part 2.
+    await ctx.dashboards.store.create({ ...dashWithSql, widgets: [] });
+    const app = appWith(ctx);
     const res = await app.inject({ method: 'PUT', url: '/api/dashboards/d1', payload: dashWithSql });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('authoring gate: new or changed filter options SQL is refused when the flag is off, unchanged is kept (review DS4)', async () => {
+    const withOptions = (sql: string) => ({ ...dashWithSql, widgets: [], filters: [{ id: 'f1', label: 'F', type: 'text', optionsSql: sql }] });
+    const ctx = fakeCtx({ DASHBOARD_SQL_ENABLED: false });
+    const app = appWith(ctx);
+    expect((await app.inject({ method: 'POST', url: '/api/dashboards', payload: withOptions('select 42') })).statusCode).toBe(400);
+    await ctx.dashboards.store.create(withOptions('select 1'));
+    expect((await app.inject({ method: 'PUT', url: '/api/dashboards/d1', payload: withOptions('select 2') })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'PUT', url: '/api/dashboards/d1', payload: { ...withOptions('select 1'), name: 'Renamed' } })).statusCode).toBe(200);
   });
 
   it('authoring gate: allows updating an existing all-SQL dashboard with UNCHANGED sql (layout/chart edit) when the flag is off', async () => {
@@ -171,15 +191,16 @@ describe('dashboard routes', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it('RBAC: a lab_technician cannot author dashboards but a data_analyst may view/query', async () => {
+  it('RBAC: a lab_technician cannot author dashboards; a data_analyst may view but not run a free-form query', async () => {
     // Writes are MANAGE (admin/manager); a technician is rejected.
     const tech = appWith(fakeCtx(), ['lab_technician'], []);
     expect((await tech.inject({ method: 'POST', url: '/api/dashboards', payload: { id: 'd1', name: 'M', layout: [], widgets: [], filters: [], refreshIntervalSec: 0, isDefault: false, ownerId: null } })).statusCode).toBe(403);
     expect((await tech.inject({ method: 'GET', url: '/api/dashboards' })).statusCode).toBe(403);
-    // Reads/query require dashboards.view; a data_analyst holding it is allowed.
+    // Reads require dashboards.view. A free-form query needs dashboards.edit since roles part 2: a
+    // viewer runs the saved widgets of dashboards shared with them (operator: "Also lock the data").
     const analyst = appWith(fakeCtx(), ['data_analyst'], ['dashboards.view']);
     expect((await analyst.inject({ method: 'GET', url: '/api/dashboards' })).statusCode).toBe(200);
-    expect((await analyst.inject({ method: 'POST', url: '/api/dashboards/query', payload: { mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [] } })).statusCode).toBe(200);
+    expect((await analyst.inject({ method: 'POST', url: '/api/dashboards/query', payload: { mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [] } })).statusCode).toBe(403);
   });
 
   it('audits create/update/delete with the request actor', async () => {

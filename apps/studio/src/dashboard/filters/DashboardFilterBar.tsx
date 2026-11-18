@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { DateRangePicker, type DateRangePreset } from '@/components/ui/date-range-picker';
-import { runWidgetQuery, type DashboardFilterDef } from '../../api';
+import { runWidgetQuery, savedFilterOptions, type DashboardFilterDef } from '../../api';
 
 const ALL = '__all__';
 
@@ -32,8 +32,11 @@ export function DashboardFilterBar({
   filters,
   values,
   onChange,
+  savedDashboardId,
 }: {
   filters: DashboardFilterDef[];
+  /** The dashboard is saved: option lists come from the stored filter, by id (roles part 2). */
+  savedDashboardId?: string;
   values: Record<string, unknown>;
   onChange: (v: Record<string, unknown>) => void;
 }) {
@@ -44,7 +47,7 @@ export function DashboardFilterBar({
     let alive = true;
     for (const f of filters) {
       if (f.type !== 'text' || !f.optionsSql || f.options) continue;
-      runWidgetQuery({ mode: 'sql', sql: f.optionsSql })
+      (savedDashboardId ? savedFilterOptions(savedDashboardId, f.id) : runWidgetQuery({ mode: 'sql', sql: f.optionsSql }))
         .then((r) => {
           if (!alive || !r.columns?.length) return;
           const key = r.columns[0].key;
@@ -57,7 +60,7 @@ export function DashboardFilterBar({
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(filters.map((f) => [f.id, f.optionsSql]))]);
+  }, [JSON.stringify(filters.map((f) => [f.id, f.optionsSql])), savedDashboardId]);
 
   if (filters.length === 0) return null;
   const set = (id: string, v: unknown) => onChange({ ...values, [id]: v });

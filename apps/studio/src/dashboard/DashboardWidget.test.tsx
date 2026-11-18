@@ -159,3 +159,23 @@ describe('bindQuery', () => {
     });
   });
 });
+
+// A viewer's widget runs as a saved widget of a dashboard they may see; the server builds the query
+// (roles part 2, "Also lock the data"). Unsaved changes keep the free-form route, for editors only.
+describe('DashboardWidget saved runs', () => {
+  it('runs a saved widget by dashboard and widget id, sending only the filter values', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(3));
+    render(<DashboardWidget config={cfg} filterValues={{ 'f-site': 'HCNAM' }} savedDashboardId="d1" />);
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(String(url)).toContain('/api/dashboards/d1/widgets/w/query');
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ filterValues: { 'f-site': 'HCNAM' } });
+  });
+
+  it('runs the free-form query while the dashboard has unsaved changes', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(3));
+    render(<DashboardWidget config={cfg} filterValues={{}} />);
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(String(fetch.mock.calls[0]![0])).toContain('/api/dashboards/query');
+  });
+});
