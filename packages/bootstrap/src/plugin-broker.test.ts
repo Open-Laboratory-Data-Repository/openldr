@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { currentInFlight } from '@openldr/core';
 import { createImportCheckHeldStore, createImportCopyStore, createPluginDataStore } from '@openldr/db';
 import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
@@ -62,6 +62,7 @@ function broker(opts: {
     schedules: opts.schedules,
     imports: opts.imports,
     copies: opts.copies,
+    jobInterruptions: (opts as any).jobInterruptions,
     checks: opts.checks,
     diagnoseConnector: opts.diagnoseConnector,
     maxDocBytes: opts.maxDocBytes,
@@ -718,6 +719,17 @@ describe('plugin broker: copies', () => {
     await b.handle('p1', admin, { kind: 'import.copy.list', pluginId: 'p2' });
     await b.handle('p1', admin, { kind: 'import.copy.stop', copyId: 'cp1', pluginId: 'p2' });
     expect(copies.calls).toEqual([['get', ['p1', 'cp1']], ['list', ['p1']], ['stop', ['p1', 'cp1', actor]]]);
+  });
+
+  it('copy status and list carry each copy\'s interruptions (design 2026-11-18-interrupted-jobs)', async () => {
+    const copies = fakeCopies();
+    const cut = { id: 'i1', at: '2026-11-18T05:00:00.000Z', cause: 'server-restart', phase: null, resumedAt: '2026-11-18T05:02:00.000Z', resumedBy: 'self', continuedAs: null };
+    const listFor = vi.fn(async (kind: string, ids: string[]) => new Map(ids.map((id) => [id, kind === 'cdr-run' ? [cut] : []])));
+    const { b } = broker({ caps: IMPORT_CAPS, copies: copies.api, jobInterruptions: { listFor } } as never);
+    const status = await b.handle('p1', admin, { kind: 'import.copy.status', copyId: 'cp1' }) as { ok: true; data: { interruptions: unknown[] } };
+    expect(status.data.interruptions).toEqual([cut]);
+    const list = await b.handle('p1', admin, { kind: 'import.copy.list' }) as { ok: true; data: Array<{ interruptions: unknown[] }> };
+    expect(list.data.every((r) => r.interruptions.length === 1)).toBe(true);
   });
 
   it('no answer carries a set cursor or the driver', async () => {

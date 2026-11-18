@@ -725,6 +725,18 @@ describe('Facilities page', () => {
       expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
     });
 
+    it('shows the latest rebuild\'s interruptions on the chip (re-review R3)', async () => {
+      (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue({
+        reportDimension: {
+          state: 'current', lastSuccessAt: '2026-08-01T10:00:00Z', rows: 42, error: null, jobId: null,
+          interruptions: [{ id: 'i1', at: '2026-11-18T05:00:00.000Z', cause: 'server-restart', phase: null, resumedAt: '2026-11-18T05:02:00.000Z', resumedBy: 'self', continuedAs: null }],
+        },
+        projection: { failedCount: 0, failed: [] },
+      });
+      show();
+      expect(await screen.findByText('Interrupted once')).toBeInTheDocument();
+    });
+
     it('shows Stale — a state that should never occur in practice, but must be renderable when it does', async () => {
       (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue({
         reportDimension: { state: 'stale', lastSuccessAt: '2026-07-01T10:00:00Z', rows: 10, error: null, jobId: null },

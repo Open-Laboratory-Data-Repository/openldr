@@ -8,6 +8,8 @@ import { createConnectorDb, type ConnectorDb } from './connector-db';
 import { growPage, isStorageDown, retryWaitMs } from './import-retry';
 import { createSourceReader, type SourceReader } from './import-source-reader';
 import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, fillDetailQuery, fillKeyQuery, toPluginRow } from './import-sql';
+import { takeBack, type SelfResumeDeps } from './job-interruptions';
+import { resolveByPerson } from './job-continue';
 
 // Runs an import for a plugin that declares `payload.importSource` (see the marketplace manifest).
 //
@@ -87,6 +89,8 @@ export interface ImportAuditEvent {
 }
 
 export interface ImportServiceDeps {
+  /** Records each cut a run, copy or check carried on through (design 2026-11-18-interrupted-jobs). */
+  interruptions?: SelfResumeDeps;
   plugins: {
     list(): Promise<Array<{ id: string; version: string; enabled: boolean; manifest: Record<string, unknown> }>>;
     loadSink(id: string, version?: string): Promise<{ invoke(entrypoint: string, input: unknown): Promise<unknown> } | undefined>;
@@ -776,6 +780,11 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
         ...(actor.type === 'system' ? {} : { metadata: { cursor: run.cursor } }),
       });
       await save(run);
+      // A person's Resume closes the cut the run waited on, so its record stops reading as waiting.
+      // adopt resumes as the system and its cut is resolved as self by takeBack (third review R10).
+      if (actor.type !== 'system' && deps.interruptions) {
+        await resolveByPerson(deps.interruptions.store, 'cdr-run', runId, now()).catch(() => {});
+      }
       // A resume by hand and adopt can both pass the checks above before either launches. The
       // second one does not start a second drive in this process.
       if (local.has(runId)) return { ...run };
@@ -793,9 +802,24 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
           // Asked before each run, so a server that is shutting down resumes nothing more.
           if (opts.signal?.aborted) return out;
           if (!needsAdopting(stored)) continue;
-          try {
+          const takeOver = async (): Promise<void> => {
             out.push(stored.status === 'stopping' ? await finishStop(stored) : await service.resume(stored.pluginId, stored.id, SYSTEM));
             unadoptable.delete(stored.id);
+          };
+          try {
+            if (deps.interruptions) {
+              // The cut is recorded open and resolved only once the resume went through, so a refused
+              // resume never reads as carried on (review R7). Three cuts at the same saved cursor
+              // leave the run interrupted for a person's Resume (review R10).
+              const at = new Date(stored.updatedAt);
+              await takeBack(deps.interruptions, {
+                kind: 'cdr-run', jobId: stored.id, phase: stored.cursor ?? null, at,
+                cause: at.getTime() < deps.interruptions.processStartedAt.getTime() ? 'server-restart' : 'lease-expired',
+                selfResume: true, resume: takeOver, wait: async () => {},
+              });
+            } else {
+              await takeOver();
+            }
           } catch {
             // A plugin that is now disabled, a connector no longer allowed, or the audit log down.
             // The run stays as it is and reads as interrupted, so a person can see it and resume

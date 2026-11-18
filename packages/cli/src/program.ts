@@ -14,7 +14,7 @@ import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQue
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
 import { runReportList, runReportRun, runReportGlassExport } from './report';
 import { runAuditList } from './audit';
-import { runWorkflowReceiptsList, runWorkflowReceiptShow, runWorkflowSetEnabled } from './workflows';
+import { runWorkflowReceiptsList, runWorkflowReceiptShow, runWorkflowSetEnabled, runWorkflowRunContinue } from './workflows';
 import { runWorkflowMapTest } from './workflow-map';
 import {
   runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus, runUserPreferencesShow, runUserPreferencesSet,
@@ -23,7 +23,7 @@ import {
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
 import { runStorageCopy } from './storage';
-import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge } from './terminology';
+import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge, runTerminologyJobStatus, runTerminologyJobContinue } from './terminology';
 import { runMarketVerify, runMarketInstall, runMarketUpdate, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runMarketSites } from './market-sites';
 import { runLayoutsList, runLayoutsSet, runLayoutsDelete } from './layouts';
@@ -36,7 +36,7 @@ import { runErrorsList } from './errors';
 import { runUpdateCheck, UPDATE_ERROR_EXIT } from './update';
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
-  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportRunRevalidate,
+  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportRunContinue, runFacilitiesImportRunRevalidate,
   runFacilitiesImportSources, runFacilitiesRegisterSource,
   runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList,
   runFacilitiesDelete, runFacilitiesAddType, runFacilitiesLinkMatching,
@@ -103,6 +103,12 @@ export function buildProgram(): Command {
     .action(async (workflowId: string, nodeId: string, file: string, opts: { json: boolean }) => {
       try { process.exitCode = await runWorkflowMapTest(workflowId, nodeId, file, opts); }
       catch { process.stderr.write('Map test unavailable.\n'); process.exitCode = 1; }
+    });
+  workflows.command('run-continue <workflowId> <requestId>')
+    .description('Continue an interrupted run: start a new run with its stored input')
+    .option('--json', 'emit JSON', false)
+    .action(async (workflowId: string, requestId: string, opts: { json: boolean }) => {
+      process.exitCode = await runWorkflowRunContinue(workflowId, requestId, opts);
     });
   workflows.command('enable <workflowId>')
     .description('Turn a workflow on, as Enable in the studio. Refused when another enabled workflow uses its webhook path.')
@@ -868,6 +874,13 @@ export function buildProgram(): Command {
       process.exitCode = await runFacilitiesImportRunCancel(id, opts);
     });
   facilities
+    .command('import-run-continue <id>')
+    .description('Continue a facility import that waits after being interrupted too many times. A cut apply applies again with no second confirm; a cut check stops at the usual confirm.')
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (id: string, opts: { json: boolean }) => {
+      process.exitCode = await runFacilitiesImportRunContinue(id, opts);
+    });
+  facilities
     .command('import-run-revalidate <id>')
     .description('Check an already-uploaded facility import again under a new column map, WITHOUT sending the file again. Only a run waiting for a decision can be re-checked. Exit 0 = queued for a fresh check, 1 = refused (no such run, wrong state, or nothing stored).')
     .option('--column-map <file>', 'JSON column map to check the stored file against')
@@ -1109,6 +1122,16 @@ export function buildProgram(): Command {
     });
 
 
+  term.command('job <system>').description('show the latest distribution upload for a system, with its interruptions')
+    .option('--json', 'emit JSON', false)
+    .action(async (system: string, opts: { json: boolean }) => {
+      process.exitCode = await runTerminologyJobStatus(system, opts);
+    });
+  term.command('job-continue <id>').description('continue an upload that waits after being interrupted too many times')
+    .option('--json', 'emit JSON', false)
+    .action(async (id: string, opts: { json: boolean }) => {
+      process.exitCode = await runTerminologyJobContinue(id, opts);
+    });
   const tdist = term.command('distribution').description('Import/purge terminology distributions (zip → flat terms + ontology)');
   tdist.command('import <system>').description('import a loinc|snomed|rxnorm distribution zip inline')
     .requiredOption('--file <path>', 'path to the distribution .zip')

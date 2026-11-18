@@ -1,3 +1,5 @@
+import { MAX_SELF_RESUMES, takeBack } from './job-interruptions';
+import { resolveByPerson } from './job-continue';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { redact } from '@openldr/core';
@@ -61,6 +63,9 @@ export interface CheckCounts { read: number; saved: number; held: number; failed
 
 /** The counts of one laboratory. `code` is null for the requests that named none, and for those
  *  past the 500th code. Counted with the run's counts, so the entries always add up to the run. */
+/** How far a check got, as a cut's phase: a cut after more requests were read starts the count again. */
+const cutPhase = (run: { counts: { read: number } }): string => String(run.counts.read);
+
 export interface CheckLaboratory { code: string | null; counts: Pick<CheckCounts, 'read' | 'saved' | 'held' | 'failed' | 'labels'> }
 
 export interface CheckRun {
@@ -137,7 +142,7 @@ export interface ImportCheckService {
   release(): Promise<void>;
 }
 
-export interface ImportCheckServiceDeps extends Pick<ImportServiceDeps, 'plugins' | 'pluginData' | 'audit' | 'persist' | 'now'> {
+export interface ImportCheckServiceDeps extends Pick<ImportServiceDeps, 'plugins' | 'pluginData' | 'audit' | 'persist' | 'now' | 'interruptions'> {
   /** The copy rows, read only. */
   copyStore: ImportCopyStore;
   held: ImportCheckHeldStore;
@@ -784,19 +789,46 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         const unclaimed = stored.status === 'queued';
         const orphaned = isDriven(stored.status) && now().getTime() - Date.parse(stored.updatedAt) > STALE_MS;
         if (!unclaimed && !orphaned) continue;
-        const previous = stored.driver ?? null;
-        const run: CheckRun = {
-          ...stored, driver: deps.driverId, waiting: null,
-          status: stored.status === 'queued' || stored.status === 'waiting' ? 'running' : stored.status,
+        const claim = async (): Promise<boolean> => {
+          const previous = stored.driver ?? null;
+          const run: CheckRun = {
+            ...stored, driver: deps.driverId, waiting: null,
+            status: stored.status === 'queued' || stored.status === 'waiting' ? 'running' : stored.status,
+          };
+          if (!(await writeIfRev(run, stored.rev))) return false;
+          if (released) return true;
+          if (!unclaimed && previous !== null && previous !== deps.driverId) {
+            await auditQuietly(deps.audit, {
+              action: 'import.check.takeover', pluginId: run.pluginId, runId: run.id, actor: SYSTEM, metadata: { status: stored.status },
+            });
+          }
+          launch(run);
+          return true;
         };
-        if (!(await writeIfRev(run, stored.rev))) continue;
-        if (released) return;
-        if (!unclaimed && previous !== null && previous !== deps.driverId) {
-          await auditQuietly(deps.audit, {
-            action: 'import.check.takeover', pluginId: run.pluginId, runId: run.id, actor: SYSTEM, metadata: { status: stored.status },
-          });
+        if (unclaimed || !deps.interruptions) {
+          await claim();
+          if (released) return;
+          continue;
         }
-        launch(run);
+        // An orphan: the cut is recorded open and resolved only once this driver's claim went
+        // through (review R7). Three cuts with no progress between them leave it for a person
+        // (review R10): its progress is the phase, so a cut after progress starts the count again.
+        const at = new Date(stored.updatedAt);
+        await takeBack(deps.interruptions, {
+          kind: 'cdr-run', jobId: stored.id, phase: cutPhase(stored), at,
+          cause: at.getTime() < deps.interruptions.processStartedAt.getTime() ? 'server-restart' : 'lease-expired',
+          selfResume: true,
+          resume: async () => { if (!(await claim())) throw new Error('another driver claimed the run'); },
+          // Stopped with a reason, so the plugin's page offers Continue, which carries on from the
+          // saved place (re-review R10). The rev guard makes a second wait on the same cut a no-op.
+          wait: async () => {
+            await writeIfRev({
+              ...stored, status: 'stopped', driver: null, waiting: null, finishedAt: now().toISOString(),
+              lastError: `the check was cut ${MAX_SELF_RESUMES + 1} times with no progress; use Continue to carry it on`,
+            }, stored.rev);
+          },
+        }).catch(() => {});
+        if (released) return;
       }
     }
   }
@@ -862,7 +894,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       const id = checkIdOf(input.copyId);
       const copyFinishedAt = { source: source.finishedAt, reference: referenceRun?.finishedAt ?? null };
 
-      return changeRun(plugin.id, id, async (existing) => {
+      const started = await changeRun(plugin.id, id, async (existing) => {
         if (existing && isLive(existing.status)) {
           throw new Error(`check ${id} is ${existing.status}; stop it before starting it again`);
         }
@@ -895,6 +927,11 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         action: 'import.check.start', pluginId: plugin.id, runId: id, actor: input.actor,
         metadata: { copyId: next.copyId, referenceCopyId: next.referenceCopyId, pageSize: next.pageSize, carriedOn: next.carriedOn === true },
       }));
+      // A person's start closes the cut the run stopped on, if any (re-review R10).
+      if (deps.interruptions && started.status === 'queued') {
+        await resolveByPerson(deps.interruptions.store, 'cdr-run', started.id, now()).catch(() => {});
+      }
+      return started;
     },
 
     async get(pluginId, runId) {

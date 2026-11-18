@@ -13,6 +13,7 @@ import {
   externalMigrations,
   type ExternalSchema,
   type Provenance,
+  createJobInterruptionStore, type JobInterruptionStore,
 } from '@openldr/db';
 import { createValidationStrictness } from './validation-settings';
 import {
@@ -22,11 +23,16 @@ import {
   createBatchStore,
   registryResolver,
   chainResolvers,
+  sweepStuckBatches,
   type AcceptInput,
   type BatchStore,
   type Converter,
 } from '@openldr/ingest';
 import { type PluginRuntime } from '@openldr/plugins';
+
+/** Three event leases: a batch this quiet with no live event has no delivery left to carry it on. */
+const STUCK_BATCH_MS = 15 * 60_000;
+const STUCK_SWEEP_EVERY_MS = 60_000;
 import { createAuditStore, safeRecord } from '@openldr/audit';
 import { createPluginRegistry } from './plugin-registry';
 import type { EventingPort } from '@openldr/ports';
@@ -38,6 +44,8 @@ export interface IngestContext {
   drain(): Promise<{ processed: number; failed: number }>;
   startWorker(): { stop(): Promise<void> };
   batches: BatchStore;
+  /** Each batch's recorded interruptions (design 2026-11-18-interrupted-jobs). */
+  jobInterruptions: JobInterruptionStore;
   plugins: PluginRuntime;
   eventing: EventingPort;
   republish(batch: { batch_id: string; blob_key: string; source: string | null; converter: string; config?: Record<string, string> | null }): Promise<void>;
@@ -64,6 +72,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
     });
   const converters = defaultConverters();
   const batches = createBatchStore(internal.db);
+  const jobInterruptions = createJobInterruptionStore(internal.db);
   const audit = createAuditStore(internal.db);
 
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
@@ -75,6 +84,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
     handleIngestEvent(
       {
         blob, persist, resolver, batches, logger,
+        interruptions: { store: jobInterruptions, now: () => new Date() },
         audit: (e) => safeRecord(audit, logger, e),
         onBatchDone: (info) => eventing.publish({ type: 'ingest.batch.done', payload: info }),
       },
@@ -89,8 +99,22 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   return {
     accept: (input) => acceptPayload({ blob, eventing, batches, logger }, input),
     drain: () => eventing.drain(),
-    startWorker: () => eventing.startWorker(),
+    startWorker: () => {
+      const worker = eventing.startWorker();
+      // A batch whose event ran out of attempts is marked interrupted, so it does not sit at
+      // processing for ever (design 2026-11-18-interrupted-jobs, review R9).
+      const sweep = () => {
+        void sweepStuckBatches({ batches, interruptions: jobInterruptions, olderThanMs: STUCK_BATCH_MS })
+          .then((n) => { if (n > 0) logger.warn({ count: n }, 'ingest batches marked interrupted after their event ran out of attempts'); })
+          .catch(() => undefined);
+      };
+      sweep();
+      const timer = setInterval(sweep, STUCK_SWEEP_EVERY_MS);
+      timer.unref?.();
+      return { async stop() { clearInterval(timer); await worker.stop(); } };
+    },
     batches,
+    jobInterruptions,
     eventing,
     plugins,
     async republish(batch) {

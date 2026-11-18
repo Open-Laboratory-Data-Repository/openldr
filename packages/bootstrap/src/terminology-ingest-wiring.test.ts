@@ -3,9 +3,11 @@ import type { Config } from '@openldr/config';
 import type { TerminologyIngestJob } from '@openldr/db';
 
 /**
- * Every `openldr` CLI command builds an `AppContext`. Building the terminology import worker sweeps
- * every `running` job to failed, so a CLI process used to fail the server's live terminology imports.
- * Only the server's start sets `runTerminologyIngestWorker`.
+ * Every `openldr` CLI command builds an `AppContext`. Building the terminology import worker used to
+ * sweep every `running` job to failed, so a CLI process failed the server's live terminology imports.
+ * Only the server's start sets `runTerminologyIngestWorker`. Since 2026-11-18 the worker takes back
+ * only a job whose heartbeat stopped, on its tick, never at construction
+ * (terminology-ingest-worker.test.ts proves the take-back).
  *
  * The job store is swapped for an in-memory one holding a `running` row, so the sweep is seen on the
  * row itself. The database URL is unreachable on purpose, as in facility-import-wiring.test.ts.
@@ -18,11 +20,7 @@ vi.mock('@openldr/db', async (importOriginal) => {
     ...actual,
     createTerminologyIngestJobStore: () => ({
       async claimNext(): Promise<TerminologyIngestJob | null> { return null; },
-      async failStaleRunning(error: string): Promise<number> {
-        let n = 0;
-        for (const j of rows.jobs) if (j.status === 'running') { j.status = 'failed'; j.error = error; n += 1; }
-        return n;
-      },
+      async listStaleRunning() { return []; },
     }),
   };
 });
@@ -61,11 +59,10 @@ describe('createAppContext and the terminology import worker', () => {
     expect(rows.jobs[0]).toEqual({ id: 'j1', status: 'running', error: null });
   });
 
-  it('with runTerminologyIngestWorker, the start-up sweep still fails an orphaned running import (the server shape)', async () => {
+  it('with runTerminologyIngestWorker, building and closing the app leaves a running import running (the server shape)', async () => {
     rows.jobs = [{ id: 'j1', status: 'running', error: null }];
     ctx = await createAppContext(cfg, { runTerminologyIngestWorker: true });
     await ctx.close();
-    expect(rows.jobs[0]!.status).toBe('failed');
-    expect(rows.jobs[0]!.error).toMatch(/interrupted/);
+    expect(rows.jobs[0]).toEqual({ id: 'j1', status: 'running', error: null });
   });
 });

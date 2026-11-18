@@ -387,3 +387,13 @@ Reset normally keeps the existing webhook secret. If the reset warning says it c
 ## Related guides
 
 [Activity](/docs/activity) follows the payload lifecycle. [Scheduled reports](/docs/report-pipeline) builds stored data and workbook output. [Connectors](/docs/connectors) configures external systems. [Map to FHIR](/docs/map-to-fhir) maps a lab's own rows.
+
+## When a run is interrupted
+
+A run can be cut off when the server restarts or stops. A workflow run never starts again by itself, because it may already have sent an email or called another system before the cut.
+
+1. Open the workflow and its **History**.
+2. An interrupted run shows the status **Interrupted**. Point at the **Interrupted** badge to see when it happened.
+3. To run it again, open the row's **⋯** menu and select **Continue**. A new run starts with the same input. If the workflow changed since the interrupted run started, the message says so and the new run uses the workflow as it is now.
+
+The same from the command line: `openldr workflows run-continue <workflowId> <requestId>`.

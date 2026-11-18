@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createPluginDataStore, type PluginDataStore } from '@openldr/db';
+import { createPluginDataStore, type PluginDataStore, createJobInterruptionStore } from '@openldr/db';
 import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
 import { STALE_MS, createImportService, type ImportActor, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
 
@@ -78,6 +78,7 @@ function fakeSource(keys: string[]) {
 
 interface Harness {
   svc: ImportService;
+  interruptions: ReturnType<typeof createJobInterruptionStore>;
   source: ReturnType<typeof fakeSource>;
   persist: ReturnType<typeof vi.fn>;
   invoke: ReturnType<typeof vi.fn>;
@@ -141,7 +142,9 @@ async function harness(keys: string[], opts: { origin?: 'server' | 'cli' } = {})
   let sinkLoadFaults = 0;
   let sinkFault: () => unknown = storageRefused;
   let noSink = false;
+  const interruptions = createJobInterruptionStore(internalDb);
   const svc = createImportService({
+    interruptions: { store: interruptions, now: () => new Date(clock.now), processStartedAt: new Date(clock.now) },
     plugins: {
       list: async () => [{ id: 'v1-import', version: '1.2.0', enabled: true, manifest: currentManifest as Record<string, unknown> }],
       loadSink: async () => {
@@ -171,7 +174,7 @@ async function harness(keys: string[], opts: { origin?: 'server' | 'cli' } = {})
   });
   await svc.allow('v1-import', 'c1', ADMIN);
   return {
-    svc, source, persist, invoke, audited, mapInputs, clock, runSaves, sleeps, warnings,
+    svc, source, persist, invoke, audited, mapInputs, clock, runSaves, sleeps, warnings, interruptions,
     holdSleeps: () => { held = true; },
     releaseSleeps: () => { held = false; const w = waiters; waiters = []; for (const resolve of w) resolve(); },
     failAuditOn: (action) => { auditFails = action; },
@@ -805,6 +808,42 @@ describe('import run: adopt', () => {
     expect(await h.svc.wait('dead')).toMatchObject({ status: 'completed', cursor: 'REQ0004', counts: { keys: 4, imported: 4 } });
     // Nothing before the saved position is read or saved again.
     expect(h.mapInputs.map((m) => m.keys)).toEqual([['REQ0003', 'REQ0004']]);
+    // The cut is recorded as one the run carried on through by itself (design 2026-11-18-interrupted-jobs).
+    // The run went silent after this harness's process started, so it is a lease that ran out.
+    expect((await h.interruptions.listFor('cdr-run', ['dead'])).get('dead')).toEqual([
+      expect.objectContaining({ cause: 'lease-expired', resumedBy: 'self' }),
+    ]);
+  });
+
+  it('a refused resume leaves the cut open, never marked carried on (review R7)', async () => {
+    const h = await harness(keysOf(4), { origin: 'server' });
+    await storeRun(h, { status: 'waiting', waiting: { since: new Date(h.clock.now).toISOString(), attempt: 2, error: 'Connection lost' } });
+    h.clock.now += STALE_MS + 1;
+    h.failAuditOn('import.resume');
+    expect(await h.svc.adopt()).toEqual([]);
+    expect((await h.interruptions.listFor('cdr-run', ['dead'])).get('dead')).toEqual([
+      expect.objectContaining({ resumedBy: null, resumedAt: null }),
+    ]);
+  });
+
+  it('after three cuts at the same saved cursor, adopt leaves the run interrupted (review R10)', async () => {
+    const h = await harness(keysOf(4), { origin: 'server' });
+    await storeRun(h, { status: 'waiting', waiting: { since: new Date(h.clock.now).toISOString(), attempt: 2, error: 'Connection lost' } });
+    const run = await rawRun('dead');
+    for (let i = 1; i <= 3; i += 1) {
+      const cut = await h.interruptions.record('cdr-run', 'dead', { at: new Date(Date.UTC(2026, 0, 1, 0, i)), cause: 'server-restart', phase: run.cursor ?? null });
+      await h.interruptions.resolve(cut.id, { resumedBy: 'self', resumedAt: new Date(Date.UTC(2026, 0, 1, 0, i, 30)) });
+    }
+    h.clock.now += STALE_MS + 1;
+    expect(await h.svc.adopt()).toEqual([]);
+    expect(h.mapInputs).toEqual([]);
+    // A person's Resume carries it on and closes the open cut, so it no longer reads as waiting
+    // (third review R10).
+    await h.svc.resume('v1-import', 'dead', ADMIN);
+    expect(await h.svc.wait('dead')).toMatchObject({ status: 'completed' });
+    const records = (await h.interruptions.listFor('cdr-run', ['dead'])).get('dead') ?? [];
+    expect(records.filter((r) => r.resumedBy === null)).toEqual([]);
+    expect(records.at(-1)).toMatchObject({ resumedBy: 'person' });
   });
 
   it('adopt leaves a run that a CLI process started', async () => {

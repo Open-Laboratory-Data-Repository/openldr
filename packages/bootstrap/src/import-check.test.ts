@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  CopySetTooLargeError, createImportCheckHeldStore, createImportCopyStore, createPluginDataStore,
+  CopySetTooLargeError, createImportCheckHeldStore, createImportCopyStore, createJobInterruptionStore, createPluginDataStore,
   type CopyRow, type ImportCheckHeldStore, type ImportCopyStore, type PluginDataStore,
 } from '@openldr/db';
 import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
@@ -170,8 +170,10 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
       deleteCheck: (pluginId, copyId) => deleteCheckRecord(raw, pluginId, copyId),
     },
   });
+  const interruptions = createJobInterruptionStore(internalDb);
   const service = (driverId = 'server-1'): ImportCheckService => createImportCheckService({
     plugins: pluginsDep, pluginData, audit, persist, copyStore, held, copies, driverId, allowed,
+    interruptions: { store: interruptions, now: () => new Date(clock.now), processStartedAt: new Date(clock.now) },
     now: () => new Date(clock.now),
     sleep: async (ms) => { sleeps.push(ms); },
   });
@@ -205,6 +207,7 @@ async function world(opts: { entrypoints?: Record<string, string> } = {}) {
   };
 
   return {
+    interruptions,
     svc, service, copies, raw, audited, runSaves, decodeCalls, twinCalls, invoke, persisted, clock, sleeps, plugins,
     readSetCalls, readCalls, heldPuts, copyCalls, allowedCalls,
     revoke: (connectorId: string) => { allowedConnectors.delete(connectorId); },
@@ -483,6 +486,28 @@ describe('check: start again, stop, and who drives', () => {
     expect(w.persisted).toHaveLength(4);
     expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { read: 4, saved: 4 } });
     expect(actions(w)).toEqual(['import.check.start', 'import.check.finish']);
+  });
+
+  it('a run cut three times with no progress stops for a person, and a start carries it on (re-review R10)', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(4));
+    const started = await w.svc.start({ ...START, pageSize: 2 });
+    const orphan: CheckRun = {
+      ...started, status: 'running', driver: 'server-old', cursor: 'REQ0002',
+      counts: { read: 2, saved: 2, held: 0, failed: 0, resources: 2, labels: { passed: 2 } },
+      updatedAt: new Date(w.clock.now - STALE_MS - 1000).toISOString(),
+    };
+    await w.raw.put(PLUGIN, '__import-checks', CHECK, orphan);
+    for (let i = 1; i <= 3; i += 1) {
+      const cut = await w.interruptions.record('cdr-run', CHECK, { at: new Date(Date.UTC(2026, 0, 1, 0, i)), cause: 'server-restart', phase: '2' });
+      await w.interruptions.resolve(cut.id, { resumedBy: 'self', resumedAt: new Date(Date.UTC(2026, 0, 1, 0, i, 30)) });
+    }
+    await drive(w.svc);
+    expect(w.decodeCalls).toEqual([]);
+    expect((await w.stored())!).toMatchObject({ status: 'stopped', driver: null, cursor: 'REQ0002', lastError: expect.stringContaining('Continue') });
+    const again = await w.svc.start({ ...START, pageSize: 2 });
+    expect(again).toMatchObject({ status: 'queued', cursor: 'REQ0002', carriedOn: true });
+    expect(((await w.interruptions.listFor('cdr-run', [CHECK])).get(CHECK) ?? []).filter((r) => r.resumedBy === null)).toEqual([]);
   });
 
   it('a_run_left_by_a_dead_server_is_taken_after_two_minutes', async () => {

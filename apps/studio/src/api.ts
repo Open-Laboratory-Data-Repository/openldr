@@ -1565,7 +1565,10 @@ export type FacilityImportRunStatus =
   // instead of `queued`, so it sits with no column map and no worker claim until something asks
   // for a real check. See `uploadFacilityImport`'s own `validate` parameter.
   | 'stored'
-  | 'previewed' | 'applied' | 'failed' | 'cancelled';
+  | 'previewed' | 'applied' | 'failed' | 'cancelled'
+  // Cut by restarts too many times in one phase: holds its register and waits for Continue
+  // (design 2026-11-18-interrupted-jobs, review R8).
+  | 'interrupted';
 
 /** One `facility_import_runs` row as `GET /api/facilities/import/runs/:id` returns it — mirrors the
  *  server's `FacilityImportRun` field for field, the same "mirrored, not shared" reasoning as
@@ -1580,6 +1583,8 @@ export type FacilityImportRunStatus =
  *  register of at least 5 000 rows (its measured `PER_ROW_PROGRESS_MIN_ROWS`). For most runs there
  *  is no denominator at all — `phase` is the field that is always there. */
 export interface FacilityImportRunView {
+  /** Each time a restart cut this run and it carried on (design 2026-11-18-interrupted-jobs). */
+  interruptions?: JobInterruption[];
   id: string;
   nationalSystem: string;
   sourceFormat: 'csv' | 'jsonl';
@@ -1792,6 +1797,11 @@ export const revalidateFacilityImportRun = (
  *
  *  The outcome is read off the body rather than the status code because both are 2xx and `okJson`
  *  does not expose which one arrived. */
+/** Continue on an import that waits after interruptions. */
+export const continueFacilityImportRun = (id: string): Promise<void> =>
+  authFetch(`/api/facilities/import/runs/${encodeURIComponent(id)}/continue`, { method: 'POST' })
+    .then((r) => okJson<unknown>(r, 'continue facility import')).then(() => undefined);
+
 export const cancelFacilityImportRun = (
   id: string,
 ): Promise<{ runId: string; outcome: 'cancelled' | 'requested' }> =>
@@ -1908,6 +1918,8 @@ export interface FacilityHealth {
      *  the ONLY place the chip can get an id to retry: the route this hits has no other listing
      *  endpoint that exposes `facility_jobs` ids. */
     jobId: string | null;
+    /** The latest rebuild's cuts (design 2026-11-18-interrupted-jobs, re-review R3). */
+    interruptions?: JobInterruption[];
   };
   projection: {
     /** Always `failed.length` — the server derives it from the rows below rather than counting
@@ -2298,9 +2310,11 @@ export async function findValueSetByUrl(url: string): Promise<ValueSetSummary | 
 }
 
 export interface TerminologyIngestJobView {
-  id: string; status: 'queued' | 'running' | 'ready' | 'failed';
+  id: string; status: 'queued' | 'running' | 'ready' | 'failed' | 'interrupted';
   phase: string | null; processed: number; total: number | null; error: string | null;
   version: string | null; finishedAt: string | null;
+  /** Each time a restart cut this upload, and how it came back. */
+  interruptions?: JobInterruption[];
 }
 
 /** Stream a distribution zip to the server with upload progress. Uses XHR (fetch has no upload
@@ -2335,6 +2349,11 @@ export function uploadTerminologyDistribution(
 export const getTerminologyIngestJob = (publisherId: string, systemType: string): Promise<TerminologyIngestJobView> =>
   authFetch(`/api/terminology/publishers/${encodeURIComponent(publisherId)}/distribution/job?systemType=${systemType}`)
     .then((r) => okJson<TerminologyIngestJobView>(r, 'get import job'));
+
+/** Continue on an upload that stopped carrying on by itself after interruptions. */
+export const continueTerminologyIngestJob = (id: string): Promise<void> =>
+  authFetch(`/api/terminology/jobs/${encodeURIComponent(id)}/continue`, { method: 'POST' })
+    .then((r) => okJson<unknown>(r, 'continue import job')).then(() => undefined);
 
 export const purgeTerminologyDistribution = (publisherId: string, systemType: string): Promise<void> =>
   authFetch(`/api/terminology/publishers/${encodeURIComponent(publisherId)}/distribution?systemType=${systemType}`, { method: 'DELETE' }).then(() => undefined);
@@ -3229,7 +3248,20 @@ export async function executeWorkflowStream(
 
 // ── Workflow run history ───────────────────────────────────────────────────────
 
+/** One time a long job was cut off, and how it came back (design 2026-11-18-interrupted-jobs). */
+export interface JobInterruption {
+  id: string;
+  at: string;
+  cause: 'server-restart' | 'lease-expired' | 'attempts-exhausted';
+  phase: string | null;
+  resumedAt: string | null;
+  resumedBy: 'self' | 'person' | null;
+  continuedAs: string | null;
+}
+
 export interface WorkflowReceipt {
+  /** Present on the list: each recorded interruption of this run. */
+  interruptions?: JobInterruption[];
   id: string;
   workflowId: string;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'interrupted' | 'cancelled';
@@ -3254,6 +3286,20 @@ export async function fetchWorkflowReceipts(
   const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}/receipts?${qs}`);
   if (!res.ok) throw new Error(`workflow receipts failed: ${res.status}`);
   return res.json() as Promise<WorkflowReceipt[]>;
+}
+
+/** What Continue would do, without doing it: whether the workflow changed since the run was cut. */
+export async function checkWorkflowReceiptContinue(id: string, requestId: string): Promise<{ definitionChanged: boolean }> {
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}/receipts/${encodeURIComponent(requestId)}/continue`);
+  if (!res.ok) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? `continue check failed: ${res.status}`);
+  return res.json() as Promise<{ definitionChanged: boolean }>;
+}
+
+/** Continue on an interrupted run: a new run with its stored input. */
+export async function continueWorkflowReceipt(id: string, requestId: string): Promise<{ runId: string; definitionChanged: boolean }> {
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}/receipts/${encodeURIComponent(requestId)}/continue`, { method: 'POST' });
+  if (!res.ok) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? `continue failed: ${res.status}`);
+  return res.json() as Promise<{ runId: string; definitionChanged: boolean }>;
 }
 
 export async function fetchWorkflowReceipt(id: string, requestId: string): Promise<WorkflowReceipt> {

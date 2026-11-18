@@ -346,6 +346,7 @@ export interface FacilityJobsTable {
   requested_by: string | null;
   requested_at: Generated<Date>;
   started_at: Date | null;
+  heartbeat_at: Date | null;
   finished_at: Date | null;
   active_key: string | null;
 }
@@ -760,6 +761,19 @@ export interface WorkflowsTable {
   version: Generated<number>;
 }
 
+export interface JobInterruptionsTable {
+  id: string;
+  job_kind: string;
+  job_id: string;
+  phase: string | null;
+  at: Date;
+  cause: string;
+  resumed_at: Date | null;
+  resumed_by: string | null;
+  continued_as: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface WorkflowWebhookReceiptsTable {
   id: string;
   workflow_id: string;
@@ -1011,6 +1025,7 @@ export interface TerminologyIngestJobsTable {
   created_by: string | null;
   created_at: Generated<Date>;
   started_at: Date | null;
+  heartbeat_at: Date | null;
   finished_at: Date | null;
   // Mirrors `system_type` while the job is queued|running, NULL once finished; backs the
   // "one active job per system" unique index. See the 061 migration for why.
@@ -1107,6 +1122,7 @@ export interface InternalSchema {
   workflow_webhook_claims: { path: string; workflow_id: string };
   workflow_runs: WorkflowRunsTable;
   workflow_webhook_receipts: WorkflowWebhookReceiptsTable;
+  job_interruptions: JobInterruptionsTable;
   workflow_schedules: WorkflowSchedulesTable;
   workflow_datasets: WorkflowDatasetsTable;
   custom_queries: CustomQueriesTable;

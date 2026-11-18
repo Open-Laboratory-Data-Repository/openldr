@@ -15,7 +15,7 @@ vi.mock('@openldr/config', () => ({ loadConfig: vi.fn(() => ({ config: true })) 
 // The real ingestAndWait runs over the fake context, so these tests cover the moved wait loop.
 vi.mock('@openldr/bootstrap', async (original) => ({ ...await original<typeof import('@openldr/bootstrap')>(), createIngestContext: mocks.createIngestContext }));
 
-import { runIngest } from './ingest';
+import { runIngest, runPipelineRetry } from './ingest';
 
 const FAST = { intervalMs: 1, timeoutMs: 50 };
 const opts = { json: false, source: 'cli', converter: 'fhir-bundle' };
@@ -70,5 +70,21 @@ describe('openldr ingest', () => {
     expect(await runIngest(file, opts, FAST)).toBe(1);
     expect(out.join('')).toContain('still processing');
     expect(out.join('')).toContain('openldr pipeline status');
+  });
+
+  it('retry closes the open interruption record of a cut batch (review R9)', async () => {
+    const resolve = vi.fn();
+    const at = new Date('2026-11-18T05:00:00Z');
+    const jobInterruptions = {
+      listFor: vi.fn(async () => new Map([['b1', [{ id: 'i1', at, cause: 'attempts-exhausted', phase: null, resumedAt: null, resumedBy: null, continuedAs: null }]]])),
+      resolve,
+    };
+    mocks.get.mockResolvedValueOnce(batch('interrupted', { blob_key: 'k', source: 'cli', converter: 'fhir-bundle', config: null })).mockResolvedValue(batch('done'));
+    mocks.createIngestContext.mockResolvedValue({
+      drain: mocks.drain, close: mocks.close, jobInterruptions,
+      batches: { get: mocks.get, reset: vi.fn() }, republish: vi.fn(),
+    });
+    expect(await runPipelineRetry('b1', { json: false })).toBe(0);
+    expect(resolve).toHaveBeenCalledWith('i1', expect.objectContaining({ resumedBy: 'person' }));
   });
 });

@@ -1,7 +1,8 @@
 import { readFileSync, createReadStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { loadConfig } from '@openldr/config';
-import { createAppContext, createTerminologyContext, resolveCodingSystemId, createRunIngest, runIngestJob, recordAuditEvent } from '@openldr/bootstrap';
+import { createAppContext, createTerminologyContext, resolveCodingSystemId, createRunIngest, runIngestJob, recordAuditEvent, continueTerminologyIngestJob, continueRefusal } from '@openldr/bootstrap';
+import { describeInterruption } from './interruptions';
 import { callerName, cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 import { validateDistributionImportArgs, isActiveJobConflict } from './distribution-args';
@@ -257,6 +258,34 @@ export async function runDistributionImport(system: string, opts: { file?: strin
     process.stderr.write(`\nterminology distribution import failed: ${result.error}\n`);
     return 1;
   } catch (err) { process.stderr.write(`terminology distribution import failed: ${redactError(err)}\n`); return 1; }
+  finally { await ctx.close(); }
+}
+
+/** `terminology job <system>`: the latest upload for a system, with its interruptions. */
+export async function runTerminologyJobStatus(system: string, opts: { json: boolean }): Promise<number> {
+  const ctx = await createTerminologyContext(loadConfig());
+  try {
+    const job = await ctx.jobs.latestForSystem(system);
+    if (!job) { process.stderr.write(`no import job for ${system}\n`); return 1; }
+    const interruptions = (await ctx.jobInterruptions.listFor('terminology-ingest', [job.id])).get(job.id) ?? [];
+    const lines = [`${job.id}  ${job.status}${job.phase ? `  ${job.phase}` : ''}  ${job.processed}${job.total != null ? `/${job.total}` : ''}`,
+      ...interruptions.map(describeInterruption)];
+    out(opts.json, { ...job, interruptions }, lines.join('\n'));
+    return 0;
+  } catch (err) { process.stderr.write(`terminology job failed: ${redactError(err)}\n`); return 1; }
+  finally { await ctx.close(); }
+}
+
+/** `terminology job-continue <id>`: Continue on an upload that waits after interruptions. */
+export async function runTerminologyJobContinue(id: string, opts: { json: boolean }): Promise<number> {
+  const ctx = await createTerminologyContext(loadConfig());
+  try {
+    const outcome = await continueTerminologyIngestJob({ terminologyJobs: ctx.jobs, jobInterruptions: ctx.jobInterruptions }, id);
+    if (outcome !== 'requeued') { process.stderr.write(`terminology job-continue refused: ${continueRefusal(outcome)}\n`); return 1; }
+    await recordAuditEvent(ctx, cliActor(), { action: 'terminology.import.continued', entityType: 'terminology_ingest_job', entityId: id });
+    out(opts.json, { id, status: 'queued' }, `${id} is back in the queue; the server runs it next`);
+    return 0;
+  } catch (err) { process.stderr.write(`terminology job-continue failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
 }
 

@@ -1,4 +1,5 @@
 import type { FacilityJob, FacilityJobStore } from '@openldr/db';
+import { startHeartbeat, sweepStale, type InterruptionDeps } from './job-interruptions';
 
 export interface FacilityJobWorkerDeps {
   jobs: FacilityJobStore;
@@ -6,6 +7,11 @@ export interface FacilityJobWorkerDeps {
   runProjection(registryId: string): Promise<void>;
   /** Attempt budget a job may spend before it stays `failed` for good. Default 5. */
   maxAttempts?: number;
+  /** Where the worker records the jobs it takes back after an interruption. Absent (some unit
+   *  tests), the worker takes nothing back. */
+  interruptions?: InterruptionDeps;
+  /** When this server process started: a job silent since before it was cut by a restart. */
+  processStartedAt?: Date;
   intervalMs?: number;
   logger: { info(o: unknown, m?: string): void; error(o: unknown, m?: string): void };
 }
@@ -22,8 +28,10 @@ export function createFacilityJobWorker(deps: FacilityJobWorkerDeps): FacilityJo
   /** The tick in progress, if any. stop() awaits it: closing the DB under a claimed job makes its
    *  `finish()` throw, and the row then stays `running` with nothing left to finish it. */
   let inFlight: Promise<void> | null = null;
+  const processStartedAt = deps.processStartedAt ?? new Date();
 
   async function processJob(job: FacilityJob): Promise<void> {
+    const stopBeat = startHeartbeat(() => deps.jobs.beat(job.id));
     try {
       if (job.kind === 'facility-map-rebuild') {
         const { written } = await deps.runRebuild();
@@ -41,11 +49,21 @@ export function createFacilityJobWorker(deps: FacilityJobWorkerDeps): FacilityJo
       // disappearing, so the health chip can still show it and an operator can Retry.
       if (job.attempts < maxAttempts) await deps.jobs.retryPreservingAttempts(job.id);
       deps.logger.error({ err, jobId: job.id, kind: job.kind, attempts: job.attempts }, 'facility job failed');
+    } finally {
+      stopBeat();
     }
   }
 
   async function runTick(): Promise<void> {
     try {
+      // A job a dead process was running goes back in the queue (or waits for Continue after
+      // MAX_SELF_RESUMES cuts), with the cut recorded. Its heartbeat tells it from a live one.
+      if (deps.interruptions) await sweepStale(deps.interruptions, {
+        kind: 'facility-job', processStartedAt, selfResume: true,
+        listStale: (olderThan) => deps.jobs.listStaleRunning(olderThan),
+        resume: async (id) => { await deps.jobs.requeueStale(id); },
+        wait: (id) => deps.jobs.markInterrupted(id, 'interrupted too many times in a row; use Continue to run it again'),
+      });
       const job = await deps.jobs.claimNext();
       if (job) await processJob(job);
     } catch (err) {
@@ -62,14 +80,6 @@ export function createFacilityJobWorker(deps: FacilityJobWorkerDeps): FacilityJo
     return inFlight;
   }
 
-  // Crash recovery: a job still 'running' at startup was orphaned by a killed process. Best-effort
-  // and non-blocking — a failure here must never stop the worker starting. The handle is retained so
-  // stop() can await it, preventing a stray recovery log after shutdown.
-  const crashRecovery = deps.jobs
-    .failStaleRunning('interrupted — the server restarted before the rebuild finished')
-    .then((n) => { if (n > 0) deps.logger.info({ count: n }, 'reset orphaned facility jobs at startup'); })
-    .catch((err) => deps.logger.error({ err }, 'facility job crash-recovery failed'));
-
   const timer = setInterval(() => { if (!stopped) void tickOnce(); }, intervalMs);
 
   return {
@@ -77,9 +87,8 @@ export function createFacilityJobWorker(deps: FacilityJobWorkerDeps): FacilityJo
     async stop() {
       stopped = true;
       clearInterval(timer);
-      await crashRecovery;
-      // No timeout. A rebuild cut short by a hard kill stays `running` until the next server boot's
-      // crash recovery fails it, which is the same outcome a timeout here would produce.
+      // No timeout. A rebuild cut short by a hard kill stops beating, and the next server's sweep
+      // takes it back and runs it again.
       await inFlight;
     },
   };
@@ -87,9 +96,8 @@ export function createFacilityJobWorker(deps: FacilityJobWorkerDeps): FacilityJo
 
 /** Build the worker only in a process that drains the queue.
  *
- *  Every `openldr` CLI command builds an `AppContext`. Building this worker there runs crash
- *  recovery, which fails EVERY `running` job, including a rebuild the API server is doing right
- *  now. It also lets a short-lived CLI process claim a rebuild it will close the DB under. Jobs a
+ *  Every `openldr` CLI command builds an `AppContext`. Building this worker there would let a
+ *  short-lived CLI process claim a rebuild it will close the DB under. Jobs a
  *  CLI command enqueues wait in `facility_jobs` for the server to run them. */
 export function createFacilityJobWorkerIfEnabled(
   enabled: boolean, deps: FacilityJobWorkerDeps,

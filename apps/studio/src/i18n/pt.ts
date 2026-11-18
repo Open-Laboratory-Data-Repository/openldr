@@ -73,7 +73,24 @@ export const pt: EnShape = {
   "mapped": "{{count}} mapeadas",
   "persisted": "{{count}} guardadas"
   },
+  interruptions: {
+  "badgeOnce": "Interrompido uma vez",
+  "badgeMany": "Interrompido {{count}} vezes",
+  "carriedOn": "Interrompido às {{at}}. Continuou sozinho às {{back}}.",
+  "continued": "Interrompido às {{at}}. Continuado por uma pessoa às {{back}}.",
+  "waiting": "Interrompido às {{at}}. À espera de Continuar.",
+  "continueImport": "Continuar importação",
+  "importWaiting": "Importação interrompida",
+  "importContinued": "A importação voltou à fila.",
+  "continueFailed": "Não foi possível continuar: {{error}}"
+  },
   workflowReceipts: {
+  "confirmChangedTitle": "Executar o workflow alterado?",
+  "confirmChangedBody": "O workflow mudou depois do início desta execução. Continuar executa-o como está agora, com os mesmos dados.",
+  "continue": "Continuar",
+  "continued": "Execução {{runId}} iniciada com os mesmos dados.",
+  "continuedChanged": "Execução {{runId}} iniciada com os mesmos dados. O workflow mudou desde o início da execução interrompida, por isso a nova execução usa-o como está agora.",
+  "continueFailed": "Não foi possível continuar: {{error}}",
   "title": "Recibos webhook",
   "runs": "Execuções",
   "detail": "Detalhes do recibo",
@@ -1787,6 +1804,8 @@ export const pt: EnShape = {
       runLoading: 'A verificar a execução da importação…',
       runPhase: 'Fase: {{phase}}',
       runProgress: '{{processed}} de {{total}} linha(s) processadas.',
+      continueRunAction: 'Continuar importação',
+      interruptedNotice: 'Esta importação foi interrompida demasiadas vezes durante a execução, por isso parou. Mantém o registo. Use Continuar importação no menu para a executar de novo.',
       runStatus: {
         queued: 'Em fila — à espera de um worker de importação.',
         validating: 'A validar o ficheiro carregado.',

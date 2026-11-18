@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createImportCopyStore, createPluginDataStore, type ImportCopyStore, type PluginDataStore } from '@openldr/db';
+import { createImportCopyStore, createPluginDataStore, type ImportCopyStore, type PluginDataStore, createJobInterruptionStore } from '@openldr/db';
 import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
 import { STALE_MS, createImportService, type ImportActor, type ImportAuditEvent, type ImportService } from './import-run';
 import { CopySetChangedError, copyIdOf, createImportCopyService, type CopyRun, type ImportCopyService } from './import-copy';
@@ -108,6 +108,7 @@ let internalDb: Awaited<ReturnType<typeof makeMigratedDb>>;
 async function world(requests: string[], facilities: string[] = []) {
   const source = fakeSource(requests, facilities);
   const raw = createPluginDataStore(internalDb);
+  const interruptions = createJobInterruptionStore(internalDb);
   const runSaves: CopyRun[] = [];
   /** Writes of a copy record held between the caller's read and its write, until released. */
   const pauses: Array<{ match: (doc: CopyRun) => boolean; reached: () => void; gate: Promise<void> }> = [];
@@ -218,6 +219,7 @@ async function world(requests: string[], facilities: string[] = []) {
     plugins: pluginsDep, connectors, secretsKey: 'k', pluginData, audit, store, checks,
     allowed: (pluginId) => imports.allowed(pluginId),
     driverId,
+    interruptions: { store: interruptions, now: () => new Date(clock.now), processStartedAt: new Date(clock.now) },
     createDb: () => source.db,
     now: () => new Date(clock.now),
     sleep: async (ms) => {
@@ -229,7 +231,7 @@ async function world(requests: string[], facilities: string[] = []) {
   worlds.push({ plainCopyPuts });
   const svc = service();
   return {
-    svc, service, imports, source, store, calls, audited, runSaves, sleeps, clock, plugins, invoke, raw, plainCopyPuts,
+    svc, service, imports, source, store, calls, audited, runSaves, sleeps, clock, plugins, invoke, raw, plainCopyPuts, interruptions,
     /** Hold the next write of a copy record that matches, after its caller read the record. */
     pauseWrite: (match: (doc: CopyRun) => boolean) => {
       let reached: () => void = () => {};
@@ -1220,6 +1222,37 @@ describe('copy: who drives', () => {
     });
     expect((await w.svc.get(PLUGIN, COPY))!).toMatchObject({ status: 'completed', driver: null, sets: { requests: { cursor: 'REQ0004', keys: 4, rows: 12 } } });
     expect(keyAfters(w)).toEqual(['REQ0002', 'REQ0004']);
+  });
+
+  it('records the takeover as a cut the copy carried on through by itself (design 2026-11-18-interrupted-jobs)', async () => {
+    const w = await world(keysOf(4));
+    const updatedAt = at(w.clock.now - STALE_MS - 1);
+    await orphan(w, { updatedAt });
+    await w.svc.tick();
+    await w.svc.idle();
+    expect((await w.interruptions.listFor('cdr-run', [COPY])).get(COPY)).toEqual([
+      expect.objectContaining({ at: new Date(updatedAt).toISOString(), cause: 'server-restart', resumedBy: 'self' }),
+    ]);
+  });
+
+  it('leaves an orphan cut three times with no progress for a person (review R10)', async () => {
+    const w = await world(keysOf(4));
+    await orphan(w, { updatedAt: at(w.clock.now - STALE_MS - 1) });
+    const stored = (await w.stored())!;
+    const phase = Object.entries(stored.sets).map(([k, p]) => `${k}:${p.cursor ?? ''}:${p.keys}`).join('|');
+    for (let i = 1; i <= 3; i += 1) {
+      const cut = await w.interruptions.record('cdr-run', COPY, { at: new Date(Date.UTC(2026, 0, 1, 0, i)), cause: 'server-restart', phase });
+      await w.interruptions.resolve(cut.id, { resumedBy: 'self', resumedAt: new Date(Date.UTC(2026, 0, 1, 0, i, 30)) });
+    }
+    await w.svc.tick();
+    expect((await w.stored())!.driver).not.toBe('server-1');
+    expect(w.audited.find((e) => e.action === 'import.copy.takeover')).toBeUndefined();
+    // It stops with a reason, so the page offers Continue (re-review R10).
+    expect((await w.stored())!).toMatchObject({ status: 'stopped', driver: null, lastError: expect.stringContaining('Continue') });
+    // Continue is a start: it carries on from the saved cursor and closes the open cut.
+    const again = await w.svc.start({ ...START, pageSize: 2 });
+    expect(again).toMatchObject({ status: 'queued', sets: { requests: { cursor: 'REQ0002', keys: 2 } } });
+    expect(((await w.interruptions.listFor('cdr-run', [COPY])).get(COPY) ?? []).filter((r) => r.resumedBy === null)).toEqual([]);
   });
 
   it('a release during a takeover audit write launches no drive, and idle resolves', async () => {

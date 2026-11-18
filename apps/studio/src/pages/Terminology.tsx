@@ -1,6 +1,7 @@
 import { isNarrowViewport } from '@/lib/viewport';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { InterruptionBadge } from '@/components/ui/interruption-badge';
 import { Library, MoreHorizontal, ChevronRight, Plus, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { toast } from 'sonner';
@@ -23,6 +24,7 @@ import {
   systemDeletionImpact,
   uploadTerminologyDistribution,
   getTerminologyIngestJob,
+  continueTerminologyIngestJob,
   purgeTerminologyDistribution,
   type Publisher,
   type CodingSystem,
@@ -472,7 +474,7 @@ export function Terminology(): JSX.Element {
         const job = await getTerminologyIngestJob(publisherId, systemType);
         if (!importPollMountedRef.current) return;
         setImportJobs((prev) => ({ ...prev, [publisherId]: job }));
-        if (job.status === 'ready' || job.status === 'failed') {
+        if (job.status === 'ready' || job.status === 'failed' || job.status === 'interrupted') {
           clearInterval(importPollRef.current[publisherId]);
           delete importPollRef.current[publisherId];
           if (job.status === 'ready') {
@@ -503,15 +505,27 @@ export function Terminology(): JSX.Element {
         try {
           const job = await getTerminologyIngestJob(pub.id, systemType);
           if (cancelled || !importPollMountedRef.current) return;
-          if (job.status === 'queued' || job.status === 'running') {
-            setImportJobs((prev) => ({ ...prev, [pub.id]: job }));
-            startPollingImportJob(pub.id, systemType);
-          }
+          // Keep every job found: an interrupted one shows its badge and Continue import, and a
+          // finished one its record of interruptions (review R4). Only a live one is polled.
+          setImportJobs((prev) => ({ ...prev, [pub.id]: job }));
+          if (job.status === 'queued' || job.status === 'running') startPollingImportJob(pub.id, systemType);
         } catch { /* no job for this system → nothing to resume */ }
       }
     })();
     return () => { cancelled = true; };
   }, [publishers]);
+
+  // Continue on an upload that stopped carrying on by itself after interruptions
+  // (design 2026-11-18-interrupted-jobs). Back in the queue, then polled like a fresh upload.
+  const continueImport = async (publisherId: string, systemType: 'loinc' | 'snomed' | 'rxnorm', jobId: string): Promise<void> => {
+    try {
+      await continueTerminologyIngestJob(jobId);
+      toast.success(t('interruptions.importContinued'));
+      startPollingImportJob(publisherId, systemType);
+    } catch (err) {
+      toast.error(t('interruptions.continueFailed', { error: err instanceof Error ? err.message : String(err) }));
+    }
+  };
 
   const handleDistributionQueued = (_jobId: string): void => {
     setDistImportOpen(false);
@@ -637,6 +651,10 @@ export function Terminology(): JSX.Element {
                         : `Importing…${activeImportJob.total ? ` ${activeImportJob.processed}/${activeImportJob.total}` : ''}`}
                     </Badge>
                   )}
+                  {activeImportJob?.status === 'interrupted' && (
+                    <Badge variant="outline" className="border-destructive/40 text-[9px] uppercase text-destructive">{t('interruptions.importWaiting')}</Badge>
+                  )}
+                  {activeImportJob && <InterruptionBadge interruptions={activeImportJob.interruptions} />}
                   {selectedSystem && (
                     <>
                       <ChevronRight className="h-3 w-3" />
@@ -721,6 +739,11 @@ export function Terminology(): JSX.Element {
                             <DropdownMenuItem onClick={() => openDistImport(activeSection.publisher.id, st)}>
                               Import distribution...
                             </DropdownMenuItem>
+                            {activeImportJob?.status === 'interrupted' && (
+                              <DropdownMenuItem onClick={() => { void continueImport(activeSection.publisher.id, st, activeImportJob.id); }}>
+                                {t('interruptions.continueImport')}
+                              </DropdownMenuItem>
+                            )}
                           </>
                         );
                       })()}

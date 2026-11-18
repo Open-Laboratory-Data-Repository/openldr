@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { InterruptionBadge } from '@/components/ui/interruption-badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -360,6 +361,7 @@ function FacilityHealthChip({
           ? t('facilities.health.lastBuilt', { time: formatBuildTime(dim.lastSuccessAt) })
           : t('facilities.health.neverBuilt')}
       </span>
+      <InterruptionBadge interruptions={dim.interruptions} />
       {dim.state === 'failed' && canManage && dim.jobId && (
         <Button
           variant="outline" size="sm" className="h-6 px-2 text-xs"

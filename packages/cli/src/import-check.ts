@@ -9,6 +9,7 @@ import { loadConfig } from '@openldr/config';
 import { cliActor, cliNamedActor } from './cli-actor';
 import { parseImportOptions } from './import';
 import { outputTargetRefusal } from './output-target';
+import { withCdrCuts } from './interruptions';
 
 // `openldr import check ...`: check a finished copy with a plugin that decodes each request. Every
 // command calls the check service the plugin page uses (packages/bootstrap/src/import-check.ts), so
@@ -104,7 +105,8 @@ export async function runImportCheckStatus(
   try {
     if (runId === undefined) {
       const runs = await ctx.importChecks.list(pluginId);
-      emit(opts.json, runs.map(checkRunForJson), runs.map((r) => formatCheckDetail(r, opts.laboratories)).join('\n') || '(no checks)');
+      const shown = await withCdrCuts(ctx.jobInterruptions, runs, checkRunForJson, (r) => formatCheckDetail(r, opts.laboratories));
+      emit(opts.json, shown.json, shown.text || '(no checks)');
       return 0;
     }
     const run = await ctx.importChecks.get(pluginId, runId);
@@ -112,7 +114,8 @@ export async function runImportCheckStatus(
       emit(opts.json, { error: 'check not found' }, `check ${runId} not found`);
       return 1;
     }
-    emit(opts.json, checkRunForJson(run), formatCheckDetail(run, opts.laboratories));
+    const shown = await withCdrCuts(ctx.jobInterruptions, [run], checkRunForJson, (r) => formatCheckDetail(r, opts.laboratories));
+    emit(opts.json, shown.json[0], shown.text);
     return 0;
   } finally { await ctx.close(); }
 }

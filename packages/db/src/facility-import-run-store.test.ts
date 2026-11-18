@@ -352,6 +352,47 @@ describe('createFacilityImportRunStore', () => {
     await expect(store.startUpload(upload)).resolves.toMatchObject({ status: 'queued' });
   });
 
+  it('lists RUNNING runs past the lease, and takes one back to the state its phase claims from', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+    for (const status of ALL_RUN_STATES) await insertRun(db, `fir_${status}`, status);
+
+    const stale = await store.listStaleRunning(0);
+    expect(stale.map((r) => r.status).sort()).toEqual([...RUNNING_RUN_STATES].sort());
+
+    expect(await store.returnToClaimable('fir_validating')).toBe(true);
+    expect(await store.returnToClaimable('fir_applying')).toBe(true);
+    expect((await row(db, 'fir_validating')).status).toBe(VALIDATE_PHASE.from);
+    expect((await row(db, 'fir_applying')).status).toBe(APPLY_PHASE.from);
+    // The register stays held: the run is still the active one for it.
+    expect((await row(db, 'fir_applying')).active_key).toBe('urn:sys:fir_applying');
+    // Not running any more, so a second take-back changes nothing.
+    expect(await store.returnToClaimable('fir_applying')).toBe(false);
+    expect(await store.returnToClaimable('fir_queued')).toBe(false);
+  });
+
+  it('an interrupted run keeps its register; Continue takes it back to the claimable state (review R8)', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+    await insertRun(db, 'fir_a', 'applying');
+    expect(await store.markInterrupted('fir_a', 'interrupted four times while applying')).toBe(true);
+    expect(await row(db, 'fir_a')).toMatchObject({ status: 'interrupted', active_key: 'urn:sys:fir_a' });
+    expect(await store.continueInterrupted('fir_a', APPLY_PHASE.from)).toBe(true);
+    expect(await row(db, 'fir_a')).toMatchObject({ status: 'confirmed', error: null, active_key: 'urn:sys:fir_a' });
+    expect(await store.continueInterrupted('fir_a', APPLY_PHASE.from)).toBe(false);
+  });
+
+  it('failRunning fails one RUNNING run and releases its key, and leaves any other state alone', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+    await insertRun(db, 'fir_a', 'applying');
+    await insertRun(db, 'fir_b', 'confirmed');
+    expect(await store.failRunning('fir_a', 'interrupted three times')).toBe(true);
+    expect(await row(db, 'fir_a')).toMatchObject({ status: 'failed', error: 'interrupted three times', active_key: null });
+    expect(await store.failRunning('fir_b', 'x')).toBe(false);
+    expect((await row(db, 'fir_b')).status).toBe('confirmed');
+  });
+
   it('failStaleRunning fails exactly the RUNNING states, releases their keys, and returns the count', async () => {
     // Built from `ALL_RUN_STATES` so a state added later is covered here automatically: the
     // expectation is derived from `RUNNING_RUN_STATES`, never from a list re-spelled in this test.

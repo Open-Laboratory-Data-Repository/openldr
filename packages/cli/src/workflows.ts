@@ -1,4 +1,5 @@
-import { createAppContext, recordAuditEvent, setWorkflowEnabled } from '@openldr/bootstrap';
+import { createAppContext, recordAuditEvent, setWorkflowEnabled, continueWorkflowReceipt } from '@openldr/bootstrap';
+import { describeInterruption } from './interruptions';
 import { loadConfig } from '@openldr/config';
 import { cliNamedActor } from './cli-actor';
 import { redactError } from './redact-error';
@@ -43,8 +44,9 @@ export async function runWorkflowReceiptsList(workflowId: string, opts: { limit?
   const ctx = await createAppContext(loadConfig());
   try {
     const rows = await ctx.workflows.receipts.list(workflowId, { limit, offset });
-    process.stdout.write(opts.json ? JSON.stringify(rows, null, 2) + '\n' :
-      (rows.map(row => `${row.id}\t${row.status}\t${row.runId ?? ''}\t${row.createdAt}`).join('\n') || '(no receipts)') + '\n');
+    const cuts = rows.length > 0 ? await ctx.jobInterruptions.listFor('workflow-receipt', rows.map((r) => r.id)) : new Map();
+    process.stdout.write(opts.json ? JSON.stringify(rows.map((r) => ({ ...r, interruptions: cuts.get(r.id) ?? [] })), null, 2) + '\n' :
+      (rows.map(row => [`${row.id}\t${row.status}\t${row.runId ?? ''}\t${row.createdAt}`, ...(cuts.get(row.id) ?? []).map(describeInterruption)].join('\n')).join('\n') || '(no receipts)') + '\n');
     return 0;
   } finally {
     await ctx.close();
@@ -61,6 +63,25 @@ export async function runWorkflowReceiptShow(requestId: string, opts: { json: bo
     }
     process.stdout.write(JSON.stringify(receipt, null, 2) + '\n');
     return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** `openldr workflows run-continue <workflowId> <requestId>`: the History row menu's Continue on an
+ *  interrupted run, through the same shared code. Starts a new run with the stored input. */
+export async function runWorkflowRunContinue(workflowId: string, requestId: string, opts: { json: boolean }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const result = await continueWorkflowReceipt(ctx, workflowId, requestId);
+    if (result === 'not-waiting') { process.stderr.write('workflows run-continue refused: this run is not waiting to continue\n'); return 1; }
+    await recordAuditEvent(ctx, cliNamedActor(), { action: 'workflow.run.continued', entityType: 'workflow', entityId: workflowId, metadata: { receiptId: requestId, runId: result.runId } });
+    process.stdout.write(opts.json ? JSON.stringify(result) + '\n'
+      : `started run ${result.runId}${result.definitionChanged ? ' with the workflow as it is now; it changed after the interrupted run started' : ''}\n`);
+    return 0;
+  } catch (err) {
+    process.stderr.write(`workflows run-continue failed: ${redactError(err)}\n`);
+    return 1;
   } finally {
     await ctx.close();
   }

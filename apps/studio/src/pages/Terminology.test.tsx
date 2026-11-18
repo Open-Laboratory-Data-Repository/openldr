@@ -381,6 +381,27 @@ describe('Terminology page', () => {
     await waitFor(() => expect(distSpy.mock.calls.length).toBeGreaterThan(1));
   });
 
+  it('keeps an interrupted import found on mount, with its badge and Continue import (review R4)', async () => {
+    vi.spyOn(api, 'listPublishers').mockResolvedValue([pub('pub-loinc', 'LOINC')] as never);
+    vi.spyOn(api, 'listOntologyDistributions').mockReset().mockResolvedValue([]);
+    vi.spyOn(api, 'getTerminologyIngestJob').mockReset().mockResolvedValue({
+      id: 'tij_1', status: 'interrupted', phase: 'concepts', processed: 10, total: 100, error: 'interrupted', version: null, finishedAt: null,
+      interruptions: [{ id: 'i1', at: '2026-11-18T05:00:00.000Z', cause: 'server-restart', phase: 'concepts', resumedAt: null, resumedBy: null, continuedAs: null }],
+    });
+    const cont = vi.spyOn(api, 'continueTerminologyIngestJob').mockResolvedValue(undefined);
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+    fireEvent.click(await screen.findByText('LOINC'));
+    expect(await screen.findByText('Import interrupted')).toBeInTheDocument();
+    expect(screen.getByText('Interrupted once')).toBeInTheDocument();
+
+    const actions = (await screen.findAllByRole('button', { name: 'Actions' }))[0]!;
+    fireEvent.pointerDown(actions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Continue import')) fireEvent.keyDown(actions, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Continue import'));
+    await waitFor(() => expect(cont).toHaveBeenCalledWith('tij_1'));
+  }, 20_000);
+
   it('shows "Import distribution..." on the SNOMED CT publisher menu and uploads with systemType=snomed', async () => {
     const uploadSpy = vi.spyOn(api, 'uploadTerminologyDistribution').mockResolvedValue({ jobId: 'tij_1' });
     vi.spyOn(api, 'getTerminologyIngestJob').mockResolvedValue({

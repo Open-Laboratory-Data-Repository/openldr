@@ -73,7 +73,24 @@ export const fr: EnShape = {
   "mapped": "{{count}} mappées",
   "persisted": "{{count}} stockées"
   },
+  interruptions: {
+  "badgeOnce": "Interrompu une fois",
+  "badgeMany": "Interrompu {{count}} fois",
+  "carriedOn": "Interrompu à {{at}}. A repris tout seul à {{back}}.",
+  "continued": "Interrompu à {{at}}. Repris par une personne à {{back}}.",
+  "waiting": "Interrompu à {{at}}. En attente de Continuer.",
+  "continueImport": "Continuer l’import",
+  "importWaiting": "Import interrompu",
+  "importContinued": "L’import est de nouveau dans la file.",
+  "continueFailed": "Impossible de continuer : {{error}}"
+  },
   workflowReceipts: {
+  "confirmChangedTitle": "Exécuter le workflow modifié ?",
+  "confirmChangedBody": "Le workflow a changé après le début de cette exécution. Continuer l’exécute tel qu’il est maintenant, avec les mêmes données.",
+  "continue": "Continuer",
+  "continued": "Exécution {{runId}} lancée avec les mêmes données.",
+  "continuedChanged": "Exécution {{runId}} lancée avec les mêmes données. Le workflow a changé depuis le début de l’exécution interrompue, la nouvelle exécution l’utilise tel qu’il est maintenant.",
+  "continueFailed": "Impossible de continuer : {{error}}",
   "title": "Reçus webhook",
   "runs": "Exécutions",
   "detail": "Détails du reçu",
@@ -1787,6 +1804,8 @@ export const fr: EnShape = {
       runLoading: 'Vérification de l’exécution de l’import…',
       runPhase: 'Étape : {{phase}}',
       runProgress: '{{processed}} ligne(s) sur {{total}} traitées.',
+      continueRunAction: 'Continuer l’import',
+      interruptedNotice: 'Cet import a été interrompu trop de fois pendant son exécution, il s’est donc arrêté. Il garde le registre. Utilisez Continuer l’import dans le menu pour le relancer.',
       runStatus: {
         queued: 'En file d’attente — en attente d’un worker d’import.',
         validating: 'Validation du fichier téléversé.',

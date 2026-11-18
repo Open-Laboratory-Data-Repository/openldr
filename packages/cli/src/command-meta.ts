@@ -227,6 +227,7 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'facilities import': { kind: 'app', capability: 'facilities.manage', destructive: true, paths: [inFile('path'), inFile('--column-map'), inFile('--value-map')] }, // :2118, :2035
   'facilities import-run': { kind: 'app', capability: 'facilities.view' }, // :3068
   'facilities import-run-cancel': { kind: 'app', capability: 'facilities.manage', destructive: true }, // :3039
+  'facilities import-run-continue': { kind: 'app', capability: 'facilities.manage' },
   'facilities import-run-revalidate': { kind: 'app', capability: 'facilities.manage', paths: [inFile('--column-map')] }, // :3013
   'facilities import-runs': { kind: 'app', capability: 'facilities.view' }, // :2790
   'facilities import-sources': { kind: 'app', capability: 'facilities.view' }, // :1926
@@ -420,6 +421,8 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // read, so reads take the area's view key. reproject is db reproject under its old name.
   'terminology distribution import': { kind: 'app', capability: 'terminology.manage', paths: [inFile('--file')] }, // admin :458, :461
   'terminology distribution purge': { kind: 'app', capability: 'terminology.manage', destructive: true }, // admin :495
+  'terminology job': { kind: 'app', capability: 'terminology.manage' },
+  'terminology job-continue': { kind: 'app', capability: 'terminology.manage' },
   'terminology expand': { kind: 'app', capability: 'terminology.view' }, // terminology-routes.ts:25
   'terminology import': { kind: 'app', capability: 'terminology.manage', paths: [{ target: 'path', kind: terminologyImportPath }] }, // admin :193, :432
   'terminology lookup': { kind: 'app', capability: 'terminology.view' }, // terminology-routes.ts:8
@@ -501,6 +504,7 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // Enable and Disable in the studio row menu: PUT /api/workflows/:id/enabled, guard EDIT
   // (workflows-routes.ts). Only `enabled` changes; nothing is removed, so not destructive.
   'workflows enable': { kind: 'app', capability: 'workflows.edit' },
+  'workflows run-continue': { kind: 'app', capability: 'workflows.run' },
   'workflows disable': { kind: 'app', capability: 'workflows.edit' },
   'workflows receipts list': { kind: 'app', capability: 'workflows.view' },
   'workflows receipts show': { kind: 'app', capability: 'workflows.view' },

@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
     // (the OPERATOR's action, never `retryPreservingAttempts` — see facility-job-store.ts).
     // `enqueue` is here for the import command, which must hand this store to `importFacilities`.
     facilityJobs: { retry: vi.fn(), enqueue: vi.fn() },
+    jobInterruptions: { listFor: vi.fn(async () => new Map()), resolve: vi.fn() },
     // Task 4: `openldr facilities list` calls `ctx.facilityRegistry.list` directly — the same
     // store method Task 3's HTTP route reads (apps/server/src/facilities-routes.ts).
     facilityRegistry: { list: vi.fn(), idsMatching: vi.fn(), removeMany: vi.fn() },
@@ -93,6 +94,7 @@ vi.mock('@openldr/bootstrap', async () => {
   const actual = await vi.importActual<typeof import('@openldr/bootstrap')>('@openldr/bootstrap');
   return {
     createAppContext: mocks.createAppContext,
+    resolveByPerson: actual.resolveByPerson,
     importFacilities: mocks.importFacilities,
     scanObservedFacilities: mocks.scanObservedFacilities,
     publishFacilityMap: mocks.publishFacilityMap,
@@ -2055,7 +2057,7 @@ describe('facilities import-run CLI', () => {
     const code = await runFacilitiesImportRun('fir_a', { json: true });
 
     expect(code).toBe(0);
-    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify(RUN_DETAIL, null, 2) + '\n');
+    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify({ ...RUN_DETAIL, interruptions: [] }, null, 2) + '\n');
   });
 
   // ⛔ The `--json` assertion above compares against `JSON.stringify(<the fixture>)`, so it agrees
@@ -2598,6 +2600,7 @@ describe('facilities jobs CLI', () => {
     mocks.createAppContext.mockResolvedValue(mocks.ctx);
     mocks.ctx.close.mockResolvedValue(undefined);
     mocks.ctx.facilityJobs.retry.mockResolvedValue('requeued');
+    mocks.ctx.jobInterruptions.listFor.mockResolvedValue(new Map());
   });
 
   afterEach(() => {
@@ -2610,11 +2613,24 @@ describe('facilities jobs CLI', () => {
     const code = await runFacilitiesJobs({ json: false });
 
     expect(code).toBe(0);
-    expect(mocks.facilityHealth).toHaveBeenCalledWith({ internalDb: mocks.ctx.internalDb, jobs: mocks.ctx.facilityJobs });
+    expect(mocks.facilityHealth).toHaveBeenCalledWith({ internalDb: mocks.ctx.internalDb, jobs: mocks.ctx.facilityJobs, interruptions: mocks.ctx.jobInterruptions });
     const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(human).toMatch(/current/);
     expect(human).toMatch(/88/);
     expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("prints each of the latest rebuild's interruptions (re-review R3)", async () => {
+    mocks.facilityHealth.mockResolvedValue({
+      ...HEALTH_CURRENT,
+      reportDimension: {
+        ...HEALTH_CURRENT.reportDimension,
+        interruptions: [{ id: 'i1', at: '2026-11-18T05:00:00.000Z', cause: 'server-restart', phase: null, resumedAt: '2026-11-18T05:02:00.000Z', resumedBy: 'self', continuedAs: null }],
+      },
+    });
+    expect(await runFacilitiesJobs({ json: false })).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/interrupted: .*carried on by itself/);
   });
 
   it('prints a failed state with its error and the separate projection-failure count', async () => {

@@ -48,6 +48,9 @@ export const ALL_RUN_STATES = [
   'stored',
   // The inline preview/apply path A2a shipped mints exactly this one.
   'previewed',
+  // Cut by restarts too many times in one phase (design 2026-11-18-interrupted-jobs, review R8). It
+  // keeps its register and waits for a person's Continue; a new upload may supersede it.
+  'interrupted',
   // Terminal.
   'applied', 'failed', 'cancelled',
 ] as const;
@@ -82,7 +85,7 @@ export const TERMINAL_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
  *  confirm and the apply would otherwise leave the register locked with no operator path back. What
  *  a take-over costs here is one un-run apply, which the superseding upload replaces. */
 export const SUPERSEDABLE_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
-  new Set<FacilityImportRunStatus>(['queued', 'stored', 'awaiting_confirmation', 'confirmed', 'previewed']);
+  new Set<FacilityImportRunStatus>(['queued', 'stored', 'awaiting_confirmation', 'confirmed', 'previewed', 'interrupted']);
 
 /** A worker is mid-flight. A new request gets 409 — taking over would race a live run. */
 export const RUNNING_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =

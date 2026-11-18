@@ -33,6 +33,27 @@ describe('handleIngestEvent', () => {
     };
   }
 
+  it('records a cut when the queue hands back a batch a dead worker left processing (design 2026-11-18-interrupted-jobs)', async () => {
+    const d = deps();
+    const updatedAt = new Date('2026-11-18T05:00:00.000Z');
+    (d.batches as any).get = vi.fn(async () => ({ status: 'processing', updated_at: updatedAt }));
+    const record = vi.fn(async () => ({ id: 'i1', inserted: true }));
+    const resolve = vi.fn(async () => {});
+    const now = new Date('2026-11-18T05:06:00.000Z');
+    await handleIngestEvent({ ...d, interruptions: { store: { record, resolve }, now: () => now } }, { type: 'ingest.received', payload: { batchId: 'b1', blobKey: 'k', source: 'test', converter: 'fhir-bundle' } });
+    expect(record).toHaveBeenCalledWith('ingest-batch', 'b1', { at: updatedAt, cause: 'lease-expired', phase: null });
+    expect(resolve).toHaveBeenCalledWith('i1', { resumedBy: 'self', resumedAt: now });
+    expect(d.batches.markDone).toHaveBeenCalledWith('b1', 1);
+  });
+
+  it('records nothing for a first delivery', async () => {
+    const d = deps();
+    (d.batches as any).get = vi.fn(async () => ({ status: 'received', updated_at: new Date() }));
+    const record = vi.fn();
+    await handleIngestEvent({ ...d, interruptions: { store: { record, resolve: vi.fn() }, now: () => new Date() } }, { type: 'ingest.received', payload: { batchId: 'b1', blobKey: 'k', source: 'test', converter: 'fhir-bundle' } });
+    expect(record).not.toHaveBeenCalled();
+  });
+
   it('converts, persists the resources with provenance, marks done', async () => {
     const persist = vi.fn(async (rs: unknown[]) => rs.map(() => ({ saved: true, flattened: 'written' as const })));
     const d = deps(persist);

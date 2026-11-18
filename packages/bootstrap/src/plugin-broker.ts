@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { beginOp } from '@openldr/core';
 import { readGrant, type Capability } from '@openldr/marketplace';
-import type { PluginDataStore } from '@openldr/db';
+import type { JobInterruption, JobInterruptionStore, PluginDataStore } from '@openldr/db';
 import type { PluginPolicy } from './policy';
 import { policyAllows } from './policy';
 import { checkReadOp } from './check-read-audit';
@@ -82,6 +82,13 @@ export type BrokerOp =
 export type PageCopyRun = Omit<CopyRun, 'driver' | 'sets'> & { sets: Record<string, Omit<CopySetProgress, 'cursor'>> };
 
 /** The one place a copy is cut down for a plugin page. Every copy op's answer goes through it. */
+/** Runs with each one's recorded interruptions attached as `interruptions`. */
+async function attachCuts<T extends { id: string }>(store: Pick<JobInterruptionStore, 'listFor'> | undefined, runs: T[]): Promise<Array<T & { interruptions?: JobInterruption[] }>> {
+  if (!store || runs.length === 0) return runs;
+  const cuts = await store.listFor('cdr-run', runs.map((r) => r.id));
+  return runs.map((r) => ({ ...r, interruptions: cuts.get(r.id) ?? [] }));
+}
+
 export function copyForPage(run: CopyRun): PageCopyRun {
   const { driver: _driver, sets, ...rest } = run;
   const shown: PageCopyRun['sets'] = {};
@@ -291,6 +298,9 @@ export interface PluginBrokerDeps {
   facilities?: () => Promise<unknown>;
   /** Plugin-scoped schedule registry (wired in Task 4; undefined until then). */
   schedules?: { register(pluginId: string, schedule: unknown): Promise<unknown>; list(pluginId: string): Promise<unknown>; remove(pluginId: string, id: string): Promise<unknown> };
+  /** Each run's recorded interruptions, attached to the runs the page reads (design
+   *  2026-11-18-interrupted-jobs). Absent, runs carry no `interruptions` field. */
+  jobInterruptions?: Pick<JobInterruptionStore, 'listFor'>;
   /** The import service (import-run.ts). When absent, import ops return a structured error. */
   imports?: Pick<ImportService, 'allowed' | 'checks' | 'start' | 'get' | 'list' | 'failures' | 'stop' | 'resume'>;
   /** The copy service (import-copy.ts). When absent, copy ops return a structured error. */
@@ -314,6 +324,8 @@ export interface PluginBroker {
 }
 
 export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
+  const withCutsAll = <T extends { id: string }>(runs: T[]) => attachCuts(deps.jobInterruptions, runs);
+  const withCuts = async <T extends { id: string }>(run: T | null) => (run ? (await withCutsAll([run]))[0]! : null);
   function hasCapability(caps: Capability[], gate: string): boolean {
     return caps.some((c) => c.kind === gate);
   }
@@ -487,8 +499,8 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
                 ...(op.dryRun !== undefined ? { dryRun: op.dryRun } : {}),
                 actor,
               }) };
-              case 'import.status': return { ok: true, data: await imports.get(pluginId, op.runId) };
-              case 'import.list': return { ok: true, data: await imports.list(pluginId) };
+              case 'import.status': return { ok: true, data: await withCuts(await imports.get(pluginId, op.runId)) };
+              case 'import.list': return { ok: true, data: await withCutsAll(await imports.list(pluginId)) };
               case 'import.failures': return { ok: true, data: await imports.failures(pluginId, op.runId) };
               case 'import.stop': return { ok: true, data: await imports.stop(pluginId, op.runId, actor) };
               case 'import.resume': return { ok: true, data: await imports.resume(pluginId, op.runId, actor) };
@@ -516,10 +528,10 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
                   throw err;
                 }
               }
-              case 'import.copy.list': return { ok: true, data: (await copies.list(pluginId)).map(copyForPage) };
+              case 'import.copy.list': return { ok: true, data: await withCutsAll((await copies.list(pluginId)).map(copyForPage)) };
               case 'import.copy.status': {
                 const run = await copies.get(pluginId, op.copyId);
-                return { ok: true, data: run ? copyForPage(run) : null };
+                return { ok: true, data: run ? await withCuts(copyForPage(run)) : null };
               }
               case 'import.copy.stop': return { ok: true, data: copyForPage(await copies.stop(pluginId, op.copyId, actor)) };
               case 'import.copy.delete': return { ok: true, data: copyForPage(await copies.remove(pluginId, op.copyId, actor)) };
@@ -538,10 +550,10 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
                 ...(op.fromStart !== undefined ? { fromStart: op.fromStart } : {}),
                 actor,
               })) };
-              case 'import.check.list': return { ok: true, data: (await checks.list(pluginId)).map(checkForPage) };
+              case 'import.check.list': return { ok: true, data: await withCutsAll((await checks.list(pluginId)).map(checkForPage)) };
               case 'import.check.status': {
                 const run = await checks.get(pluginId, op.runId);
-                return { ok: true, data: run ? checkForPage(run) : null };
+                return { ok: true, data: run ? await withCuts(checkForPage(run)) : null };
               }
               case 'import.check.stop': return { ok: true, data: checkForPage(await checks.stop(pluginId, op.runId, actor)) };
               case 'import.check.held': {

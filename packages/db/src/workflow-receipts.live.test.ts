@@ -12,6 +12,7 @@ import * as runs from './migrations/internal/028_workflow_runs';
 import * as correlation from './migrations/internal/039_workflow_runs_correlation';
 import * as token from './migrations/internal/094_outbox_claim_token';
 import * as receipts from './migrations/internal/097_workflow_webhook_receipts';
+import * as interruptions from './migrations/internal/122_job_interruptions';
 import { createWorkflowReceiptService, WebhookIdempotencyConflictError } from '../../workflows/src/receipt-service';
 
 const url = process.env.WEBHOOK_TEST_DATABASE_URL;
@@ -35,7 +36,7 @@ describe.skipIf(!url)('durable webhook receipts on disposable PostgreSQL', () =>
     pool.on('error', connectionError);
     pool.on('connect', client => client.on('error', connectionError));
     db = new Kysely<InternalSchema>({ log: event => { if (event.level === 'query' && event.query.sql.startsWith('select') && event.query.sql.includes('order by') && event.query.sql.includes('workflow_webhook_receipts')) historyQuery = event.query; }, dialect: new PostgresDialect({ pool }) });
-    for (const migration of [outbox, workflows, runs, correlation, token, receipts]) await migration.up(db as Kysely<unknown>);
+    for (const migration of [outbox, workflows, runs, correlation, token, receipts, interruptions]) await migration.up(db as Kysely<unknown>);
     await sql`insert into workflows(id,name,definition) values ('w','test','{"nodes":[],"edges":[]}')`.execute(db);
     effect = 0;
     service = createWorkflowReceiptService({ db, execute: async (_wf, runId) => {
@@ -185,8 +186,62 @@ describe.skipIf(!url)('durable webhook receipts on disposable PostgreSQL', () =>
       await sql`update workflow_webhook_receipts set status=${status} where id=${receipt.id}`.execute(db);
       if (terminal === 'missing') await sql`delete from outbox_events`.execute(db);
       else await sql`update outbox_events set status=${terminal}`.execute(db);
-      expect((await service.get(receipt.id))?.status).toBe(status === 'queued' ? 'cancelled' : 'interrupted');
+      // A queued receipt never ran, so it is requeued with a fresh event (review R11); a started one
+      // waits for Continue.
+      expect((await service.get(receipt.id))?.status).toBe(status === 'queued' ? 'queued' : 'interrupted');
+      await sql`delete from workflow_webhook_receipts`.execute(db);
+      await sql`delete from outbox_events`.execute(db);
     }
+  });
+  it('records the cut when a started receipt becomes interrupted, left open for Continue (review R6)', async () => {
+    const { receipt } = await service.accept({ workflowId: 'w', input: {} });
+    await sql`update workflow_webhook_receipts set status='running',started_at='2001-01-01T00:00:00Z',claim_token='dead' where id=${receipt.id}`.execute(db);
+    await sql`update outbox_events set status='failed',updated_at='2026-11-18T08:00:00Z'`.execute(db);
+    expect((await service.get(receipt.id))?.status).toBe('interrupted');
+    const cuts = await db.selectFrom('job_interruptions').selectAll().where('job_id', '=', receipt.id).execute();
+    expect(cuts).toHaveLength(1);
+    expect(cuts[0]).toMatchObject({ job_kind: 'workflow-receipt', resumed_by: null });
+    // The cut is dated by the event's last update, the last time CE heard of the run, not by when
+    // the run started (re-review R6).
+    expect(new Date(cuts[0].at).toISOString()).toBe('2026-11-18T08:00:00.000Z');
+  });
+  it('requeues a queued receipt whose dispatch ended, recorded as carried on, and leaves it for Continue after three (review R11)', async () => {
+    const { receipt } = await service.accept({ workflowId: 'w', input: {} });
+    for (let round = 1; round <= 3; round += 1) {
+      await sql`update outbox_events set status='failed'`.execute(db);
+      expect((await service.get(receipt.id))?.status).toBe('queued');
+      const pending = await db.selectFrom('outbox_events').select('id').where('status', 'not in', ['failed', 'done']).execute();
+      expect(pending).toHaveLength(1);
+    }
+    const cuts = await db.selectFrom('job_interruptions').selectAll().where('job_id', '=', receipt.id).execute();
+    expect(cuts).toHaveLength(3);
+    expect(cuts.every((c) => c.resumed_by === 'self')).toBe(true);
+    await sql`update outbox_events set status='failed'`.execute(db);
+    expect((await service.get(receipt.id))?.status).toBe('interrupted');
+    const open = await db.selectFrom('job_interruptions').selectAll().where('job_id', '=', receipt.id).where('resumed_by', 'is', null).execute();
+    expect(open).toHaveLength(1);
+    // Continue starts its run (re-review R11).
+    const continued = await service.continueFrom('w', receipt.id);
+    expect(continued).not.toBe('not-waiting');
+  });
+  it('says before Continue whether the workflow changed since the cut, and starts nothing (review R5)', async () => {
+    const { receipt } = await service.accept({ workflowId: 'w', input: { a: 1 } });
+    await sql`update workflow_webhook_receipts set status='interrupted',started_at=now() where id=${receipt.id}`.execute(db);
+    expect(await service.continueCheck('w', receipt.id)).toEqual({ definitionChanged: false });
+    await sql`update workflows set definition='{"nodes":[{"id":"x","type":"code","position":{"x":0,"y":0},"data":{}}],"edges":[]}' where id='w'`.execute(db);
+    expect(await service.continueCheck('w', receipt.id)).toEqual({ definitionChanged: true });
+    expect(await service.continueCheck('w', 'not-a-receipt')).toBe('not-waiting');
+    expect((await db.selectFrom('workflow_webhook_receipts').select('id').execute())).toHaveLength(1);
+  });
+  it('Continue twice starts one run (review R2)', async () => {
+    const { receipt } = await service.accept({ workflowId: 'w', input: { a: 1 } });
+    await sql`update workflow_webhook_receipts set status='interrupted',started_at=now() where id=${receipt.id}`.execute(db);
+    const first = await service.continueFrom('w', receipt.id);
+    const second = await service.continueFrom('w', receipt.id);
+    expect(first).not.toBe('not-waiting');
+    expect(second).not.toBe('not-waiting');
+    expect((first as { receipt: { runId: string } }).receipt.runId).toBe((second as { receipt: { runId: string } }).receipt.runId);
+    expect((await db.selectFrom('workflow_webhook_receipts').select('id').execute())).toHaveLength(2);
   });
   it('does not accept when PostgreSQL disconnects during the acceptance transaction', async () => {
     disconnectExpected = true;

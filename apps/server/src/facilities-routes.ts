@@ -23,7 +23,7 @@ import {
   facilityXlsxToCsv, facilityXlsxTooLarge, FacilityXlsxError, FACILITY_IMPORT_MAX_XLSX_BYTES,
   linkMatchingFacilityCodes,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
-  type ValueMappingEntry, type FacilityXlsxCsv, type LinkMatchingResult, facilityRegisterSourceInputSchema } from '@openldr/bootstrap';
+  type ValueMappingEntry, type FacilityXlsxCsv, type LinkMatchingResult, facilityRegisterSourceInputSchema, resolveByPerson, continueFacilityImportRun } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
   FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
@@ -1158,7 +1158,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // segment over `/api/facilities/:id` regardless of registration order (measured there), so this
   // route's position here is for legibility, not correctness.
   app.get('/api/facilities/health', VIEW, async () => {
-    return facilityHealth({ internalDb: ctx.internalDb, jobs: ctx.facilityJobs });
+    return facilityHealth({ internalDb: ctx.internalDb, jobs: ctx.facilityJobs, interruptions: ctx.jobInterruptions });
   });
 
   // Task 10: the operator's manual retry for a failed facility job — `facility-map-rebuild` (the
@@ -1214,6 +1214,8 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       reply.code(409);
       return { error: 'this job is already running; wait for it to finish before retrying it' };
     }
+    // Retry is also Continue for a job that stopped carrying on by itself after interruptions.
+    await resolveByPerson(ctx.jobInterruptions, 'facility-job', id, new Date());
 
     const after = await ctx.internalDb
       .selectFrom('facility_jobs')
@@ -3036,6 +3038,16 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     return { runId: id, status: VALIDATE_PHASE.from };
   });
 
+  // Continue on a register import that waits after interruptions (design 2026-11-18, review R8). The
+  // CLI's `facilities import-run-continue` runs the same code.
+  app.post('/api/facilities/import/runs/:id/continue', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const outcome = await continueFacilityImportRun({ facilityImportRuns: importRuns, jobInterruptions: ctx.jobInterruptions }, id);
+    if (outcome === 'not-waiting') { reply.code(409); return { error: 'this import is not waiting to continue' }; }
+    await recordAudit(ctx, req, { action: 'facility.import.continued', entityType: 'facility_import_run', entityId: id, before: null, after: null });
+    return { id, status: 'continued' };
+  });
+
   app.post('/api/facilities/import/runs/:id/cancel', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
 
@@ -3069,7 +3081,9 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const { id } = req.params as { id: string };
     const run = await importRuns.get(id);
     if (!run) { reply.code(404); return { error: 'not found' }; }
-    return run;
+    // Each time a restart cut the run and it carried on (design 2026-11-18-interrupted-jobs).
+    const interruptions = (await ctx.jobInterruptions.listFor('facility-import', [run.id])).get(run.id) ?? [];
+    return { ...run, interruptions };
   });
 
   // Task 2 (mapping-answers-back, Slice B): one column's vocabulary, so the mapping step can check

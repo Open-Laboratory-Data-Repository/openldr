@@ -71,7 +71,24 @@ export const en = {
   "mapped": "{{count}} mapped",
   "persisted": "{{count}} persisted"
   },
+  interruptions: {
+  "badgeOnce": "Interrupted once",
+  "badgeMany": "Interrupted {{count}} times",
+  "carriedOn": "Interrupted at {{at}}. Carried on by itself at {{back}}.",
+  "continued": "Interrupted at {{at}}. Continued by a person at {{back}}.",
+  "waiting": "Interrupted at {{at}}. Waiting for Continue.",
+  "continueImport": "Continue import",
+  "importWaiting": "Import interrupted",
+  "importContinued": "Import is back in the queue.",
+  "continueFailed": "Could not continue: {{error}}"
+  },
   workflowReceipts: {
+  "confirmChangedTitle": "Run the changed workflow?",
+  "confirmChangedBody": "The workflow changed after this run started. Continue runs it as it is now, with the same input.",
+  "continue": "Continue",
+  "continued": "Started run {{runId}} with the same input.",
+  "continuedChanged": "Started run {{runId}} with the same input. The workflow changed since the interrupted run started, so the new run uses it as it is now.",
+  "continueFailed": "Could not continue: {{error}}",
   "title": "Webhook receipts",
   "runs": "Runs",
   "detail": "Receipt details",
@@ -1839,6 +1856,8 @@ export const en = {
       // dynamic key, and the block that renders it is gated on the same five (RUN_ACTIVE_STATUSES in
       // ImportFacilitiesSheet.tsx). A terminal run is described by its own block below instead, so
       // adding `applied`/`failed`/`cancelled` labels here would be dead copy.
+      continueRunAction: 'Continue import',
+      interruptedNotice: 'This import was interrupted too many times while it was running, so it stopped. It still holds the register. Use Continue import in the menu to run it again.',
       runStatus: {
         queued: 'Queued — waiting for an import worker.',
         validating: 'Validating the uploaded file.',

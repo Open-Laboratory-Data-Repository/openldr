@@ -5,8 +5,7 @@ import type { AuditEventInput } from '@openldr/audit';
 import { makeMigratedDb } from '@openldr/db/testing';
 import {
   createFacilityImportRunStore, createFacilityJobStore, referenceCapture, APPLY_PHASE,
-  type InternalSchema, type FacilityImportRunStore,
-} from '@openldr/db';
+  type InternalSchema, type FacilityImportRunStore, createJobInterruptionStore } from '@openldr/db';
 import { importFacilities } from './facility-import';
 import {
   createFacilityImportWorker, createFacilityImportWorkerIfEnabled, PER_ROW_PROGRESS_MIN_ROWS,
@@ -801,6 +800,60 @@ describe('createFacilityImportWorker — apply phase', () => {
     expect(after?.status).toBe('failed');
     expect(after?.error).toMatch(/restart/i);
     expect((await rowFor(db, run.id)).active_key).toBeNull();
+  });
+});
+
+// ── Design 2026-11-18-interrupted-jobs: a cut run carries on ──────────────────────────────────
+describe('createFacilityImportWorker — taking back a cut run', () => {
+  async function cutRun(phase: 'validating' | 'applying', earlierCuts = 0) {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const runs = createFacilityImportRunStore(db);
+    const store = createJobInterruptionStore(db);
+    const run = await runs.startUpload(upload());
+    await runs.claimNext('queued', 'validating');
+    if (phase === 'applying') {
+      await runs.completeValidation(run.id, { create: 1 });
+      await runs.confirm(run.id, 'awaiting_confirmation', { nationalSystem: SYSTEM });
+      await runs.claimNext(APPLY_PHASE.from, APPLY_PHASE.to);
+    }
+    await ageRun(db, run.id); // a process killed long enough ago to outlive the lease
+    for (let min = 1; min <= earlierCuts; min += 1) {
+      await store.record('facility-import', run.id, { at: new Date(Date.UTC(2026, 0, 1, 0, min)), cause: 'server-restart', phase });
+    }
+    const worker = createFacilityImportWorker({
+      runs, blob: fakeBlob(CSV), importDeps: { db, capture: referenceCapture },
+      interruptions: { store, now: () => new Date() }, processStartedAt: new Date(),
+      intervalMs: 10_000, logger: fakeLogger(),
+    });
+    return { db, runs, store, run, worker };
+  }
+
+  it('a run cut while applying is applied again with no second confirm, and the cut is recorded', async () => {
+    const { db, runs, store, run, worker } = await cutRun('applying');
+    await worker.tickOnce();
+    await worker.stop();
+    expect((await runs.get(run.id))?.status).toBe('applied');
+    expect(await registryRows(db)).toHaveLength(1);
+    expect((await store.listFor('facility-import', [run.id])).get(run.id)).toEqual([
+      expect.objectContaining({ phase: 'applying', cause: 'server-restart', resumedBy: 'self' }),
+    ]);
+  });
+
+  it('a run cut while validating is validated again and stops at the usual confirm', async () => {
+    const { runs, run, worker } = await cutRun('validating');
+    await worker.tickOnce();
+    await worker.stop();
+    expect((await runs.get(run.id))?.status).toBe('awaiting_confirmation');
+  });
+
+  it('after three cuts in one phase, a fourth leaves the run interrupted, holding its register (review R8)', async () => {
+    const { db, runs, run, worker } = await cutRun('applying', 3);
+    await worker.tickOnce();
+    await worker.stop();
+    const after = await runs.get(run.id);
+    expect(after?.status).toBe('interrupted');
+    expect(after?.error).toMatch(/interrupted 4 times while applying\. Use Continue/);
+    expect((await rowFor(db, run.id)).active_key).not.toBeNull();
   });
 });
 

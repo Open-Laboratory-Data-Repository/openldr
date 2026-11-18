@@ -3,7 +3,7 @@ import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
 
 export type FacilityJobKind = 'facility-map-rebuild' | 'registry-projection';
-export type FacilityJobStatus = 'queued' | 'running' | 'done' | 'failed';
+export type FacilityJobStatus = 'queued' | 'running' | 'done' | 'failed' | 'interrupted';
 
 export interface FacilityJob {
   id: string; kind: FacilityJobKind; status: FacilityJobStatus; attempts: number;
@@ -30,7 +30,15 @@ export interface FacilityJobStore {
   finish(id: string, status: 'done' | 'failed', opts: { error?: string | null; resultCount?: number | null }): Promise<void>;
   retry(id: string): Promise<FacilityJobRetryOutcome>;
   retryPreservingAttempts(id: string): Promise<void>;
-  failStaleRunning(error: string): Promise<number>;
+  /** A running job's heartbeat: the job is still being worked on. */
+  beat(id: string): Promise<void>;
+  /** Running jobs whose heartbeat (or start, before the first beat) is older than `olderThan`. */
+  listStaleRunning(olderThan: Date): Promise<{ id: string; phase: string | null; at: Date }[]>;
+  /** Puts a stale running job back in the queue, keeping its attempt count. False when it is no
+   *  longer running. */
+  requeueStale(id: string): Promise<boolean>;
+  /** Leaves a stale running job waiting for Continue. */
+  markInterrupted(id: string, error: string): Promise<void>;
   latest(kind: FacilityJobKind): Promise<FacilityJob | null>;
   listUnresolved(): Promise<FacilityJob[]>;
   /** Failed jobs of this kind that NOTHING has superseded — see the implementation's doc comment for
@@ -174,7 +182,7 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
       for (const candidate of candidates) {
         const rows = await sql<Row>`
           update facility_jobs
-          set status = 'running', started_at = now(), attempts = attempts + 1, active_key = null
+          set status = 'running', started_at = now(), heartbeat_at = now(), attempts = attempts + 1, active_key = null
           where id = ${candidate.id} and status = 'queued'
           returning *
         `.execute(db);
@@ -239,12 +247,34 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
         .execute());
     },
 
-    async failStaleRunning(error) {
-      const res = await db.updateTable('facility_jobs')
-        .set({ status: 'failed', last_error: error, finished_at: sql<Date>`now()`, active_key: null })
-        .where('status', '=', 'running')
-        .executeTakeFirst();
-      return Number(res?.numUpdatedRows ?? 0);
+    async beat(id) {
+      await db.updateTable('facility_jobs').set({ heartbeat_at: sql<Date>`now()` })
+        .where('id', '=', id).where('status', '=', 'running').execute();
+    },
+
+    async listStaleRunning(olderThan) {
+      const rows = await db.selectFrom('facility_jobs').select(['id', 'heartbeat_at', 'started_at', 'requested_at'])
+        .where('status', '=', 'running').execute();
+      return rows
+        .map((r) => ({ id: r.id, phase: null, at: new Date((r.heartbeat_at ?? r.started_at ?? r.requested_at) as Date) }))
+        .filter((r) => r.at.getTime() < olderThan.getTime());
+    },
+
+    async requeueStale(id) {
+      const job = await db.selectFrom('facility_jobs').selectAll().where('id', '=', id).executeTakeFirst();
+      if (!job || job.status !== 'running') return false;
+      // The worker that ran it is gone, so re-arming `active_key` cannot race a live run's finish().
+      await requeue(job, (activeKey) => db.updateTable('facility_jobs')
+        .set({ status: 'queued', started_at: null, heartbeat_at: null, finished_at: null, active_key: activeKey })
+        .where('id', '=', id).where('status', '=', 'running')
+        .execute());
+      return true;
+    },
+
+    async markInterrupted(id, error) {
+      await db.updateTable('facility_jobs')
+        .set({ status: 'interrupted', last_error: error, finished_at: sql<Date>`now()`, active_key: null })
+        .where('id', '=', id).where('status', '=', 'running').execute();
     },
 
     async latest(kind) {
@@ -298,8 +328,9 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
      * second query only reads rows sharing a `registry_id` with a failed one.
      */
     async listFailed(kind) {
+      // An interrupted job waits for the same Retry (Continue) as a failed one, so it is reported too.
       const failedRows = await db.selectFrom('facility_jobs').selectAll()
-        .where('kind', '=', kind).where('status', '=', 'failed').execute();
+        .where('kind', '=', kind).where('status', 'in', ['failed', 'interrupted']).execute();
       if (failedRows.length === 0) return [];
 
       const registryIds = [...new Set(failedRows.map((r) => r.registry_id))];

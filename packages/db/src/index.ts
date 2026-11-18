@@ -58,6 +58,8 @@ export {
 export * from './projection';
 export * from './terminology-ingest-job-store';
 export { createFacilityJobStore } from './facility-job-store';
+export { createJobInterruptionStore } from './job-interruption-store';
+export type { JobKind, InterruptionCause, JobInterruption, JobInterruptionStore } from './job-interruption-store';
 export type { FacilityJob, FacilityJobKind, FacilityJobStatus, FacilityJobStore } from './facility-job-store';
 export { createFacilityImportRunStore, type FacilityImportRun, type FacilityImportRunStore } from './facility-import-run-store';
 export { createFacilityRegisterSourceStore, resolveFacilityRegisterForImport } from './facility-register-sources';

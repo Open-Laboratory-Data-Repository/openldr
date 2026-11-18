@@ -9,8 +9,7 @@ import {
   createTerminologyAdminStore, createFacilityRegistryStore, createFacilityJobStore,
   createFacilityRegisterSourceStore,
   DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, APPLY_PHASE,
-  VALIDATE_PHASE,
-} from '@openldr/db';
+  VALIDATE_PHASE, createJobInterruptionStore } from '@openldr/db';
 import {
   projectRegistryRows, observedFieldSystem, addRegisterFacilityType, CONTROLLED_VALUE_SETS,
   suggestColumns, FACILITY_IMPORT_MAX_XLSX_BYTES,
@@ -195,6 +194,7 @@ function fakeCtx() {
     logger: { error() {}, warn() {}, info() {} },
     forms: { get: async (formId: string) => forms[formId] },
     facilityJobs: fakeFacilityJobStore(),
+    jobInterruptions: { record: async () => ({ id: 'i', inserted: true }), resolve: async () => {}, listFor: async () => new Map(), inARow: async () => 0 },
     facilityRegistry: {
       // Task 3: `list()`'s real contract (Task 1) is `{ rows, total }`, not a bare array — this
       // fake must match it or the route's `const { rows, total } = await ...list(...)` destructures
@@ -1828,6 +1828,7 @@ function fakeImportCtx(db: any) {
   const audit: any[] = [];
   return {
     internalDb: db,
+    jobInterruptions: createJobInterruptionStore(db),
     // Fix 1 (mapping-ux report): the import route now passes `admin` through to `importFacilities`
     // so a CSV upload projects into FACILITY_REGISTRY_SYSTEM too. Real projection behaviour is
     // exercised for real against `createTerminologyAdminStore` in `packages/bootstrap`'s own
@@ -2456,6 +2457,7 @@ describe('POST /api/facilities/import', () => {
       // above ("dry-run (no `apply`) returns the full summary…"); re-pinning it here would just be a
       // second, driftable copy of that same assertion.
       expect(runRes.json()).toEqual({
+        interruptions: [],
         id: runId,
         nationalSystem: SYSTEM,
         sourceFormat: 'csv',
@@ -2527,6 +2529,7 @@ describe('POST /api/facilities/import', () => {
       const runRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` });
       expect(runRes.statusCode).toBe(200);
       expect(runRes.json()).toEqual({
+        interruptions: [],
         id: runId,
         nationalSystem: SYSTEM,
         sourceFormat: 'csv',
@@ -3893,6 +3896,7 @@ describe('POST /api/facilities/import/upload', () => {
     // field that differs from an inline preview's row (blobKey, status, previewedAt, summary) is a
     // field a reader will rely on.
     expect(runRes.json()).toEqual({
+        interruptions: [],
       id: runId,
       nationalSystem: SYSTEM,
       sourceFormat: 'csv',
@@ -5343,6 +5347,22 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
 const cancelUrl = (runId: string) => `/api/facilities/import/runs/${runId}/cancel`;
 
 // A2b Task 6. The cancel surface, and the whole of it is about NOT overstating what happened.
+describe('POST /api/facilities/import/runs/:id/continue (design 2026-11-18, review R8)', () => {
+  it('sends an interrupted apply back to confirmed, and refuses a run that is not waiting', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+    const refused = await app.inject({ method: 'POST', url: `/api/facilities/import/runs/${runId}/continue`, payload: {} });
+    expect(refused.statusCode).toBe(409);
+    await db.updateTable('facility_import_runs').set({ status: 'interrupted' } as never).where('id', '=', runId).execute();
+    await ctx.jobInterruptions.record('facility-import', runId, { at: new Date('2026-11-18T05:00:00.000Z'), cause: 'server-restart', phase: 'applying' });
+    const ok = await app.inject({ method: 'POST', url: `/api/facilities/import/runs/${runId}/continue`, payload: {} });
+    expect(ok.statusCode).toBe(200);
+    expect((await db.selectFrom('facility_import_runs').select('status').where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('confirmed');
+  });
+});
+
 describe('POST /api/facilities/import/runs/:id/cancel', () => {
   it('gated on facilities.manage — a facilities.view-only user gets 403 and the run is untouched', async () => {
     const db = await importDb();
@@ -5454,6 +5474,7 @@ function fakeReconcileCtx(internalDb: any, externalDb: any) {
   const audit: any[] = [];
   return {
     internalDb,
+    jobInterruptions: createJobInterruptionStore(internalDb),
     store: { db: externalDb },
     terminology: { admin: createTerminologyAdminStore(internalDb) },
     audit: { record: async (e: any) => { audit.push(e); return e; } },

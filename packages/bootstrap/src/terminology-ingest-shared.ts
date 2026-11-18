@@ -6,6 +6,7 @@ import type { AuditStore } from '@openldr/audit';
 import { deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type TerminologyIngestJob, type TerminologyIngestJobStore } from '@openldr/db';
 import { canonicalSystemUrl, ingestDistribution, type IngestProgress } from '@openldr/terminology';
 import { downloadAndExtract } from './terminology-dist-extract';
+import { startHeartbeat } from './job-interruptions';
 
 // Resolve the coding system for a systemType by its loader-backed canonical URL, creating it if
 // absent with the SAME values loadLoinc's saveSystem uses (so it is one row, not a duplicate).
@@ -73,9 +74,10 @@ export function createRunIngest(opts: {
   };
 }
 
+
 export interface RunIngestJobDeps {
   job: TerminologyIngestJob;
-  jobs: Pick<TerminologyIngestJobStore, 'latestReadyForSystem' | 'updateProgress' | 'finish'>;
+  jobs: Pick<TerminologyIngestJobStore, 'latestReadyForSystem' | 'updateProgress' | 'finish' | 'beat'>;
   blob: Pick<BlobStoragePort, 'delete'>;
   runIngest(job: TerminologyIngestJob, onProgress: (p: IngestProgress) => void): Promise<{ conceptsLoaded: number }>;
   audit: Pick<AuditStore, 'record'>;
@@ -91,6 +93,9 @@ export interface RunIngestJobDeps {
 export async function runIngestJob(deps: RunIngestJobDeps): Promise<{ status: 'ready' | 'failed'; conceptsLoaded: number; error: string | null }> {
   const { job } = deps;
   const prior = await deps.jobs.latestReadyForSystem(job.systemType).catch(() => null);
+  // The heartbeat tells a worker this job is alive, so a server that starts while it runs (a CLI's
+  // inline import, say) does not take it back and run it twice.
+  const stopBeat = startHeartbeat(() => deps.jobs.beat(job.id));
   try {
     const { conceptsLoaded } = await deps.runIngest(job, (p) => {
       deps.onProgress?.(p);
@@ -117,5 +122,7 @@ export async function runIngestJob(deps: RunIngestJobDeps): Promise<{ status: 'r
     deps.logger.error({ jobId: job.id, err }, 'terminology ingest failed');
     // The uploaded blob is intentionally retained so the operator can retry.
     return { status: 'failed', conceptsLoaded: 0, error: msg };
+  } finally {
+    stopBeat();
   }
 }

@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { createIngestContext, ingestAndWait, type IngestWait } from '@openldr/bootstrap';
+import { createIngestContext, ingestAndWait, resolveByPerson, type IngestWait } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
+import { describeInterruption } from './interruptions';
 
 interface JsonOpt {
   json: boolean;
@@ -46,10 +47,12 @@ export async function runPipelineStatus(opts: JsonOpt): Promise<number> {
   const ctx = await createIngestContext(loadConfig());
   try {
     const rows = await ctx.batches.list();
+    const cuts = rows.length > 0 ? await ctx.jobInterruptions.listFor('ingest-batch', rows.map((r) => r.batch_id)) : new Map();
     emit(
       opts.json,
-      rows,
-      rows.map((r) => `  ${r.batch_id.slice(0, 8)}  ${r.status.padEnd(10)} ${r.converter.padEnd(22)} ${r.resource_count} res  ${r.last_error ?? ''}`).join('\n') || '  (no batches)',
+      rows.map((r) => ({ ...r, interruptions: cuts.get(r.batch_id) ?? [] })),
+      rows.map((r) => [`  ${r.batch_id.slice(0, 8)}  ${r.status.padEnd(10)} ${r.converter.padEnd(22)} ${r.resource_count} res  ${r.last_error ?? ''}`,
+        ...(cuts.get(r.batch_id) ?? []).map(describeInterruption)].join('\n')).join('\n') || '  (no batches)',
     );
     return 0;
   } finally {
@@ -66,6 +69,8 @@ export async function runPipelineRetry(batchId: string, opts: JsonOpt): Promise<
       return 1;
     }
     await ctx.batches.reset(batchId);
+    // A person carrying on a cut batch closes its open interruption record.
+    await resolveByPerson(ctx.jobInterruptions, 'ingest-batch', batchId, new Date());
     await ctx.republish({ batch_id: batch.batch_id, blob_key: batch.blob_key, source: batch.source, converter: batch.converter, config: batch.config });
     await ctx.drain();
     const after = await ctx.batches.get(batchId);

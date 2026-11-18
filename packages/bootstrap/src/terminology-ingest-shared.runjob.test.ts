@@ -25,7 +25,7 @@ describe('runIngestJob', () => {
   it('finishes ready, audits completed, deletes the prior ready blob, returns conceptsLoaded', async () => {
     const d = deps({ jobs: {
       latestReadyForSystem: vi.fn(async () => ({ status: 'ready', blobKey: 'k/old.zip' } as never)),
-      updateProgress: vi.fn(async () => {}), finish: vi.fn(async () => {}),
+      updateProgress: vi.fn(async () => {}), finish: vi.fn(async () => {}), beat: vi.fn(async () => {}),
     } });
     const r = await runIngestJob(d);
     expect(r).toEqual({ status: 'ready', conceptsLoaded: 42, error: null });
@@ -37,7 +37,7 @@ describe('runIngestJob', () => {
   it('does NOT delete the prior blob when it equals the current job blob', async () => {
     const d = deps({ jobs: {
       latestReadyForSystem: vi.fn(async () => ({ status: 'ready', blobKey: 'k/new.zip' } as never)),
-      updateProgress: vi.fn(async () => {}), finish: vi.fn(async () => {}),
+      updateProgress: vi.fn(async () => {}), finish: vi.fn(async () => {}), beat: vi.fn(async () => {}),
     } });
     await runIngestJob(d);
     expect(d.blob.delete).not.toHaveBeenCalled();

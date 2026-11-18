@@ -481,3 +481,13 @@ Each change is recorded in the audit log as the signed-in account.
 Studio's **Your preferences** guide is under **Personal settings**. It shows language, theme, start page and sidebar choices, with a screenshot for each step. Preferences save to each user's account. A personal start page takes priority over a layout's start page; Dashboard is the fallback.
 
 For operators, `user preferences show <user-id>` reads the saved values and `user preferences set <user-id> startPage none` clears the personal start-page choice. Use the installed or development command form described above. Clearing the choice lets the layout's start page apply again when one is configured.
+
+## Interrupted jobs
+
+A long job cut off by a restart records it. Most carry on by themselves; these commands show the record and continue a job that waits.
+
+- `openldr terminology job <system>` shows the latest distribution import and its interruptions. `openldr terminology job-continue <id>` continues one that waits after three cuts.
+- `openldr workflows receipts list <workflowId>` shows each run's interruptions. `openldr workflows run-continue <workflowId> <requestId>` starts a new run from an interrupted one; a workflow run never restarts by itself.
+- `openldr facilities jobs --retry <id>` continues an interrupted facility map rebuild.
+- `openldr facilities import-run-continue <runId>` continues a waiting register import from its saved file. Add `--json` for JSON output. A previously confirmed apply runs again without another confirmation. A file check stops at the usual confirmation.
+- `openldr import status`, `import copy status`, `import check status`, `facilities import-run <id>` and `pipeline status` list the interruptions of each run.

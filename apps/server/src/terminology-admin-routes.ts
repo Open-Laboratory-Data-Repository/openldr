@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { gunzipSync } from 'node:zlib';
-import { resolveCodingSystemId, mappingTouchesTestMap, type AppContext } from '@openldr/bootstrap';
+import { resolveCodingSystemId, mappingTouchesTestMap, continueTerminologyIngestJob, continueRefusal, type AppContext } from '@openldr/bootstrap';
 import { appError, redact } from '@openldr/core';
 import { FACILITY_REGISTRY_SYSTEM } from '@openldr/db';
 import { z } from 'zod';
@@ -489,7 +489,18 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     const systemType = String(q.systemType ?? 'loinc');
     const job = await ctx.terminologyJobs.latestForSystem(systemType);
     if (!job) { reply.code(404); return { error: 'no import job for this system' }; }
-    return { id: job.id, status: job.status, phase: job.phase, processed: job.processed, total: job.total, error: job.error, version: job.version, finishedAt: job.finishedAt };
+    const interruptions = (await ctx.jobInterruptions.listFor('terminology-ingest', [job.id])).get(job.id) ?? [];
+    return { id: job.id, status: job.status, phase: job.phase, processed: job.processed, total: job.total, error: job.error, version: job.version, finishedAt: job.finishedAt, interruptions };
+  });
+
+  // Continue on an upload that stopped carrying on by itself after too many interruptions
+  // (design 2026-11-18-interrupted-jobs). The CLI's `terminology job-continue` runs the same code.
+  app.post('/api/terminology/jobs/:id/continue', MANAGE, async (req, reply) => {
+    const id = (req.params as IdParam).id;
+    const outcome = await continueTerminologyIngestJob(ctx, id);
+    if (outcome !== 'requeued') { reply.code(409); return { error: continueRefusal(outcome) }; }
+    await recordAudit(ctx, req, { action: 'terminology.import.continued', entityType: 'terminology_ingest_job', entityId: id, before: null, after: null });
+    return { id, status: 'queued' };
   });
 
   app.delete('/api/terminology/publishers/:publisherId/distribution', MANAGE, async (req, reply) => {

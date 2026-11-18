@@ -13,6 +13,8 @@ export interface IngestBatch {
   last_error: string | null;
   config: Record<string, string> | null;
   created_at: Date;
+  /** Last status change: for a batch left `processing`, when its worker was last heard from. */
+  updated_at: Date;
 }
 
 export interface BatchStore {
@@ -24,9 +26,13 @@ export interface BatchStore {
   get(batchId: string): Promise<IngestBatch | undefined>;
   list(): Promise<IngestBatch[]>;
   provenanceGaps(): Promise<{ resource_type: string; id: string }[]>;
+  /** Batches left `processing` longer than `olderThanMs` whose `ingest.received` event is no longer
+   *  pending or being processed: the queue gave up on them, so no delivery will carry them on. */
+  listStuck(olderThanMs: number): Promise<IngestBatch[]>;
+  markInterrupted(batchId: string, error: string): Promise<void>;
 }
 
-const COLUMNS = ['batch_id', 'source', 'blob_key', 'content_type', 'converter', 'status', 'resource_count', 'attempts', 'last_error', 'config', 'created_at'] as const;
+const COLUMNS = ['batch_id', 'source', 'blob_key', 'content_type', 'converter', 'status', 'resource_count', 'attempts', 'last_error', 'config', 'created_at', 'updated_at'] as const;
 
 export function createBatchStore(db: Kysely<InternalSchema>): BatchStore {
   return {
@@ -57,6 +63,28 @@ export function createBatchStore(db: Kysely<InternalSchema>): BatchStore {
         .set({ status: 'failed', last_error: error, updated_at: sql`now()` })
         .where('batch_id', '=', batchId)
         .execute();
+    },
+    async markInterrupted(batchId, error) {
+      await db
+        .updateTable('ingest_batches')
+        .set({ status: 'interrupted', last_error: error, updated_at: sql`now()` })
+        .where('batch_id', '=', batchId)
+        .where('status', '=', 'processing')
+        .execute();
+    },
+    async listStuck(olderThanMs) {
+      const cutoff = new Date(Date.now() - olderThanMs);
+      const old = await db.selectFrom('ingest_batches').select(COLUMNS)
+        .where('status', '=', 'processing').where('updated_at', '<', cutoff).execute();
+      if (old.length === 0) return [];
+      // Two reads, joined here: pg-mem cannot run the correlated subquery this would otherwise be.
+      const live = await db.selectFrom('outbox_events').select('payload')
+        .where('type', '=', 'ingest.received').where('status', 'in', ['pending', 'processing']).execute();
+      const held = new Set(live.map((e) => {
+        const p = typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload;
+        return (p as { batchId?: string } | null)?.batchId;
+      }));
+      return (old as IngestBatch[]).filter((b) => !held.has(b.batch_id));
     },
     async reset(batchId) {
       await db

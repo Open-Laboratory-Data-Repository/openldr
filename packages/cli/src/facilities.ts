@@ -24,6 +24,8 @@ import {
   facilityRegisterSourceInputSchema,
   type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict, type FacilityHealth,
   type FacilityImportResult, type ColumnSuggestion, type ValueMappingEntry, type ControlledField,
+  resolveByPerson,
+  continueFacilityImportRun,
 } from '@openldr/bootstrap';
 import {
   referenceCapture, createFacilityImportRunStore, createFacilityRegisterSourceStore,
@@ -50,6 +52,7 @@ import { FACILITY_COLUMNS } from '@openldr/table-query';
 import { parseWhereFlags } from './table-query-flags';
 import { callerName, cliActor, cliNamedActor } from './cli-actor';
 import { redactError } from './redact-error';
+import { describeInterruption } from './interruptions';
 
 export interface FacilitiesImportOpts {
   nationalSystem: string;
@@ -1077,10 +1080,11 @@ export async function runFacilitiesImportRun(id: string, opts: FacilitiesImportR
       else process.stderr.write(`facilities import-run failed: ${msg}\n`);
       return 1;
     }
+    const interruptions = (await ctx.jobInterruptions.listFor('facility-import', [run.id])).get(run.id) ?? [];
     if (opts.json) {
-      process.stdout.write(JSON.stringify(run, null, 2) + '\n');
+      process.stdout.write(JSON.stringify({ ...run, interruptions }, null, 2) + '\n');
     } else {
-      process.stdout.write(formatImportRunHuman(run) + '\n');
+      process.stdout.write([formatImportRunHuman(run), ...interruptions.map(describeInterruption)].join('\n') + '\n');
     }
     return 0;
   } catch (err) {
@@ -1233,6 +1237,19 @@ export interface FacilitiesImportRunCancelOpts {
  * and routing it through the worker queue would cost it the exit code that is the whole point of
  * running an import from a script.
  */
+/** `facilities import-run-continue <id>`: Continue on a register import that waits after
+ *  interruptions, through the same shared code as the route (design 2026-11-18, review R8). */
+export async function runFacilitiesImportRunContinue(id: string, opts: { json: boolean }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const outcome = await continueFacilityImportRun({ facilityImportRuns: createFacilityImportRunStore(ctx.internalDb), jobInterruptions: ctx.jobInterruptions }, id);
+    if (outcome === 'not-waiting') { process.stderr.write('facilities import-run-continue refused: this import is not waiting to continue\n'); return 1; }
+    await recordAuditEvent(ctx, cliNamedActor(), { action: 'facility.import.continued', entityType: 'facility_import_run', entityId: id });
+    process.stdout.write(opts.json ? JSON.stringify({ id, status: 'continued' }) + '\n' : `${id} carries on; the server runs it next\n`);
+    return 0;
+  } finally { await ctx.close(); }
+}
+
 export async function runFacilitiesImportRunCancel(
   id: string, opts: FacilitiesImportRunCancelOpts,
 ): Promise<number> {
@@ -1864,6 +1881,8 @@ export async function runFacilitiesJobs(opts: FacilitiesJobsOpts): Promise<numbe
       // nothing was re-queued. The HTTP route answers 404/409 for these two; this is their exit-code
       // equivalent, since a CLI has no status line to carry them.
       const outcome = await ctx.facilityJobs.retry(opts.retry);
+      // Retry is also Continue for a job that stopped carrying on by itself after interruptions.
+      if (outcome === 'requeued') await resolveByPerson(ctx.jobInterruptions, 'facility-job', opts.retry, new Date());
       if (outcome !== 'requeued') {
         const why = outcome === 'running'
           ? `job ${opts.retry} is already running; wait for it to finish before retrying it`
@@ -1874,7 +1893,7 @@ export async function runFacilitiesJobs(opts: FacilitiesJobsOpts): Promise<numbe
       }
     }
 
-    const health: FacilityHealth = await facilityHealth({ internalDb: ctx.internalDb, jobs: ctx.facilityJobs });
+    const health: FacilityHealth = await facilityHealth({ internalDb: ctx.internalDb, jobs: ctx.facilityJobs, interruptions: ctx.jobInterruptions });
 
     if (opts.json) {
       process.stdout.write(JSON.stringify(health, null, 2) + '\n');
@@ -1903,6 +1922,7 @@ function formatJobsHuman(health: FacilityHealth): string {
   lines.push(`last successful rebuild: ${dim.lastSuccessAt ?? 'never'}${dim.rows != null ? ` (${dim.rows} rows)` : ''}`);
   if (dim.error) lines.push(`last error: ${dim.error}`);
   if (dim.jobId) lines.push(`retry with: openldr facilities jobs --retry ${dim.jobId}`);
+  for (const r of dim.interruptions ?? []) lines.push(`interrupted: ${describeInterruption(r)}`);
   lines.push(`failed projection retries: ${projection.failedCount}`);
   for (const job of projection.failed) {
     lines.push(`  facility ${job.registryId ?? '(unnamed)'}: ${job.lastError ?? 'no error recorded'}`);
