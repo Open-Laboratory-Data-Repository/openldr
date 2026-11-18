@@ -191,5 +191,3 @@ export function RegisterSourceDialog({
     </Dialog>
   );
 }
-
-export default RegisterSourceDialog;

@@ -196,6 +196,9 @@ It is **not** the same one: it probes `openldr-api` only, where `pnpm release`'s
 reads all five images. Pass `--allow-overwrite` only to republish a version that was never
 announced.
 
+On Windows, `scripts/build-and-push.ps1` does the same job with the same guard. Its escape hatch
+is `-AllowOverwrite`. It needs `gh` on the PATH with `read:packages`, or it refuses to push.
+
 ### What is NOT proven by tests
 
 `scripts/release.ts` **has no unit tests, by design** — it only gathers facts and sequences

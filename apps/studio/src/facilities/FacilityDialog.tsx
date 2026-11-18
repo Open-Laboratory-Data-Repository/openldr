@@ -400,5 +400,3 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
     </Sheet>
   );
 }
-
-export default FacilityDialog;

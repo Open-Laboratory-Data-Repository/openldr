@@ -545,7 +545,7 @@ const EXTRA_CARE = [
   'connectors inspect', 'connectors list', 'connectors diagnose', 'connectors test', 'connectors add', 'connectors update',
   'settings sync show',
   // destroys or resets
-  'settings danger', 'db reproject', 'terminology reproject', 'facilities delete', 'layouts delete', 'report-def delete',
+  'settings danger', 'db reproject', 'facilities delete', 'layouts delete', 'report-def delete',
   'report-design delete', 'roles delete', 'connectors remove', 'plugin remove', 'market remove', 'terminology distribution purge',
   'terminology ontology unlink', 'test-catalog map clear', 'test-catalog result-fields unlink', 'sync divergence clear',
   'sync import', 'sync merge-patient', 'import copy delete',

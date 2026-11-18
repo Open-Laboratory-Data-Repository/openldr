@@ -155,5 +155,3 @@ export function DuplicateGroupSheet({ group, canManage, onClose, onChanged, onOp
     </Sheet>
   );
 }
-
-export default DuplicateGroupSheet;

@@ -232,5 +232,3 @@ function FieldRow({ id, label, alignTop, children }: {
     </>
   );
 }
-
-export default Laboratory;

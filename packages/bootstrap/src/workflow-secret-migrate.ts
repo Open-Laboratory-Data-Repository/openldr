@@ -10,7 +10,7 @@ import { sealDefinitionSecrets } from './workflow-secret-seal';
  * string, an auth-bearing `config.headers` blob) inline in their definitions. New
  * saves are already sealed by `extractWorkflowSecrets`, but existing rows stay
  * plaintext until the next save. This shim proactively seals them once at boot,
- * mirroring `migrateLegacySyncConfig`: idempotent, best-effort, key-injected (runs
+ * idempotent, best-effort, key-injected (runs
  * WITH the SECRETS_ENCRYPTION_KEY the SQL migrator lacks), and can-never-crash-boot.
  *
  * The seal itself is `sealDefinitionSecrets` — the SAME helper the save path

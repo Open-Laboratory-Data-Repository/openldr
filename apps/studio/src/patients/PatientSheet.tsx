@@ -161,5 +161,3 @@ export function PatientSheet({ patientRef, onClose, onOpen }: {
     </Sheet>
   );
 }
-
-export default PatientSheet;

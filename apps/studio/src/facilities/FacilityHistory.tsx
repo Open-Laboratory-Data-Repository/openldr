@@ -190,5 +190,3 @@ export function FacilityHistory({ open, onOpenChange, facilityId, facilityName }
     </Sheet>
   );
 }
-
-export default FacilityHistory;

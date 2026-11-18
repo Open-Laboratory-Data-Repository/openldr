@@ -187,7 +187,7 @@ Reconstruire le modèle de lecture de l'entrepôt à partir du magasin FHIR cano
 
 Elle affiche deux comptes distincts : les ressources canoniques réécrites, et les arrivées enregistrées dans le registre d'ingestion (une par version d'une ressource clinique). Ce sont des unités différentes, pas le même nombre. Comme `db seed`, elle refuse de s'exécuter quand des migrations sont en attente, au lieu d'aller jusqu'au bout sur un schéma en retard. Utilisez-la pour compléter les données après une mise à niveau qui ajoute une table à l'entrepôt.
 
-`terminology reproject` est **obsolète**. Elle a toujours lancé la même reconstruction complète du modèle de lecture, jamais une reconstruction limitée à la terminologie. Elle fonctionne encore comme alias, affiche maintenant un avertissement d'obsolescence et hérite de la protection `--force`. Utilisez plutôt `db reproject`.
+L'ancienne commande `terminology reproject` a été supprimée. Elle lançait la même reconstruction complète. Utilisez `db reproject --force` à la place.
 
 Installer et lancer un plugin d'ingestion, puis ingérer un fichier avec :
 

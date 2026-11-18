@@ -114,5 +114,3 @@ export function ResultFieldSheet({ field, ownedHere, loinc, onClose, onSaved }: 
     </Sheet>
   );
 }
-
-export default ResultFieldSheet;

@@ -257,5 +257,3 @@ export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Ele
     </div>
   );
 }
-
-export default ObservedCodesTab;

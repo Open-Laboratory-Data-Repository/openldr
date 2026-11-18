@@ -23,7 +23,7 @@ import {
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
 import { runStorageCopy } from './storage';
-import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runTerminologyReproject, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge } from './terminology';
+import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge } from './terminology';
 import { runMarketVerify, runMarketInstall, runMarketUpdate, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runMarketSites } from './market-sites';
 import { runLayoutsList, runLayoutsSet, runLayoutsDelete } from './layouts';
@@ -1108,10 +1108,6 @@ export function buildProgram(): Command {
       try { process.exitCode = await runValueSetList(opts); } catch (err) { process.stderr.write(`terminology valueset list failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 
-  term.command('reproject').description('DEPRECATED — use `openldr db reproject`. Rebuilds the ENTIRE read model, not only terminology_codes').option('--json', 'emit JSON', false).option('--force', 'confirm the rebuild — it rewrites every projected warehouse row', false)
-    .action(async (opts: { json: boolean; force: boolean }) => {
-      try { process.exitCode = await runTerminologyReproject(opts); } catch (err) { process.stderr.write(`terminology reproject failed: ${redactError(err)}\n`); process.exitCode = 1; }
-    });
 
   const tdist = term.command('distribution').description('Import/purge terminology distributions (zip → flat terms + ontology)');
   tdist.command('import <system>').description('import a loinc|snomed|rxnorm distribution zip inline')

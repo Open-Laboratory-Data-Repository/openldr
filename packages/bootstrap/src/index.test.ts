@@ -73,7 +73,7 @@ describe('createAppContext', () => {
   // so this is a SHAPE check only — but it also proves the boot-time cache load (`columnPolicy.load()`
   // called once inside createAppContext, before this object is returned) is wrapped best-effort:
   // construction must still succeed against an unreachable DB, exactly like the other unconditional
-  // best-effort seeds/migrations in createAppContext (roles.seedSystemRoles(), migrateLegacySyncConfig,
+  // best-effort seeds/migrations in createAppContext (roles.seedSystemRoles(), migrateWorkflowSecrets,
   // etc.) — an empty cache still falls back to HARDCODED_DENY_UNION per table (registry.ts's
   // `hiddenFor`), so known PII stays denied either way. The real read/write/reload round trip against a
   // live DB is proven below (against pg-mem, mirroring bootstrap's exact construction — createAppContext

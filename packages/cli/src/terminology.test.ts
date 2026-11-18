@@ -30,7 +30,6 @@ const mocks = vi.hoisted(() => ({
   createTerminologyContext: vi.fn(),
   recordAuditEvent: vi.fn(),
   readFileSync: vi.fn(),
-  runDbReproject: vi.fn(),
   appCtx: { testMapping: { rebuildNow: vi.fn() }, close: vi.fn() },
   createAppContext: vi.fn(),
 }));
@@ -49,10 +48,6 @@ vi.mock('node:fs', () => ({
   readFileSync: mocks.readFileSync,
 }));
 
-vi.mock('./db', () => ({
-  runDbReproject: mocks.runDbReproject,
-}));
-
 import {
   runTerminologyImport,
   runPublisherCreate,
@@ -60,7 +55,6 @@ import {
   runSystemList,
   runOntologyUnlink,
   runOntologyBuild,
-  runTerminologyReproject,
 } from './terminology';
 
 describe('terminology CLI audit', () => {
@@ -277,7 +271,7 @@ describe('terminology CLI audit', () => {
   });
 });
 
-describe('terminology reproject (deprecated alias)', () => {
+describe('terminology system list', () => {
   let err: string;
 
   beforeEach(() => {
@@ -292,33 +286,6 @@ describe('terminology reproject (deprecated alias)', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-  });
-
-  it('delegates to runDbReproject with the same options', async () => {
-    mocks.runDbReproject.mockResolvedValue(0);
-
-    const code = await runTerminologyReproject({ json: false, force: true });
-
-    expect(code).toBe(0);
-    expect(mocks.runDbReproject).toHaveBeenCalledWith({ json: false, force: true });
-  });
-
-  it('prints a deprecation notice naming the replacement command', async () => {
-    mocks.runDbReproject.mockResolvedValue(0);
-
-    await runTerminologyReproject({ json: false, force: true });
-
-    expect(err).toContain('deprecated');
-    expect(err).toContain('openldr db reproject');
-  });
-
-  it('passes through the exit code runDbReproject returns, including the --force refusal', async () => {
-    mocks.runDbReproject.mockResolvedValue(1);
-
-    const code = await runTerminologyReproject({ json: false, force: false });
-
-    expect(code).toBe(1);
-    expect(mocks.runDbReproject).toHaveBeenCalledWith({ json: false, force: false });
   });
 
   it('system list prints where each system came from', async () => {

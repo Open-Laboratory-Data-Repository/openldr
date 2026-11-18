@@ -51,5 +51,3 @@ export function ImportSteps({ current, furthest, allowBack, onSelect }: ImportSt
     </nav>
   );
 }
-
-export default ImportSteps;

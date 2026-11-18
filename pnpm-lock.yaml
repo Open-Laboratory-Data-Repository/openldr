@@ -30,9 +30,6 @@ importers:
       esbuild:
         specifier: ^0.24.0
         version: 0.24.2
-      tsup:
-        specifier: ^8.3.5
-        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(supports-color@5.5.0)(tsx@4.22.4)(typescript@5.9.3)
       tsx:
         specifier: ^4.19.2
         version: 4.22.4
@@ -48,9 +45,6 @@ importers:
       xlsx:
         specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
         version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
-      xlsx-populate:
-        specifier: ^1.21.0
-        version: 1.21.0
 
   apps/desktop:
     devDependencies:
@@ -93,9 +87,6 @@ importers:
       '@openldr/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@openldr/dhis2':
-        specifier: workspace:*
-        version: link:../../packages/dhis2
       '@openldr/fhir':
         specifier: workspace:*
         version: link:../../packages/fhir
@@ -386,9 +377,6 @@ importers:
       react-resizable:
         specifier: ^3.0.5
         version: 3.2.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      react-resizable-panels:
-        specifier: ^4.9.0
-        version: 4.11.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-router-dom:
         specifier: ^6.28.0
         version: 6.30.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -459,9 +447,6 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.1.2
         version: 1.3.0(@types/react@18.3.31)(react@18.3.1)
-      '@radix-ui/react-tabs':
-        specifier: ^1.1.15
-        version: 1.1.15(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@xyflow/react':
         specifier: ^12.10.2
         version: 12.11.0(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -896,9 +881,6 @@ importers:
       '@openldr/db':
         specifier: workspace:*
         version: link:../db
-      '@openldr/dhis2':
-        specifier: workspace:*
-        version: link:../dhis2
       '@openldr/fhir':
         specifier: workspace:*
         version: link:../fhir
@@ -948,9 +930,6 @@ importers:
       kysely:
         specifier: ^0.28.17
         version: 0.28.17
-      pg-mem:
-        specifier: ^3.0.14
-        version: 3.0.14(kysely@0.28.17)
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(supports-color@7.2.0)(tsx@4.22.4)(typescript@5.9.3)
@@ -1415,9 +1394,6 @@ importers:
 
   packages/users:
     dependencies:
-      '@openldr/core':
-        specifier: workspace:*
-        version: link:../core
       '@openldr/db':
         specifier: workspace:*
         version: link:../db
@@ -6593,12 +6569,6 @@ packages:
     peerDependenciesMeta:
       '@types/react':
         optional: true
-
-  react-resizable-panels@4.11.2:
-    resolution: {integrity: sha512-+kfFbDZ8mygc7g0vxOcDzCVGuwiIUOnILqPoUHo6/uP+Mmyx6HzZU+kj1aOPDlktXuobYbr6BtQekvJwHRX4Eg==}
-    peerDependencies:
-      react: ^18.0.0 || ^19.0.0
-      react-dom: ^18.0.0 || ^19.0.0
 
   react-resizable@3.2.0:
     resolution: {integrity: sha512-3NKQ0SLZV7rs3LQHeXlOzDSRQfFrkX6TVet77/Qk03zqiZyee37b7N8/gwDJAA8UUjRz7PdWCCy49hcso45SMQ==}
@@ -12948,11 +12918,6 @@ snapshots:
       use-sidecar: 1.1.3(@types/react@18.3.31)(react@18.3.1)
     optionalDependencies:
       '@types/react': 18.3.31
-
-  react-resizable-panels@4.11.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
-    dependencies:
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
 
   react-resizable@3.2.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:

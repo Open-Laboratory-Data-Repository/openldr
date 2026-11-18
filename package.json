@@ -67,8 +67,6 @@
     "sync:e2e": "tsx scripts/sync-two-instance-harness.ts",
     "workflow:secret:accept": "tsx scripts/workflow-secret-smoke.ts",
     "mysql:accept:matrix": "bash scripts/mysql-matrix-accept.sh",
-    "make:marketplace-bundle": "tsx scripts/make-marketplace-bundle.ts",
-    "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts",
     "init": "node scripts/init.mjs",
     "publish:images": "bash scripts/build-and-push.sh"
   },
@@ -77,12 +75,10 @@
     "@types/node": "^22.10.0",
     "dependency-cruiser": "^16.4.0",
     "esbuild": "^0.24.0",
-    "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
-    "xlsx-populate": "^1.21.0"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }

@@ -203,9 +203,8 @@ diferentes, não o mesmo número. Tal como `db seed`, recusa correr quando há m
 pendentes, em vez de ir até ao fim sobre um esquema atrasado. Use-o para preencher dados
 depois de uma atualização acrescentar uma tabela ao armazém.
 
-`terminology reproject` está **obsoleto**. Sempre chamou a mesma reconstrução completa do
-modelo de leitura, nunca uma só da terminologia. Continua a funcionar como alias, mostra
-agora um aviso de obsolescência e herda a proteção `--force`. Use antes `db reproject`.
+O antigo comando `terminology reproject` foi removido. Executava a mesma reconstrução
+completa. Use `db reproject --force` em vez dele.
 
 Instalar e executar um plugin de ingestão, e depois carregar um ficheiro com ele:
 

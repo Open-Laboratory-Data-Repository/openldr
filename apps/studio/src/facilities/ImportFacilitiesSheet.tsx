@@ -2014,5 +2014,3 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     </Sheet>
   );
 }
-
-export default ImportFacilitiesSheet;

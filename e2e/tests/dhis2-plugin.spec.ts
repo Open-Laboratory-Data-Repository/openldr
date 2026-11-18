@@ -29,7 +29,7 @@ import { test, expect, type FrameLocator, type Page } from '@playwright/test';
  *     with AUTH_DEV_BYPASS=true (the playwright webServer sets this).
  *   - migration 036 applied (runs on server boot).
  *   - UI-bearing dhis2-sink installed, with the server running (the install goes through it):
- *       pnpm build:dhis2-sink && pnpm make:marketplace-bundle
+ *       pnpm build:dhis2-sink
  *       pnpm openldr plugin install reference-plugins/dhis2-sink/plugin.wasm
  *   - For step 4 (the live metadata pull): docker compose --profile dhis2 up, and a
  *     dhis2-sink connector created + enabled (Settings ▸ Connectors) pointing at the

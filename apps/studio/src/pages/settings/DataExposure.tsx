@@ -179,5 +179,3 @@ export function DataExposure() {
     </div>
   );
 }
-
-export default DataExposure;

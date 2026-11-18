@@ -121,5 +121,3 @@ export function MatchCodesSheet({ open, onClose, onApplied }: { open: boolean; o
     </Sheet>
   );
 }
-
-export default MatchCodesSheet;

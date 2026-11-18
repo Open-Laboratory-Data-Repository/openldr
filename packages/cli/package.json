@@ -17,7 +17,6 @@
     "@openldr/bootstrap": "workspace:*",
     "@openldr/marketplace": "workspace:*",
     "@openldr/plugins": "workspace:*",
-    "@openldr/dhis2": "workspace:*",
     "@openldr/terminology": "workspace:*",
     "@openldr/config": "workspace:*",
     "@openldr/sync": "workspace:*",
@@ -36,5 +35,5 @@
     "quickjs-emscripten": "0.32.0",
     "ssh2": "^1.17.0"
   },
-  "devDependencies": { "kysely": "^0.28.17", "pg-mem": "^3.0.14", "tsup": "^8.3.5", "typescript": "^5.7.2", "vitest": "^2.1.8" }
+  "devDependencies": { "kysely": "^0.28.17", "tsup": "^8.3.5", "typescript": "^5.7.2", "vitest": "^2.1.8" }
 }

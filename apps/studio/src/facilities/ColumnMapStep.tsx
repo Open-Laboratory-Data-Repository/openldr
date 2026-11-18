@@ -885,5 +885,3 @@ export function ColumnMapStep({
     </div>
   );
 }
-
-export default ColumnMapStep;

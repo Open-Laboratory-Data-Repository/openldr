@@ -116,5 +116,3 @@ export function ValueMapRow({
     </Fragment>
   );
 }
-
-export default ValueMapRow;

@@ -234,5 +234,3 @@ export function Roles() {
     </div>
   );
 }
-
-export default Roles;

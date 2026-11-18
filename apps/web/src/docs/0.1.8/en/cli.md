@@ -198,9 +198,8 @@ the ingest ledger (one per version of a clinical resource — they are different
 number). Like `db seed`, it refuses when migrations are pending rather than running to completion
 against a schema that is behind. Use it to backfill after an upgrade adds a warehouse table.
 
-`terminology reproject` is **deprecated** — it has always called the same whole-read-model rebuild,
-never a terminology-only one. It still works as an alias, it now prints a deprecation warning, and
-it inherits the `--force` guard. Use `db reproject` instead.
+The old `terminology reproject` command has been removed. It ran the same full rebuild. Use
+`db reproject --force` instead.
 
 Install and run an ingest plugin, then ingest a file with it:
 

@@ -225,5 +225,3 @@ export function ResultFieldsTab({ canManage, loinc }: { canManage: boolean; loin
     </div>
   );
 }
-
-export default ResultFieldsTab;

@@ -88,5 +88,3 @@ export function IdentifierSystemSheet({ system, onClose, onSaved }: {
     </Sheet>
   );
 }
-
-export default IdentifierSystemSheet;

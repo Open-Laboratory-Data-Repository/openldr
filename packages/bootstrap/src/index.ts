@@ -57,7 +57,6 @@ import { createSyncHandle, type SyncHandle } from './sync-handle';
 import { createSyncRuntime, type SyncRuntime, type BuiltPush, type BuiltPull } from './sync-runtime';
 import { createRetryQuarantine } from './sync-retry-quarantine';
 import { createSyncActivityTracker } from './sync-activity-tracker';
-import { migrateLegacySyncConfig } from './sync-settings-migrate';
 import { encodePushBody, advertisesGzip } from './sync-gzip';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
 import { createResultParametersLoader } from './reexpand-value-sets';
@@ -767,7 +766,7 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   // optional demo/sample data (see seed.ts); a real production install would never seed roles if
   // this depended on it. seedSystemRoles() is idempotent (safe to call on every boot) so this
   // covers a fresh install AND an existing-DB upgrade to this feature identically. Mirrors the
-  // migrateWorkflowSecrets/migrateLegacySyncConfig best-effort shims further below: wrapped so a
+  // migrateWorkflowSecrets best-effort shim further below: wrapped so a
   // pre-migration DB or a transient connection failure logs a warning and never aborts boot.
   const reconciliation = await roles.seedSystemRoles().catch((err) => {
     logger.warn({ err }, 'system-role seed failed');
@@ -1526,13 +1525,6 @@ const reporting: ReportingApi = {
   const encryptSecret = (plain: string): string => seal(plain, parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''));
   // Reading the sync config touches app_settings; a transient DB read failure here must degrade to
   // "sync disabled" rather than abort boot (mirrors the projection LISTEN fallback's boot-safety).
-  // One-time upgrade shim: pre-S4 installs kept sync config as a single JSON blob the workers never read.
-  // Migrate it into the discrete sync.* keys BEFORE readSyncConfig runs so the reader sees the populated
-  // keys. Best-effort — a failure here (transient DB) must warn, never abort boot.
-  await migrateLegacySyncConfig(appSettings).catch((err) => {
-    logger.warn({ err: (err as Error).message }, 'legacy sync config migration failed');
-    return false;
-  });
   // buildPush / buildPull (Task 3): construct — but do NOT start — the workers for a given config.
   // The SyncRuntime calls .start() after each builder returns and owns their stop()/listen-client
   // lifecycle, so these same closures rebuild the workers whenever reconcile() re-reads the config.
@@ -2135,7 +2127,6 @@ export {
 } from './sync-bundle';
 export { createSyncHandle } from './sync-handle';
 export type { SyncHandle, SyncStatus, SyncDirectionStatus, SyncMode } from './sync-handle';
-export { migrateLegacySyncConfig } from './sync-settings-migrate';
 export { sealDefinitionSecrets, sealForSave, secretRefsOf, type SealedSave } from './workflow-secret-seal';
 export { duplicateWorkflow, newWorkflowId } from './workflow-duplicate';
 export { setWorkflowEnabled } from './workflow-enabled';

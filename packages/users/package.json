@@ -10,7 +10,6 @@
     "lint": "echo \"no lint\""
   },
   "dependencies": {
-    "@openldr/core": "workspace:*",
     "@openldr/db": "workspace:*",
     "@openldr/ports": "workspace:*",
     "kysely": "^0.28.17"

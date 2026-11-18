@@ -431,7 +431,6 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'terminology ontology unlink': { kind: 'app', capability: 'terminology.manage', destructive: true }, // ontology :19
   'terminology publisher create': { kind: 'app', capability: 'terminology.manage' }, // admin :48
   'terminology publisher list': { kind: 'app', capability: 'terminology.view' }, // admin :47
-  'terminology reproject': { kind: 'app', capability: 'settings.danger_zone', destructive: true },
   'terminology system create': { kind: 'app', capability: 'terminology.manage' }, // admin :85
   'terminology system list': { kind: 'app', capability: 'terminology.view' }, // admin :81
   'terminology term list': { kind: 'app', capability: 'terminology.view' }, // admin :155

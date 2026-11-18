@@ -135,10 +135,12 @@ Key configuration:
 Worked example. The bundle is built from repository files, so this is a source checkout:
 
 ```bash
-pnpm make:marketplace-bundle
-pnpm openldr market verify reference-plugins/whonet-sqlite --json
+pnpm make:docs-marketplace-bundle
+pnpm openldr market verify .docs-marketplace/bundles/test-sink --json
 pnpm openldr market list --json
 ```
+
+To pack your own plugin, form or report, use `openldr artifact pack <dir> --key <private key>`.
 
 Troubleshooting:
 

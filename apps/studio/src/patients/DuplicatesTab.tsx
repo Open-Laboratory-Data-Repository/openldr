@@ -149,5 +149,3 @@ export function DuplicatesTab({ canManage, canExport, onOpen }: {
     </div>
   );
 }
-
-export default DuplicatesTab;

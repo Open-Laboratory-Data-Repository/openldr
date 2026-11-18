@@ -407,9 +407,6 @@ export async function compileBuilderToSql(q: Extract<WidgetQuery, { mode: 'build
 export async function listDashboards(): Promise<Dashboard[]> {
   return authFetch('/api/dashboards').then((r) => okJson<Dashboard[]>(r, 'list dashboards'));
 }
-export async function getDashboard(id: string): Promise<Dashboard> {
-  return authFetch(`/api/dashboards/${id}`).then((r) => okJson<Dashboard>(r, 'get dashboard'));
-}
 export async function createDashboard(d: Dashboard): Promise<Dashboard> {
   return authFetch('/api/dashboards', json(d)).then((r) => okJson<Dashboard>(r, 'create dashboard'));
 }
@@ -667,8 +664,6 @@ export const setValidation = (strictness: ValidationStrictness): Promise<{ stric
 
 export interface HealthCheckResult { status: string; latencyMs: number; detail?: string }
 export interface HealthReport { status: string; checks: Record<string, HealthCheckResult> }
-export const fetchHealth = (): Promise<HealthReport> =>
-  authFetch('/health').then((r) => r.json() as Promise<HealthReport>);
 
 // Audit
 export interface AuditEvent {
@@ -1963,7 +1958,6 @@ export const deleteLayout = (id: string): Promise<void> =>
   authFetch(`/api/layouts/${encodeURIComponent(id)}`, { method: 'DELETE' }).then((r) => okJson<unknown>(r, 'delete layout')).then(() => undefined);
 
 export const getRoleCatalog = (): Promise<{ groups: CapabilityGroup[] }> => apiGet('/api/roles/catalog', 'role catalog');
-export const getRole = (id: string): Promise<RoleRecord> => apiGet(`/api/roles/${id}`, 'get role');
 export const createRole = (input: { name: string; slug?: string; description?: string | null; capabilities: string[] }): Promise<RoleRecord> =>
   authFetch('/api/roles', jbody(input, 'POST')).then((r) => okJson<RoleRecord>(r, 'create role'));
 export const updateRole = (id: string, input: { name?: string; description?: string | null; capabilities?: string[] }): Promise<RoleRecord> =>
@@ -2497,12 +2491,6 @@ export const ontologySearch = (id: string, query: string): Promise<OntologyNode[
   apiGet(`/api/terminology/ontology/${id}/search?q=${encodeURIComponent(query)}`, 'ontology search');
 export const ontologyPath = (id: string, code: string): Promise<OntologyBreadcrumb[]> =>
   apiGet(`/api/terminology/ontology/${id}/path?code=${encodeURIComponent(code)}`, 'ontology path');
-export const ontologyPanelMembers = (id: string, loinc: string): Promise<PanelMember[]> =>
-  apiGet(`/api/terminology/ontology/${id}/panels?loinc=${encodeURIComponent(loinc)}`, 'ontology panel members');
-export const ontologyAnswerOptions = (id: string, loinc: string): Promise<AnswerOption[]> =>
-  apiGet(`/api/terminology/ontology/${id}/answers?loinc=${encodeURIComponent(loinc)}`, 'ontology answer options');
-export const ontologySpecimenCodes = (id: string, loinc: string): Promise<SpecimenCode[]> =>
-  apiGet(`/api/terminology/ontology/${id}/specimens?loinc=${encodeURIComponent(loinc)}`, 'ontology specimen codes');
 
 // ── Test catalog (test catalog S1 and S2) ──────────────────────────────────────
 // These types mirror @openldr/bootstrap's test-catalog.ts. The routes are apps/server/src/test-catalog-routes.ts.

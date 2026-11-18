@@ -46,7 +46,6 @@ export function FormRuntime({
   onSubmit,
   footer,
   initialAnswers,
-  fieldWarnings,
   formId,
   formDefinitionId,
   preview,
@@ -62,8 +61,6 @@ export function FormRuntime({
   onSubmit: (answers: RuntimeAnswers) => void | Promise<void>;
   footer?: React.ReactNode;
   initialAnswers?: RuntimeAnswers;
-  /** @deprecated No longer used to render markers in preview; kept for API compatibility. */
-  fieldWarnings?: Record<string, 'error' | 'warning'>;
   /**
    * DOM id set on the rendered `<form>` element, so a ⋯ menu item outside the form can call
    * `requestSubmit()` on it. This is NOT a form-definition id — see `formDefinitionId`.

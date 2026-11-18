@@ -519,5 +519,3 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
     </div>
   );
 }
-
-export default ObservedTab;

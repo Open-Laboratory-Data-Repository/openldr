@@ -1384,5 +1384,3 @@ export function Facilities() {
     </AppShell>
   );
 }
-
-export default Facilities;

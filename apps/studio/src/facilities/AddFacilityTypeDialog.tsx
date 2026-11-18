@@ -160,5 +160,3 @@ export function AddFacilityTypeDialog({
     </Dialog>
   );
 }
-
-export default AddFacilityTypeDialog;
