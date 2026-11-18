@@ -6,7 +6,7 @@ import type { InternalSchema } from './schema/internal';
 
 /** A user's data limit, by role subject (design 2026-11-18-roles-scope, part 3). */
 export interface UserDataScopeStore {
-  /** No row is Everything. */
+  /** No row, or a row with limited false, is Everything. */
   get(subject: string): Promise<DataScope>;
   /** Replaces the limit, and returns it as it was and as it is now, both read under the lock the
    *  save holds, so another save cannot slip between them (roles part 1 review FR5, FR10). */
@@ -33,16 +33,16 @@ export function createUserDataScopeStore(db: Kysely<InternalSchema>): UserDataSc
     get: (subject) => read(db, subject),
     async set(subject, scope) {
       return db.transaction().execute(async (trx) => {
-        // Saves for one user take turns on their row. The row is made first so there is one to lock.
-        await trx.insertInto('user_data_scopes').values({ subject }).onConflict((oc) => oc.column('subject').doNothing()).execute();
-        await trx.selectFrom('user_data_scopes').select('subject').where('subject', '=', subject).forUpdate().execute();
+        // Saves for one user take turns on their row. The upsert writes the row whether or not it
+        // exists, so it always takes the row lock and waits for another save. The row is never
+        // deleted: Everything is limited false. "Do nothing" took no lock, so a save could run while
+        // another deleted the row and leave the limit read back as Everything (review S1).
+        await trx.insertInto('user_data_scopes').values({ subject })
+          .onConflict((oc) => oc.column('subject').doUpdateSet({ subject })).execute();
         const before = await read(trx, subject);
         await trx.deleteFrom('user_data_scope_items').where('subject', '=', subject).execute();
-        if (!scope.limited) {
-          await trx.deleteFrom('user_data_scopes').where('subject', '=', subject).execute();
-          return { before, after: await read(trx, subject) };
-        }
-        await trx.updateTable('user_data_scopes').set({ limited: true, updated_at: new Date() }).where('subject', '=', subject).execute();
+        await trx.updateTable('user_data_scopes').set({ limited: scope.limited, updated_at: new Date() }).where('subject', '=', subject).execute();
+        if (!scope.limited) return { before, after: await read(trx, subject) };
         const rows = new Map<string, { subject: string; kind: string; region: string; value: string }>();
         const add = (kind: string, region: string, value: string) => rows.set(JSON.stringify([kind, region, value]), { subject, kind, region, value });
         for (const f of scope.facilities) add('facility', '', f);

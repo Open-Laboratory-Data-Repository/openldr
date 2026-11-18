@@ -66,4 +66,20 @@ describe.skipIf(!url)('user data scope saves on disposable PostgreSQL', () => {
       expect([a, b]).toContainEqual(await store.get('u1'));
     }
   });
+
+  // Review S1: an Everything save and a Limited save at once, on a row that exists, must leave one of
+  // the two whole, never a Limited save that reads back as Everything with its items orphaned.
+  it('keeps one of a Limited and an Everything save made at once, with no orphan items', async () => {
+    const store = createUserDataScopeStore(db);
+    for (let i = 0; i < 30; i += 1) {
+      await store.set('u1', a);
+      const [rb, re] = await Promise.all([store.set('u1', b), store.set('u1', { limited: false })]);
+      expect(rb.after).toEqual(b);
+      expect(re.after).toEqual({ limited: false });
+      const now = await store.get('u1');
+      expect([b, { limited: false }]).toContainEqual(now);
+      const items = await db.selectFrom('user_data_scope_items').selectAll().where('subject', '=', 'u1').execute();
+      expect(items.length).toBe(now.limited ? 1 : 0);
+    }
+  });
 });
