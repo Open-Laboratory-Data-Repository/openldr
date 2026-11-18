@@ -491,3 +491,10 @@ A long job cut off by a restart records it. Most carry on by themselves; these c
 - `openldr facilities jobs --retry <id>` continues an interrupted facility map rebuild.
 - `openldr facilities import-run-continue <runId>` continues a waiting register import from its saved file. Add `--json` for JSON output. A previously confirmed apply runs again without another confirmation. A file check stops at the usual confirmation.
 - `openldr import status`, `import copy status`, `import check status`, `facilities import-run <id>` and `pipeline status` list the interruptions of each run.
+
+## Correcting held requests
+
+A source check holds a request back when its rules find an error. Someone with the **Correct held requests** permission can correct the request's fields and check it again. The source rows stay as they are; the correction is kept beside them with who, when and why.
+
+- `openldr import check correct <plugin> <copy> <key> --set field=value --reason "why"` corrects one or more fields. Repeat `--set` for each field. An empty value clears the field. The plugin decides which fields can be corrected.
+- `openldr import check recheck <plugin> <copy> <key>` checks the request again in the run that held it. If it now passes it is saved and leaves the held list. Run `import check held` to see the result.

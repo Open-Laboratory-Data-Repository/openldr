@@ -129,6 +129,46 @@ export async function runImportCheckStop(pluginId: string, runId: string, opts: 
   } finally { await ctx.close(); }
 }
 
+export interface ImportCheckCorrectOpts extends JsonOpt {
+  /** Repeated `field=value`. An empty value clears the field. */
+  set: string[];
+  reason?: string;
+}
+
+/** `import check correct`: corrections to one held request, then `recheck` checks it again
+ *  (design 2026-11-18-held-corrections). Neither the key nor a value is printed. */
+export async function runImportCheckCorrect(pluginId: string, copyId: string, key: string, opts: ImportCheckCorrectOpts): Promise<number> {
+  const values: Record<string, string | null> = {};
+  for (const pair of opts.set) {
+    const at = pair.indexOf('=');
+    const field = at > 0 ? pair.slice(0, at).trim() : '';
+    if (field === '') throw new Error(`--set needs field=value, got ${JSON.stringify(pair.slice(0, 40))}`);
+    const value = pair.slice(at + 1);
+    values[field] = value === '' ? null : value;
+  }
+  if (Object.keys(values).length === 0) throw new Error('give at least one --set field=value');
+  const reason = (opts.reason ?? '').trim();
+  if (reason === '') throw new Error('--reason is required: say why the field is corrected');
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const out = await ctx.importChecks.correct({ pluginId, copyId, key, values, reason, actor: actor() });
+    const fields = Object.keys(values).sort();
+    emit(opts.json, { fields, corrections: out.corrections.length },
+      `corrected ${fields.length} field${fields.length === 1 ? '' : 's'}: ${fields.join(', ')}`);
+    return 0;
+  } finally { await ctx.close(); }
+}
+
+/** `import check recheck`: checks one corrected held request again, in the run that held it. */
+export async function runImportCheckRecheck(pluginId: string, copyId: string, key: string, opts: JsonOpt): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const run = await ctx.importChecks.recheck({ pluginId, copyId, key, actor: actor() });
+    emit(opts.json, checkRunForJson(run), `${formatCheckRun(run)}\nThe server checks the request again. Run import check held to see whether it is still held.`);
+    return 0;
+  } finally { await ctx.close(); }
+}
+
 export interface ImportCheckHeldOpts extends JsonOpt {
   label?: string;
   reason?: string;

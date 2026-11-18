@@ -260,6 +260,17 @@ export function buildProgram(): Command {
     .action(async (plugin: string, run: string, opts: { json: boolean }) => {
       try { process.exitCode = await runImportCheckStop(plugin, run, opts); } catch (err) { process.stderr.write(`import check stop failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
+  checkRuns.command('correct <plugin> <copy> <key>').description('Correct fields of a held request. The source rows stay as they are')
+    .option('--set <field=value>', 'a field and its corrected value; repeat for more; an empty value clears it', (v: string, all: string[]) => [...all, v], [] as string[])
+    .option('--reason <text>', 'why the field is corrected (required)')
+    .option('--json', 'emit JSON', false)
+    .action(async (plugin: string, copy: string, key: string, opts: { set: string[]; reason?: string; json: boolean }) => {
+      try { process.exitCode = await runImportCheckCorrect(plugin, copy, key, opts); } catch (err) { process.stderr.write(`import check correct failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  checkRuns.command('recheck <plugin> <copy> <key>').description('Check one corrected held request again, in the run that held it').option('--json', 'emit JSON', false)
+    .action(async (plugin: string, copy: string, key: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runImportCheckRecheck(plugin, copy, key, opts); } catch (err) { process.stderr.write(`import check recheck failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
   checkRuns.command('held <plugin> <copy>').description('List the held and failed requests of a copy, without their findings. --export writes them with their findings to a file')
     .option('--label <label>', 'only requests held under this label')
     .option('--reason <reason>', 'only held or only error')
@@ -1793,5 +1804,5 @@ import { runDoctor } from './doctor';
 import {
   runImportAllow, runImportAllowed, runImportFailures, runImportResume, runImportRevoke, runImportStart, runImportStatus, runImportStop,
 } from './import';
-import { runImportCheckHeld, runImportCheckStart, runImportCheckStatus, runImportCheckStop } from './import-check';
+import { runImportCheckCorrect, runImportCheckHeld, runImportCheckRecheck, runImportCheckStart, runImportCheckStatus, runImportCheckStop } from './import-check';
 import { runImportCopyDelete, runImportCopyStart, runImportCopyStatus, runImportCopyStop } from './import-copy';

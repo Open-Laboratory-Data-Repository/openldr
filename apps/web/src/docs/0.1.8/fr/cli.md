@@ -473,3 +473,10 @@ Une tâche longue coupée par un redémarrage l’enregistre. La plupart reprenn
 - `openldr facilities jobs --retry <id>` reprend une reconstruction de la carte des établissements interrompue.
 - `openldr facilities import-run-continue <runId>` reprend un import de registre en attente depuis son fichier enregistré. Ajoutez `--json` pour une sortie JSON. Une application déjà confirmée reprend sans nouvelle confirmation. Une vérification du fichier s'arrête à la confirmation habituelle.
 - `openldr import status`, `import copy status`, `import check status`, `facilities import-run <id>` et `pipeline status` listent les interruptions de chaque exécution.
+
+## Corriger les demandes retenues
+
+Une vérification de source retient une demande quand ses règles trouvent une erreur. Une personne qui a la permission **Correct held requests** peut corriger les champs de la demande et la vérifier à nouveau. Les lignes de la source ne changent pas ; la correction est gardée à côté, avec qui, quand et pourquoi.
+
+- `openldr import check correct <plugin> <copy> <key> --set champ=valeur --reason "pourquoi"` corrige un ou plusieurs champs. Répétez `--set` pour chaque champ. Une valeur vide efface le champ. Le plugin décide quels champs peuvent être corrigés.
+- `openldr import check recheck <plugin> <copy> <key>` vérifie à nouveau la demande dans l'exécution qui l'a retenue. Si elle passe, elle est enregistrée et quitte la liste des demandes retenues. Lancez `import check held` pour voir le résultat.
