@@ -32,6 +32,17 @@ describe('packBundle', () => {
     await rm(out, { recursive: true, force: true });
   });
 
+  it('refuses a manifest with keys this packer does not know, naming them and writing nothing', async () => {
+    // An older packer once stripped importSource.corrections and ui.requiredCapabilities, then signed
+    // what was left, so the signature was valid but the bundle had lost its settings.
+    const out = join(await mkdtemp(join(tmpdir(), 'pack-')), 'bundle');
+    const kp = generatePublisherKeypair();
+    const manifest = { ...structuredClone(baseManifest), payload: { ...baseManifest.payload, newerSetting: { fields: ['a'] } }, alsoNew: 1 };
+    await expect(packBundle({ manifest, payload: new Uint8Array([1]), outDir: out, privateKeyDer: kp.privateKeyDer, publicKeyDer: kp.publicKeyDer }))
+      .rejects.toThrow(/payload\.newerSetting.*alsoNew|alsoNew.*payload\.newerSetting/);
+    expect(existsSync(out)).toBe(false);
+  });
+
   it('a tampered written manifest fails verification', async () => {
     const out = await mkdtemp(join(tmpdir(), 'pack-'));
     const kp = generatePublisherKeypair();
