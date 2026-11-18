@@ -79,7 +79,7 @@ A new capability `imports.correct_held`, "Correct held requests". No preset role
 
 ### The screen
 
-In the plugin's Held tab, the detail sheet of a held request gets a ⋯ menu at the top right with
+In the plugin's Held tab (plugin UI), the detail sheet of a held request gets a ⋯ menu at the top right with
 **Correct fields**. It shows the correctable fields, label left and input right: the value as read on a
 line under the label, the new value in the input. A reason field is required. The sheet's ⋯ menu then
 offers **Save and check again**. The result shows in the sheet: saved, or still held with the new
@@ -91,13 +91,35 @@ findings.
 `openldr import-check recheck <copyId> <key>` checks it again. Both act as `cli` in the audit log and print
 the outcome.
 
+### Settled after the builder check (my calls)
+
+- **Where the screen lives.** The Held tab is the plugin's page (cdr-source `ui/`). The form and its ⋯
+  menu are plugin UI. CE adds two host calls through the plugin broker, `import.check.correct` and
+  `import.check.recheck`, both refused without `imports.correct_held`.
+- **How CE knows a plugin can be corrected.** The plugin's import source declares `corrections.fields`
+  in its manifest. CE shows **Correct fields** only when that list exists, and only those fields. No
+  version compare.
+- **The values as read.** For a held group the plugin also returns `fields`: the decoded values of the
+  correctable fields. CE keeps them with the held row (a new `fields` column), so the form can show
+  "As read" without reading the source again.
+- **Which held rows.** Only rows held by rules or by the check (`reason = 'held'`). A row that could not
+  be read (`reason = 'error'`) has no fields to correct.
+- **What "check again" runs under.** The held row's own check run: its options, reference copy and
+  provenance. A pass is saved under that run, which moves one from held to saved in its counts. It is
+  refused while a check of the same copy is live, and when that run no longer exists ("Start the check
+  again first").
+- **Later full runs.** A full check run sends the stored corrections for the keys on each page, so a
+  corrected request stays corrected when the copy is checked again.
+- **Keeping and removing.** Corrections are deleted with the held rows they belong to and with the copy.
+  After a pass they stay: they are the record of who changed what, and the saved request carries them too.
+
 ## Constraints
 
 - AGENTS.md section 4: build only this. Section 5: sheet, ⋯ menu, label-left form. Section 6: CLI, docs in
   en, fr, pt, mobile, changelog.
 - The plugin is published code. It ships as a new version, signed on the laptop, only on the operator's
-  yes. CE must keep working with the published 0.1.1 and 0.1.2, which do not know `corrections`: CE asks
-  the plugin's version and shows **Correct fields** only when it supports it.
+  yes. CE must keep working with the published 0.1.1 and 0.1.2, which declare no corrections: CE shows no
+  **Correct fields** for them.
 - Migration 124: check no other branch claims it before merging.
 
 ## Left to the builder
