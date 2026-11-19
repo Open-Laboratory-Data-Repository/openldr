@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "841199b9",
+          "type": "feat",
+          "scope": "query",
+          "title": "Groups for the Connectors and Datasets lists, as Custom Queries has: new group, move, rename, delete, and openldr query groups (migration 133)"
+        },
+        {
           "hash": "9456737c",
           "type": "fix",
           "scope": "datasets",
