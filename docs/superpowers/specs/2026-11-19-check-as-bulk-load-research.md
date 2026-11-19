@@ -178,6 +178,45 @@ What this tells us:
 - So "all plugin calls" adds something only where another plugin call runs long, for example a
   converter fed a large file. No such call was measured here.
 
+## Built result: decode-ahead on branch `feat/check-decode-ahead` (2026-11-19)
+
+Design: `2026-11-19-check-decode-ahead-design.md`. Same 5,000 requests, real check driver, real
+save path, cdr-source 0.1.4. Started the way the server starts (`tsx` registered in-process). "Before"
+is `main` at 6c496749. "After" is the branch with `decodeOffThread` on. Two runs each. Every run
+read 5,000, saved 4,850, held 119, failed 31, with 69,667 records.
+
+| | Before | After |
+|---|---|---|
+| Requests a second | 176.8 and 177.0 | 279.1 and 274.8 |
+| Whole run | 28.3 and 28.3 s | 17.9 and 18.2 s |
+| Time in decode calls | 13.6 and 13.8 s | 13.6 and 13.5 s, now beside the saves |
+| Time in saves | 13.5 and 13.4 s | 14.3 and 14.6 s |
+| Longest main-thread stall | 1,357 and 1,371 ms | 132 and 136 ms |
+| Stalls over 500 ms | 10 and 10 | 0 and 0 |
+
+- The check is 1.57 times faster. A full source check (2.3 million) would take about 2.3 hours on
+  this disk with nothing else running, against about 3.6 hours before.
+- Saved records are the same. The list of type, id, version, op and content hash in
+  `fhir.change_log` after a "before" run and an "after" run is byte-identical (`cmp` exit 0,
+  69,671 rows each).
+- Stop and start again: an "after" run was stopped once 2,000 requests were read. It stopped at
+  2,500 read, cursor `TBG0102499`, and was started again. Final counts equal a clean run. Its hash
+  list is byte-identical to a clean run, so no request was saved twice.
+- The real page ahead reads its rows from the database while the current page saves. The built
+  speed matches the spike (275 to 278), so that overlap costs nothing measurable here.
+- The test runner's workers start with no loader flag, so integration tests can take the worker path.
+
+Bench scripts kept outside the repo, in `/home/fredrick/.cache/openldr-speed-bench/`:
+`run-check.mts`, `launch.mjs`, `dump-hashes.mjs`.
+
+HONEST NON-PROOF:
+- The built standalone app and the Docker image were not run. Proof would be
+  `pnpm --filter @openldr/server build:check`, then one check in the built app.
+- No projection or sync worker ran beside the check. The live install will be slower.
+- One sample of 5,000 requests, one page size (500), no reference copy, so the twin-keys path was
+  not in the bench. The unit tests cover it with a fake plugin only.
+- A stop was tested once, at one point. A power cut mid-page was not.
+
 ## HONEST NON-PROOF
 
 - Proven for this sample since the first draft: a re-run gives the same hashes (see "Measured").
