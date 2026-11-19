@@ -7,6 +7,7 @@ import type { MarketplaceInstallStore, MarketplaceInstallRow } from '@openldr/db
 import { safeRecord, type AuditEventInput, type AuditStore } from '@openldr/audit';
 import { redact, type Logger } from '@openldr/core';
 import type { MapLevel, PackMappingInput, PackMappingPlan } from './test-mapping';
+import type { PackDataset } from './warehouse-datasets';
 
 type Actor = { id: string | null; name: string };
 type StepOutcome = { ok: true } | { ok: false; error: string };
@@ -44,6 +45,11 @@ export interface ContentPackDeps {
     | { ok: true; wouldLink: number }
     | { ok: false; reason: 'unknown-register' | 'deactivated-register'; error: string }
   >;
+  /** Throws when the pack's datasets would not install: a warehouse that is not PostgreSQL, SQL that is
+   *  not one read-only SELECT, a name another pack owns. Writes nothing. `ownerPack` is the pack's id. */
+  checkDatasets(ownerPack: string, tables: PackDataset[]): Promise<void>;
+  /** Saves the datasets and builds each in the warehouse. Throws at the first build that fails. */
+  installDatasets(ownerPack: string, tables: PackDataset[]): Promise<void>;
   /** Resolve a pack's test or result mappings by LOINC, writing nothing (mapping specs 4.7). */
   planTestMappings(mappings: PackMappingInput[], level: MapLevel): Promise<PackMappingPlan>;
   /** Write the resolvable ones and rebuild test_map once. Existing mappings are kept. */
@@ -116,6 +122,9 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
         case 'custom-queries':
           deps.checkQueries(step.file);
           break;
+        case 'datasets':
+          await deps.checkDatasets(bundle.manifest.id, step.tables);
+          break;
         case 'facility-register': {
           const out = await deps.register({ url: step.url, name: step.name, code: step.code, csv: step.csv, extraColumns: step.extraColumns, apply: false, actor });
           if (!out.ok) throw new Error(out.error);
@@ -145,7 +154,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     return { pack, steps, linkPreview, testMapPreview };
   }
 
-  async function runStep(step: ContentPackStep, actor: Actor, at: { pack: string; step: number }): Promise<void> {
+  async function runStep(step: ContentPackStep, actor: Actor, at: { pack: string; step: number; packId: string }): Promise<void> {
     const source = { source: 'content-pack', pack: at.pack, step: at.step };
     switch (step.kind) {
       case 'code-system':
@@ -183,6 +192,16 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
             before: c.outcome === 'created' ? null : c.before, after: c.after, metadata: source,
           });
         }
+        return;
+      }
+      case 'datasets': {
+        // Owned by the pack's id, without its version, so the next version replaces its own datasets.
+        await deps.installDatasets(at.packId, step.tables);
+        await record({
+          ...who(actor), action: 'dataset.install', entityType: 'dataset', entityId: at.packId,
+          before: null, after: null,
+          metadata: { ...source, names: step.tables.map((t) => t.name) },
+        });
         return;
       }
       case 'test-mappings':
@@ -228,7 +247,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     let error: string | undefined;
     for (let i = 0; i < pack.steps.length; i++) {
       try {
-        await runStep(pack.steps[i], actor, { pack: `${artifactId}@${version}`, step: i + 1 });
+        await runStep(pack.steps[i], actor, { pack: `${artifactId}@${version}`, step: i + 1, packId: artifactId });
       } catch (err) {
         failedStep = i + 1;
         // The text reaches the install row, the audit and the UI. Mask secrets a driver error may echo.

@@ -1316,6 +1316,8 @@ const reporting: ReportingApi = {
     loadResource: async (json, packId) => terminology.loaders.resource(await withRegisteredResourceId(termDb, json), { origin: 'pack', originRef: packId }),
     checkResource: (json) => { checkTerminologyResource(json); },
     checkQueries: checkCustomQueryFile,
+    checkDatasets: (ownerPack, tables) => warehouseDatasets.check(ownerPack, tables),
+    installDatasets: (ownerPack, tables) => warehouseDatasets.install(ownerPack, tables),
     importQueries: async (file) => {
       const customQueries = createCustomQueryStore(internal.db);
       // Read the rows first, so a replace can be audited with the SQL it overwrote.
