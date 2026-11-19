@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "2ebfc22e",
+          "type": "feat",
+          "scope": "imports",
+          "title": "A check does not save a record again when nothing in it changed (item 16)"
+        },
+        {
           "hash": "9672db43",
           "type": "perf",
           "scope": "imports",
