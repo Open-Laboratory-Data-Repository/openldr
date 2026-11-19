@@ -66,8 +66,6 @@ requests ranked 250,000 to 500,000, which carry 11.7 rows each, so it runs fast.
   in the copy sheet, and `n of total` keys for a set still being read. en, fr and pt.
 - Page SDK types (`packages/plugin-ui-sdk`): `total`, `pace` and `estimate`, all optional, so a
   page built against them still works on an older CE.
-
-## Left out
-
-- The v1 import plugin's own page (`wasm/openldr-v1-import/ui`) still says "of an unknown number
-  of requests". Its guide now says where the count shows. A follow-up.
+- v1 import plugin page (`wasm/openldr-v1-import/ui`): a bar and the same words under the status,
+  and "Requests read: n." above them. With no total it keeps "of an unknown number of requests"
+  and shows no bar. en, fr and pt. Done on 2026-11-19 in commit 194123fc, merged to main.
