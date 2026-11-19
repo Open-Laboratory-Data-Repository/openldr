@@ -194,7 +194,7 @@ Open the dots menu at the top right of the Copy tab and select **Start copy**. T
 
 Each row of the table is one set. The v1 plugin copies one set, `requests`, which holds the rows of all four tables for each request. **State** reads Not started, Copying, Waiting, Partly copied, Done, To be read again or Deleting. **Requests read** is the number of requests stored so far. **Rows** is the number of source rows stored, from all four tables. **Size** is the size of those rows as CE stores them.
 
-The line under the status counts requests "of an unknown number of requests", because the copy does not count the source first. A finished copy reads **Finished** and gives **Requests copied:** with the count.
+The line under the status gives **Requests read:** with the count. Under it, a bar shows the share read, with words such as "41% of 3,000,000 requests, about 25 min left". CE counts the source's requests each time a copy starts or carries on. The time left shows after about a minute of reading. A stopped copy shows the share without a time left. On a CE that does not count, the line reads "of an unknown number of requests" and no bar shows. A finished copy reads **Finished** and gives **Requests copied:** with the count.
 
 ![The set table gives the state, requests, rows and size.](/docs-images/operator/v1-import-guide-copy-sets.png)
 

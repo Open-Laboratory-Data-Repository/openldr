@@ -312,6 +312,11 @@ body {
 .v1i-run-head .v1i-row-main { gap: 2px; }
 .v1i-run-head .v1i-muted { font-weight: 400; }
 
+/* The share of a copy read. Capped in width so it stays a bar on a wide screen; full width on a phone. */
+.v1i-progress-wrap { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.v1i-progress { display: block; width: 100%; max-width: 16rem; height: 6px; border-radius: 999px; overflow: hidden; background: var(--border); }
+.v1i-progress-fill { display: block; height: 100%; background: var(--accent); transition: width 0.3s ease; }
+
 /* The set table scrolls inside its own box, so a narrow screen never scrolls the page sideways. */
 .v1i-table-wrap { margin-top: 12px; max-width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
 .v1i-table { width: 100%; border-collapse: collapse; }

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/pre
 import { createMockOpenldr, type PluginCopyRun } from '@openldr/plugin-ui-sdk';
 import { App } from './App';
 import { resetLocale } from './i18n';
+import { copyProgress, timeLeftText } from './CopyPanel';
 
 // Layer proven here: the Copy tab's own logic against the SDK mock, in jsdom. Not proven: the
 // real broker, the iframe sandbox, CSS layout at phone width, or a database. The browser check
@@ -293,6 +294,59 @@ describe('copy tab', () => {
 });
 
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+describe('the share read and the time left', () => {
+  const est = (over: Partial<NonNullable<PluginCopyRun['estimate']>> = {}) =>
+    ({ done: 1240500, total: 3000000, percent: 41.35, secondsLeft: 1500, ...over });
+
+  it('shows a bar, the share of the total and the time left for a running copy', async () => {
+    const live = copy({ estimate: est(), sets: { requests: { keys: 1240500, rows: 1, bytes: 1, skipped: 0, done: false, total: 3000000 } } });
+    setup({ list: async () => [live], status: async () => live });
+    await openCopy();
+    expect(byId('copy-summary').textContent).toBe('Requests read: 1,240,500.');
+    expect(byId('copy-progress-text').textContent).toBe('41% of 3,000,000 requests, about 25 min left');
+    const bar = pane().getByRole('progressbar');
+    expect(bar.getAttribute('aria-valuenow')).toBe('41');
+    expect(bar.getAttribute('aria-label')).toBe('41% of 3,000,000 requests, about 25 min left');
+  });
+
+  it('keeps the old line and draws no bar when the host sends no total', async () => {
+    const live = copy();
+    setup({ list: async () => [live], status: async () => live });
+    await openCopy();
+    expect(byId('copy-summary').textContent).toBe('1,240,500 of an unknown number of requests.');
+    expect(pane().queryByTestId('copy-progress')).toBeNull();
+  });
+
+  it('shows the share without a time left for a stopped copy, and nothing once completed', () => {
+    expect(copyProgress(copy({ status: 'stopped', estimate: est() }))?.text).toBe('41% of 3,000,000 requests');
+    expect(copyProgress(copy({ status: 'completed', estimate: est({ percent: 100 }) }))).toBeNull();
+    expect(copyProgress(copy({ estimate: est({ total: null, percent: null }) }))).toBeNull();
+  });
+
+  it('never shows 100 for a copy short of its end', () => {
+    expect(copyProgress(copy({ estimate: est({ percent: 99.97 }) }))?.text).toMatch(/^99% /);
+  });
+
+  it('says the time left in minutes, hours, or not yet known', () => {
+    expect(timeLeftText(null)).toBe('time left not known yet');
+    expect(timeLeftText(30)).toBe('under a minute left');
+    expect(timeLeftText(90)).toBe('about 2 min left');
+    expect(timeLeftText(3 * 3600 + 5 * 60)).toBe('about 3 h 5 min left');
+  });
+
+  it('speaks French and Portuguese', () => {
+    for (const [locale, want] of [
+      ['fr', '41 % de 3\u202f000\u202f000 demandes, environ 25 min restantes'],
+      ['pt', '41% de 3.000.000 pedidos, cerca de 25 min restantes'],
+    ] as const) {
+      resetLocale();
+      (window as unknown as { openldr: unknown }).openldr = createMockOpenldr({ pluginId: PLUGIN, locale });
+      expect(copyProgress(copy({ estimate: est() }))?.text).toBe(want);
+    }
+    resetLocale();
+  });
+});
 
 describe('reading the copy', () => {
   it('stops reading once the copy reaches a final status', async () => {
