@@ -271,7 +271,7 @@ waits for it. Run `status` to follow it. `start` on a stopped or failed copy car
 where each set stopped. `start` on a finished copy reads no set again. It only tries the skipped
 keys again, so it reads no new source rows. `start` on a queued, running or waiting copy whose
 SQL has not changed returns it unchanged. `--page-size` is the number of source keys per page,
-1 to 2000, default 500. The v1 import plugin's copy does not need the `tz` option.
+1 to 2000, default 500.
 
 When the plugin's SQL for a set changed since the copy began, `start` prints
 `these sets would be read again from the start: <names>. Run again with --reread to do that.`

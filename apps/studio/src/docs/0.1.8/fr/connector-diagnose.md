@@ -164,4 +164,4 @@ Les contrôles documentés ont obtenu une réussite Postgres réelle et un déla
 
 ## Guides associés
 
-[Connecteurs](/docs/connectors) décrit la création, les tests et les changements de secrets. [Importer depuis OpenLDR v1](/docs/v1-import) utilise un connecteur de base de données.
+[Connecteurs](/docs/connectors) décrit la création, les tests et les changements de secrets.

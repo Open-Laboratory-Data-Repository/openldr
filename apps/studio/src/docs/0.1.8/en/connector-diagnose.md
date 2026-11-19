@@ -164,4 +164,4 @@ The documented checks exercised actual Postgres success and a real UDP timeout f
 
 ## Related guides
 
-[Connectors](/docs/connectors) covers creation, testing and secret changes. [Import from OpenLDR v1](/docs/v1-import) uses a database connector.
+[Connectors](/docs/connectors) covers creation, testing and secret changes.
