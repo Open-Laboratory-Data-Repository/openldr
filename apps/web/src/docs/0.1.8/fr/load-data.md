@@ -340,6 +340,8 @@ Si cette instance est un **laboratoire** inscrit auprès d'un serveur OpenLDR **
 
 Les ressources ingérées arrivent dans le magasin FHIR interne et sont projetées dans l'entrepôt analytique que lisent les rapports et les tableaux de bord. Si des données sont ingérées mais n'apparaissent pas dans un rapport, vérifiez que le stockage cible est configuré (voir [Variables d'environnement](/docs/environment)) et laissez un moment à la projection pour rattraper son retard. La ligne **Entrepôt** en haut de la page Activity indique le retard et le temps nécessaire. `openldr db warehouse-status` affiche les mêmes chiffres.
 
+Un pack de rapports peut aussi installer des jeux de données : des tables qu'il construit à partir de l'entrepôt pour que ses rapports ne répètent pas une étape lente à chaque exécution. OpenLDR les reconstruit une fois l'entrepôt à jour, si bien qu'un tel rapport peut avoir une reconstruction de retard. La page Query les liste sous Datasets, et `openldr db datasets list` affiche la même liste.
+
 ### Faits et attributs des demandes
 
 Chaque demande de laboratoire porte, quand la source les envoie : l'ensemble OBR, l'heure d'analyse, le lieu de soins, le type de demande, qui l'a enregistrée et analysée, le médecin demandeur, l'âge au moment de la demande, les informations cliniques, l'analyseur, ainsi que le code et le motif de rejet. Chaque compte rendu porte sa section et la personne qui l'a validé.

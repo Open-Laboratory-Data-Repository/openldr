@@ -475,7 +475,7 @@ export const pt: EnShape = {
       },
       query: {
         run: { label: 'Usar a consola de consultas', description: 'Executar consultas SQL avulsas sobre os dados de análise.' },
-        manage: { label: 'Gerir consultas guardadas', description: 'Editar, renomear, mover e apagar qualquer consulta guardada, gerir grupos de consultas e substituir consultas na importação.' },
+        manage: { label: 'Gerir consultas guardadas', description: 'Editar, renomear, mover e apagar qualquer consulta guardada, gerir grupos de consultas e substituir consultas na importação. Também reconstruir ou eliminar os conjuntos de dados instalados por um pacote.' },
       },
       users: {
         view: { label: 'Ver utilizadores', description: 'Abrir a área de Utilizadores e ver as contas.' },

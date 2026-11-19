@@ -479,7 +479,7 @@ export const en = {
       },
       query: {
         run: { label: 'Use query workbench', description: 'Run ad-hoc SQL queries against analytics data.' },
-        manage: { label: 'Manage saved queries', description: 'Edit, rename, move and delete any saved query, manage query groups, and replace queries on import.' },
+        manage: { label: 'Manage saved queries', description: 'Edit, rename, move and delete any saved query, manage query groups, and replace queries on import. Also rebuild or delete the datasets a pack installed.' },
       },
       users: {
         view: { label: 'View users', description: 'Open the Users workspace and see accounts.' },

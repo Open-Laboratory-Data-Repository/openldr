@@ -383,6 +383,11 @@ confirm the target store is configured (see [Environment variables](/docs/enviro
 the projection a moment to catch up. The **Warehouse** line at the top of the Activity page shows
 how far behind it is and how long it needs. `openldr db warehouse-status` prints the same numbers.
 
+A report pack can also install datasets: tables it builds from the warehouse so its reports do not
+repeat a slow step on every run. OpenLDR rebuilds them once the warehouse has caught up, so such a
+report can be one rebuild behind. The Query page lists them under Datasets, and
+`openldr db datasets list` prints the same list.
+
 ### Request facts and request attributes
 
 Each lab request carries, where the source sends them: the OBR set, analysis time, point of care,

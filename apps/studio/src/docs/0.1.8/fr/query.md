@@ -354,6 +354,34 @@ Sélectionnez son nom. L'exemple ouvre request_summary, créé dans Rapports pla
 
 **Résultat attendu :** l'onglet affiche les lignes enregistrées par le workflow.
 
+## Utiliser un jeu de données installé par un pack
+
+Utilisez cette tâche si un pack de contenu a installé des jeux de données. Un jeu de données de pack est une table que le pack construit à partir de l'entrepôt. Ses rapports lisent donc une seule table et ne répètent pas une étape lente à chaque exécution. Vous ne les créez pas ici. L'installation du pack les crée.
+
+Vous avez besoin de **Use query workbench** pour les voir. Reconstruire et Supprimer demandent aussi **Gérer les requêtes enregistrées**.
+
+### 1. Développer Datasets
+
+Sélectionnez **Datasets** dans Explorer. Les jeux de données de pack suivent ceux des workflows, chacun avec son nombre de lignes. Une icône rouge signale celui dont la dernière construction a échoué.
+
+### 2. Ouvrir un jeu de données
+
+Sélectionnez son nom. Il s'ouvre comme une table de l'entrepôt, sous `dataset.` suivi de son nom. Une requête enregistrée peut le lire de la même façon.
+
+### 3. Lire ses détails
+
+Sélectionnez les points à côté du nom, puis **Détails**. Le panneau indique le pack propriétaire, l'état, les lignes, la dernière construction, sa durée et la dernière erreur si une construction a échoué.
+
+### 4. Le reconstruire
+
+Sélectionnez les points, puis **Reconstruire**. Un message signale la fin. Sur un grand entrepôt, cela peut prendre une minute.
+
+**Résultat attendu :** le nombre de lignes et la date de dernière construction sont mis à jour.
+
+OpenLDR reconstruit aussi les jeux de données lui-même, une fois l'entrepôt à jour. Pendant un import volumineux, rien n'est reconstruit avant la fin de l'import. Un rapport qui lit un jeu de données peut donc avoir une reconstruction de retard sur l'entrepôt. La ligne **Entrepôt** dans [Activity](/docs/activity) affiche « reconstruction des jeux de données » pendant ce temps.
+
+Dans un terminal, `openldr db datasets list` affiche la même liste et `openldr db datasets rebuild` les reconstruit.
+
 ## Exécuter une requête enregistrée sur téléphone
 
 Explorer est replié au départ pour laisser plus de place au travail. Un grand écran facilite l'écriture SQL.

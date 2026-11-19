@@ -354,6 +354,34 @@ Selecione o nome. O exemplo abre request_summary, criado em Relatórios agendado
 
 **Resultado esperado:** o separador mostra as linhas guardadas pelo workflow.
 
+## Usar um conjunto de dados instalado por um pacote
+
+Use esta tarefa quando um pacote de conteúdo tiver instalado conjuntos de dados. Um conjunto de dados de pacote é uma tabela que o pacote constrói a partir do armazém. Assim, os seus relatórios leem uma só tabela e não repetem um passo lento em cada execução. Não os cria aqui. A instalação do pacote cria-os.
+
+Precisa de **Use query workbench** para os ver. Reconstruir e Eliminar também exigem **Gerir consultas guardadas**.
+
+### 1. Expandir Datasets
+
+Selecione **Datasets** no Explorer. Os conjuntos de dados de pacote aparecem depois dos de workflow, cada um com o seu número de linhas. Um ícone vermelho assinala aquele cuja última construção falhou.
+
+### 2. Abrir um conjunto de dados
+
+Selecione o nome. Abre como qualquer tabela do armazém, com `dataset.` seguido do nome. Uma consulta guardada pode lê-lo da mesma forma.
+
+### 3. Ler os detalhes
+
+Selecione os pontos ao lado do nome e depois **Detalhes**. O painel mostra o pacote que o possui, o estado, as linhas, a última construção, o tempo que demorou e o último erro, se uma construção falhou.
+
+### 4. Reconstruir
+
+Selecione os pontos e depois **Reconstruir**. Uma mensagem indica quando termina. Num armazém grande pode demorar um minuto.
+
+**Resultado esperado:** o número de linhas e a data da última construção são atualizados.
+
+O OpenLDR também reconstrói os conjuntos de dados sozinho, quando o armazém fica atualizado. Durante uma importação grande, nada é reconstruído até a importação terminar. Por isso, um relatório que lê um conjunto de dados pode estar uma reconstrução atrás do armazém. A linha **Armazém** em [Activity](/docs/activity) mostra «a reconstruir conjuntos de dados» enquanto isso decorre.
+
+Num terminal, `openldr db datasets list` mostra a mesma lista e `openldr db datasets rebuild` reconstrói-os.
+
 ## Executar uma consulta guardada num telemóvel
 
 O Explorer começa recolhido para dar mais espaço à área de trabalho. Um ecrã grande facilita a escrita de SQL.

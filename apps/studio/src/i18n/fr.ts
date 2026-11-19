@@ -475,7 +475,7 @@ export const fr: EnShape = {
       },
       query: {
         run: { label: 'Utiliser l’atelier de requêtes', description: 'Exécuter des requêtes SQL ponctuelles sur les données d’analyse.' },
-        manage: { label: 'Gérer les requêtes enregistrées', description: 'Modifier, renommer, déplacer et supprimer toute requête enregistrée, gérer les groupes de requêtes et remplacer des requêtes à l’import.' },
+        manage: { label: 'Gérer les requêtes enregistrées', description: 'Modifier, renommer, déplacer et supprimer toute requête enregistrée, gérer les groupes de requêtes et remplacer des requêtes à l’import. Aussi reconstruire ou supprimer les jeux de données installés par un pack.' },
       },
       users: {
         view: { label: 'Voir les utilisateurs', description: 'Ouvrir l’espace Utilisateurs et voir les comptes.' },
