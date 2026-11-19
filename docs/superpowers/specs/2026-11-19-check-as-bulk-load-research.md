@@ -246,6 +246,133 @@ HONEST NON-PROOF:
 - An install upgraded from before migration 129 has no stored hashes. Its first check after the
   upgrade writes every record once more. That path has a unit test, not a bench run.
 
+## Spike: one transaction per page (slice 2b), throwaway, 2026-11-19
+
+In the bench script only. Each request was still checked on its own, in order, and saw the orders
+of earlier requests on its page. Its records were kept back, and the whole page was saved with one
+`saveMany` call, in one transaction, just before the check wrote its page end. Real save code, hash
+skip on, decode-ahead on. `main` at 73e6950c. Every run: 5,000 read, 4,850 saved, 119 held, 31 failed.
+
+| Run | Requests/s | Whole run | Decode | Checks | Page saves |
+|---|---|---|---|---|---|
+| Main today, a transaction per request | 275.1 | 18.2 s | 13.5 s | saves and checks 14.6 s | |
+| Spike, page of 500, two runs | 309.1 and 324.6 | 16.2 and 15.4 s | 13.6 and 13.4 s | 1.4 and 1.3 s | 9.7 and 8.2 s in 10 transactions |
+| Spike, page of 2,000 | 325.4 | 15.4 s | 11.0 s in 3 calls | 1.3 s | 8.7 s in 3 transactions |
+| Spike, run again over the loaded database | 234.1 | 21.4 s | 13.5 s | 1.3 s | 16.6 s, writing nothing |
+
+- The stored result is the same as main's, versions included (`cmp` exit 0 on the full hash list).
+- First run: 12 to 18 percent faster, not more. Saving got cheaper (about 14.6 s to about 10 s), but
+  decode is now the limit: 13.5 s of a 15.4 s run, on one worker. One page ahead is no longer
+  enough. With two pages ahead the run would be bound by saves at about 11 to 12 s, or about 415 to
+  450 requests a second. That is an estimate, not a measurement.
+- Risk met: a run again got slower, 234 against 325 to 331 today. The skip lookup asks for a page's
+  7,000 records with one long OR per 1,000 keys, and Postgres plans that badly. A first run does not
+  show it, because few records have a stored version then. The fix is a lookup that joins against
+  arrays. pg-mem cannot run that form, so it would be tested on real Postgres only.
+- A page save still takes about 0.85 s for about 7,000 records. That is Postgres writing two full
+  copies of each document, with one commit. It sets a ceiling near 500 to 590 requests a second
+  for one saver.
+- Not met in the spike, because it did not try them: a cursor write that loses its compare-and-set
+  after the page was saved, one bad request in a page, a stop or a cut mid-page, memory for a page of
+  2,000 requests, and the projection receiving 7,000 change rows at once.
+
+## Floor bench: how fast can a page of real records be saved at all (2026-11-19)
+
+The operator asked whether a Postgres extension would help, and why the document is stored twice.
+This measures both without writing an extension. Script: `/home/fredrick/.cache/openldr-speed-bench/floor.mts`.
+
+It replays the 58,526 real records of a loaded bench database into the real three tables, with their
+real indexes: 10 pages, one transaction per page, a checkpoint before each variant, two rounds.
+No checks, no hash skip, every record new. Only the save itself.
+
+| Variant | Time | Records/s | WAL | Current table |
+|---|---|---|---|---|
+| E. Today's `saveMany`, one call per page | 9.4 to 10.4 s | 5,600 to 6,200 | 145 MiB | 60 MiB |
+| A. Node sends the page as arrays, 4 statements | 4.1 to 4.3 s | 13,600 to 14,300 | 145 MiB | 60 MiB |
+| F. One statement, the page sent once as arrays, the server stamps and hashes | 2.7 s | 21,700 to 21,900 | 146 MiB | 60 MiB |
+| B. The page is already in the server, one statement | 2.1 to 2.2 s | 26,800 to 27,600 | 146 MiB | 61 MiB |
+| F1. As F, the document stored once | 2.5 s | 23,600 | 97 MiB | 10 MiB |
+| B1. As B, the document stored once | 1.9 to 2.0 s | 29,200 to 30,300 | 97 MiB | 11 MiB |
+
+What this tells us:
+- Today's save code is the slow part, not Postgres. One plain SQL statement per page (F) is 3.6
+  times faster than `saveMany` (E), with no extension. `saveMany` sends each value as its own
+  parameter, in several statements per 1,000 rows, and sends every document twice.
+- B is the most an extension can reach while it writes through Postgres's SQL interface. It is 20
+  percent faster than F. That 20 percent is the cost of sending the page to the server, and an
+  extension pays that too, because the records come from the plugin in Node. So an extension has
+  little left to win over a plain statement. An extension that writes below the SQL layer was not
+  measured.
+- Storing the document once cuts WAL by 33 percent (146 to 97 MiB) and the current table from 60 to
+  10 MiB. It makes the save about 9 percent faster. Earlier in this document's history I said
+  "nearly half the writing". The measured figure is a third.
+- F is not finished code. It has no hash skip, and it fails on a record that comes twice in a page.
+  The real statement needs both. pg-mem cannot run its form (a data-changing `WITH`, a
+  multi-argument `unnest`, a correlated subquery), so it can only be tested on real Postgres.
+
+What it means for the check: saving a page would fall from about 0.85 s to about 0.3 s. With enough
+decode workers one saver could then reach about 900 requests a second. That is an estimate.
+
+## The check beside the projection worker (2026-11-19)
+
+Script: `/home/fredrick/.cache/openldr-speed-bench/run-proj.mts`. The real projection worker
+(`createProjectionWorker` with its LISTEN client and 2 s interval, `createProjectionRunner`, the
+real warehouse writer) ran in the same process as the check, into a throwaway warehouse database
+on the same server. No facility capture hook. `main` at 73e6950c, quiet machine.
+
+| | Result |
+|---|---|
+| Check alone | 269.5 requests a second, 18.5 s |
+| Check with the projection worker | 254.6 requests a second, 19.6 s |
+| Warehouse when the check ended | 50,812 of 58,530 change rows still to do |
+| Time to catch up after the check | 205 s |
+| Live projection while working | 543 records a second, 10,204 commits a second |
+| The existing bulk rebuild (`reprojectAll`) on the same records | 58,543 records in 4.7 s, 12,400 a second |
+
+- The check makes about 3,000 records a second. The live projection does about 260 a second over
+  the whole run. A full source would leave about 29 hours of warehouse work behind a 2.3 hour check.
+- Cause 1: the worker runs one batch of 500 change rows per tick (`cycle.ts:98`) and then waits for
+  the next notify or the 2 s interval (`projection-worker.ts:17`, `:31`), however far behind it is.
+  After the check ends there are no more notifies, so it drains at 500 rows per 2 s.
+- Cause 2: it writes one record at a time (`cycle.ts:104-106`), each in its own transactions.
+- The bulk path that already exists is 48 times faster on the same records. The live cycle should
+  use `writeMany` and run again at once while a batch comes back full.
+
+## The Rust extension, tried (pgrx 0.20.0, 2026-11-19)
+
+The operator asked for a real try. Project: `/home/fredrick/.cache/openldr-speed-bench/fhirsave`.
+`cargo-pgrx` builds Postgres with debug assertions, which made every variant two to three times
+slower, so a release Postgres 16.16 was built from the same source for the timings
+(`~/.pgrx/16.16-release`, same settings as the bench server). Same floor bench as above, same
+58,526 real records, 10 pages, one transaction per page, two rounds.
+
+| Variant | Time | Records/s |
+|---|---|---|
+| E. Today's `saveMany`, one call per page | 8.8 to 9.4 s | 6,200 to 6,600 |
+| A. Node sends arrays, 4 statements | 3.5 to 3.7 s | 16,000 to 16,900 |
+| F. One plain SQL statement, no extension | 2.29 to 2.30 s | 25,500 |
+| X. Rust extension, rows go in through SPI | 2.24 to 2.29 s | 25,500 to 26,100 |
+| D. Rust extension, rows written straight into the tables and indexes | 1.99 to 2.04 s | 28,700 to 29,400 |
+| B. The page already in the server, one statement | 1.84 to 1.90 s | 30,800 to 31,700 |
+
+- An extension that saves through SPI is no faster than the plain statement: the same executor
+  does the same work.
+- An extension that writes below the SQL layer is 11 to 13 percent faster than the plain statement.
+  That is the whole prize for a Rust extension on this job.
+- Every variant stored the same documents (one digest over all stored documents, by key).
+- Risk met: the first build of D changed numbers. The Rust JSON library read them as floats, so
+  `4.20` was stored as `4.2`. 399 of the first 3,000 records hold such a number. The digest caught
+  it. Turning on exact numbers (`arbitrary_precision`) fixed it. A stored lab value must never
+  change this way, so any Rust code that touches the documents needs that setting and that check.
+- D is not finished: it takes every record as new, with no upsert of the current row and no hash
+  skip. Both would add work and narrow its lead.
+- What an extension costs: it must be compiled for each Postgres major version and platform, shipped
+  inside the standalone app's Postgres, and it cannot be installed on managed Postgres at all.
+
+Verdict: for saving, build the plain SQL statement. It takes 3.8 times off today's save with no
+install problem. Keep the extension as a known 11 to 13 percent, to revisit if saving is ever the
+limit again after that.
+
 ## HONEST NON-PROOF
 
 - Proven for this sample since the first draft: a re-run gives the same hashes (see "Measured").
