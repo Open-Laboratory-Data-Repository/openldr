@@ -94,7 +94,8 @@ export interface ImportServiceDeps {
   interruptions?: SelfResumeDeps;
   plugins: {
     list(): Promise<Array<{ id: string; version: string; enabled: boolean; manifest: Record<string, unknown> }>>;
-    loadSink(id: string, version?: string): Promise<{ invoke(entrypoint: string, input: unknown): Promise<unknown> } | undefined>;
+    /** `offThread` asks for the call to run on a worker thread, where the process allows it. */
+    loadSink(id: string, version?: string): Promise<{ invoke(entrypoint: string, input: unknown, opts?: { offThread?: boolean }): Promise<unknown> } | undefined>;
   };
   connectors: {
     get(id: string): Promise<{ type: string | null; enabled: boolean } | null>;

@@ -194,6 +194,10 @@ export interface ImportCheckServiceDeps extends Pick<ImportServiceDeps, 'plugins
   driverId: string;
   /** Injectable for tests; the wait while CE's own database does not answer. */
   sleep?: (ms: number) => Promise<void>;
+  /** When true, decode calls run on a worker thread and the check decodes one page ahead
+   *  (design 2026-11-19-check-decode-ahead). Left out, the check runs on the main thread, one
+   *  page at a time. */
+  decodeOffThread?: boolean;
 }
 
 /** One value a person may pick for a field: the code stored, and the name shown beside it. */
@@ -667,6 +671,8 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         sourceSystem: plugin.source.sourceSystem ?? plugin.id,
       };
       const useTwins = plugin.twinKeys !== null && run.referenceCopyId !== null;
+      /** Only decode goes off the main thread: it is the one call that takes over a second. */
+      const decodeOpts = deps.decodeOffThread === true ? { offThread: true } : undefined;
       /** The fields the plugin lets a person correct. None: no correction is read or sent. */
       const correctable = correctableOf(plugin);
       /** A recheck reads its keys once, then is done. */
@@ -676,10 +682,10 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
 
       /** A plugin call. A throw or a bad answer is a PluginCallFault with a fixed sentence. Only
        *  the runtime's own timeout is told apart from a refusal; the plugin's text is never kept. */
-      const callPlugin = async <T>(what: string, entrypoint: string, input: unknown, schema: z.ZodType<T>): Promise<T> => {
+      const callPlugin = async <T>(what: string, entrypoint: string, input: unknown, schema: z.ZodType<T>, opts?: { offThread?: boolean }): Promise<T> => {
         let raw: unknown;
         try {
-          raw = await sink.invoke(entrypoint, input);
+          raw = opts ? await sink.invoke(entrypoint, input, opts) : await sink.invoke(entrypoint, input);
         } catch (err) {
           const timedOut = err instanceof Error && /timed out/i.test(err.message);
           throw new PluginCallFault(timedOut ? `the plugin's ${what} call timed out` : `the plugin refused the ${what} call`);
@@ -812,7 +818,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           const answer = await callPlugin('decode', plugin.decode, {
             options: run.options, now: now().toISOString(), dictionaries: p.dictionaries, keys, rows, twins,
             ...(corrections ? { corrections } : {}),
-          }, decodeOutputSchema);
+          }, decodeOutputSchema, decodeOpts);
           groups = new Map();
           for (const g of answer.groups) {
             if (groups.has(g.key)) twice.add(g.key);

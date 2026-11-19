@@ -63,7 +63,7 @@ const CHECKER = { copy: 'import_copy', decode: 'import_decode', twinKeys: 'impor
 
 let internalDb: Awaited<ReturnType<typeof makeMigratedDb>>;
 
-async function world(opts: { entrypoints?: Record<string, string>; corrections?: string[] } = {}) {
+async function world(opts: { entrypoints?: Record<string, string>; corrections?: string[]; decodeOffThread?: boolean } = {}) {
   const raw = createPluginDataStore(internalDb);
   const plainCheckPuts: string[] = [];
   const runSaves: CheckRun[] = [];
@@ -164,7 +164,7 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
   let copyFn: (options: Record<string, string>) => unknown = (options) => (options.role === 'reference'
     ? { sets: [setSpec('twins', ['requests', 'results'])] }
     : { sets: [setSpec('requests', ['requests', 'results']), setSpec('facilities', [])] });
-  const invoke = vi.fn(async (entrypoint: string, input: unknown) => {
+  const invoke = vi.fn(async (entrypoint: string, input: unknown, _opts?: { offThread?: boolean }) => {
     if (entrypoint === 'import_decode') {
       const i = structuredClone(input) as DecodeInput;
       decodeCalls.push(i);
@@ -219,6 +219,7 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
     interruptions: { store: interruptions, now: () => new Date(clock.now), processStartedAt: new Date(clock.now) },
     now: () => new Date(clock.now),
     sleep: async (ms) => { sleeps.push(ms); },
+    ...(opts.decodeOffThread !== undefined ? { decodeOffThread: opts.decodeOffThread } : {}),
   });
   const svc = service();
   worlds.push({ plainCheckPuts });
@@ -2160,5 +2161,29 @@ describe('held finding codes', () => {
     expect((await w.svc.heldItems(PLUGIN, SRC, { finding: 'specimen_missing', after: null, limit: 10 })).items.map((i) => i.key)).toEqual(['REQ0001', 'REQ0002']);
     expect(await w.svc.heldCodes(PLUGIN, SRC, {})).toEqual([{ code: 'specimen_missing', count: 2 }, { code: 'record_has_no_observations', count: 1 }]);
     await expect(w.svc.heldCodes(PLUGIN, 'no-such-copy', {})).rejects.toThrow(/not found/);
+  });
+});
+
+describe('check: decode off the main thread (item 16)', () => {
+  type Call = [string, unknown, { offThread?: boolean } | undefined];
+
+  it('with_decodeOffThread_every_decode_call_asks_for_a_worker_and_no_other_call_does', async () => {
+    const w = await world({ decodeOffThread: true });
+    await sourceCopy(w, keysOf(4));
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    const calls = w.invoke.mock.calls as unknown as Call[];
+    const decode = calls.filter(([ep]) => ep === 'import_decode');
+    expect(decode.length).toBeGreaterThan(0);
+    for (const [, , opts] of decode) expect(opts).toEqual({ offThread: true });
+    for (const [ep, , opts] of calls) if (ep !== 'import_decode') expect(opts?.offThread).toBeUndefined();
+  });
+
+  it('without_it_no_call_asks_for_a_worker', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(2));
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    for (const [, , opts] of w.invoke.mock.calls as unknown as Call[]) expect(opts?.offThread).toBeUndefined();
   });
 });
