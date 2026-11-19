@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["openldr-plugin-sdk", "hl7v2", "tabular", "test-sink", "dhis2-sink", "openldr-v1-import"]
+members = ["openldr-plugin-sdk", "hl7v2", "tabular", "test-sink", "dhis2-sink"]
 
 [workspace.package]
 edition = "2021"

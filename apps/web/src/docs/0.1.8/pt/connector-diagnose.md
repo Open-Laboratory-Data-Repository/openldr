@@ -186,4 +186,4 @@ As verificações documentadas testaram uma ligação Postgres real com sucesso 
 
 ## Guias relacionados
 
-[Conectores](/docs/connectors) explica a criação, os testes e a alteração de segredos. [Importar do OpenLDR v1](/docs/v1-import) usa um conector de base de dados.
+[Conectores](/docs/connectors) explica a criação, os testes e a alteração de segredos.

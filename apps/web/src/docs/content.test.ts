@@ -51,7 +51,7 @@ describe('website docs content', () => {
     expect(new Set(SLUGS).size).toBe(SLUGS.length);
     expect(SLUGS).toEqual(expect.arrayContaining([
       'getting-started', 'desktop-app', 'requirements', 'install', 'windows-server', 'upgrading',
-      'environment', 'auth-providers', 'load-data', 'map-to-fhir', 'v1-import', 'connector-diagnose',
+      'environment', 'auth-providers', 'load-data', 'map-to-fhir', 'connector-diagnose',
       'cli', 'cli-access', 'standalone', 'development',
     ]));
   });

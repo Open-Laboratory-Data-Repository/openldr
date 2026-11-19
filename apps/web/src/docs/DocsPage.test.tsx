@@ -83,18 +83,6 @@ describe('DocsPage', () => {
     expect(document.querySelector('.web-doc-terminal')).not.toBeNull();
   });
 
-  it('keeps the existing v1 terminal illustrations without adding a second frame', () => {
-    renderDocs('/docs/v1-import');
-    const blocks = [...document.querySelectorAll('.doc-markdown pre code')];
-    const copy = blocks.find(block => block.textContent?.includes('openldr import copy start'));
-    expect(copy).toBeDefined();
-    expect(copy!.closest('.web-doc-terminal')).toBeNull();
-    expect(screen.getByRole('img', { name: 'Start a copy and return at once.' })).toBeInTheDocument();
-    const allow = blocks.find(block => block.textContent?.includes('import allow'));
-    expect(allow).toBeDefined();
-    expect(allow!.closest('.web-doc-terminal')).toBeNull();
-  });
-
   it('keeps the restored sign-in crop and theme identical when enlarged', async () => {
     document.documentElement.dataset.theme = 'dark';
     renderDocs('/docs/install');
