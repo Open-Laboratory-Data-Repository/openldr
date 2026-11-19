@@ -6,6 +6,30 @@
       "version": null,
       "entries": [
         {
+          "hash": "9672db43",
+          "type": "perf",
+          "scope": "imports",
+          "title": "The server and the CLI decode a check off the main thread (item 16)"
+        },
+        {
+          "hash": "28dcd1aa",
+          "type": "perf",
+          "scope": "imports",
+          "title": "A check decodes the next page while it saves the current one (item 16)"
+        },
+        {
+          "hash": "c251b617",
+          "type": "feat",
+          "scope": "imports",
+          "title": "Check decode calls can run off the main thread (item 16)"
+        },
+        {
+          "hash": "4b0cd58a",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "A plugin call can run off the main thread (item 16)"
+        },
+        {
           "hash": "790d9820",
           "type": "perf",
           "scope": "db",
