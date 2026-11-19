@@ -7,7 +7,7 @@ import {
   DndContext, DragOverlay, PointerSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors,
   type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core';
-import { queryApi, type ConnectorRef, type DatasetRef, type PackDatasetRef } from '../api';
+import { queryApi, type ConnectorRef, type DatasetRef, type ExplorerGroupKind, type ExplorerGroups, type PackDatasetRef } from '../api';
 import { DatasetInfoSheet } from '../DatasetInfoSheet';
 import { useQueryStore } from '../store';
 import { useAuth } from '@/auth/AuthProvider';
@@ -148,9 +148,16 @@ export function ExplorerTree(): JSX.Element {
   const [packDatasets, setPackDatasets] = useState<PackDatasetRef[]>([]);
   const [datasetInfo, setDatasetInfo] = useState<PackDatasetRef | null>(null);
   const [deleteDataset, setDeleteDataset] = useState<string | null>(null);
-  // Naming a dataset group: a new one for a dataset being moved, or a new name for an existing one.
-  const [datasetNameSheet, setDatasetNameSheet] = useState<{ kind: 'newGroup'; dataset: string } | { kind: 'renameGroup'; group: string } | null>(null);
-  const [deleteDatasetGroup, setDeleteDatasetGroup] = useState<string | null>(null);
+  // Groups of the Connectors and Datasets branches: one mechanism for both. Custom Queries has its own.
+  const [groupsOf, setGroupsOf] = useState<Record<ExplorerGroupKind, ExplorerGroups>>({ connector: { groups: [], items: {} }, dataset: { groups: [], items: {} } });
+  const loadGroups = (kind: ExplorerGroupKind) => queryApi.explorerGroups(kind).then((g) => setGroupsOf((all) => ({ ...all, [kind]: g }))).catch(onErr(`${kind} groups`));
+  // Naming a group: a new empty one, a new one for an item being moved, or a new name for one.
+  const [groupSheet, setGroupSheet] = useState<
+    | { kind: ExplorerGroupKind; mode: 'create' }
+    | { kind: ExplorerGroupKind; mode: 'createFor'; itemId: string }
+    | { kind: ExplorerGroupKind; mode: 'rename'; group: string }
+    | null>(null);
+  const [deleteGroupOf, setDeleteGroupOf] = useState<{ kind: ExplorerGroupKind; group: string } | null>(null);
   const loadPackDatasets = () => queryApi.warehouseDatasets().then(setPackDatasets).catch(onErr('pack datasets'));
   const [queries, setQueries] = useState<CustomQuery[]>([]);
   const [groups, setGroups] = useState<CustomQueryGroup[]>([]);
@@ -173,7 +180,8 @@ export function ExplorerTree(): JSX.Element {
 
   useEffect(() => { if (openBranch.connectors && connectors.length === 0) queryApi.connectors().then(setConnectors).catch(onErr('connectors')); }, [openBranch.connectors]);
   useEffect(() => { if (openBranch.datasets && datasets.length === 0) queryApi.datasets().then(setDatasets).catch(onErr('datasets')); }, [openBranch.datasets]);
-  useEffect(() => { if (openBranch.datasets) void loadPackDatasets(); }, [openBranch.datasets]);
+  useEffect(() => { if (openBranch.datasets) { void loadPackDatasets(); void loadGroups('dataset'); } }, [openBranch.datasets]);
+  useEffect(() => { if (openBranch.connectors) void loadGroups('connector'); }, [openBranch.connectors]);
   useEffect(() => {
     if (!openBranch.queries) return;
     let cancelled = false;
@@ -191,7 +199,8 @@ export function ExplorerTree(): JSX.Element {
     setConnectors([]); setDatasets([]); setDatabases({}); setSchemas({}); setTables({});
     if (openBranch.connectors) queryApi.connectors().then(setConnectors).catch(onErr('connectors'));
     if (openBranch.datasets) queryApi.datasets().then(setDatasets).catch(onErr('datasets'));
-    if (openBranch.datasets) void loadPackDatasets();
+    if (openBranch.datasets) { void loadPackDatasets(); void loadGroups('dataset'); }
+    if (openBranch.connectors) void loadGroups('connector');
     for (const [k, open] of Object.entries(openBranch)) {
       if (!open) continue;
       if (k.startsWith('c:')) fetchDatabases(k.slice(2));
@@ -252,29 +261,26 @@ export function ExplorerTree(): JSX.Element {
     } catch (e) { toast.error(t('query.dataset.rebuildFailed', { name, error: message(e) })); }
     await loadPackDatasets();
   }
-  async function moveDataset(name: string, group: string | null): Promise<void> {
-    try { await queryApi.setDatasetGroup(name, group); }
+  async function moveItem(kind: ExplorerGroupKind, itemId: string, group: string | null): Promise<void> {
+    try { await queryApi.moveExplorerItem(kind, itemId, group); }
     catch (e) { toast.error(t('query.groups.moveFailed', { error: message(e) })); }
-    await loadPackDatasets();
+    await loadGroups(kind);
   }
-  /** Saves the name sheet. A name another dataset group already has is refused, as for query groups. */
-  async function saveDatasetGroupName(name: string): Promise<void> {
-    const sheet = datasetNameSheet;
+  /** Saves the group name sheet. The server refuses a name another group of the branch has. */
+  async function saveGroupName(name: string): Promise<void> {
+    const sheet = groupSheet;
     if (!sheet) return;
-    const taken = packDatasets.some((d) => d.group === name);
-    if (sheet.kind === 'newGroup') {
-      // Moving into a name that exists just joins that group.
-      await queryApi.setDatasetGroup(sheet.dataset, name);
-    } else {
-      if (taken && name !== sheet.group) throw new Error('name already exists');
-      await queryApi.renameDatasetGroup(sheet.group, name);
-    }
-    await loadPackDatasets();
+    if (sheet.mode === 'create') await queryApi.createExplorerGroup(sheet.kind, name);
+    else if (sheet.mode === 'createFor') {
+      await queryApi.createExplorerGroup(sheet.kind, name);
+      await queryApi.moveExplorerItem(sheet.kind, sheet.itemId, name);
+    } else await queryApi.renameExplorerGroup(sheet.kind, sheet.group, name);
+    await loadGroups(sheet.kind);
   }
-  async function doDeleteDatasetGroup(group: string): Promise<void> {
-    try { await queryApi.renameDatasetGroup(group, null); }
+  async function doDeleteExplorerGroup(kind: ExplorerGroupKind, group: string): Promise<void> {
+    try { await queryApi.renameExplorerGroup(kind, group, null); }
     catch (e) { toast.error(t('query.groups.deleteFailed', { error: message(e) })); }
-    await loadPackDatasets();
+    await loadGroups(kind);
   }
   async function doDeleteDataset(name: string): Promise<void> {
     try { await queryApi.removeDataset(name); }
@@ -369,8 +375,60 @@ export function ExplorerTree(): JSX.Element {
     </DraggableQuery>
   );
 
-  /** The dataset groups in use, in name order. A group exists while a dataset carries its name. */
-  const datasetGroups = [...new Set(packDatasets.map((d) => d.group).filter((g): g is string => !!g))].sort((x, y) => x.localeCompare(y));
+  /** "Move to group" for an item of a branch: its groups, a new group, or none. */
+  const moveMenu = (kind: ExplorerGroupKind, itemId: string) => canManage && (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>{t('query.groups.moveTo')}</DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        {groupsOf[kind].groups.map((g) => (
+          <DropdownMenuItem key={g} disabled={groupsOf[kind].items[itemId] === g} onSelect={() => void moveItem(kind, itemId, g)}>
+            <TruncatedText text={g} side="right" className="max-w-[14rem]" />
+          </DropdownMenuItem>
+        ))}
+        {groupsOf[kind].groups.length > 0 && <DropdownMenuSeparator />}
+        <DropdownMenuItem onSelect={() => setGroupSheet({ kind, mode: 'createFor', itemId })}>{t('query.groups.newGroup')}</DropdownMenuItem>
+        <DropdownMenuItem disabled={!groupsOf[kind].items[itemId]} onSelect={() => void moveItem(kind, itemId, null)}>{t('query.groups.noGroup')}</DropdownMenuItem>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+  /** A branch's rows under their groups, then the rows in no group. A group shows even when empty. */
+  function groupedRows<T>(kind: ExplorerGroupKind, entries: T[], idOf: (e: T) => string, row: (e: T, depth: number) => JSX.Element): JSX.Element[] {
+    const { groups, items } = groupsOf[kind];
+    const known = new Set(groups);
+    const groupOf = (e: T): string | null => { const g = items[idOf(e)]; return g && known.has(g) ? g : null; };
+    return [
+      ...groups.map((g) => {
+        const inGroup = entries.filter((e) => groupOf(e) === g);
+        const key = `xg:${kind}:${g}`;
+        return (
+          <div key={key}>
+            <div className="group flex min-w-0 items-center">
+              <div className="min-w-0 flex-1">
+                <Row depth={1} open={!!openBranch[key]} onClick={() => toggle(key)} icon={<Folder className="h-3.5 w-3.5" />} label={g} count={inGroup.length} />
+              </div>
+              {canManage && <RowMenu label={t('query.groups.groupActions', { name: g })}>
+                <DropdownMenuItem onSelect={() => setGroupSheet({ kind, mode: 'rename', group: g })}>{t('query.groups.rename')}</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteGroupOf({ kind, group: g })}>{t('query.groups.delete')}</DropdownMenuItem>
+              </RowMenu>}
+            </div>
+            {openBranch[key] && inGroup.map((e) => row(e, 2))}
+          </div>
+        );
+      }),
+      ...entries.filter((e) => groupOf(e) === null).map((e) => row(e, 1)),
+    ];
+  }
+  /** A branch's top row, with New group for those who may arrange the list. */
+  const branchRow = (kind: ExplorerGroupKind, key: string, icon: React.ReactNode, label: string) => (
+    <div className="group flex min-w-0 items-center">
+      <div className="min-w-0 flex-1">
+        <Row depth={0} open={!!openBranch[key]} onClick={() => toggle(key)} icon={icon} label={label} />
+      </div>
+      {canManage && <RowMenu label={t('query.groups.branchActionsOf', { branch: label })}>
+        <DropdownMenuItem onSelect={() => setGroupSheet({ kind, mode: 'create' })}>{t('query.groups.newGroup')}</DropdownMenuItem>
+      </RowMenu>}
+    </div>
+  );
   const datasetRow = (d: PackDatasetRef, depth: number) => (
         <div key={`pack:${d.name}`} className="group flex min-w-0 items-center">
       <div className="min-w-0 flex-1">
@@ -382,72 +440,59 @@ export function ExplorerTree(): JSX.Element {
       </div>
       <RowMenu label={t('query.dataset.rowActions', { name: d.name })}>
         <DropdownMenuItem onSelect={() => setDatasetInfo(d)}>{t('query.dataset.details')}</DropdownMenuItem>
-        {canManage && (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>{t('query.groups.moveTo')}</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {datasetGroups.map((g) => (
-                <DropdownMenuItem key={g} disabled={d.group === g} onSelect={() => void moveDataset(d.name, g)}>
-                  <TruncatedText text={g} side="right" className="max-w-[14rem]" />
-                </DropdownMenuItem>
-              ))}
-              {datasetGroups.length > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuItem onSelect={() => setDatasetNameSheet({ kind: 'newGroup', dataset: d.name })}>{t('query.groups.newGroup')}</DropdownMenuItem>
-              <DropdownMenuItem disabled={!d.group} onSelect={() => void moveDataset(d.name, null)}>{t('query.groups.noGroup')}</DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        )}
+        {moveMenu('dataset', d.name)}
         {canManage && <DropdownMenuItem onSelect={() => void rebuildDataset(d.name)}>{t('query.dataset.rebuild')}</DropdownMenuItem>}
         {canManage && <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteDataset(d.name)}>{t('query.dataset.delete')}</DropdownMenuItem>}
       </RowMenu>
     </div>
   );
 
+  const connectorRow = (c: ConnectorRef, depth: number) => (
+    <div key={c.id}>
+      <div className="group flex min-w-0 items-center">
+        <div className="min-w-0 flex-1">
+          <Row depth={depth} open={!!openBranch[`c:${c.id}`]} onClick={() => loadConnector(c.id)} icon={<span>🗄</span>} label={c.name} />
+        </div>
+        {canManage && <RowMenu label={t('query.dataset.rowActions', { name: c.name })}>{moveMenu('connector', c.id)}</RowMenu>}
+      </div>
+      {openBranch[`c:${c.id}`] && (Array.isArray(databases[c.id])
+        // A SQL Server connector with a blank database: databases, then schemas, then tables.
+        ? (databases[c.id] ?? []).map((db) => {
+          const scope: Scope = { id: c.id, database: db };
+          const key = scopeKey(scope);
+          return (
+            <div key={db}>
+              <Row depth={depth + 1} open={!!openBranch[`d:${key}`]} onClick={() => loadDatabase(scope)} icon={<Database className="h-3.5 w-3.5" />} label={db} />
+              {openBranch[`d:${key}`] && schemaRows(c, scope, depth + 2)}
+            </div>
+          );
+        })
+        : schemaRows(c, { id: c.id }, depth + 1))}
+    </div>
+  );
+  const workflowDatasetRow = (d: DatasetRef, depth: number) => (
+    <div key={`wf:${d.id}`} className="group flex min-w-0 items-center">
+      <div className="min-w-0 flex-1">
+        <Row depth={depth} onClick={() => openDatasetTab({ name: d.name })} icon={<Table2 className="h-3.5 w-3.5" />} label={d.name} />
+      </div>
+      {canManage && <RowMenu label={t('query.dataset.rowActions', { name: d.name })}>{moveMenu('dataset', `wf:${d.name}`)}</RowMenu>}
+    </div>
+  );
+
   return (
     <div className="flex h-full flex-col overflow-auto py-2 text-sm">
-      <Row depth={0} open={!!openBranch.connectors} onClick={() => toggle('connectors')} icon={<Plug className="h-3.5 w-3.5" />} label={t('query.connectors')} />
-      {openBranch.connectors && connectors.map((c) => (
-        <div key={c.id}>
-          <Row depth={1} open={!!openBranch[`c:${c.id}`]} onClick={() => loadConnector(c.id)} icon={<span>🗄</span>} label={c.name} />
-          {openBranch[`c:${c.id}`] && (Array.isArray(databases[c.id])
-            // A SQL Server connector with a blank database: databases, then schemas, then tables.
-            ? (databases[c.id] ?? []).map((db) => {
-              const scope: Scope = { id: c.id, database: db };
-              const key = scopeKey(scope);
-              return (
-                <div key={db}>
-                  <Row depth={2} open={!!openBranch[`d:${key}`]} onClick={() => loadDatabase(scope)} icon={<Database className="h-3.5 w-3.5" />} label={db} />
-                  {openBranch[`d:${key}`] && schemaRows(c, scope, 3)}
-                </div>
-              );
-            })
-            : schemaRows(c, { id: c.id }, 2))}
-        </div>
-      ))}
+      {branchRow('connector', 'connectors', <Plug className="h-3.5 w-3.5" />, t('query.connectors'))}
+      {openBranch.connectors && groupedRows('connector', connectors, (c) => c.id, connectorRow)}
 
-      <Row depth={0} open={!!openBranch.datasets} onClick={() => toggle('datasets')} icon={<Package className="h-3.5 w-3.5" />} label={t('query.datasets')} />
-      {openBranch.datasets && datasets.map((d) => (
-        <Row key={d.id} depth={1} onClick={() => openDatasetTab({ name: d.name })} icon={<Table2 className="h-3.5 w-3.5" />} label={d.name} />
-      ))}
-      {/* A pack dataset starts in a group named for its pack, and can be moved like a custom query. */}
-      {openBranch.datasets && datasetGroups.map((g) => {
-        const inGroup = packDatasets.filter((d) => d.group === g);
-        return (
-          <div key={`dg:${g}`}>
-            <div className="group flex min-w-0 items-center">
-              <div className="min-w-0 flex-1">
-                <Row depth={1} open={!!openBranch[`dg:${g}`]} onClick={() => toggle(`dg:${g}`)} icon={<Folder className="h-3.5 w-3.5" />} label={g} count={inGroup.length} />
-              </div>
-              {canManage && <RowMenu label={t('query.groups.groupActions', { name: g })}>
-                <DropdownMenuItem onSelect={() => setDatasetNameSheet({ kind: 'renameGroup', group: g })}>{t('query.groups.rename')}</DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteDatasetGroup(g)}>{t('query.groups.delete')}</DropdownMenuItem>
-              </RowMenu>}
-            </div>
-            {openBranch[`dg:${g}`] && inGroup.map((d) => datasetRow(d, 2))}
-          </div>
-        );
-      })}
-      {openBranch.datasets && packDatasets.filter((d) => !d.group).map((d) => datasetRow(d, 1))}
+      {branchRow('dataset', 'datasets', <Package className="h-3.5 w-3.5" />, t('query.datasets'))}
+      {/* Workflow datasets and pack datasets share the branch and its groups. A pack dataset starts
+          in a group named for its pack. */}
+      {openBranch.datasets && groupedRows<{ id: string; wf?: DatasetRef; pack?: PackDatasetRef }>(
+        'dataset',
+        [...datasets.map((d) => ({ id: `wf:${d.name}`, wf: d })), ...packDatasets.map((d) => ({ id: d.name, pack: d }))],
+        (e) => e.id,
+        (e, depth) => (e.pack ? datasetRow(e.pack, depth) : workflowDatasetRow(e.wf!, depth)),
+      )}
 
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
         {/* Dropping a query on the branch row takes it out of its group. */}
@@ -515,26 +560,16 @@ export function ExplorerTree(): JSX.Element {
         onConfirm={() => { const id = deleteId; setDeleteId(null); if (id) void doDelete(id); }}
       />
       {datasetInfo && <DatasetInfoSheet dataset={datasetInfo} onClose={() => setDatasetInfo(null)} />}
-      {datasetNameSheet && (
+      {groupSheet && (
         <QueryNameSheet
-          initialName={datasetNameSheet.kind === 'renameGroup' ? datasetNameSheet.group : ''}
-          title={datasetNameSheet.kind === 'newGroup' ? t('query.groups.newGroup') : t('query.groups.rename')}
-          description={t('query.dataset.groupDescription')}
+          initialName={groupSheet.mode === 'rename' ? groupSheet.group : ''}
+          title={groupSheet.mode === 'rename' ? t('query.groups.rename') : t('query.groups.newGroup')}
+          description={t('query.groups.explorerDescription')}
           existsMessage={t('query.groups.nameExists')}
-          onClose={() => setDatasetNameSheet(null)}
-          onSave={saveDatasetGroupName}
+          onClose={() => setGroupSheet(null)}
+          onSave={saveGroupName}
         />
       )}
-      <ConfirmDialog
-        open={deleteDatasetGroup !== null}
-        onOpenChange={(o) => { if (!o) setDeleteDatasetGroup(null); }}
-        title={t('query.groups.confirmDelete', { name: deleteDatasetGroup ?? '' })}
-        description={t('query.dataset.confirmDeleteGroupBody')}
-        confirmLabel={t('query.groups.delete')}
-        cancelLabel={t('common.cancel')}
-        destructive
-        onConfirm={() => { const g = deleteDatasetGroup; setDeleteDatasetGroup(null); if (g) void doDeleteDatasetGroup(g); }}
-      />
       <ConfirmDialog
         open={deleteDataset !== null}
         onOpenChange={(o) => { if (!o) setDeleteDataset(null); }}
@@ -544,6 +579,16 @@ export function ExplorerTree(): JSX.Element {
         cancelLabel={t('common.cancel')}
         destructive
         onConfirm={() => { const name = deleteDataset; setDeleteDataset(null); if (name) void doDeleteDataset(name); }}
+      />
+      <ConfirmDialog
+        open={deleteGroupOf !== null}
+        onOpenChange={(o) => { if (!o) setDeleteGroupOf(null); }}
+        title={t('query.groups.confirmDelete', { name: deleteGroupOf?.group ?? '' })}
+        description={t('query.groups.confirmDeleteItemsBody')}
+        confirmLabel={t('query.groups.delete')}
+        cancelLabel={t('common.cancel')}
+        destructive
+        onConfirm={() => { const g = deleteGroupOf; setDeleteGroupOf(null); if (g) void doDeleteExplorerGroup(g.kind, g.group); }}
       />
       <ConfirmDialog
         open={deleteGroup !== null}

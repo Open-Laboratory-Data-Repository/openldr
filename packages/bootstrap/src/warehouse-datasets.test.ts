@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { advanceCursor, createFhirStore, createWarehouseDatasetStore } from '@openldr/db';
+import { advanceCursor, createExplorerGroupStore, createFhirStore, createWarehouseDatasetStore } from '@openldr/db';
 import { createWarehouseDatasetService, createDatasetRefresher, datasetNotBuiltMessage, withDatasetMessage } from './warehouse-datasets';
 import { readWarehouseReading } from './warehouse-status';
 
@@ -9,6 +9,7 @@ const quiet = { info() {}, warn() {}, error() {}, debug() {} } as never;
 async function world(opts: { engine?: 'postgres' | 'mssql' | 'mysql'; failing?: string[] } = {}) {
   const db = await makeMigratedDb();
   const store = createWarehouseDatasetStore(db as never);
+  const groups = createExplorerGroupStore(db as never);
   const fhir = createFhirStore(db as never);
   const built: string[] = [];
   const dropped: string[] = [];
@@ -17,7 +18,7 @@ async function world(opts: { engine?: 'postgres' | 'mssql' | 'mysql'; failing?: 
   let overlapped = false;
   let duringBuild: (() => Promise<void>) | null = null;
   const service = createWarehouseDatasetService({
-    store, internalDb: db as never, warehouseDb: {} as never, engine: opts.engine ?? 'postgres', logger: quiet,
+    store, groups, internalDb: db as never, warehouseDb: {} as never, engine: opts.engine ?? 'postgres', logger: quiet,
     build: async (_db, def) => {
       running += 1;
       if (running > 1) overlapped = true;
@@ -33,7 +34,7 @@ async function world(opts: { engine?: 'postgres' | 'mssql' | 'mysql'; failing?: 
   /** Moves the warehouse cursor to the newest change: the warehouse is up to date. */
   const catchUp = async () => { await advanceCursor(db as never, 'projection', (await readWarehouseReading(db as never)).head); };
   const save = (id: string) => fhir.save({ resourceType: 'Patient', id } as never);
-  return { db, store, service, built, dropped, failing, catchUp, save, overlapped: () => overlapped, onBuild: (f: (() => Promise<void>) | null) => { duringBuild = f; } };
+  return { db, store, groups, service, built, dropped, failing, catchUp, save, overlapped: () => overlapped, onBuild: (f: (() => Promise<void>) | null) => { duringBuild = f; } };
 }
 
 describe('pack datasets: check', () => {
@@ -121,23 +122,21 @@ describe('pack datasets: install and rebuild', () => {
 });
 
 describe('pack datasets: groups', () => {
-  it('moves_a_dataset_trims_the_name_and_blank_means_no_group', async () => {
+  it('a_new_dataset_starts_in_a_group_named_for_its_pack_and_a_reinstall_keeps_where_it_was_moved', async () => {
     const w = await world();
-    await w.service.install('p', [{ name: 'abc', sql: 'select 1' }]);
-    await w.service.setGroup('abc', '  Turnaround  ');
-    expect((await w.service.list())[0].group).toBe('Turnaround');
-    await w.service.setGroup('abc', '   ');
-    expect((await w.service.list())[0].group).toBeNull();
-    await expect(w.service.setGroup('nope', 'x')).rejects.toThrow('no dataset named nope');
-    await expect(w.service.setGroup('abc', 'x'.repeat(201))).rejects.toThrow('at most 200');
+    await w.service.install('reports-zm', [{ name: 'abc', sql: 'select 1' }, { name: 'abd', sql: 'select 2' }]);
+    expect(await w.groups.itemGroups('dataset')).toEqual({ abc: 'reports-zm', abd: 'reports-zm' });
+    await w.groups.setItemGroup('dataset', 'abc', 'Turnaround');
+    await w.groups.setItemGroup('dataset', 'abd', null);
+    await w.service.install('reports-zm', [{ name: 'abc', sql: 'select 11' }, { name: 'abd', sql: 'select 2' }, { name: 'abe', sql: 'select 3' }]);
+    expect(await w.groups.itemGroups('dataset')).toEqual({ abc: 'Turnaround', abd: null, abe: 'reports-zm' });
     await w.db.destroy();
   });
-  it('renames_a_group_and_removes_one', async () => {
+  it('a_removed_dataset_is_forgotten_by_its_group', async () => {
     const w = await world();
-    await w.service.install('p', [{ name: 'abc', sql: 'select 1' }, { name: 'abd', sql: 'select 2' }]);
-    expect(await w.service.renameGroup('p', 'Viral load')).toBe(2);
-    expect(await w.service.renameGroup('Viral load', null)).toBe(2);
-    expect((await w.service.list()).map((d) => d.group)).toEqual([null, null]);
+    await w.service.install('p', [{ name: 'abc', sql: 'select 1' }]);
+    await w.service.remove('abc');
+    expect(await w.groups.itemGroups('dataset')).toEqual({});
     await w.db.destroy();
   });
 });

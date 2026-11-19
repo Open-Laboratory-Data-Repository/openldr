@@ -2001,8 +2001,6 @@ export const pt: EnShape = {
   },
   query: {
     dataset: {
-      groupDescription: 'Os grupos organizam a lista Datasets. Um conjunto de dados funciona em qualquer grupo.',
-      confirmDeleteGroupBody: 'Os seus conjuntos de dados não são eliminados. Saem do grupo.',
       rowActions: 'Ações para {{name}}',
       details: 'Detalhes',
       rebuild: 'Reconstruir',
@@ -2038,6 +2036,7 @@ export const pt: EnShape = {
     renameQuery: 'Renomear consulta',
     groups: {
       branchActions: 'Ações das consultas personalizadas', rowActions: 'Ações para “{{name}}”', groupActions: 'Ações para o grupo “{{name}}”',
+      explorerDescription: 'Os grupos organizam esta lista. Um item funciona em qualquer grupo.', confirmDeleteItemsBody: 'O que contém não é eliminado. Sai do grupo.', branchActionsOf: 'Ações para {{branch}}',
       newGroup: 'Novo grupo', rename: 'Renomear grupo', delete: 'Eliminar grupo',
       description: 'Os grupos apenas organizam esta lista. As consultas mantêm o nome e os relatórios que as usam continuam a funcionar.',
       nameExists: 'Já existe um grupo com este nome. Escolha outro nome.',

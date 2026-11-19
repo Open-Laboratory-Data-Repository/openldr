@@ -21,8 +21,6 @@ export interface WarehouseDataset {
   lastError: string | null;
   /** The newest change number when the newest build failed. Null once a build works. */
   failedAtSeq: number | null;
-  /** The Query page group it sits in. It starts as the pack's id. Null: no group. */
-  group: string | null;
 }
 
 export interface WarehouseDatasetDef { name: string; sql: string; indexes?: string[][] }
@@ -40,10 +38,6 @@ export interface WarehouseDatasetStore {
   /** `seq` is the newest change number at the failed try. */
   markFailed(name: string, error: string, seq: number): Promise<void>;
   remove(name: string): Promise<void>;
-  /** Moves a dataset to a group, or to none. Throws `no dataset named <name>`. */
-  setGroup(name: string, group: string | null): Promise<void>;
-  /** Gives every dataset in the group `from` the group `to`, or none. Resolves to how many moved. */
-  renameGroup(from: string, to: string | null): Promise<number>;
 }
 
 const T = 'warehouse_datasets' as const;
@@ -60,7 +54,6 @@ function fromRow(r: Record<string, unknown>): WarehouseDataset {
     buildMs: num(r.build_ms), rowCount: num(r.row_count),
     lastError: (r.last_error as string | null) ?? null,
     failedAtSeq: num(r.failed_at_seq),
-    group: (r.group_name as string | null) ?? null,
   };
 }
 
@@ -94,8 +87,7 @@ export function createWarehouseDatasetStore(db: Kysely<InternalSchema>): Warehou
           const indexes = JSON.stringify(def.indexes ?? []);
           const before = byName.get(def.name);
           if (!before) {
-            // A new dataset starts in a group named for its pack. One that exists keeps where it was moved.
-            await trx.insertInto(T).values({ name: def.name, owner_pack: ownerPack, sql: def.sql, indexes, position, group_name: ownerPack } as never).execute();
+            await trx.insertInto(T).values({ name: def.name, owner_pack: ownerPack, sql: def.sql, indexes, position } as never).execute();
           } else if (before.sql === def.sql && JSON.stringify(before.indexes) === indexes) {
             await trx.updateTable(T).set({ position, updated_at: new Date() } as never).where('name', '=', def.name).execute();
           } else {
@@ -117,17 +109,6 @@ export function createWarehouseDatasetStore(db: Kysely<InternalSchema>): Warehou
     },
     async remove(name) {
       await db.deleteFrom(T).where('name', '=', name).execute();
-    },
-    async setGroup(name, group) {
-      const hit = await db.selectFrom(T).select('name').where('name', '=', name).executeTakeFirst();
-      if (!hit) throw new Error(`no dataset named ${name}`);
-      await db.updateTable(T).set({ group_name: group, updated_at: new Date() } as never).where('name', '=', name).execute();
-    },
-    async renameGroup(from, to) {
-      const inGroup = await db.selectFrom(T).select('name').where('group_name', '=', from).execute();
-      if (inGroup.length === 0) return 0;
-      await db.updateTable(T).set({ group_name: to, updated_at: new Date() } as never).where('group_name', '=', from).execute();
-      return inGroup.length;
     },
   };
   return store;

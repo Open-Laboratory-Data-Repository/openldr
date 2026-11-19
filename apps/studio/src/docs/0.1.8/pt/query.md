@@ -378,11 +378,31 @@ Selecione os pontos e depois **Reconstruir**. Uma mensagem indica quando termina
 
 **Resultado esperado:** o número de linhas e a data da última construção são atualizados.
 
-Um conjunto de dados começa num grupo com o nome do pacote que o instalou. Para o mover, selecione os pontos e depois **Mover para o grupo**. Escolha um grupo, **Novo grupo** ou **Sem grupo**. Os pontos ao lado de um grupo permitem mudar-lhe o nome ou eliminá-lo. Eliminar um grupo mantém os seus conjuntos de dados.
+Um conjunto de dados começa num grupo com o nome do pacote que o instalou. A secção **Organizar conectores e conjuntos de dados em grupos** abaixo explica como o mover.
 
 O OpenLDR também reconstrói os conjuntos de dados sozinho, quando o armazém fica atualizado. Durante uma importação grande, nada é reconstruído até a importação terminar. Por isso, um relatório que lê um conjunto de dados pode estar uma reconstrução atrás do armazém. A linha **Armazém** em [Activity](/docs/activity) mostra «a reconstruir conjuntos de dados» enquanto isso decorre.
 
 Num terminal, `openldr db datasets list` mostra a mesma lista e `openldr db datasets rebuild` reconstrói-os.
+
+## Organizar conectores e conjuntos de dados em grupos
+
+Use grupos quando a lista Connectors ou Datasets ficar longa. Funcionam como os grupos de Custom Queries, exceto que os itens se movem pelo menu e não por arrastar. Precisa de **Gerir consultas guardadas**.
+
+### 1. Criar um grupo
+
+Selecione os pontos ao lado de **Connectors** ou de **Datasets** e depois **Novo grupo**. Introduza um nome e guarde. O grupo aparece nessa lista, vazio.
+
+### 2. Mover um item para o grupo
+
+Selecione os pontos ao lado de um conector ou de um conjunto de dados e depois **Mover para o grupo**. Escolha o grupo. **Novo grupo** cria um e move o item num só passo. **Sem grupo** tira o item do seu grupo.
+
+### 3. Mudar o nome ou remover um grupo
+
+Selecione os pontos ao lado do grupo. **Renomear grupo** mantém o que contém. **Eliminar grupo** remove o grupo e mantém o que continha, sem grupo.
+
+**Resultado esperado:** a lista mostra cada grupo com um número e, abaixo, os itens sem grupo.
+
+Um grupo só organiza a lista. Um conector ou um conjunto de dados funciona da mesma forma em qualquer grupo. Num terminal, `openldr query groups` faz o mesmo com `--kind connector` ou `--kind dataset`.
 
 ## Executar uma consulta guardada num telemóvel
 

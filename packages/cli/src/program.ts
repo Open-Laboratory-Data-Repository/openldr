@@ -5,7 +5,7 @@ import { exitCodeFor, formatHealthTable } from './format';
 import { redactError } from './redact-error';
 import { sendLogsToStderr } from '@openldr/core';
 import { runFhirValidate, formatFhirValidate } from './fhir';
-import { runDbMigrate, runDbReset, runDbSeed, runDbReproject, runDbWarehouseStatus, runDbDatasetsList, runDbDatasetsRebuild, runDbDatasetsDelete, runDbDatasetsMove } from './db';
+import { runDbMigrate, runDbReset, runDbSeed, runDbReproject, runDbWarehouseStatus, runDbDatasetsList, runDbDatasetsRebuild, runDbDatasetsDelete } from './db';
 import { runAuthRebindIssuer, runAuthSetupCode } from './auth';
 import { runDashboardsShare } from './dashboards';
 import { runUsersScope, type UsersScopeOpts } from './users-scope';
@@ -60,7 +60,7 @@ import {
   runIdentifierSystemsList, runIdentifierSystemsSet, runPatientsList, runPatientsShow,
   type IdentifierSystemsSetOpts, type PatientsListOpts,
 } from './patients';
-import { runQueryExport, runQueryImport } from './query';
+import { runQueryExport, runQueryImport, runQueryGroupsList, runQueryGroupsCreate, runQueryGroupsRename, runQueryGroupsDelete, runQueryGroupsMove } from './query';
 import { setActorOverride } from './cli-actor';
 import { guardServed, NAME_OPTIONS, nameRefusalText } from './served';
 import { commandPath, runCommandsList } from './command-list';
@@ -472,18 +472,6 @@ export function buildProgram(): Command {
         process.exitCode = await runDbDatasetsRebuild(name, opts);
       } catch (err) {
         process.stderr.write(`db datasets rebuild failed: ${redactError(err)}\n`);
-        process.exitCode = 1;
-      }
-    });
-  datasets.command('move <name>')
-    .description('Put a dataset in a Query page group, or in none when --group is left out')
-    .option('--group <group>', 'the group to move it to; a new name makes the group')
-    .option('--json', 'emit JSON', false)
-    .action(async (name: string, opts: { json: boolean; group?: string }) => {
-      try {
-        process.exitCode = await runDbDatasetsMove(name, opts);
-      } catch (err) {
-        process.stderr.write(`db datasets move failed: ${redactError(err)}\n`);
         process.exitCode = 1;
       }
     });
@@ -1065,6 +1053,36 @@ export function buildProgram(): Command {
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (file: string, opts: { connector?: string; force: boolean; json: boolean }) => {
       process.exitCode = await runQueryImport(file, opts);
+    });
+
+  // Groups of the Query page's Connectors and Datasets branches. `--kind` says which branch.
+  const queryGroups = queryGroup.command('groups').description('Groups of the Query page\'s Connectors and Datasets lists');
+  const kindOpt = '--kind <kind>';
+  const kindText = 'the list the groups belong to: connector or dataset';
+  queryGroups.command('list').description('List the groups of a list, and the group each placed item sits in')
+    .requiredOption(kindOpt, kindText).option('--json', 'emit JSON', false)
+    .action(async (opts: { kind: string; json: boolean }) => {
+      try { process.exitCode = await runQueryGroupsList(opts); } catch (err) { process.stderr.write(`query groups list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  queryGroups.command('create <name>').description('Make an empty group')
+    .requiredOption(kindOpt, kindText).option('--json', 'emit JSON', false)
+    .action(async (name: string, opts: { kind: string; json: boolean }) => {
+      try { process.exitCode = await runQueryGroupsCreate(name, opts); } catch (err) { process.stderr.write(`query groups create failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  queryGroups.command('rename <name> <newName>').description('Rename a group; its items stay in it')
+    .requiredOption(kindOpt, kindText).option('--json', 'emit JSON', false)
+    .action(async (name: string, newName: string, opts: { kind: string; json: boolean }) => {
+      try { process.exitCode = await runQueryGroupsRename(name, newName, opts); } catch (err) { process.stderr.write(`query groups rename failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  queryGroups.command('delete <name>').description('Remove a group; its items are kept, in no group (refuses without --force)')
+    .requiredOption(kindOpt, kindText).option('--force', 'confirm the removal', false).option('--json', 'emit JSON', false)
+    .action(async (name: string, opts: { kind: string; force: boolean; json: boolean }) => {
+      try { process.exitCode = await runQueryGroupsDelete(name, opts); } catch (err) { process.stderr.write(`query groups delete failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  queryGroups.command('move <item>').description('Put an item in a group, or in none when --group is left out. An item is a connector id, a pack dataset name, or wf:<name> for a workflow dataset')
+    .requiredOption(kindOpt, kindText).option('--group <group>', 'the group to move it to; a new name makes the group').option('--json', 'emit JSON', false)
+    .action(async (item: string, opts: { kind: string; group?: string; json: boolean }) => {
+      try { process.exitCode = await runQueryGroupsMove(item, opts); } catch (err) { process.stderr.write(`query groups move failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 
   const syncGroup = program.command('sync').description('lab⇄central sync status + control');
