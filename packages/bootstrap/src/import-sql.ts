@@ -57,6 +57,18 @@ export function fillKeyQuery(sql: string, after: string | null, limit: number): 
   return fill(sql, { after: quoteLiteral(after ?? ''), limit: String(limit) });
 }
 
+/** The largest TOP a count passes: SQL Server's largest int, so the key query's own TOP never
+ *  cuts the count short. */
+const COUNT_ALL = 2147483647;
+
+/** A statement that counts every key the key query would page through from the start: the key
+ *  query with `after` empty and no real limit, wrapped in COUNT_BIG. SQL Server allows ORDER BY in
+ *  a derived table that has a TOP, which every key query has. The copy shows this count as its
+ *  total (import-copy.ts). */
+export function fillCountQuery(sql: string): string {
+  return `SELECT COUNT_BIG(*) AS [n] FROM (${fill(sql, { after: quoteLiteral(''), limit: String(COUNT_ALL) })}) AS [k]`;
+}
+
 /** Fill a detail query with the page's keys. */
 export function fillDetailQuery(sql: string, keys: string[]): string {
   if (keys.length === 0) throw new Error('import detail query has no keys');

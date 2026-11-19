@@ -631,3 +631,137 @@ grouping, and summary tables kept up to date by the projection.
 2. Parallel decode is decode-ahead with one cursor. No key ranges.
 3. Warehouse: measure the projection lag first. No build yet.
 4. This file is saved in the main checkout, uncommitted.
+
+## The copy step (2026-11-19, second session)
+
+The copy took 58.6 minutes on the full source, as long as the check now takes. The operator set
+four items, in order. Numbers are in `docs/benchmarks/log.md` under "Import: copy". The sample is
+**Copy 250k**: 250,000 requests copied by the real copy service and the installed plugin, from the
+demo4 SQL Server to the scratch Postgres. It took 5 to 7 minutes a run, so each setting could run
+twice.
+
+### Where the time goes
+
+Detail queries take 65 to 72% of a copy. Writes to `import_copy_rows` take most of the rest. One
+detail query costs about 50 to 100 ms however few rows it returns: SQL Server compiles each new
+`IN` list (about 40 ms at 500 keys, 80 to 170 ms at 2,000), and each query is a round trip that
+sends its rows over TLS. The copy sends six detail queries a page, one after another. SQL Server
+averages about 0.6 of a core and the copy process 0.4, on a 32-core machine. So the copy is slow
+because it waits, not because either side is busy. The earlier note that "the source SQL Server is
+the busy side" read 73% as busy. It is 73% of one core.
+
+Two source tables have no index that starts with the lab number (`RDOBIDX4` is clustered on
+`DOBDATE, LABNO`, `RTKNIDX5` on `TAKENDATE, INVOICENO`). Their detail queries scan the whole table
+on every page. They are small (74 MB and 7 MB), so this costs about 100 to 300 ms a page, not more.
+The source is the lab's database, so CE cannot add the index. Fewer pages is the lever.
+
+### 1. Total, percentage and time left (built)
+
+Design: `docs/superpowers/specs/2026-11-19-copy-progress-design.md`. When a drive starts, CE counts
+each set's keys by wrapping the plugin's own key query in `COUNT_BIG`. The count is exact: it gave
+250,000 for the sample. The seven counts took 0.6 s on the sample. Not measured: their time on
+the full source. The copy shows `45% of 2,327,622 keys, about 31 min left` on the plugin's copy
+page, on Activity, in `openldr import copy status` and in `--json`. The time left is the average
+speed since the drive began, applied to the keys left.
+
+### 2. Bigger pages (built)
+
+The default page goes from 500 to 2,000 keys, the most the code allows. Page 500 copied 38,000 to
+41,000 requests a minute, 1,000 about 44,000, 2,000 between 45,600 and 53,200. Memory rose about
+70 MiB. A page of 4,000 (spike only) was slower than 2,000: 41,444. A copy started earlier keeps
+its own page size when it carries on.
+
+### 3. Several reads at once (spike, then built)
+
+Two throwaway changes, in a worktree outside the repo (`~/.cache/openldr-speed-bench/copy/spike-wt`):
+
+- send a page's six detail queries at once. The source connection is already a pool of up to 10
+  (`packages/adapter-mssql-store/src/index.ts:45`), and its per-query timeout is safe under
+  concurrency (`request-timeout.ts`, AsyncLocalStorage);
+- read the next page while this one is written.
+
+Each alone gave 61,500 and 64,900 a minute. Together they gave 89,000 to 90,900 on the sample and
+89,184 on a range SQL Server had never read, against 45,700 to 49,600 for the shipped code. That is
+about 1.85 times. The rows stored were the same: 4,876,338 rows and the same content digest as the
+shipped code.
+
+What building it properly would cost, my estimate, not measured:
+
+- details at once: about a day. One failed detail query must fail the whole page attempt, and the
+  others must finish or be dropped before the reader closes its connection. The halving on timeout
+  stays as it is. Tests for a failure and a stop while several queries are in flight.
+- read-ahead: two to three days. The cursor and the record must still move only after a page's rows
+  are stored, in order, as now (`import-copy.ts`, `markPageEnd` then save). The page read ahead is
+  never written before the page before it. A stop, a lost run, a skipped key or a page that shrank
+  throws the read-ahead away. The reader keeps one connection and one waiting state today, so the
+  read-ahead needs its own reader. The hard-kill test of item 4 must be run again on it.
+- cost to the lab: SQL Server goes from about 0.6 to 1.5 cores while a copy runs. On a lab's own
+  server during working hours that may matter.
+
+My recommendation: build both, details first. It is the next largest gain left in the copy.
+
+The operator said build both. Built on the same branch:
+
+- `import-source-reader.ts`: `detailsAtOnce` sends a page's detail queries in groups of that size.
+  A failure is acted on only once every query of its group has answered, and the first failure in
+  detail order is thrown, as before. Queries sent together share one open. The one-pass import keeps
+  1.
+- `import-copy.ts`: 6 details at once, and the next page read on a second reader with a pool of its
+  own. That reader never waits and never retries (its `stopWanted` is always true). Its page is used
+  only when the run is still at that place and that size, and only a whole page or the end. Anything
+  else is thrown away and the normal reader reads the page again. The next page is never stored
+  before this one, and the cursor moves only after a page is stored, as before.
+
+Measured: 85,783 and 103,251 a minute on Copy 250k, 102,911 on Copy 250k B, against about 46,000 to
+50,000 for page 2,000 alone. The rows matched. The hard-kill test ran again on the built code (four
+SIGKILLs at 15 s, 30 s, 4 s and 45 s) and the copy matched a clean copy in every set and in the
+record counts. Seven older tests that put a fault on one exact statement run with the read-ahead
+off, because the read-ahead would meet the fault instead. Four new tests cover the read-ahead: the
+next page is read while this one is written and each page is read once, a lost link on the page
+read ahead, a stop while a page is read ahead, and the read-ahead off.
+
+### 4. Cut and compare (proved, no change needed)
+
+The copy: the sample copied at page 2,000 with four SIGKILLs to the copy process, at 20 s, 45 s,
+4 s (during start-up) and 60 s, resumed each time as a server restart is. The test moved the clock
+forward instead of waiting the 2 minutes a real restart waits. All four cuts were recorded and
+resumed by themselves. The finished copy equals a clean copy: the same 4,876,338 request rows, the
+same content digest in every set (with and without each row's order number), the same counts in
+the record, and no key skipped. A hard kill loses the page being read and nothing else. The next
+start reads that page again and replaces its rows (`replaceKeys`), and the cursor only moves after
+a page is stored.
+
+The warehouse projection: Bench 5k (58,530 records) projected with SIGKILLs to the process, two
+patterns of five and seven kills, carrying on after each. The kills landed at the cursor's two
+middle steps, 22,000 and 48,000. In both patterns all 11 warehouse tables equal a clean run, row
+count and content digest. A projection cycle writes the warehouse first and then moves the cursor
+in the other database (`packages/db/src/projection/cycle.ts:203` and `:225`). A kill between the
+two makes the next start write that batch again, and the second write gives the same rows.
+
+### Full source, all three changes
+
+24.3 minutes, 95,912 requests a minute, against 58.6 minutes and 39,720 before: 2.4 times. The same
+2,326,075 requests and 48,182,311 rows. The count of the requests set gave 2,326,075, the source's
+own number. The seven counts took 2.0 s.
+
+### HONEST NON-PROOF
+
+- The full-source copy with all three changes (24.3 minutes against 58.6) wrote to the scratch
+  Postgres, not the standalone's embedded Postgres at its defaults. Writes took 1,066 s of its
+  1,455 s, overlapped with reading, so a slower Postgres could lengthen it. Not measured there.
+- The time of the counts on the full source was not measured. Each count has a 30-second limit, and
+  a count that runs out leaves the total unknown.
+- The estimate was checked over one full copy only: about 15% low in the first minutes (19 min
+  shown at minute 2, 22 real), within a minute from minute 12. Not checked: a copy that restarts,
+  or a slow link.
+- Phone width was checked in headless Chromium at 375 px on a preview of the plugin page with a fake
+  copy, not on a real phone or in a live CE. The table scrolls sideways inside itself at that
+  width, as it did before, so the progress line is cut until the table is swiped.
+- The plugin page change is not published. It needs the laptop's signing and a marketplace release.
+- The projection kills landed at only two points of a small sample. Not tested: a kill in the
+  middle of a larger batch, and the facility capture hook (`onProjected`), which the test loop left
+  out.
+- The copy kill test ran in a bench process, not the server. The server's own start and stop code
+  around the copy service was not under SIGKILL.
+- Run-to-run spread is up to 15% at page 2,000. The page-size ranking holds across runs. The exact
+  gain does not.

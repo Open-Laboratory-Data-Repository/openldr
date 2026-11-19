@@ -166,6 +166,8 @@ Une copie lit les lignes de la base v1 et les garde sur le disque du serveur CE.
 
 Rien ne lit encore la copie. L'import des sections précédentes lit toujours la source elle-même. Une copie ne change donc pas ce qu'un import enregistre.
 
+Une copie lit la page suivante pendant qu'elle enregistre la page en cours, et envoie ensemble les requêtes d'une page. Elle garde jusqu'à 14 connexions ouvertes vers la source. Sur la source de test de Tanzanie, elle a utilisé environ un cœur et demi du processeur du SQL Server. Si la source est un serveur de production chargé, faites la copie en dehors des heures de travail.
+
 La copie contient les données des patients en entier. Elle garde toutes les colonnes des lignes Requests, LabResults, Patients et ASTResults de chaque demande lue. Protégez le serveur CE et ses sauvegardes comme vous protégez la source. Il y a une copie par connecteur. Le plugin doit d'abord être autorisé à lire le connecteur.
 
 ### 1. Ouvrir l'onglet Copie
@@ -190,7 +192,7 @@ Ouvrez le menu à points en haut à droite de l'onglet Copie et choisissez **Lan
 
 Chaque ligne du tableau est un ensemble. Le plugin v1 copie un seul ensemble, `requests`, qui contient les lignes des quatre tables pour chaque demande. **État** affiche Pas commencé, Copie en cours, En attente, Copié en partie, Terminé, À relire ou Suppression. **Demandes lues** est le nombre de demandes enregistrées jusqu'ici. **Lignes** est le nombre de lignes sources enregistrées, dans les quatre tables. **Taille** est la taille de ces lignes telles que CE les stocke.
 
-La ligne sous l'état compte les demandes "sur un total encore inconnu", car la copie ne compte pas la source avant de commencer. Une copie finie affiche **Terminée** et donne **Demandes copiées :** avec le nombre.
+La ligne sous l'état compte les demandes "sur un total encore inconnu". CE compte bien les demandes de la source quand une copie démarre ou reprend, mais cette page n'affiche pas encore ce nombre. **Activity** et `openldr import copy status` affichent la part lue et le temps restant. Une copie finie affiche **Terminée** et donne **Demandes copiées :** avec le nombre.
 
 ![Le tableau donne l'état, les demandes, les lignes et la taille.](v1-import-guide-copy-sets.png)
 

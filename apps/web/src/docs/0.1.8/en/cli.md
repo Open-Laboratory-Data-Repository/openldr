@@ -484,6 +484,12 @@ Studio's **Your preferences** guide is under **Personal settings**. It shows lan
 
 For operators, `user preferences show <user-id>` reads the saved values and `user preferences set <user-id> startPage none` clears the personal start-page choice. Use the installed or development command form described above. Clearing the choice lets the layout's start page apply again when one is configured.
 
+## How far a copy has got
+
+`openldr import copy status <plugin> [copy]` prints one line per copy. While a copy is not finished, the line gives how many of the source's keys it has read, as a percentage, such as `45.2% of 2342719 keys`. While it runs, it adds the time left, such as `about 31 min left`. Each set shows `total=` beside its own counts. `--json` gives the same numbers in `estimate`: `done`, `total`, `percent` and `secondsLeft`.
+
+CE counts each set's keys on the source when a copy starts or carries on. The time left is the keys still to read at the average speed since then. It is a guess. It is shown only after a minute of reading. It changes when the source gets busier, when older and newer requests carry different numbers of rows, and after a restart, which starts the average again. When the source could not count a set in 30 seconds, the line gives no percentage and the copy carries on.
+
 ## Interrupted jobs
 
 A long job cut off by a restart records it. Most carry on by themselves; these commands show the record and continue a job that waits.

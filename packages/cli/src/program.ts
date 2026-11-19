@@ -221,7 +221,7 @@ export function buildProgram(): Command {
     .requiredOption('--plugin <id>', 'the plugin that names the rows to copy')
     .requiredOption('--connector <id>', 'the database connector to read (must be allowed for the plugin)')
     .option('--option <name=value...>', 'a plugin option, repeatable (for example tz=+02:00)')
-    .option('--page-size <n>', 'source keys per page, 1 to 2000 (default 500)')
+    .option('--page-size <n>', 'source keys per page, 1 to 2000 (default 2000, or the page size of a copy that carries on)')
     .option('--reread', 'empty every set whose SQL changed and read it again from the start', false)
     .option('--json', 'emit JSON', false)
     .action(async (opts: { plugin: string; connector: string; option?: string[]; pageSize?: string; reread: boolean; json: boolean }) => {

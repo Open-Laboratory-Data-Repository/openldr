@@ -16,6 +16,11 @@ Datasets:
 - **Tanzania full.** The whole restored DISA database: 2,326,075 requests, 48.2 million source rows.
   Standalone desktop install on the Linux box (32 cores, 90 GB), embedded Postgres at its default
   settings. Evidence in `~/.local/share/demo5-evidence/`.
+- **Copy 250k.** The copy of 250,000 Tanzania requests, ranked 1,000,000 to 1,250,000 by lab number:
+  4,876,338 request rows, 1.91 GiB, 18.9 rows a request against 20.7 for the whole source. The real
+  copy service and the installed cdr-source plugin read the demo4 SQL Server and write to the
+  scratch Postgres. The dictionaries are copied whole. A second range, ranks 1,500,000 to
+  1,750,000, is **Copy 250k B**. Scripts and output in `~/.cache/openldr-speed-bench/copy/`.
 
 ## Import: processing (the check)
 
@@ -35,8 +40,52 @@ Tanzania full, whole run at 770f37f2: 60 minutes. 2,130,022 saved, 163,451 held,
 | Date | Commit | Dataset | Time | Requests a minute |
 |---|---|---|---|---|
 | 2026-11-19 | 770f37f2 | Tanzania full | 58.6 min | 39,720 average, 27,575 slowest minute, 53,500 fastest |
+| 2026-11-19 | 6daedb65 | Tanzania full, bench Postgres | 24.3 min | 95,912 average |
 
 19.9 GiB copied. Page size 500. No interruption.
+
+6daedb65 run: page 2,000, 6 detail queries at once, the next page read ahead. Same totals as the
+770f37f2 run: 2,326,075 requests, 48,182,311 rows, 19.90 GiB. Written to the scratch Postgres on
+port 54399, not the standalone's, so the Postgres side differs from the 770f37f2 row. Peak memory
+861 MiB. SQL Server averaged 1.26 cores, the copy process 0.70. The seven counts took 2.0 s. The
+time left it showed: 19 min at minute 2 (22 real), 15 at minute 8 (16 real), 12 at minute 12 (12
+real), within a minute from then on. Output: `~/.cache/openldr-speed-bench/copy/full-a.txt`.
+
+Copy 250k, before and after each item of the copy work (2026-11-19, base commit 0ef2a49b). Runs
+on one range share SQL Server's cache, and two runs of one setting differ by up to 15%.
+
+| Date | Code | Dataset | Page | Requests a minute | Peak memory |
+|---|---|---|---|---|---|
+| 2026-11-19 | 0ef2a49b, before | Copy 250k | 500 | 34,965 (tests running beside it) | 586 MiB |
+| 2026-11-19 | item 1, counts the total | Copy 250k | 500 | 38,173 and 40,672 | 577 and 591 MiB |
+| 2026-11-19 | item 1 | Copy 250k | 1,000 | 43,732 and 43,980 | 591 and 568 MiB |
+| 2026-11-19 | item 1 | Copy 250k | 2,000 | 53,159, 49,247, 45,571, 49,623, 45,737 | 656 to 671 MiB |
+| 2026-11-19 | spike, throwaway | Copy 250k | 4,000 | 41,444 | 781 MiB |
+| 2026-11-19 | spike: details at once | Copy 250k | 2,000 | 61,530 | 654 MiB |
+| 2026-11-19 | spike: read the next page ahead | Copy 250k | 2,000 | 64,872 | 842 MiB |
+| 2026-11-19 | spike: both | Copy 250k | 2,000 | 116,768, then 88,993 and 90,869 | 759 to 806 MiB |
+| 2026-11-19 | spike: both | Copy 250k | 4,000 | 77,719 | 905 MiB |
+| 2026-11-19 | spike: both, cold cache, run first | Copy 250k B | 2,000 | 89,184 | 723 MiB |
+| 2026-11-19 | item 1, run after the spike | Copy 250k B | 2,000 | 48,007 | 640 MiB |
+| 2026-11-19 | item 3 built: 6 details at once, read-ahead | Copy 250k | 2,000 | 85,783 (plugin build beside it), 103,251 | 772 and 773 MiB |
+| 2026-11-19 | item 3 built | Copy 250k B | 2,000 | 102,911 | 753 MiB |
+
+Where the time goes at page 500 (38,173 run): detail queries 279 s of 393 s, writes to
+`import_copy_rows` 86 s, key queries 3 s, the seven counts of item 1 0.6 s. At page 2,000: detail
+queries 183 to 212 s of 282 to 329 s, writes 75 to 88 s.
+
+CPU while copying, page 2,000 (100 = one core, 32 cores in the machine): today's code, SQL Server
+55 to 60 and the copy process 35 to 39. Both spikes: SQL Server 111 to 152, the copy process 57 to
+69. Neither side is near its limit. The copy waits on one query at a time.
+
+The 116,768 run came after five runs on the same range and was not repeated. Read the spike gain as
+about 1.85 times, from the repeated runs and the cold run.
+
+With item 3 built, SQL Server used 136 to 173 and the copy process 59 to 72. The stored rows
+matched the code before item 3: the same 4,876,338 rows and the same content digest.
+
+Not proved by these rows: a full-source run with page 2,000 (the change was not run on the whole
+source), a source over a slow network, and SQL Server with more than its 2 GB memory cap.
 
 ## Projection (the warehouse step)
 

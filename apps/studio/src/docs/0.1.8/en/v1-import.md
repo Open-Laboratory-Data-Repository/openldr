@@ -166,6 +166,8 @@ A copy reads the rows of the v1 database and keeps them on the CE server's own d
 
 Nothing reads the copy yet. The import in the sections above still reads the source itself, so a copy does not change what an import saves.
 
+A copy reads the next page while it stores the current one, and sends a page's queries together. It keeps up to 14 connections open to the source. On the Tanzania test source it used about one and a half processor cores of the SQL Server. If the source is a busy production server, copy outside working hours.
+
 The copy holds patient data in full. It keeps every column of the Requests, LabResults, Patients and ASTResults rows of each request it reads. Protect the CE server and its backups as you protect the source. There is one copy for each connector. The plugin must be allowed to read the connector first.
 
 ### 1. Open the Copy tab
@@ -190,7 +192,7 @@ Open the dots menu at the top right of the Copy tab and select **Start copy**. T
 
 Each row of the table is one set. The v1 plugin copies one set, `requests`, which holds the rows of all four tables for each request. **State** reads Not started, Copying, Waiting, Partly copied, Done, To be read again or Deleting. **Requests read** is the number of requests stored so far. **Rows** is the number of source rows stored, from all four tables. **Size** is the size of those rows as CE stores them.
 
-The line under the status counts requests "of an unknown number of requests", because the copy does not count the source first. A finished copy reads **Finished** and gives **Requests copied:** with the count.
+The line under the status counts requests "of an unknown number of requests". CE does count the source's requests when a copy starts or carries on, but this page does not show that count yet. **Activity** and `openldr import copy status` show the share read and the time left. A finished copy reads **Finished** and gives **Requests copied:** with the count.
 
 ![The set table gives the state, requests, rows and size.](v1-import-guide-copy-sets.png)
 

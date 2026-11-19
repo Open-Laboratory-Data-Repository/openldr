@@ -12,8 +12,8 @@ import {
   type ImportActor, type ImportServiceDeps, type ResolvedPlugin,
 } from './import-run';
 import { growPage } from './import-retry';
-import { createSourceReader, matchPageKey, type SourceReader } from './import-source-reader';
-import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, fillDetailQuery, fillKeyQuery } from './import-sql';
+import { createSourceReader, matchPageKey, type PageResult, type SourceReader } from './import-source-reader';
+import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, fillCountQuery, fillDetailQuery, fillKeyQuery } from './import-sql';
 
 // Copies the rows of a source database to CE's own disk (spec 9.2 and 9.3).
 //
@@ -32,9 +32,20 @@ import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, fillDetailQuery, fillKeyQuery } from './i
 
 const COPIES = '__import-copies';
 const SKIPPED = '__import-copy-skipped';
-const DEFAULT_PAGE_SIZE = 500;
+/** Keys a page asks for. Measured on 2026-11-19 on 250,000 Tanzania requests: 500 read about
+ *  39,000 requests a minute, 1,000 about 44,000 and 2,000 about 51,000, for about 70 MiB more
+ *  memory (docs/benchmarks/log.md). Each page sends one statement a detail query, and SQL Server
+ *  spends a fixed time on each, so fewer, larger pages win. 2,000 is the most `fillKeyQuery`
+ *  allows. A page that times out still halves. A copy started before keeps its own size. */
+const DEFAULT_PAGE_SIZE = 2000;
 const DELETE_BATCH = 10_000;
 const HEARTBEAT_MS = 30_000;
+/** Longest wait for one set's count. The connector allows no more. */
+const COUNT_TIMEOUT_MS = 30_000;
+/** Detail queries of a page sent together. A page sends six for cdr-source, and the SQL Server
+ *  connection pools up to 10 (adapter-mssql-store). Measured on 2026-11-19 with the read-ahead:
+ *  about 1.85 times the speed of one query at a time (docs/benchmarks/log.md). */
+const DETAILS_AT_ONCE = 6;
 const MAX_SETS = 50;
 const SYSTEM: ImportActor = { type: 'system', id: null, name: 'system' };
 const PLUGIN_FAILED = "the plugin's copy entrypoint failed";
@@ -58,7 +69,27 @@ export interface CopySetProgress {
   done: boolean;
   /** Set by a start with `reread`: the driver empties this set before it reads it again. */
   empty?: boolean;
+  /** Keys the source held for this set, counted by its key query when the last drive began
+   *  (`fillCountQuery`). Null when that count failed. Absent on a record from before counts. */
+  total?: number | null;
 }
+
+/** How far a copy has got, and a guess at the time left. Worked out from the record each time it is
+ *  read (`copyEstimate`), never stored. */
+export interface CopyEstimate {
+  /** Keys read so far over every set: stored plus skipped. */
+  done: number;
+  /** Keys to read over every set, or null while a set not yet done has no count. */
+  total: number | null;
+  /** `done` as a share of `total`, 0 to 100, or null without a total. */
+  percent: number | null;
+  /** Seconds left at the average speed since the drive began, or null when there is no fair
+   *  guess: not running, no total, less than a minute of driving, or no key read yet. */
+  secondsLeft: number | null;
+}
+
+/** Driving time before a time left is shown. A guess from the first seconds is mostly noise. */
+const ESTIMATE_AFTER_MS = 60_000;
 
 export interface CopyRun {
   id: string;
@@ -87,6 +118,54 @@ export interface CopyRun {
   finishedAt: string | null;
   lastError: string | null;
   startedBy: string;
+  /** When the current drive began reading, and how many keys were done then (stored plus
+   *  skipped). The time left is worked out from it. Null or absent before a drive begins. */
+  pace?: { since: string; done: number } | null;
+  /** Worked out by `copyEstimate` when the record is read. Never stored. */
+  estimate?: CopyEstimate;
+}
+
+/** Keys read by a set: stored plus skipped. */
+const keysDone = (p: CopySetProgress): number => p.keys + p.skipped;
+
+/**
+ * Total, percentage and time left for a copy. A done set counts what it read. A set not yet done
+ * counts its source count, or what it has read when that is more (rows added to the source while
+ * the copy runs). One set not done with no count leaves the total unknown.
+ *
+ * The time left is the keys left divided by the average speed since this drive began, measured up
+ * to the record's last save. It is wrong when the speed changes: the source gets busier, older and
+ * newer requests carry different numbers of rows, or the page size shrinks after timeouts. A
+ * restart starts the average again.
+ */
+export function copyEstimate(run: Pick<CopyRun, 'status' | 'sets' | 'updatedAt' | 'pace'>): CopyEstimate {
+  let done = 0;
+  let total: number | null = 0;
+  for (const p of Object.values(run.sets)) {
+    done += keysDone(p);
+    if (total === null) continue;
+    if (p.done) total += keysDone(p);
+    else if (typeof p.total === 'number') total += Math.max(p.total, keysDone(p));
+    else total = null;
+  }
+  const percent = total === null ? null : total === 0 ? 100 : Math.min(100, (100 * done) / total);
+  let secondsLeft: number | null = null;
+  if (run.status === 'running' && total !== null && run.pace) {
+    const ms = Date.parse(run.updatedAt) - Date.parse(run.pace.since);
+    const gained = done - run.pace.done;
+    if (ms >= ESTIMATE_AFTER_MS && gained > 0) secondsLeft = Math.round((Math.max(0, total - done) * ms) / gained / 1000);
+  }
+  return { done, total, percent, secondsLeft };
+}
+
+/** Time left in words: "under a minute", "about 12 min", "about 3 h 5 min". */
+export function formatTimeLeft(seconds: number): string {
+  if (seconds < 60) return 'under a minute';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `about ${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `about ${h} h` : `about ${h} h ${m} min`;
 }
 
 /** One copy per plugin and connector: the first 32 hex characters of SHA-256 of `<pluginId>|<connectorId>`. */
@@ -114,6 +193,10 @@ export interface ImportCopyServiceDeps
   driverId: string;
   /** Injectable for tests; the page reader's wait between tries. */
   sleep?: (ms: number) => Promise<void>;
+  /** Read the next page while this one is written. Default true. */
+  readAhead?: boolean;
+  /** Detail queries of a page sent together. Default 6. */
+  detailsAtOnce?: number;
   /** The check runs over a copy (import-check.ts). Given as two functions, so this service does
    *  not import that one. Without it, a start or a remove does not look for a check. */
   checks?: {
@@ -271,7 +354,9 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
   /** The only way a copy record is written (R28): only when the stored rev is `expected`, or when
    *  there is no record and `expected` is null. Sets `rev` and `updatedAt` on success. */
   async function writeIfRev(run: CopyRun, expected: number | null): Promise<boolean> {
-    const doc: CopyRun = { ...run, rev: (expected ?? 0) + 1, updatedAt: now().toISOString() };
+    // The estimate is worked out on each read. A record that went through `view` must not store it.
+    const { estimate: _estimate, ...stored } = run;
+    const doc: CopyRun = { ...stored, rev: (expected ?? 0) + 1, updatedAt: now().toISOString() };
     const wrote = await ownDb('write', () => deps.pluginData.putIfRev(run.pluginId, COPIES, run.id, doc, expected));
     if (wrote) { run.rev = doc.rev; run.updatedAt = doc.updatedAt; }
     return wrote;
@@ -310,7 +395,8 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     const sets: Record<string, CopySetProgress> = {};
     for (const name of order) if (stored.sets[name]) sets[name] = { ...stored.sets[name] };
     for (const name of Object.keys(stored.sets)) if (!(name in sets)) sets[name] = { ...stored.sets[name] };
-    return { ...stored, sets, setOrder: [...order], waiting: stored.waiting ?? null, driver: stored.driver ?? null };
+    const shown = { ...stored, sets, setOrder: [...order], waiting: stored.waiting ?? null, driver: stored.driver ?? null };
+    return { ...shown, estimate: copyEstimate(shown) };
   }
 
   async function resolveCopier(pluginId: string): Promise<ResolvedPlugin & { copyEntrypoint: string }> {
@@ -470,11 +556,29 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     return { markPageEnd, haltWanted, saveInTurn, saveKeepingStop, stopBeating, rewind, settled: () => saving };
   }
 
+  /** The keys a set's key query pages through, or null when the source does not answer. Its own
+   *  connection, so a count that hangs never holds the page reader's. */
+  async function countKeys(access: Awaited<ReturnType<typeof openSourceAccess>>, keySql: string): Promise<number | null> {
+    let conn: ReturnType<typeof access.open> | undefined;
+    try {
+      conn = access.open({ queryTimeoutMs: COUNT_TIMEOUT_MS });
+      const { rows } = await conn.query(fillCountQuery(keySql));
+      const n = Number(Object.values(rows[0] ?? {})[0]);
+      return Number.isSafeInteger(n) && n >= 0 ? n : null;
+    } catch {
+      return null;
+    } finally {
+      if (conn) void conn.close().catch(() => undefined);
+    }
+  }
+
   const haltOutcome = (halt: Halt | null): CopyOutcome => (halt === 'release' ? 'release' : halt === 'lost' ? 'lost' : 'stopped');
 
   async function driveCopy(run: CopyRun, entry: Drive): Promise<void> {
     const d = driving(run, entry);
     let reader: SourceReader | undefined;
+    /** Reads the next page while this one is written. See `next` below. */
+    let aheadReader: SourceReader | undefined;
     let clean = (text: string) => redact(text).slice(0, 300);
     let outcome: CopyOutcome = 'failed';
 
@@ -526,13 +630,28 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
 
       const access = await openSourceAccess(deps, makeDb, run.connectorId, type);
       clean = access.clean;
+      const detailsAtOnce = deps.detailsAtOnce ?? DETAILS_AT_ONCE;
       reader = createSourceReader({
         open: async (opts) => access.open(opts),
         onWaiting,
         stopWanted,
         clean,
+        detailsAtOnce,
         ...sleep,
       });
+      // The read-ahead has a reader and a connection pool of its own. It never waits and never
+      // tries again: it answers a stop at its first wait. Anything but a whole page or the end, and
+      // its answer is thrown away, so `reader` reads that page again with every rule it has.
+      if (deps.readAhead !== false) {
+        aheadReader = createSourceReader({
+          open: async (opts) => access.open(opts),
+          onWaiting: async () => {},
+          stopWanted: async () => true,
+          clean,
+          detailsAtOnce,
+          ...sleep,
+        });
+      }
       /** A set with a position or done: this copy has read the source before, so a refused login
        *  or database may be a source that is starting up (R45). */
       const readBefore = (): boolean => Object.values(run.sets).some((p) => p.cursor !== null || p.done);
@@ -548,6 +667,18 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
         if (!(await d.saveKeepingStop())) return 'lost';
       }
 
+      // Count the keys of every set still to read, for the total, percentage and time left the
+      // copy shows. One statement a set on a connection of its own, before the first page. A
+      // count that fails or times out leaves that total unknown, and the copy goes on.
+      const counts = new Map<string, number | null>();
+      for (const set of spec.sets) {
+        if (run.sets[set.name]?.done && !run.sets[set.name]?.empty) continue;
+        if (entry.halt) return haltOutcome(entry.halt);
+        counts.set(set.name, await countKeys(access, set.keyQuery.sql));
+      }
+      // A set to be read again starts from 0 below, so its old keys are not counted as done.
+      run.pace = { since: now().toISOString(), done: Object.values(run.sets).reduce((n, p) => n + (p.empty ? 0 : keysDone(p)), 0) };
+
       for (const set of spec.sets) {
         let progress = run.sets[set.name];
         if (!progress || progress.empty) {
@@ -561,14 +692,24 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
           if (!(await d.saveKeepingStop())) return 'lost';
         }
         if (progress.done) continue;
+        if (counts.has(set.name)) {
+          // Nothing of a page is in hand here, so this is still a page end.
+          progress.total = counts.get(set.name) ?? null;
+          d.markPageEnd();
+        }
 
         // A page the reader had to halve stays halved, and doubles again after 5 good pages in a
         // row, never above the run's own page size.
         let size = run.pageSize;
         let goodInRow = 0;
+        /** The page read ahead: the page after `after`, at `size`. It is used only when the run is
+         *  still at that place and that size, so no page is ever stored out of order or twice. */
+        let next: { after: string; size: number; page: Promise<PageResult | null> } | null = null;
         for (;;) {
           if (entry.halt) return haltOutcome(entry.halt);
-          const page = await reader.readPage({
+          const ahead: PageResult | null = next && next.after === progress.cursor && next.size === size ? await next.page : null;
+          next = null;
+          const page: PageResult = ahead && (ahead.kind === 'page' || ahead.kind === 'end') ? ahead : await reader.readPage({
             keySql: set.keyQuery.sql, details: set.detailQueries, after: progress.cursor, size, checkRowKeys: true, readBefore: readBefore(),
           });
           if (page.kind === 'stopped') return haltOutcome(entry.halt);
@@ -602,6 +743,17 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
           }
 
           const filed = filePage(set, page);
+          if (aheadReader) {
+            // Start reading the next page now. Its rows are not touched until this page is stored
+            // and the position saved past it.
+            const after: string = page.keys[page.keys.length - 1]!;
+            next = {
+              after, size,
+              page: aheadReader.readPage({
+                keySql: set.keyQuery.sql, details: set.detailQueries, after, size, checkRowKeys: true, readBefore: readBefore(),
+              }).catch(() => null),
+            };
+          }
           // Every key of the page is replaced, so a key that cannot be stored keeps no old rows.
           await ownDb('write', () => deps.store.replaceKeys(run.id, set.name, filed.keys, filed.rows));
           for (const key of filed.unstorable) {
@@ -681,6 +833,7 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     } finally {
       await d.stopBeating();
       await reader?.close();
+      await aheadReader?.close();
     }
     await finishDrive(run, d, outcome);
   }

@@ -166,6 +166,8 @@ Uma cópia lê as linhas da base v1 e guarda-as no disco do próprio servidor CE
 
 Nada lê a cópia ainda. A importação das secções anteriores continua a ler a própria origem, por isso uma cópia não muda o que uma importação guarda.
 
+Uma cópia lê a página seguinte enquanto guarda a página atual, e envia juntas as consultas de uma página. Mantém até 14 ligações abertas à origem. Na origem de teste da Tanzânia, usou cerca de um núcleo e meio do processador do SQL Server. Se a origem for um servidor de produção ocupado, faça a cópia fora do horário de trabalho.
+
 A cópia contém os dados dos pacientes por inteiro. Guarda todas as colunas das linhas Requests, LabResults, Patients e ASTResults de cada pedido lido. Proteja o servidor CE e as suas cópias de segurança como protege a origem. Há uma cópia por conector. O plugin tem de estar autorizado a ler o conector primeiro.
 
 ### 1. Abrir o separador Cópia
@@ -190,7 +192,7 @@ Abra o menu de pontos no canto superior direito do separador Cópia e selecione 
 
 Cada linha da tabela é um conjunto. O plugin v1 copia um só conjunto, `requests`, que contém as linhas das quatro tabelas de cada pedido. **Estado** mostra Não iniciado, A copiar, À espera, Copiado em parte, Concluído, Por ler de novo ou A eliminar. **Pedidos lidos** é o número de pedidos guardados até agora. **Linhas** é o número de linhas de origem guardadas, das quatro tabelas. **Tamanho** é o tamanho dessas linhas tal como o CE as guarda.
 
-A linha por baixo do estado conta os pedidos "de um total ainda desconhecido", porque a cópia não conta a origem antes de começar. Uma cópia terminada mostra **Concluída** e dá **Pedidos copiados:** com o número.
+A linha por baixo do estado conta os pedidos "de um total ainda desconhecido". O CE conta os pedidos da origem quando uma cópia começa ou continua, mas esta página ainda não mostra esse número. **Activity** e `openldr import copy status` mostram a parte lida e o tempo restante. Uma cópia terminada mostra **Concluída** e dá **Pedidos copiados:** com o número.
 
 ![A tabela dá o estado, os pedidos, as linhas e o tamanho.](v1-import-guide-copy-sets.png)
 

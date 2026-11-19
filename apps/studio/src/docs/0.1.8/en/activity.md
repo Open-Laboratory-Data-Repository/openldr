@@ -209,6 +209,12 @@ A recorded push does not prove the recipient accepted or read the data. Stuck is
 | Running | An import run or CLI batch is still active. |
 | Stopped | An import run or CLI batch was stopped. |
 
+## Follow a source copy
+
+A copy of a source database shows in Activity as a row whose source starts with `copy:`. Open it to read its **Persisted** line. While the copy is not finished, the line gives the rows copied, then the share of the source's keys read, such as `45% of 2342719 keys`. While it runs, it adds the time left, such as `about 31 min left`.
+
+OpenLDR counts the source's keys when a copy starts or carries on. The time left is the keys still to read at the average speed since then. It appears after a minute of reading. It changes when the source gets busier, and a restart starts the average again. With no count, the line gives the rows alone.
+
 ## Check whether the warehouse is up to date
 
 Dashboards and reports read the warehouse. OpenLDR saves each record first, then copies it to the warehouse. During a large import the warehouse can be far behind, so a dashboard shows less than was saved.
