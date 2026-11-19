@@ -6,6 +6,30 @@
       "version": null,
       "entries": [
         {
+          "hash": "6a7c7e28",
+          "type": "fix",
+          "scope": "db",
+          "title": "The set-based save refuses a record with no type, asks again after a lost connection, and the check clamps its pages ahead (item 16 review)"
+        },
+        {
+          "hash": "505c0050",
+          "type": "perf",
+          "scope": "imports",
+          "title": "A check saves a page with one call and decodes three pages ahead (item 16)"
+        },
+        {
+          "hash": "28b441e4",
+          "type": "feat",
+          "scope": "db",
+          "title": "PersistRequests saves the passing requests of a page with one call (item 16)"
+        },
+        {
+          "hash": "c127c422",
+          "type": "perf",
+          "scope": "db",
+          "title": "On PostgreSQL a save is one set-based statement (item 16)"
+        },
+        {
           "hash": "b1128959",
           "type": "fix",
           "scope": "db",
