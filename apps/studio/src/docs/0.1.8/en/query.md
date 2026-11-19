@@ -378,11 +378,31 @@ Select the dots, then **Rebuild**. A message says when it finishes. On a large w
 
 **Expected result:** The row count and the last-built time update.
 
-A dataset starts in a group named for the pack that installed it. To move it, select the dots, then **Move to group**. Choose a group, **New group**, or **No group**. The dots beside a group rename or delete the group. Deleting a group keeps its datasets.
+A dataset starts in a group named for the pack that installed it. The section **Arrange connectors and datasets in groups** below explains how to move it.
 
 OpenLDR also rebuilds datasets by itself, once the warehouse has caught up with what was saved. During a large import nothing rebuilds until the import ends. So a report that reads a dataset can be one rebuild behind the warehouse. The **Warehouse** line on [Activity](/docs/activity) says "rebuilding datasets" while that runs.
 
 From a terminal, `openldr db datasets list` shows the same list, and `openldr db datasets rebuild` rebuilds them.
+
+## Arrange connectors and datasets in groups
+
+Use groups when the Connectors or Datasets list grows long. They work as the Custom Queries groups do, except that items move by menu and not by dragging. You need **Manage saved queries**.
+
+### 1. Make a group
+
+Select the dots beside **Connectors** or **Datasets**, then **New group**. Enter a name and save. The group appears in that list, empty.
+
+### 2. Move an item into it
+
+Select the dots beside a connector or a dataset, then **Move to group**. Choose the group. **New group** makes one and moves the item in one step. **No group** takes the item out of its group.
+
+### 3. Rename or remove a group
+
+Select the dots beside the group. **Rename group** keeps what it holds. **Delete group** removes the group and keeps what it held, in no group.
+
+**Expected result:** The list shows each group with a count, and the items in no group below them.
+
+A group only arranges the list. A connector or a dataset works the same in any group. From a terminal, `openldr query groups` does the same with `--kind connector` or `--kind dataset`.
 
 ## Run a saved query on a phone
 

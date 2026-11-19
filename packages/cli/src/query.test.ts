@@ -213,3 +213,22 @@ describe('runQueryImport', () => {
     expect(err.join('')).toMatch(/cannot read/);
   });
 });
+
+describe('query groups: the groups of the Connectors and Datasets lists', () => {
+  it('refuses_a_kind_that_is_not_a_list', async () => {
+    const { runQueryGroupsList, runQueryGroupsCreate } = await import('./query');
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    expect(await runQueryGroupsList({ kind: 'queries', json: false })).toBe(1);
+    expect(await runQueryGroupsCreate('x', { kind: 'nope', json: false })).toBe(1);
+    expect(err.mock.calls.map((c) => String(c[0]))).toEqual(['--kind must be connector or dataset\n', '--kind must be connector or dataset\n']);
+    err.mockRestore();
+  });
+
+  it('delete_refuses_without_force_before_it_opens_anything', async () => {
+    const { runQueryGroupsDelete } = await import('./query');
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    expect(await runQueryGroupsDelete('Labs', { kind: 'connector', json: false, force: false })).toBe(1);
+    expect(String(err.mock.calls[0][0])).toContain('query groups delete refused');
+    err.mockRestore();
+  });
+});

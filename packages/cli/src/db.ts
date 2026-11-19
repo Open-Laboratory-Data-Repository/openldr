@@ -232,7 +232,7 @@ function buildLine(r: DatasetBuildResult): string {
 }
 
 /** Best effort, as for `db reproject`: a failed audit write never fails a change already made. */
-async function auditDataset(action: 'dataset.rebuild' | 'dataset.delete' | 'dataset.move', entityId: string, metadata: Record<string, unknown>): Promise<void> {
+async function auditDataset(action: 'dataset.rebuild' | 'dataset.delete', entityId: string, metadata: Record<string, unknown>): Promise<void> {
   try {
     const appCtx = await createAppContext(loadConfig());
     try {
@@ -248,7 +248,7 @@ async function auditDataset(action: 'dataset.rebuild' | 'dataset.delete' | 'data
 export async function runDbDatasetsList(opts: JsonOpt): Promise<number> {
   const ctx = await createDbContext(loadConfig());
   try {
-    const all = await listDatasetsWithState(ctx.warehouseDatasets, ctx.internalDb);
+    const all = await listDatasetsWithState(ctx.warehouseDatasets, ctx.internalDb, ctx.explorerGroups);
     emit(opts.json, all, all.length === 0 ? 'No datasets. A content pack installs them.' : all.map(datasetLine).join('\n'));
     return 0;
   } finally {
@@ -303,26 +303,3 @@ export async function runDbDatasetsDelete(name: string, opts: JsonOpt & { force:
     await ctx.close();
   }
 }
-
-/** `openldr db datasets move <name> [--group <group>]`: puts a dataset in a Query page group, or in
- *  none when no group is given. A group is only a name: naming a new one makes it. */
-export async function runDbDatasetsMove(name: string, opts: JsonOpt & { group?: string }): Promise<number> {
-  const ctx = await createDbContext(loadConfig());
-  try {
-    const group = opts.group && opts.group.trim() ? opts.group.trim() : null;
-    try {
-      await ctx.warehouseDatasets.setGroup(name, group);
-    } catch (err) {
-      const message = redactError(err);
-      if (opts.json) emit(true, { ok: false, error: message }, '');
-      else process.stderr.write(`${message}\n`);
-      return 1;
-    }
-    await auditDataset('dataset.move', name, { group });
-    emit(opts.json, { ok: true, name, group }, group ? `Moved ${name} to the group ${group}.` : `Moved ${name} out of its group.`);
-    return 0;
-  } finally {
-    await ctx.close();
-  }
-}
-

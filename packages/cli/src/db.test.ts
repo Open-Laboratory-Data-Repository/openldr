@@ -468,22 +468,4 @@ describe('db datasets', () => {
     expect(out).toBe('Deleted the dataset abc.\n');
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(mocks.appCtx, expect.objectContaining({ actorType: 'cli' }), expect.objectContaining({ action: 'dataset.delete', entityId: 'abc' }));
   });
-
-  it('move_puts_a_dataset_in_a_group_or_in_none', async () => {
-    service.setGroup.mockReset(); service.setGroup.mockResolvedValue(undefined);
-    const { runDbDatasetsMove } = await import('./db');
-    expect(await runDbDatasetsMove('abc', { json: false, group: ' Turnaround ' })).toBe(0);
-    expect(await runDbDatasetsMove('abc', { json: false })).toBe(0);
-    expect(service.setGroup.mock.calls).toEqual([['abc', 'Turnaround'], ['abc', null]]);
-    expect(out).toBe('Moved abc to the group Turnaround.\nMoved abc out of its group.\n');
-    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(mocks.appCtx, expect.objectContaining({ actorType: 'cli' }), expect.objectContaining({ action: 'dataset.move', entityId: 'abc', metadata: { group: 'Turnaround' } }));
-  });
-
-  it('move_of_an_unknown_dataset_fails_with_one_line', async () => {
-    service.setGroup.mockReset(); service.setGroup.mockRejectedValue(new Error('no dataset named nope'));
-    const { runDbDatasetsMove } = await import('./db');
-    expect(await runDbDatasetsMove('nope', { json: false, group: 'x' })).toBe(1);
-    expect(err).toBe('no dataset named nope\n');
-  });
 });
-

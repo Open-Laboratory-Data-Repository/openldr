@@ -217,7 +217,6 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // query.manage, as the Query page's dataset routes do.
   'db datasets list': { kind: 'app', capability: 'activity.view' },
   'db datasets rebuild': { kind: 'app', capability: 'query.manage' },
-  'db datasets move': { kind: 'app', capability: 'query.manage' },
   'db datasets delete': { kind: 'app', capability: 'query.manage', destructive: true },
 
   // No route exports the whole dataset, patient details included. data.export is new, and only
@@ -355,6 +354,13 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
 
   // query-routes.ts: every custom-query route needs query.run, export and import included. Import with
   // --force replaces saved queries, so query.ts also checks query.manage, as the route does.
+  // Groups of the Connectors and Datasets lists. Reading takes a view key, as `db datasets list`
+  // does. Changes take query.manage, as the routes do (query-routes.ts, /api/query/groups).
+  'query groups list': { kind: 'app', capability: 'activity.view' },
+  'query groups create': { kind: 'app', capability: 'query.manage' },
+  'query groups rename': { kind: 'app', capability: 'query.manage' },
+  'query groups delete': { kind: 'app', capability: 'query.manage', destructive: true },
+  'query groups move': { kind: 'app', capability: 'query.manage' },
   'query export': { kind: 'app', capability: 'query.run', paths: [outFile('--out')] },
   'query import': { kind: 'app', capability: 'query.run', destructive: true, paths: [inFile('file')] },
 

@@ -378,11 +378,31 @@ Sélectionnez les points, puis **Reconstruire**. Un message signale la fin. Sur 
 
 **Résultat attendu :** le nombre de lignes et la date de dernière construction sont mis à jour.
 
-Un jeu de données commence dans un groupe portant le nom du pack qui l'a installé. Pour le déplacer, sélectionnez les points, puis **Déplacer vers le groupe**. Choisissez un groupe, **Nouveau groupe** ou **Aucun groupe**. Les points à côté d'un groupe permettent de le renommer ou de le supprimer. Supprimer un groupe conserve ses jeux de données.
+Un jeu de données commence dans un groupe portant le nom du pack qui l'a installé. La section **Ranger les connecteurs et les jeux de données dans des groupes** ci-dessous explique comment le déplacer.
 
 OpenLDR reconstruit aussi les jeux de données lui-même, une fois l'entrepôt à jour. Pendant un import volumineux, rien n'est reconstruit avant la fin de l'import. Un rapport qui lit un jeu de données peut donc avoir une reconstruction de retard sur l'entrepôt. La ligne **Entrepôt** dans [Activity](/docs/activity) affiche « reconstruction des jeux de données » pendant ce temps.
 
 Dans un terminal, `openldr db datasets list` affiche la même liste et `openldr db datasets rebuild` les reconstruit.
+
+## Ranger les connecteurs et les jeux de données dans des groupes
+
+Utilisez des groupes quand la liste Connectors ou Datasets devient longue. Ils fonctionnent comme les groupes de Custom Queries, sauf que les éléments se déplacent par le menu et non par glisser-déposer. Il vous faut **Gérer les requêtes enregistrées**.
+
+### 1. Créer un groupe
+
+Sélectionnez les points à côté de **Connectors** ou de **Datasets**, puis **Nouveau groupe**. Saisissez un nom et enregistrez. Le groupe apparaît dans cette liste, vide.
+
+### 2. Y déplacer un élément
+
+Sélectionnez les points à côté d'un connecteur ou d'un jeu de données, puis **Déplacer vers le groupe**. Choisissez le groupe. **Nouveau groupe** en crée un et y déplace l'élément en une étape. **Aucun groupe** sort l'élément de son groupe.
+
+### 3. Renommer ou supprimer un groupe
+
+Sélectionnez les points à côté du groupe. **Renommer le groupe** conserve son contenu. **Supprimer le groupe** retire le groupe et conserve son contenu, sans groupe.
+
+**Résultat attendu :** la liste affiche chaque groupe avec un nombre, puis les éléments sans groupe.
+
+Un groupe ne fait qu'organiser la liste. Un connecteur ou un jeu de données fonctionne de la même façon dans n'importe quel groupe. Dans un terminal, `openldr query groups` fait la même chose avec `--kind connector` ou `--kind dataset`.
 
 ## Exécuter une requête enregistrée sur téléphone
 

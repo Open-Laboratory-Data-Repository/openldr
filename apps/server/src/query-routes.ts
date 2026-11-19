@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { dialectFor, exportCustomQueries, importCustomQueries, CustomQueryTransferError, type AppContext, type DatasetBuildResult, type DatasetListItem } from '@openldr/bootstrap';
+import { dialectFor, exportCustomQueries, importCustomQueries, CustomQueryTransferError, explorerGroupName, type AppContext, type DatasetBuildResult, type DatasetListItem } from '@openldr/bootstrap';
 import { CustomQueryInputSchema, validateSelectSqlForSave } from '@openldr/dashboards';
-import type { CustomQueryGroupStore, CustomQueryStore } from '@openldr/db';
+import type { CustomQueryGroupStore, CustomQueryStore, ExplorerGroupStore } from '@openldr/db';
 import { holdsCapability, requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 import { prepareSelect } from './run-stored-query';
@@ -31,10 +31,9 @@ export interface QueryRouteDeps {
     /** Throws `no dataset named <name>` for an unknown name. A build that fails is in the result. */
     rebuild(name: string): Promise<DatasetBuildResult>;
     remove(name: string): Promise<void>;
-    /** Throws `no dataset named <name>` for an unknown name. */
-    setGroup(name: string, group: string | null): Promise<void>;
-    renameGroup(from: string, to: string | null): Promise<number>;
   };
+  /** Groups of the Connectors and Datasets branches. Absent: no groups. */
+  explorerGroups?: Pick<ExplorerGroupStore, 'listGroups' | 'itemGroups' | 'createGroup' | 'renameGroup' | 'setItemGroup'>;
 }
 
 export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: QueryRouteDeps): void {
@@ -383,33 +382,65 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
   });
 
-  // A dataset's group is where it sits in the Query page list, as a custom query's is. It starts as
-  // the name of the pack that installed it. A group is only a name the datasets carry.
-  const DatasetGroupBody = z.object({ group: z.string().max(200).nullable() });
-  app.put('/api/query/warehouse-datasets/:name/group', MANAGE, async (req, reply) => {
-    const { name } = req.params as { name: string };
-    const parsed = DatasetGroupBody.safeParse(req.body);
-    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    if (!deps.warehouseDatasets) { reply.code(404); return { error: 'dataset not found' }; }
-    try {
-      await deps.warehouseDatasets.setGroup(name, parsed.data.group);
-      await recordAudit(ctx, req, { action: 'dataset.move', entityType: 'dataset', entityId: name, before: null, after: null, metadata: { group: parsed.data.group } });
-      return { ok: true };
-    } catch (e) {
-      if (unknownDataset(e)) { reply.code(404); return { error: 'dataset not found' }; }
-      throw e;
-    }
+  // ---- Groups for the Connectors and Datasets branches ----
+  // Custom Queries has its own group routes above. These serve the other two branches with one
+  // mechanism: a group is a name in a branch, and an item sits in one group or in none.
+  const groupKind = (raw: string): 'connector' | 'dataset' | null => (raw === 'connector' || raw === 'dataset' ? raw : null);
+  const cleanName = (raw: string): string | null => { try { return explorerGroupName(raw); } catch { return null; } };
+
+  app.get('/api/query/groups/:kind', GUARD, async (req, reply) => {
+    const kind = groupKind((req.params as { kind: string }).kind);
+    if (!kind) { reply.code(404); return { error: 'unknown branch' }; }
+    if (!deps.explorerGroups) return { groups: [], items: {} };
+    const [groups, items] = await Promise.all([deps.explorerGroups.listGroups(kind), deps.explorerGroups.itemGroups(kind)]);
+    return { groups, items };
   });
 
-  // `to` null removes the group and keeps its datasets, with no group.
+  app.post('/api/query/groups/:kind', MANAGE, async (req, reply) => {
+    const kind = groupKind((req.params as { kind: string }).kind);
+    const name = cleanName(String((req.body as { name?: unknown } | null)?.name ?? ''));
+    if (!kind || !deps.explorerGroups) { reply.code(404); return { error: 'unknown branch' }; }
+    if (!name) { reply.code(400); return { error: 'a group needs a name of at most 200 characters' }; }
+    try {
+      await deps.explorerGroups.createGroup(kind, name);
+    } catch (e) {
+      if (e instanceof Error && e.message === 'name already exists') { reply.code(409); return { error: 'name already exists' }; }
+      throw e;
+    }
+    await recordAudit(ctx, req, { action: 'explorerGroup.create', entityType: 'explorerGroup', entityId: `${kind}:${name}`, before: null, after: { kind, name } });
+    return { ok: true };
+  });
+
+  // `to` null removes the group and keeps its items, in no group.
   const RenameGroupBody = z.object({ from: z.string().min(1).max(200), to: z.string().max(200).nullable() });
-  app.post('/api/query/warehouse-dataset-groups/rename', MANAGE, async (req, reply) => {
+  app.post('/api/query/groups/:kind/rename', MANAGE, async (req, reply) => {
+    const kind = groupKind((req.params as { kind: string }).kind);
+    if (!kind || !deps.explorerGroups) { reply.code(404); return { error: 'unknown branch' }; }
     const parsed = RenameGroupBody.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    if (!deps.warehouseDatasets) return { moved: 0 };
-    const moved = await deps.warehouseDatasets.renameGroup(parsed.data.from, parsed.data.to);
-    if (moved > 0) await recordAudit(ctx, req, { action: 'dataset.group.rename', entityType: 'dataset', entityId: `group:${parsed.data.from}`, before: null, after: null, metadata: { ...parsed.data, moved } });
+    const to = parsed.data.to === null ? null : cleanName(parsed.data.to);
+    if (parsed.data.to !== null && !to) { reply.code(400); return { error: 'a group needs a name of at most 200 characters' }; }
+    if (to !== null && to !== parsed.data.from && (await deps.explorerGroups.listGroups(kind)).includes(to)) {
+      reply.code(409); return { error: 'name already exists' };
+    }
+    const moved = await deps.explorerGroups.renameGroup(kind, parsed.data.from, to);
+    await recordAudit(ctx, req, {
+      action: to === null ? 'explorerGroup.delete' : 'explorerGroup.rename', entityType: 'explorerGroup', entityId: `${kind}:${parsed.data.from}`,
+      before: { kind, name: parsed.data.from }, after: to === null ? null : { kind, name: to }, metadata: { moved },
+    });
     return { moved };
+  });
+
+  const ItemGroupBody = z.object({ itemId: z.string().min(1).max(400), group: z.string().max(200).nullable() });
+  app.put('/api/query/groups/:kind/items', MANAGE, async (req, reply) => {
+    const kind = groupKind((req.params as { kind: string }).kind);
+    if (!kind || !deps.explorerGroups) { reply.code(404); return { error: 'unknown branch' }; }
+    const parsed = ItemGroupBody.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    const group = parsed.data.group === null || parsed.data.group.trim() === '' ? null : cleanName(parsed.data.group);
+    await deps.explorerGroups.setItemGroup(kind, parsed.data.itemId, group);
+    await recordAudit(ctx, req, { action: 'explorerGroup.move', entityType: 'explorerGroup', entityId: `${kind}:${parsed.data.itemId}`, before: null, after: null, metadata: { group } });
+    return { ok: true };
   });
 
   // ---- Datasets ----

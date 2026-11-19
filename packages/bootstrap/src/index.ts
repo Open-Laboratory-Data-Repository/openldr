@@ -10,7 +10,7 @@ import { createBlobFromConfig } from './s3-config';
 import { requireOidcIssuer, type Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
-import { createInternalDb, createFhirStore, createRelationalWriter, createWarehouseDatasetStore, persistResources, persistRequests, createTerminologyStore, createTerminologyAdminStore, LOCAL_MAP_URL, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, createWarehouseDatasetStore, createExplorerGroupStore, type ExplorerGroupStore, persistResources, persistRequests, createTerminologyStore, createTerminologyAdminStore, LOCAL_MAP_URL, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -609,6 +609,8 @@ export interface AppContext {
   warehouseStatus: WarehouseStatusReader;
   /** Datasets a content pack defines: list, rebuild, remove. */
   warehouseDatasets: WarehouseDatasetService;
+  /** Groups of the Query page's Connectors and Datasets branches. */
+  explorerGroups: ExplorerGroupStore;
   /** Seal a plaintext secret for at-rest storage (AES-256-GCM under SECRETS_ENCRYPTION_KEY).
    *  Symmetric with {@link decryptSecret}; used by the sync settings route/CLI to write-encrypt
    *  the client secret. */
@@ -843,8 +845,9 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const canonicalFhirStore = createFhirStore(internal.db);
   const workflowRelationalWriter = createRelationalWriter(externalDb, engine);
   // Datasets a content pack defines, kept as tables in the warehouse's `dataset` schema.
+  const explorerGroups = createExplorerGroupStore(internal.db);
   const warehouseDatasets = createWarehouseDatasetService({
-    store: createWarehouseDatasetStore(internal.db), internalDb: internal.db, warehouseDb: externalDb as unknown as Kysely<any>, engine, logger,
+    store: createWarehouseDatasetStore(internal.db), groups: explorerGroups, internalDb: internal.db, warehouseDb: externalDb as unknown as Kysely<any>, engine, logger,
   });
   // Gate enforcement is wired via `validationStrictness`, defined below alongside the rest of the
   // app-settings-backed services — this closure isn't invoked until after bootstrap() returns, so
@@ -2173,6 +2176,7 @@ const reporting: ReportingApi = {
     activity,
     warehouseStatus: createWarehouseStatusReader(internal.db),
     warehouseDatasets,
+    explorerGroups,
     encryptSecret,
     decryptSecret: syncDecrypt,
     sync,
@@ -2217,7 +2221,7 @@ export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
 export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
 export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
-export { createWarehouseDatasetService, createDatasetRefresher, datasetNotBuiltMessage, withDatasetMessage, listDatasetsWithState, type WarehouseDatasetService, type PackDataset, type DatasetBuildResult, type DatasetListItem } from './warehouse-datasets';
+export { createWarehouseDatasetService, createDatasetRefresher, datasetNotBuiltMessage, withDatasetMessage, listDatasetsWithState, explorerGroupName, type WarehouseDatasetService, type PackDataset, type DatasetBuildResult, type DatasetListItem } from './warehouse-datasets';
 export { readWarehouseReading, withRate, createWarehouseStatusReader, type WarehouseReading, type WarehouseStatus, type WarehouseStatusReader } from './warehouse-status';
 export type { ActivityService, ActivityImportRun, ActivityCopyRun, ActivityCheckRun, ActivityLifecycle, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig, readSigningKeys } from './sync-settings';

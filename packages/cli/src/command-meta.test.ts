@@ -215,6 +215,8 @@ const PERSON = 'a name written into a record as is; refusing it through the app 
 const REASON: Record<string, string> = {
   '--seconds': 'a number of seconds',
   '--group': 'the name of a Query page group',
+  newName: 'the name of a Query page group',
+  item: 'a connector id or a dataset name',
   // positional arguments
   action: CHOICE, batchId: ID, capability: ID, code: ID, columns: 'column names in the warehouse', connector: ID,
   conceptMapUrl: URI, copy: ID, display: TEXT, entityId: ID, entityType: CHOICE, field: SETTING, id: ID, idA: ID, idB: ID,
@@ -327,6 +329,11 @@ const NOT_A_PATH: Record<string, string[]> = {
   'facilities delete': ['--where'],
   'facilities jobs': ['--retry'],
   'query export': ['--name'],
+  'query groups list': ['--kind'],
+  'query groups create': ['name', '--kind'],
+  'query groups rename': ['name', 'newName', '--kind'],
+  'query groups delete': ['name', '--kind'],
+  'query groups move': ['item', '--kind', '--group'],
   'query import': ['--connector'],
   'sync enroll': ['siteId', '--name', '--central-url'],
   'sync rotate': ['siteId'],
@@ -400,7 +407,6 @@ const NOT_A_PATH: Record<string, string[]> = {
   'db warehouse-status': ['--seconds'],
   'db datasets rebuild': ['name'],
   'db datasets delete': ['name'],
-  'db datasets move': ['name', '--group'],
 };
 
 describe('paths on app commands', () => {

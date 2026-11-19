@@ -18,8 +18,12 @@ vi.mock('../api', () => ({ queryApi: {
   ]),
   rebuildDataset: vi.fn(async (name: string) => ({ name, ok: true, rows: 7, ms: 12 })),
   removeDataset: vi.fn(async () => ({ ok: true })),
-  setDatasetGroup: vi.fn(async () => ({ ok: true })),
-  renameDatasetGroup: vi.fn(async () => ({ moved: 2 })),
+  explorerGroups: vi.fn(async (kind: string) => (kind === 'dataset'
+    ? { groups: ['Empty', 'reports-zm'], items: { zm_request_times: 'reports-zm', zm_broken: 'reports-zm' } as Record<string, string | null> }
+    : { groups: [], items: {} as Record<string, string | null> })),
+  createExplorerGroup: vi.fn(async () => ({ ok: true })),
+  renameExplorerGroup: vi.fn(async () => ({ moved: 2 })),
+  moveExplorerItem: vi.fn(async () => ({ ok: true })),
   list: vi.fn(async () => [
     { id: 'cq1', name: 'Q1', connectorId: 'c1', sql: '', params: [], groupId: null },
     { id: 'cq2', name: 'TB LAM', connectorId: 'c1', sql: '', params: [], groupId: 'g1' },
@@ -201,7 +205,7 @@ describe('ExplorerTree', () => {
 });
 
 describe('pack datasets in the explorer', () => {
-  beforeEach(() => { caps = 'all'; useQueryStore.getState().reset(); vi.mocked(queryApi.rebuildDataset).mockClear(); vi.mocked(queryApi.removeDataset).mockClear(); vi.mocked(queryApi.setDatasetGroup).mockClear(); vi.mocked(queryApi.renameDatasetGroup).mockClear(); });
+  beforeEach(() => { caps = 'all'; useQueryStore.getState().reset(); vi.mocked(queryApi.rebuildDataset).mockClear(); vi.mocked(queryApi.removeDataset).mockClear(); vi.mocked(queryApi.createExplorerGroup).mockClear(); vi.mocked(queryApi.renameExplorerGroup).mockClear(); vi.mocked(queryApi.moveExplorerItem).mockClear(); });
 
   async function openDatasets() {
     render(<ExplorerTree />);
@@ -272,13 +276,16 @@ describe('pack datasets in the explorer', () => {
     expect(within(sheet).getByText('relation "nope" does not exist')).toBeInTheDocument();
   });
 
-  it('a_dataset_with_no_group_is_listed_below_the_groups', async () => {
+  it('a_dataset_in_no_group_is_listed_below_the_groups_and_an_empty_group_still_shows', async () => {
     vi.mocked(queryApi.warehouseDatasets).mockResolvedValueOnce([
       { name: 'zm_loose', ownerPack: 'reports-zm', group: null, rowCount: 3, builtAt: '2026-11-19T11:00:00.000Z', buildMs: 10, lastError: null, stale: false, connectorId: 'c1' },
     ]);
     render(<ExplorerTree />);
     fireEvent.click(await screen.findByText('Datasets'));
     expect(await screen.findByText('zm_loose')).toBeInTheDocument();
+    expect(within(screen.getByText('Empty').closest('button')!).getByText('0')).toBeInTheDocument();
+    // The workflow dataset shares the branch, in no group.
+    expect(screen.getByText('AMR')).toBeInTheDocument();
   });
 
   it('moves_a_dataset_to_no_group_from_its_menu', async () => {
@@ -287,7 +294,7 @@ describe('pack datasets in the explorer', () => {
     const sub = screen.getByRole('menuitem', { name: 'Move to group' });
     fireEvent.pointerMove(sub); fireEvent.keyDown(sub, { key: 'ArrowRight' });
     await act(async () => { fireEvent.click(await screen.findByRole('menuitem', { name: 'No group' })); });
-    await waitFor(() => expect(queryApi.setDatasetGroup).toHaveBeenCalledWith('zm_request_times', null));
+    await waitFor(() => expect(queryApi.moveExplorerItem).toHaveBeenCalledWith('dataset', 'zm_request_times', null));
   });
 
   it('a_new_group_from_the_menu_moves_the_dataset_into_it', async () => {
@@ -299,7 +306,8 @@ describe('pack datasets in the explorer', () => {
     fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Turnaround' } });
     openMenu(screen.getByRole('button', { name: 'Name actions' }));
     await act(async () => { fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' })); });
-    await waitFor(() => expect(queryApi.setDatasetGroup).toHaveBeenCalledWith('zm_request_times', 'Turnaround'));
+    await waitFor(() => expect(queryApi.createExplorerGroup).toHaveBeenCalledWith('dataset', 'Turnaround'));
+    await waitFor(() => expect(queryApi.moveExplorerItem).toHaveBeenCalledWith('dataset', 'zm_request_times', 'Turnaround'));
   });
 
   it('renames_a_group_and_deleting_one_keeps_its_datasets', async () => {
@@ -307,6 +315,73 @@ describe('pack datasets in the explorer', () => {
     openMenu(screen.getByLabelText('Actions for group “reports-zm”'));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete group' }));
     await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Delete group' })); });
-    await waitFor(() => expect(queryApi.renameDatasetGroup).toHaveBeenCalledWith('reports-zm', null));
+    await waitFor(() => expect(queryApi.renameExplorerGroup).toHaveBeenCalledWith('dataset', 'reports-zm', null));
+  });
+
+  it('new_group_on_the_datasets_branch_makes_an_empty_group', async () => {
+    render(<ExplorerTree />);
+    await screen.findByText('Datasets');
+    openMenu(screen.getByLabelText('Actions for Datasets'));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'New group' }));
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Viral load' } });
+    openMenu(screen.getByRole('button', { name: 'Name actions' }));
+    await act(async () => { fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' })); });
+    await waitFor(() => expect(queryApi.createExplorerGroup).toHaveBeenCalledWith('dataset', 'Viral load'));
+    expect(queryApi.moveExplorerItem).not.toHaveBeenCalled();
+  });
+
+  it('a_workflow_dataset_can_be_moved_to_a_group', async () => {
+    render(<ExplorerTree />);
+    fireEvent.click(await screen.findByText('Datasets'));
+    openMenu(await screen.findByLabelText('Actions for AMR'));
+    const sub = screen.getByRole('menuitem', { name: 'Move to group' });
+    fireEvent.pointerMove(sub); fireEvent.keyDown(sub, { key: 'ArrowRight' });
+    await act(async () => { fireEvent.click(await screen.findByRole('menuitem', { name: 'Empty' })); });
+    await waitFor(() => expect(queryApi.moveExplorerItem).toHaveBeenCalledWith('dataset', 'wf:AMR', 'Empty'));
   });
 });
+
+describe('groups for connectors in the explorer', () => {
+  beforeEach(() => { caps = 'all'; useQueryStore.getState().reset(); vi.mocked(queryApi.createExplorerGroup).mockClear(); vi.mocked(queryApi.moveExplorerItem).mockClear(); });
+
+  it('lists_a_connector_under_its_group_and_opens_it_there', async () => {
+    vi.mocked(queryApi.explorerGroups).mockImplementation(async (kind: string): Promise<{ groups: string[]; items: Record<string, string | null> }> => (kind === 'connector' ? { groups: ['Country systems'], items: { c1: 'Country systems' } } : { groups: [], items: {} }));
+    render(<ExplorerTree />);
+    fireEvent.click(await screen.findByText('Connectors'));
+    const group = (await screen.findByText('Country systems')).closest('button')!;
+    expect(within(group).getByText('1')).toBeInTheDocument();
+    expect(screen.queryByText('PG')).toBeNull();
+    fireEvent.click(group);
+    fireEvent.click(await screen.findByText('PG'));
+    expect(await screen.findByText('public')).toBeInTheDocument();
+  });
+
+  it('new_group_on_the_connectors_branch_and_move_a_connector_out_of_its_group', async () => {
+    vi.mocked(queryApi.explorerGroups).mockImplementation(async (kind: string): Promise<{ groups: string[]; items: Record<string, string | null> }> => (kind === 'connector' ? { groups: ['Country systems'], items: { c1: 'Country systems' } } : { groups: [], items: {} }));
+    render(<ExplorerTree />);
+    fireEvent.click(await screen.findByText('Connectors'));
+    openMenu(screen.getByLabelText('Actions for Connectors'));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'New group' }));
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Labs' } });
+    openMenu(screen.getByRole('button', { name: 'Name actions' }));
+    await act(async () => { fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' })); });
+    await waitFor(() => expect(queryApi.createExplorerGroup).toHaveBeenCalledWith('connector', 'Labs'));
+    fireEvent.click(await screen.findByText('Country systems'));
+    openMenu(await screen.findByLabelText('Actions for PG'));
+    const sub = screen.getByRole('menuitem', { name: 'Move to group' });
+    fireEvent.pointerMove(sub); fireEvent.keyDown(sub, { key: 'ArrowRight' });
+    await act(async () => { fireEvent.click(await screen.findByRole('menuitem', { name: 'No group' })); });
+    await waitFor(() => expect(queryApi.moveExplorerItem).toHaveBeenCalledWith('connector', 'c1', null));
+  });
+
+  it('shows_no_group_menus_without_query_manage', async () => {
+    vi.mocked(queryApi.explorerGroups).mockImplementation(async (kind: string): Promise<{ groups: string[]; items: Record<string, string | null> }> => (kind === 'connector' ? { groups: ['Country systems'], items: { c1: 'Country systems' } } : { groups: [], items: {} }));
+    caps = ['query.run'];
+    render(<ExplorerTree />);
+    fireEvent.click(await screen.findByText('Connectors'));
+    await screen.findByText('Country systems');
+    expect(screen.queryByLabelText('Actions for Connectors')).toBeNull();
+    expect(screen.queryByLabelText('Actions for group “Country systems”')).toBeNull();
+  });
+});
+

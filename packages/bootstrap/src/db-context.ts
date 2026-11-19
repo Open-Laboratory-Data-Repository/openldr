@@ -10,6 +10,8 @@ import {
   createFhirStore,
   createRelationalWriter,
   createWarehouseDatasetStore,
+  createExplorerGroupStore,
+  type ExplorerGroupStore,
   createMigrator,
   migrateAllDown,
   persistResource,
@@ -30,6 +32,8 @@ export interface DbContext {
   relationalWriter: RelationalWriter;
   /** Datasets a content pack defines: list, rebuild, remove. No refresher runs in this context. */
   warehouseDatasets: WarehouseDatasetService;
+  /** Groups of the Query page's Connectors and Datasets branches. */
+  explorerGroups: ExplorerGroupStore;
   logger: Logger;
   persist(resource: unknown, prov?: Provenance): Promise<PersistResult>;
   migrateAll(): Promise<{ internal: MigrationResultSet; external: MigrationResultSet }>;
@@ -50,14 +54,16 @@ export async function createDbContext(cfg: Config): Promise<DbContext> {
   const internalMigrator = createMigrator(internal.db, internalMigrations);
   const externalMigrator = createMigrator(externalDb, externalMigrations(engine));
 
+  const explorerGroups = createExplorerGroupStore(internal.db);
   return {
     internalDb: internal.db,
     externalStore,
     fhirStore,
     relationalWriter,
     warehouseDatasets: createWarehouseDatasetService({
-      store: createWarehouseDatasetStore(internal.db), internalDb: internal.db, warehouseDb: externalDb as unknown as Kysely<any>, engine, logger,
+      store: createWarehouseDatasetStore(internal.db), groups: explorerGroups, internalDb: internal.db, warehouseDb: externalDb as unknown as Kysely<any>, engine, logger,
     }),
+    explorerGroups,
     logger,
     persist: (resource, prov) => persistResource({ fhirStore, logger }, resource, prov),
     async migrateAll() {

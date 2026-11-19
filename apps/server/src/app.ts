@@ -225,7 +225,7 @@ export async function buildApp(ctx: AppContext) {
     },
     warehouseDatasets: {
       list: async () => {
-        const rows = await listDatasetsWithState(ctx.warehouseDatasets, ctx.internalDb);
+        const rows = await listDatasetsWithState(ctx.warehouseDatasets, ctx.internalDb, ctx.explorerGroups);
         if (rows.length === 0) return [];
         // Datasets are PostgreSQL warehouse tables, browsed through the seeded warehouse connector.
         const connectorId = (await ctx.connectors.list()).find((c) => c.name === DEFAULT_CONNECTOR_NAME && c.enabled)?.id ?? null;
@@ -233,9 +233,8 @@ export async function buildApp(ctx: AppContext) {
       },
       rebuild: async (name) => (await ctx.warehouseDatasets.rebuild(name))[0]!,
       remove: (name) => ctx.warehouseDatasets.remove(name),
-      setGroup: (name, group) => ctx.warehouseDatasets.setGroup(name, group),
-      renameGroup: (from, to) => ctx.warehouseDatasets.renameGroup(from, to),
     },
+    explorerGroups: ctx.explorerGroups,
     runConnectorSql: (input) => {
       // Optional on WorkflowServices, but always wired in bootstrap for the server context.
       const run = ctx.workflows.services.runConnectorSql;

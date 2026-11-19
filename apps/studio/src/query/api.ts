@@ -16,6 +16,9 @@ export interface PackDatasetRef {
   name: string; ownerPack: string; group: string | null; rowCount: number | null; builtAt: string | null; buildMs: number | null;
   lastError: string | null; stale: boolean; connectorId: string | null;
 }
+export type ExplorerGroupKind = 'connector' | 'dataset';
+/** A branch's groups, and the group each placed item sits in (null: none). */
+export interface ExplorerGroups { groups: string[]; items: Record<string, string | null> }
 export interface DatasetBuildResult { name: string; ok: boolean; rows?: number; ms?: number; error?: string }
 
 async function j<T>(res: Response): Promise<T> {
@@ -35,12 +38,16 @@ export const queryApi = {
   warehouseDatasets: () => authFetch('/api/query/warehouse-datasets').then(j<PackDatasetRef[]>),
   rebuildDataset: (name: string) => authFetch(`/api/query/warehouse-datasets/${encodeURIComponent(name)}/rebuild`, { method: 'POST' }).then(j<DatasetBuildResult>),
   removeDataset: (name: string) => authFetch(`/api/query/warehouse-datasets/${encodeURIComponent(name)}`, { method: 'DELETE' }).then(j<{ ok: true }>),
-  /** Moves a pack dataset to a group, or to none with null. */
-  setDatasetGroup: (name: string, group: string | null) =>
-    authFetch(`/api/query/warehouse-datasets/${encodeURIComponent(name)}/group`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ group }) }).then(j<{ ok: true }>),
-  /** Renames a dataset group. With `to` null the group is removed and its datasets keep no group. */
-  renameDatasetGroup: (from: string, to: string | null) =>
-    authFetch('/api/query/warehouse-dataset-groups/rename', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ from, to }) }).then(j<{ moved: number }>),
+  // Groups of the Connectors and Datasets branches. Custom Queries has its own, above.
+  explorerGroups: (kind: ExplorerGroupKind) => authFetch(`/api/query/groups/${kind}`).then(j<ExplorerGroups>),
+  createExplorerGroup: (kind: ExplorerGroupKind, name: string) =>
+    authFetch(`/api/query/groups/${kind}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) }).then(j<{ ok: true }>),
+  /** With `to` null the group is removed and its items keep no group. */
+  renameExplorerGroup: (kind: ExplorerGroupKind, from: string, to: string | null) =>
+    authFetch(`/api/query/groups/${kind}/rename`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ from, to }) }).then(j<{ moved: number }>),
+  /** Moves an item to a group, or to none with null. A group that does not exist yet is made. */
+  moveExplorerItem: (kind: ExplorerGroupKind, itemId: string, group: string | null) =>
+    authFetch(`/api/query/groups/${kind}/items`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ itemId, group }) }).then(j<{ ok: true }>),
   // The datasets/:name route returns { columns, rows, rowCount } with no `ms`, so omit it from the type.
   datasetRows: (name: string) => authFetch(`/api/query/datasets/${encodeURIComponent(name)}`).then(j<Omit<RunResult, 'ms'>>),
   run: (body: { connectorId: string; sql: string; params?: CustomQueryParam[]; values?: Record<string, unknown>; limit?: number; offset?: number }) =>

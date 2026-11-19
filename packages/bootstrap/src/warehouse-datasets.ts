@@ -1,7 +1,7 @@
 import type { Kysely } from 'kysely';
 import {
   buildWarehouseDataset, dropWarehouseDataset,
-  type InternalSchema, type WarehouseDataset, type WarehouseDatasetDef, type WarehouseDatasetStore,
+  type ExplorerGroupStore, type InternalSchema, type WarehouseDataset, type WarehouseDatasetDef, type WarehouseDatasetStore,
 } from '@openldr/db';
 import { validateSelectSql } from '@openldr/dashboards';
 import { redact } from '@openldr/core';
@@ -32,17 +32,14 @@ export interface WarehouseDatasetService {
   refreshDue(): Promise<string[]>;
   /** Drops the built table and forgets the dataset. */
   remove(name: string): Promise<void>;
-  /** Moves a dataset to a Query page group, or to none (null or blank). Throws for an unknown name. */
-  setGroup(name: string, group: string | null): Promise<void>;
-  /** Renames a group, or with `to` null or blank removes it and leaves its datasets with no group.
-   *  Resolves to how many datasets it held. */
-  renameGroup(from: string, to: string | null): Promise<number>;
   /** True while a build runs in this process. */
   building(): boolean;
 }
 
 export interface WarehouseDatasetDeps {
   store: WarehouseDatasetStore;
+  /** The Query page's groups. A new dataset is placed in a group named for its pack. */
+  groups: Pick<ExplorerGroupStore, 'placeIfUnplaced' | 'forgetItem'>;
   internalDb: Kysely<InternalSchema>;
   warehouseDb: Kysely<any>;
   engine: 'postgres' | 'mssql' | 'mysql';
@@ -56,13 +53,6 @@ export interface WarehouseDatasetDeps {
 function errorText(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
   return redact(message.split('\n')[0] ?? '').slice(0, 500);
-}
-
-/** A group name as stored: trimmed, at most 200 characters as for query groups, blank means none. */
-function groupName(group: string | null): string | null {
-  const name = (group ?? '').trim();
-  if (name.length > 200) throw new Error('a group name is at most 200 characters');
-  return name === '' ? null : name;
 }
 
 export function createWarehouseDatasetService(deps: WarehouseDatasetDeps): WarehouseDatasetService {
@@ -130,7 +120,10 @@ export function createWarehouseDatasetService(deps: WarehouseDatasetDeps): Wareh
       const removed = await deps.store.replaceForPack(ownerPack, defs);
       // A dataset this version of the pack no longer lists: its table goes too, or it would stay in
       // the warehouse with old rows, in no list, with nothing able to delete it.
-      for (const name of removed) await inTurn(() => drop(deps.warehouseDb, name));
+      for (const name of removed) { await inTurn(() => drop(deps.warehouseDb, name)); await deps.groups.forgetItem('dataset', name); }
+      // Where it came from shows in the list: a new dataset starts in a group named for its pack.
+      // One a person has since moved, or taken out of every group, stays where they put it.
+      for (const def of defs) await deps.groups.placeIfUnplaced('dataset', def.name, ownerPack);
       for (const def of defs) {
         const out = await inTurn(async () => ((await isStale(def.name)) ? buildOne(def) : null));
         if (out && !out.ok) throw new Error(`dataset ${def.name}: ${out.error}`);
@@ -177,11 +170,9 @@ export function createWarehouseDatasetService(deps: WarehouseDatasetDeps): Wareh
       await inTurn(async () => {
         await drop(deps.warehouseDb, name);
         await deps.store.remove(name);
+        await deps.groups.forgetItem('dataset', name);
       });
     },
-
-    setGroup: async (name, group) => deps.store.setGroup(name, groupName(group)),
-    renameGroup: async (from, to) => deps.store.renameGroup(from, groupName(to)),
 
     building: () => waiting > 0,
   };
@@ -257,11 +248,21 @@ export interface DatasetListItem {
 }
 
 /** The list for the Query page and the CLI: one definition of `stale` for both. */
-export async function listDatasetsWithState(service: Pick<WarehouseDatasetService, 'list'>, internalDb: Kysely<InternalSchema>): Promise<DatasetListItem[]> {
-  const [all, reading] = await Promise.all([service.list(), readWarehouseReading(internalDb)]);
+export async function listDatasetsWithState(
+  service: Pick<WarehouseDatasetService, 'list'>, internalDb: Kysely<InternalSchema>, groups: Pick<ExplorerGroupStore, 'itemGroups'>,
+): Promise<DatasetListItem[]> {
+  const [all, reading, placed] = await Promise.all([service.list(), readWarehouseReading(internalDb), groups.itemGroups('dataset')]);
   return all.map((d) => ({
-    name: d.name, ownerPack: d.ownerPack, group: d.group, rowCount: d.rowCount, builtAt: d.builtAt, buildMs: d.buildMs, lastError: d.lastError,
+    name: d.name, ownerPack: d.ownerPack, group: placed[d.name] ?? null, rowCount: d.rowCount, builtAt: d.builtAt, buildMs: d.buildMs, lastError: d.lastError,
     stale: d.builtAtSeq === null || d.builtAtSeq < reading.head,
   }));
+}
+
+/** A group name as stored: trimmed, 1 to 200 characters, as for custom query groups. */
+export function explorerGroupName(name: string): string {
+  const trimmed = name.trim();
+  if (trimmed === '') throw new Error('a group needs a name');
+  if (trimmed.length > 200) throw new Error('a group name is at most 200 characters');
+  return trimmed;
 }
 

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { loadConfig } from '@openldr/config';
 import {
-  createAppContext, exportCustomQueries, importCustomQueries, recordAuditEvent,
+  createAppContext, createDbContext, explorerGroupName, exportCustomQueries, importCustomQueries, recordAuditEvent,
   type ImportResult,
 } from '@openldr/bootstrap';
 import { createCustomQueryGroupStore, createCustomQueryStore, referenceCapture } from '@openldr/db';
@@ -140,3 +140,130 @@ export async function runQueryImport(file: string, opts: QueryImportOpts): Promi
     await ctx.close();
   }
 }
+
+// `openldr query groups ...`: the groups of the Query page's Connectors and Datasets lists. The same
+// store the Query page's routes use. Custom Queries has its own groups, moved by `query import`.
+
+type GroupKind = 'connector' | 'dataset';
+interface GroupOpts { kind: string; json: boolean }
+
+function say(json: boolean, payload: unknown, human: string): void {
+  process.stdout.write(json ? `${JSON.stringify(payload, null, 2)}\n` : `${human}\n`);
+}
+function refuse(json: boolean, message: string): number {
+  if (json) process.stdout.write(`${JSON.stringify({ ok: false, error: message }, null, 2)}\n`);
+  else process.stderr.write(`${message}\n`);
+  return 1;
+}
+function kindOf(raw: string): GroupKind | null {
+  return raw === 'connector' || raw === 'dataset' ? raw : null;
+}
+const BAD_KIND = '--kind must be connector or dataset';
+
+/** Best effort: a failed audit write never fails a change already made. */
+async function auditGroup(action: string, entityId: string, metadata: Record<string, unknown>): Promise<void> {
+  try {
+    const appCtx = await createAppContext(loadConfig());
+    try {
+      await recordAuditEvent(appCtx, cliActor(), { action, entityType: 'explorerGroup', entityId, metadata });
+    } finally {
+      await appCtx.close();
+    }
+  } catch {
+    // audit is best-effort
+  }
+}
+
+export async function runQueryGroupsList(opts: GroupOpts): Promise<number> {
+  const kind = kindOf(opts.kind);
+  if (!kind) return refuse(opts.json, BAD_KIND);
+  const ctx = await createDbContext(loadConfig());
+  try {
+    const [groups, items] = await Promise.all([ctx.explorerGroups.listGroups(kind), ctx.explorerGroups.itemGroups(kind)]);
+    const lines = groups.map((g) => {
+      const held = Object.entries(items).filter(([, group]) => group === g).map(([id]) => id).sort();
+      return `${g}  ${held.length === 0 ? '(empty)' : held.join(', ')}`;
+    });
+    say(opts.json, { groups, items }, lines.length === 0 ? 'No groups.' : lines.join('\n'));
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runQueryGroupsCreate(name: string, opts: GroupOpts): Promise<number> {
+  const kind = kindOf(opts.kind);
+  if (!kind) return refuse(opts.json, BAD_KIND);
+  const ctx = await createDbContext(loadConfig());
+  try {
+    let clean: string;
+    try {
+      clean = explorerGroupName(name);
+      await ctx.explorerGroups.createGroup(kind, clean);
+    } catch (err) {
+      return refuse(opts.json, err instanceof Error && err.message === 'name already exists' ? `a ${kind} group named ${name.trim()} already exists` : redactError(err));
+    }
+    await auditGroup('explorerGroup.create', `${kind}:${clean}`, { kind, name: clean });
+    say(opts.json, { ok: true, kind, name: clean }, `Made the ${kind} group ${clean}.`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runQueryGroupsRename(name: string, newName: string, opts: GroupOpts): Promise<number> {
+  const kind = kindOf(opts.kind);
+  if (!kind) return refuse(opts.json, BAD_KIND);
+  const ctx = await createDbContext(loadConfig());
+  try {
+    let clean: string;
+    try { clean = explorerGroupName(newName); } catch (err) { return refuse(opts.json, redactError(err)); }
+    const groups = await ctx.explorerGroups.listGroups(kind);
+    if (!groups.includes(name)) return refuse(opts.json, `no ${kind} group named ${name}`);
+    if (clean !== name && groups.includes(clean)) return refuse(opts.json, `a ${kind} group named ${clean} already exists`);
+    const moved = await ctx.explorerGroups.renameGroup(kind, name, clean);
+    await auditGroup('explorerGroup.rename', `${kind}:${name}`, { kind, from: name, to: clean, moved });
+    say(opts.json, { ok: true, kind, from: name, to: clean, moved }, `Renamed the ${kind} group ${name} to ${clean}.`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runQueryGroupsDelete(name: string, opts: GroupOpts & { force: boolean }): Promise<number> {
+  const kind = kindOf(opts.kind);
+  if (!kind) return refuse(opts.json, BAD_KIND);
+  if (!opts.force) {
+    process.stderr.write(`query groups delete refused: this removes the ${kind} group ${name}. What it holds is kept, in no group.\nRe-run with --force if that is what you intend.\n`);
+    return 1;
+  }
+  const ctx = await createDbContext(loadConfig());
+  try {
+    if (!(await ctx.explorerGroups.listGroups(kind)).includes(name)) return refuse(opts.json, `no ${kind} group named ${name}`);
+    const moved = await ctx.explorerGroups.renameGroup(kind, name, null);
+    await auditGroup('explorerGroup.delete', `${kind}:${name}`, { kind, name, moved });
+    say(opts.json, { ok: true, kind, name, moved }, `Removed the ${kind} group ${name}. ${moved} item(s) are now in no group.`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runQueryGroupsMove(item: string, opts: GroupOpts & { group?: string }): Promise<number> {
+  const kind = kindOf(opts.kind);
+  if (!kind) return refuse(opts.json, BAD_KIND);
+  const ctx = await createDbContext(loadConfig());
+  try {
+    let group: string | null = null;
+    if (opts.group && opts.group.trim()) {
+      try { group = explorerGroupName(opts.group); } catch (err) { return refuse(opts.json, redactError(err)); }
+    }
+    await ctx.explorerGroups.setItemGroup(kind, item, group);
+    await auditGroup('explorerGroup.move', `${kind}:${item}`, { kind, item, group });
+    say(opts.json, { ok: true, kind, item, group }, group ? `Moved ${item} to the ${kind} group ${group}.` : `Moved ${item} out of its group.`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+

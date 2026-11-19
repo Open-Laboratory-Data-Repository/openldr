@@ -732,8 +732,6 @@ describe('pack datasets on the Query page', () => {
       list: async () => ROWS,
       rebuild: async (name) => { calls.push(`rebuild ${name}`); if (name === 'nope') throw new Error('no dataset named nope'); return { name, ok: true, rows: 7, ms: 12 }; },
       remove: async (name) => { calls.push(`remove ${name}`); if (name === 'nope') throw new Error('no dataset named nope'); },
-      setGroup: async (name, group) => { calls.push(`group ${name} ${group}`); if (name === 'nope') throw new Error('no dataset named nope'); },
-      renameGroup: async (from, to) => { calls.push(`rename ${from} ${to}`); return from === 'empty' ? 0 : 2; },
     };
     return { deps, calls };
   }
@@ -787,34 +785,71 @@ describe('pack datasets on the Query page', () => {
     expect((await app.inject({ method: 'DELETE', url: '/api/query/warehouse-datasets/nope' })).statusCode).toBe(404);
     expect(auditRecord).not.toHaveBeenCalled();
   });
+});
 
-  it('moves_a_dataset_to_a_group_or_to_none_and_audits_it', async () => {
-    auditRecord.mockClear();
-    const { deps, calls } = withDatasets();
-    const app = await build(deps);
-    expect((await app.inject({ method: 'PUT', url: '/api/query/warehouse-datasets/zm_request_times/group', payload: { group: 'Turnaround' } })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'PUT', url: '/api/query/warehouse-datasets/zm_request_times/group', payload: { group: null } })).statusCode).toBe(200);
-    expect(calls).toEqual(['group zm_request_times Turnaround', 'group zm_request_times null']);
-    expect((auditRecord.mock.calls as unknown[][]).map((c) => (c[0] as { action: string }).action)).toEqual(['dataset.move', 'dataset.move']);
-    expect((await app.inject({ method: 'PUT', url: '/api/query/warehouse-datasets/nope/group', payload: { group: 'x' } })).statusCode).toBe(404);
-    expect((await app.inject({ method: 'PUT', url: '/api/query/warehouse-datasets/zm_request_times/group', payload: {} })).statusCode).toBe(400);
-  });
+describe('groups for the Connectors and Datasets branches', () => {
+  function withGroups() {
+    const calls: string[] = [];
+    const groups: Record<string, string[]> = { connector: ['Country systems'], dataset: ['reports-zm'] };
+    const deps = makeDeps();
+    deps.explorerGroups = {
+      listGroups: async (kind) => groups[kind],
+      itemGroups: async (kind): Promise<Record<string, string | null>> => (kind === 'dataset' ? { abc: 'reports-zm', abd: null } : {}),
+      createGroup: async (kind, name) => { if (groups[kind].includes(name)) throw new Error('name already exists'); calls.push(`create ${kind} ${name}`); },
+      renameGroup: async (kind, from, to) => { calls.push(`rename ${kind} ${from} ${to}`); return 2; },
+      setItemGroup: async (kind, itemId, group) => { calls.push(`move ${kind} ${itemId} ${group}`); },
+    };
+    return { deps, calls };
+  }
+  const actions = () => (auditRecord.mock.calls as unknown[][]).map((c) => (c[0] as { action: string }).action);
 
-  it('renames_or_removes_a_group_and_audits_only_when_something_moved', async () => {
-    auditRecord.mockClear();
-    const { deps, calls } = withDatasets();
-    const app = await build(deps);
-    expect((await app.inject({ method: 'POST', url: '/api/query/warehouse-dataset-groups/rename', payload: { from: 'reports-zm', to: 'Viral load' } })).json()).toEqual({ moved: 2 });
-    expect((await app.inject({ method: 'POST', url: '/api/query/warehouse-dataset-groups/rename', payload: { from: 'empty', to: null } })).json()).toEqual({ moved: 0 });
-    expect(calls).toEqual(['rename reports-zm Viral load', 'rename empty null']);
-    expect(auditRecord).toHaveBeenCalledTimes(1);
-  });
-
-  it('moving_and_renaming_need_query_manage', async () => {
-    const { deps, calls } = withDatasets();
+  it('lists_a_branchs_groups_and_where_each_item_sits', async () => {
+    const { deps } = withGroups();
     const app = await build(deps, ['query.run']);
-    expect((await app.inject({ method: 'PUT', url: '/api/query/warehouse-datasets/zm_request_times/group', payload: { group: 'x' } })).statusCode).toBe(403);
-    expect((await app.inject({ method: 'POST', url: '/api/query/warehouse-dataset-groups/rename', payload: { from: 'a', to: 'b' } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url: '/api/query/groups/dataset' })).json()).toEqual({ groups: ['reports-zm'], items: { abc: 'reports-zm', abd: null } });
+    expect((await app.inject({ method: 'GET', url: '/api/query/groups/connector' })).json()).toEqual({ groups: ['Country systems'], items: {} });
+    expect((await app.inject({ method: 'GET', url: '/api/query/groups/queries' })).statusCode).toBe(404);
+  });
+
+  it('makes_an_empty_group_trimmed_and_refuses_a_name_in_use_or_a_blank_one', async () => {
+    auditRecord.mockClear();
+    const { deps, calls } = withGroups();
+    const app = await build(deps);
+    expect((await app.inject({ method: 'POST', url: '/api/query/groups/connector', payload: { name: '  Labs  ' } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/api/query/groups/connector', payload: { name: 'Country systems' } })).statusCode).toBe(409);
+    expect((await app.inject({ method: 'POST', url: '/api/query/groups/connector', payload: { name: '   ' } })).statusCode).toBe(400);
+    expect(calls).toEqual(['create connector Labs']);
+    expect(actions()).toEqual(['explorerGroup.create']);
+  });
+
+  it('renames_a_group_removes_one_and_refuses_a_name_another_group_has', async () => {
+    auditRecord.mockClear();
+    const { deps, calls } = withGroups();
+    const app = await build(deps);
+    expect((await app.inject({ method: 'POST', url: '/api/query/groups/dataset/rename', payload: { from: 'reports-zm', to: 'Viral load' } })).json()).toEqual({ moved: 2 });
+    expect((await app.inject({ method: 'POST', url: '/api/query/groups/dataset/rename', payload: { from: 'reports-zm', to: null } })).json()).toEqual({ moved: 2 });
+    expect((await app.inject({ method: 'POST', url: '/api/query/groups/dataset/rename', payload: { from: 'other', to: 'reports-zm' } })).statusCode).toBe(409);
+    expect(calls).toEqual(['rename dataset reports-zm Viral load', 'rename dataset reports-zm null']);
+    expect(actions()).toEqual(['explorerGroup.rename', 'explorerGroup.delete']);
+  });
+
+  it('moves_an_item_to_a_group_or_to_none', async () => {
+    auditRecord.mockClear();
+    const { deps, calls } = withGroups();
+    const app = await build(deps);
+    expect((await app.inject({ method: 'PUT', url: '/api/query/groups/connector/items', payload: { itemId: 'c1', group: 'Country systems' } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'PUT', url: '/api/query/groups/connector/items', payload: { itemId: 'c1', group: null } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'PUT', url: '/api/query/groups/connector/items', payload: { group: 'x' } })).statusCode).toBe(400);
+    expect(calls).toEqual(['move connector c1 Country systems', 'move connector c1 null']);
+    expect(actions()).toEqual(['explorerGroup.move', 'explorerGroup.move']);
+  });
+
+  it('every_change_needs_query_manage', async () => {
+    const { deps, calls } = withGroups();
+    const app = await build(deps, ['query.run']);
+    expect((await app.inject({ method: 'POST', url: '/api/query/groups/dataset', payload: { name: 'x' } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'POST', url: '/api/query/groups/dataset/rename', payload: { from: 'a', to: 'b' } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'PUT', url: '/api/query/groups/dataset/items', payload: { itemId: 'abc', group: 'x' } })).statusCode).toBe(403);
     expect(calls).toEqual([]);
   });
 });

@@ -2111,8 +2111,6 @@ export const en = {
   },
   query: {
     dataset: {
-      groupDescription: 'Groups arrange the Datasets list. A dataset keeps working whichever group it is in.',
-      confirmDeleteGroupBody: 'Its datasets are not deleted. They move out of the group.',
       rowActions: 'Actions for {{name}}',
       details: 'Details',
       rebuild: 'Rebuild',
@@ -2148,6 +2146,7 @@ export const en = {
     renameQuery: 'Rename query',
     groups: {
       branchActions: 'Custom query actions', rowActions: 'Actions for “{{name}}”', groupActions: 'Actions for group “{{name}}”',
+      explorerDescription: 'Groups arrange this list. An item keeps working whichever group it is in.', confirmDeleteItemsBody: 'What it holds is not deleted. It moves out of the group.', branchActionsOf: 'Actions for {{branch}}',
       newGroup: 'New group', rename: 'Rename group', delete: 'Delete group',
       description: 'Groups only arrange this list. Queries keep their names, and reports that use them keep working.',
       nameExists: 'A group already uses this name. Choose another name.',
