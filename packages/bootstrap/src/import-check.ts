@@ -38,6 +38,8 @@ const REQUESTS = 'requests';
 /** The set a reference copy offers. */
 const TWINS = 'twins';
 const DEFAULT_PAGE_SIZE = 500;
+/** The most pages a check decodes ahead of its saves. Each is a worker thread and a page of rows in memory. */
+const MAX_PAGES_AHEAD = 8;
 const HEARTBEAT_MS = 30_000;
 /** The most row JSON the dictionaries of one copy may hold, over every set. */
 const DICTIONARY_CAP = 64 * 1024 * 1024;
@@ -955,7 +957,10 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         if (deps.decodeOffThread === true && !rechecking) {
           // A page read at another size is not the page the loop will ask for, nor are those after it.
           if (aheads.some((x) => x.size !== size)) await dropAhead();
-          const want = Math.max(1, Math.floor(deps.decodePagesAhead ?? 1));
+          // 1 to 8 pages. A value that is not a number means 1. Without the upper limit a large
+          // value would read and decode the whole copy at once.
+          const asked = deps.decodePagesAhead ?? 1;
+          const want = Number.isNaN(asked) ? 1 : Math.min(MAX_PAGES_AHEAD, Math.max(1, Math.floor(asked)));
           let after = aheads.length > 0 ? aheads[aheads.length - 1]!.keys.at(-1)! : keys[keys.length - 1]!;
           while (aheads.length < want) {
             const next = await startAhead(p, after, size);

@@ -160,6 +160,12 @@ describe.skipIf(!url)('saveMany: the set-based statement stores what the row pat
     expect((await w.db.selectFrom('fhir.resource_history').select('id').where('id', '=', 'race-own').execute()).length).toBe(0);
   }, 60_000);
 
+  it('a record with no resource type is refused and nothing of the call is saved', async () => {
+    const w = await world('set');
+    await expect(w.store.saveMany([p('typed-1'), { id: 'untyped' }, p('typed-2')] as never)).rejects.toThrow(/resourceType/);
+    expect((await w.db.selectFrom('fhir.resource_history').select('id').where('id', 'in', ['typed-1', 'untyped', 'typed-2']).execute()).length).toBe(0);
+  }, 60_000);
+
   it('a meta that is not an object is replaced, as the row path does', async () => {
     const rows = await world('rows');
     const set = await world('set');

@@ -2470,6 +2470,26 @@ describe('check: a page is saved with one call, and decoded several pages ahead 
     expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { read: 12, saved: 12, failed: 0 } });
   });
 
+  it('a_pages_ahead_value_that_is_not_a_sane_number_is_clamped', async () => {
+    const firstSaveAfter = async (decodePagesAhead: number) => {
+      const w = await world({ decodeOffThread: true, decodePagesAhead });
+      await sourceCopy(w, keysOf(40));
+      const order: string[] = [];
+      w.setDecode((input) => { order.push('decode'); return { groups: input.keys.map(pass) }; });
+      w.failPersist(() => { order.push('save'); return null; });
+      await w.svc.start({ ...START, pageSize: 2 });
+      await drive(w.svc);
+      expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { read: 40, saved: 40 } });
+      return order.indexOf('save');
+    };
+    // Not a number: one page ahead, so two decodes come before the first save.
+    expect(await firstSaveAfter(Number.NaN)).toBe(2);
+    expect(await firstSaveAfter(0)).toBe(2);
+    // Without a limit it would read and decode the whole copy at once: at most 8 pages ahead.
+    expect(await firstSaveAfter(Number.POSITIVE_INFINITY)).toBe(9);
+    expect(await firstSaveAfter(500)).toBe(9);
+  });
+
   it('a_stop_waits_for_every_page_ahead', async () => {
     const w = await world({ decodeOffThread: true, decodePagesAhead: 2 });
     await sourceCopy(w, keysOf(8));

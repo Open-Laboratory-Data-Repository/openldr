@@ -376,6 +376,11 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
     const bodies: string[] = [];
     const hashes: string[] = [];
     for (const resource of resources) {
+      // The row path fails such a record on the not-null column. Here the statement would drop it
+      // without a word, so it is refused before anything is sent.
+      if (typeof resource.resourceType !== 'string' || resource.resourceType.length === 0) {
+        throw new Error('cannot save a record with no resourceType');
+      }
       const id = (resource as { id?: string }).id ?? randomUUID();
       // The pre-stamp content, as `writeMany` hashes it. The server adds the meta stamps.
       const body = JSON.stringify({ ...resource, id });
@@ -438,9 +443,14 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
         order by s.n
       )
       select n::int as n, v::bigint as v, keep from numbered order by n`.execute(trx);
+    // One answer for each record sent, by its place in the call.
+    if (found.rows.length !== resources.length) {
+      throw new Error(`the save answered for ${found.rows.length} of ${resources.length} records`);
+    }
     let written = 0;
-    const refs = found.rows.map((row, k) => {
+    const refs = found.rows.map((row) => {
       if (row.keep) written += 1;
+      const k = Number(row.n) - 1;
       return { resourceType: types[k], id: ids[k], version: Number(row.v) };
     });
     return { refs, written };
@@ -455,8 +465,13 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
         await sql`select k.n from unnest(array['a']::text[], array['b']::text[]) with ordinality as k(t, i, n)
           left join lateral (select 1 as one) x on true`.execute(db);
         setBased = true;
-      } catch {
-        setBased = false;
+      } catch (err) {
+        // Only "this database cannot run it" settles the question. Any other failure, such as a
+        // dropped connection, takes the row path for this one save and asks again on the next:
+        // remembering it would leave a real PostgreSQL on the slower path until the next restart.
+        const text = err instanceof Error ? err.message : String(err);
+        if (/unnest|ordinality|lateral|not supported|not implemented|failed to parse/i.test(text)) setBased = false;
+        else return false;
       }
     }
     return setBased;
