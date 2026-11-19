@@ -1,9 +1,21 @@
 {
-  "generatedAt": "2026-11-18",
+  "generatedAt": "2026-11-19",
   "days": [
     {
-      "date": "2026-11-18",
+      "date": "2026-11-19",
       "version": null,
+      "entries": [
+        {
+          "hash": "790d9820",
+          "type": "perf",
+          "scope": "db",
+          "title": "Save each request in one transaction with a few multi-row statements (item 16)"
+        }
+      ]
+    },
+    {
+      "date": "2026-11-18",
+      "version": "v0.1.12-demo.4",
       "entries": [
         {
           "hash": "1bdbc281",
@@ -567,7 +579,7 @@
     },
     {
       "date": "2026-11-17",
-      "version": null,
+      "version": "v0.1.12-demo.4",
       "entries": [
         {
           "hash": "4dd37e24",
@@ -957,7 +969,7 @@
     },
     {
       "date": "2026-11-16",
-      "version": null,
+      "version": "v0.1.12-demo.4",
       "entries": [
         {
           "hash": "90d1af9c",
@@ -1101,7 +1113,7 @@
     },
     {
       "date": "2026-11-15",
-      "version": null,
+      "version": "v0.1.12-demo.4",
       "entries": [
         {
           "hash": "127de445",
@@ -1413,7 +1425,7 @@
     },
     {
       "date": "2026-11-13",
-      "version": null,
+      "version": "v0.1.12-demo.4",
       "entries": [
         {
           "hash": "83a508a7",
@@ -1893,7 +1905,7 @@
     },
     {
       "date": "2026-11-12",
-      "version": null,
+      "version": "v0.1.12-demo.4",
       "entries": [
         {
           "hash": "066d2ba0",
@@ -2283,7 +2295,7 @@
     },
     {
       "date": "2026-11-11",
-      "version": null,
+      "version": "v0.1.12-demo.4",
       "entries": [
         {
           "hash": "04873b7c",
@@ -2697,7 +2709,7 @@
     },
     {
       "date": "2026-11-06",
-      "version": null,
+      "version": "v0.1.12-demo.4",
       "entries": [
         {
           "hash": "ee150bda",
@@ -2721,7 +2733,7 @@
     },
     {
       "date": "2026-11-05",
-      "version": null,
+      "version": "v0.1.12-demo.4",
       "entries": [
         {
           "hash": "c466ae0e",
@@ -2733,7 +2745,7 @@
     },
     {
       "date": "2026-10-14",
-      "version": null,
+      "version": "v0.1.12-demo.4",
       "entries": [
         {
           "hash": "c4c3e6e4",
@@ -2751,7 +2763,7 @@
     },
     {
       "date": "2026-10-12",
-      "version": null,
+      "version": "v0.1.12-demo.4",
       "entries": [
         {
           "hash": "37694807",
