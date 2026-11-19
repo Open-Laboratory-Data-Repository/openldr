@@ -176,7 +176,8 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
       const result = await importCustomQueries(
         { customQueries: deps.customQueries, customQueryGroups: deps.customQueryGroups, connectors: deps.connectors },
         parsed.data.file,
-        { connectorName: parsed.data.connectorName, replace: parsed.data.replace ?? false },
+        // Groups are arranged only by a caller with query.manage (Codex review C13-R1).
+        { connectorName: parsed.data.connectorName, replace: parsed.data.replace ?? false, arrange: holdsCapability(req.user!, 'query.manage') },
       );
       for (const r of result.results) {
         if (r.outcome === 'skipped') continue;

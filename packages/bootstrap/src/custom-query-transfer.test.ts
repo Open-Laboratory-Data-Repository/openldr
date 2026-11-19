@@ -192,6 +192,19 @@ describe('query groups in files', () => {
     expect(store.map.get('cq_new3')?.groupId).toBeUndefined();
   });
 
+  // demo.4 item 13, Codex review C13-R1: arranging queries in groups needs query.manage, so an
+  // import by a caller without it creates the queries and leaves every group alone.
+  it('import with arrange off creates no group and puts no query in one', async () => {
+    const store = fakeStore();
+    const groups = fakeGroups([{ id: 'g1', name: 'Known' }]);
+    const res = await importCustomQueries(deps(store, undefined, groups),
+      file([{ ...q('a'), group: 'New group' }, { ...q('b'), group: 'Known' }]), { replace: false, arrange: false });
+    expect(res.results.map((r) => r.outcome)).toEqual(['created', 'created']);
+    expect([...groups.map.values()]).toEqual([{ id: 'g1', name: 'Known' }]);
+    expect(store.map.get('cq_new1')?.groupId).toBeUndefined();
+    expect(store.map.get('cq_new2')?.groupId).toBeUndefined();
+  });
+
   it('import reuses a group that already has the name', async () => {
     const store = fakeStore();
     const groups = fakeGroups([{ id: 'g1', name: 'Mozambique' }]);

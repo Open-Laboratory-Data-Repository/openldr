@@ -112,8 +112,12 @@ export function checkCustomQueryFile(file: unknown): void {
 export async function importCustomQueries(
   deps: TransferDeps,
   file: unknown,
-  opts: { connectorName?: string; replace: boolean },
+  // arrange: whether the import may create groups and put queries in them. Arranging the list needs
+  // query.manage (demo.4 item 13), so a caller without it imports the queries with no group. A
+  // pack install and a caller with query.manage arrange; the default keeps that.
+  opts: { connectorName?: string; replace: boolean; arrange?: boolean },
 ): Promise<ImportResult> {
+  const arrange = opts.arrange ?? true;
   const { parsed, checked } = validateFile(file);
 
   // Look up which names exist, then resolve the connector only if something will be created.
@@ -149,13 +153,13 @@ export async function importCustomQueries(
     if (!hit) {
       const id = newId();
       await deps.customQueries.create({ id, name: query.name, connectorId: connectorId!, sql: query.sql, params: query.params });
-      if (query.group) await deps.customQueries.setGroup(id, await groupFor(query.group));
+      if (arrange && query.group) await deps.customQueries.setGroup(id, await groupFor(query.group));
       results.push({ name: query.name, outcome: 'created', id });
     } else if (opts.replace) {
       await deps.customQueries.update(hit.id, { sql: query.sql, params: query.params });
       // Only a query with no group joins the file's group. A query someone has already put in a
       // group stays there, so reinstalling a pack does not undo that.
-      if (query.group && hit.groupId === null) await deps.customQueries.setGroup(hit.id, await groupFor(query.group));
+      if (arrange && query.group && hit.groupId === null) await deps.customQueries.setGroup(hit.id, await groupFor(query.group));
       results.push({ name: query.name, outcome: 'replaced', id: hit.id });
     } else {
       results.push({ name: query.name, outcome: 'skipped', id: hit.id });

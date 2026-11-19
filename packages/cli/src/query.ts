@@ -106,12 +106,9 @@ export async function runQueryImport(file: string, opts: QueryImportOpts): Promi
   try {
     // --force overwrites saved queries, so it needs query.manage, as the import route does (demo.4
     // item 13). A local run is the machine's operator and is not checked.
-    if (opts.force) {
-      const caller = await servedCaller(ctx);
-      if (caller !== 'local' && !caller?.capabilities.includes('query.manage')) {
-        return fail('--force replaces saved queries and needs query.manage');
-      }
-    }
+    const caller = await servedCaller(ctx);
+    const manages = caller === 'local' || caller?.capabilities.includes('query.manage') === true;
+    if (opts.force && !manages) return fail('--force replaces saved queries and needs query.manage');
     const deps = buildDeps(ctx);
     // Read the existing rows first, so a replace can record what it overwrote.
     const beforeByName = new Map<string, unknown>();
@@ -120,7 +117,7 @@ export async function runQueryImport(file: string, opts: QueryImportOpts): Promi
       if (hit) beforeByName.set(name, hit);
     }
 
-    const result = await importCustomQueries(deps, parsed, { connectorName: opts.connector, replace: opts.force });
+    const result = await importCustomQueries(deps, parsed, { connectorName: opts.connector, replace: opts.force, arrange: manages });
 
     for (const r of result.results) {
       if (r.outcome === 'skipped') continue;

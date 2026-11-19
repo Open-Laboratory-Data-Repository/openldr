@@ -6,7 +6,7 @@ Start with your own connector and received data. No documentation sample data is
 
 You need **Use query workbench**. Queries read data. Statements that change data or tables are refused. A new installation creates a target-warehouse connector for its configured database engine. These pictures use **Target Warehouse (Postgres)**. Other sources need a matching enabled database connector.
 
-To rename, edit, move or delete a saved query, or to manage groups, you also need **Manage saved queries**. Without it, the Explorer shows no row menus, and Save on a saved query keeps the original and saves a copy under a new name.
+To rename, edit, move or delete a saved query, or to manage groups, you also need **Manage saved queries**. Without it, the Explorer shows no row menus, and Save on a saved query keeps the original and saves a copy under a new name. An import adds new queries with no group.
 
 Saved built-in queries can supply reports. Inspect them freely, but understand those report dependencies before changing SQL or parameter identifiers.
 

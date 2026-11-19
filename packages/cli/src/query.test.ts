@@ -127,9 +127,9 @@ describe('runQueryImport', () => {
   it('passes replace only when --force is set, and the connector name', async () => {
     mocks.importCustomQueries.mockResolvedValue({ results: [] });
     await runQueryImport(writeInput(), { force: false, json: false });
-    expect(mocks.importCustomQueries.mock.calls[0][2]).toEqual({ connectorName: undefined, replace: false });
+    expect(mocks.importCustomQueries.mock.calls[0][2]).toEqual({ connectorName: undefined, replace: false, arrange: true });
     await runQueryImport(writeInput(), { force: true, connector: 'X Y', json: false });
-    expect(mocks.importCustomQueries.mock.calls[1][2]).toEqual({ connectorName: 'X Y', replace: true });
+    expect(mocks.importCustomQueries.mock.calls[1][2]).toEqual({ connectorName: 'X Y', replace: true, arrange: true });
   });
 
   // demo.4 item 13: replacing saved queries is a change, so it needs query.manage, as the route does.
@@ -144,6 +144,8 @@ describe('runQueryImport', () => {
     mocks.servedCaller.mockResolvedValueOnce({ id: 'u1', roleIds: [], capabilities: ['query.run'], dataScope: { limited: false } });
     mocks.importCustomQueries.mockResolvedValue({ results: [] });
     expect(await runQueryImport(writeInput(), { force: false, json: false })).toBe(0);
+    // Without query.manage the import adds queries but arranges no group (Codex review C13-R1).
+    expect(mocks.importCustomQueries.mock.calls[0][2]).toEqual({ connectorName: undefined, replace: false, arrange: false });
   });
 
   it('skips existing names without --force, exits 0 and writes no audit', async () => {

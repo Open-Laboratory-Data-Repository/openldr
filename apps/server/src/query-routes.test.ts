@@ -82,6 +82,11 @@ describe('saved queries need query.manage to change', () => {
     }
     expect((await deps.customQueries.get(id))?.name).toBe('Mine');
     expect((await runner.inject({ method: 'POST', url: '/api/custom-queries/import', payload: { file } })).statusCode).toBe(200);
+    // An add-only import makes the queries, but no group (Codex review C13-R1).
+    const grouped = { ...file, queries: [{ ...file.queries[0], name: 'Imported', group: 'Made by import' }] };
+    expect((await runner.inject({ method: 'POST', url: '/api/custom-queries/import', payload: { file: grouped, connectorName: 'PG' } })).statusCode).toBe(200);
+    expect((await deps.customQueryGroups.list()).map((g) => g.name)).toEqual(['G']);
+    expect((await deps.customQueries.getByName('Imported'))?.groupId ?? null).toBeNull();
     expect((await manager.inject({ method: 'PUT', url: `/api/custom-queries/${id}`, payload: { name: 'Renamed' } })).statusCode).toBe(200);
   });
 });

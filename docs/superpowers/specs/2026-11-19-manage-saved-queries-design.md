@@ -24,7 +24,7 @@ owner (`apps/server/src/query-routes.ts:30`, one guard for every route). The ope
 | Delete a saved query | Run a query |
 | Move a query to a group | Save a new query, save a copy |
 | Create, rename, delete a group | Export |
-| Import with replace | Import that only adds |
+| Import with replace | Import that only adds, with no group (Codex review C13-R1) |
 
 A data limit removes `query.manage` too, like `query.run`.
 
