@@ -240,6 +240,7 @@ const REASON: Record<string, string> = {
   '--timezone': 'an IANA time zone name', '--to': WHEN, '--url': URI, '--username': ID, '--valueset': URI,
   '--version': 'a version number', '--where': FILTER, '--year': WHEN,
   '--field': 'a correctable field name, not a file',
+  '--finding': FILTER,
   '--facility': 'register facility ids, comma separated', '--district': 'Region/District names, comma separated', '--region': 'region names, comma separated',
 };
 // Per command, so a new option is reviewed for that command and not let through by its name alone.
@@ -273,7 +274,8 @@ const NOT_A_PATH: Record<string, string[]> = {
   'import check correct': ['plugin', 'copy', 'key', '--set', '--reason'],
   'import check recheck': ['plugin', 'copy', 'key'],
   'import check choices': ['plugin', 'copy', '--field'],
-  'import check held': ['plugin', 'copy', '--label', '--reason', '--laboratory', '--offset', '--limit'],
+  'import check held': ['plugin', 'copy', '--label', '--reason', '--laboratory', '--finding', '--offset', '--limit'],
+  'import check codes': ['plugin', 'copy', '--label', '--reason', '--laboratory'],
   'settings flags set': ['key', 'value'],
   'settings numbers set': ['key', 'value'],
   'settings lab set': ['--name', '--address', '--contact', '--timezone'],

@@ -42,6 +42,8 @@ const HEARTBEAT_MS = 30_000;
 /** The most row JSON the dictionaries of one copy may hold, over every set. */
 const DICTIONARY_CAP = 64 * 1024 * 1024;
 const LABEL = /^[a-z][a-z0-9_]{0,31}$/;
+/** A finding code the plugin names for a held request: a bare word, never a source value. */
+export const FINDING_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 const MAX_LABELS = 12;
 const OTHER_LABEL = 'other';
 /** A laboratory code as a group may name it. Anything else is no laboratory. */
@@ -134,7 +136,8 @@ export interface ImportCheckStartInput {
 }
 
 /** A page of the held list. Each filter given narrows it. */
-export interface HeldFilter { reason?: HeldReason; label?: string; laboratory?: string; offset: number; limit: number }
+/** `finding`: only requests the plugin named this finding code for (demo.4 item 10). */
+export interface HeldFilter { reason?: HeldReason; label?: string; laboratory?: string; finding?: string; offset: number; limit: number }
 /** A page of `heldItems`: by offset as `held`, or by key with `after` (a key, or null for the
  *  start). With `after`, `offset` is ignored and the answer adds `next`. */
 export type HeldItemsFilter = Omit<HeldFilter, 'offset'> & ({ offset: number; after?: undefined } | { after: string | null; offset?: number });
@@ -164,6 +167,9 @@ export interface ImportCheckService {
    *  read by key: the rows past that key, and `next`, the last key of the page or null when no row
    *  is left. A page read by key does not move when a check adds or removes rows before it. */
   heldItems(pluginId: string, copyId: string, opts: HeldItemsFilter): Promise<{ items: HeldItem[]; total: number; next?: string | null }>;
+  /** Each finding code of the copy's held requests that match the filter, with how many carry it,
+   *  most first (demo.4 item 10). */
+  heldCodes(pluginId: string, copyId: string, opts: Omit<HeldFilter, 'offset' | 'limit' | 'finding'>): Promise<Array<{ code: string; count: number }>>;
   /** Server only. Take every run that needs a driver and start driving it. Does not wait. */
   tick(): Promise<void>;
   /** Resolves when this process is driving nothing. */
@@ -318,6 +324,9 @@ const groupSchema = z.object({
   laboratory: z.unknown().optional(),
   // The values as read of the correctable fields. Read with care in `validFields`.
   fields: z.unknown().optional(),
+  // The finding codes of a held request, for the Held back filter (demo.4 item 10). Read with care
+  // in `validCodes`: a bad code is left out, never a bad answer.
+  codes: z.unknown().optional(),
 });
 const decodeOutputSchema = z.object({ groups: z.array(groupSchema) });
 const twinKeysOutputSchema = z.object({ keys: z.array(z.string()) });
@@ -455,6 +464,19 @@ function validFields(raw: unknown, declared: string[]): Record<string, string | 
     const v = (raw as Record<string, unknown>)[name];
     if (v === null) out[name] = null;
     else if (typeof v === 'string') out[name] = storable(v.slice(0, CORRECTION_VALUE_MAX)) as string;
+  }
+  return out;
+}
+
+/** The most finding codes one held request keeps. */
+const CODES_MAX = 50;
+/** The finding codes a held group sent: bare words like a label, each once, at most CODES_MAX. */
+function validCodes(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const c of raw) {
+    if (typeof c === 'string' && FINDING_CODE.test(c) && !out.includes(c)) out.push(c);
+    if (out.length === CODES_MAX) break;
   }
   return out;
 }
@@ -856,6 +878,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
               // refuses a NUL or a lone surrogate, so those are replaced.
               findings: storable(group.findings ?? null), check: storable(group.check ?? null),
               fields: validFields(group.fields, correctable),
+              codes: validCodes(group.codes),
               // A recheck keeps the pass that first held it, so its count stays where it was made (re-review H4).
               pass: rechecking ? passOf.get(key) ?? null : run.pass ?? null,
             }));
@@ -1206,6 +1229,11 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
     async held(pluginId, copyId, opts) {
       await ownCopy(pluginId, copyId);
       return ownDb('read', () => deps.held.list(copyId, opts));
+    },
+
+    async heldCodes(pluginId, copyId, opts) {
+      await ownCopy(pluginId, copyId);
+      return ownDb('read', () => deps.held.codes(copyId, opts));
     },
 
     async heldItem(pluginId, copyId, key) {

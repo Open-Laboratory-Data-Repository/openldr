@@ -283,13 +283,22 @@ export function buildProgram(): Command {
     .option('--label <label>', 'only requests held under this label')
     .option('--reason <reason>', 'only held or only error')
     .option('--laboratory <code>', 'only requests of this laboratory')
+    .option('--finding <code>', 'only requests with this finding code; import check codes lists them')
     .option('--offset <n>', 'skip this many rows (default 0)')
     .option('--limit <n>', 'rows to list, 1 to 100 (default 50)')
     .option('--export <file>', 'write every matching row, with its findings, to this file, one JSON object per line. The file holds patient values')
     .option('--force', 'write over an existing --export file', false)
     .option('--json', 'emit JSON', false)
-    .action(async (plugin: string, copy: string, opts: { label?: string; reason?: string; laboratory?: string; offset?: string; limit?: string; export?: string; force: boolean; json: boolean }) => {
+    .action(async (plugin: string, copy: string, opts: { label?: string; reason?: string; laboratory?: string; finding?: string; offset?: string; limit?: string; export?: string; force: boolean; json: boolean }) => {
       try { process.exitCode = await runImportCheckHeld(plugin, copy, opts); } catch (err) { process.stderr.write(`import check held failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  checkRuns.command('codes <plugin> <copy>').description('List the finding codes of the held requests of a copy, each with how many requests carry it')
+    .option('--label <label>', 'only requests held under this label')
+    .option('--reason <reason>', 'only held or only error')
+    .option('--laboratory <code>', 'only requests of this laboratory')
+    .option('--json', 'emit JSON', false)
+    .action(async (plugin: string, copy: string, opts: { label?: string; reason?: string; laboratory?: string; json: boolean }) => {
+      try { process.exitCode = await runImportCheckCodes(plugin, copy, opts); } catch (err) { process.stderr.write(`import check codes failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 
   program
@@ -1848,5 +1857,5 @@ import { runDoctor } from './doctor';
 import {
   runImportAllow, runImportAllowed, runImportFailures, runImportResume, runImportRevoke, runImportStart, runImportStatus, runImportStop,
 } from './import';
-import { runImportCheckChoices, runImportCheckCorrect, runImportCheckHeld, runImportCheckRecheck, runImportCheckStart, runImportCheckStatus, runImportCheckStop } from './import-check';
+import { runImportCheckChoices, runImportCheckCodes, runImportCheckCorrect, runImportCheckHeld, runImportCheckRecheck, runImportCheckStart, runImportCheckStatus, runImportCheckStop } from './import-check';
 import { runImportCopyDelete, runImportCopyStart, runImportCopyStatus, runImportCopyStop } from './import-copy';

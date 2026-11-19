@@ -25,7 +25,14 @@ export interface HeldItem extends HeldRow {
   pass: string | null;
 }
 
-export interface HeldListOptions { reason?: HeldReason; label?: string; laboratory?: string; offset: number; limit: number }
+/** `finding`: only requests the plugin named this finding code for (demo.4 item 10). */
+export interface HeldListOptions { reason?: HeldReason; label?: string; laboratory?: string; finding?: string; offset: number; limit: number }
+
+/** Held filters without the page. */
+export type HeldFilterOptions = Pick<HeldListOptions, 'reason' | 'label' | 'laboratory' | 'finding'>;
+
+/** One finding code of a copy's held requests and how many requests carry it. */
+export interface HeldCodeCount { code: string; count: number }
 
 /** `listItems` reads by offset, as `list` does, or by key. With `after` (a key, or null for the
  *  start) it returns the rows whose key is greater, `offset` is ignored, and the answer adds `next`.
@@ -38,7 +45,8 @@ export interface HeldItemsPage { rows: HeldItem[]; total: number; next?: string 
 
 export interface ImportCheckHeldStore {
   /** Insert or replace by (copyId, key). */
-  put(item: Omit<HeldItem, 'heldAt' | 'fields' | 'pass'> & { fields?: Record<string, string | null> | null; pass?: string | null }): Promise<void>;
+  /** `codes`: the finding codes the plugin named for the request. They replace the key's earlier codes. */
+  put(item: Omit<HeldItem, 'heldAt' | 'fields' | 'pass'> & { fields?: Record<string, string | null> | null; pass?: string | null; codes?: string[] }): Promise<void>;
   remove(copyId: string, keys: string[]): Promise<void>;
   /** Ordered by key. `total` counts every row that matches the filter, not only the page. */
   list(copyId: string, opts: HeldListOptions): Promise<{ rows: HeldRow[]; total: number }>;
@@ -48,6 +56,9 @@ export interface ImportCheckHeldStore {
   get(copyId: string, key: string): Promise<HeldItem | null>;
   /** Delete up to `limit` rows of a copy. 0 means none left. */
   deleteSome(copyId: string, limit: number): Promise<number>;
+  /** Each finding code of the copy's held requests that match the filter, with its count, most
+   *  first, then by code (demo.4 item 10). `finding` in the filter is ignored. */
+  codes(copyId: string, opts: HeldFilterOptions): Promise<HeldCodeCount[]>;
 }
 
 /** Keys per delete statement in `remove`. */
@@ -79,12 +90,25 @@ function toRow(r: Stored): HeldRow {
 
 export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCheckHeldStore {
   /** The rows of a copy that match the filter. */
-  function matching(copyId: string, opts: Pick<HeldListOptions, 'reason' | 'label' | 'laboratory'>) {
+  function matching(copyId: string, opts: HeldFilterOptions) {
     let q = db.selectFrom('import_check_held').where('copy_id', '=', copyId);
     if (opts.reason !== undefined) q = q.where('reason', '=', opts.reason);
     if (opts.label !== undefined) q = q.where('label', '=', opts.label);
     if (opts.laboratory !== undefined) q = q.where('laboratory', '=', opts.laboratory);
+    if (opts.finding !== undefined) {
+      const finding = opts.finding;
+      q = q.where('key', 'in', db.selectFrom('import_check_held_codes').select('key').where('copy_id', '=', copyId).where('code', '=', finding));
+    }
     return q;
+  }
+
+  /** The codes of these keys of a copy go. Chunked as `remove` is. */
+  async function dropCodes(copyId: string, keys: string[]): Promise<void> {
+    for (let i = 0; i < keys.length; i += REMOVE_CHUNK) {
+      await db.deleteFrom('import_check_held_codes')
+        .where('copy_id', '=', copyId).where('key', 'in', keys.slice(i, i + REMOVE_CHUNK))
+        .execute();
+    }
   }
 
   /** One page of the matching rows. Within one copy the key is unique, so this order has no tie. */
@@ -95,7 +119,7 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
   }
 
   /** Every matching row, not only the page. */
-  async function count(copyId: string, opts: Pick<HeldListOptions, 'reason' | 'label' | 'laboratory'>): Promise<number> {
+  async function count(copyId: string, opts: HeldFilterOptions): Promise<number> {
     const r = await matching(copyId, opts).select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirstOrThrow();
     return Number(r.n);
   }
@@ -130,10 +154,17 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
           held_at: new Date(),
         })))
         .execute();
+      // The codes follow the row: the earlier ones go, these come in (demo.4 item 10).
+      await dropCodes(item.copyId, [item.key]);
+      const codes = [...new Set(item.codes ?? [])];
+      if (codes.length > 0) {
+        await db.insertInto('import_check_held_codes').values(codes.map((code) => ({ copy_id: item.copyId, key: item.key, code }))).execute();
+      }
     },
 
     async remove(copyId, keys) {
       const unique = [...new Set(keys)];
+      await dropCodes(copyId, unique);
       for (let i = 0; i < unique.length; i += REMOVE_CHUNK) {
         await db.deleteFrom('import_check_held')
           .where('copy_id', '=', copyId).where('key', 'in', unique.slice(i, i + REMOVE_CHUNK))
@@ -181,6 +212,7 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
         .orderBy('key')
         .limit(limit)
         .execute();
+      await dropCodes(copyId, picked.map((p) => p.key));
       let gone = 0;
       for (let i = 0; i < picked.length; i += REMOVE_CHUNK) {
         const res = await db.deleteFrom('import_check_held')
@@ -190,6 +222,18 @@ export function createImportCheckHeldStore(db: Kysely<InternalSchema>): ImportCh
         gone += Number(res.numDeletedRows);
       }
       return gone;
+    },
+
+    async codes(copyId, opts) {
+      const { finding: _ignored, ...filters } = opts;
+      const rows = await db.selectFrom('import_check_held_codes')
+        .select(['code', (eb) => eb.fn.countAll<number>().as('n')])
+        .where('copy_id', '=', copyId)
+        .where('key', 'in', matching(copyId, filters).select('key'))
+        .groupBy('code')
+        .execute();
+      return rows.map((r) => ({ code: r.code, count: Number(r.n) }))
+        .sort((a, b) => b.count - a.count || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
     },
   };
 }

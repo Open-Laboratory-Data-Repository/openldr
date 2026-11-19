@@ -501,6 +501,7 @@ A source check holds a request back when its rules find an error. Someone with t
 - `openldr import check correct <plugin> <copy> <key> --set field=value --reason "why"` corrects one or more fields. Repeat `--set` for each field. An empty value clears the field. The plugin decides which fields can be corrected.
 - `openldr import check choices <plugin> <copy> [--field specimen]` lists the values a field may be corrected to, such as the source's specimen codes. Use a code from it in `--set`.
 - `openldr import check recheck <plugin> <copy> <key>` checks the request again in the run that held it. If it now passes it is saved and leaves the held list. Run `import check held` to see the result.
+- `openldr import check codes <plugin> <copy>` lists the finding codes of the held requests, each with how many requests carry it. `openldr import check held <plugin> <copy> --finding <code>` lists only the requests with one of them.
 
 ## Who may open and submit a form
 

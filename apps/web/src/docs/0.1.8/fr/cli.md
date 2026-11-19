@@ -483,6 +483,7 @@ Une vérification de source retient une demande quand ses règles trouvent une e
 - `openldr import check correct <plugin> <copy> <key> --set champ=valeur --reason "pourquoi"` corrige un ou plusieurs champs. Répétez `--set` pour chaque champ. Une valeur vide efface le champ. Le plugin décide quels champs peuvent être corrigés.
 - `openldr import check choices <plugin> <copy> [--field specimen]` liste les valeurs possibles d'un champ, par exemple les codes de prélèvement de la source. Utilisez un de ces codes dans `--set`.
 - `openldr import check recheck <plugin> <copy> <key>` vérifie à nouveau la demande dans l'exécution qui l'a retenue. Si elle passe, elle est enregistrée et quitte la liste des demandes retenues. Lancez `import check held` pour voir le résultat.
+- `openldr import check codes <plugin> <copy>` liste les codes de constat des demandes retenues, chacun avec le nombre de demandes qui le portent. `openldr import check held <plugin> <copy> --finding <code>` ne liste que les demandes qui portent l'un d'eux.
 
 ## Qui peut ouvrir et soumettre un formulaire
 

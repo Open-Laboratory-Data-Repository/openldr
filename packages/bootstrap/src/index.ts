@@ -2304,7 +2304,7 @@ export {
   type ImportService, type ImportRun, type ImportStatus, type ImportActor, type ImportAuditEvent, type ImportStartInput,
 } from './import-run';
 export type { ImportCopyService, CopyRun, CopyStatus, CopySetProgress } from './import-copy';
-export { checkIdOf, isLiveCheck, LABORATORY_CODE } from './import-check';
+export { checkIdOf, FINDING_CODE, isLiveCheck, LABORATORY_CODE } from './import-check';
 export type { ImportCheckService, ImportCheckStartInput, HeldItemsFilter, CheckRun, CheckStatus, CheckCounts, CheckLaboratory } from './import-check';
 export { CopySetChangedError } from './import-copy';
 export {

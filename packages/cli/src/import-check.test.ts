@@ -16,6 +16,7 @@ vi.mock('@openldr/config', async (importOriginal) => ({
 vi.mock('@openldr/bootstrap', () => ({
   createAppContext: mocks.createAppContext,
   LABORATORY_CODE: /^[A-Za-z0-9._-]{1,32}$/,
+  FINDING_CODE: /^[a-z][a-z0-9_]{0,63}$/,
   // The numbers the plugin broker checks a held request page against.
   HELD_LABEL_MAX: 64, HELD_LIST_LIMIT_MAX: 100, HELD_ITEMS_LIMIT_MAX: 200,
   checkIdOf: (copyId: string) => `check-of-${copyId}`,
@@ -27,7 +28,7 @@ vi.mock('@openldr/bootstrap', () => ({
 
 import { COMMAND_META } from './command-meta';
 import {
-  formatCheckRun, runImportCheckChoices, runImportCheckCorrect, runImportCheckHeld, runImportCheckRecheck, runImportCheckStart, runImportCheckStatus, runImportCheckStop,
+  formatCheckRun, runImportCheckChoices, runImportCheckCodes, runImportCheckCorrect, runImportCheckHeld, runImportCheckRecheck, runImportCheckStart, runImportCheckStatus, runImportCheckStop,
 } from './import-check';
 
 // A source key and a patient value that must never be printed from a run. The key sits in the cursor.
@@ -272,6 +273,21 @@ describe('import check CLI', () => {
 
   describe('held', () => {
     const heldOpts = { json: false };
+
+    // demo.4 item 10: the held list by finding code, and the codes with counts.
+    it('--finding filters the list by a finding code, and refuses one that is not a bare word', async () => {
+      checks.held.mockResolvedValue({ rows: [], total: 0 });
+      expect(await runImportCheckHeld('v1-check', 'c0ffee', { ...heldOpts, finding: 'specimen_missing' })).toBe(0);
+      expect(checks.held).toHaveBeenCalledWith('v1-check', 'c0ffee', { finding: 'specimen_missing', offset: 0, limit: 50 });
+      await expect(runImportCheckHeld('v1-check', 'c0ffee', { ...heldOpts, finding: 'Not A Code' })).rejects.toThrow(/--finding/);
+    });
+
+    it('codes lists each finding code with its count, most first, and takes the filters', async () => {
+      (checks as Record<string, unknown>).heldCodes = vi.fn(async () => [{ code: 'specimen_missing', count: 2385 }, { code: 'panel_specimen_mismatch', count: 41 }]);
+      expect(await runImportCheckCodes('v1-check', 'c0ffee', { json: false, laboratory: 'TBG' })).toBe(0);
+      expect((checks as Record<string, ReturnType<typeof vi.fn>>).heldCodes).toHaveBeenCalledWith('v1-check', 'c0ffee', { laboratory: 'TBG' });
+      expect(out.join('')).toBe('specimen_missing  2385\npanel_specimen_mismatch  41\n');
+    });
 
     it('lists the rows with no findings, then the total, and asks for 50 from 0 by default', async () => {
       checks.held.mockResolvedValue({ rows: [heldRow(1), heldRow(2, { reason: 'error', label: null, laboratory: null, error: 'DECODE_FAILED' })], total: 7 });

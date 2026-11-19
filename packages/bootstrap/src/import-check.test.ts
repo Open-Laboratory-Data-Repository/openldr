@@ -2138,3 +2138,27 @@ describe('choices for a correctable field', () => {
     await expect(w.svc.choices(PLUGIN, SRC)).rejects.toThrow(/no longer allowed/);
   });
 });
+
+// demo.4 item 10: the Held back list filters by finding code and counts each code. The plugin
+// names the codes with each held request; a bad code is left out, never a bad answer.
+describe('held finding codes', () => {
+  it('stores the codes a held group names, filters by one, and counts them', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(3));
+    w.setDecode((input) => ({
+      groups: [
+        { key: input.keys[0], held: true, label: 'held_rules', codes: ['specimen_missing', 'specimen_missing', 'Bad Code', SECRET, 7] },
+        { key: input.keys[1], held: true, label: 'held_rules', codes: ['specimen_missing', 'record_has_no_observations'] },
+        { key: input.keys[2], held: true, label: 'held_rules', codes: 'not a list' },
+      ],
+    }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const keysWith = async (finding: string) => (await w.svc.held(PLUGIN, SRC, { finding, offset: 0, limit: 10 })).rows.map((r) => r.key);
+    expect(await keysWith('specimen_missing')).toEqual(['REQ0001', 'REQ0002']);
+    expect(await keysWith('record_has_no_observations')).toEqual(['REQ0002']);
+    expect((await w.svc.heldItems(PLUGIN, SRC, { finding: 'specimen_missing', after: null, limit: 10 })).items.map((i) => i.key)).toEqual(['REQ0001', 'REQ0002']);
+    expect(await w.svc.heldCodes(PLUGIN, SRC, {})).toEqual([{ code: 'specimen_missing', count: 2 }, { code: 'record_has_no_observations', count: 1 }]);
+    await expect(w.svc.heldCodes(PLUGIN, 'no-such-copy', {})).rejects.toThrow(/not found/);
+  });
+});

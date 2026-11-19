@@ -953,6 +953,13 @@ export interface FormAccessTable {
   mode: string;
 }
 
+/** The finding codes of a held request (demo.4 item 10). */
+export interface ImportCheckHeldCodesTable {
+  copy_id: string;
+  key: string;
+  code: string;
+}
+
 export interface ImportCheckCorrectionsTable {
   copy_id: string;
   key: string;
@@ -1177,6 +1184,7 @@ export interface InternalSchema {
   import_copy_rows: ImportCopyRowsTable;
   import_check_held: ImportCheckHeldTable;
   import_check_corrections: ImportCheckCorrectionsTable;
+  import_check_held_codes: ImportCheckHeldCodesTable;
   form_access: FormAccessTable;
   dashboard_access: DashboardAccessTable;
   user_data_scopes: UserDataScopesTable;

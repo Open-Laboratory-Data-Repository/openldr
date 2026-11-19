@@ -284,6 +284,8 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'import check correct': { kind: 'app', capability: 'imports.correct_held' },
   'import check recheck': { kind: 'app', capability: 'imports.correct_held' },
   'import check choices': { kind: 'app', capability: 'imports.correct_held' },
+  // demo.4 item 10: bare codes and counts.
+  'import check codes': { kind: 'app', capability: 'connectors.manage' },
   'import check held': { kind: 'app', capability: 'connectors.manage', destructive: true, paths: [outFile('--export', { private: true, keepExistingUnless: '--force' })] },
 
   // No route sends a file through the pipeline with any converter. It writes clinical records.

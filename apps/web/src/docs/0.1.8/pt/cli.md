@@ -508,6 +508,7 @@ Uma verificação de fonte retém um pedido quando as suas regras encontram um e
 - `openldr import check correct <plugin> <copy> <key> --set campo=valor --reason "porquê"` corrige um ou mais campos. Repita `--set` para cada campo. Um valor vazio limpa o campo. O plugin decide que campos podem ser corrigidos.
 - `openldr import check choices <plugin> <copy> [--field specimen]` lista os valores possíveis de um campo, por exemplo os códigos de amostra da fonte. Use um desses códigos em `--set`.
 - `openldr import check recheck <plugin> <copy> <key>` verifica o pedido de novo na execução que o reteve. Se passar, é gravado e sai da lista de pedidos retidos. Execute `import check held` para ver o resultado.
+- `openldr import check codes <plugin> <copy>` lista os códigos de constatação dos pedidos retidos, cada um com o número de pedidos que o têm. `openldr import check held <plugin> <copy> --finding <code>` lista apenas os pedidos com um deles.
 
 ## Quem pode abrir e submeter um formulário
 

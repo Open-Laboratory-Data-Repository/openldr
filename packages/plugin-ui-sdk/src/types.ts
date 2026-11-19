@@ -52,13 +52,14 @@ export type PluginBrokerOp =
   | { kind: 'import.check.list' }
   | { kind: 'import.check.status'; runId: string }
   | { kind: 'import.check.stop'; runId: string }
-  | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }
+  | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; finding?: string; offset: number; limit: number }
+  | { kind: 'import.check.heldCodes'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string }
   | { kind: 'import.check.heldItem'; copyId: string; key: string }
   | { kind: 'import.check.choices'; copyId: string }
   | { kind: 'import.check.correct'; copyId: string; key: string; values: Record<string, string | null>; reason: string }
   | { kind: 'import.check.recheck'; copyId: string; key: string }
   | { kind: 'import.check.access' }
-  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset?: number; after?: string | null; limit: number };
+  | { kind: 'import.check.heldItems'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; finding?: string; offset?: number; after?: string | null; limit: number };
 
 /** The types of file a page may ask the host to save. */
 export type PluginDownloadMime = 'text/csv' | 'application/json' | 'text/plain';
@@ -156,7 +157,7 @@ export interface PluginHeldRow {
 }
 
 /** The filters of a page of held requests, read by offset or by key (`after`). */
-export type PluginHeldItemsInput = { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; limit: number }
+export type PluginHeldItemsInput = { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; finding?: string; limit: number }
   & ({ offset: number; after?: undefined } | { after: string | null; offset?: number });
 
 /** A held request with the plugin's own JSON. Only the plugin's page knows what is inside. */
@@ -260,7 +261,10 @@ export interface OpenLdrPluginApi {
       status(runId: string): Promise<PluginCheckRun | null>;
       stop(runId: string): Promise<PluginCheckRun>;
       /** `laboratory` is a code of 1 to 32 of A-Z a-z 0-9 . _ -; the host refuses any other. */
-      held(input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }): Promise<{ rows: PluginHeldRow[]; total: number }>;
+      held(input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; finding?: string; offset: number; limit: number }): Promise<{ rows: PluginHeldRow[]; total: number }>;
+      /** Each finding code the plugin named for the held requests that match, with how many carry
+       *  it, most first. `finding` on `held` and `heldItems` filters by one (a bare word). */
+      heldCodes(input: { copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string }): Promise<Array<{ code: string; count: number }>>;
       heldItem(input: { copyId: string; key: string }): Promise<PluginHeldItemView | null>;
       /** Stores corrections to a held request. `values` maps a field the plugin declares to its new
        *  value, null to clear it. Needs a reason. Fails with a sentence for any other field. */

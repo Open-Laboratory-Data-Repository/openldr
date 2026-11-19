@@ -893,6 +893,7 @@ describe('plugin broker: checks', () => {
       checks.api.correct = async (...args: unknown[]) => { checks.calls.push(['correct', args]); return { corrections: [{ field: 'dob_age' }] }; };
       checks.api.recheck = async (...args: unknown[]) => { checks.calls.push(['recheck', args]); return checkRun({ status: 'queued', driver: null }); };
       checks.api.choices = async (...args: unknown[]) => { checks.calls.push(['choices', args]); return { specimen: [{ code: 'FNA', description: 'Fine needle aspirate' }] }; };
+      checks.api.heldCodes = async (...args: unknown[]) => { checks.calls.push(['heldCodes', args]); return [{ code: 'specimen_missing', count: 3 }]; };
       return checks;
     };
     const gated = (checks: ReturnType<typeof fakeChecks>) => broker({
@@ -936,6 +937,23 @@ describe('plugin broker: checks', () => {
       expect(checks.calls.filter(([n]) => n === 'choices')).toEqual([['choices', ['p1', 'cp1']], ['choices', ['p1', 'cp1']]]);
       expect(await b.handle('p1', nobody, { kind: 'import.check.choices', copyId: 'cp1' })).toMatchObject({ ok: false });
       expect(await b.handle('p1', admin, { kind: 'import.check.choices' })).toMatchObject({ ok: false, error: expect.stringMatching(/^invalid operation/) });
+    });
+
+    // demo.4 item 10: the finding filter and its counts.
+    it('passes a finding filter to held and heldItems, and hands the codes with counts to a corrector', async () => {
+      const checks = withCorrections();
+      const { b } = gated(checks);
+      await b.handle('p1', corrector, { kind: 'import.check.held', copyId: 'cp1', finding: 'specimen_missing', offset: 0, limit: 50 });
+      await b.handle('p1', corrector, { kind: 'import.check.heldItems', copyId: 'cp1', finding: 'specimen_missing', after: null, limit: 200 });
+      expect(await b.handle('p1', corrector, { kind: 'import.check.heldCodes', copyId: 'cp1', laboratory: 'LAB-1' })).toEqual({ ok: true, data: [{ code: 'specimen_missing', count: 3 }] });
+      expect(checks.calls.filter(([n]) => n === 'held' || n === 'heldItems' || n === 'heldCodes')).toEqual([
+        ['held', ['p1', 'cp1', { finding: 'specimen_missing', offset: 0, limit: 50 }]],
+        ['heldItems', ['p1', 'cp1', { finding: 'specimen_missing', after: null, limit: 200 }]],
+        ['heldCodes', ['p1', 'cp1', { laboratory: 'LAB-1' }]],
+      ]);
+      // A code is a bare word: anything else is refused before the service.
+      expect(await b.handle('p1', admin, { kind: 'import.check.held', copyId: 'cp1', finding: "x' or 1=1", offset: 0, limit: 50 })).toMatchObject({ ok: false, error: expect.stringMatching(/^invalid operation/) });
+      expect(await b.handle('p1', nobody, { kind: 'import.check.heldCodes', copyId: 'cp1' })).toMatchObject({ ok: false });
     });
 
     it('refuses everything to a caller with neither the role nor the permission', async () => {
