@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeMigratedDb } from './test-helpers';
+import { makeMigratedDbUpTo } from './test-helpers';
 import {
   LAB_ORDER_PREV_FIELDS_SNAPSHOT,
   LAB_ORDER_RESULTS_FIELDS_SNAPSHOT,
@@ -11,6 +11,11 @@ import {
 // Imported to PROVE this migration's frozen copy still matches what 105 actually shipped.
 // The migration itself must never import it.
 import { LAB_ORDER_CATALOG_FIELDS_SNAPSHOT as SHIPPED_105 } from './105_lab_order_test_catalog';
+
+// These tests run an older migration's own up() and down() again. Those write fhir.fhir_resources,
+// which migration 130 turns into a view. On a real install they ran before 130, so the database
+// here stops just before it (see makeMigratedDbUpTo).
+const makeMigratedDb = () => makeMigratedDbUpTo('129_resource_history_content_hash');
 
 async function seedOrderForm(db: any, fields: readonly unknown[], id = 'form-sample-order'): Promise<void> {
   await db.insertInto('form_definitions').values({

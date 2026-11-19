@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { makeMigratedDb } from './test-helpers';
+import { makeMigratedDbUpTo } from './test-helpers';
+
+// These tests run an older migration's own up() and down() again. Those write fhir.fhir_resources,
+// which migration 130 turns into a view. On a real install they ran before 130, so the database
+// here stops just before it (see makeMigratedDbUpTo).
+const makeMigratedDb = () => makeMigratedDbUpTo('129_resource_history_content_hash');
 
 describe('069 result-role value sets', () => {
   it('seeds the dictionary-scope value set as a whole-system include (no filter, no concept)', async () => {
