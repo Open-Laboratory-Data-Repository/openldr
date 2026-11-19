@@ -30,3 +30,19 @@ describe('persist path emits change_log per resource', () => {
     await db.destroy();
   });
 });
+
+describe('persist path saves a list whole or not at all (item 16)', () => {
+  it('no opts: an invalid second resource saves nothing, not even the valid first one', async () => {
+    const db = await makeMigratedDb();
+    const fhirStore = createFhirStore(db as any);
+    await expect(persistResources({ fhirStore, logger }, [
+      { resourceType: 'Patient', id: 'ok1' },
+      { resourceType: 'Observation', id: 'bad1', code: { text: 'no status' } },
+    ])).rejects.toThrow();
+    for (const t of ['fhir.fhir_resources', 'fhir.resource_history'] as const) {
+      expect(await db.selectFrom(t).select('id').where('id', 'in', ['ok1', 'bad1']).execute()).toHaveLength(0);
+    }
+    expect(await db.selectFrom('fhir.change_log').select('resource_id').where('resource_id', 'in', ['ok1', 'bad1']).execute()).toHaveLength(0);
+    await db.destroy();
+  });
+});
