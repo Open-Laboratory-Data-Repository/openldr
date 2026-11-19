@@ -37,6 +37,19 @@ describe('persistResource', () => {
 });
 
 describe('persistResources (batched)', () => {
+  it('hands_skipUnchanged_to_saveMany_only_when_asked (item 16)', async () => {
+    const saveMany = vi.fn(async (rs: any[], _prov?: unknown, _opts?: unknown) => rs.map((r) => ({ resourceType: r.resourceType, id: r.id, version: 1 })));
+    const deps = { fhirStore: { saveMany } as never, logger: { error: vi.fn(), info: vi.fn() } as never };
+    const a = { resourceType: 'Patient', id: 'p1', gender: 'male' };
+    const resolveServiceRequest = async () => true;
+    await persistResources(deps, [a], {}, { level: 'low', resolveServiceRequest, skipUnchanged: true });
+    await persistResources(deps, [a], {}, { level: 'low', resolveServiceRequest });
+    await persistResources(deps, [a], {});
+    expect(saveMany.mock.calls[0][2]).toEqual({ skipUnchanged: true });
+    expect(saveMany.mock.calls[1]).toHaveLength(2);
+    expect(saveMany.mock.calls[2]).toHaveLength(2);
+  });
+
   it('saves the whole list in one saveMany call → projection deferred to the async worker', async () => {
     const saveMany = vi.fn(async (rs: any[], _prov?: unknown) => rs.map((r) => ({ resourceType: r.resourceType, id: r.id, version: 1 })));
     const fhirStore = { saveMany } as never;

@@ -21,6 +21,9 @@ export interface ResourceHistoryTable {
   version: number;
   op: string; // 'upsert' | 'delete'
   resource: JSONColumnType<FhirResource> | null; // null for delete tombstones
+  /** sha256 of the record before the server stamps `meta`, as `fhir.change_log` has it. Set by
+   *  `saveMany` only; null on a tombstone, an amendment, a version from sync, and older rows. */
+  content_hash: string | null;
   recorded_at: Generated<Date>;
 }
 
