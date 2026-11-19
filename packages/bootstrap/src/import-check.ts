@@ -239,6 +239,16 @@ const CORRECTION_VALUE_MAX = 200;
 const CORRECTION_REASON_MAX = 500;
 
 interface Decided { outcome: 'saved' | 'held' | 'failed'; laboratory: string | null; label: string | undefined }
+/** A decode answer by key, and the keys the plugin gave more than one group. */
+interface Decoded { groups: Map<string, Group>; twice: Set<string> }
+/** What a page's decode call is sent, but for the twins. `stored` is the corrections as read. */
+interface PageRows {
+  stored: Map<string, Correction[]>;
+  corrections: Record<string, Array<Record<string, unknown>>> | undefined;
+  rows: Record<string, Array<Record<string, unknown>>>;
+}
+/** A page read after `after` at `size`, with its decode in flight (design 2026-11-19-check-decode-ahead). */
+interface PageAhead { after: string; size: number; keys: string[]; stored: Map<string, Correction[]>; work: Promise<Decoded> }
 interface Tally { resources: number; decided: Decided[] }
 const freshTally = (): Tally => ({ resources: 0, decided: [] });
 /** Each request counts once in the run and once in its laboratory, under the same label name,
@@ -645,6 +655,15 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
   async function driveCheck(run: CheckRun, entry: Drive): Promise<void> {
     const d = driving(run, entry);
     let outcome: CheckOutcome = 'failed';
+    /** The next page, read and with its decode running, while the current page saves (item 16).
+     *  At most one. Only a drive with `decodeOffThread` ever has one. */
+    let ahead: PageAhead | null = null;
+    /** Waits for a page ahead still decoding, then forgets it. No decode outlives its drive. */
+    const dropAhead = async (): Promise<void> => {
+      const a = ahead;
+      ahead = null;
+      if (a) await a.work.catch(() => undefined);
+    };
 
     const body = async (): Promise<CheckOutcome> => {
       if (run.status === 'stopping') return 'stopped';
@@ -755,6 +774,56 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         }));
       };
 
+      /** The corrections of a page's keys, read only for a plugin that declares correctable fields. */
+      const readCorrections = async (keys: string[]): Promise<Map<string, Correction[]>> => (correctable.length > 0 && deps.corrections
+        ? ownDb('read', () => deps.corrections!.listFor(run.copyId, keys))
+        : new Map<string, Correction[]>());
+      /** Two readings of a page's corrections are the same when these are equal. */
+      const correctionsSig = (keys: string[], m: Map<string, Correction[]>): string =>
+        JSON.stringify(keys.map((k) => (m.get(k) ?? []).map((c) => [c.field, c.value, c.correctedAt])));
+      /** A page's corrections and rows: what the decode call is sent, but for the twins. */
+      const readRows = async (p: Prepared, keys: string[]): Promise<PageRows> => {
+        const stored = await readCorrections(keys);
+        const corrections = stored.size === 0 ? undefined : Object.fromEntries([...stored].map(([k, list]) => [k, list.map((c) => ({
+          field: c.field, value: c.value, original: c.original, reason: c.reason, by: c.correctedBy, at: c.correctedAt,
+        }))]));
+        const rows = byDetail(await ownDb('read', () => deps.copyStore.read(run.copyId, REQUESTS, keys)), p.requestDetails);
+        return { stored, corrections, rows };
+      };
+      /** The decode call for one page. Throws a PluginCallFault as `callPlugin` does. */
+      const decodePage = async (p: Prepared, keys: string[], page: PageRows, twins: Record<string, Array<Record<string, unknown>>>): Promise<Decoded> => {
+        const answer = await callPlugin('decode', plugin.decode, {
+          options: run.options, now: now().toISOString(), dictionaries: p.dictionaries, keys, rows: page.rows, twins,
+          ...(page.corrections ? { corrections: page.corrections } : {}),
+        }, decodeOutputSchema, decodeOpts);
+        const groups = new Map<string, Group>();
+        const twice = new Set<string>();
+        for (const g of answer.groups) {
+          if (groups.has(g.key)) twice.add(g.key);
+          else groups.set(g.key, g);
+        }
+        return { groups, twice };
+      };
+      /** Reads the page after `after` and starts its decode, without waiting for the answer. The
+       *  reads are waited for, so the decode is always called before the current page's first
+       *  save. Any fault here means no page ahead: the page is then read in line, as without this,
+       *  and meets the same fault where it is handled. */
+      const startAhead = async (p: Prepared, after: string, pageSize: number): Promise<PageAhead | null> => {
+        try {
+          const keys = await ownDb('read', () => deps.copyStore.listKeys(run.copyId, REQUESTS, after, pageSize));
+          if (keys.length === 0) return null;
+          const page = await readRows(p, keys);
+          const twins = await readTwins(keys, p.twinDetails);
+          const work = decodePage(p, keys, page, twins);
+          // A page ahead that is thrown away is never awaited for its answer. Without this its
+          // rejection would be unhandled, which ends the server process.
+          work.catch(() => undefined);
+          return { after, size: pageSize, keys, stored: page.stored, work };
+        } catch {
+          return null;
+        }
+      };
+
       let prepared: Prepared | null = null;
       // A page the plugin could not decode is halved, and doubles again after 5 good pages in a
       // row, never above the run's own page size.
@@ -796,37 +865,45 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         const counted0 = new Map((run.recheck?.before ?? []).map((b) => [b.key, b]));
         const decided = before.map((h) => counted0.get(h.key) ?? { key: h.key, label: h.label, laboratory: h.laboratory, pass: h.pass });
         const passOf = new Map(decided.map((d) => [d.key, d.pass]));
-        const keys = rechecking
-          ? before.map((h) => h.key)
-          : await ownDb('read', () => deps.copyStore.listKeys(run.copyId, REQUESTS, run.cursor, size));
+        // A page decoded ahead is used only if it is this very page, read at this size, its decode
+        // gave groups, and the corrections of its keys are still what the plugin was sent. In every
+        // other case it is waited for and thrown away, and the page is read and decoded here.
+        let fromAhead: { keys: string[]; stored: Map<string, Correction[]>; decoded: Decoded } | null = null;
+        const a = ahead;
+        ahead = null;
+        if (a) {
+          const decoded = await a.work.catch(() => null);
+          if (decoded && !rechecking && a.after === run.cursor && a.size === size
+            && correctionsSig(a.keys, await readCorrections(a.keys)) === correctionsSig(a.keys, a.stored)) {
+            fromAhead = { keys: a.keys, stored: a.stored, decoded };
+          }
+        }
+        const keys = fromAhead
+          ? fromAhead.keys
+          : rechecking
+            ? before.map((h) => h.key)
+            : await ownDb('read', () => deps.copyStore.listKeys(run.copyId, REQUESTS, run.cursor, size));
         if (keys.length === 0) return 'done';
-        // The corrections of the page's keys, sent only to a plugin that declares correctable fields.
-        const stored = correctable.length > 0 && deps.corrections
-          ? await ownDb('read', () => deps.corrections!.listFor(run.copyId, keys))
-          : new Map<string, Correction[]>();
-        const corrections = stored.size === 0 ? undefined : Object.fromEntries([...stored].map(([k, list]) => [k, list.map((c) => ({
-          field: c.field, value: c.value, original: c.original, reason: c.reason, by: c.correctedBy, at: c.correctedAt,
-        }))]));
-        const rows = byDetail(await ownDb('read', () => deps.copyStore.read(run.copyId, REQUESTS, keys)), p.requestDetails);
 
         let groups: Map<string, Group> | null = null;
         /** Keys the plugin gave more than one group. */
-        const twice = new Set<string>();
+        let twice = new Set<string>();
         let fault: PluginCallFault | null = null;
-        try {
-          const twins = await readTwins(keys, p.twinDetails);
-          const answer = await callPlugin('decode', plugin.decode, {
-            options: run.options, now: now().toISOString(), dictionaries: p.dictionaries, keys, rows, twins,
-            ...(corrections ? { corrections } : {}),
-          }, decodeOutputSchema, decodeOpts);
-          groups = new Map();
-          for (const g of answer.groups) {
-            if (groups.has(g.key)) twice.add(g.key);
-            else groups.set(g.key, g);
+        let stored: Map<string, Correction[]>;
+        if (fromAhead) {
+          stored = fromAhead.stored;
+          ({ groups, twice } = fromAhead.decoded);
+        } else {
+          // The corrections of the page's keys, sent only to a plugin that declares correctable fields.
+          const page = await readRows(p, keys);
+          stored = page.stored;
+          try {
+            const twins = await readTwins(keys, p.twinDetails);
+            ({ groups, twice } = await decodePage(p, keys, page, twins));
+          } catch (err) {
+            if (!(err instanceof PluginCallFault)) throw err;
+            fault = err;
           }
-        } catch (err) {
-          if (!(err instanceof PluginCallFault)) throw err;
-          fault = err;
         }
         // Another process may hold the run now. Then nothing of this page is written.
         if ((await d.haltWanted()) === 'lost') return 'lost';
@@ -859,10 +936,13 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         // A correction made while this recheck decoded would never reach the plugin: the recheck then
         // decides nothing and writes nothing, and the request waits, held, for the next one (review H17).
         if (rechecking && correctable.length > 0 && deps.corrections) {
-          const sig = (m: Map<string, Correction[]>) => JSON.stringify(keys.map((k) => (m.get(k) ?? []).map((c) => [c.field, c.value, c.correctedAt])));
           const now2 = await ownDb('read', () => deps.corrections!.listFor(run.copyId, keys));
-          if (sig(now2) !== sig(stored)) { recheckRead = true; return 'next'; }
+          if (correctionsSig(keys, now2) !== correctionsSig(keys, stored)) { recheckRead = true; return 'next'; }
         }
+
+        // Before this page's first save: read the next page and start its decode on a worker, so
+        // it runs while this page saves (item 16). Never in a recheck, which has one page.
+        if (deps.decodeOffThread === true && !rechecking) ahead = await startAhead(p, keys[keys.length - 1]!, size);
 
         const saved: string[] = [];
         for (const key of keys) {
@@ -976,6 +1056,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           : redact(err instanceof Error ? err.message : String(err)).slice(0, 300);
       }
     } finally {
+      await dropAhead();
       await d.stopBeating();
     }
     await finishDrive(run, d, outcome);
