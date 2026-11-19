@@ -34,7 +34,7 @@ export const CORRECTOR_CAPABILITY = 'imports.correct_held';
 const CORRECTOR_OPS = new Set([
   // `import.allowed` gives the connector names the tab shows beside each copy.
   'import.allowed', 'import.copy.list', 'import.check.list', 'import.check.status', 'import.check.held', 'import.check.heldItem', 'import.check.heldItems',
-  'import.check.correct', 'import.check.recheck', 'import.check.access',
+  'import.check.correct', 'import.check.recheck', 'import.check.access', 'import.check.choices',
 ]);
 const isCorrector = (p: { capabilities?: string[] }): boolean => (p.capabilities ?? []).includes(CORRECTOR_CAPABILITY);
 
@@ -107,6 +107,7 @@ export type BrokerOp =
   | { kind: 'import.check.stop'; runId: string }
   | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }
   | { kind: 'import.check.heldItem'; copyId: string; key: string }
+  | { kind: 'import.check.choices'; copyId: string }
   | { kind: 'import.check.correct'; copyId: string; key: string; values: Record<string, string | null>; reason: string }
   | { kind: 'import.check.recheck'; copyId: string; key: string }
   | { kind: 'import.check.access' }
@@ -236,6 +237,7 @@ export function buildBrokerOpSchema(maxDocBytes: number) {
       laboratory: LABORATORY.optional(), offset: z.number().int().min(0), limit: z.number().int().min(1).max(HELD_LIST_LIMIT_MAX),
     }),
     z.object({ kind: z.literal('import.check.heldItem'), copyId: ID, key: z.string().min(1).max(200) }),
+    z.object({ kind: z.literal('import.check.choices'), copyId: ID }),
     // Held corrections (design 2026-11-18-held-corrections). The service checks the fields against
     // what the plugin declares; here only the shape and the sizes.
     z.object({
@@ -272,6 +274,7 @@ function gateFor(op: BrokerOp): string | undefined {
     case 'import.copy.start': case 'import.copy.list': case 'import.copy.status': case 'import.copy.stop': case 'import.copy.delete':
     case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop': case 'import.check.held': case 'import.check.heldItem':
     case 'import.check.heldItems': case 'import.check.correct': case 'import.check.recheck': case 'import.check.access':
+    case 'import.check.choices':
       return 'host:import';
     default: return undefined; // storage.*, invoke
   }
@@ -314,6 +317,7 @@ function rolesFor(op: BrokerOp): string[] {
     case 'import.copy.start': case 'import.copy.list': case 'import.copy.status': case 'import.copy.stop': case 'import.copy.delete':
     case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop': case 'import.check.held': case 'import.check.heldItem':
     case 'import.check.heldItems': case 'import.check.correct': case 'import.check.recheck': case 'import.check.access':
+    case 'import.check.choices':
       return ['lab_admin'];
     // storage.*, invoke, reports.*, fhir.* — reports/fhir reads are broadly readable (native routes have no role gate).
     default: return [];
@@ -352,7 +356,7 @@ export interface PluginBrokerDeps {
   /** The copy service (import-copy.ts). When absent, copy ops return a structured error. */
   copies?: Pick<ImportCopyService, 'start' | 'get' | 'list' | 'stop' | 'remove'>;
   /** The check service (import-check.ts). When absent, check ops return a structured error. */
-  checks?: Pick<ImportCheckService, 'start' | 'get' | 'list' | 'stop' | 'held' | 'heldItem' | 'heldItems' | 'correct' | 'recheck'>;
+  checks?: Pick<ImportCheckService, 'start' | 'get' | 'list' | 'stop' | 'held' | 'heldItem' | 'heldItems' | 'correct' | 'recheck' | 'choices'>;
   /** Step-by-step check of a host connector (connector-diagnose.ts), by connector id. */
   diagnoseConnector?: (id: string) => Promise<unknown>;
   policy: () => PluginPolicy;
@@ -596,7 +600,7 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
           }
           case 'import.check.start': case 'import.check.list': case 'import.check.status': case 'import.check.stop':
           case 'import.check.held': case 'import.check.heldItem': case 'import.check.heldItems':
-          case 'import.check.correct': case 'import.check.recheck': case 'import.check.access': {
+          case 'import.check.correct': case 'import.check.recheck': case 'import.check.access': case 'import.check.choices': {
             const checks = deps.checks;
             if (!checks) return { ok: false, error: 'checks are unavailable' };
             const actor: ImportActor = { type: 'user', id: principal.id, name: principal.username ?? principal.id };
@@ -641,6 +645,13 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
                   : { ...filters, offset: op.offset!, limit: op.limit });
                 // As for heldItem: the operation and the copy, never a key, a value or the size.
                 await emit(pluginId, principal, checkReadOp('heldItems', op.copyId), 'ok');
+                return { ok: true, data };
+              }
+              case 'import.check.choices': {
+                // The values a person may pick for a correctable field (demo.4 item 11). They come
+                // from the copy's dictionaries, so the audit row names the operation and the copy.
+                const data = await checks.choices(pluginId, op.copyId);
+                await emit(pluginId, principal, checkReadOp('choices', op.copyId), 'ok');
                 return { ok: true, data };
               }
               case 'import.check.correct': {

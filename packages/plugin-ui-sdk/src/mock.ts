@@ -101,6 +101,7 @@ export function createMockOpenldr(opts: MockOptions): MockOpenLdrPluginApi {
         async stop() { return mockCheck('mock-copy', null, 'stopping'); },
         async held() { return { rows: [], total: 0 }; },
         async heldItem() { return null; },
+        async choices() { return {}; },
         async correct() { return { corrections: [] }; },
         async recheck(input) { return mockCheck(input.copyId, null, 'queued'); },
         async access() { return { full: true, correct: true }; },

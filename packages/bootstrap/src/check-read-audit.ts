@@ -6,7 +6,7 @@ import { recordAuditEvent, type AuditActor, type AuditDetails } from './record-a
 // one. The plugin broker (Studio) and the CLI both write it from here, so the two rows are the same.
 // It names the operation and the copy. Never a key, a value, a count or a file path.
 
-export type CheckReadKind = 'held' | 'heldItem' | 'heldItems';
+export type CheckReadKind = 'held' | 'heldItem' | 'heldItems' | 'choices';
 
 /** The operation as the audit row names it. */
 export function checkReadOp(kind: CheckReadKind, copyId: string): string {

@@ -892,6 +892,7 @@ describe('plugin broker: checks', () => {
       const checks = fakeChecks();
       checks.api.correct = async (...args: unknown[]) => { checks.calls.push(['correct', args]); return { corrections: [{ field: 'dob_age' }] }; };
       checks.api.recheck = async (...args: unknown[]) => { checks.calls.push(['recheck', args]); return checkRun({ status: 'queued', driver: null }); };
+      checks.api.choices = async (...args: unknown[]) => { checks.calls.push(['choices', args]); return { specimen: [{ code: 'FNA', description: 'Fine needle aspirate' }] }; };
       return checks;
     };
     const gated = (checks: ReturnType<typeof fakeChecks>) => broker({
@@ -923,6 +924,18 @@ describe('plugin broker: checks', () => {
       expect(checks.calls.find(([n]) => n === 'correct')).toEqual(['correct', [{
         pluginId: 'p1', copyId: 'cp1', key: SECRET_KEY, values: { dob_age: '2023-03-11' }, reason: 'typed wrong', actor: { type: 'user', id: 'u2', name: 'baraka' },
       }]]);
+    });
+
+    // demo.4 item 11: the correction form's specimen list.
+    it('hands a corrector and an admin the choices of the calling plugin, and refuses anyone else', async () => {
+      const checks = withCorrections();
+      const { b } = gated(checks);
+      const want = { ok: true, data: { specimen: [{ code: 'FNA', description: 'Fine needle aspirate' }] } };
+      expect(await b.handle('p1', corrector, { kind: 'import.check.choices', copyId: 'cp1', pluginId: 'p2' })).toEqual(want);
+      expect(await b.handle('p1', admin, { kind: 'import.check.choices', copyId: 'cp1' })).toEqual(want);
+      expect(checks.calls.filter(([n]) => n === 'choices')).toEqual([['choices', ['p1', 'cp1']], ['choices', ['p1', 'cp1']]]);
+      expect(await b.handle('p1', nobody, { kind: 'import.check.choices', copyId: 'cp1' })).toMatchObject({ ok: false });
+      expect(await b.handle('p1', admin, { kind: 'import.check.choices' })).toMatchObject({ ok: false, error: expect.stringMatching(/^invalid operation/) });
     });
 
     it('refuses everything to a caller with neither the role nor the permission', async () => {

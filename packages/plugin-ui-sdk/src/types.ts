@@ -54,6 +54,7 @@ export type PluginBrokerOp =
   | { kind: 'import.check.stop'; runId: string }
   | { kind: 'import.check.held'; copyId: string; reason?: 'held' | 'error'; label?: string; laboratory?: string; offset: number; limit: number }
   | { kind: 'import.check.heldItem'; copyId: string; key: string }
+  | { kind: 'import.check.choices'; copyId: string }
   | { kind: 'import.check.correct'; copyId: string; key: string; values: Record<string, string | null>; reason: string }
   | { kind: 'import.check.recheck'; copyId: string; key: string }
   | { kind: 'import.check.access' }
@@ -267,6 +268,10 @@ export interface OpenLdrPluginApi {
       /** Checks one corrected held request again, in the run that held it. Answers the run, queued.
        *  Read `heldItem` again once the run is no longer live: null means the request was saved. */
       recheck(input: { copyId: string; key: string }): Promise<PluginCheckRun>;
+      /** The values a person may pick for each correctable field that has a fixed list, from the
+       *  copy's dictionaries as the plugin reads them. A field with no list is not in the answer, and
+       *  a plugin with no `choices` entrypoint answers an empty object. */
+      choices(input: { copyId: string }): Promise<Record<string, Array<{ code: string; description: string }>>>;
       /** What this person may do: `full`, every tab; `correct`, correct held requests. */
       access(): Promise<{ full: boolean; correct: boolean }>;
       /** The same rows as `held`, in the same order, each with its findings and check. `limit` is 1 to 200.
