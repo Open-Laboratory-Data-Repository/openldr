@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { sql } from 'kysely';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTER_STATE_DROPPED, FACILITY_REGISTRY_SYSTEM, internalMigrations, observedSystemForFeed } from '@openldr/db';
-import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, reprojectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, captureObservedFacility, captureObservedFacilityFromProjection, assertResolvedFacilityInvariant, registryConceptCodeById } from './facility-reconcile';
+import { captureObservedFacilitiesFromProjection, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, reprojectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, captureObservedFacility, captureObservedFacilityFromProjection, assertResolvedFacilityInvariant, registryConceptCodeById } from './facility-reconcile';
 import { makeReconcileDeps, seedPerformers, seedRequesters, seedRegistry, seedMapping, currentConceptCode, dropOneActiveFacilityResolutionIndex } from './test-support/facility-reconcile-fixture';
 
 describe('scanObservedFacilities', () => {
@@ -2667,6 +2667,32 @@ describe('captureObservedFacility', () => {
 // together — `cycle.test.ts` only exercises the generic `onProjected` contract with a mock, and the
 // tests above call `captureObservedFacility` directly with hand-picked arguments. A typo in the
 // resourceType string, or a broken `performer` extraction, would have passed the whole suite.
+describe('captureObservedFacilitiesFromProjection (item 16)', () => {
+  const report = (id: string, lab: string) => ({ resourceType: 'DiagnosticReport', resource: { resourceType: 'DiagnosticReport', id, performer: [{ display: lab }] }, sourceSystem: 'webhook-ingest' });
+
+  it('a_batch_ends_with_the_same_concepts_as_one_record_at_a_time', async () => {
+    const batch = [report('d1', 'Lab A'), report('d2', 'Lab B'), report('d3', 'Lab A'), { resourceType: 'Patient', resource: { resourceType: 'Patient', id: 'p1' }, sourceSystem: 'webhook-ingest' }];
+    const one = await makeReconcileDeps();
+    for (const it of batch) await captureObservedFacilityFromProjection(one, it.resourceType, it.resource, it.sourceSystem, '2026-08-05T00:00:00.000Z');
+    const many = await makeReconcileDeps();
+    await captureObservedFacilitiesFromProjection(many, batch, '2026-08-05T00:00:00.000Z');
+    const codes = async (d: typeof one) => (await d.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 })).rows.map((r) => `${r.code}|${r.display}`).sort();
+    expect(await codes(many)).toEqual(['Lab A|Lab A', 'Lab B|Lab B']);
+    expect(await codes(many)).toEqual(await codes(one));
+  });
+
+  it('a_batch_of_known_facilities_writes_nothing', async () => {
+    const deps = await makeReconcileDeps();
+    await captureObservedFacilitiesFromProjection(deps, [report('d1', 'Lab A')], '2026-08-05T00:00:00.000Z');
+    let writes = 0;
+    const counting = { ...deps, admin: { ...deps.admin, terms: { ...deps.admin.terms, importRows: async (...a: Parameters<typeof deps.admin.terms.importRows>) => { writes += 1; return deps.admin.terms.importRows(...a); } } } };
+    await captureObservedFacilitiesFromProjection(counting as never, [report('d2', 'Lab A'), report('d3', 'Lab A')], '2026-08-06T00:00:00.000Z');
+    expect(writes).toBe(0);
+    await captureObservedFacilitiesFromProjection(counting as never, [report('d4', 'Lab C'), report('d5', 'Lab C')], '2026-08-06T00:00:00.000Z');
+    expect(writes).toBe(1);
+  });
+});
+
 describe('captureObservedFacilityFromProjection', () => {
   it('creates a concept from a projected DiagnosticReport with a performer', async () => {
     const deps = await makeReconcileDeps();

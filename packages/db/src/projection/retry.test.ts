@@ -30,7 +30,7 @@ describe('durable projection retries', () => {
   it('recovers after restart without another change and reads the newest canonical resource', async () => {
     const f = await fixture();
     try {
-      const deps = { ...f, internalDb: f.internalDb as never, relationalWriter: { ...f.writer, write: async () => { throw new Error('offline'); }, writeMany: async () => { throw new Error('offline'); } }, logger };
+      const deps = { ...f, internalDb: f.internalDb as never, relationalWriter: { ...f.writer, atomically: undefined, write: async () => { throw new Error('offline'); }, writeMany: async () => { throw new Error('offline'); } }, logger };
       await createProjectionRunner(deps).runCycle();
       expect(await readCursor(f.internalDb as never, 'projection')).toBe(2);
       await f.fhirStore.save({ resourceType: 'Patient', id: 'bad', name: [{ family: 'Latest' }] } as never);
@@ -47,7 +47,7 @@ describe('durable projection retries', () => {
   it('backs off poison resources while projecting later valid resources', async () => {
     const f = await fixture();
     try {
-      const relationalWriter = { ...f.writer, write: async (...args: Parameters<typeof f.writer.write>) => {
+      const relationalWriter = { ...f.writer, atomically: undefined, write: async (...args: Parameters<typeof f.writer.write>) => {
         if ((args[0] as { id?: string }).id === 'bad') throw new Error('poison');
         return f.writer.write(...args);
       }, writeMany: async (items: Parameters<typeof f.writer.writeMany>[0]) => {
@@ -75,7 +75,7 @@ it('retains ledger failures and repairs them idempotently', async () => {
       { seq: 1, xid: 1, resource_type: 'ServiceRequest', resource_id: 'request', op: 'upsert' },
     ], boundary: 100, xmax: 200 });
     const deps = { ...f, internalDb: f.internalDb as never, fetch, logger };
-    await createProjectionRunner({ ...deps, relationalWriter: { ...f.writer, writeIngestEvents: async () => { throw new Error('ledger offline'); } } }).runCycle();
+    await createProjectionRunner({ ...deps, relationalWriter: { ...f.writer, atomically: undefined, writeIngestEvents: async () => { throw new Error('ledger offline'); } } }).runCycle();
     expect(await f.internalDb.selectFrom('fhir.projection_retries').selectAll().execute()).toHaveLength(1);
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(Date.now() + 3_600_000);
@@ -95,7 +95,7 @@ it('keeps the cursor when retry persistence fails', async () => {
       return null;
     });
     const runner = createProjectionRunner({ ...f, internalDb: f.internalDb as never,
-      relationalWriter: { ...f.writer, write: async () => { throw new Error('offline'); }, writeMany: async () => { throw new Error('offline'); } }, logger });
+      relationalWriter: { ...f.writer, atomically: undefined, write: async () => { throw new Error('offline'); }, writeMany: async () => { throw new Error('offline'); } }, logger });
     await expect(runner.runCycle()).rejects.toThrow('retry storage offline');
     expect(await readCursor(f.internalDb as never, 'projection')).toBe(0);
   } finally { await f.internalDb.destroy(); await f.externalDb.destroy(); }
@@ -107,7 +107,7 @@ it('retries a deletion against current canonical state', async () => {
     await f.writer.write({ resourceType: 'Patient', id: 'bad' }, {});
     await f.fhirStore.delete('Patient', 'bad');
     const deps = { ...f, internalDb: f.internalDb as never, logger };
-    await createProjectionRunner({ ...deps, relationalWriter: { ...f.writer, deleteById: async () => { throw new Error('delete offline'); } } }).runCycle();
+    await createProjectionRunner({ ...deps, relationalWriter: { ...f.writer, atomically: undefined, deleteById: async () => { throw new Error('delete offline'); } } }).runCycle();
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(Date.now() + 3_600_000);
     await createProjectionRunner({ ...deps, relationalWriter: f.writer }).runCycle();
@@ -136,7 +136,7 @@ it('caps repeated failure backoff at five minutes without dropping the retry', a
   try {
     vi.useFakeTimers({ toFake: ['Date'] });
     const runner = createProjectionRunner({ ...f, internalDb: f.internalDb as never,
-      relationalWriter: { ...f.writer, write: async () => { throw new Error('still offline'); }, writeMany: async () => { throw new Error('still offline'); } }, logger });
+      relationalWriter: { ...f.writer, atomically: undefined, write: async () => { throw new Error('still offline'); }, writeMany: async () => { throw new Error('still offline'); } }, logger });
     for (let i = 0; i < 12; i++) {
       await runner.runCycle();
       const rows = await f.internalDb.selectFrom('fhir.projection_retries').selectAll().execute();
