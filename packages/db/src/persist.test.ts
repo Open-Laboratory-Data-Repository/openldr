@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { persistResource, persistResources } from './persist';
+import { persistRequests, persistResource, persistResources } from './persist';
 import type { FhirStore } from './fhir-store';
 import { AppError, type Logger } from '@openldr/core';
 
@@ -109,5 +109,89 @@ describe('persistResources strictness gate', () => {
     const { store, saved } = stubStore();
     await persistResources({ fhirStore: store, logger: gateLogger }, [labObs], {}, opts('low'));
     expect(saved).toHaveLength(1);
+  });
+});
+
+// Item 16: the import check saves the passing requests of a page with one call.
+describe('persistRequests', () => {
+  const sr = (id: string) => ({ resourceType: 'ServiceRequest', id, status: 'active', intent: 'order', subject: { reference: 'Patient/p1' } });
+  const result = (id: string, order: string) => ({ ...labObs, id, basedOn: [{ reference: `ServiceRequest/${order}` }] });
+  function pageStore(over: { failWhole?: boolean; failId?: string } = {}) {
+    const calls: Array<{ ids: string[]; opts: unknown }> = [];
+    const stored = new Set<string>();
+    const store = {
+      saveMany: vi.fn(async (rs: any[], _prov?: unknown, o?: unknown) => {
+        calls.push({ ids: rs.map((r) => r.id), opts: o });
+        if (over.failWhole && rs.length > 2) throw Object.assign(new Error('page refused'), { code: '53100' });
+        if (over.failId && rs.some((r) => r.id === over.failId)) throw Object.assign(new Error('row refused'), { code: '23514' });
+        for (const r of rs) if (r.resourceType === 'ServiceRequest') stored.add(r.id);
+        return rs.map((r) => ({ resourceType: r.resourceType, id: r.id, version: 1 }));
+      }),
+      exists: vi.fn(async (_t: string, id: string) => stored.has(id)),
+    } as any;
+    return { store, calls };
+  }
+  const high = (store: any) => ({ level: 'high' as const, resolveServiceRequest: (id: string) => store.exists('ServiceRequest', id) });
+
+  it('saves_every_passing_request_of_the_page_with_one_call_in_order', async () => {
+    const { store, calls } = pageStore();
+    const out = await persistRequests({ fhirStore: store, logger: gateLogger }, [
+      { key: 'A', resources: [sr('sr-a'), result('o-a', 'sr-a')] },
+      { key: 'B', resources: [sr('sr-b'), result('o-b', 'sr-b')] },
+    ], { batchId: 'run' }, { ...high(store), skipUnchanged: true });
+    expect(out).toEqual([{ key: 'A' }, { key: 'B' }]);
+    expect(calls).toEqual([{ ids: ['sr-a', 'o-a', 'sr-b', 'o-b'], opts: { skipUnchanged: true } }]);
+  });
+
+  it('a_result_passes_when_its_order_came_with_an_earlier_request_of_the_page', async () => {
+    const { store, calls } = pageStore();
+    const out = await persistRequests({ fhirStore: store, logger: gateLogger }, [
+      { key: 'A', resources: [sr('sr-a')] },
+      { key: 'B', resources: [result('o-b', 'sr-a')] },
+    ], {}, high(store));
+    expect(out).toEqual([{ key: 'A' }, { key: 'B' }]);
+    expect(calls[0].ids).toEqual(['sr-a', 'o-b']);
+  });
+
+  it('a_result_is_refused_when_its_order_only_comes_with_a_later_request', async () => {
+    const { store, calls } = pageStore();
+    const out = await persistRequests({ fhirStore: store, logger: gateLogger }, [
+      { key: 'A', resources: [result('o-a', 'sr-b')] },
+      { key: 'B', resources: [sr('sr-b')] },
+    ], {}, high(store));
+    expect(out[0].key).toBe('A');
+    expect((out[0].error as { code?: string }).code).toBe('VA0002');
+    expect(out[1]).toEqual({ key: 'B' });
+    expect(calls[0].ids).toEqual(['sr-b']);
+  });
+
+  it('when_the_page_save_fails_each_request_is_saved_alone_and_only_the_bad_one_fails', async () => {
+    const { store, calls } = pageStore({ failWhole: true, failId: 'o-b' });
+    const out = await persistRequests({ fhirStore: store, logger: gateLogger }, [
+      { key: 'A', resources: [sr('sr-a'), result('o-a', 'sr-a')] },
+      { key: 'B', resources: [sr('sr-b'), result('o-b', 'sr-b')] },
+      { key: 'C', resources: [sr('sr-c')] },
+    ], {}, high(store));
+    expect(out.map((o) => [o.key, (o.error as { code?: string } | undefined)?.code ?? null])).toEqual([['A', null], ['B', '23514'], ['C', null]]);
+    // The page, then each request alone.
+    expect(calls.map((c) => c.ids)).toEqual([['sr-a', 'o-a', 'sr-b', 'o-b', 'sr-c'], ['sr-a', 'o-a'], ['sr-b', 'o-b'], ['sr-c']]);
+  });
+
+  it('saved_alone_a_request_no_longer_sees_the_order_of_a_request_that_failed', async () => {
+    const { store } = pageStore({ failWhole: true, failId: 'sr-a' });
+    const out = await persistRequests({ fhirStore: store, logger: gateLogger }, [
+      { key: 'A', resources: [sr('sr-a')] },
+      { key: 'B', resources: [result('o-b', 'sr-a')] },
+      { key: 'C', resources: [sr('sr-c')] },
+    ], {}, high(store));
+    expect(out.map((o) => [o.key, (o.error as { code?: string } | undefined)?.code ?? null])).toEqual([['A', '23514'], ['B', 'VA0002'], ['C', null]]);
+  });
+
+  it('a_page_with_no_passing_request_saves_nothing', async () => {
+    const { store, calls } = pageStore();
+    const out = await persistRequests({ fhirStore: store, logger: gateLogger }, [{ key: 'A', resources: [result('o-a', 'missing')] }], {}, high(store));
+    expect((out[0].error as { code?: string }).code).toBe('VA0002');
+    expect(calls).toEqual([]);
+    expect(await persistRequests({ fhirStore: store, logger: gateLogger }, [], {}, high(store))).toEqual([]);
   });
 });
