@@ -18,10 +18,12 @@ const mocks = vi.hoisted(() => ({
   referenceCapture: { marker: 'referenceCapture' },
   exportCustomQueries: vi.fn(),
   importCustomQueries: vi.fn(),
+  servedCaller: vi.fn(async (): Promise<unknown> => 'local'),
   recordAuditEvent: vi.fn(),
 }));
 
 vi.mock('@openldr/config', () => ({ loadConfig: vi.fn(() => ({ config: true })) }));
+vi.mock('./served-caller', () => ({ servedCaller: mocks.servedCaller }));
 vi.mock('@openldr/bootstrap', async () => {
   const actual = await vi.importActual<typeof import('@openldr/bootstrap')>('@openldr/bootstrap');
   return {
@@ -128,6 +130,20 @@ describe('runQueryImport', () => {
     expect(mocks.importCustomQueries.mock.calls[0][2]).toEqual({ connectorName: undefined, replace: false });
     await runQueryImport(writeInput(), { force: true, connector: 'X Y', json: false });
     expect(mocks.importCustomQueries.mock.calls[1][2]).toEqual({ connectorName: 'X Y', replace: true });
+  });
+
+  // demo.4 item 13: replacing saved queries is a change, so it needs query.manage, as the route does.
+  it('refuses --force for a signed-in caller without query.manage, and writes nothing', async () => {
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    mocks.servedCaller.mockResolvedValueOnce({ id: 'u1', roleIds: [], capabilities: ['query.run'], dataScope: { limited: false } });
+    const code = await runQueryImport(writeInput(), { force: true, json: false });
+    expect(code).toBe(1);
+    expect(mocks.importCustomQueries).not.toHaveBeenCalled();
+    expect(err.mock.calls.map((c) => String(c[0])).join('')).toMatch(/--force replaces saved queries and needs query\.manage/);
+    err.mockRestore();
+    mocks.servedCaller.mockResolvedValueOnce({ id: 'u1', roleIds: [], capabilities: ['query.run'], dataScope: { limited: false } });
+    mocks.importCustomQueries.mockResolvedValue({ results: [] });
+    expect(await runQueryImport(writeInput(), { force: false, json: false })).toBe(0);
   });
 
   it('skips existing names without --force, exits 0 and writes no audit', async () => {

@@ -475,6 +475,7 @@ export const fr: EnShape = {
       },
       query: {
         run: { label: 'Utiliser l’atelier de requêtes', description: 'Exécuter des requêtes SQL ponctuelles sur les données d’analyse.' },
+        manage: { label: 'Gérer les requêtes enregistrées', description: 'Modifier, renommer, déplacer et supprimer toute requête enregistrée, gérer les groupes de requêtes et remplacer des requêtes à l’import.' },
       },
       users: {
         view: { label: 'Voir les utilisateurs', description: 'Ouvrir l’espace Utilisateurs et voir les comptes.' },
@@ -1991,6 +1992,7 @@ export const fr: EnShape = {
     filterTables: 'Filtrer…', noConnectors: 'Aucun connecteur de base de données', rows: 'lignes',
     runParameters: 'Paramètres d’exécution', runWithValues: 'Exécuter avec ces valeurs', runActions: 'Actions d’exécution', anyValue: '(toutes)',
     savedToast: 'Requête personnalisée « {{name}} » enregistrée',
+    copyName: '{{name}} (copie)',
     deleteQuery: 'Supprimer la requête', confirmDeleteQuery: 'Supprimer cette requête personnalisée ?',
     renameQuery: 'Renommer la requête',
     groups: {

@@ -13,9 +13,10 @@ describe('capability catalog', () => {
   // 40 -> 43: patients.view, patients.view_identifiers and patients.manage for the Patient Index.
   // 43 -> 45: ingest.run and data.export, for CLI commands that no Studio screen covers.
   // 45 -> 46: imports.correct_held, for correcting held requests (design 2026-11-18-held-corrections).
-  it('exposes 46 unique capability keys', () => {
-    expect(CAPABILITY_KEYS.length).toBe(46);
-    expect(new Set(CAPABILITY_KEYS).size).toBe(46);
+  // 46 -> 47: query.manage, for changing saved queries (design 2026-11-19-manage-saved-queries).
+  it('exposes 47 unique capability keys', () => {
+    expect(CAPABILITY_KEYS.length).toBe(47);
+    expect(new Set(CAPABILITY_KEYS).size).toBe(47);
   });
 
   it('has imports.correct_held in its own group', () => {

@@ -479,6 +479,7 @@ export const en = {
       },
       query: {
         run: { label: 'Use query workbench', description: 'Run ad-hoc SQL queries against analytics data.' },
+        manage: { label: 'Manage saved queries', description: 'Edit, rename, move and delete any saved query, manage query groups, and replace queries on import.' },
       },
       users: {
         view: { label: 'View users', description: 'Open the Users workspace and see accounts.' },
@@ -2101,6 +2102,7 @@ export const en = {
     filterTables: 'Filter…', noConnectors: 'No database connectors', rows: 'rows',
     runParameters: 'Run parameters', runWithValues: 'Run with these values', runActions: 'Run actions', anyValue: '(any)',
     savedToast: 'Saved custom query “{{name}}”',
+    copyName: '{{name}} (copy)',
     deleteQuery: 'Delete query', confirmDeleteQuery: 'Delete this custom query?',
     renameQuery: 'Rename query',
     groups: {

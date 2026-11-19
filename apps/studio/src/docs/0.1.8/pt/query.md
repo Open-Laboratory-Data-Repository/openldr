@@ -6,6 +6,8 @@ Comece com o seu conector e os dados recebidos. Não precisa de dados de exemplo
 
 Precisa de **Use query workbench**. As consultas leem dados. São recusadas instruções que alterem dados ou tabelas. Uma nova instalação cria um conector para o motor de armazém configurado. Estas imagens usam **Target Warehouse (Postgres)**. Outras origens exigem um conector de base correspondente e ativo.
 
+Para renomear, editar, mover ou apagar uma consulta guardada, ou gerir grupos, precisa também de **Gerir consultas guardadas**. Sem essa permissão, o Explorador não mostra menus de linha, e Guardar numa consulta guardada mantém a original e guarda uma cópia com um novo nome.
+
 As consultas integradas guardadas podem alimentar relatórios. Consulte-as, mas compreenda essas dependências antes de alterar o SQL ou os identificadores de parâmetros.
 
 ## Explorar uma tabela de origem
@@ -476,7 +478,7 @@ Use `./openldr` na pasta instalada em Linux ou macOS, `.\openldr.ps1` em Windows
 ./openldr query import data/queries.json
 ```
 
-A exportação substitui um ficheiro de saída existente. A importação ignora nomes existentes por predefinição. Acrescente `--force` apenas para os substituir. O conteúdo específico de um sistema laboratorial pertence a ficheiros de pacotes geridos pelo operador.
+A exportação substitui um ficheiro de saída existente. A importação ignora nomes existentes por predefinição. Acrescente `--force` apenas para os substituir. `--force` exige **Gerir consultas guardadas**. O conteúdo específico de um sistema laboratorial pertence a ficheiros de pacotes geridos pelo operador.
 
 ## Ficheiro opcional de consulta para praticar
 

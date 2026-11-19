@@ -7,6 +7,7 @@ import {
 import { createCustomQueryGroupStore, createCustomQueryStore, referenceCapture } from '@openldr/db';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
+import { servedCaller } from './served-caller';
 
 export interface QueryExportOpts {
   /** Query names to export. Omitted means every custom query. */
@@ -103,6 +104,14 @@ export async function runQueryImport(file: string, opts: QueryImportOpts): Promi
 
   const ctx = await createAppContext(loadConfig());
   try {
+    // --force overwrites saved queries, so it needs query.manage, as the import route does (demo.4
+    // item 13). A local run is the machine's operator and is not checked.
+    if (opts.force) {
+      const caller = await servedCaller(ctx);
+      if (caller !== 'local' && !caller?.capabilities.includes('query.manage')) {
+        return fail('--force replaces saved queries and needs query.manage');
+      }
+    }
     const deps = buildDeps(ctx);
     // Read the existing rows first, so a replace can record what it overwrote.
     const beforeByName = new Map<string, unknown>();
