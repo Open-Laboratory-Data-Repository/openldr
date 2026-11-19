@@ -159,6 +159,34 @@ describe('pack datasets: refresh', () => {
     expect(await w.service.refreshDue()).toEqual([]);
     await w.db.destroy();
   });
+  it('an_install_and_a_refresh_at_once_build_each_dataset_once', async () => {
+    const w = await world();
+    await w.catchUp();
+    // The refresh is asked for while the install is still building. It takes its turn after it.
+    const installing = w.service.install('p', [{ name: 'one', sql: 'select 1' }, { name: 'two', sql: 'select 2' }]);
+    await new Promise((r) => setTimeout(r, 2));
+    const refreshed = w.service.refreshDue();
+    await installing;
+    await refreshed;
+    // Whichever of the two built `two`, each dataset was built once.
+    expect(w.built).toEqual(['one', 'two']);
+    await w.db.destroy();
+  });
+
+  it('an_install_does_not_build_again_what_a_refresh_just_built', async () => {
+    const w = await world();
+    await w.catchUp();
+    await w.service.install('p', [{ name: 'one', sql: 'select 1' }]);
+    w.built.length = 0;
+    // The same definitions again, with nothing changed since: nothing to build.
+    await w.service.install('p', [{ name: 'one', sql: 'select 1' }]);
+    expect(w.built).toEqual([]);
+    // A changed definition is built.
+    await w.service.install('p', [{ name: 'one', sql: 'select 11' }]);
+    expect(w.built).toEqual(['one']);
+    await w.db.destroy();
+  });
+
   it('a_dataset_that_failed_is_tried_again_only_after_the_next_change', async () => {
     const w = await world({ failing: ['abc'] });
     await w.catchUp();

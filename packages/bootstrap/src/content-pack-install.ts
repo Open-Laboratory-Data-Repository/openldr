@@ -183,7 +183,12 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
         return;
       }
       case 'custom-queries': {
-        const { changes } = await deps.importQueries(step.file);
+        // A pack's queries sit in a Query page group named for the pack, so a reader can tell where
+        // each came from. A query the pack already placed in a group keeps that group.
+        const { changes } = await deps.importQueries({
+          ...step.file,
+          queries: step.file.queries.map((q) => ((q as { group?: unknown }).group ? q : { ...q, group: at.packId })),
+        });
         for (const c of changes) {
           // A pack replaces a query by name, so the before row keeps the SQL it overwrote.
           await record({

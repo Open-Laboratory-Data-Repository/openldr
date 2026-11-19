@@ -368,10 +368,16 @@ export function ExplorerTree(): JSX.Element {
       {openBranch.datasets && datasets.map((d) => (
         <Row key={d.id} depth={1} onClick={() => openDatasetTab({ name: d.name })} icon={<Table2 className="h-3.5 w-3.5" />} label={d.name} />
       ))}
-      {openBranch.datasets && packDatasets.map((d) => (
-        <div key={`pack:${d.name}`} className="group flex min-w-0 items-center">
+      {/* A pack's datasets sit under the pack's name, as its queries sit in a group named for it. */}
+      {openBranch.datasets && [...new Set(packDatasets.map((d) => d.ownerPack))].map((pack) => {
+        const inPack = packDatasets.filter((d) => d.ownerPack === pack);
+        return (
+          <div key={`dp:${pack}`}>
+            <Row depth={1} open={!!openBranch[`dp:${pack}`]} onClick={() => toggle(`dp:${pack}`)} icon={<Folder className="h-3.5 w-3.5" />} label={pack} count={inPack.length} />
+            {openBranch[`dp:${pack}`] && inPack.map((d) => (
+            <div key={`pack:${d.name}`} className="group flex min-w-0 items-center">
           <div className="min-w-0 flex-1">
-            <Row depth={1}
+            <Row depth={2}
               // With no warehouse connector to browse it through, the row opens its details.
               onClick={() => (d.connectorId ? openTableTab({ connectorId: d.connectorId, type: 'postgres', schema: 'dataset', table: d.name }) : setDatasetInfo(d))}
               icon={<Table2 className={`h-3.5 w-3.5 ${d.lastError ? 'text-destructive' : ''}`} />} label={d.name}
@@ -383,7 +389,10 @@ export function ExplorerTree(): JSX.Element {
             {canManage && <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteDataset(d.name)}>{t('query.dataset.delete')}</DropdownMenuItem>}
           </RowMenu>
         </div>
-      ))}
+            ))}
+          </div>
+        );
+      })}
 
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
         {/* Dropping a query on the branch row takes it out of its group. */}

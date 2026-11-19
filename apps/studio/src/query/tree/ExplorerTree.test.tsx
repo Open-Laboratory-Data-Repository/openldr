@@ -204,8 +204,18 @@ describe('pack datasets in the explorer', () => {
   async function openDatasets() {
     render(<ExplorerTree />);
     fireEvent.click(await screen.findByText('Datasets'));
+    // A pack's datasets sit in a group named for the pack, closed until opened.
+    fireEvent.click(await screen.findByText('reports-zm'));
     await screen.findByText('zm_request_times');
   }
+
+  it('groups_pack_datasets_under_their_pack_closed_with_a_count', async () => {
+    render(<ExplorerTree />);
+    fireEvent.click(await screen.findByText('Datasets'));
+    const group = (await screen.findByText('reports-zm')).closest('button')!;
+    expect(within(group).getByText('2')).toBeInTheDocument();
+    expect(screen.queryByText('zm_request_times')).toBeNull();
+  });
 
   it('lists_pack_datasets_after_the_workflow_ones', async () => {
     await openDatasets();

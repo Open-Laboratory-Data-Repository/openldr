@@ -459,3 +459,18 @@ describe('content pack installer: datasets (pack datasets design)', () => {
   });
 });
 
+describe('content pack installer: a pack\'s queries sit in a group named for the pack', () => {
+  it('gives_a_query_with_no_group_the_packs_id_and_keeps_a_group_the_pack_names', async () => {
+    const queries = [{ name: 'plain', sql: 'select 1', params: [] }, { name: 'placed', sql: 'select 2', params: [], group: 'Viral load' }];
+    const pack = { formatVersion: 1, steps: [{ kind: 'custom-queries', file: { format: 'openldr.custom-queries', version: 1, exportedAt: '2026-01-01T00:00:00Z', queries } }] };
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup();
+    await s.installer.install(bundle, { actor });
+    const file = (s.deps.importQueries as any).mock.calls[0][0];
+    expect(file.queries.map((q: any) => [q.name, q.group])).toEqual([['plain', 'test-pack'], ['placed', 'Viral load']]);
+    // The check reads the pack's own file, unchanged.
+    expect((s.deps.checkQueries as any).mock.calls[0][0].queries[0].group).toBeUndefined();
+    await cleanup();
+  });
+});
+

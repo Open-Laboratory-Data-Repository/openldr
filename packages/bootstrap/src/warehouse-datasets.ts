@@ -86,6 +86,12 @@ export function createWarehouseDatasetService(deps: WarehouseDatasetDeps): Wareh
     }
   }
 
+  /** True when the dataset was never built, or the warehouse has changed since its last build. */
+  async function isStale(name: string): Promise<boolean> {
+    const [d, reading] = await Promise.all([deps.store.get(name), readWarehouseReading(deps.internalDb)]);
+    return !d || d.builtAtSeq === null || d.builtAtSeq < reading.head;
+  }
+
   const service: WarehouseDatasetService = {
     list: () => deps.store.list(),
 
@@ -109,8 +115,8 @@ export function createWarehouseDatasetService(deps: WarehouseDatasetDeps): Wareh
       await service.check(ownerPack, defs);
       await deps.store.replaceForPack(ownerPack, defs);
       for (const def of defs) {
-        const out = await inTurn(() => buildOne(def));
-        if (!out.ok) throw new Error(`dataset ${def.name}: ${out.error}`);
+        const out = await inTurn(async () => ((await isStale(def.name)) ? buildOne(def) : null));
+        if (out && !out.ok) throw new Error(`dataset ${def.name}: ${out.error}`);
       }
     },
 
@@ -137,7 +143,9 @@ export function createWarehouseDatasetService(deps: WarehouseDatasetDeps): Wareh
       if (stale.length === 0) return [];
       return inTurn(async () => {
         const done: string[] = [];
-        for (const d of stale) { await buildOne(d); done.push(d.name); }
+        // Checked again now that its turn has come: an install or a rebuild that ran first may
+        // have built it. On the first real install the refresher built four datasets a second time.
+        for (const d of stale) { if (await isStale(d.name)) { await buildOne(d); done.push(d.name); } }
         return done;
       });
     },
