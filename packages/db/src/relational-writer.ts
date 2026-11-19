@@ -21,10 +21,17 @@ export interface RelationalWriter {
   writeMany(items: RelationalWriteItem[]): Promise<WriteResult[]>;
   deleteById(resourceType: string, id: string): Promise<void>;
   writeIngestEvents(events: ArrivalEvent[]): Promise<void>;
+  /** Runs `fn` with a writer whose writes all commit together, in one warehouse transaction, or
+   *  not at all. The projection uses it so a batch costs one commit, not one per table (item 16). */
+  atomically?<T>(fn: (writer: RelationalWriter) => Promise<T>): Promise<T>;
 }
 
 export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: TargetEngine = 'postgres'): RelationalWriter {
   const anyDb = db as unknown as Kysely<any>;
+  /** Inside `atomically` the writer already runs in a transaction, and Kysely refuses to open one
+   *  inside another. The outer one gives the same all-or-nothing, so the work just runs in it. */
+  const inTransaction = <T>(fn: (trx: Kysely<any>) => Promise<T>): Promise<T> =>
+    anyDb.isTransaction ? fn(anyDb) : anyDb.transaction().execute(fn);
   // `conflictCols` defaults to the single `id` PK every other warehouse table has. `ingest_events`
   // is the one table whose natural key IS its primary key, three columns wide with no `id` at all —
   // see batch-upsert.ts's comment on why a hardcoded 'id' target broke it outright on real Postgres.
@@ -44,7 +51,7 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
   async function replaceScope(p: RelationalResult): Promise<void> {
     const scope = p.scope;
     if (!scope) { await upsertOn(anyDb, p.table, p.rows); return; }
-    await anyDb.transaction().execute(async (trx: Kysely<any>) => {
+    await inTransaction(async (trx: Kysely<any>) => {
       await trx.deleteFrom(p.table).where(scope.column as any, '=', scope.value as any).execute();
       await upsertOn(trx, p.table, p.rows);
     });
@@ -98,7 +105,7 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
       for (const [table, entry] of owned) {
         const allRows: Record<string, unknown>[] = [];
         for (const rows of entry.rowsByScope.values()) for (const row of rows) allRows.push(row);
-        await anyDb.transaction().execute(async (trx: Kysely<any>) => {
+        await inTransaction(async (trx: Kysely<any>) => {
           for (let i = 0; i < entry.scopeValues.length; i += 500) {
             const chunk = entry.scopeValues.slice(i, i + 500);
             await trx.deleteFrom(table).where(entry.scopeColumn as any, 'in', chunk as any).execute();
@@ -128,6 +135,9 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
         anyDb, 'ingest_events', events as unknown as Record<string, unknown>[],
         ['resource_type', 'resource_id', 'version'],
       );
+    },
+    atomically(fn) {
+      return inTransaction((trx) => fn(createRelationalWriter(trx as unknown as Kysely<ExternalSchema>, engine)));
     },
   };
 }

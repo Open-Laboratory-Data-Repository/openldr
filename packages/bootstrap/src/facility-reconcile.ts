@@ -2101,27 +2101,80 @@ export async function captureObservedFacilityFromProjection(
   sourceSystem: string | null,
   now: string,
 ): Promise<void> {
+  const seen = observedFacilityOf(resourceType, resource, sourceSystem);
+  if (seen) await captureObservedFacility(deps, seen.system, seen.code, now, seen.display);
+}
+
+/** The facility a projected record names, and the system it is filed under, or null when it names
+ *  none. One definition for the per-record hook and the per-batch one. */
+function observedFacilityOf(
+  resourceType: string, resource: Record<string, unknown>, sourceSystem: string | null,
+): { system: string; code: string; display: string | null | undefined } | null {
   if (resourceType === 'ServiceRequest') {
     const request = projectServiceRequest(resource, {});
-    if (!request.requester_code) return;
-    const system = resolvedObservedSystem(request.requester_system, sourceSystem);
-    await captureObservedFacility(deps, system, request.requester_code, now, request.requester_display);
-    return;
+    if (!request.requester_code) return null;
+    return { system: resolvedObservedSystem(request.requester_system, sourceSystem), code: request.requester_code, display: request.requester_display };
   }
-  if (resourceType !== 'DiagnosticReport') return;
+  if (resourceType !== 'DiagnosticReport') return null;
   const projected = projectDiagnosticReport(resource, {});
   const performer = projected.performer;
-  if (!performer) return;
+  if (!performer) return null;
   // Same system preference as scan/resolve: the wire's own `performer_system` (`identifier.
   // system`) wins over the feed-based inference, so a code captured here at ingest time lands
   // under the SAME system a later full scan would also file it under.
-  const system = resolvedObservedSystem(projected.performer_system, sourceSystem);
   // ⛔ `performer_display` comes from the SAME `projectDiagnosticReport` call as `performer`, so the
   // name stored on the concept and the one the Observed tab reads off
   // `diagnostic_reports.performer_display` can never disagree. Dropping it here is what created 88
   // concepts displaying their own code: this hook is what first writes the concept, and
   // `observedFacilityConceptRow` falls back to `code` when given no display.
-  await captureObservedFacility(deps, system, performer, now, projected.performer_display);
+  return { system: resolvedObservedSystem(projected.performer_system, sourceSystem), code: performer, display: projected.performer_display };
+}
+
+/**
+ * The same capture for a whole projected batch (item 16). The per-record hook asked the database
+ * "is this facility known?" once per record, and on a 2.3 million request import that question was
+ * the largest single cost left in the projection. A batch names few distinct facilities, so this
+ * asks once per system for the batch's distinct codes, and hands only the unknown ones to
+ * `captureObservedFacility`, which checks again and writes exactly as before. The first record of
+ * the batch to name a facility supplies its display, as it did one record at a time.
+ */
+export async function captureObservedFacilitiesFromProjection(
+  deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
+  items: Array<{ resourceType: string; resource: Record<string, unknown>; sourceSystem: string | null }>,
+  now: string,
+): Promise<void> {
+  const bySystem = new Map<string, Map<string, string | null | undefined>>();
+  for (const item of items) {
+    const seen = observedFacilityOf(item.resourceType, item.resource, item.sourceSystem);
+    if (!seen || seen.system === FACILITY_REGISTRY_SYSTEM) continue;
+    const codes = bySystem.get(seen.system) ?? new Map<string, string | null | undefined>();
+    if (!codes.has(seen.code)) codes.set(seen.code, seen.display);
+    bySystem.set(seen.system, codes);
+  }
+  for (const [system, codes] of bySystem) {
+    const all = [...codes.keys()];
+    const known = new Set<string>();
+    for (let i = 0; i < all.length; i += 1000) {
+      const rows = await deps.internalDb
+        .selectFrom('terminology_concepts')
+        .select(['code'])
+        .where('system', '=', system)
+        .where('code', 'in', all.slice(i, i + 1000))
+        .execute();
+      for (const row of rows) known.add(row.code);
+    }
+    for (const [code, display] of codes) {
+      if (known.has(code)) continue;
+      // One facility that cannot be recorded must not cost the batch its others. The per-record
+      // hook lost one facility to one failure, and so does this. The next scan records it.
+      try {
+        await captureObservedFacility(deps, system, code, now, display);
+      } catch (err) {
+        // eslint-disable-next-line no-console -- this module takes no logger, as `registerObservedSystem` notes.
+        console.error('[facility-reconcile] failed to record an observed facility from a projected batch', system, err);
+      }
+    }
+  }
 }
 
 // ── Task 13: the mapping-conflict review queue ─────────────────────────────────────────────────

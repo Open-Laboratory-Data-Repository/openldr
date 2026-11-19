@@ -74,7 +74,7 @@ import { createUpdateCheck, type UpdateCheck } from './update-check';
 export * from './update-check';
 export { createMapToFhirApi, MAP_TEST_MAX_ITEMS, MapConfigError, type MapToFhirApi, type MapTestResult } from './map-to-fhir-api';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
-import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
+import { captureObservedFacilityFromProjection, captureObservedFacilitiesFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
 import { createWorkflowSql } from './workflow-sql';
 import { createFacilityJobWorkerIfEnabled } from './facility-job-worker';
 import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
@@ -1551,6 +1551,9 @@ const reporting: ReportingApi = {
     // lands in THAT feed's coding system rather than always the default one.
     onProjected: (resourceType, resource, provenance) =>
       captureObservedFacilityFromProjection({ admin: termAdmin, internalDb: internal.db }, resourceType, resource, provenance.sourceSystem ?? null, new Date().toISOString()),
+    // A batch that projected in bulk asks once for its distinct facilities (item 16).
+    onProjectedMany: (items) =>
+      captureObservedFacilitiesFromProjection({ admin: termAdmin, internalDb: internal.db }, items.map((it) => ({ resourceType: it.resourceType, resource: it.resource, sourceSystem: it.provenance.sourceSystem ?? null })), new Date().toISOString()),
   });
   const projectionWorker = createProjectionWorker({
     runCycle: () => projectionRunner.runCycle(),

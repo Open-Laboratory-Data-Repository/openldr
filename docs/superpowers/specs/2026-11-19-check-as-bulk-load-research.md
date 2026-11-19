@@ -525,6 +525,94 @@ HONEST NON-PROOF:
 - No reader was found that writes `fhir.fhir_resources` outside the store. A plugin or script that
   did would now fail, loudly, on the view.
 
+## The full Tanzania source on the standalone (2026-11-19)
+
+A clean install of `0.1.12-demo.5`, built from `main` at `770f37f2`. The source is the restored DISA
+database: 2,326,075 requests. The projection ran throughout. Evidence is in
+`~/.local/share/demo5-evidence/`.
+
+| Step | Time | Result |
+|---|---|---|
+| Copy | 58.6 min | 2,326,075 requests, 48.2 million rows, 19.9 GiB |
+| Check | 60 min (09:21 to 10:21 UTC) | 2,130,022 saved, 163,451 held, 32,602 failed |
+
+The check ran at 625 to 680 requests a second from start to end. The server answered its health
+call in 2 to 5 ms the whole time, worst 0.33 s.
+
+The dashboard's 13 widgets, and all 77 report queries one after another:
+
+| Requests read | Dashboard | 77 queries | Over 10 s | Slowest |
+|---|---|---|---|---|
+| 0 | 38 ms | 1.9 s | 0 | |
+| 617,000 | 0.64 s | 70 s | 1 | 11.3 s |
+| 1,179,000 | 0.88 s | 205 s | 7 | 29.5 s |
+| 1,778,000 | 1.38 s | 296 s | | |
+| 2,326,075 | 1.77 s | 363 s | 9 | 49.8 s |
+
+At full size one report was stopped by the 30 s statement limit. Three more fail in every pass
+because my script sends a blank for a required parameter. That is the script, not the app.
+
+The warehouse was about half behind at every mark, and still 54.5 percent behind when the check
+ended. So the last row of the table is the warehouse at half its final size. The full-size timings
+with a complete warehouse are not taken yet.
+
+### Why the warehouse was half behind
+
+Measured for 20 s during the check: the check wrote 9,434 change rows a second and the projection
+moved 2,667. It finished 4.9 batches a second of 500 rows. No batch failed, nothing waited for a
+retry, and the longest open writing transaction was 0.5 s. With the check finished the projection
+alone moved 6,100 to 7,500 a second.
+
+Variants, each for 30 to 40 s on the real backlog, with the server stopped:
+
+| Variant | Change rows a second |
+|---|---|
+| Before: 500, a commit per table, a facility lookup per record | 6,122, 6,942, 7,482, 6,744 |
+| 500, one commit per batch | 8,719 |
+| 2,000, a commit per table | 9,303 |
+| 2,000, one commit | 10,557, 11,331 |
+| 5,000, one commit | 10,345 |
+| 2,000, one commit, no facility lookup | 14,640, 15,515 |
+| Built: 2,000, one commit, one facility lookup per batch | 15,383 |
+
+### Built result: branch `perf/projection-one-commit`
+
+- A batch's warehouse writes are one transaction (`RelationalWriter.atomically`). Disk flushes
+  fell from about 125 a second to 20.
+- The default batch is 2,000 change rows (`DEFAULT_BATCH` in `projection/cycle.ts`).
+- The facility capture asks once per coding system for a batch's distinct codes
+  (`captureObservedFacilitiesFromProjection`).
+
+Old and new code projected the same 58,530 bench records into a fresh warehouse. All 11 tables had
+the same row counts and the same content digests. The full gate passed: 39 test tasks and 40
+typecheck tasks. A fresh reviewer found no lost-record path.
+
+HONEST NON-PROOF for this branch:
+
+- That the projection keeps up during a check. 15,383 is above the 9,434 the check writes, but it
+  was measured with the check finished. During a check both share one disk. A second full run
+  would prove it.
+- A SQL Server or MySQL warehouse. One transaction per batch holds its locks for longer there.
+- That a failed batch leaves no row is proved on real PostgreSQL only
+  (`relational-writer.live.test.ts`). pg-mem does not undo a failed transaction.
+
+### Why the slow reports are slow
+
+The warehouse has almost no indexes: primary keys, plus `diagnostic_reports(based_on_id)`,
+`lab_results(request_id)` and `patients(match_key)`. For the slow reports an index would not help
+as they are written. "Requests received by week" joins all of `lab_requests`, `diagnostic_reports`
+and `specimens`, parses each date from text with a regular expression, groups by request, and only
+then applies the date filter. Its plan read 3.7 GB of table from disk and wrote 3.4 GB of sort and
+hash files, with PostgreSQL at its defaults (`shared_buffers` 160 MB, `work_mem` 4 MB).
+
+Raising `work_mem` for the session moved the sorts into memory but did not make the report faster:
+52 s at 4 MB, 114 s at 64 MB, 65 s at 256 MB. Those runs shared the machine with the test gate and
+the projection, so they are too noisy to rank. What they do show is that sort memory alone is not
+the fix. The cost is reading and grouping every row on every run.
+
+Not yet tried: a larger `shared_buffers`, typed date columns with the filter applied before the
+grouping, and summary tables kept up to date by the projection.
+
 ## HONEST NON-PROOF
 
 - Proven for this sample since the first draft: a re-run gives the same hashes (see "Measured").

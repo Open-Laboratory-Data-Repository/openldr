@@ -20,6 +20,20 @@ describe('relational-writer', () => {
     await db.destroy();
   });
 
+  it('atomically_commits_every_write_of_the_callback_together', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    await w.atomically!(async (tx) => {
+      await tx.writeMany([{ resource: { resourceType: 'Patient', id: 'p1' }, provenance: {} }]);
+      // A request with owned rows: inside `atomically` its replace must not open a second transaction.
+      await tx.write({ resourceType: 'Patient', id: 'p2' }, {});
+      await tx.writeIngestEvents([{ resource_type: 'Patient', resource_id: 'p1', version: 1, recorded_at: new Date('2026-01-01T00:00:00Z') }]);
+    });
+    expect((await db.selectFrom('patients').select('id').orderBy('id').execute()).map((r) => r.id)).toEqual(['p1', 'p2']);
+    expect(await db.selectFrom('ingest_events').selectAll().execute()).toHaveLength(1);
+    await db.destroy();
+  });
+
   it('writeMany groups by table and returns per-item results', async () => {
     const db = await makeMigratedExternalDb();
     const w = createRelationalWriter(db as never, 'postgres');

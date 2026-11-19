@@ -179,6 +179,8 @@ describe('runProjectionCycle in bulk (item 16)', () => {
     let failOne: string | null = null;
     const relationalWriter = {
       ...real,
+      // Not the real writer's: that would run the batch on the real writer and pass this fake by.
+      atomically: undefined,
       async write(resource: unknown, provenance: never) {
         const id = (resource as { id: string }).id;
         calls.write.push(id);
@@ -306,6 +308,68 @@ describe('runProjectionCycle in bulk (item 16)', () => {
     await w.run(['p1', 'p2', 'p3'], async (_t, r) => { seen.push(r.id as string); });
     expect(seen).toEqual(['p1', 'p3']);
     await w.done();
+  });
+
+  // That the failed batch leaves no row behind is proved on real PostgreSQL, in
+  // relational-writer.live.test.ts: pg-mem does not undo a failed transaction.
+  it('a_batch_is_written_in_one_warehouse_transaction_and_a_failure_sends_every_record_to_retry', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    const real = createRelationalWriter(externalDb as never, 'postgres');
+    let atomic = 0;
+    // The arrivals write, the batch's last, refuses, and so does each record tried alone.
+    const relationalWriter = {
+      ...real,
+      write: async () => { throw new Error('offline'); },
+      atomically: <T>(fn: (w: typeof real) => Promise<T>) => {
+        atomic += 1;
+        return real.atomically!((tx) => fn({ ...tx, writeIngestEvents: async () => { throw new Error('arrivals refused'); } }));
+      },
+    };
+    for (const id of ['p1', 'p2']) await fhirStore.save({ resourceType: 'Patient', id } as never);
+    const projected = await createProjectionRunner({
+      internalDb: internalDb as never, fhirStore, relationalWriter: relationalWriter as never, logger,
+      fetch: async () => ({ rows: rowsFor(['p1', 'p2']), boundary: 100, xmax: 200 }),
+    }).runCycle();
+    expect(atomic).toBe(1);
+    expect(projected).toBe(0);
+    expect((await internalDb.selectFrom('fhir.projection_retries').select('resource_id').orderBy('resource_id').execute()).map((r) => r.resource_id)).toEqual(['p1', 'p2']);
+    await internalDb.destroy(); await externalDb.destroy();
+  });
+
+  it('a_batch_hook_is_called_once_with_the_whole_batch_and_the_record_hook_is_not', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    for (const id of ['p1', 'p2', 'p3']) await fhirStore.save({ resourceType: 'Patient', id } as never);
+    const batches: string[][] = [];
+    const single: string[] = [];
+    await createProjectionRunner({
+      internalDb: internalDb as never, fhirStore, relationalWriter: createRelationalWriter(externalDb as never, 'postgres'), logger,
+      fetch: async () => ({ rows: rowsFor(['p1', 'p2', 'p3']), boundary: 100, xmax: 200 }),
+      onProjected: async (_t, r) => { single.push(r.id as string); },
+      onProjectedMany: async (items) => { batches.push(items.map((it) => `${it.resourceType} ${it.resource.id as string}`)); },
+    }).runCycle();
+    expect(batches).toEqual([['Patient p1', 'Patient p2', 'Patient p3']]);
+    expect(single).toEqual([]);
+    await internalDb.destroy(); await externalDb.destroy();
+  });
+
+  it('a_batch_hook_that_throws_does_not_fail_the_batch', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    await fhirStore.save({ resourceType: 'Patient', id: 'p1' } as never);
+    const projected = await createProjectionRunner({
+      internalDb: internalDb as never, fhirStore, relationalWriter: createRelationalWriter(externalDb as never, 'postgres'), logger,
+      fetch: async () => ({ rows: rowsFor(['p1']), boundary: 100, xmax: 200 }),
+      onProjectedMany: async () => { throw new Error('hook broke'); },
+    }).runCycle();
+    expect(projected).toBe(1);
+    expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(1);
+    expect(await internalDb.selectFrom('fhir.projection_retries').selectAll().execute()).toHaveLength(0);
+    await internalDb.destroy(); await externalDb.destroy();
   });
 
   it('the_hook_is_called_for_each_record_written_in_batch_order', async () => {
