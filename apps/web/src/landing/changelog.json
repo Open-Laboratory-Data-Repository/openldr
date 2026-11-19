@@ -1,10 +1,16 @@
 {
-  "generatedAt": "2026-11-19",
+  "generatedAt": "2026-11-20",
   "days": [
     {
       "date": "2026-11-19",
       "version": null,
       "entries": [
+        {
+          "hash": "4d748753",
+          "type": "fix",
+          "scope": "copy",
+          "title": "The delete before each copied page keeps to the index on a large copy (migration 134)"
+        },
         {
           "hash": "194123fc",
           "type": "feat",
