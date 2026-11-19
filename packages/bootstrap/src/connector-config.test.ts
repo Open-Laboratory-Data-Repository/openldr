@@ -99,6 +99,13 @@ it('points a certificate failure to Trust server certificate, not to a Node.js f
     expect(await testHostConnector(store, 'ms', key, async () => { throw new Error(nodeText); })).toEqual({
       ok: false, error: 'Failed to connect to 127.0.0.1:14341 - self-signed certificate', hint: 'tlsCertificate',
     });
+    // Only a SQL Server connector has that switch (Codex review B7-R1), so other types get no hint.
+    for (const type of ['postgres', 'mysql']) {
+      await store.create({ id: type, name: type, type, kind: 'database', config: { host: 'db', password: 'p' } }, key);
+      expect(await testHostConnector(store, type, key, async () => { throw new Error(nodeText); })).toEqual({
+        ok: false, error: 'Failed to connect to 127.0.0.1:14341 - self-signed certificate',
+      });
+    }
   } finally { await db.destroy(); }
 });
 

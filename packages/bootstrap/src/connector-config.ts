@@ -106,7 +106,9 @@ export async function testHostConnector(
     // cannot do that; the connector's "Trust server certificate" switch is the fix, so the hint
     // names it and the advice is dropped (demo.4 item 7).
     const error = (e instanceof Error ? e.message : String(e)).replace(NODE_CA_ADVICE, '');
-    return classifyConnectError(error) === 'tlsCertificate' ? { ok: false, error, hint: 'tlsCertificate' } : { ok: false, error };
+    // Only a SQL Server connector has that switch (Codex review B7-R1).
+    const trustSwitch = record.type === 'microsoft-sql' && classifyConnectError(error) === 'tlsCertificate';
+    return trustSwitch ? { ok: false, error, hint: 'tlsCertificate' } : { ok: false, error };
   }
 }
 
