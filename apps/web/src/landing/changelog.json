@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "f891e0e7",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "One facility that cannot be recorded does not cost a projected batch its others, and the full-source run is written up (item 16 review)"
+        },
+        {
+          "hash": "e15d71ab",
+          "type": "perf",
+          "scope": "db",
+          "title": "A projection batch is one warehouse transaction of 2,000 change rows, and asks once for its facilities (item 16)"
+        },
+        {
           "hash": "82afcf4c",
           "type": "fix",
           "scope": "db",
