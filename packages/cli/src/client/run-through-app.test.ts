@@ -334,6 +334,16 @@ describe('sending a command', () => {
     expect(srv.calls[0]!.headers.authorization).toBeUndefined();
   });
 
+  // demo.4 item 3: before sign-in, a command with a small file sometimes printed "The connection to
+  // OpenLDR was lost." instead of the 401. With Connection: close the server ends the socket right
+  // after a refusal, and the client's next write of the file met EPIPE before it read the answer.
+  // Only two processes show that race (checked live on the demo.4 install), so this pins the cause.
+  it('asks to keep the connection open, so it can still send while a refusal comes back', async () => {
+    const srv = await startServer(answers({ t: 'exit', code: 0 }));
+    await cli(['layouts', 'list'], { OPENLDR_URL: srv.url });
+    expect(srv.calls[0]!.headers.connection).toBe('keep-alive');
+  });
+
   it('sends the command and prints output in order, and returns the exit code', async () => {
     const srv = await startServer(answers(
       { t: 'out', d: b64('one\n') }, { t: 'err', d: b64('two\n') }, { t: 'out', d: b64('three\n') },
