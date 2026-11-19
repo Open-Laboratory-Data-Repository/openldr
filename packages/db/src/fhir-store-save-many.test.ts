@@ -161,6 +161,51 @@ describe('fhirStore.saveMany', () => {
   }, 60_000);
 });
 
+// Item 16: which path a store saves with. pg-mem cannot run the set-based statement.
+describe('fhirStore.saveMany: choosing the save path', () => {
+  it('a_database_that_cannot_run_the_statement_gets_the_row_path_and_is_asked_once', async () => {
+    let probes = 0;
+    const db = (await makeMigratedDb()).withPlugin({
+      transformQuery({ node }: { node: RootOperationNode & { kind: string; sqlFragments?: readonly string[] } }) {
+        if (node.kind === 'RawNode' && node.sqlFragments?.join('').includes('with ordinality')) probes++;
+        return node;
+      },
+      async transformResult({ result }: { result: unknown }) { return result; },
+    } as never);
+    const store = createFhirStore(db as never);
+    await store.saveMany([{ resourceType: 'Patient', id: 'c1' }] as never);
+    await store.saveMany([{ resourceType: 'Patient', id: 'c2' }] as never);
+    expect(probes).toBe(1);
+    expect((await db.selectFrom('fhir.resource_history').select('id').where('id', 'in', ['c1', 'c2']).execute()).length).toBe(2);
+    await db.destroy();
+  });
+
+  it('a_failure_that_is_not_about_the_statement_is_not_remembered', async () => {
+    let probes = 0;
+    let down = true;
+    const db = (await makeMigratedDb()).withPlugin({
+      transformQuery({ node }: { node: RootOperationNode & { kind: string; sqlFragments?: readonly string[] } }) {
+        if (node.kind === 'RawNode' && node.sqlFragments?.join('').includes('with ordinality')) {
+          probes++;
+          // As a dropped connection: nothing to do with what the database can run.
+          if (down) throw Object.assign(new Error('Connection terminated unexpectedly'), { code: 'ECONNRESET' });
+        }
+        return node;
+      },
+      async transformResult({ result }: { result: unknown }) { return result; },
+    } as never);
+    const store = createFhirStore(db as never);
+    await store.saveMany([{ resourceType: 'Patient', id: 'd1' }] as never);
+    down = false;
+    await store.saveMany([{ resourceType: 'Patient', id: 'd2' }] as never);
+    await store.saveMany([{ resourceType: 'Patient', id: 'd3' }] as never);
+    // Asked again after the failure, then settled: pg-mem cannot run it, so twice in all.
+    expect(probes).toBe(2);
+    expect((await db.selectFrom('fhir.resource_history').select('id').where('id', 'in', ['d1', 'd2', 'd3']).execute()).length).toBe(3);
+    await db.destroy();
+  });
+});
+
 // Item 16: a check save skips a record whose content is the latest stored content.
 describe('fhirStore.saveMany with skipUnchanged', () => {
   const versions = async (db: Awaited<ReturnType<typeof makeMigratedDb>>, id: string) =>

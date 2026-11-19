@@ -38,6 +38,8 @@ const REQUESTS = 'requests';
 /** The set a reference copy offers. */
 const TWINS = 'twins';
 const DEFAULT_PAGE_SIZE = 500;
+/** The most pages a check decodes ahead of its saves. Each is a worker thread and a page of rows in memory. */
+const MAX_PAGES_AHEAD = 8;
 const HEARTBEAT_MS = 30_000;
 /** The most row JSON the dictionaries of one copy may hold, over every set. */
 const DICTIONARY_CAP = 64 * 1024 * 1024;
@@ -198,6 +200,13 @@ export interface ImportCheckServiceDeps extends Pick<ImportServiceDeps, 'plugins
    *  (design 2026-11-19-check-decode-ahead). Left out, the check runs on the main thread, one
    *  page at a time. */
   decodeOffThread?: boolean;
+  /** How many pages to keep decoding ahead of the saves, with `decodeOffThread`. Left out, 1. Each
+   *  page ahead is one more worker thread and one more page of rows in memory. */
+  decodePagesAhead?: number;
+  /** Saves the passing requests of one page with one call, and says how each ended, by key. A
+   *  request it could not save carries the error a single save would have thrown. Left out, each
+   *  request is saved alone with `persist`, as before. A recheck always uses `persist`. */
+  persistPage?: (requests: Array<{ key: string; resources: unknown[] }>, provenance: Provenance) => Promise<Array<{ key: string; error?: unknown }>>;
 }
 
 /** One value a person may pick for a field: the code stored, and the name shown beside it. */
@@ -655,14 +664,15 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
   async function driveCheck(run: CheckRun, entry: Drive): Promise<void> {
     const d = driving(run, entry);
     let outcome: CheckOutcome = 'failed';
-    /** The next page, read and with its decode running, while the current page saves (item 16).
-     *  At most one. Only a drive with `decodeOffThread` ever has one. */
-    let ahead: PageAhead | null = null;
-    /** Waits for a page ahead still decoding, then forgets it. No decode outlives its drive. */
+    /** The next pages, in key order, each read and with its decode running, while the current page
+     *  saves (item 16). Each was read after the last key of the one before it. Only a drive with
+     *  `decodeOffThread` ever has any. */
+    let aheads: PageAhead[] = [];
+    /** Waits for every page ahead still decoding, then forgets them. No decode outlives its drive. */
     const dropAhead = async (): Promise<void> => {
-      const a = ahead;
-      ahead = null;
-      if (a) await a.work.catch(() => undefined);
+      const all = aheads;
+      aheads = [];
+      for (const a of all) await a.work.catch(() => undefined);
     };
 
     const body = async (): Promise<CheckOutcome> => {
@@ -869,13 +879,15 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         // gave groups, and the corrections of its keys are still what the plugin was sent. In every
         // other case it is waited for and thrown away, and the page is read and decoded here.
         let fromAhead: { keys: string[]; stored: Map<string, Correction[]>; decoded: Decoded } | null = null;
-        const a = ahead;
-        ahead = null;
+        const a = aheads.shift();
         if (a) {
           const decoded = await a.work.catch(() => null);
           if (decoded && !rechecking && a.after === run.cursor && a.size === size
             && correctionsSig(a.keys, await readCorrections(a.keys)) === correctionsSig(a.keys, a.stored)) {
             fromAhead = { keys: a.keys, stored: a.stored, decoded };
+          } else {
+            // The pages behind it were read after its keys, so they go with it.
+            await dropAhead();
           }
         }
         const keys = fromAhead
@@ -942,9 +954,26 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
 
         // Before this page's first save: read the next page and start its decode on a worker, so
         // it runs while this page saves (item 16). Never in a recheck, which has one page.
-        if (deps.decodeOffThread === true && !rechecking) ahead = await startAhead(p, keys[keys.length - 1]!, size);
+        if (deps.decodeOffThread === true && !rechecking) {
+          // A page read at another size is not the page the loop will ask for, nor are those after it.
+          if (aheads.some((x) => x.size !== size)) await dropAhead();
+          // 1 to 8 pages. A value that is not a number means 1. Without the upper limit a large
+          // value would read and decode the whole copy at once.
+          const asked = deps.decodePagesAhead ?? 1;
+          const want = Number.isNaN(asked) ? 1 : Math.min(MAX_PAGES_AHEAD, Math.max(1, Math.floor(asked)));
+          let after = aheads.length > 0 ? aheads[aheads.length - 1]!.keys.at(-1)! : keys[keys.length - 1]!;
+          while (aheads.length < want) {
+            const next = await startAhead(p, after, size);
+            if (!next) break;
+            aheads.push(next);
+            after = next.keys[next.keys.length - 1]!;
+          }
+        }
 
         const saved: string[] = [];
+        /** Requests that passed and wait for the page save (item 16). Empty without `persistPage`. */
+        const pending: Array<{ key: string; resources: unknown[]; label: string | null; laboratory: string | null; shown: string | undefined }> = [];
+        const usePage = deps.persistPage !== undefined && !rechecking;
         for (const key of keys) {
           const group = groups.get(key);
           if (!group || twice.has(key)) {
@@ -974,6 +1003,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           const resources = group.resources ?? [];
           const refused = checkResources(resources, allowedTypes);
           if (refused) { await keepFailed(key, refused, label, laboratory); decided('failed'); continue; }
+          if (usePage) { pending.push({ key, resources, label, laboratory, shown: group.label }); continue; }
           try {
             await deps.persist(resources, provenance);
           } catch (err) {
@@ -984,6 +1014,28 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
           saved.push(key);
           decided('saved');
           t.resources += resources.length;
+        }
+        if (pending.length > 0) {
+          // One call for the page. Whatever it throws, or leaves out, is that request's failure, as a
+          // throw from a single save is.
+          let ended = new Map<string, { error?: unknown }>();
+          let whole: unknown;
+          try {
+            ended = new Map((await deps.persistPage!(pending.map((r) => ({ key: r.key, resources: r.resources })), provenance)).map((o) => [o.key, o]));
+          } catch (err) {
+            whole = err;
+          }
+          for (const r of pending) {
+            const end = ended.get(r.key);
+            if (!end || end.error !== undefined) {
+              await keepFailed(r.key, saveCode(end ? end.error : whole), r.label, r.laboratory);
+              t.decided.push({ outcome: 'failed', laboratory: r.laboratory, label: r.shown });
+              continue;
+            }
+            saved.push(r.key);
+            t.decided.push({ outcome: 'saved', laboratory: r.laboratory, label: r.shown });
+            t.resources += r.resources.length;
+          }
         }
         // A request that passes now leaves the held-back store. In a recheck that waits for the counts
         // to be saved first (re-review H3).

@@ -412,6 +412,65 @@ HONEST NON-PROOF:
   already uses on them.
 - No sync worker ran.
 
+## Built result: the set-based save, branch `perf/save-set-based` (2026-11-19)
+
+The second of the three. Design, as built:
+
+- **One statement per save on real PostgreSQL** (`writeManySet` in `fhir-store.ts`). Node hashes
+  each record as before, so a hash is the same text whichever path wrote it. The call goes over
+  once, as four arrays. The server reads the newest history row of each key, applies the hash skip,
+  numbers the versions, stamps `meta` and fills the three tables.
+- **The history row is written before the change row inside that statement.** The change insert
+  reads the history insert's `RETURNING` rows. That keeps the projection's rule that a change row
+  is never a transaction's first write.
+- **pg-mem keeps the row path.** It cannot run `unnest`, a correlated subquery or a window
+  function (probed). The store asks the database once and uses the statement where it works.
+  `fhir-store-save-set.live.test.ts` runs every scenario through both paths on real PostgreSQL, each
+  in its own database, and compares the three tables and the returned refs.
+- **The check saves a page with one call** (`persistRequests`, wired as `persistPage`). Each request
+  is still checked on its own, in order. A result sees the orders already stored and the orders of
+  earlier requests of its page, never of later ones. If the page save fails, each request is saved
+  alone, so one bad request fails alone.
+- **No all-or-nothing tie between the page and the cursor.** The hash skip makes a page that is
+  run again write nothing, so a cut between the page save and the cursor write costs nothing.
+  That removes the riskiest rule of the old page-transaction plan (slice 2b).
+- **The check decodes three pages ahead** (`decodePagesAhead`, was one).
+
+Measured, same 5,000 requests, quiet machine. Every run: 5,000 read, 4,850 saved, 119 held, 31 failed.
+
+| | Requests/s | Whole run | Time in saves |
+|---|---|---|---|
+| `main` before this branch | 273 and 281 | 18.3 and 17.8 s | 14.7 s |
+| Set-based save, still one call per request | 325 and 319 | 15.4 and 15.7 s | 11.4 s |
+| Plus one save per page, 1 page ahead | 323 | 15.5 s | 4.7 s |
+| 2 pages ahead | 512 | 9.8 s | 5.2 s |
+| 3 pages ahead, three runs | 544, 546 and 548 | 9.2 s | 5.1 s |
+| 4 pages ahead | 559 | 8.9 s | 5.0 s |
+| 3 ahead, run again over loaded data | 635 | 7.9 s | 3.4 s, writing nothing |
+| 3 ahead, with the projection worker | 546 | 9.2 s | 5.1 s |
+
+- About twice as fast as before this branch, and eleven times the 50 a second the day began with.
+  A full source check (2.3 million) would take about 1.2 hours on this disk.
+- Same stored result: the full change list (type, id, version, op, hash) after a branch run is
+  byte-identical to a `main` run (`cmp` exit 0). So is the list after a run stopped at 2,500 read
+  and started again.
+- With the projection running, the warehouse was 24,526 change rows behind when the check ended
+  and caught up 2.0 s later. It projects about 7,150 records a second while working, against the
+  check's 6,400.
+- The longest main-thread stall stayed under 190 ms.
+- Three pages ahead is where the gain flattens, so it is the default.
+
+HONEST NON-PROOF:
+- The gate runs the unit tests on pg-mem, which takes the row path. The set-based statement is
+  tested only by the live tests, run by hand against real PostgreSQL
+  (`FHIR_SAVE_TEST_DATABASE_URL`), and by this bench. A change to one path that the other does not
+  get would pass the gate.
+- The sample has 10 pages. The first page cannot be decoded ahead, so a long run should do a
+  little better than these numbers. Not measured.
+- Memory with three pages ahead was not measured. Each page ahead holds about 20 MB of input.
+- The built standalone app and the Docker image were not run.
+- No reference copy in the bench, so the twin-keys path ran only in unit tests.
+
 ## HONEST NON-PROOF
 
 - Proven for this sample since the first draft: a re-run gives the same hashes (see "Measured").

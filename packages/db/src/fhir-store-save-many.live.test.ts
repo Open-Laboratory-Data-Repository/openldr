@@ -63,7 +63,9 @@ describe.skipIf(!url)('saveMany on disposable PostgreSQL', () => {
   }
 
   it('a failure after the canonical and history rows are written leaves none of the list saved', async () => {
-    const store = createFhirStore(db.withPlugin(failOnInsert('change_log')) as never);
+    // The row path: the injected failure hooks a query-builder insert, which only that path sends.
+    // The set-based path is one statement, so it is all or nothing by itself (fhir-store-save-set.live.test.ts).
+    const store = createFhirStore(db.withPlugin(failOnInsert('change_log')) as never, { saveMode: 'rows' });
     const ids = ['a1', 'a2', 'a3'].map((x) => `${x}-${randomUUID()}`);
     await expect(store.saveMany(ids.map((id) => ({ resourceType: 'Patient', id })) as never)).rejects.toThrow('injected save failure');
     expect(await counts(ids)).toEqual({ resources: 0, history: 0, changeLog: 0 });
@@ -88,7 +90,7 @@ describe.skipIf(!url)('saveMany on disposable PostgreSQL', () => {
   it('persistResources saves a whole request or none of it', async () => {
     const logger = { info() {}, warn() {}, error() {}, debug() {} } as never;
     const ids = ['b1', 'b2', 'b3'].map((x) => `${x}-${randomUUID()}`);
-    const bad = createFhirStore(db.withPlugin(failOnInsert('change_log')) as never);
+    const bad = createFhirStore(db.withPlugin(failOnInsert('change_log')) as never, { saveMode: 'rows' });
     await expect(persistResources({ fhirStore: bad, logger }, ids.map((id) => ({ resourceType: 'Patient', id })))).rejects.toThrow();
     expect(await counts(ids)).toEqual({ resources: 0, history: 0, changeLog: 0 });
     const good = createFhirStore(db);
@@ -163,7 +165,8 @@ describe.skipIf(!url)('saveMany on disposable PostgreSQL', () => {
           const value = Reflect.get(target, prop, target);
           return typeof value === 'function' ? value.bind(target) : value;
         },
-      }) as never);
+      // The row path: the gate holds a writer after its versions lookup, a statement only that path sends.
+      }) as never, { saveMode: 'rows' });
       return store.saveMany([{ resourceType: 'Patient', id: own }, { resourceType: 'Patient', id: shared }] as never)
         .then(() => ({ ok: true as const, own }), (e: { code?: string }) => ({ ok: false as const, own, code: e.code }));
     };
