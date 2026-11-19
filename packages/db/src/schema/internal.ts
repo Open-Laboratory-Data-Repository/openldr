@@ -846,6 +846,22 @@ export interface WorkflowDatasetsTable {
   updated_at: Generated<Date>;
 }
 
+/** A dataset a content pack defines (migration 131). Its built table is `dataset.<name>` in the warehouse. */
+export interface WarehouseDatasetsTable {
+  name: string;
+  owner_pack: string;
+  sql: string;
+  indexes: JSONColumnType<string[][]>;
+  position: number;
+  built_at_seq: number | null;
+  built_at: Date | null;
+  build_ms: number | null;
+  row_count: number | null;
+  last_error: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface CustomQueriesTable {
   id: string;
   name: string;
@@ -1194,6 +1210,7 @@ export interface InternalSchema {
   job_interruptions: JobInterruptionsTable;
   workflow_schedules: WorkflowSchedulesTable;
   workflow_datasets: WorkflowDatasetsTable;
+  warehouse_datasets: WarehouseDatasetsTable;
   custom_queries: CustomQueriesTable;
   custom_query_groups: CustomQueryGroupsTable;
   user_preferences: UserPreferencesTable;
