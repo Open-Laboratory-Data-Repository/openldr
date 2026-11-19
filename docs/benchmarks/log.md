@@ -194,3 +194,34 @@ first build of the new pack against 1.4 s before, because PostgreSQL redid the l
 of 36,010 rows. Not proved: many labs. The Tanzania data has one lab code, so each lab query
 returns one lab. The generator's own 13,049 check cases cover several labs.
 
+
+## Reports pack with five datasets (reports-zm 0.2.0, commit c7f6ce4, not published)
+
+Tanzania full, warehouse complete, standalone at CE 0.1.12-demo.8. Three more datasets
+(`zm_request_ids`, `zm_vl_tested_by_month`, `zm_lab_dist`), so 20 of 74 queries read a dataset. The
+published 0.1.2 SQL against the new SQL, same parameter values. 60 cases compared, 60 with identical
+rows; 21 refused by both with the same message. The 7 lab queries are measured again here with the
+rest. Evidence: `~/.local/share/demo5-evidence/zm-pack/compare-run3.txt` (all 20),
+`compare-run4-materialized.txt` and `time-small-run3.txt`, `time-small-run4.txt` (after the fix
+below).
+
+| Date | Query | Parameters | Before | After |
+|---|---|---|---|---|
+| 2026-11-19 | Client by ART number | blank (1,550,756 rows) | 15.9 s | 11.6 s |
+| 2026-11-19 | Client by ART number | one ART number, two values | 5.9 to 6.0 s | 1.9 s |
+| 2026-11-19 | VL results for a facility's clients | 2017, 2018 | 5.2 to 7.4 s | 4.3 to 7.0 s |
+| 2026-11-19 | VL requests and tests by lab and month | four date ranges | 5.1 to 5.4 s | 1.8 to 2.2 s |
+| 2026-11-19 | VL throughput by lab and month | 2017, 2018, 2019 | 3.9 to 4.8 s | 0.6 to 1.4 s |
+| 2026-11-19 | Days since last transmission | three dates | 9.7 to 11.1 s | 9.2 to 10.5 s |
+| 2026-11-19 | VL and EID weekly stats | 2017, 2018 | 7.4 to 11.3 s | 6.4 to 10.6 s |
+| 2026-11-19 | Seven facility-level queries | 2017, 2018, median of 5 | 7.5 to 28.3 ms | 7.2 to 25.6 ms |
+| 2026-11-19 | All 60 cases | | 1081 s | 272 s |
+
+A fault found on the way and fixed before commit: "Unique VL clients by facility (12 months)" took
+about 1 s against 11 ms in 0.1.2, and "Unique VL clients" and "DBS monitoring" were 4 to 7 ms
+slower. PostgreSQL scanned the ids table in parallel and joined every request before finding that
+no facility is mapped. Those three now read the ids as a materialized step: 11 to 26 ms, within 1 ms
+of 0.1.2. Materialized in every query was worse: "Client by ART number" went from 2.0 s to 5.3 s.
+
+Not proved: the seven facility-level queries return nothing here (no facility code is mapped in the
+Tanzania data), so their speed on real Zambia data is not measured. The lab queries return one lab.
