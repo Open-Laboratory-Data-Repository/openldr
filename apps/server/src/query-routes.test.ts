@@ -722,8 +722,8 @@ describe('SQL Server database level', () => {
 
 describe('pack datasets on the Query page', () => {
   const ROWS = [
-    { name: 'zm_request_times', ownerPack: 'reports-zm', rowCount: 4239703, builtAt: '2026-11-19T11:00:00.000Z', buildMs: 28000, lastError: null, stale: false },
-    { name: 'zm_broken', ownerPack: 'reports-zm', rowCount: null, builtAt: null, buildMs: null, lastError: 'relation "nope" does not exist', stale: true },
+    { name: 'zm_request_times', ownerPack: 'reports-zm', rowCount: 4239703, builtAt: '2026-11-19T11:00:00.000Z', buildMs: 28000, lastError: null, stale: false, connectorId: 'c1' },
+    { name: 'zm_broken', ownerPack: 'reports-zm', rowCount: null, builtAt: null, buildMs: null, lastError: 'relation "nope" does not exist', stale: true, connectorId: 'c1' },
   ];
   function withDatasets() {
     const calls: string[] = [];

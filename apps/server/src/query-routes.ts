@@ -26,7 +26,8 @@ export interface QueryRouteDeps {
   runConnectorSql(input: { connectorId: string; sql: string; rowCap?: number; offset?: number }): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
   /** Datasets a content pack defines, kept as warehouse tables. Absent: the list is empty. */
   warehouseDatasets?: {
-    list(): Promise<DatasetListItem[]>;
+    /** `connectorId` is the warehouse connector the Query page browses the table through. */
+    list(): Promise<Array<DatasetListItem & { connectorId: string | null }>>;
     /** Throws `no dataset named <name>` for an unknown name. A build that fails is in the result. */
     rebuild(name: string): Promise<DatasetBuildResult>;
     remove(name: string): Promise<void>;

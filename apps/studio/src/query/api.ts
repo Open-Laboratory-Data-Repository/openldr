@@ -10,6 +10,13 @@ export interface QueryTransferFile {
 }
 export interface ImportResult { results: { name: string; outcome: 'created' | 'replaced' | 'skipped'; id: string }[] }
 export interface DatasetRef { id: string; name: string; rowCount: number }
+/** A dataset a content pack defines. It is the warehouse table `dataset.<name>`. `connectorId` is the
+ *  warehouse connector to browse it through, or null where there is none. */
+export interface PackDatasetRef {
+  name: string; ownerPack: string; rowCount: number | null; builtAt: string | null; buildMs: number | null;
+  lastError: string | null; stale: boolean; connectorId: string | null;
+}
+export interface DatasetBuildResult { name: string; ok: boolean; rows?: number; ms?: number; error?: string }
 
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? res.statusText);
@@ -25,6 +32,9 @@ export const queryApi = {
   schemas: (id: string, database?: string) => authFetch(`/api/query/connectors/${id}/schemas${dbQuery(database)}`).then(j<string[]>),
   tables: (id: string, schema: string, database?: string) => authFetch(`/api/query/connectors/${id}/schemas/${schema}/tables${dbQuery(database)}`).then(j<string[]>),
   datasets: () => authFetch('/api/query/datasets').then(j<DatasetRef[]>),
+  warehouseDatasets: () => authFetch('/api/query/warehouse-datasets').then(j<PackDatasetRef[]>),
+  rebuildDataset: (name: string) => authFetch(`/api/query/warehouse-datasets/${encodeURIComponent(name)}/rebuild`, { method: 'POST' }).then(j<DatasetBuildResult>),
+  removeDataset: (name: string) => authFetch(`/api/query/warehouse-datasets/${encodeURIComponent(name)}`, { method: 'DELETE' }).then(j<{ ok: true }>),
   // The datasets/:name route returns { columns, rows, rowCount } with no `ms`, so omit it from the type.
   datasetRows: (name: string) => authFetch(`/api/query/datasets/${encodeURIComponent(name)}`).then(j<Omit<RunResult, 'ms'>>),
   run: (body: { connectorId: string; sql: string; params?: CustomQueryParam[]; values?: Record<string, unknown>; limit?: number; offset?: number }) =>

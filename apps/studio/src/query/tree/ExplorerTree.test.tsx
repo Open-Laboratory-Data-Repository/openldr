@@ -12,6 +12,12 @@ vi.mock('../api', () => ({ queryApi: {
   schemas: vi.fn(async () => ['public']),
   tables: vi.fn(async () => ['products']),
   datasets: vi.fn(async () => [{ id: 'd1', name: 'AMR', rowCount: 2 }]),
+  warehouseDatasets: vi.fn(async () => [
+    { name: 'zm_request_times', ownerPack: 'reports-zm', rowCount: 4239703, builtAt: '2026-11-19T11:00:00.000Z', buildMs: 28000, lastError: null, stale: false, connectorId: 'c1' },
+    { name: 'zm_broken', ownerPack: 'reports-zm', rowCount: null, builtAt: null, buildMs: null, lastError: 'relation "nope" does not exist', stale: true, connectorId: 'c1' },
+  ]),
+  rebuildDataset: vi.fn(async (name: string) => ({ name, ok: true, rows: 7, ms: 12 })),
+  removeDataset: vi.fn(async () => ({ ok: true })),
   list: vi.fn(async () => [
     { id: 'cq1', name: 'Q1', connectorId: 'c1', sql: '', params: [], groupId: null },
     { id: 'cq2', name: 'TB LAM', connectorId: 'c1', sql: '', params: [], groupId: 'g1' },
@@ -191,3 +197,67 @@ describe('ExplorerTree', () => {
     expect(queryApi.remove).not.toHaveBeenCalled();
   });
 });
+
+describe('pack datasets in the explorer', () => {
+  beforeEach(() => { caps = 'all'; useQueryStore.getState().reset(); vi.mocked(queryApi.rebuildDataset).mockClear(); vi.mocked(queryApi.removeDataset).mockClear(); });
+
+  async function openDatasets() {
+    render(<ExplorerTree />);
+    fireEvent.click(await screen.findByText('Datasets'));
+    await screen.findByText('zm_request_times');
+  }
+
+  it('lists_pack_datasets_after_the_workflow_ones', async () => {
+    await openDatasets();
+    expect(screen.getByText('AMR')).toBeInTheDocument();
+    expect(screen.getByText('zm_broken')).toBeInTheDocument();
+  });
+
+  it('opens_a_pack_dataset_as_a_warehouse_table', async () => {
+    await openDatasets();
+    fireEvent.click(screen.getByText('zm_request_times'));
+    expect(useQueryStore.getState().tabs).toEqual([expect.objectContaining({ kind: 'table', connectorId: 'c1', schema: 'dataset', table: 'zm_request_times', sql: 'select * from "dataset"."zm_request_times"' })]);
+  });
+
+  it('offers_details_rebuild_and_delete_and_only_details_without_query_manage', async () => {
+    await openDatasets();
+    openMenu(screen.getByLabelText('Actions for zm_request_times'));
+    expect(within(screen.getByRole('menu')).getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Details', 'Rebuild', 'Delete dataset']);
+  });
+
+  it('offers_only_details_without_query_manage', async () => {
+    caps = ['query.run'];
+    await openDatasets();
+    openMenu(screen.getByLabelText('Actions for zm_request_times'));
+    expect(within(screen.getByRole('menu')).getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Details']);
+  });
+
+  it('rebuild_calls_the_server_and_reloads_the_list', async () => {
+    await openDatasets();
+    vi.mocked(queryApi.warehouseDatasets).mockClear();
+    openMenu(screen.getByLabelText('Actions for zm_request_times'));
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: 'Rebuild' })); });
+    await waitFor(() => expect(queryApi.rebuildDataset).toHaveBeenCalledWith('zm_request_times'));
+    await waitFor(() => expect(queryApi.warehouseDatasets).toHaveBeenCalled());
+  });
+
+  it('delete_asks_first_then_calls_the_server', async () => {
+    await openDatasets();
+    openMenu(screen.getByLabelText('Actions for zm_request_times'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete dataset' }));
+    expect(queryApi.removeDataset).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Delete dataset' })); });
+    await waitFor(() => expect(queryApi.removeDataset).toHaveBeenCalledWith('zm_request_times'));
+  });
+
+  it('details_shows_the_owner_the_rows_and_the_last_error', async () => {
+    await openDatasets();
+    openMenu(screen.getByLabelText('Actions for zm_broken'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Details' }));
+    const sheet = await screen.findByRole('dialog');
+    expect(within(sheet).getByText('reports-zm')).toBeInTheDocument();
+    expect(within(sheet).getByText('Not built yet')).toBeInTheDocument();
+    expect(within(sheet).getByText('relation "nope" does not exist')).toBeInTheDocument();
+  });
+});
+
