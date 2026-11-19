@@ -3533,6 +3533,21 @@ export const fetchActivity = (limit = 200): Promise<RecentPayload[]> =>
 export const fetchLifecycle = (id: string): Promise<Lifecycle> =>
   authFetch(`/api/activity/${encodeURIComponent(id)}`).then((r) => okJson<Lifecycle>(r, 'load lifecycle'));
 
+/** How far the warehouse is behind the records saved. Mirrors `WarehouseStatus` in @openldr/bootstrap. */
+export interface WarehouseStatus {
+  head: number;
+  cursor: number;
+  behind: number;
+  waitingRetry: number;
+  oldestWaitingAt: string | null;
+  readAt: string;
+  appliedPerSecond: number | null;
+  secondsLeft: number | null;
+  fallingBehind: boolean;
+}
+export const fetchWarehouseStatus = (): Promise<WarehouseStatus> =>
+  authFetch('/api/warehouse/status').then((r) => okJson<WarehouseStatus>(r, 'load warehouse status'));
+
 // ── Plugin UI surface (SP-A1b) ─────────────────────────────────────────────────
 
 export interface PluginUiEntry {

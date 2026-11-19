@@ -209,6 +209,22 @@ Um envio registado não prova que o destinatário aceitou ou leu os dados. Stuck
 | Running | Uma importação ou lote CLI continua ativo. |
 | Stopped | Uma importação ou lote CLI foi parado. |
 
+## Verificar se o armazém está atualizado
+
+Os painéis e os relatórios leem o armazém. O OpenLDR guarda primeiro cada registo e depois copia-o para o armazém. Durante uma importação grande, o armazém pode ficar muito atrasado, e um painel mostra então menos do que foi guardado.
+
+A linha **Armazém** no topo de Activity mostra em que ponto está. Atualiza-se sozinha.
+
+| A linha diz | Significado |
+| --- | --- |
+| Atualizado | Tudo o que foi guardado está no armazém. Os painéis e os relatórios estão completos. |
+| Alterações em atraso, com um tempo restante | O armazém está a recuperar. O tempo é uma estimativa feita com os últimos segundos. |
+| O atraso está a aumentar | Os registos chegam mais depressa do que o armazém os recebe, como durante uma importação. O tempo restante aparece quando a importação termina. |
+
+**Mostra os registos guardados até** indica a hora do registo mais antigo ainda em espera. Os relatórios estão completos para o que foi guardado antes.
+
+Num terminal, `openldr db warehouse-status` mostra os mesmos números.
+
 ## Compreender a janela do histórico
 
 Activity carrega até 200 envios recentes. A pesquisa, os filtros, a ordenação e a paginação atuam nessas linhas. Não pesquisam toda a base de dados.

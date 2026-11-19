@@ -367,3 +367,33 @@ describe('db reproject', () => {
     expect(mocks.dbCtx.pendingMigrations).not.toHaveBeenCalled();
   });
 });
+
+describe('db warehouse-status', () => {
+  const base = { head: 1000, cursor: 400, behind: 600, waitingRetry: 0, oldestWaitingAt: '2026-11-19T10:00:00.000Z', readAt: '2026-11-19T10:05:00.000Z' };
+
+  it('formats_a_duration_in_the_largest_two_units', async () => {
+    const { formatDuration } = await import('./db');
+    expect([formatDuration(40), formatDuration(720), formatDuration(7500)]).toEqual(['40 s', '12 min', '2 h 5 min']);
+  });
+
+  it('says_up_to_date_when_nothing_waits', async () => {
+    const { warehouseStatusLines } = await import('./db');
+    expect(warehouseStatusLines({ ...base, cursor: 1000, behind: 0, oldestWaitingAt: null, appliedPerSecond: null, secondsLeft: null, fallingBehind: false })).toEqual(['The warehouse is up to date.']);
+  });
+
+  it('prints_the_gap_the_rate_and_the_time_left', async () => {
+    const { warehouseStatusLines } = await import('./db');
+    expect(warehouseStatusLines({ ...base, appliedPerSecond: 50, secondsLeft: 720, fallingBehind: false })).toEqual([
+      'behind = 600 changes (the warehouse is at 400 of 1000)',
+      'oldestWaiting = 2026-11-19T10:00:00.000Z',
+      'rate = 50 changes a second',
+      'timeLeft = about 12 min',
+      'waitingRetry = 0',
+    ]);
+  });
+
+  it('says_falling_behind_when_the_gap_grows', async () => {
+    const { warehouseStatusLines } = await import('./db');
+    expect(warehouseStatusLines({ ...base, appliedPerSecond: 50, secondsLeft: null, fallingBehind: true })[3]).toBe('timeLeft = falling behind: records are being saved faster than the warehouse takes them');
+  });
+});

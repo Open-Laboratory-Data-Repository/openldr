@@ -212,6 +212,7 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // No route rebuilds the read model. It rewrites every projected warehouse row, a destructive
   // maintenance action, so it takes the danger zone's key (settings-routes.ts:32, :507).
   'db reproject': { kind: 'app', capability: 'settings.danger_zone', destructive: true },
+  'db warehouse-status': { kind: 'app', capability: 'activity.view' },
 
   // No route exports the whole dataset, patient details included. data.export is new, and only
   // lab_admin holds it.

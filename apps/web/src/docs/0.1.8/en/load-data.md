@@ -380,7 +380,8 @@ it. See the in-app **Distributed Sync** guide.
 Ingested resources land in the internal FHIR store and are projected into the analytics
 warehouse that reports and dashboards read. If data ingests but does not show up in a report,
 confirm the target store is configured (see [Environment variables](/docs/environment)) and give
-the projection a moment to catch up.
+the projection a moment to catch up. The **Warehouse** line at the top of the Activity page shows
+how far behind it is and how long it needs. `openldr db warehouse-status` prints the same numbers.
 
 ### Request facts and request attributes
 

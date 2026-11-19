@@ -1,4 +1,4 @@
-import { createDbContext, createAppContext, seedDatabase, recordAuditEvent } from '@openldr/bootstrap';
+import { createDbContext, createAppContext, seedDatabase, recordAuditEvent, readWarehouseReading, withRate, type WarehouseStatus } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { reprojectAll } from '@openldr/db';
 import { redactError } from './redact-error';
@@ -163,6 +163,49 @@ export async function runDbSeed(opts: JsonOpt): Promise<number> {
     } finally {
       await appCtx.close();
     }
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** Seconds as "2 h 5 min", "12 min" or "40 s". */
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.max(Math.round(seconds), 1)} s`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+
+/** The lines `db warehouse-status` prints. Exported for its test. */
+export function warehouseStatusLines(s: WarehouseStatus): string[] {
+  if (s.behind === 0) {
+    return ['The warehouse is up to date.', ...(s.waitingRetry > 0 ? [`waitingRetry = ${s.waitingRetry}`] : [])];
+  }
+  const left = s.fallingBehind
+    ? 'falling behind: records are being saved faster than the warehouse takes them'
+    : s.secondsLeft !== null ? `about ${formatDuration(s.secondsLeft)}` : 'unknown';
+  return [
+    `behind = ${s.behind} changes (the warehouse is at ${s.cursor} of ${s.head})`,
+    `oldestWaiting = ${s.oldestWaitingAt ?? '-'}`,
+    `rate = ${s.appliedPerSecond !== null ? `${s.appliedPerSecond} changes a second` : 'not measured'}`,
+    `timeLeft = ${left}`,
+    `waitingRetry = ${s.waitingRetry}`,
+  ];
+}
+
+/** `openldr db warehouse-status`: how far the warehouse is behind the records saved. It reads twice,
+ *  `seconds` apart, to say how fast the gap is closing. `--seconds 0` reads once. Read-only. */
+export async function runDbWarehouseStatus(opts: JsonOpt & { seconds: number }): Promise<number> {
+  const ctx = await createDbContext(loadConfig());
+  try {
+    const first = await readWarehouseReading(ctx.internalDb);
+    let status = withRate(null, first);
+    if (opts.seconds > 0 && first.behind > 0) {
+      await new Promise((resolve) => setTimeout(resolve, opts.seconds * 1000));
+      status = withRate(first, await readWarehouseReading(ctx.internalDb));
+    }
+    emit(opts.json, status, warehouseStatusLines(status).join('\n'));
+    return 0;
   } finally {
     await ctx.close();
   }

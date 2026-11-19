@@ -389,7 +389,8 @@ aqui. Consulte o guia **Sincronização distribuída** na aplicação.
 Os recursos carregados ficam no armazém FHIR interno e são projetados para o armazém
 analítico que os relatórios e os painéis leem. Se os dados forem carregados mas não
 aparecerem num relatório, confirme que o armazém de destino está configurado (consulte
-[Variáveis de ambiente](/docs/environment)) e dê algum tempo à projeção para se atualizar.
+[Variáveis de ambiente](/docs/environment)) e dê algum tempo à projeção para se atualizar. A linha **Armazém** no topo da página Activity mostra
+o atraso e o tempo necessário. `openldr db warehouse-status` mostra os mesmos números.
 
 ### Factos e atributos dos pedidos
 

@@ -60,6 +60,7 @@ import { createSyncHandle, type SyncHandle } from './sync-handle';
 import { createSyncRuntime, type SyncRuntime, type BuiltPush, type BuiltPull } from './sync-runtime';
 import { createRetryQuarantine } from './sync-retry-quarantine';
 import { createSyncActivityTracker } from './sync-activity-tracker';
+import { createWarehouseStatusReader, type WarehouseStatusReader } from './warehouse-status';
 import { encodePushBody, advertisesGzip } from './sync-gzip';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
 import { createResourceLoader } from './reexpand-value-sets';
@@ -603,6 +604,8 @@ export interface AppContext {
    *  (Task 8). Reads the level fresh per persist call so runtime setting changes apply immediately. */
   validationStrictness: ValidationStrictness;
   activity: ActivityService;
+  /** How far the warehouse is behind the records saved, and how fast the gap closes. */
+  warehouseStatus: WarehouseStatusReader;
   /** Seal a plaintext secret for at-rest storage (AES-256-GCM under SECRETS_ENCRYPTION_KEY).
    *  Symmetric with {@link decryptSecret}; used by the sync settings route/CLI to write-encrypt
    *  the client secret. */
@@ -2147,6 +2150,7 @@ const reporting: ReportingApi = {
     numberSettings,
     validationStrictness,
     activity,
+    warehouseStatus: createWarehouseStatusReader(internal.db),
     encryptSecret,
     decryptSecret: syncDecrypt,
     sync,
@@ -2190,6 +2194,7 @@ export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
 export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
 export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
+export { readWarehouseReading, withRate, createWarehouseStatusReader, type WarehouseReading, type WarehouseStatus, type WarehouseStatusReader } from './warehouse-status';
 export type { ActivityService, ActivityImportRun, ActivityCopyRun, ActivityCheckRun, ActivityLifecycle, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig, readSigningKeys } from './sync-settings';
 export {

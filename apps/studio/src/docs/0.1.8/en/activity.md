@@ -209,6 +209,22 @@ A recorded push does not prove the recipient accepted or read the data. Stuck is
 | Running | An import run or CLI batch is still active. |
 | Stopped | An import run or CLI batch was stopped. |
 
+## Check whether the warehouse is up to date
+
+Dashboards and reports read the warehouse. OpenLDR saves each record first, then copies it to the warehouse. During a large import the warehouse can be far behind, so a dashboard shows less than was saved.
+
+The **Warehouse** line at the top of Activity shows where it stands. It updates by itself.
+
+| The line says | Meaning |
+| --- | --- |
+| Up to date | Everything saved is in the warehouse. Dashboards and reports are complete. |
+| Changes behind, with a time left | The warehouse is catching up. The time is an estimate from the last few seconds. |
+| Falling behind | Records are being saved faster than the warehouse takes them, as during an import. The time left appears when the import ends. |
+
+**Shows records saved up to** names the time of the oldest record still waiting. Reports are complete for records saved before it.
+
+From a terminal, `openldr db warehouse-status` prints the same numbers.
+
 ## Understand the history window
 
 Activity loads up to 200 recent payloads. Search, filters, sorting and paging act on those loaded rows. They do not search the full database.

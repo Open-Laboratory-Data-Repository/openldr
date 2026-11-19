@@ -338,7 +338,7 @@ Si cette instance est un **laboratoire** inscrit auprès d'un serveur OpenLDR **
 
 ## Où vont les données
 
-Les ressources ingérées arrivent dans le magasin FHIR interne et sont projetées dans l'entrepôt analytique que lisent les rapports et les tableaux de bord. Si des données sont ingérées mais n'apparaissent pas dans un rapport, vérifiez que le stockage cible est configuré (voir [Variables d'environnement](/docs/environment)) et laissez un moment à la projection pour rattraper son retard.
+Les ressources ingérées arrivent dans le magasin FHIR interne et sont projetées dans l'entrepôt analytique que lisent les rapports et les tableaux de bord. Si des données sont ingérées mais n'apparaissent pas dans un rapport, vérifiez que le stockage cible est configuré (voir [Variables d'environnement](/docs/environment)) et laissez un moment à la projection pour rattraper son retard. La ligne **Entrepôt** en haut de la page Activity indique le retard et le temps nécessaire. `openldr db warehouse-status` affiche les mêmes chiffres.
 
 ### Faits et attributs des demandes
 

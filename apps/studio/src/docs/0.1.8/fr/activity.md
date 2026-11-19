@@ -209,6 +209,22 @@ Un envoi enregistré ne prouve pas que le destinataire a accepté ou lu les donn
 | Running | Un import ou un lot CLI est encore actif. |
 | Stopped | Un import ou un lot CLI a été arrêté. |
 
+## Vérifier si l'entrepôt est à jour
+
+Les tableaux de bord et les rapports lisent l'entrepôt. OpenLDR enregistre d'abord chaque enregistrement, puis le copie dans l'entrepôt. Pendant un import volumineux, l'entrepôt peut avoir beaucoup de retard, et un tableau de bord affiche alors moins que ce qui est enregistré.
+
+La ligne **Entrepôt** en haut d'Activity indique où il en est. Elle se met à jour seule.
+
+| La ligne indique | Signification |
+| --- | --- |
+| À jour | Tout ce qui est enregistré est dans l'entrepôt. Les tableaux de bord et les rapports sont complets. |
+| Des modifications de retard, avec un temps restant | L'entrepôt rattrape son retard. Le temps est une estimation calculée sur les dernières secondes. |
+| Le retard augmente | Les enregistrements arrivent plus vite que l'entrepôt ne les prend, comme pendant un import. Le temps restant apparaît à la fin de l'import. |
+
+**Affiche les enregistrements jusqu'au** donne l'heure du plus ancien enregistrement encore en attente. Les rapports sont complets pour ce qui a été enregistré avant.
+
+Dans un terminal, `openldr db warehouse-status` affiche les mêmes chiffres.
+
 ## Comprendre la période d'historique
 
 Activity charge jusqu'à 200 envois récents. Recherche, filtres, tri et pagination agissent sur ces lignes chargées. Ils ne recherchent pas dans toute la base.

@@ -17,6 +17,7 @@ vi.mock('@/api', () => ({
     ],
     runIds: ['run-1'],
   })),
+  fetchWarehouseStatus: vi.fn(async () => ({ head: 10, cursor: 10, behind: 0, waitingRetry: 0, oldestWaitingAt: null, readAt: '2026-07-03T10:00:00Z', appliedPerSecond: null, secondsLeft: null, fallingBehind: false })),
   listPluginUis: vi.fn(async () => []),
   listNotifications: vi.fn(async () => ({ notifications: [], unreadCount: 0, total: 0 })),
   markNotificationsRead: vi.fn(async () => undefined),
