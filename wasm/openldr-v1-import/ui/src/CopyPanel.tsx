@@ -24,6 +24,47 @@ function totals(run: CopyRun) {
   return out;
 }
 
+/** The time left in words. Null means the host has no fair guess yet: under a minute in, or no total. */
+export function timeLeftText(seconds: number | null): string {
+  if (seconds === null) return t('copy.left.unknown');
+  if (seconds < 60) return t('copy.left.minute');
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return t('copy.left.minutes', { m: formatNumber(minutes) });
+  return t('copy.left.hours', { h: formatNumber(Math.floor(minutes / 60)), m: formatNumber(minutes % 60) });
+}
+
+/** How far a copy that has not completed got, with the time left while it runs. Null for a
+ *  completed or deleting copy, and for one with no total: a CE that does not count, or a count
+ *  that failed. The share is rounded down, so a copy short of its end never shows 100. */
+export function copyProgress(run: CopyRun): { percent: number; text: string } | null {
+  const e = run.estimate;
+  if (run.status === 'completed' || run.status === 'deleting' || !e || e.total === null || e.percent === null) return null;
+  const head = t('copy.progress', { percent: formatNumber(Math.floor(e.percent)), total: formatNumber(e.total) });
+  return { percent: e.percent, text: run.status === 'running' ? `${head}, ${timeLeftText(e.secondsLeft)}` : head };
+}
+
+/** A thin bar for the share read, with the words under it. Nothing when there is no total. */
+function CopyProgress({ run }: { run: CopyRun }) {
+  const p = copyProgress(run);
+  if (!p) return null;
+  const shown = Math.max(0, Math.min(100, p.percent));
+  return (
+    <span class="v1i-progress-wrap" data-testid="copy-progress">
+      <span
+        class="v1i-progress"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.floor(shown)}
+        aria-label={p.text}
+      >
+        <span class="v1i-progress-fill" style={{ width: `${shown}%` }} />
+      </span>
+      <span class="v1i-muted" data-testid="copy-progress-text">{p.text}</span>
+    </span>
+  );
+}
+
 /** Every copy status, so a status added to the SDK fails to compile here until it has a label. */
 const STATUSES: Record<CopyStatus, true> = {
   queued: true, running: true, waiting: true, stopping: true, stopped: true, completed: true, failed: true, deleting: true,
@@ -451,8 +492,12 @@ export function CopyPanel({ pollMs, shown = true }: { pollMs: number; shown?: bo
               <span class="v1i-row-main">
                 <span class="v1i-status-line" data-testid="copy-status" ref={statusLine} tabIndex={-1}>{statusText}</span>
                 <span class="v1i-muted" data-testid="copy-summary">
-                  {t(run.status === 'completed' ? 'copy.summaryDone' : 'copy.summary', { n: formatNumber(sum.keys) })}
+                  {t(
+                    run.status === 'completed' ? 'copy.summaryDone' : typeof run.estimate?.total === 'number' ? 'copy.summaryRead' : 'copy.summary',
+                    { n: formatNumber(sum.keys) },
+                  )}
                 </span>
+                <CopyProgress run={run} />
               </span>
               <div class="v1i-menu" ref={menuRef}>
                 <button

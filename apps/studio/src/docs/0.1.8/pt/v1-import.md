@@ -192,7 +192,7 @@ Abra o menu de pontos no canto superior direito do separador Cópia e selecione 
 
 Cada linha da tabela é um conjunto. O plugin v1 copia um só conjunto, `requests`, que contém as linhas das quatro tabelas de cada pedido. **Estado** mostra Não iniciado, A copiar, À espera, Copiado em parte, Concluído, Por ler de novo ou A eliminar. **Pedidos lidos** é o número de pedidos guardados até agora. **Linhas** é o número de linhas de origem guardadas, das quatro tabelas. **Tamanho** é o tamanho dessas linhas tal como o CE as guarda.
 
-A linha por baixo do estado conta os pedidos "de um total ainda desconhecido". O CE conta os pedidos da origem quando uma cópia começa ou continua, mas esta página ainda não mostra esse número. **Activity** e `openldr import copy status` mostram a parte lida e o tempo restante. Uma cópia terminada mostra **Concluída** e dá **Pedidos copiados:** com o número.
+A linha por baixo do estado dá **Pedidos lidos:** com o número. Por baixo, uma barra mostra a parte lida, com palavras como "41% de 3.000.000 pedidos, cerca de 25 min restantes". O CE conta os pedidos da origem sempre que uma cópia começa ou continua. O tempo restante aparece depois de cerca de um minuto de leitura. Uma cópia parada mostra a parte sem tempo restante. Num CE que não conta, a linha diz "de um total ainda desconhecido" e nenhuma barra aparece. Uma cópia terminada mostra **Concluída** e dá **Pedidos copiados:** com o número.
 
 ![A tabela dá o estado, os pedidos, as linhas e o tamanho.](v1-import-guide-copy-sets.png)
 
