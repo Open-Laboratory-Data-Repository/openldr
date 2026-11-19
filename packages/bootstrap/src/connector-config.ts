@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ConnectorPatch, ConnectorRecord, ConnectorStore } from '@openldr/db';
 import { testConnector } from './connector-test';
+import { classifyConnectError } from './connector-diagnose';
 import { z } from 'zod';
 
 export const hostConnectorPatchSchema = z.object({
@@ -93,7 +94,7 @@ export async function createHostConnector(store: ConnectorStore, input: HostConn
 export async function testHostConnector(
   store: ConnectorStore, id: string, key: string | undefined,
   test: (type: string, config: Record<string, string>) => Promise<unknown> = testConnector,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; hint?: 'tlsCertificate' }> {
   const record = await store.get(id);
   if (!record) throw new Error('connector not found');
   if (!record.type) throw new Error('host connector required');
@@ -101,9 +102,15 @@ export async function testHostConnector(
     await test(record.type, await store.getDecryptedConfig(id, key));
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    // Newer Node adds advice to run Node.js with --use-system-ca to a certificate error. A lab user
+    // cannot do that; the connector's "Trust server certificate" switch is the fix, so the hint
+    // names it and the advice is dropped (demo.4 item 7).
+    const error = (e instanceof Error ? e.message : String(e)).replace(NODE_CA_ADVICE, '');
+    return classifyConnectError(error) === 'tlsCertificate' ? { ok: false, error, hint: 'tlsCertificate' } : { ok: false, error };
   }
 }
+
+const NODE_CA_ADVICE = /;?\s*if the root CA is installed locally,? try running Node\.js with --use-system-ca\.?/i;
 
 /** Remove a connector. Returns what was removed, or null when there was nothing to remove. */
 export async function removeConnector(store: ConnectorStore, id: string): Promise<ConnectorRecord | null> {
