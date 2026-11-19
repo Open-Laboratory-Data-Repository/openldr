@@ -15,6 +15,18 @@ export async function clearRetry(db: Kysely<InternalSchema>, task: ProjectionTas
     .where('resource_type', '=', task.resourceType).where('resource_id', '=', task.id).execute();
 }
 
+/** `clearRetry` for a whole batch: one statement per resource type, not one per record. */
+export async function clearRetries(db: Kysely<InternalSchema>, tasks: ProjectionTask[]): Promise<void> {
+  const byType = new Map<string, string[]>();
+  for (const t of tasks) byType.set(t.resourceType, [...(byType.get(t.resourceType) ?? []), t.id]);
+  for (const [resourceType, ids] of byType) {
+    for (let i = 0; i < ids.length; i += 1000) {
+      await db.deleteFrom('fhir.projection_retries')
+        .where('resource_type', '=', resourceType).where('resource_id', 'in', ids.slice(i, i + 1000)).execute();
+    }
+  }
+}
+
 export async function deferRetry(db: Kysely<InternalSchema>, task: ProjectionTask): Promise<void> {
   const previous = await db.selectFrom('fhir.projection_retries').select('attempts')
     .where('resource_type', '=', task.resourceType).where('resource_id', '=', task.id).executeTakeFirst();

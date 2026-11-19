@@ -9,6 +9,10 @@ import { readCursor } from './cursor';
 const logger = { info() {}, error() {}, warn() {}, debug() {} };
 afterEach(() => vi.useRealTimers());
 
+// A cycle writes its batch in bulk first (item 16) and falls back to one record at a time when the
+// batch fails. So a fake warehouse that refuses a record must refuse it in `writeMany` as well as in
+// `write`, as a real one does.
+
 async function fixture() {
   const { db: internalDb, mem } = await makeMigratedDbWithMem();
   const externalDb = await makeMigratedExternalDb();
@@ -26,7 +30,7 @@ describe('durable projection retries', () => {
   it('recovers after restart without another change and reads the newest canonical resource', async () => {
     const f = await fixture();
     try {
-      const deps = { ...f, internalDb: f.internalDb as never, relationalWriter: { ...f.writer, write: async () => { throw new Error('offline'); } }, logger };
+      const deps = { ...f, internalDb: f.internalDb as never, relationalWriter: { ...f.writer, write: async () => { throw new Error('offline'); }, writeMany: async () => { throw new Error('offline'); } }, logger };
       await createProjectionRunner(deps).runCycle();
       expect(await readCursor(f.internalDb as never, 'projection')).toBe(2);
       await f.fhirStore.save({ resourceType: 'Patient', id: 'bad', name: [{ family: 'Latest' }] } as never);
@@ -46,6 +50,10 @@ describe('durable projection retries', () => {
       const relationalWriter = { ...f.writer, write: async (...args: Parameters<typeof f.writer.write>) => {
         if ((args[0] as { id?: string }).id === 'bad') throw new Error('poison');
         return f.writer.write(...args);
+      }, writeMany: async (items: Parameters<typeof f.writer.writeMany>[0]) => {
+        // The warehouse refuses the poison row whichever way it is sent, so the batch fails too.
+        if (items.some((it) => (it.resource as { id?: string }).id === 'bad')) throw new Error('poison');
+        return f.writer.writeMany(items);
       } };
       const runner = createProjectionRunner({ ...f, internalDb: f.internalDb as never, relationalWriter, logger });
       await runner.runCycle();
@@ -87,7 +95,7 @@ it('keeps the cursor when retry persistence fails', async () => {
       return null;
     });
     const runner = createProjectionRunner({ ...f, internalDb: f.internalDb as never,
-      relationalWriter: { ...f.writer, write: async () => { throw new Error('offline'); } }, logger });
+      relationalWriter: { ...f.writer, write: async () => { throw new Error('offline'); }, writeMany: async () => { throw new Error('offline'); } }, logger });
     await expect(runner.runCycle()).rejects.toThrow('retry storage offline');
     expect(await readCursor(f.internalDb as never, 'projection')).toBe(0);
   } finally { await f.internalDb.destroy(); await f.externalDb.destroy(); }
@@ -128,7 +136,7 @@ it('caps repeated failure backoff at five minutes without dropping the retry', a
   try {
     vi.useFakeTimers({ toFake: ['Date'] });
     const runner = createProjectionRunner({ ...f, internalDb: f.internalDb as never,
-      relationalWriter: { ...f.writer, write: async () => { throw new Error('still offline'); } }, logger });
+      relationalWriter: { ...f.writer, write: async () => { throw new Error('still offline'); }, writeMany: async () => { throw new Error('still offline'); } }, logger });
     for (let i = 0; i < 12; i++) {
       await runner.runCycle();
       const rows = await f.internalDb.selectFrom('fhir.projection_retries').selectAll().execute();

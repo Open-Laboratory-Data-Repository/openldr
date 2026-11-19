@@ -4,10 +4,10 @@ import type { FhirStore } from '../fhir-store';
 import type { RelationalWriter } from '../relational-writer';
 import { planProjection, type ProjectionTask, type Gap } from './plan';
 import { readCursor, advanceCursor } from './cursor';
-import { dueRetries, deferRetry, clearRetry } from './retry';
+import { dueRetries, deferRetry, clearRetry, clearRetries } from './retry';
 import type { SafeFetchResult } from './fetch';
 import { provenanceFromRow, type Provenance } from '../provenance';
-import { LEDGER_RESOURCE_TYPES, isLedgerResourceType, readArrivals, toArrivalEvent } from './ledger';
+import { LEDGER_RESOURCE_TYPES, isLedgerResourceType, readArrivals, readArrivalsMany, toArrivalEvent } from './ledger';
 
 export type FetchSafeRows = (db: Kysely<InternalSchema>, cursor: number, limit: number) => Promise<SafeFetchResult>;
 
@@ -89,6 +89,59 @@ async function applyProjection(task: ProjectionTask, deps: ProjectionDeps): Prom
   }
 }
 
+/** The current row of each record of a batch, by `type id`, in a statement per resource type. A
+ *  record with no current row (deleted since) is absent. */
+async function readCurrent(
+  db: Kysely<InternalSchema>, tasks: ProjectionTask[],
+): Promise<Map<string, { resource: unknown; provenance: Provenance }>> {
+  const byType = new Map<string, string[]>();
+  for (const t of tasks) byType.set(t.resourceType, [...(byType.get(t.resourceType) ?? []), t.id]);
+  const out = new Map<string, { resource: unknown; provenance: Provenance }>();
+  for (const [resourceType, ids] of byType) {
+    for (let i = 0; i < ids.length; i += 1000) {
+      const rows = await db
+        .selectFrom('fhir.fhir_resources')
+        .select(['id', 'resource', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'])
+        .where('resource_type', '=', resourceType)
+        .where('id', 'in', ids.slice(i, i + 1000))
+        .execute();
+      for (const row of rows) out.set(`${resourceType} ${row.id}`, { resource: row.resource, provenance: provenanceFromRow(row) });
+    }
+  }
+  return out;
+}
+
+/** Projects a whole batch with the bulk writer, as `reprojectAll` does (item 16). The live path
+ *  wrote one record at a time, each in its own transactions, and fell eleven times behind an import
+ *  check. Any throw here leaves the batch to the caller, which tries each record alone, so one bad
+ *  record costs the others nothing but that second try. Every write is an upsert or a replace, so
+ *  a record written here and then again alone ends the same. */
+async function applyBatch(tasks: ProjectionTask[], deps: ProjectionDeps): Promise<void> {
+  const current = await readCurrent(deps.internalDb, tasks);
+  const found: Array<{ task: ProjectionTask; resource: unknown; provenance: Provenance }> = [];
+  const gone: ProjectionTask[] = [];
+  for (const task of tasks) {
+    const row = current.get(`${task.resourceType} ${task.id}`);
+    if (row) found.push({ task, ...row });
+    else gone.push(task);
+  }
+  if (found.length > 0) await deps.relationalWriter.writeMany(found.map((f) => ({ resource: f.resource, provenance: f.provenance })));
+  for (const task of gone) await deps.relationalWriter.deleteById(task.resourceType, task.id);
+  // Every arrival of every record, found or gone, for the reasons `applyProjection` gives.
+  const ledger = tasks.filter((t) => isLedgerResourceType(t.resourceType));
+  if (ledger.length > 0) await deps.relationalWriter.writeIngestEvents(await readArrivalsMany(deps.internalDb, ledger));
+  if (deps.onProjected) {
+    for (const f of found) {
+      try {
+        await deps.onProjected(f.task.resourceType, f.resource as Record<string, unknown>, f.provenance);
+      } catch (err) {
+        // As in `applyProjection`: the clinical projection already landed, only the hook failed.
+        deps.logger.error({ err, task: f.task }, 'onProjected hook failed; ignoring (clinical projection already applied)');
+      }
+    }
+  }
+}
+
 /** Carries safe-frontier gaps across ticks. Failed tasks are persisted before cursor advancement. */
 export function createProjectionRunner(deps: ProjectionDeps): ProjectionRunner {
   let pendingGaps: Gap[] = [];
@@ -101,14 +154,27 @@ export function createProjectionRunner(deps: ProjectionDeps): ProjectionRunner {
       for (const task of [...await dueRetries(deps.internalDb), ...plan.tasks]) {
         tasks.set(JSON.stringify([task.resourceType, task.id]), task);
       }
-      for (const task of tasks.values()) {
+      const batch = [...tasks.values()];
+      let inBulk = false;
+      if (batch.length > 0) {
         try {
-          await applyProjection(task, deps);
-          await clearRetry(deps.internalDb, task);
+          await applyBatch(batch, deps);
+          await clearRetries(deps.internalDb, batch);
+          inBulk = true;
         } catch (err) {
-          // If persistence fails, reject this cycle before advancing the cursor.
-          await deferRetry(deps.internalDb, task);
-          deps.logger.error({ err, task }, 'projection failed; durable retry scheduled');
+          deps.logger.warn({ err, records: batch.length }, 'projection batch failed; projecting its records one at a time');
+        }
+      }
+      if (!inBulk) {
+        for (const task of batch) {
+          try {
+            await applyProjection(task, deps);
+            await clearRetry(deps.internalDb, task);
+          } catch (err) {
+            // If persistence fails, reject this cycle before advancing the cursor.
+            await deferRetry(deps.internalDb, task);
+            deps.logger.error({ err, task }, 'projection failed; durable retry scheduled');
+          }
         }
       }
       if (plan.newCursor > cursor) await advanceCursor(deps.internalDb, 'projection', plan.newCursor);
