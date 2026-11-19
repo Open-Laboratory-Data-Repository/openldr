@@ -218,10 +218,10 @@ The **Warehouse** line at the top of Activity shows where it stands. It updates 
 | The line says | Meaning |
 | --- | --- |
 | Up to date | Everything saved is in the warehouse. Dashboards and reports are complete. |
-| Changes behind, with a time left | The warehouse is catching up. The time is an estimate from the last few seconds. |
+| A number behind, with a time left | The warehouse is catching up. The time is an estimate from the last few seconds. |
 | Falling behind | Records are being saved faster than the warehouse takes them, as during an import. The time left appears when the import ends. |
 
-**Shows records saved up to** names the time of the oldest record still waiting. Reports are complete for records saved before it.
+**data up to** names the time of the oldest record still waiting. Reports are complete for records saved before it.
 
 From a terminal, `openldr db warehouse-status` prints the same numbers.
 

@@ -16,36 +16,35 @@ describe('WarehouseStatusBand', () => {
   it('says_up_to_date_when_nothing_waits', async () => {
     status.mockResolvedValue(base);
     render(<WarehouseStatusBand />);
-    expect(await screen.findByText(/Up to date/)).toBeInTheDocument();
-    expect(screen.queryByText(/changes behind/)).toBeNull();
+    expect(await screen.findByText('Up to date')).toBeInTheDocument();
+    expect(screen.queryByText(/behind/)).toBeNull();
   });
 
   it('shows_the_gap_the_time_left_and_the_rate_when_behind', async () => {
     status.mockResolvedValue({ ...base, cursor: 400, behind: 14030722, oldestWaitingAt: '2026-11-19T09:40:00Z', appliedPerSecond: 6100, secondsLeft: 2300 });
     render(<WarehouseStatusBand />);
-    expect(await screen.findByText('14,030,722 changes behind.')).toBeInTheDocument();
-    expect(screen.getByText('About 38 min left.')).toBeInTheDocument();
-    expect(screen.getByText('6,100 changes a second')).toBeInTheDocument();
-    expect(screen.getByText(/Shows records saved up to/)).toBeInTheDocument();
-    expect(screen.getByText(/they show less than was saved/)).toBeInTheDocument();
+    expect(await screen.findByText('14,030,722 behind')).toBeInTheDocument();
+    expect(screen.getByText('38 min left')).toBeInTheDocument();
+    expect(screen.getByText('6,100 a second')).toBeInTheDocument();
+    expect(screen.getByText(/data up to/)).toBeInTheDocument();
   });
 
   it('says_falling_behind_when_the_gap_grows', async () => {
     status.mockResolvedValue({ ...base, cursor: 400, behind: 600, appliedPerSecond: 2667, fallingBehind: true });
     render(<WarehouseStatusBand />);
-    expect(await screen.findByText(/Falling behind/)).toBeInTheDocument();
+    expect(await screen.findByText('falling behind')).toBeInTheDocument();
   });
 
   it('says_it_is_measuring_before_there_is_a_rate', async () => {
     status.mockResolvedValue({ ...base, cursor: 400, behind: 600 });
     render(<WarehouseStatusBand />);
-    expect(await screen.findByText(/Measuring the time left/)).toBeInTheDocument();
+    expect(await screen.findByText('measuring…')).toBeInTheDocument();
   });
 
   it('names_the_records_that_wait_for_another_try', async () => {
     status.mockResolvedValue({ ...base, waitingRetry: 3 });
     render(<WarehouseStatusBand />);
-    expect(await screen.findByText(/3 records were refused/)).toBeInTheDocument();
+    expect(await screen.findByText('3 refused, waiting to retry')).toBeInTheDocument();
   });
 
   it('shows_nothing_when_the_status_cannot_be_read', async () => {
