@@ -1,0 +1,70 @@
+# Benchmark log
+
+Every speed measurement, kept so progress can be read over time.
+
+Rules:
+
+- Add rows. Never rewrite an old row. If a number was wrong, add a row that says so.
+- One row is one measurement: date, commit, dataset, what was measured, the number.
+- Timings and counts only. Never a value from patient data.
+- Say where the evidence is, and what the number does not prove.
+
+Datasets:
+
+- **Bench 5k.** 5,000 real requests from the restored Tanzania DISA database, about 58,500 FHIR
+  records. Scratch Postgres on the Linux box. Scripts in `~/.cache/openldr-speed-bench/`.
+- **Tanzania full.** The whole restored DISA database: 2,326,075 requests, 48.2 million source rows.
+  Standalone desktop install on the Linux box (32 cores, 90 GB), embedded Postgres at its default
+  settings. Evidence in `~/.local/share/demo5-evidence/`.
+
+## Import: processing (the check)
+
+| Date | Commit | Dataset | Change | Requests a second |
+|---|---|---|---|---|
+| 2026-11-19 | before item 16 | Bench 5k | start of the session | 50 |
+| 2026-11-19 | decode-ahead | Bench 5k | decode the next page off the main thread | 165 to 177 |
+| 2026-11-19 | hash skip | Bench 5k | skip a save whose content is unchanged | 272 to 279 |
+| 2026-11-19 | set-based save | Bench 5k | one statement per page, three pages decoded ahead | 544 to 548 |
+| 2026-11-19 | 770f37f2 | Bench 5k | one copy of each document | 525 to 537 |
+| 2026-11-19 | 770f37f2 | Tanzania full | whole run, projection running beside it | 625 to 680 |
+
+Tanzania full, whole run at 770f37f2: 60 minutes. 2,130,022 saved, 163,451 held, 32,602 failed.
+
+## Import: copy
+
+| Date | Commit | Dataset | Time | Requests a minute |
+|---|---|---|---|---|
+| 2026-11-19 | 770f37f2 | Tanzania full | 58.6 min | 39,720 average, 27,575 slowest minute, 53,500 fastest |
+
+19.9 GiB copied. Page size 500. No interruption.
+
+## Projection (the warehouse step)
+
+Change rows moved a second.
+
+| Date | Commit | Dataset | Condition | Change rows a second |
+|---|---|---|---|---|
+| 2026-11-19 | 770f37f2 | Tanzania full | during the check, which wrote 9,434 a second | 2,667 |
+| 2026-11-19 | 770f37f2 | Tanzania full | alone, four runs | 6,122 to 7,482 |
+| 2026-11-19 | e3edbf8b | Tanzania full | alone: batch of 2,000, one commit, one facility lookup per batch | 15,383 |
+| 2026-11-19 | 770f37f2 | Bench 5k | alone, whole set | 9,055 |
+| 2026-11-19 | e3edbf8b | Bench 5k | alone, whole set | 13,587 |
+
+Not proved: the rate of e3edbf8b during a check.
+
+## Dashboard and reports
+
+Tanzania full at 770f37f2, measured while the check ran. "Dashboard" is the 13 widgets of the sample
+dashboard, asked through the API. "77 reports" is every report query of the two installed packs,
+one after another. The warehouse was about half behind at every row.
+
+| Date | Requests read | Dashboard | 77 reports | Reports over 10 s | Slowest report |
+|---|---|---|---|---|---|
+| 2026-11-19 | 0 | 38 ms | 1.9 s | 0 | |
+| 2026-11-19 | 617,000 | 0.64 s | 70 s | 1 | 11.3 s |
+| 2026-11-19 | 1,179,000 | 0.88 s | 205 s | 7 | 29.5 s |
+| 2026-11-19 | 1,778,000 | 1.38 s | 296 s | | |
+| 2026-11-19 | 2,326,075 | 1.77 s | 363 s | 9 | 49.8 s |
+
+At the last row one report was stopped by the 30 s statement limit. Server health call: 2 to 5 ms
+throughout, worst 0.33 s.
