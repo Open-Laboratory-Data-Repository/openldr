@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "de05ada5",
+          "type": "fix",
+          "scope": "activity",
+          "title": "The Warehouse line is one compact line, without the explanation sentence"
+        },
+        {
           "hash": "87dc9a04",
           "type": "feat",
           "scope": "activity",
