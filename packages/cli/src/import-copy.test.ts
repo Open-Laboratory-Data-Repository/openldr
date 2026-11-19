@@ -16,11 +16,16 @@ vi.mock('@openldr/config', async (importOriginal) => ({
   ...await importOriginal<typeof import('@openldr/config')>(),
   loadConfig: vi.fn(() => ({ config: true })),
 }));
-vi.mock('@openldr/bootstrap', () => ({ createAppContext: mocks.createAppContext, CopySetChangedError: mocks.CopySetChangedError }));
+vi.mock('@openldr/bootstrap', async (importOriginal) => ({
+  createAppContext: mocks.createAppContext,
+  CopySetChangedError: mocks.CopySetChangedError,
+  // The words for the time left are the real ones the server uses.
+  formatTimeLeft: (await importOriginal<typeof import('@openldr/bootstrap')>()).formatTimeLeft,
+}));
 
 import { COMMAND_META } from './command-meta';
 import {
-  formatCopyRun, runImportCopyDelete, runImportCopyStart, runImportCopyStatus, runImportCopyStop,
+  formatCopyRun, formatTimeLeft, runImportCopyDelete, runImportCopyStart, runImportCopyStatus, runImportCopyStop,
 } from './import-copy';
 
 // A source key that must never be printed. It sits in every set's cursor.
@@ -120,6 +125,32 @@ describe('import copy CLI', () => {
     // An old error left on a stopped copy is not shown: only waiting and failed carry one.
     expect(formatCopyRun(copy({ status: 'stopped', lastError: 'old' }) as never)).not.toContain('error');
     for (const run of [copy(), waiting, failed]) expect(formatCopyRun(run as never)).not.toContain(SECRET_KEY);
+  });
+
+  it('shows the percentage and time left of a running copy, and each set\'s total', () => {
+    const counted = (status: string, secondsLeft: number | null) => copy({
+      status,
+      sets: {
+        requests: { cursor: SECRET_KEY, keys: 500, rows: 1200, bytes: 34000, skipped: 0, done: false, total: 2000 },
+        results: { cursor: SECRET_KEY, keys: 10, rows: 40, bytes: 900, skipped: 2, done: true, total: 12 },
+      },
+      estimate: { done: 512, total: 2012, percent: (100 * 512) / 2012, secondsLeft },
+    });
+    expect(formatCopyRun(counted('running', 754) as never)).toBe(
+      'c0ffee  running  25.4% of 2012 keys, about 13 min left  requests keys=500 rows=1200 bytes=34000 skipped=0 total=2000  results keys=10 rows=40 bytes=900 skipped=2 total=12',
+    );
+    expect(formatCopyRun(counted('running', null) as never)).toContain('25.4% of 2012 keys, time left not known yet');
+    // A copy that is not running shows how far it got, with no time left.
+    expect(formatCopyRun(counted('stopped', null) as never)).toMatch(/^c0ffee {2}stopped {2}25\.4% of 2012 keys {2}requests/);
+    expect(formatCopyRun(counted('completed', null) as never)).not.toContain('%');
+    expect(formatCopyRun(counted('running', 754) as never)).not.toContain(SECRET_KEY);
+  });
+
+  it('says the time left in plain words', () => {
+    expect(formatTimeLeft(59)).toBe('under a minute');
+    expect(formatTimeLeft(90)).toBe('about 2 min');
+    expect(formatTimeLeft(3600)).toBe('about 1 h');
+    expect(formatTimeLeft(3 * 3600 + 5 * 60)).toBe('about 3 h 5 min');
   });
 
   // Spec 9.3: a copy with a skipped key left is shown as complete with a warning, never as clean.

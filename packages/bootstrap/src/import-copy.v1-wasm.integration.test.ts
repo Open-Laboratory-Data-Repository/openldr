@@ -70,7 +70,7 @@ describe.skipIf(!present)('copy service with the built v1 plugin', () => {
     expect(run.sets).toEqual({ requests: { cursor: null, keys: 0, rows: 0, bytes: 0, skipped: 0, done: false } });
     expect(run.setSql.requests).toMatch(/^[0-9a-f]{64}$/);
     expect(opened).toBe(0);
-    expect(audited.map((e) => [e.action, e.metadata])).toEqual([['import.copy.start', { pageSize: 500, sets: 1, reread: 0 }]]);
+    expect(audited.map((e) => [e.action, e.metadata])).toEqual([['import.copy.start', { pageSize: 2000, sets: 1, reread: 0 }]]);
   });
 
   it('every statement it names is one SELECT once filled, the star included', async () => {

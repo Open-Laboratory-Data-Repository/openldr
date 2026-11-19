@@ -1,4 +1,4 @@
-import { CopySetChangedError, createAppContext, type CopyRun, type ImportActor } from '@openldr/bootstrap';
+import { CopySetChangedError, createAppContext, formatTimeLeft, type CopyRun, type ImportActor } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { cliActor } from './cli-actor';
 import { parseImportOptions } from './import';
@@ -41,15 +41,31 @@ export function copyRunForJson(run: CopyRun): Omit<CopyRun, 'sets'> & { sets: Re
   return { ...run, sets };
 }
 
-/** One line per copy: the id, the status, the counts of each set, then the error when waiting or
- *  failed. The error is the text the run holds, already safe to show, kept on one line. A
+export { formatTimeLeft };
+
+/** How far a copy that has not completed got: `45.2% of 2342719 keys`, and while it runs the time
+ *  left. Null for a completed copy and for one with no total (a record from before counts, or a
+ *  count that failed). */
+export function formatCopyProgress(run: CopyRun): string | null {
+  const e = run.estimate;
+  if (run.status === 'completed' || !e || e.total === null || e.percent === null) return null;
+  const head = `${e.percent.toFixed(1)}% of ${e.total} keys`;
+  if (run.status !== 'running') return head;
+  return `${head}, ${e.secondsLeft === null ? 'time left not known yet' : `${formatTimeLeft(e.secondsLeft)} left`}`;
+}
+
+/** One line per copy: the id, the status, how far it got and the time left, the counts of each
+ *  set, then the error when waiting or failed. The error is the text the run holds, already safe to show, kept on one line. A
  *  completed copy with a skipped key left reads `completed with skipped keys`, never a bare
  *  `completed` (spec 9.3). */
 export function formatCopyRun(run: CopyRun): string {
   const skipped = Object.values(run.sets).some((p) => p.skipped > 0);
   const parts = [run.id, run.status === 'completed' && skipped ? 'completed with skipped keys' : run.status];
+  const progress = formatCopyProgress(run);
+  if (progress) parts.push(progress);
   for (const [name, p] of Object.entries(run.sets)) {
-    parts.push(`${name} keys=${p.keys} rows=${p.rows} bytes=${p.bytes} skipped=${p.skipped}`);
+    const total = typeof p.total === 'number' ? ` total=${p.total}` : '';
+    parts.push(`${name} keys=${p.keys} rows=${p.rows} bytes=${p.bytes} skipped=${p.skipped}${total}`);
   }
   const error = run.status === 'waiting' ? run.waiting?.error : run.status === 'failed' ? run.lastError : null;
   if (error) parts.push(`error: ${error.replace(/\s+/g, ' ').trim()}`);

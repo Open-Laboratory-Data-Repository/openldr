@@ -161,10 +161,26 @@ describe('copies', () => {
     expect(queued?.stages.map((s) => s.stage)).toEqual(['received']);
   });
 
+  it('a running copy shows how far it is through its total, and the time left', async () => {
+    const running = copyRun({
+      status: 'running', finishedAt: null, updatedAt: '2026-07-03T12:40:00Z', pace: { since: '2026-07-03T12:30:00Z', done: 0 },
+      sets: { requests: { cursor: SECRET_KEY, keys: 900, rows: 2500, bytes: 99000, skipped: 0, done: false, total: 3600 } },
+    });
+    // 900 keys in 10 minutes, 2,700 left: 30 minutes.
+    const lc = await withCopies([running]).getLifecycle('cp-1');
+    expect(lc?.stages[1].detail).toBe('2500 rows copied, 0 keys skipped, 25% of 3600 keys, about 30 min left');
+    const stopped = await withCopies([copyRun({ ...running, status: 'stopped' })]).getLifecycle('cp-1');
+    expect(stopped?.stages[1].detail).toBe('2500 rows copied, 0 keys skipped, 25% of 3600 keys');
+    // No count: the line is as before.
+    const old = await withCopies([copyRun({ ...running, sets: { requests: { cursor: SECRET_KEY, keys: 900, rows: 2500, bytes: 99000, skipped: 0, done: false } } })]).getLifecycle('cp-1');
+    expect(old?.stages[1].detail).toBe('2500 rows copied, 0 keys skipped');
+  });
+
   it('keeps counts and states only, never a cursor', async () => {
     const shown = copyForActivity(copyRun() as any);
     expect(shown).toEqual({
       id: 'cp-1', pluginId: 'openldr-v1-import', pluginVersion: '0.2.0', status: 'completed', rows: 2540, skipped: 3,
+      total: 943, percent: 100, secondsLeft: null,
       startedAt: '2026-07-03T12:30:00Z', updatedAt: '2026-07-03T13:00:00Z', finishedAt: '2026-07-03T13:00:00Z', startedBy: 'amina',
     });
     const svc = withCopies([copyRun()]);

@@ -466,6 +466,12 @@ Le guide **Vos préférences** de Studio se trouve dans **Préférences personne
 
 Pour les opérateurs, `user preferences show <user-id>` lit les valeurs enregistrées et `user preferences set <user-id> startPage none` efface le choix personnel de page de démarrage. Utilisez la commande de l'installation ou de développement décrite plus haut. Effacer le choix permet de réutiliser la page de démarrage de la disposition lorsqu'elle est configurée.
 
+## Où en est une copie
+
+`openldr import copy status <plugin> [copy]` affiche une ligne par copie. Tant qu'une copie n'est pas finie, la ligne donne la part des clés de la source déjà lue, en pourcentage, par exemple `45.2% of 2342719 keys`. Pendant qu'elle tourne, elle ajoute le temps restant, par exemple `about 31 min left`. Chaque ensemble affiche `total=` à côté de ses propres nombres. `--json` donne les mêmes nombres dans `estimate` : `done`, `total`, `percent` et `secondsLeft`.
+
+CE compte les clés de chaque ensemble sur la source quand une copie démarre ou reprend. Le temps restant est le nombre de clés encore à lire, à la vitesse moyenne depuis ce moment. C'est une estimation. Elle n'apparaît qu'après une minute de lecture. Elle change quand la source est plus chargée, quand les demandes anciennes et récentes ont un nombre de lignes différent, et après un redémarrage, qui recommence la moyenne. Quand la source n'a pas pu compter un ensemble en 30 secondes, la ligne ne donne pas de pourcentage et la copie continue.
+
 ## Tâches interrompues
 
 Une tâche longue coupée par un redémarrage l’enregistre. La plupart reprennent toutes seules ; ces commandes montrent l’enregistrement et reprennent une tâche qui attend.

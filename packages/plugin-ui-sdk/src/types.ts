@@ -85,6 +85,22 @@ export interface PluginCopySetProgress {
   done: boolean;
   /** Set when a start with `reread` asked for this set to be emptied and read again. */
   empty?: boolean;
+  /** Keys the source held for this set when the copy last began reading it. Null when the host
+   *  could not count them. Absent on a copy from a host that does not count. */
+  total?: number | null;
+}
+
+/** How far a copy has got, worked out by the host each time it answers. */
+export interface PluginCopyEstimate {
+  /** Keys read so far over every set. */
+  done: number;
+  /** Keys to read over every set, or null while one is not counted. */
+  total: number | null;
+  /** 0 to 100, or null without a total. */
+  percent: number | null;
+  /** Seconds left at the speed since the copy last began, or null when there is no fair guess:
+   *  not running, no total, or less than a minute in. */
+  secondsLeft: number | null;
 }
 
 /** A copy as the host shows it to a page (mirror of the broker's PageCopyRun). The host never
@@ -110,6 +126,10 @@ export interface PluginCopyRun {
   finishedAt: string | null;
   lastError: string | null;
   startedBy: string;
+  /** When the copy last began reading, and how many keys were done then. */
+  pace?: { since: string; done: number } | null;
+  /** Absent from a host that does not count. */
+  estimate?: PluginCopyEstimate;
 }
 
 export type PluginCheckStatus = 'queued' | 'running' | 'waiting' | 'stopping' | 'stopped' | 'completed' | 'failed';

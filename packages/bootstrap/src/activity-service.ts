@@ -1,6 +1,6 @@
 import { buildLifecycle, type Lifecycle, type LifecycleRun } from '@openldr/workflows';
 import type { CheckRun } from './import-check';
-import type { CopyRun } from './import-copy';
+import { copyEstimate, formatTimeLeft, type CopyRun } from './import-copy';
 
 /** Structural view of a workflow run; `result` is widened to `unknown` so the store's
  *  own WorkflowRun type (which has `result?: unknown`) is assignable here. `buildLifecycle`
@@ -35,6 +35,11 @@ export interface ActivityCopyRun {
   rows: number;
   /** Keys skipped, over every set. */
   skipped: number;
+  /** Keys to read over every set, its share read so far, and the seconds left, from
+   *  `copyEstimate`. Null when not known. */
+  total: number | null;
+  percent: number | null;
+  secondsLeft: number | null;
   startedAt: string;
   updatedAt: string;
   finishedAt: string | null;
@@ -46,8 +51,9 @@ export function copyForActivity(run: CopyRun): ActivityCopyRun {
   let rows = 0;
   let skipped = 0;
   for (const s of Object.values(run.sets)) { rows += s.rows; skipped += s.skipped; }
+  const { total, percent, secondsLeft } = copyEstimate(run);
   return {
-    id: run.id, pluginId: run.pluginId, pluginVersion: run.pluginVersion, status: run.status, rows, skipped,
+    id: run.id, pluginId: run.pluginId, pluginVersion: run.pluginVersion, status: run.status, rows, skipped, total, percent, secondsLeft,
     startedAt: run.startedAt, updatedAt: run.updatedAt, finishedAt: run.finishedAt, startedBy: run.startedBy,
   };
 }
@@ -155,7 +161,17 @@ function copyStatus(status: string): ActivityLifecycle['status'] {
   return 'running';
 }
 
-/** One copy as a lifecycle: who started it, then how many rows it holds so far. */
+/** How far a copy that has not completed got, and its time left while it runs, as a tail for its
+ *  rows line. Empty when the copy is complete or its total is not known. */
+function copyProgress(run: ActivityCopyRun): string {
+  if (run.status === 'completed' || run.total === null || run.percent === null) return '';
+  const head = `, ${Math.floor(run.percent)}% of ${run.total} keys`;
+  if (run.status !== 'running') return head;
+  return `${head}, ${run.secondsLeft === null ? 'time left not known yet' : `${formatTimeLeft(run.secondsLeft)} left`}`;
+}
+
+/** One copy as a lifecycle: who started it, then how many rows it holds so far, how far it is
+ *  through the total, and the time left. */
 function copyLifecycle(run: ActivityCopyRun): ActivityLifecycle {
   const stages: ActivityLifecycle['stages'] = [
     { stage: 'received', status: 'ok', at: run.startedAt, detail: `copy: ${run.pluginId} ${run.pluginVersion}, started by ${run.startedBy}` },
@@ -165,7 +181,7 @@ function copyLifecycle(run: ActivityCopyRun): ActivityLifecycle {
       stage: 'persisted', status: run.status === 'failed' ? 'failed' : 'ok',
       // A copy that has not finished is dated by its last save.
       at: run.finishedAt ?? run.updatedAt,
-      detail: `${run.rows} rows copied, ${run.skipped} keys skipped`,
+      detail: `${run.rows} rows copied, ${run.skipped} keys skipped${copyProgress(run)}`,
     });
   }
   return { correlationId: run.id, status: copyStatus(run.status), stages, runIds: [] };

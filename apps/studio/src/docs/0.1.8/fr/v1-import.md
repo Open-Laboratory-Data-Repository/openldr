@@ -190,7 +190,7 @@ Ouvrez le menu à points en haut à droite de l'onglet Copie et choisissez **Lan
 
 Chaque ligne du tableau est un ensemble. Le plugin v1 copie un seul ensemble, `requests`, qui contient les lignes des quatre tables pour chaque demande. **État** affiche Pas commencé, Copie en cours, En attente, Copié en partie, Terminé, À relire ou Suppression. **Demandes lues** est le nombre de demandes enregistrées jusqu'ici. **Lignes** est le nombre de lignes sources enregistrées, dans les quatre tables. **Taille** est la taille de ces lignes telles que CE les stocke.
 
-La ligne sous l'état compte les demandes "sur un total encore inconnu", car la copie ne compte pas la source avant de commencer. Une copie finie affiche **Terminée** et donne **Demandes copiées :** avec le nombre.
+La ligne sous l'état compte les demandes "sur un total encore inconnu". CE compte bien les demandes de la source quand une copie démarre ou reprend, mais cette page n'affiche pas encore ce nombre. **Activity** et `openldr import copy status` affichent la part lue et le temps restant. Une copie finie affiche **Terminée** et donne **Demandes copiées :** avec le nombre.
 
 ![Le tableau donne l'état, les demandes, les lignes et la taille.](v1-import-guide-copy-sets.png)
 

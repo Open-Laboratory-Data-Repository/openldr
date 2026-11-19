@@ -2364,10 +2364,10 @@ export {
   createImportService,
   type ImportService, type ImportRun, type ImportStatus, type ImportActor, type ImportAuditEvent, type ImportStartInput,
 } from './import-run';
-export type { ImportCopyService, CopyRun, CopyStatus, CopySetProgress } from './import-copy';
+export type { ImportCopyService, CopyRun, CopyStatus, CopySetProgress, CopyEstimate } from './import-copy';
 export { checkIdOf, FINDING_CODE, isLiveCheck, LABORATORY_CODE } from './import-check';
 export type { ImportCheckService, ImportCheckStartInput, HeldItemsFilter, CheckRun, CheckStatus, CheckCounts, CheckLaboratory } from './import-check';
-export { CopySetChangedError } from './import-copy';
+export { CopySetChangedError, copyEstimate, formatTimeLeft } from './import-copy';
 export {
   runSetupChecks, setupCheckDeps, SETUP_CHECK_TITLE, SETUP_HINT_TEXT,
   type SetupCheck, type SetupCheckDeps, type SetupCheckId, type SetupHint, type SetupReport, type SetupStatus,

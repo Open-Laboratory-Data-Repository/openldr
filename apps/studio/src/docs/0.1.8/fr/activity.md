@@ -209,6 +209,12 @@ Un envoi enregistré ne prouve pas que le destinataire a accepté ou lu les donn
 | Running | Un import ou un lot CLI est encore actif. |
 | Stopped | Un import ou un lot CLI a été arrêté. |
 
+## Suivre une copie de la source
+
+Une copie d'une base source apparaît dans Activity comme une ligne dont la source commence par `copy:`. Ouvrez-la pour lire sa ligne **Persisted**. Tant que la copie n'est pas finie, la ligne donne les lignes copiées, puis la part des clés de la source déjà lue, par exemple `45% of 2342719 keys`. Pendant qu'elle tourne, elle ajoute le temps restant, par exemple `about 31 min left`.
+
+OpenLDR compte les clés de la source quand une copie démarre ou reprend. Le temps restant est le nombre de clés encore à lire, à la vitesse moyenne depuis ce moment. Il apparaît après une minute de lecture. Il change quand la source est plus chargée, et un redémarrage recommence la moyenne. Sans compte, la ligne ne donne que les lignes.
+
 ## Vérifier si l'entrepôt est à jour
 
 Les tableaux de bord et les rapports lisent l'entrepôt. OpenLDR enregistre d'abord chaque enregistrement, puis le copie dans l'entrepôt. Pendant un import volumineux, l'entrepôt peut avoir beaucoup de retard, et un tableau de bord affiche alors moins que ce qui est enregistré.

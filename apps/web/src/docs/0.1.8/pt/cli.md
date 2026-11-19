@@ -491,6 +491,12 @@ O guia **As suas preferências** do Studio encontra-se em **Preferências pessoa
 
 Para operadores, `user preferences show <user-id>` lê os valores guardados e `user preferences set <user-id> startPage none` limpa a escolha pessoal da página inicial. Use a forma do comando instalado ou de desenvolvimento descrita acima. Limpar a escolha permite voltar a usar a página inicial da disposição, quando está configurada.
 
+## Até onde chegou uma cópia
+
+`openldr import copy status <plugin> [copy]` mostra uma linha por cópia. Enquanto uma cópia não termina, a linha dá a parte das chaves da origem já lida, em percentagem, por exemplo `45.2% of 2342719 keys`. Enquanto corre, acrescenta o tempo restante, por exemplo `about 31 min left`. Cada conjunto mostra `total=` ao lado das suas próprias contagens. `--json` dá os mesmos números em `estimate`: `done`, `total`, `percent` e `secondsLeft`.
+
+O CE conta as chaves de cada conjunto na origem quando uma cópia começa ou continua. O tempo restante é o número de chaves ainda por ler, à velocidade média desde esse momento. É uma estimativa. Só aparece depois de um minuto de leitura. Muda quando a origem fica mais ocupada, quando os pedidos antigos e recentes têm números de linhas diferentes, e depois de um reinício, que recomeça a média. Quando a origem não conseguiu contar um conjunto em 30 segundos, a linha não dá percentagem e a cópia continua.
+
 ## Tarefas interrompidas
 
 Uma tarefa longa cortada por um reinício regista-o. A maioria continua sozinha; estes comandos mostram o registo e continuam uma tarefa que espera.

@@ -209,6 +209,12 @@ Um envio registado não prova que o destinatário aceitou ou leu os dados. Stuck
 | Running | Uma importação ou lote CLI continua ativo. |
 | Stopped | Uma importação ou lote CLI foi parado. |
 
+## Acompanhar uma cópia da origem
+
+Uma cópia de uma base de dados de origem aparece em Activity como uma linha cuja origem começa por `copy:`. Abra-a para ler a linha **Persisted**. Enquanto a cópia não termina, a linha dá as linhas copiadas e depois a parte das chaves da origem já lida, por exemplo `45% of 2342719 keys`. Enquanto corre, acrescenta o tempo restante, por exemplo `about 31 min left`.
+
+O OpenLDR conta as chaves da origem quando uma cópia começa ou continua. O tempo restante é o número de chaves ainda por ler, à velocidade média desde esse momento. Aparece depois de um minuto de leitura. Muda quando a origem fica mais ocupada, e um reinício recomeça a média. Sem contagem, a linha dá só as linhas.
+
 ## Verificar se o armazém está atualizado
 
 Os painéis e os relatórios leem o armazém. O OpenLDR guarda primeiro cada registo e depois copia-o para o armazém. Durante uma importação grande, o armazém pode ficar muito atrasado, e um painel mostra então menos do que foi guardado.
