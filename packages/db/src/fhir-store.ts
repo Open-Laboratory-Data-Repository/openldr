@@ -112,6 +112,9 @@ export const AMENDABLE_TYPES: ReadonlySet<string> = new Set(['Observation', 'Dia
 
 export interface FhirStore {
   save(resource: FhirResource, provenance?: Provenance): Promise<SavedRef>;
+  /** Saves every resource in one transaction, in order, with one projection wake-up after the
+   *  commit. A failure on any resource saves none of them (item 16: a request is saved whole). */
+  saveMany(resources: FhirResource[], provenance?: Provenance): Promise<SavedRef[]>;
   get(resourceType: string, id: string): Promise<FhirResource | null>;
   /** Cheap existence check for the latest version of a resource. */
   exists(resourceType: string, id: string): Promise<boolean>;
@@ -214,73 +217,123 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
     return owner?.site_id ?? '';
   }
 
+  // Rows per statement. Nine columns at most, so 1,000 rows stay far below PostgreSQL's limit of
+  // 65,535 parameters. saveMany has no size limit of its own, so every statement is split.
+  const SAVE_CHUNK = 1000;
+  function chunksOf<T>(list: T[]): T[][] {
+    const out: T[][] = [];
+    for (let i = 0; i < list.length; i += SAVE_CHUNK) out.push(list.slice(i, i + SAVE_CHUNK));
+    return out;
+  }
+
+  // Writes a list inside the caller's transaction with a few multi-row statements (item 16 slice 2a):
+  // one versions lookup, then one insert each into fhir_resources, resource_history and change_log.
+  // Each row is built as a single save builds it.
+  async function writeMany(trx: Kysely<InternalSchema>, resources: FhirResource[], provenance: Provenance, site: string | null): Promise<SavedRef[]> {
+    // Ids first: a resource without one gets it before keys are grouped.
+    const items = resources.map((resource) => ({ resource, resourceType: resource.resourceType, id: (resource as { id?: string }).id ?? randomUUID() }));
+    const keyOf = (resourceType: string, id: string): string => `${resourceType}\u0000${id}`;
+
+    // Next version = highest ever recorded in the append-only history + 1. Deriving from
+    // history (not the canonical row) keeps versions monotonic across delete→recreate, since
+    // delete() removes the canonical row but history retains every version. The history PK
+    // (resource_type,id,version) also serializes concurrent same-key writes: a race loser
+    // hits a duplicate-key and rolls back atomically, throwing to the caller (no data
+    // corruption; a caller retry then reads the new max and advances). This means truly
+    // concurrent same-id writes can now fail where a plain upsert would have last-writer-won.
+    // (bigint reads back as string on real pg, number on pg-mem — always coerce.)
+    // One plain max() per key, joined with UNION ALL into one statement. PostgreSQL answers a plain
+    // max() on (resource_type, id) from the end of the history primary key, reading one entry. A
+    // single grouped lookup would instead read every stored version of each key, and a record that
+    // every request saves again (an Organization) has thousands.
+    const highest = new Map<string, number>();
+    const distinct = [...new Map(items.map((i) => [keyOf(i.resourceType, i.id), i])).values()];
+    for (const part of chunksOf(distinct)) {
+      const branches = part.map((k, n) => sql`select ${sql.lit(n)} as n, coalesce(max(version), 0) as maxv from fhir.resource_history where resource_type = ${k.resourceType} and id = ${k.id}`);
+      const found = await sql<{ n: number; maxv: number | string }>`${sql.join(branches, sql` union all `)}`.execute(trx);
+      for (const row of found.rows) {
+        const k = part[Number(row.n)];
+        highest.set(keyOf(k.resourceType, k.id), Number(row.maxv));
+      }
+    }
+
+    const prov = {
+      source_system: provenance.sourceSystem ?? null,
+      plugin_id: provenance.pluginId ?? null,
+      plugin_version: provenance.pluginVersion ?? null,
+      batch_id: provenance.batchId ?? null,
+    };
+    // Versions are numbered in input order, so a key that comes twice gets max+1 then max+2.
+    const rows = items.map(({ resource, resourceType, id }) => {
+      const key = keyOf(resourceType, id);
+      const next = (highest.get(key) ?? 0) + 1;
+      highest.set(key, next);
+      const nowIso = new Date().toISOString();
+      // Hash the pre-stamp content so identical content hashes stably (excludes the volatile
+      // server-stamped meta.versionId / meta.lastUpdated we add below).
+      const contentHashHex = contentHash(JSON.stringify({ ...resource, id }));
+      const meta = { ...(resource as { meta?: Record<string, unknown> }).meta, versionId: String(next), lastUpdated: nowIso };
+      const serialized = JSON.stringify({ ...resource, id, meta });
+      return { key, resourceType, id, next, serialized, contentHashHex };
+    });
+
+    // The canonical row holds the latest version only. A key that comes twice sends just its last
+    // row: PostgreSQL refuses an upsert that would update one row twice in a statement.
+    const last = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) last.set(row.key, row);
+    for (const part of chunksOf([...last.values()])) {
+      await trx
+        .insertInto('fhir.fhir_resources')
+        .values(part.map((r) => ({ resource_type: r.resourceType, id: r.id, version: r.next, version_id: String(r.next), resource: r.serialized, ...prov })))
+        .onConflict((oc) =>
+          oc.columns(['resource_type', 'id']).doUpdateSet((eb) => ({
+            version: eb.ref('excluded.version'),
+            version_id: eb.ref('excluded.version_id'),
+            resource: eb.ref('excluded.resource'),
+            source_system: eb.ref('excluded.source_system'),
+            plugin_id: eb.ref('excluded.plugin_id'),
+            plugin_version: eb.ref('excluded.plugin_version'),
+            batch_id: eb.ref('excluded.batch_id'),
+            updated_at: sql`now()`,
+          })),
+        )
+        .execute();
+    }
+    // History keeps every version, in input order.
+    for (const part of chunksOf(rows)) {
+      await trx
+        .insertInto('fhir.resource_history')
+        .values(part.map((r) => ({ resource_type: r.resourceType, id: r.id, version: r.next, op: 'upsert' as const, resource: r.serialized })))
+        .execute();
+    }
+    // INVARIANT (load-bearing for the projection safe-frontier): the change_log insert must NOT be
+    // this transaction's first write. The fhir_resources upsert + resource_history insert above run
+    // first, so the txn's xid is assigned before nextval(seq) is drawn here. The R2 projection worker
+    // relies on this: a gap's txn xid < the snapshot's xmax that stamps its x0. Inserting into
+    // change_log as a transaction's first statement would reopen a permanent-skip window.
+    // Rows go in input order, so seq rises in input order within a call.
+    for (const part of chunksOf(rows)) {
+      await trx
+        .insertInto('fhir.change_log')
+        .values(part.map((r) => ({ resource_type: r.resourceType, resource_id: r.id, version: r.next, op: 'upsert' as const, content_hash: r.contentHashHex, site_id: site })))
+        .execute();
+    }
+    return rows.map((r) => ({ resourceType: r.resourceType, id: r.id, version: r.next }));
+  }
+
+  async function saveMany(resources: FhirResource[], provenance: Provenance = {}): Promise<SavedRef[]> {
+    if (resources.length === 0) return [];
+    const site = await resolveSiteId();
+    const refs = await db.transaction().execute((trx) => writeMany(trx, resources, provenance, site));
+    // Best-effort wakeup for the projection worker; interval polling is the correctness-bearing
+    // path, so a notify failure (e.g. pg-mem in tests) must never affect the save.
+    try { await sql`select pg_notify('fhir_changes', '')`.execute(db); } catch { /* ignore */ }
+    return refs;
+  }
+
   return {
-    async save(resource, provenance = {}) {
-      const resourceType = resource.resourceType;
-      const id = (resource as { id?: string }).id ?? randomUUID();
-      const site = await resolveSiteId();
-      const ref = await db.transaction().execute(async (trx) => {
-        // Next version = highest ever recorded in the append-only history + 1. Deriving from
-        // history (not the canonical row) keeps versions monotonic across delete→recreate, since
-        // delete() removes the canonical row but history retains every version. The history PK
-        // (resource_type,id,version) also serializes concurrent same-key writes: a race loser
-        // hits a duplicate-key and rolls back atomically, throwing to the caller (no data
-        // corruption; a caller retry then reads the new max and advances). This means truly
-        // concurrent same-id writes can now fail where a plain upsert would have last-writer-won.
-        // (bigint reads back as string on real pg, number on pg-mem — always coerce.)
-        const hi = await trx
-          .selectFrom('fhir.resource_history')
-          .select(sql<number>`coalesce(max(version), 0)`.as('maxv'))
-          .where('resource_type', '=', resourceType)
-          .where('id', '=', id)
-          .executeTakeFirst();
-        const next = Number(hi?.maxv ?? 0) + 1;
-        const nowIso = new Date().toISOString();
-        // Hash the pre-stamp content so identical content hashes stably (excludes the volatile
-        // server-stamped meta.versionId / meta.lastUpdated we add below).
-        const contentHashHex = contentHash(JSON.stringify({ ...resource, id }));
-        const meta = { ...(resource as { meta?: Record<string, unknown> }).meta, versionId: String(next), lastUpdated: nowIso };
-        const full = { ...resource, id, meta } as FhirResource;
-        const serialized = JSON.stringify(full);
-        const prov = {
-          source_system: provenance.sourceSystem ?? null,
-          plugin_id: provenance.pluginId ?? null,
-          plugin_version: provenance.pluginVersion ?? null,
-          batch_id: provenance.batchId ?? null,
-        };
-        await trx
-          .insertInto('fhir.fhir_resources')
-          .values({ resource_type: resourceType, id, version: next, version_id: String(next), resource: serialized, ...prov })
-          .onConflict((oc) =>
-            oc.columns(['resource_type', 'id']).doUpdateSet({
-              version: next,
-              version_id: String(next),
-              resource: serialized,
-              ...prov,
-              updated_at: sql`now()`,
-            }),
-          )
-          .execute();
-        await trx
-          .insertInto('fhir.resource_history')
-          .values({ resource_type: resourceType, id, version: next, op: 'upsert', resource: serialized })
-          .execute();
-        // INVARIANT (load-bearing for the projection safe-frontier): the change_log insert must NOT be
-        // this transaction's first write. The fhir_resources upsert + resource_history insert above run
-        // first, so the txn's xid is assigned before nextval(seq) is drawn here. The R2 projection worker
-        // relies on this: a gap's txn xid < the snapshot's xmax that stamps its x0. Inserting into
-        // change_log as a transaction's first statement would reopen a permanent-skip window.
-        await trx
-          .insertInto('fhir.change_log')
-          .values({ resource_type: resourceType, resource_id: id, version: next, op: 'upsert', content_hash: contentHashHex, site_id: site })
-          .execute();
-        return { resourceType, id, version: next };
-      });
-      // Best-effort wakeup for the projection worker; interval polling is the correctness-bearing
-      // path, so a notify failure (e.g. pg-mem in tests) must never affect the save.
-      try { await sql`select pg_notify('fhir_changes', '')`.execute(db); } catch { /* ignore */ }
-      return ref;
-    },
+    save: async (resource, provenance = {}) => (await saveMany([resource], provenance))[0],
+    saveMany,
 
     async get(resourceType, id) {
       const row = await db

@@ -1,5 +1,5 @@
 import { type Logger, OpenLdrError, appError } from '@openldr/core';
-import { validateResource, validateBatch, type ValidateBatchOpts } from '@openldr/fhir';
+import { validateResource, validateBatch, type ValidateBatchOpts, type FhirResource } from '@openldr/fhir';
 import type { FhirStore } from './fhir-store';
 import type { Provenance } from './provenance';
 
@@ -37,20 +37,22 @@ export async function persistResources(
   if (opts) {
     const v = await validateBatch(resources, opts);
     if (!v.ok) throw appError('VA0002', { details: { outcome: v.outcome } });
-    const results: PersistResult[] = [];
-    for (const resource of v.resources) {
-      await deps.fhirStore.save(resource, provenance);
-      results.push({ saved: true, flattened: 'deferred' });
-    }
-    return results;
+    return saveAll(deps, v.resources, provenance);
   }
-  // Back-compat path (no opts): per-resource structural validation, as before.
-  const results: PersistResult[] = [];
+  // Back-compat path (no opts): per-resource structural validation, as before. Every resource is
+  // checked before any is saved.
+  const valid: FhirResource[] = [];
   for (const resource of resources) {
     const validation = validateResource(resource);
     if (!validation.ok) throw new OpenLdrError('cannot persist invalid FHIR resource');
-    await deps.fhirStore.save(validation.resource, provenance);
-    results.push({ saved: true, flattened: 'deferred' });
+    valid.push(validation.resource);
   }
-  return results;
+  return saveAll(deps, valid, provenance);
+}
+
+// One transaction for the whole list (item 16): a database error on any resource saves none of
+// them, so a request is never left half-saved.
+async function saveAll(deps: PersistDeps, resources: FhirResource[], provenance: Provenance): Promise<PersistResult[]> {
+  await deps.fhirStore.saveMany(resources, provenance);
+  return resources.map(() => ({ saved: true, flattened: 'deferred' as const }));
 }
