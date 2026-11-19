@@ -115,3 +115,33 @@ lifted this way. They need the report rewritten. One rewritten report was not co
 script gave it a blank for a required date. The report times are from before the guarded build and
 were not taken again, since the built tables hold the same rows.
 
+## Reports pack with datasets (reports-zm 0.2.0, not published)
+
+Tanzania full, warehouse complete. The 7 queries that changed, the published 0.1.2 SQL against the
+SQL of the pack built with two datasets, same parameter values, on the standalone at CE 0.1.12-demo.8.
+Pack repo commit: see `openldr-ce-content-pack-reports-zm`. 29 cases compared, 29 with identical
+rows. The other 67 queries are unchanged.
+
+| Date | Query | Parameters | Before | After |
+|---|---|---|---|---|
+| 2026-11-19 | Date completeness by lab | four date ranges | 6.2 to 7.0 s | 1.6 to 2.0 s |
+| 2026-11-19 | Date completeness by lab facility | EID, 2017 | 1.4 s | 1.1 s |
+| 2026-11-19 | Date completeness by lab facility | VL, 2018 | 6.0 s | 1.8 s |
+| 2026-11-19 | Date completeness by lab area | all dates | 37.7 s | 9.8 s |
+| 2026-11-19 | Date completeness by lab area | three date ranges | 34.6 to 35.4 s | 3.5 to 4.1 s |
+| 2026-11-19 | Turnaround times by lab | all, all dates | 43.7 s | 14.4 s |
+| 2026-11-19 | Turnaround times by lab | all, from 2018-05-31 | 38.5 s | 6.0 s |
+| 2026-11-19 | Turnaround times by lab | EID, 2017 | 141.8 s | 0.5 s |
+| 2026-11-19 | Turnaround times by lab | VL, 2018 | 6.7 s | 1.7 s |
+| 2026-11-19 | VL turnaround by month | four date ranges | 6.0 to 6.7 s | 1.2 to 1.9 s |
+| 2026-11-19 | Requests received by week | three date ranges | 48.2 to 50.5 s | 14.1 to 16.4 s |
+| 2026-11-19 | Requests received by week (VLEID copy) | four date ranges | 21.4 to 100.3 s | 11.3 to 12.1 s |
+| 2026-11-19 | All 29 cases | | 866 s | 165 s |
+
+The two datasets built in about 70 s together when the pack was installed (4,239,703 rows and 1 row).
+
+A fault found on the way and fixed before this table: one case (lab facility, EID) took 171 s on the
+first build of the new pack against 1.4 s before, because PostgreSQL redid the lab-name step for each
+of 36,010 rows. Not proved: many labs. The Tanzania data has one lab code, so each lab query
+returns one lab. The generator's own 13,049 check cases cover several labs.
+
