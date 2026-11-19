@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "194123fc",
+          "type": "feat",
+          "scope": "v1-import",
+          "title": "The copy page shows the share read and the time left"
+        },
+        {
           "hash": "6daedb65",
           "type": "perf",
           "scope": "import",
