@@ -56,7 +56,7 @@ export async function startServer(cfg: Config, logger: Logger): Promise<RunningS
   // And for the import driver (`runImportDriver`): dropping it leaves every copy queued and every
   // import that lost its server unresumed, so after a power cut nothing carries on by itself.
   const ctx = await createAppContext(cfg, {
-    runFacilityImportWorker: true, runFacilityJobWorker: true, runTerminologyIngestWorker: true,
+    runFacilityImportWorker: true, runFacilityJobWorker: true, runTerminologyIngestWorker: true, runDatasetRefresher: true,
     startSyncWorkers: true, runImportDriver: true,
   });
 

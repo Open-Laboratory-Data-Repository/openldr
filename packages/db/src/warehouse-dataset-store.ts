@@ -1,0 +1,134 @@
+import type { Kysely } from 'kysely';
+import type { InternalSchema } from './schema/internal';
+
+/** A dataset a content pack defines: one SELECT whose result CE keeps as the warehouse table
+ *  `dataset.<name>`. The fields from `builtAtSeq` on describe its last build that worked. */
+export interface WarehouseDataset {
+  name: string;
+  /** The pack's id, without its version, so a new version of the pack replaces its own datasets. */
+  ownerPack: string;
+  sql: string;
+  /** Each entry is the columns of one plain index. */
+  indexes: string[][];
+  /** Where the pack listed it. Datasets build in this order, so one can read another before it. */
+  position: number;
+  /** The newest change number the warehouse held when the last build started. Null before a build. */
+  builtAtSeq: number | null;
+  builtAt: string | null;
+  buildMs: number | null;
+  rowCount: number | null;
+  /** Why the newest build failed. Null once a build works. The table of the last good build stays. */
+  lastError: string | null;
+  /** The newest change number when the newest build failed. Null once a build works. */
+  failedAtSeq: number | null;
+  /** The Query page group it sits in. It starts as the pack's id. Null: no group. */
+  group: string | null;
+}
+
+export interface WarehouseDatasetDef { name: string; sql: string; indexes?: string[][] }
+
+export interface WarehouseDatasetStore {
+  /** Ordered by owner pack, then the pack's own order. */
+  list(): Promise<WarehouseDataset[]>;
+  get(name: string): Promise<WarehouseDataset | undefined>;
+  /** Makes `defs`, in order, the datasets `ownerPack` owns. One it no longer lists is removed. One
+   *  whose SQL and indexes did not change keeps its last build. A changed one loses it, so it shows
+   *  as never built. Throws `dataset <name> belongs to <pack>` when another pack owns a name, and
+   *  then writes nothing. Resolves to the names it removed, whose warehouse tables the caller drops. */
+  replaceForPack(ownerPack: string, defs: WarehouseDatasetDef[]): Promise<string[]>;
+  markBuilt(name: string, built: { seq: number; ms: number; rows: number }): Promise<void>;
+  /** `seq` is the newest change number at the failed try. */
+  markFailed(name: string, error: string, seq: number): Promise<void>;
+  remove(name: string): Promise<void>;
+  /** Moves a dataset to a group, or to none. Throws `no dataset named <name>`. */
+  setGroup(name: string, group: string | null): Promise<void>;
+  /** Gives every dataset in the group `from` the group `to`, or none. Resolves to how many moved. */
+  renameGroup(from: string, to: string | null): Promise<number>;
+}
+
+const T = 'warehouse_datasets' as const;
+
+function fromRow(r: Record<string, unknown>): WarehouseDataset {
+  // jsonb comes back parsed on PostgreSQL and as text on pg-mem. bigint comes back as text.
+  const indexes = typeof r.indexes === 'string' ? JSON.parse(r.indexes) : (r.indexes ?? []);
+  const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+  return {
+    name: String(r.name), ownerPack: String(r.owner_pack), sql: String(r.sql), indexes: indexes as string[][],
+    position: Number(r.position),
+    builtAtSeq: num(r.built_at_seq),
+    builtAt: r.built_at ? new Date(r.built_at as string | number | Date).toISOString() : null,
+    buildMs: num(r.build_ms), rowCount: num(r.row_count),
+    lastError: (r.last_error as string | null) ?? null,
+    failedAtSeq: num(r.failed_at_seq),
+    group: (r.group_name as string | null) ?? null,
+  };
+}
+
+export function createWarehouseDatasetStore(db: Kysely<InternalSchema>): WarehouseDatasetStore {
+  const store: WarehouseDatasetStore = {
+    async list() {
+      const rows = await db.selectFrom(T).selectAll().orderBy('owner_pack').orderBy('position').execute();
+      return rows.map((r) => fromRow(r as Record<string, unknown>));
+    },
+    async get(name) {
+      const r = await db.selectFrom(T).selectAll().where('name', '=', name).executeTakeFirst();
+      return r ? fromRow(r as Record<string, unknown>) : undefined;
+    },
+    async replaceForPack(ownerPack, defs) {
+      const removed: string[] = [];
+      await db.transaction().execute(async (trx) => {
+        const existing = (await trx.selectFrom(T).selectAll().execute()).map((r) => fromRow(r as Record<string, unknown>));
+        const byName = new Map(existing.map((d) => [d.name, d]));
+        for (const def of defs) {
+          const other = byName.get(def.name);
+          if (other && other.ownerPack !== ownerPack) throw new Error(`dataset ${def.name} belongs to ${other.ownerPack}`);
+        }
+        const listed = new Set(defs.map((d) => d.name));
+        for (const d of existing) {
+          if (d.ownerPack === ownerPack && !listed.has(d.name)) {
+            await trx.deleteFrom(T).where('name', '=', d.name).execute();
+            removed.push(d.name);
+          }
+        }
+        for (const [position, def] of defs.entries()) {
+          const indexes = JSON.stringify(def.indexes ?? []);
+          const before = byName.get(def.name);
+          if (!before) {
+            // A new dataset starts in a group named for its pack. One that exists keeps where it was moved.
+            await trx.insertInto(T).values({ name: def.name, owner_pack: ownerPack, sql: def.sql, indexes, position, group_name: ownerPack } as never).execute();
+          } else if (before.sql === def.sql && JSON.stringify(before.indexes) === indexes) {
+            await trx.updateTable(T).set({ position, updated_at: new Date() } as never).where('name', '=', def.name).execute();
+          } else {
+            await trx.updateTable(T).set({
+              sql: def.sql, indexes, position, built_at_seq: null, built_at: null, build_ms: null, row_count: null, last_error: null, failed_at_seq: null, updated_at: new Date(),
+            } as never).where('name', '=', def.name).execute();
+          }
+        }
+      });
+      return removed;
+    },
+    async markBuilt(name, built) {
+      await db.updateTable(T).set({
+        built_at_seq: built.seq, built_at: new Date(), build_ms: Math.round(built.ms), row_count: built.rows, last_error: null, failed_at_seq: null, updated_at: new Date(),
+      } as never).where('name', '=', name).execute();
+    },
+    async markFailed(name, error, seq) {
+      await db.updateTable(T).set({ last_error: error, failed_at_seq: seq, updated_at: new Date() } as never).where('name', '=', name).execute();
+    },
+    async remove(name) {
+      await db.deleteFrom(T).where('name', '=', name).execute();
+    },
+    async setGroup(name, group) {
+      const hit = await db.selectFrom(T).select('name').where('name', '=', name).executeTakeFirst();
+      if (!hit) throw new Error(`no dataset named ${name}`);
+      await db.updateTable(T).set({ group_name: group, updated_at: new Date() } as never).where('name', '=', name).execute();
+    },
+    async renameGroup(from, to) {
+      const inGroup = await db.selectFrom(T).select('name').where('group_name', '=', from).execute();
+      if (inGroup.length === 0) return 0;
+      await db.updateTable(T).set({ group_name: to, updated_at: new Date() } as never).where('group_name', '=', from).execute();
+      return inGroup.length;
+    },
+  };
+  return store;
+}

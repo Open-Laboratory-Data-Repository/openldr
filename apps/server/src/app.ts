@@ -9,7 +9,7 @@ import fastifyStatic from '@fastify/static';
 import compress from '@fastify/compress';
 import { requireOidcIssuer, resolveAuthCapabilities, type AuthSelectionConfig } from '@openldr/config';
 import { appError } from '@openldr/core';
-import { createConnectorDialectLookup, type AppContext } from '@openldr/bootstrap';
+import { createConnectorDialectLookup, listDatasetsWithState, DEFAULT_CONNECTOR_NAME, type AppContext } from '@openldr/bootstrap';
 import { registerReportRoutes } from './reports-routes';
 import { registerTerminologyRoutes } from './terminology-routes';
 import { registerTerminologyAdminRoutes } from './terminology-admin-routes';
@@ -222,6 +222,19 @@ export async function buildApp(ctx: AppContext) {
       })),
       // getByName returns WorkflowDataset | undefined; map absent → null for the route contract.
       getByName: async (name) => (await ctx.workflows.datasets.getByName(name)) ?? null,
+    },
+    warehouseDatasets: {
+      list: async () => {
+        const rows = await listDatasetsWithState(ctx.warehouseDatasets, ctx.internalDb);
+        if (rows.length === 0) return [];
+        // Datasets are PostgreSQL warehouse tables, browsed through the seeded warehouse connector.
+        const connectorId = (await ctx.connectors.list()).find((c) => c.name === DEFAULT_CONNECTOR_NAME && c.enabled)?.id ?? null;
+        return rows.map((r) => ({ ...r, connectorId }));
+      },
+      rebuild: async (name) => (await ctx.warehouseDatasets.rebuild(name))[0]!,
+      remove: (name) => ctx.warehouseDatasets.remove(name),
+      setGroup: (name, group) => ctx.warehouseDatasets.setGroup(name, group),
+      renameGroup: (from, to) => ctx.warehouseDatasets.renameGroup(from, to),
     },
     runConnectorSql: (input) => {
       // Optional on WorkflowServices, but always wired in bootstrap for the server context.

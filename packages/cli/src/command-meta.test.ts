@@ -214,6 +214,7 @@ const WHEN = 'a date, time, year or sync cursor';
 const PERSON = 'a name written into a record as is; refusing it through the app is a later task';
 const REASON: Record<string, string> = {
   '--seconds': 'a number of seconds',
+  '--group': 'the name of a Query page group',
   // positional arguments
   action: CHOICE, batchId: ID, capability: ID, code: ID, columns: 'column names in the warehouse', connector: ID,
   conceptMapUrl: URI, copy: ID, display: TEXT, entityId: ID, entityType: CHOICE, field: SETTING, id: ID, idA: ID, idB: ID,
@@ -397,6 +398,9 @@ const NOT_A_PATH: Record<string, string[]> = {
   'market remove': ['id', 'version'],
   'artifact publish': ['--approved-by'],
   'db warehouse-status': ['--seconds'],
+  'db datasets rebuild': ['name'],
+  'db datasets delete': ['name'],
+  'db datasets move': ['name', '--group'],
 };
 
 describe('paths on app commands', () => {

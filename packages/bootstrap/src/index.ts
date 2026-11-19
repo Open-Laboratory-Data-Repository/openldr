@@ -10,7 +10,7 @@ import { createBlobFromConfig } from './s3-config';
 import { requireOidcIssuer, type Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
-import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, persistRequests, createTerminologyStore, createTerminologyAdminStore, LOCAL_MAP_URL, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, createWarehouseDatasetStore, persistResources, persistRequests, createTerminologyStore, createTerminologyAdminStore, LOCAL_MAP_URL, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -60,7 +60,8 @@ import { createSyncHandle, type SyncHandle } from './sync-handle';
 import { createSyncRuntime, type SyncRuntime, type BuiltPush, type BuiltPull } from './sync-runtime';
 import { createRetryQuarantine } from './sync-retry-quarantine';
 import { createSyncActivityTracker } from './sync-activity-tracker';
-import { createWarehouseStatusReader, type WarehouseStatusReader } from './warehouse-status';
+import { createWarehouseStatusReader, readWarehouseReading, type WarehouseStatusReader } from './warehouse-status';
+import { createWarehouseDatasetService, createDatasetRefresher, withDatasetMessage, type WarehouseDatasetService } from './warehouse-datasets';
 import { encodePushBody, advertisesGzip } from './sync-gzip';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
 import { createResourceLoader } from './reexpand-value-sets';
@@ -606,6 +607,8 @@ export interface AppContext {
   activity: ActivityService;
   /** How far the warehouse is behind the records saved, and how fast the gap closes. */
   warehouseStatus: WarehouseStatusReader;
+  /** Datasets a content pack defines: list, rebuild, remove. */
+  warehouseDatasets: WarehouseDatasetService;
   /** Seal a plaintext secret for at-rest storage (AES-256-GCM under SECRETS_ENCRYPTION_KEY).
    *  Symmetric with {@link decryptSecret}; used by the sync settings route/CLI to write-encrypt
    *  the client secret. */
@@ -700,6 +703,10 @@ export interface AppContextOptions {
    *  a CLI process it failed the server's live terminology imports. See
    *  `createTerminologyIngestWorkerIfEnabled`. */
   runTerminologyIngestWorker?: boolean;
+  /** Rebuild pack datasets when the warehouse has changed and caught up. Only the server asks for
+   *  it. A CLI command builds an app context too, and a refresher there would build a dataset the
+   *  server is also building, then be cut off when the command's database pools close. */
+  runDatasetRefresher?: boolean;
   /** Does this process start sync while the context is built?
    *
    *  ⛔ Only the API server sets it. Without it nothing reads the sync settings and no push or pull
@@ -835,6 +842,10 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   // Canonical persist for the Persist Store workflow node — same wiring as ingest-context.
   const canonicalFhirStore = createFhirStore(internal.db);
   const workflowRelationalWriter = createRelationalWriter(externalDb, engine);
+  // Datasets a content pack defines, kept as tables in the warehouse's `dataset` schema.
+  const warehouseDatasets = createWarehouseDatasetService({
+    store: createWarehouseDatasetStore(internal.db), internalDb: internal.db, warehouseDb: externalDb as unknown as Kysely<any>, engine, logger,
+  });
   // Gate enforcement is wired via `validationStrictness`, defined below alongside the rest of the
   // app-settings-backed services — this closure isn't invoked until after bootstrap() returns, so
   // the forward reference resolves by the time a caller actually persists.
@@ -1309,6 +1320,8 @@ const reporting: ReportingApi = {
     loadResource: async (json, packId) => terminology.loaders.resource(await withRegisteredResourceId(termDb, json), { origin: 'pack', originRef: packId }),
     checkResource: (json) => { checkTerminologyResource(json); },
     checkQueries: checkCustomQueryFile,
+    checkDatasets: (ownerPack, tables) => warehouseDatasets.check(ownerPack, tables),
+    installDatasets: (ownerPack, tables) => warehouseDatasets.install(ownerPack, tables),
     importQueries: async (file) => {
       const customQueries = createCustomQueryStore(internal.db);
       // Read the rows first, so a replace can be audited with the SQL it overwrote.
@@ -1442,7 +1455,9 @@ const reporting: ReportingApi = {
       await blob.put(objectKey, bytes, contentType);
       return { objectKey, contentType, fileName: safe, byteSize: bytes.byteLength };
     },
-    runConnectorSql: (input) => connectorSqlRunner(input),
+    // One place for every report, dashboard and Query page run: a dataset that is not built yet
+    // reads as a plain sentence, not as PostgreSQL's missing-relation error.
+    runConnectorSql: (input) => withDatasetMessage(() => connectorSqlRunner(input)),
     runConnectorMongo: (input) => connectorMongoRunner(input),
     runConnectorRedis: (input) => connectorRedisRunner(input),
     runConnectorEmail: (input) => connectorEmailRunner(input),
@@ -1563,6 +1578,12 @@ const reporting: ReportingApi = {
     listenClient: projectionListenConnected ? projectionListenClient : undefined,
     logger,
   });
+  // Rebuilds pack datasets once the warehouse has caught up with what was saved.
+  const datasetRefresher = opts.runDatasetRefresher === true ? createDatasetRefresher({
+    upToDate: async () => (await readWarehouseReading(internal.db)).behind === 0,
+    refreshDue: () => warehouseDatasets.refreshDue(),
+    logger,
+  }) : undefined;
 
   // Sync S1: directional push (lab -> central). A SECOND consumer of fhir.change_log ('sync-push'),
   // config-gated. readSyncConfig returns null for any install that hasn't enabled + fully configured
@@ -2151,6 +2172,7 @@ const reporting: ReportingApi = {
     validationStrictness,
     activity,
     warehouseStatus: createWarehouseStatusReader(internal.db),
+    warehouseDatasets,
     encryptSecret,
     decryptSecret: syncDecrypt,
     sync,
@@ -2164,6 +2186,7 @@ const reporting: ReportingApi = {
         await workflowListeners.stopAll();
         // The runtime stops both workers and ends the push LISTEN client it owns.
         await syncRuntime.stop();
+        datasetRefresher?.stop();
         await projectionWorker.stop();
         // Only processes that opted in own these three workers. See
         // `AppContextOptions.runTerminologyIngestWorker`, `runFacilityJobWorker` and `runFacilityImportWorker`.
@@ -2194,6 +2217,7 @@ export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
 export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
 export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
+export { createWarehouseDatasetService, createDatasetRefresher, datasetNotBuiltMessage, withDatasetMessage, listDatasetsWithState, type WarehouseDatasetService, type PackDataset, type DatasetBuildResult, type DatasetListItem } from './warehouse-datasets';
 export { readWarehouseReading, withRate, createWarehouseStatusReader, type WarehouseReading, type WarehouseStatus, type WarehouseStatusReader } from './warehouse-status';
 export type { ActivityService, ActivityImportRun, ActivityCopyRun, ActivityCheckRun, ActivityLifecycle, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig, readSigningKeys } from './sync-settings';

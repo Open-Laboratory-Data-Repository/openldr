@@ -392,6 +392,12 @@ aparecerem num relatório, confirme que o armazém de destino está configurado 
 [Variáveis de ambiente](/docs/environment)) e dê algum tempo à projeção para se atualizar. A linha **Armazém** no topo da página Activity mostra
 o atraso e o tempo necessário. `openldr db warehouse-status` mostra os mesmos números.
 
+Um pacote de relatórios também pode instalar conjuntos de dados: tabelas que constrói a partir do
+armazém para que os seus relatórios não repitam um passo lento em cada execução. O OpenLDR
+reconstrói-os quando o armazém fica atualizado, pelo que um relatório destes pode estar uma
+reconstrução atrás. A página Query lista-os em Datasets, e `openldr db datasets list` mostra a
+mesma lista.
+
 ### Factos e atributos dos pedidos
 
 Cada pedido de laboratório traz, quando a origem os envia: o conjunto OBR, a hora da

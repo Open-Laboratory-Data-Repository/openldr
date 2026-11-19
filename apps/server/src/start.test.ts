@@ -107,7 +107,7 @@ describe('startServer', () => {
     const { startServer } = await import('./start');
     const server = await startServer(cfg, logger);
     expect(bootstrap.createAppContext).toHaveBeenLastCalledWith(cfg, {
-      runFacilityImportWorker: true, runFacilityJobWorker: true, runTerminologyIngestWorker: true,
+      runFacilityImportWorker: true, runFacilityJobWorker: true, runTerminologyIngestWorker: true, runDatasetRefresher: true,
       startSyncWorkers: true, runImportDriver: true,
     });
     await server.close();

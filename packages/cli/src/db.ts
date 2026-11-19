@@ -1,4 +1,4 @@
-import { createDbContext, createAppContext, seedDatabase, recordAuditEvent, readWarehouseReading, withRate, type WarehouseStatus } from '@openldr/bootstrap';
+import { createDbContext, createAppContext, seedDatabase, recordAuditEvent, readWarehouseReading, withRate, listDatasetsWithState, type WarehouseStatus, type DatasetListItem, type DatasetBuildResult } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { reprojectAll } from '@openldr/db';
 import { redactError } from './redact-error';
@@ -210,3 +210,119 @@ export async function runDbWarehouseStatus(opts: JsonOpt & { seconds: number }):
     await ctx.close();
   }
 }
+
+// `openldr db datasets ...`: the datasets a content pack defines, kept as tables in the warehouse's
+// `dataset` schema. The same service the Query page uses, so the two cannot disagree.
+
+/** One line for `db datasets list`. */
+function datasetLine(d: DatasetListItem): string {
+  const parts = [d.name, d.ownerPack, d.group ? `group ${d.group}` : 'no group'];
+  if (d.builtAt === null) parts.push('not built');
+  else parts.push(`${d.rowCount ?? 0} rows`, `built ${d.builtAt} in ${formatDuration((d.buildMs ?? 0) / 1000)}`);
+  if (d.stale) parts.push('stale');
+  if (d.lastError) parts.push(`error: ${d.lastError}`);
+  return parts.join('  ');
+}
+
+/** One line for `db datasets rebuild`. */
+function buildLine(r: DatasetBuildResult): string {
+  return r.ok
+    ? `${r.name}  rebuilt  ${r.rows ?? 0} rows in ${formatDuration((r.ms ?? 0) / 1000)}`
+    : `${r.name}  failed  ${r.error ?? ''}`;
+}
+
+/** Best effort, as for `db reproject`: a failed audit write never fails a change already made. */
+async function auditDataset(action: 'dataset.rebuild' | 'dataset.delete' | 'dataset.move', entityId: string, metadata: Record<string, unknown>): Promise<void> {
+  try {
+    const appCtx = await createAppContext(loadConfig());
+    try {
+      await recordAuditEvent(appCtx, cliActor(), { action, entityType: 'dataset', entityId, metadata });
+    } finally {
+      await appCtx.close();
+    }
+  } catch {
+    // audit is best-effort
+  }
+}
+
+export async function runDbDatasetsList(opts: JsonOpt): Promise<number> {
+  const ctx = await createDbContext(loadConfig());
+  try {
+    const all = await listDatasetsWithState(ctx.warehouseDatasets, ctx.internalDb);
+    emit(opts.json, all, all.length === 0 ? 'No datasets. A content pack installs them.' : all.map(datasetLine).join('\n'));
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** Rebuilds one dataset, or all of them in the order their packs list them. Exit code 1 when any
+ *  build failed, so a script can tell. A failed build keeps the last good table. */
+export async function runDbDatasetsRebuild(name: string | undefined, opts: JsonOpt): Promise<number> {
+  const ctx = await createDbContext(loadConfig());
+  try {
+    let results: DatasetBuildResult[];
+    try {
+      results = await ctx.warehouseDatasets.rebuild(name);
+    } catch (err) {
+      const message = redactError(err);
+      if (opts.json) emit(true, { ok: false, error: message }, '');
+      else process.stderr.write(`${message}\n`);
+      return 1;
+    }
+    await auditDataset('dataset.rebuild', name ?? 'all', { results });
+    emit(opts.json, results, results.length === 0 ? 'No datasets to rebuild.' : results.map(buildLine).join('\n'));
+    return results.every((r) => r.ok) ? 0 : 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runDbDatasetsDelete(name: string, opts: JsonOpt & { force: boolean }): Promise<number> {
+  if (!opts.force) {
+    process.stderr.write(
+      `db datasets delete refused: this removes the table dataset.${name} from the warehouse, and reports that read it stop working.\n`
+      + 'Re-run with --force if that is what you intend.\n',
+    );
+    return 1;
+  }
+  const ctx = await createDbContext(loadConfig());
+  try {
+    try {
+      await ctx.warehouseDatasets.remove(name);
+    } catch (err) {
+      const message = redactError(err);
+      if (opts.json) emit(true, { ok: false, error: message }, '');
+      else process.stderr.write(`${message}\n`);
+      return 1;
+    }
+    await auditDataset('dataset.delete', name, {});
+    emit(opts.json, { ok: true, name }, `Deleted the dataset ${name}.`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** `openldr db datasets move <name> [--group <group>]`: puts a dataset in a Query page group, or in
+ *  none when no group is given. A group is only a name: naming a new one makes it. */
+export async function runDbDatasetsMove(name: string, opts: JsonOpt & { group?: string }): Promise<number> {
+  const ctx = await createDbContext(loadConfig());
+  try {
+    const group = opts.group && opts.group.trim() ? opts.group.trim() : null;
+    try {
+      await ctx.warehouseDatasets.setGroup(name, group);
+    } catch (err) {
+      const message = redactError(err);
+      if (opts.json) emit(true, { ok: false, error: message }, '');
+      else process.stderr.write(`${message}\n`);
+      return 1;
+    }
+    await auditDataset('dataset.move', name, { group });
+    emit(opts.json, { ok: true, name, group }, group ? `Moved ${name} to the group ${group}.` : `Moved ${name} out of its group.`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+

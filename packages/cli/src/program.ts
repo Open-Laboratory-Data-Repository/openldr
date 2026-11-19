@@ -5,7 +5,7 @@ import { exitCodeFor, formatHealthTable } from './format';
 import { redactError } from './redact-error';
 import { sendLogsToStderr } from '@openldr/core';
 import { runFhirValidate, formatFhirValidate } from './fhir';
-import { runDbMigrate, runDbReset, runDbSeed, runDbReproject, runDbWarehouseStatus } from './db';
+import { runDbMigrate, runDbReset, runDbSeed, runDbReproject, runDbWarehouseStatus, runDbDatasetsList, runDbDatasetsRebuild, runDbDatasetsDelete, runDbDatasetsMove } from './db';
 import { runAuthRebindIssuer, runAuthSetupCode } from './auth';
 import { runDashboardsShare } from './dashboards';
 import { runUsersScope, type UsersScopeOpts } from './users-scope';
@@ -448,6 +448,54 @@ export function buildProgram(): Command {
         process.exitCode = await runDbWarehouseStatus({ json: opts.json, seconds });
       } catch (err) {
         process.stderr.write(`db warehouse-status failed: ${redactError(err)}\n`);
+        process.exitCode = 1;
+      }
+    });
+
+  const datasets = db.command('datasets').description('Datasets a content pack defines, kept as warehouse tables');
+  datasets.command('list')
+    .description('List each dataset: its pack, rows, when it was last built, and any build error')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { json: boolean }) => {
+      try {
+        process.exitCode = await runDbDatasetsList(opts);
+      } catch (err) {
+        process.stderr.write(`db datasets list failed: ${redactError(err)}\n`);
+        process.exitCode = 1;
+      }
+    });
+  datasets.command('rebuild [name]')
+    .description('Rebuild one dataset, or all of them, from the warehouse as it is now')
+    .option('--json', 'emit JSON', false)
+    .action(async (name: string | undefined, opts: { json: boolean }) => {
+      try {
+        process.exitCode = await runDbDatasetsRebuild(name, opts);
+      } catch (err) {
+        process.stderr.write(`db datasets rebuild failed: ${redactError(err)}\n`);
+        process.exitCode = 1;
+      }
+    });
+  datasets.command('move <name>')
+    .description('Put a dataset in a Query page group, or in none when --group is left out')
+    .option('--group <group>', 'the group to move it to; a new name makes the group')
+    .option('--json', 'emit JSON', false)
+    .action(async (name: string, opts: { json: boolean; group?: string }) => {
+      try {
+        process.exitCode = await runDbDatasetsMove(name, opts);
+      } catch (err) {
+        process.stderr.write(`db datasets move failed: ${redactError(err)}\n`);
+        process.exitCode = 1;
+      }
+    });
+  datasets.command('delete <name>')
+    .description('Remove a dataset and its warehouse table (refuses without --force)')
+    .option('--json', 'emit JSON', false)
+    .option('--force', 'confirm the removal: reports that read the dataset stop working', false)
+    .action(async (name: string, opts: { json: boolean; force: boolean }) => {
+      try {
+        process.exitCode = await runDbDatasetsDelete(name, opts);
+      } catch (err) {
+        process.stderr.write(`db datasets delete failed: ${redactError(err)}\n`);
         process.exitCode = 1;
       }
     });

@@ -142,3 +142,5 @@ export {
   FACILITY_REGISTER_STATE_IN_REGISTER, FACILITY_REGISTER_STATE_DROPPED, FACILITY_REGISTER_STATE_NOT_REGISTERED,
 } from './migrations/internal/081_facility_source_and_register_state';
 export { ISO3166_COUNTRIES } from './iso3166';
+export { createWarehouseDatasetStore, type WarehouseDataset, type WarehouseDatasetDef, type WarehouseDatasetStore } from './warehouse-dataset-store';
+export { buildWarehouseDataset, dropWarehouseDataset, DATASET_SCHEMA } from './warehouse-dataset-build';

@@ -4,10 +4,12 @@ import type { Config } from '@openldr/config';
 import { createLogger, ConfigError, type Logger } from '@openldr/core';
 import type { TargetStorePort } from '@openldr/ports';
 import { selectTargetStore } from './target-store';
+import { createWarehouseDatasetService, type WarehouseDatasetService } from './warehouse-datasets';
 import {
   createInternalDb,
   createFhirStore,
   createRelationalWriter,
+  createWarehouseDatasetStore,
   createMigrator,
   migrateAllDown,
   persistResource,
@@ -26,6 +28,8 @@ export interface DbContext {
   externalStore: TargetStorePort;
   fhirStore: FhirStore;
   relationalWriter: RelationalWriter;
+  /** Datasets a content pack defines: list, rebuild, remove. No refresher runs in this context. */
+  warehouseDatasets: WarehouseDatasetService;
   logger: Logger;
   persist(resource: unknown, prov?: Provenance): Promise<PersistResult>;
   migrateAll(): Promise<{ internal: MigrationResultSet; external: MigrationResultSet }>;
@@ -51,6 +55,9 @@ export async function createDbContext(cfg: Config): Promise<DbContext> {
     externalStore,
     fhirStore,
     relationalWriter,
+    warehouseDatasets: createWarehouseDatasetService({
+      store: createWarehouseDatasetStore(internal.db), internalDb: internal.db, warehouseDb: externalDb as unknown as Kysely<any>, engine, logger,
+    }),
     logger,
     persist: (resource, prov) => persistResource({ fhirStore, logger }, resource, prov),
     async migrateAll() {

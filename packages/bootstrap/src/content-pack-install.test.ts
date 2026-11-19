@@ -76,6 +76,8 @@ function setup(over: Record<string, unknown> = {}) {
     previewLinkMatching: vi.fn(async () => { calls.push('previewLinkMatching'); return { ok: true as const, wouldLink: 2 }; }),
     planTestMappings: vi.fn(async (m: any[]) => { calls.push('planTestMappings'); return { mapped: m.slice(0, 1).map((x) => ({ ...x, catalogCode: 'VL' })), kept: [], skipped: m.slice(1).map((x) => ({ system: x.system, code: x.code, reason: 'no catalog test is linked to LOINC 9999-9' })) }; }),
     applyTestMappings: vi.fn(async (m: any[]) => { calls.push('applyTestMappings'); return { mapped: m.slice(0, 1).map((x) => ({ ...x, catalogCode: 'VL' })), kept: [], skipped: m.slice(1).map((x) => ({ system: x.system, code: x.code, reason: 'no catalog test is linked to LOINC 9999-9' })) }; }),
+    checkDatasets: vi.fn(async () => { calls.push('checkDatasets'); }),
+    installDatasets: vi.fn(async () => { calls.push('installDatasets'); }),
     ...over,
   };
   const installer = createContentPackInstaller(deps as never);
@@ -85,7 +87,7 @@ function setup(over: Record<string, unknown> = {}) {
 const events = (audit: { record: { mock: { calls: unknown[][] } } }) => audit.record.mock.calls.map((c) => c[0] as any);
 
 const actor = { id: 'admin', name: 'admin' };
-const WRITES = ['loadResource', 'register:true', 'linkMatching', 'importQueries', 'applyTestMappings'];
+const WRITES = ['loadResource', 'register:true', 'linkMatching', 'importQueries', 'applyTestMappings', 'installDatasets'];
 
 describe('createContentPackInstaller', () => {
   it('check returns the summary and calls no write dep', async () => {
@@ -406,3 +408,69 @@ describe('createContentPackInstaller', () => {
     await cleanup();
   });
 });
+
+describe('content pack installer: datasets (pack datasets design)', () => {
+  const tables = [{ name: 'zm_request_times', sql: 'select 1 as a', indexes: [['a']] }, { name: 'zm_other', sql: 'select 2 as b' }];
+  const pack = { formatVersion: 1, steps: [{ kind: 'datasets', tables }, PACK.steps[4]] };
+  const build = () => buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+
+  it('check_checks_the_datasets_under_the_packs_id_and_builds_nothing', async () => {
+    const { bundle, cleanup } = await build();
+    const s = setup();
+    const out = await s.installer.check(bundle);
+    expect(out.steps[0]).toEqual({ kind: 'datasets', label: 'zm_request_times, zm_other', count: 2 });
+    expect(s.deps.checkDatasets).toHaveBeenCalledWith('test-pack', tables);
+    expect(s.calls.filter((c) => WRITES.includes(c))).toEqual([]);
+    await cleanup();
+  });
+
+  it('a_dataset_that_fails_its_check_stops_the_install_before_any_write', async () => {
+    const { bundle, cleanup } = await build();
+    const s = setup({ checkDatasets: vi.fn(async () => { throw new Error('dataset zm_other: only one SELECT statement is allowed'); }) });
+    await expect(s.installer.install(bundle, { actor })).rejects.toThrow('dataset zm_other');
+    expect(s.calls.filter((c) => WRITES.includes(c))).toEqual([]);
+    expect(s.installs.store.upsert).not.toHaveBeenCalled();
+    await cleanup();
+  });
+
+  it('install_builds_the_datasets_before_the_queries_and_audits_them', async () => {
+    const { bundle, cleanup } = await build();
+    const s = setup();
+    const out = await s.installer.install(bundle, { actor });
+    expect(out.status).toBe('installed');
+    expect(s.deps.installDatasets).toHaveBeenCalledWith('test-pack', tables);
+    expect(s.calls.filter((c) => WRITES.includes(c))).toEqual(['installDatasets', 'importQueries']);
+    const e = events(s.audit).find((x) => x.action === 'dataset.install');
+    expect(e).toMatchObject({
+      actorName: 'admin', entityType: 'dataset', entityId: 'test-pack',
+      metadata: { source: 'content-pack', pack: 'test-pack@1.0.0', step: 1, names: ['zm_request_times', 'zm_other'] },
+    });
+    await cleanup();
+  });
+
+  it('a_dataset_that_fails_to_build_fails_the_install_at_that_step', async () => {
+    const { bundle, cleanup } = await build();
+    const s = setup({ installDatasets: vi.fn(async () => { throw new Error('dataset zm_other: relation "nope" does not exist'); }) });
+    const out = await s.installer.install(bundle, { actor });
+    expect(out).toMatchObject({ status: 'failed', failedStep: 1, error: 'dataset zm_other: relation "nope" does not exist' });
+    expect(s.calls).not.toContain('importQueries');
+    expect(events(s.audit).some((x) => x.action === 'dataset.install')).toBe(false);
+    await cleanup();
+  });
+});
+
+describe('content pack installer: a pack\'s queries sit in a group named for the pack', () => {
+  it('gives_a_query_with_no_group_the_packs_id_and_keeps_a_group_the_pack_names', async () => {
+    const queries = [{ name: 'plain', sql: 'select 1', params: [] }, { name: 'placed', sql: 'select 2', params: [], group: 'Viral load' }];
+    const pack = { formatVersion: 1, steps: [{ kind: 'custom-queries', file: { format: 'openldr.custom-queries', version: 1, exportedAt: '2026-01-01T00:00:00Z', queries } }] };
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup();
+    await s.installer.install(bundle, { actor });
+    const file = (s.deps.importQueries as any).mock.calls[0][0];
+    expect(file.queries.map((q: any) => [q.name, q.group])).toEqual([['plain', 'test-pack'], ['placed', 'Viral load']]);
+    // The check reads the pack's own file, unchanged.
+    expect((s.deps.checkQueries as any).mock.calls[0][0].queries[0].group).toBeUndefined();
+    await cleanup();
+  });
+});
+

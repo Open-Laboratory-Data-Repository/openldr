@@ -354,6 +354,36 @@ Select its name. The example opens request_summary, created in Scheduled reports
 
 **Expected result:** The tab displays the saved workflow rows.
 
+## Use a dataset a pack installed
+
+Use this when a content pack has installed datasets. A pack dataset is a table the pack builds from the warehouse, so its reports read one table and do not repeat a slow step on every run. You do not create these here. Installing the pack creates them.
+
+You need **Use query workbench** to see them. Rebuild and Delete also need **Manage saved queries**.
+
+### 1. Expand Datasets
+
+Select **Datasets** in the Explorer. Pack datasets are listed after any workflow datasets, each with its row count. A red icon marks one whose last build failed.
+
+### 2. Open a dataset
+
+Select its name. It opens like any warehouse table, as `dataset.` followed by its name. A saved query can read it the same way.
+
+### 3. Read its details
+
+Select the dots beside the name, then **Details**. The sheet shows the pack that owns it, its state, its rows, when it was last built, how long that took, and the last error if a build failed.
+
+### 4. Rebuild it
+
+Select the dots, then **Rebuild**. A message says when it finishes. On a large warehouse this can take a minute.
+
+**Expected result:** The row count and the last-built time update.
+
+A dataset starts in a group named for the pack that installed it. To move it, select the dots, then **Move to group**. Choose a group, **New group**, or **No group**. The dots beside a group rename or delete the group. Deleting a group keeps its datasets.
+
+OpenLDR also rebuilds datasets by itself, once the warehouse has caught up with what was saved. During a large import nothing rebuilds until the import ends. So a report that reads a dataset can be one rebuild behind the warehouse. The **Warehouse** line on [Activity](/docs/activity) says "rebuilding datasets" while that runs.
+
+From a terminal, `openldr db datasets list` shows the same list, and `openldr db datasets rebuild` rebuilds them.
+
 ## Run a saved query on a phone
 
 The Explorer starts collapsed so the workspace has more room. A large screen is easier for writing SQL.
