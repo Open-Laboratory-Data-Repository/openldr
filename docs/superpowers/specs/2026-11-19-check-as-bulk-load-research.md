@@ -373,6 +373,45 @@ Verdict: for saving, build the plain SQL statement. It takes 3.8 times off today
 install problem. Keep the extension as a known 11 to 13 percent, to revisit if saving is ever the
 limit again after that.
 
+## Built result: the projection in bulk, branch `perf/projection-bulk` (2026-11-19)
+
+The operator chose to build all three in order: the projection, the set-based save, store once.
+This is the first. Design, as built:
+
+- A projection cycle reads the current rows of its whole batch in one statement per resource type,
+  writes them with `relationalWriter.writeMany` (the writer `reprojectAll` already uses), reads every
+  arrival of the batch in one statement per type, and clears waiting retries in one statement per
+  type. Records with no current row are deleted from the warehouse one by one, as before.
+- If anything in the bulk path throws, the cycle projects that batch one record at a time, exactly
+  as it did before. So one bad record still waits for its own retry and holds nothing else back.
+- The worker runs cycles one after another while a cycle still projects something, and yields to
+  the event loop between them. It used to run one batch per notify or per 2 s tick.
+
+Measured, same 5,000 requests, quiet machine, real projection worker beside the check:
+
+| | `main` | Branch |
+|---|---|---|
+| Check with the projection running | 254.6 requests a second | 245.8 and 248.3 |
+| Warehouse when the check ended | 50,812 change rows behind | 0 behind |
+| Time to catch up after the check | 205 s | 0 s |
+| Projection alone over the loaded database | 99.8 s, 586 records a second | 4.7 s, 12,433 records a second |
+
+- The warehouse keeps up with the check. The check itself is about 3 percent slower than with the
+  old projection, because the projection now does all its work during the check, not after it.
+- Same warehouse: both checkouts projected the same loaded database into a fresh warehouse, and
+  the row count and content digest of all 11 warehouse tables with rows are equal (`diff` exit 0).
+  Columns filled by the database clock are left out of the digest.
+- A batch size of 2,000 changed nothing, so the default of 500 stays.
+
+HONEST NON-PROOF:
+- The facility capture hook (`onProjected`) was not wired in the bench. In the server it runs once
+  for each DiagnosticReport, one at a time. It may be the next limit on a live install.
+- The fallback to one record at a time is covered by unit tests with a fake warehouse, not by a
+  real warehouse that refuses a row.
+- SQL Server and MySQL warehouses were not run. They use the same `writeMany`, which the rebuild
+  already uses on them.
+- No sync worker ran.
+
 ## HONEST NON-PROOF
 
 - Proven for this sample since the first draft: a re-run gives the same hashes (see "Measured").
