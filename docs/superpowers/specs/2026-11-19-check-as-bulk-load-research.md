@@ -217,6 +217,35 @@ HONEST NON-PROOF:
   not in the bench. The unit tests cover it with a fake plugin only.
 - A stop was tested once, at one point. A power cut mid-page was not.
 
+## Built result: the hash skip on branch `feat/check-skip-unchanged` (2026-11-19)
+
+Design: `2026-11-19-check-skip-unchanged-design.md`. Same 5,000 requests, real check driver and
+save path, decode-ahead on in every run. "Main" is `main` at 3418631e. Every run read 5,000,
+saved 4,850, held 119, failed 31.
+
+| Run | Requests/s | Whole run | Saves | New history rows | WAL |
+|---|---|---|---|---|---|
+| Main, first run | 271.7 | 18.4 s | 14.7 s | 69,667 | 158 MiB |
+| Main, run again over the loaded database | 267.6 | 18.7 s | 15.0 s | 69,667 more | 155 MiB |
+| Skip, first run | 242.7 and 279.4 | 20.6 and 17.9 s | 16.9 and 14.4 s | 58,526 | 145 and 142 MiB |
+| Skip, run again over the loaded database | 325.4 and 331.5 | 15.4 and 15.1 s | 8.0 and 7.9 s | 0 | 0 MiB |
+
+- First run: 16 percent fewer history and change rows (58,526 against 69,667) and about 9 percent
+  less WAL. No speed gain is shown. One skip run was slower than main (242.7) and one faster
+  (279.4), with one main run between them. Two runs do not settle a difference that small.
+- Run again: nothing is written, where main doubles the history (69,671 to 139,338 rows). It is
+  1.2 times faster than main's run again. Decode now sets the time: 13.6 s of a 15 s run.
+- A run again still spends 8 s in saves that write nothing. That is the checks and two small
+  reads for each of 4,850 requests, each in its own transaction.
+- Same stored content: for each of the 58,530 records, the latest content hash after a skip run
+  equals the one after a main run (`cmp` exit 0). After a skip run no record has a version above 1.
+
+HONEST NON-PROOF:
+- The built standalone app and the Docker image were not run.
+- No projection or sync worker ran. The fall in rows that sync would push was not measured.
+- An install upgraded from before migration 129 has no stored hashes. Its first check after the
+  upgrade writes every record once more. That path has a unit test, not a bench run.
+
 ## HONEST NON-PROOF
 
 - Proven for this sample since the first draft: a re-run gives the same hashes (see "Measured").
