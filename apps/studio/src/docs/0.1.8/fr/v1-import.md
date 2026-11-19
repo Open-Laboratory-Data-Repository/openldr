@@ -166,6 +166,8 @@ Une copie lit les lignes de la base v1 et les garde sur le disque du serveur CE.
 
 Rien ne lit encore la copie. L'import des sections précédentes lit toujours la source elle-même. Une copie ne change donc pas ce qu'un import enregistre.
 
+Une copie lit la page suivante pendant qu'elle enregistre la page en cours, et envoie ensemble les requêtes d'une page. Elle garde jusqu'à 14 connexions ouvertes vers la source. Sur la source de test de Tanzanie, elle a utilisé environ un cœur et demi du processeur du SQL Server. Si la source est un serveur de production chargé, faites la copie en dehors des heures de travail.
+
 La copie contient les données des patients en entier. Elle garde toutes les colonnes des lignes Requests, LabResults, Patients et ASTResults de chaque demande lue. Protégez le serveur CE et ses sauvegardes comme vous protégez la source. Il y a une copie par connecteur. Le plugin doit d'abord être autorisé à lire le connecteur.
 
 ### 1. Ouvrir l'onglet Copie

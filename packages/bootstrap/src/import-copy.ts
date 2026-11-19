@@ -12,7 +12,7 @@ import {
   type ImportActor, type ImportServiceDeps, type ResolvedPlugin,
 } from './import-run';
 import { growPage } from './import-retry';
-import { createSourceReader, matchPageKey, type SourceReader } from './import-source-reader';
+import { createSourceReader, matchPageKey, type PageResult, type SourceReader } from './import-source-reader';
 import { PAGE_SIZE_MAX, PAGE_SIZE_MIN, fillCountQuery, fillDetailQuery, fillKeyQuery } from './import-sql';
 
 // Copies the rows of a source database to CE's own disk (spec 9.2 and 9.3).
@@ -42,6 +42,10 @@ const DELETE_BATCH = 10_000;
 const HEARTBEAT_MS = 30_000;
 /** Longest wait for one set's count. The connector allows no more. */
 const COUNT_TIMEOUT_MS = 30_000;
+/** Detail queries of a page sent together. A page sends six for cdr-source, and the SQL Server
+ *  connection pools up to 10 (adapter-mssql-store). Measured on 2026-11-19 with the read-ahead:
+ *  about 1.85 times the speed of one query at a time (docs/benchmarks/log.md). */
+const DETAILS_AT_ONCE = 6;
 const MAX_SETS = 50;
 const SYSTEM: ImportActor = { type: 'system', id: null, name: 'system' };
 const PLUGIN_FAILED = "the plugin's copy entrypoint failed";
@@ -189,6 +193,10 @@ export interface ImportCopyServiceDeps
   driverId: string;
   /** Injectable for tests; the page reader's wait between tries. */
   sleep?: (ms: number) => Promise<void>;
+  /** Read the next page while this one is written. Default true. */
+  readAhead?: boolean;
+  /** Detail queries of a page sent together. Default 6. */
+  detailsAtOnce?: number;
   /** The check runs over a copy (import-check.ts). Given as two functions, so this service does
    *  not import that one. Without it, a start or a remove does not look for a check. */
   checks?: {
@@ -569,6 +577,8 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
   async function driveCopy(run: CopyRun, entry: Drive): Promise<void> {
     const d = driving(run, entry);
     let reader: SourceReader | undefined;
+    /** Reads the next page while this one is written. See `next` below. */
+    let aheadReader: SourceReader | undefined;
     let clean = (text: string) => redact(text).slice(0, 300);
     let outcome: CopyOutcome = 'failed';
 
@@ -620,13 +630,28 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
 
       const access = await openSourceAccess(deps, makeDb, run.connectorId, type);
       clean = access.clean;
+      const detailsAtOnce = deps.detailsAtOnce ?? DETAILS_AT_ONCE;
       reader = createSourceReader({
         open: async (opts) => access.open(opts),
         onWaiting,
         stopWanted,
         clean,
+        detailsAtOnce,
         ...sleep,
       });
+      // The read-ahead has a reader and a connection pool of its own. It never waits and never
+      // tries again: it answers a stop at its first wait. Anything but a whole page or the end, and
+      // its answer is thrown away, so `reader` reads that page again with every rule it has.
+      if (deps.readAhead !== false) {
+        aheadReader = createSourceReader({
+          open: async (opts) => access.open(opts),
+          onWaiting: async () => {},
+          stopWanted: async () => true,
+          clean,
+          detailsAtOnce,
+          ...sleep,
+        });
+      }
       /** A set with a position or done: this copy has read the source before, so a refused login
        *  or database may be a source that is starting up (R45). */
       const readBefore = (): boolean => Object.values(run.sets).some((p) => p.cursor !== null || p.done);
@@ -677,9 +702,14 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
         // row, never above the run's own page size.
         let size = run.pageSize;
         let goodInRow = 0;
+        /** The page read ahead: the page after `after`, at `size`. It is used only when the run is
+         *  still at that place and that size, so no page is ever stored out of order or twice. */
+        let next: { after: string; size: number; page: Promise<PageResult | null> } | null = null;
         for (;;) {
           if (entry.halt) return haltOutcome(entry.halt);
-          const page = await reader.readPage({
+          const ahead: PageResult | null = next && next.after === progress.cursor && next.size === size ? await next.page : null;
+          next = null;
+          const page: PageResult = ahead && (ahead.kind === 'page' || ahead.kind === 'end') ? ahead : await reader.readPage({
             keySql: set.keyQuery.sql, details: set.detailQueries, after: progress.cursor, size, checkRowKeys: true, readBefore: readBefore(),
           });
           if (page.kind === 'stopped') return haltOutcome(entry.halt);
@@ -713,6 +743,17 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
           }
 
           const filed = filePage(set, page);
+          if (aheadReader) {
+            // Start reading the next page now. Its rows are not touched until this page is stored
+            // and the position saved past it.
+            const after: string = page.keys[page.keys.length - 1]!;
+            next = {
+              after, size,
+              page: aheadReader.readPage({
+                keySql: set.keyQuery.sql, details: set.detailQueries, after, size, checkRowKeys: true, readBefore: readBefore(),
+              }).catch(() => null),
+            };
+          }
           // Every key of the page is replaced, so a key that cannot be stored keeps no old rows.
           await ownDb('write', () => deps.store.replaceKeys(run.id, set.name, filed.keys, filed.rows));
           for (const key of filed.unstorable) {
@@ -792,6 +833,7 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
     } finally {
       await d.stopBeating();
       await reader?.close();
+      await aheadReader?.close();
     }
     await finishDrive(run, d, outcome);
   }

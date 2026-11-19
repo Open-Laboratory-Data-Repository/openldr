@@ -59,6 +59,8 @@ on one range share SQL Server's cache, and two runs of one setting differ by up 
 | 2026-11-19 | spike: both | Copy 250k | 4,000 | 77,719 | 905 MiB |
 | 2026-11-19 | spike: both, cold cache, run first | Copy 250k B | 2,000 | 89,184 | 723 MiB |
 | 2026-11-19 | item 1, run after the spike | Copy 250k B | 2,000 | 48,007 | 640 MiB |
+| 2026-11-19 | item 3 built: 6 details at once, read-ahead | Copy 250k | 2,000 | 85,783 (plugin build beside it), 103,251 | 772 and 773 MiB |
+| 2026-11-19 | item 3 built | Copy 250k B | 2,000 | 102,911 | 753 MiB |
 
 Where the time goes at page 500 (38,173 run): detail queries 279 s of 393 s, writes to
 `import_copy_rows` 86 s, key queries 3 s, the seven counts of item 1 0.6 s. At page 2,000: detail
@@ -70,6 +72,9 @@ CPU while copying, page 2,000 (100 = one core, 32 cores in the machine): today's
 
 The 116,768 run came after five runs on the same range and was not repeated. Read the spike gain as
 about 1.85 times, from the repeated runs and the cold run.
+
+With item 3 built, SQL Server used 136 to 173 and the copy process 59 to 72. The stored rows
+matched the code before item 3: the same 4,876,338 rows and the same content digest.
 
 Not proved by these rows: a full-source run with page 2,000 (the change was not run on the whole
 source), a source over a slow network, and SQL Server with more than its 2 GB memory cap.

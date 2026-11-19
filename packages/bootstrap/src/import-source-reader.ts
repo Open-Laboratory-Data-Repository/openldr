@@ -60,6 +60,9 @@ export interface SourceReaderDeps {
   /** Makes driver text safe to show: masks the password, caps the length. */
   clean(text: string): string;
   sleep?: (ms: number) => Promise<void>;
+  /** Detail queries of one page sent together, each on a pooled connection of its own. Default 1:
+   *  one after another. A failure fails the page once every query sent with it has finished. */
+  detailsAtOnce?: number;
 }
 
 const PROBE_SQL = 'SELECT 1';
@@ -138,25 +141,45 @@ export function matchPageKey(pageKeys: string[], value: string): string | null {
 export function createSourceReader(deps: SourceReaderDeps): SourceReader {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   let db: ConnectorDb | null = null;
+  /** The open in progress, so queries sent together share one connection pool. */
+  let opening: Promise<ConnectorDb> | null = null;
   /** True once a query on this reader has answered. */
   let readOnce = false;
+  const atOnce = Math.max(1, Math.floor(deps.detailsAtOnce ?? 1));
 
   /** Forget the current connection. A close on a cut link can hang, so it is not awaited. */
   function drop(): void {
     const old = db;
     db = null;
+    opening = null;
     if (old) void old.close().catch(() => undefined);
   }
 
   async function sourceRows(sql: string): Promise<Array<Record<string, unknown>>> {
     validateSelectSql(sql, 'mssql');
+    /** A connection opened while a drop happened: used once, then closed. */
+    let orphan: ConnectorDb | null = null;
     try {
-      if (!db) db = await deps.open();
-      const { rows } = await db.query(sql);
+      let conn = db;
+      if (!conn) {
+        // Queries sent together share one open.
+        const pending = (opening ??= deps.open());
+        try {
+          conn = await pending;
+        } catch (err) {
+          // A failed open is not kept: the next query opens again.
+          if (opening === pending) opening = null;
+          throw err;
+        }
+        if (opening === pending) { db = conn; opening = null; } else if (db !== conn) orphan = conn;
+      }
+      const { rows } = await conn.query(sql);
       readOnce = true;
       return rows;
     } catch (err) {
       throw new SourceFailure(err);
+    } finally {
+      if (orphan) void orphan.close().catch(() => undefined);
     }
   }
 
@@ -224,12 +247,21 @@ export function createSourceReader(deps: SourceReaderDeps): SourceReader {
 
           readingDetails = true;
           const rows: Record<string, Array<Record<string, unknown>>> = {};
-          for (const d of details) {
-            const got = (await sourceRows(fillDetailQuery(d.sql, keys))).map(toPluginRow);
-            if (checkRowKeys && got.some((row) => matchPageKey(keys, firstColumn(row)) === null)) {
-              throw new Error(`a row of detail query ${d.name} has a first column that is not a key of the page`);
-            }
-            rows[d.name] = got;
+          // In groups of `atOnce`. Every query of a group finishes before a failure is acted on, so
+          // a drop never closes a connection a query is still using. The first failure in detail
+          // order is the one thrown, as when they run one after another.
+          for (let i = 0; i < details.length; i += atOnce) {
+            const group = details.slice(i, i + atOnce);
+            const settled = await Promise.allSettled(group.map((d) => sourceRows(fillDetailQuery(d.sql, keys))));
+            const failed = settled.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+            if (failed) throw failed.reason;
+            group.forEach((d, j) => {
+              const got = (settled[j] as PromiseFulfilledResult<Array<Record<string, unknown>>>).value.map(toPluginRow);
+              if (checkRowKeys && got.some((row) => matchPageKey(keys, firstColumn(row)) === null)) {
+                throw new Error(`a row of detail query ${d.name} has a first column that is not a key of the page`);
+              }
+              rows[d.name] = got;
+            });
           }
           return { kind: 'page', keys, keyRows: keyRows.map(toPluginRow), rows, size };
         } catch (err) {

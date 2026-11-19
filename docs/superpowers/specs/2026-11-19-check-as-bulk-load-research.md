@@ -671,7 +671,7 @@ The default page goes from 500 to 2,000 keys, the most the code allows. Page 500
 70 MiB. A page of 4,000 (spike only) was slower than 2,000: 41,444. A copy started earlier keeps
 its own page size when it carries on.
 
-### 3. Several reads at once (spike, not shipped)
+### 3. Several reads at once (spike, then built)
 
 Two throwaway changes, in a worktree outside the repo (`~/.cache/openldr-speed-bench/copy/spike-wt`):
 
@@ -700,6 +700,26 @@ What building it properly would cost, my estimate, not measured:
 
 My recommendation: build both, details first. It is the next largest gain left in the copy.
 
+The operator said build both. Built on the same branch:
+
+- `import-source-reader.ts`: `detailsAtOnce` sends a page's detail queries in groups of that size.
+  A failure is acted on only once every query of its group has answered, and the first failure in
+  detail order is thrown, as before. Queries sent together share one open. The one-pass import keeps
+  1.
+- `import-copy.ts`: 6 details at once, and the next page read on a second reader with a pool of its
+  own. That reader never waits and never retries (its `stopWanted` is always true). Its page is used
+  only when the run is still at that place and that size, and only a whole page or the end. Anything
+  else is thrown away and the normal reader reads the page again. The next page is never stored
+  before this one, and the cursor moves only after a page is stored, as before.
+
+Measured: 85,783 and 103,251 a minute on Copy 250k, 102,911 on Copy 250k B, against about 46,000 to
+50,000 for page 2,000 alone. The rows matched. The hard-kill test ran again on the built code (four
+SIGKILLs at 15 s, 30 s, 4 s and 45 s) and the copy matched a clean copy in every set and in the
+record counts. Seven older tests that put a fault on one exact statement run with the read-ahead
+off, because the read-ahead would meet the fault instead. Four new tests cover the read-ahead: the
+next page is read while this one is written and each page is read once, a lost link on the page
+read ahead, a stop while a page is read ahead, and the read-ahead off.
+
 ### 4. Cut and compare (proved, no change needed)
 
 The copy: the sample copied at page 2,000 with four SIGKILLs to the copy process, at 20 s, 45 s,
@@ -720,7 +740,7 @@ two makes the next start write that batch again, and the second write gives the 
 
 ### HONEST NON-PROOF
 
-- No full-source copy was run with the new page size. The gain on the full source is expected from
+- No full-source copy has run with these changes yet. The gain on the full source is expected from
   the sample, not measured.
 - The time of the counts on the full source was not measured. Each count has a 30-second limit, and
   a count that runs out leaves the total unknown.

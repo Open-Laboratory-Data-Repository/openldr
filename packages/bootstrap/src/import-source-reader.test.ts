@@ -778,3 +778,87 @@ describe('matchPageKey', () => {
     expect(matchPageKey(keys, 'k3')).toBeNull();
   });
 });
+
+describe('detail queries sent together', () => {
+  // Three detail queries, each on its own table. Each waits until the test lets it answer, so the
+  // test can see which queries are in flight at once.
+  const THREE = ['A', 'B', 'C'].map((t) => ({ name: t.toLowerCase(), sql: `SELECT [RequestID] FROM [dbo].[${t}] WHERE [RequestID] IN ({{keys}}) ORDER BY [RequestID]` }));
+  function gated() {
+    const started: string[] = [];
+    const release = new Map<string, (fail?: Error) => void>();
+    let opens = 0;
+    let closes = 0;
+    const open = async (): Promise<ConnectorDb> => {
+      opens += 1;
+      return {
+        async query(sql: string) {
+          if (!sql.includes('IN (')) return { rows: realKeys(sql) };
+          const table = /\[dbo\]\.\[(\w+)\]/.exec(sql)![1];
+          started.push(table);
+          await new Promise<void>((resolve, reject) => { release.set(table, (fail) => (fail ? reject(fail) : resolve())); });
+          return { rows: realDetails(sql) };
+        },
+        async queryReadOnly(): Promise<never> { throw new Error('not used'); },
+        async close() { closes += 1; },
+      };
+    };
+    return { open, started, release, counts: () => ({ opens, closes }) };
+  }
+  const readerOver = (src: ReturnType<typeof gated>, detailsAtOnce?: number) => createSourceReader({
+    open: src.open, onWaiting: async () => {}, stopWanted: async () => false, clean: (t) => t, sleep: async () => {},
+    ...(detailsAtOnce === undefined ? {} : { detailsAtOnce }),
+  });
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it('sends every detail query of a page at once, on one opened pool, and files the rows by name', async () => {
+    const src = gated();
+    const page = readerOver(src, 6).readPage({ keySql: KEY_SQL, details: THREE, after: null, size: 2 });
+    await vi.waitFor(() => expect(src.started).toEqual(['A', 'B', 'C']));
+    for (const t of ['C', 'A', 'B']) src.release.get(t)!();
+    const got = await page;
+    expect(got.kind).toBe('page');
+    expect(Object.keys((got as Extract<PageResult, { kind: 'page' }>).rows)).toEqual(['a', 'b', 'c']);
+    expect(src.counts().opens).toBe(1);
+  });
+
+  it('sends no more than the given number at once', async () => {
+    const src = gated();
+    const page = readerOver(src, 2).readPage({ keySql: KEY_SQL, details: THREE, after: null, size: 2 });
+    await vi.waitFor(() => expect(src.started).toEqual(['A', 'B']));
+    src.release.get('A')!();
+    await settle();
+    expect(src.started).toEqual(['A', 'B']);
+    src.release.get('B')!();
+    await vi.waitFor(() => expect(src.started).toEqual(['A', 'B', 'C']));
+    src.release.get('C')!();
+    expect((await page).kind).toBe('page');
+  });
+
+  it('sends them one after another when no number is given', async () => {
+    const src = gated();
+    const page = readerOver(src).readPage({ keySql: KEY_SQL, details: THREE, after: null, size: 2 });
+    for (const t of ['A', 'B', 'C']) {
+      await vi.waitFor(() => expect(src.started.at(-1)).toBe(t));
+      expect(src.started).toHaveLength(['A', 'B', 'C'].indexOf(t) + 1);
+      src.release.get(t)!();
+    }
+    expect((await page).kind).toBe('page');
+  });
+
+  it('a failed query fails the page only once the others have answered, with the first failure in detail order', async () => {
+    const src = gated();
+    let done = false;
+    const page = readerOver(src, 6).readPage({ keySql: KEY_SQL, details: THREE, after: null, size: 2 }).finally(() => { done = true; });
+    const failed = page.catch((e: unknown) => e);
+    await vi.waitFor(() => expect(src.started).toHaveLength(3));
+    src.release.get('C')!(err('EREQUEST', "Invalid object name 'dbo.C'.", { number: 208 }));
+    src.release.get('B')!(err('EREQUEST', "Invalid object name 'dbo.B'.", { number: 208 }));
+    await settle();
+    // A still runs on its connection, so the page has not failed yet.
+    expect(done).toBe(false);
+    src.release.get('A')!();
+    const e = await failed;
+    expect(String((e as Error).message)).toContain('dbo.B');
+    expect(String((e as Error).message)).not.toContain('dbo.C');
+  });
+});

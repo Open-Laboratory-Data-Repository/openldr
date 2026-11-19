@@ -166,6 +166,8 @@ Uma cópia lê as linhas da base v1 e guarda-as no disco do próprio servidor CE
 
 Nada lê a cópia ainda. A importação das secções anteriores continua a ler a própria origem, por isso uma cópia não muda o que uma importação guarda.
 
+Uma cópia lê a página seguinte enquanto guarda a página atual, e envia juntas as consultas de uma página. Mantém até 14 ligações abertas à origem. Na origem de teste da Tanzânia, usou cerca de um núcleo e meio do processador do SQL Server. Se a origem for um servidor de produção ocupado, faça a cópia fora do horário de trabalho.
+
 A cópia contém os dados dos pacientes por inteiro. Guarda todas as colunas das linhas Requests, LabResults, Patients e ASTResults de cada pedido lido. Proteja o servidor CE e as suas cópias de segurança como protege a origem. Há uma cópia por conector. O plugin tem de estar autorizado a ler o conector primeiro.
 
 ### 1. Abrir o separador Cópia

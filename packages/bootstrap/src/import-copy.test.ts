@@ -118,7 +118,10 @@ function fakeSource(requests: string[], facilities: string[] = []) {
 
 let internalDb: Awaited<ReturnType<typeof makeMigratedDb>>;
 
-async function world(requests: string[], facilities: string[] = []) {
+/** `readAhead: false` for a test that puts a fault or a stop on one exact statement of a page: the
+ *  read-ahead would meet it instead, throw that page away, and the test would not see the rule it
+ *  is about. The copy runs with the read-ahead on otherwise, as it does in the server. */
+async function world(requests: string[], facilities: string[] = [], opts: { readAhead?: boolean } = {}) {
   const source = fakeSource(requests, facilities);
   const raw = createPluginDataStore(internalDb);
   const interruptions = createJobInterruptionStore(internalDb);
@@ -163,12 +166,20 @@ async function world(requests: string[], facilities: string[] = []) {
     deletes: [] as Array<{ limit: number; set: string | undefined; gone: number }>,
   };
   let replaceFault: (() => unknown) | null = null;
+  /** The next row write waits here until released. */
+  let replaceHold: { reached: () => void; gate: Promise<void> } | null = null;
   let deleteCap: number | null = null;
   const store: ImportCopyStore = {
     ...realStore,
     async replaceKeys(copyId, setName, keys, rows) {
       calls.replaceTries += 1;
       if (replaceFault) throw replaceFault();
+      if (replaceHold) {
+        const hold = replaceHold;
+        replaceHold = null;
+        hold.reached();
+        await hold.gate;
+      }
       await realStore.replaceKeys(copyId, setName, keys, rows);
       calls.replace.push({ set: setName, keys: [...keys], rows: rows.length });
     },
@@ -234,6 +245,7 @@ async function world(requests: string[], facilities: string[] = []) {
     driverId,
     interruptions: { store: interruptions, now: () => new Date(clock.now), processStartedAt: new Date(clock.now) },
     createDb: () => source.db,
+    readAhead: opts.readAhead ?? true,
     now: () => new Date(clock.now),
     sleep: async (ms) => {
       sleeps.push(ms);
@@ -273,6 +285,14 @@ async function world(requests: string[], facilities: string[] = []) {
       return { reached: at, release };
     },
     failReplace: (fault: (() => unknown) | null) => { replaceFault = fault; },
+    /** Hold the next row write. Resolves `reached` when the write arrives; `release` lets it go on. */
+    holdReplace: () => {
+      let reached: () => void = () => {};
+      let release: () => void = () => {};
+      const at = new Promise<void>((resolve) => { reached = resolve; });
+      replaceHold = { reached, gate: new Promise<void>((resolve) => { release = resolve; }) };
+      return { reached: at, release };
+    },
     capDeletes: (n: number | null) => { deleteCap = n; },
     holdSleeps: () => { held = true; },
     releaseSleeps: () => { held = false; const w = waiters; waiters = []; for (const resolve of w) resolve(); },
@@ -573,11 +593,82 @@ describe('copyEstimate', () => {
   });
 });
 
+describe('copy: the next page is read while this one is written', () => {
+  const detailReads = (w: World, key: string) =>
+    w.source.statements.filter((s) => new RegExp(`\\[Requests\\] WHERE \\[RequestID\\] IN .*'${key}'`).test(s)).length;
+
+  it('sends the next page\'s queries while this page\'s rows are still being written, and reads each page once', async () => {
+    const w = await world(keysOf(5));
+    await w.svc.start({ ...START, pageSize: 2 });
+    const hold = w.holdReplace();
+    void w.svc.tick();
+    await hold.reached;
+    // Page 1 is not stored yet, and page 2 is already being read.
+    await vi.waitFor(() => expect(w.source.statements.some((s) => /LabResults.*'REQ0003'/.test(s))).toBe(true));
+    expect(w.calls.replace).toEqual([]);
+    hold.release();
+    await w.svc.idle();
+    expect((await w.svc.get(PLUGIN, COPY))!).toMatchObject({ status: 'completed', sets: { requests: { cursor: 'REQ0005', keys: 5, rows: 15, done: true } } });
+    expect(keyAfters(w)).toEqual(['', 'REQ0002', 'REQ0004', 'REQ0005']);
+    for (const k of keysOf(5)) expect(detailReads(w, k)).toBe(1);
+    expect(w.calls.replace.map((c) => c.keys)).toEqual([['REQ0001', 'REQ0002'], ['REQ0003', 'REQ0004'], ['REQ0005']]);
+  });
+
+  it('a lost link that meets the page read ahead: the page is thrown away and read again, and stored once', async () => {
+    const w = await world(keysOf(4));
+    w.source.failNext(/LabResults.*'REQ0003'/, cutLink);
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    const run = (await w.svc.get(PLUGIN, COPY))!;
+    expect(run).toMatchObject({ status: 'completed', lastError: null, sets: { requests: { cursor: 'REQ0004', keys: 4, rows: 12, done: true } } });
+    // Read ahead and lost, then read again by the reader that keeps the rules.
+    expect(detailReads(w, 'REQ0003')).toBe(2);
+    expect(w.calls.replace.map((c) => c.keys)).toEqual([['REQ0001', 'REQ0002'], ['REQ0003', 'REQ0004']]);
+    const rows = await w.rows();
+    expect(new Set(rows.map((r) => `${r.detail_name}|${r.key}|${r.seq}`)).size).toBe(12);
+    expect(rows).toHaveLength(12);
+  });
+
+  it('a stop while a page is read ahead stores nothing of that page, and a start reads it again', async () => {
+    const w = await world(keysOf(4));
+    await w.svc.start({ ...START, pageSize: 2 });
+    // Hold the page read ahead, stop, then let it answer.
+    const release = w.source.holdNext(/LabResults.*'REQ0003'/);
+    const hold = w.holdReplace();
+    void w.svc.tick();
+    await hold.reached;
+    await vi.waitFor(() => expect(w.source.statements.some((s) => /LabResults.*'REQ0003'/.test(s))).toBe(true));
+    await w.svc.stop(PLUGIN, COPY, ADMIN);
+    hold.release();
+    release();
+    await w.svc.idle();
+    const stopped = (await w.svc.get(PLUGIN, COPY))!;
+    expect(stopped).toMatchObject({ status: 'stopped', sets: { requests: { cursor: 'REQ0002', keys: 2, rows: 6, done: false } } });
+    expect((await w.rows()).map((r) => r.key).every((k) => k <= 'REQ0002')).toBe(true);
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect((await w.svc.get(PLUGIN, COPY))!).toMatchObject({ status: 'completed', sets: { requests: { keys: 4, rows: 12 } } });
+    expect(await w.rows()).toHaveLength(12);
+  });
+
+  it('with the read-ahead off, sends no query for the next page before this one is stored', async () => {
+    const w = await world(keysOf(4), [], { readAhead: false });
+    await w.svc.start({ ...START, pageSize: 2 });
+    const hold = w.holdReplace();
+    void w.svc.tick();
+    await hold.reached;
+    await new Promise((r) => setTimeout(r, 20));
+    expect(w.source.statements.some((s) => s.includes("> 'REQ0002'"))).toBe(false);
+    hold.release();
+    await w.svc.idle();
+  });
+});
+
 describe('copy: a source that goes away', () => {
   const SECOND_PAGE = /\[Requests\].*> 'REQ0002'/;
 
   it('a cut link in the middle of a page keeps no half page and stores no row twice', async () => {
-    const w = await world(keysOf(4));
+    const w = await world(keysOf(4), [], { readAhead: false });
     // The results query of the second page: its key query and requests query have answered.
     w.source.failNext(/LabResults.*'REQ0003'/, cutLink);
     await w.svc.start({ ...START, pageSize: 2 });
@@ -600,7 +691,7 @@ describe('copy: a source that goes away', () => {
   });
 
   it('shows waiting with a cleaned error while the source is away', async () => {
-    const w = await world(keysOf(4));
+    const w = await world(keysOf(4), [], { readAhead: false });
     w.holdSleeps();
     w.source.failNext(SECOND_PAGE, cutLink);
     await w.svc.start({ ...START, pageSize: 2 });
@@ -739,7 +830,7 @@ describe('copy: a source that goes away', () => {
   });
 
   it('a skipped key is listed, read again at the end of the pass, and read again at the next start', async () => {
-    const w = await world(keysOf(4));
+    const w = await world(keysOf(4), [], { readAhead: false });
     // Every detail read that holds REQ0002 runs out of time. The source still answers SELECT 1.
     w.source.failNext(/IN \(.*'REQ0002'/, timedOut, 1000);
     await w.svc.start({ ...START, pageSize: 4 });
@@ -1057,7 +1148,7 @@ describe('copy: starting, and what a start may change', () => {
 
 describe('copy: stop, release and delete', () => {
   it('stop ends the run as stopped at the next page, and start carries it on', async () => {
-    const w = await world(keysOf(6));
+    const w = await world(keysOf(6), [], { readAhead: false });
     // Stop while the first page is being read.
     w.source.onNext(/LabResults/, () => { void w.svc.stop(PLUGIN, COPY, ADMIN); });
     await w.svc.start({ ...START, pageSize: 2 });
@@ -1086,7 +1177,7 @@ describe('copy: stop, release and delete', () => {
   });
 
   it('a waiting copy can be stopped, and the stop is felt in the wait', async () => {
-    const w = await world(keysOf(4));
+    const w = await world(keysOf(4), [], { readAhead: false });
     w.holdSleeps();
     w.source.failNext(/\[Requests\].*> 'REQ0002'/, cutLink);
     await w.svc.start({ ...START, pageSize: 2 });
@@ -1145,7 +1236,7 @@ describe('copy: stop, release and delete', () => {
   });
 
   it('remove is refused while the copy is running', async () => {
-    const w = await world(keysOf(4));
+    const w = await world(keysOf(4), [], { readAhead: false });
     w.holdSleeps();
     await w.svc.start({ ...START, pageSize: 2 });
     await expect(w.svc.remove(PLUGIN, COPY, ADMIN)).rejects.toThrow(/queued; stop it before deleting it/);
@@ -1636,7 +1727,7 @@ describe('copy: two callers at the same moment', () => {
   });
 
   it('a stop that lands while the drive saves is obeyed: the drive puts its progress on the stopped record', async () => {
-    const w = await world(keysOf(6));
+    const w = await world(keysOf(6), [], { readAhead: false });
     await w.svc.start({ ...START, pageSize: 2 });
     const held = w.pauseWrite((d) => d.driver === 'server-1' && d.sets.requests.cursor === 'REQ0002');
     await w.svc.tick();
