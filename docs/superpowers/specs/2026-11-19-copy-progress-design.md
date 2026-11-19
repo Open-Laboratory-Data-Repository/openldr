@@ -55,8 +55,8 @@ copy shows.
 - The page size shrinks after timeouts: the time left rises once the average catches up.
 
 Measured on one full copy of the Tanzania source (24.3 minutes): 19 minutes shown at minute 2, 22
-real; within a minute from minute 12 on. The first pages are the small dictionaries and older,
-lighter requests, so the early average is fast.
+real; within a minute from minute 12 on. The early average includes the small dictionaries and the
+requests ranked 250,000 to 500,000, which carry 11.7 rows each, so it runs fast.
 
 ## Where it shows
 
