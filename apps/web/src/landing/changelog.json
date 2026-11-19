@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "b1128959",
+          "type": "fix",
+          "scope": "db",
+          "title": "The projection removes deleted records before it writes a batch, fires hooks last, and reports what it projected (item 16 review)"
+        },
+        {
+          "hash": "b126d109",
+          "type": "perf",
+          "scope": "db",
+          "title": "The projection writes each batch in bulk and keeps going while it is behind (item 16)"
+        },
+        {
           "hash": "2ebfc22e",
           "type": "feat",
           "scope": "imports",
