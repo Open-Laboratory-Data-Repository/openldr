@@ -10,6 +10,78 @@
           "type": "perf",
           "scope": "db",
           "title": "Save each request in one transaction with a few multi-row statements (item 16)"
+        },
+        {
+          "hash": "aa10e0c9",
+          "type": "feat",
+          "scope": "imports",
+          "title": "The Held back list filters by finding code and counts each code, through the plugin's own codes, in the broker and the CLI (demo.4 item 10)"
+        },
+        {
+          "hash": "9c21e504",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Import check choices lists the values a held request's fields may be corrected to (demo.4 item 11)"
+        },
+        {
+          "hash": "7976c593",
+          "type": "feat",
+          "scope": "imports",
+          "title": "A plugin can offer the values a person may pick for a correctable field, from the copy's dictionaries, through import.check.choices (demo.4 item 11)"
+        },
+        {
+          "hash": "5370b019",
+          "type": "fix",
+          "scope": "query",
+          "title": "An import by a caller without Manage saved queries adds the queries with no group, in the route and the CLI (demo.4 item 13, Codex review C13-R1)"
+        },
+        {
+          "hash": "5fd39d42",
+          "type": "feat",
+          "scope": "query",
+          "title": "Changing a saved query needs the new Manage saved queries permission; running, saving a new query or a copy, and export stay with query.run (demo.4 item 13)"
+        },
+        {
+          "hash": "d9453366",
+          "type": "fix",
+          "scope": "connectors",
+          "title": "Only a SQL Server connector gets the Trust server certificate advice; other types have no such switch (demo.4 item 7, Codex review B7-R1)"
+        },
+        {
+          "hash": "89863daf",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Audit leaves the menu for a user without audit.view, and Reports, Audit and Activity send such a user to Access denied instead of a page that fails (demo.4 item 8)"
+        },
+        {
+          "hash": "a557b513",
+          "type": "fix",
+          "scope": "connectors",
+          "title": "A certificate failure on Test points to Trust server certificate, in the studio and the CLI, not to a Node.js flag (demo.4 item 7)"
+        },
+        {
+          "hash": "e7ac119d",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A user who cannot open the Dashboard goes to their start page or first sidebar page, not Access denied (demo.4 item 6)"
+        },
+        {
+          "hash": "6ffed329",
+          "type": "fix",
+          "scope": "cli",
+          "title": "A command refused before sign-in prints the refusal every time; the run request asks to keep the connection open, so a file still being sent no longer meets a closed socket first (demo.4 item 3)"
+        },
+        {
+          "hash": "09ea995e",
+          "type": "fix",
+          "scope": "server",
+          "title": "Saving a form whose schema has no fields or sections list is refused with 400, so publish no longer answers 500 (demo.4 item 2)"
+        },
+        {
+          "hash": "28dbd763",
+          "type": "fix",
+          "scope": "server",
+          "title": "Role and report category changes are audited again; their lists go into the audit row inside an object, which real Postgres accepts as jsonb (demo.4 item 1)"
         }
       ]
     },
