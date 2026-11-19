@@ -2164,7 +2164,15 @@ export async function captureObservedFacilitiesFromProjection(
       for (const row of rows) known.add(row.code);
     }
     for (const [code, display] of codes) {
-      if (!known.has(code)) await captureObservedFacility(deps, system, code, now, display);
+      if (known.has(code)) continue;
+      // One facility that cannot be recorded must not cost the batch its others. The per-record
+      // hook lost one facility to one failure, and so does this. The next scan records it.
+      try {
+        await captureObservedFacility(deps, system, code, now, display);
+      } catch (err) {
+        // eslint-disable-next-line no-console -- this module takes no logger, as `registerObservedSystem` notes.
+        console.error('[facility-reconcile] failed to record an observed facility from a projected batch', system, err);
+      }
     }
   }
 }

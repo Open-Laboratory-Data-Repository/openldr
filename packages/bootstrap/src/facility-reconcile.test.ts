@@ -2681,6 +2681,15 @@ describe('captureObservedFacilitiesFromProjection (item 16)', () => {
     expect(await codes(many)).toEqual(await codes(one));
   });
 
+  it('one_facility_that_cannot_be_recorded_does_not_cost_the_batch_its_others', async () => {
+    const deps = await makeReconcileDeps();
+    let calls = 0;
+    const failing = { ...deps, admin: { ...deps.admin, terms: { ...deps.admin.terms, importRows: async (...a: Parameters<typeof deps.admin.terms.importRows>) => { calls += 1; if (calls === 1) throw new Error('refused'); return deps.admin.terms.importRows(...a); } } } };
+    await captureObservedFacilitiesFromProjection(failing as never, [report('d1', 'Lab A'), report('d2', 'Lab B')], '2026-08-05T00:00:00.000Z');
+    const { rows } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
+    expect(rows.map((r) => r.code)).toEqual(['Lab B']);
+  });
+
   it('a_batch_of_known_facilities_writes_nothing', async () => {
     const deps = await makeReconcileDeps();
     await captureObservedFacilitiesFromProjection(deps, [report('d1', 'Lab A')], '2026-08-05T00:00:00.000Z');
