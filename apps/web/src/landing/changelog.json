@@ -6,6 +6,78 @@
       "version": null,
       "entries": [
         {
+          "hash": "9456737c",
+          "type": "fix",
+          "scope": "datasets",
+          "title": "The build runs a pack's SELECT read-only with a time limit and one statement, a failed build is not retried until a change, a build during an import is rebuilt, a dropped dataset's table goes, and the refresher runs in the server only (review)"
+        },
+        {
+          "hash": "d72887e7",
+          "type": "feat",
+          "scope": "query",
+          "title": "Pack datasets sit in groups like custom queries: a group named for the pack to start, move, new group, rename and delete (migration 132)"
+        },
+        {
+          "hash": "b2bbecdb",
+          "type": "feat",
+          "scope": "marketplace",
+          "title": "A pack's queries and datasets are grouped under the pack's name, and a dataset is not built twice when an install and a refresh meet"
+        },
+        {
+          "hash": "177402a6",
+          "type": "fix",
+          "scope": "rbac",
+          "title": "The catalog text for Manage saved queries names datasets, as the studio text does"
+        },
+        {
+          "hash": "63db5d71",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr db datasets, and the Warehouse line says when datasets rebuild"
+        },
+        {
+          "hash": "1239d8a1",
+          "type": "feat",
+          "scope": "query",
+          "title": "Pack datasets show under Datasets, with details, rebuild and delete"
+        },
+        {
+          "hash": "24555297",
+          "type": "feat",
+          "scope": "query",
+          "title": "Routes to list, rebuild and delete pack datasets, and a plain message when one is not built yet"
+        },
+        {
+          "hash": "1da4b44f",
+          "type": "feat",
+          "scope": "marketplace",
+          "title": "Installing a pack builds its datasets"
+        },
+        {
+          "hash": "2d5ab997",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Install, rebuild and refresh pack datasets"
+        },
+        {
+          "hash": "2bee31df",
+          "type": "feat",
+          "scope": "db",
+          "title": "Build a pack dataset as a warehouse table, old table kept until the new one is ready"
+        },
+        {
+          "hash": "331e12ee",
+          "type": "feat",
+          "scope": "db",
+          "title": "Where pack datasets are recorded (migration 131)"
+        },
+        {
+          "hash": "ab98bb17",
+          "type": "feat",
+          "scope": "marketplace",
+          "title": "A content pack can carry datasets"
+        },
+        {
           "hash": "de05ada5",
           "type": "fix",
           "scope": "activity",
