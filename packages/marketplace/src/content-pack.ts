@@ -6,7 +6,8 @@ const NEWER = 'this pack needs a newer CE';
 const KINDS = ['code-system', 'value-set', 'facility-register', 'link-matching', 'custom-queries', 'test-mappings', 'result-mappings', 'datasets'] as const;
 
 /** A dataset's name: it becomes a table name in the warehouse's `dataset` schema. */
-export const DATASET_NAME = /^[a-z][a-z0-9_]{2,47}$/;
+/** No two underscores in a row: the build keeps `<name>__new` and `<name>__idx<n>` for itself. */
+export const DATASET_NAME = /^(?!.*__)[a-z][a-z0-9_]{2,47}$/;
 
 const fhir = (resourceType: 'CodeSystem' | 'ValueSet') =>
   z.object({ resourceType: z.literal(resourceType), url: z.string().min(1) }).passthrough();
@@ -60,7 +61,15 @@ const stepSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 
-export const contentPackSchema = z.object({ formatVersion: z.literal(CONTENT_PACK_FORMAT_VERSION), steps: z.array(stepSchema).min(1) });
+export const contentPackSchema = z.object({
+  formatVersion: z.literal(CONTENT_PACK_FORMAT_VERSION),
+  // One datasets step at most. Each install replaces the pack's whole list of datasets, so a second
+  // step would remove what the first one built.
+  steps: z.array(stepSchema).min(1).superRefine((steps, ctx) => {
+    const at = steps.map((s, i) => (s.kind === 'datasets' ? i : -1)).filter((i) => i >= 0);
+    if (at.length > 1) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [at[1]], message: 'a pack has at most one datasets step' });
+  }),
+});
 export type ContentPack = z.infer<typeof contentPackSchema>;
 export type ContentPackStep = ContentPack['steps'][number];
 

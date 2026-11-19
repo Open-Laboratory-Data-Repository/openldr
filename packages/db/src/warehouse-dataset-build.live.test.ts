@@ -47,8 +47,8 @@ describe.skipIf(!url)('building a pack dataset in the warehouse, on real Postgre
     expect(await count('abc')).toBe(3);
     const idx = await indexes('abc');
     expect(idx).toHaveLength(2);
-    expect(idx.join(' ')).toMatch(/abc_0_idx.*\(surname\)/);
-    expect(idx.join(' ')).toMatch(/abc_1_idx.*\(id, surname\)/);
+    expect(idx.join(' ')).toMatch(/abc__idx0.*\(surname\)/);
+    expect(idx.join(' ')).toMatch(/abc__idx1.*\(id, surname\)/);
     expect(await tables()).toEqual(['abc']);
   });
 
@@ -57,7 +57,7 @@ describe.skipIf(!url)('building a pack dataset in the warehouse, on real Postgre
     expect((await buildWarehouseDataset(db, { name: 'abc', sql: 'select id, surname from patients;  ', indexes: [['surname']] })).rows).toBe(4);
     expect(await count('abc')).toBe(4);
     expect(await tables()).toEqual(['abc']);
-    expect((await indexes('abc')).join(' ')).toMatch(/abc_0_idx/);
+    expect((await indexes('abc')).join(' ')).toMatch(/abc__idx0/);
   });
 
   it('a_failed_build_keeps_the_old_table', async () => {
@@ -92,10 +92,51 @@ describe.skipIf(!url)('building a pack dataset in the warehouse, on real Postgre
   });
 
   it('refuses_a_name_that_is_not_plain_before_running_anything', async () => {
-    for (const name of ['x; drop', 'Abc', 'ab', 'public.abc']) {
+    for (const name of ['x; drop', 'Abc', 'ab', 'public.abc', 'abc__new', 'a__b']) {
       await expect(buildWarehouseDataset(db, { name, sql: 'select 1 as a' })).rejects.toThrow(/dataset name/);
     }
     expect(await tables()).toEqual(['abc', 'abd', 'abe']);
+  });
+
+  // The guards a report's SQL gets, which the keyword check alone does not give (review finding 1).
+  it('a_select_that_writes_through_a_function_is_refused_and_writes_nothing', async () => {
+    await sql`create sequence if not exists guard_seq`.execute(db);
+    await sql`select setval('guard_seq', 5)`.execute(db);
+    await expect(buildWarehouseDataset(db, { name: 'writer', sql: "select setval('guard_seq', 99) as v" })).rejects.toThrow(/read-only/);
+    expect(Number((await sql<{ v: string }>`select last_value as v from guard_seq`.execute(db)).rows[0].v)).toBe(5);
+    expect(await tables()).not.toContain('writer');
+  });
+
+  it('text_after_a_semicolon_is_an_error_and_never_a_second_statement', async () => {
+    await expect(buildWarehouseDataset(db, { name: 'twice', sql: 'select 1 as a; create table public.evil (x int)' })).rejects.toThrow();
+    expect((await sql<{ n: string }>`select count(*) as n from pg_tables where schemaname = 'public' and tablename = 'evil'`.execute(db)).rows[0].n).toBe('0');
+    expect(await tables()).not.toContain('twice');
+  });
+
+  it('a_comment_at_the_end_of_the_select_does_not_swallow_the_build', async () => {
+    expect((await buildWarehouseDataset(db, { name: 'commented', sql: 'select id from patients -- all of them' })).rows).toBe(4);
+    await dropWarehouseDataset(db, 'commented');
+  });
+
+  it('a_select_that_runs_past_the_time_limit_is_stopped_and_the_next_build_works', async () => {
+    await expect(buildWarehouseDataset(db, { name: 'sleeper', sql: 'select 1 as v from (select pg_sleep(5)) as zzz' }, { timeoutMs: 300 })).rejects.toThrow(/statement timeout/);
+    expect((await buildWarehouseDataset(db, { name: 'sleeper', sql: 'select 1 as v' })).rows).toBe(1);
+    await dropWarehouseDataset(db, 'sleeper');
+  });
+
+  it('what_the_select_sets_or_locks_does_not_reach_the_next_user_of_the_connection', async () => {
+    // One connection, so the next statement is certain to run on the one the build used.
+    const single = new pg.Pool({ connectionString: (pool as unknown as { options: { connectionString: string } }).options.connectionString, max: 1 });
+    const one = new Kysely<any>({ dialect: new PostgresDialect({ pool: single }) });
+    try {
+      await buildWarehouseDataset(one, { name: 'setter', sql: "select set_config('application_name', 'left-behind', false) as v, pg_try_advisory_lock(424242) as l" });
+      expect((await sql<{ v: string }>`select current_setting('application_name') as v`.execute(one)).rows[0].v).not.toBe('left-behind');
+      expect((await sql<{ v: string }>`select current_setting('statement_timeout') as v`.execute(one)).rows[0].v).toBe('0');
+      expect((await sql<{ n: string }>`select count(*) as n from pg_locks where locktype = 'advisory' and pid = pg_backend_pid()`.execute(one)).rows[0].n).toBe('0');
+      await dropWarehouseDataset(one, 'setter');
+    } finally {
+      await one.destroy();
+    }
   });
 
   it('drops_a_dataset_and_dropping_a_missing_one_is_fine', async () => {

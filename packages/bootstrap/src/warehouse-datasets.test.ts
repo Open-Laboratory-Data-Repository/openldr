@@ -209,13 +209,45 @@ describe('pack datasets: refresh', () => {
     await w.db.destroy();
   });
 
-  it('a_dataset_that_failed_is_tried_again_only_after_the_next_change', async () => {
+  // Review findings 2 and 3.
+  it('a_dataset_whose_build_fails_is_tried_again_only_after_the_next_change', async () => {
     const w = await world({ failing: ['abc'] });
     await w.catchUp();
     await expect(w.service.install('p', [{ name: 'abc', sql: 'select 1' }])).rejects.toThrow();
-    // Never built: tried on the next refresh.
+    w.built.length = 0;
+    let tries = 0;
+    w.onBuild(async () => { tries += 1; });
+    // Nothing changed since it failed: no retry, however often the refresher asks.
+    expect(await w.service.refreshDue()).toEqual([]);
+    expect(await w.service.refreshDue()).toEqual([]);
+    expect(tries).toBe(0);
+    await w.save('p1');
+    await w.catchUp();
     w.failing.clear();
     expect(await w.service.refreshDue()).toEqual(['abc']);
+    expect(await w.store.get('abc')).toMatchObject({ lastError: null, failedAtSeq: null });
+    await w.db.destroy();
+  });
+
+  it('a_dataset_built_while_the_warehouse_is_behind_is_rebuilt_once_it_catches_up', async () => {
+    const w = await world();
+    await w.catchUp();
+    await w.save('p1');
+    // Installed mid-import: the warehouse holds less than was saved, so the table is incomplete.
+    await w.service.install('p', [{ name: 'abc', sql: 'select 1' }]);
+    w.built.length = 0;
+    await w.catchUp();
+    expect(await w.service.refreshDue()).toEqual(['abc']);
+    expect(await w.service.refreshDue()).toEqual([]);
+    await w.db.destroy();
+  });
+
+  it('a_new_version_of_a_pack_drops_the_tables_of_datasets_it_no_longer_lists', async () => {
+    const w = await world();
+    await w.service.install('p', [{ name: 'keep', sql: 'select 1' }, { name: 'gone', sql: 'select 2' }]);
+    await w.service.install('p', [{ name: 'keep', sql: 'select 1' }]);
+    expect(w.dropped).toEqual(['gone']);
+    expect((await w.service.list()).map((d) => d.name)).toEqual(['keep']);
     await w.db.destroy();
   });
 });
@@ -253,12 +285,12 @@ describe('pack datasets: the refresher', () => {
 
 describe('pack datasets: a report run before its dataset exists', () => {
   it('names_the_dataset_that_is_not_built_yet', () => {
-    expect(datasetNotBuiltMessage('relation "dataset.zm_request_times" does not exist')).toBe('The dataset zm_request_times is still being built. Try again when it is ready.');
+    expect(datasetNotBuiltMessage('relation "dataset.zm_request_times" does not exist')).toBe('The dataset zm_request_times is not built yet, or there is no dataset of that name.');
     expect(datasetNotBuiltMessage('relation "patients_x" does not exist')).toBeNull();
     expect(datasetNotBuiltMessage('syntax error at or near "selct"')).toBeNull();
   });
   it('replaces_only_that_error', async () => {
-    await expect(withDatasetMessage(async () => { throw new Error('relation "dataset.abc" does not exist'); })).rejects.toThrow('The dataset abc is still being built. Try again when it is ready.');
+    await expect(withDatasetMessage(async () => { throw new Error('relation "dataset.abc" does not exist'); })).rejects.toThrow('The dataset abc is not built yet, or there is no dataset of that name.');
     await expect(withDatasetMessage(async () => { throw new Error('division by zero'); })).rejects.toThrow('division by zero');
     expect(await withDatasetMessage(async () => 4)).toBe(4);
   });

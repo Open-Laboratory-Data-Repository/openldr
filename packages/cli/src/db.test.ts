@@ -476,6 +476,7 @@ describe('db datasets', () => {
     expect(await runDbDatasetsMove('abc', { json: false })).toBe(0);
     expect(service.setGroup.mock.calls).toEqual([['abc', 'Turnaround'], ['abc', null]]);
     expect(out).toBe('Moved abc to the group Turnaround.\nMoved abc out of its group.\n');
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(mocks.appCtx, expect.objectContaining({ actorType: 'cli' }), expect.objectContaining({ action: 'dataset.move', entityId: 'abc', metadata: { group: 'Turnaround' } }));
   });
 
   it('move_of_an_unknown_dataset_fails_with_one_line', async () => {

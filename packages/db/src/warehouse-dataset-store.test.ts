@@ -24,7 +24,8 @@ describe('warehouse dataset store (pack datasets, migration 131)', () => {
     const { db, store } = await world();
     await store.replaceForPack('reports-zm', [{ name: 'keep', sql: 'select 1' }, { name: 'change', sql: 'select 2' }, { name: 'gone', sql: 'select 3' }]);
     for (const n of ['keep', 'change', 'gone']) await store.markBuilt(n, { seq: 40, ms: 1200, rows: 7 });
-    await store.replaceForPack('reports-zm', [{ name: 'change', sql: 'select 22' }, { name: 'keep', sql: 'select 1' }]);
+    // It names what the pack no longer lists, so the caller can drop those tables.
+    expect(await store.replaceForPack('reports-zm', [{ name: 'change', sql: 'select 22' }, { name: 'keep', sql: 'select 1' }])).toEqual(['gone']);
     const all = await store.list();
     expect(all.map((d) => d.name)).toEqual(['change', 'keep']);
     expect(all[0]).toMatchObject({ sql: 'select 22', builtAtSeq: null, rowCount: null, buildMs: null, builtAt: null });
@@ -54,10 +55,10 @@ describe('warehouse dataset store (pack datasets, migration 131)', () => {
     const { db, store } = await world();
     await store.replaceForPack('p', [{ name: 'abc', sql: 'select 1' }]);
     await store.markBuilt('abc', { seq: 4, ms: 10, rows: 3 });
-    await store.markFailed('abc', 'relation "x" does not exist');
-    expect(await store.get('abc')).toMatchObject({ builtAtSeq: 4, rowCount: 3, lastError: 'relation "x" does not exist' });
+    await store.markFailed('abc', 'relation "x" does not exist', 7);
+    expect(await store.get('abc')).toMatchObject({ builtAtSeq: 4, rowCount: 3, lastError: 'relation "x" does not exist', failedAtSeq: 7 });
     await store.markBuilt('abc', { seq: 9, ms: 11, rows: 4 });
-    expect(await store.get('abc')).toMatchObject({ builtAtSeq: 9, rowCount: 4, lastError: null });
+    expect(await store.get('abc')).toMatchObject({ builtAtSeq: 9, rowCount: 4, lastError: null, failedAtSeq: null });
     await db.destroy();
   });
 

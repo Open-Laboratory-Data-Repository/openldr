@@ -81,18 +81,20 @@ export function createWarehouseDatasetService(deps: WarehouseDatasetDeps): Wareh
   }
 
   async function buildOne(def: WarehouseDataset | (PackDataset & { name: string })): Promise<DatasetBuildResult> {
-    // The newest change is read BEFORE the build. A record saved while the build runs then leaves
-    // the dataset out of date, and the next refresh builds it again.
+    // Read BEFORE the build, and it is what the WAREHOUSE has reached (`cursor`), not the newest
+    // change saved (`head`). A table built during an import holds only what the warehouse held, so
+    // it must read as out of date until the warehouse has caught up and it is built again. A record
+    // saved while the build runs leaves it out of date the same way.
     const before = await readWarehouseReading(deps.internalDb);
     const started = Date.now();
     try {
       const { rows } = await build(deps.warehouseDb, { name: def.name, sql: def.sql, indexes: def.indexes });
       const ms = Date.now() - started;
-      await deps.store.markBuilt(def.name, { seq: before.head, ms, rows });
+      await deps.store.markBuilt(def.name, { seq: before.cursor, ms, rows });
       return { name: def.name, ok: true, rows, ms };
     } catch (err) {
       const error = errorText(err);
-      await deps.store.markFailed(def.name, error);
+      await deps.store.markFailed(def.name, error, before.head);
       deps.logger.warn({ dataset: def.name, error }, 'a pack dataset failed to build; the last good table stays');
       return { name: def.name, ok: false, error };
     }
@@ -125,7 +127,10 @@ export function createWarehouseDatasetService(deps: WarehouseDatasetDeps): Wareh
 
     async install(ownerPack, defs) {
       await service.check(ownerPack, defs);
-      await deps.store.replaceForPack(ownerPack, defs);
+      const removed = await deps.store.replaceForPack(ownerPack, defs);
+      // A dataset this version of the pack no longer lists: its table goes too, or it would stay in
+      // the warehouse with old rows, in no list, with nothing able to delete it.
+      for (const name of removed) await inTurn(() => drop(deps.warehouseDb, name));
       for (const def of defs) {
         const out = await inTurn(async () => ((await isStale(def.name)) ? buildOne(def) : null));
         if (out && !out.ok) throw new Error(`dataset ${def.name}: ${out.error}`);
@@ -148,16 +153,21 @@ export function createWarehouseDatasetService(deps: WarehouseDatasetDeps): Wareh
     async refreshDue() {
       const reading = await readWarehouseReading(deps.internalDb);
       if (reading.behind > 0) return [];
-      // Out of date: never built, or built before the newest change. A dataset whose last build
-      // failed and was never built counts as never built, so it is tried again here. One that has a
-      // good table and failed since is tried again only after the next change, which moves `head`.
-      const stale = (await deps.store.list()).filter((d) => d.builtAtSeq === null || d.builtAtSeq < reading.head);
+      // Out of date: never built, or built before the newest change. One whose build failed is left
+      // alone until a newer change exists: without that, a dataset that cannot build was rebuilt
+      // every tick, reading whole warehouse tables each time.
+      const stale = (await deps.store.list()).filter((d) => (d.builtAtSeq === null || d.builtAtSeq < reading.head)
+        && !(d.failedAtSeq !== null && d.failedAtSeq >= reading.head));
       if (stale.length === 0) return [];
       return inTurn(async () => {
         const done: string[] = [];
         // Checked again now that its turn has come: an install or a rebuild that ran first may
         // have built it. On the first real install the refresher built four datasets a second time.
-        for (const d of stale) { if (await isStale(d.name)) { await buildOne(d); done.push(d.name); } }
+        for (const d of stale) {
+          if (!(await isStale(d.name))) continue;
+          const out = await buildOne(d);
+          if (out.ok) done.push(d.name);
+        }
         return done;
       });
     },
@@ -225,7 +235,7 @@ const MISSING_DATASET = /relation "dataset\.([a-z][a-z0-9_]*)" does not exist/;
 /** A plain sentence for a database error that means a dataset is not built yet. Null for any other. */
 export function datasetNotBuiltMessage(message: string): string | null {
   const m = MISSING_DATASET.exec(message);
-  return m ? `The dataset ${m[1]} is still being built. Try again when it is ready.` : null;
+  return m ? `The dataset ${m[1]} is not built yet, or there is no dataset of that name.` : null;
 }
 
 /** Runs `operation`. An error that means a dataset is not built yet is thrown again with the plain

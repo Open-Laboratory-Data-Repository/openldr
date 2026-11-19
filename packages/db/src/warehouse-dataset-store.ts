@@ -19,6 +19,8 @@ export interface WarehouseDataset {
   rowCount: number | null;
   /** Why the newest build failed. Null once a build works. The table of the last good build stays. */
   lastError: string | null;
+  /** The newest change number when the newest build failed. Null once a build works. */
+  failedAtSeq: number | null;
   /** The Query page group it sits in. It starts as the pack's id. Null: no group. */
   group: string | null;
 }
@@ -32,10 +34,11 @@ export interface WarehouseDatasetStore {
   /** Makes `defs`, in order, the datasets `ownerPack` owns. One it no longer lists is removed. One
    *  whose SQL and indexes did not change keeps its last build. A changed one loses it, so it shows
    *  as never built. Throws `dataset <name> belongs to <pack>` when another pack owns a name, and
-   *  then writes nothing. */
-  replaceForPack(ownerPack: string, defs: WarehouseDatasetDef[]): Promise<void>;
+   *  then writes nothing. Resolves to the names it removed, whose warehouse tables the caller drops. */
+  replaceForPack(ownerPack: string, defs: WarehouseDatasetDef[]): Promise<string[]>;
   markBuilt(name: string, built: { seq: number; ms: number; rows: number }): Promise<void>;
-  markFailed(name: string, error: string): Promise<void>;
+  /** `seq` is the newest change number at the failed try. */
+  markFailed(name: string, error: string, seq: number): Promise<void>;
   remove(name: string): Promise<void>;
   /** Moves a dataset to a group, or to none. Throws `no dataset named <name>`. */
   setGroup(name: string, group: string | null): Promise<void>;
@@ -56,6 +59,7 @@ function fromRow(r: Record<string, unknown>): WarehouseDataset {
     builtAt: r.built_at ? new Date(r.built_at as string | number | Date).toISOString() : null,
     buildMs: num(r.build_ms), rowCount: num(r.row_count),
     lastError: (r.last_error as string | null) ?? null,
+    failedAtSeq: num(r.failed_at_seq),
     group: (r.group_name as string | null) ?? null,
   };
 }
@@ -71,6 +75,7 @@ export function createWarehouseDatasetStore(db: Kysely<InternalSchema>): Warehou
       return r ? fromRow(r as Record<string, unknown>) : undefined;
     },
     async replaceForPack(ownerPack, defs) {
+      const removed: string[] = [];
       await db.transaction().execute(async (trx) => {
         const existing = (await trx.selectFrom(T).selectAll().execute()).map((r) => fromRow(r as Record<string, unknown>));
         const byName = new Map(existing.map((d) => [d.name, d]));
@@ -80,7 +85,10 @@ export function createWarehouseDatasetStore(db: Kysely<InternalSchema>): Warehou
         }
         const listed = new Set(defs.map((d) => d.name));
         for (const d of existing) {
-          if (d.ownerPack === ownerPack && !listed.has(d.name)) await trx.deleteFrom(T).where('name', '=', d.name).execute();
+          if (d.ownerPack === ownerPack && !listed.has(d.name)) {
+            await trx.deleteFrom(T).where('name', '=', d.name).execute();
+            removed.push(d.name);
+          }
         }
         for (const [position, def] of defs.entries()) {
           const indexes = JSON.stringify(def.indexes ?? []);
@@ -92,19 +100,20 @@ export function createWarehouseDatasetStore(db: Kysely<InternalSchema>): Warehou
             await trx.updateTable(T).set({ position, updated_at: new Date() } as never).where('name', '=', def.name).execute();
           } else {
             await trx.updateTable(T).set({
-              sql: def.sql, indexes, position, built_at_seq: null, built_at: null, build_ms: null, row_count: null, last_error: null, updated_at: new Date(),
+              sql: def.sql, indexes, position, built_at_seq: null, built_at: null, build_ms: null, row_count: null, last_error: null, failed_at_seq: null, updated_at: new Date(),
             } as never).where('name', '=', def.name).execute();
           }
         }
       });
+      return removed;
     },
     async markBuilt(name, built) {
       await db.updateTable(T).set({
-        built_at_seq: built.seq, built_at: new Date(), build_ms: Math.round(built.ms), row_count: built.rows, last_error: null, updated_at: new Date(),
+        built_at_seq: built.seq, built_at: new Date(), build_ms: Math.round(built.ms), row_count: built.rows, last_error: null, failed_at_seq: null, updated_at: new Date(),
       } as never).where('name', '=', name).execute();
     },
-    async markFailed(name, error) {
-      await db.updateTable(T).set({ last_error: error, updated_at: new Date() } as never).where('name', '=', name).execute();
+    async markFailed(name, error, seq) {
+      await db.updateTable(T).set({ last_error: error, failed_at_seq: seq, updated_at: new Date() } as never).where('name', '=', name).execute();
     },
     async remove(name) {
       await db.deleteFrom(T).where('name', '=', name).execute();

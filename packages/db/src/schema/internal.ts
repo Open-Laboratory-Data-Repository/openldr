@@ -860,6 +860,8 @@ export interface WarehouseDatasetsTable {
   last_error: string | null;
   /** The Query page group it sits in (migration 132). Null: no group. */
   group_name: string | null;
+  /** The newest change number when the last build failed (migration 132). Null once a build works. */
+  failed_at_seq: number | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

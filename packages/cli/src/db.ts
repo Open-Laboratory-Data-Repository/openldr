@@ -232,7 +232,7 @@ function buildLine(r: DatasetBuildResult): string {
 }
 
 /** Best effort, as for `db reproject`: a failed audit write never fails a change already made. */
-async function auditDataset(action: 'dataset.rebuild' | 'dataset.delete', entityId: string, metadata: Record<string, unknown>): Promise<void> {
+async function auditDataset(action: 'dataset.rebuild' | 'dataset.delete' | 'dataset.move', entityId: string, metadata: Record<string, unknown>): Promise<void> {
   try {
     const appCtx = await createAppContext(loadConfig());
     try {
@@ -318,6 +318,7 @@ export async function runDbDatasetsMove(name: string, opts: JsonOpt & { group?: 
       else process.stderr.write(`${message}\n`);
       return 1;
     }
+    await auditDataset('dataset.move', name, { group });
     emit(opts.json, { ok: true, name, group }, group ? `Moved ${name} to the group ${group}.` : `Moved ${name} out of its group.`);
     return 0;
   } finally {

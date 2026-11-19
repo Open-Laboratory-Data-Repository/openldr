@@ -703,6 +703,10 @@ export interface AppContextOptions {
    *  a CLI process it failed the server's live terminology imports. See
    *  `createTerminologyIngestWorkerIfEnabled`. */
   runTerminologyIngestWorker?: boolean;
+  /** Rebuild pack datasets when the warehouse has changed and caught up. Only the server asks for
+   *  it. A CLI command builds an app context too, and a refresher there would build a dataset the
+   *  server is also building, then be cut off when the command's database pools close. */
+  runDatasetRefresher?: boolean;
   /** Does this process start sync while the context is built?
    *
    *  ⛔ Only the API server sets it. Without it nothing reads the sync settings and no push or pull
@@ -1575,11 +1579,11 @@ const reporting: ReportingApi = {
     logger,
   });
   // Rebuilds pack datasets once the warehouse has caught up with what was saved.
-  const datasetRefresher = createDatasetRefresher({
+  const datasetRefresher = opts.runDatasetRefresher === true ? createDatasetRefresher({
     upToDate: async () => (await readWarehouseReading(internal.db)).behind === 0,
     refreshDue: () => warehouseDatasets.refreshDue(),
     logger,
-  });
+  }) : undefined;
 
   // Sync S1: directional push (lab -> central). A SECOND consumer of fhir.change_log ('sync-push'),
   // config-gated. readSyncConfig returns null for any install that hasn't enabled + fully configured
@@ -2182,7 +2186,7 @@ const reporting: ReportingApi = {
         await workflowListeners.stopAll();
         // The runtime stops both workers and ends the push LISTEN client it owns.
         await syncRuntime.stop();
-        datasetRefresher.stop();
+        datasetRefresher?.stop();
         await projectionWorker.stop();
         // Only processes that opted in own these three workers. See
         // `AppContextOptions.runTerminologyIngestWorker`, `runFacilityJobWorker` and `runFacilityImportWorker`.

@@ -79,7 +79,7 @@ describe('content pack: datasets (pack datasets design)', () => {
     expect(pack.steps[0]).toEqual({ kind: 'datasets', tables: [{ name: 'zm_request_times', sql: 'select 1 as a', indexes: [['a']] }] });
   });
   it('refuses_a_dataset_name_that_is_not_a_plain_lower_case_name', () => {
-    for (const name of ['Ab_c', 'ab', 'a-b-c', '1abc', 'public.x', 'a'.repeat(49)]) {
+    for (const name of ['Ab_c', 'ab', 'a-b-c', '1abc', 'public.x', 'a'.repeat(49), 'abc__new', 'a__b']) {
       expect(() => parseContentPack({ formatVersion: 1, steps: [{ kind: 'datasets', tables: [{ name, sql: 'select 1' }] }] })).toThrow(/invalid pack/);
     }
   });
@@ -89,6 +89,10 @@ describe('content pack: datasets (pack datasets design)', () => {
   it('refuses_a_datasets_step_with_no_table_and_an_empty_index', () => {
     expect(() => parseContentPack({ formatVersion: 1, steps: [{ kind: 'datasets', tables: [] }] })).toThrow(/invalid pack/);
     expect(() => parseContentPack({ formatVersion: 1, steps: [{ kind: 'datasets', tables: [{ name: 'abc', sql: 'select 1', indexes: [[]] }] }] })).toThrow(/invalid pack/);
+  });
+  it('refuses_a_second_datasets_step', () => {
+    const step = (name: string) => ({ kind: 'datasets', tables: [{ name, sql: 'select 1' }] });
+    expect(() => parseContentPack({ formatVersion: 1, steps: [step('abc'), step('abd')] })).toThrow(/invalid pack: .*one datasets step/);
   });
   it('summarizes_a_datasets_step_by_its_names', () => {
     const pack = parseContentPack({ formatVersion: 1, steps: [{ kind: 'datasets', tables: [{ name: 'abc', sql: 'select 1' }, { name: 'abd', sql: 'select 2' }] }] });
