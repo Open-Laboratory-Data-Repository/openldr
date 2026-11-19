@@ -53,6 +53,10 @@ describe.skipIf(!url)('migration 130: one copy of each document', () => {
     // 3. A history row for the current version that holds another document.
     await sql`insert into fhir.fhir_resources (resource_type, id, version, version_id, resource) values ('Patient', 'differs', 1, '1', '{"resourceType":"Patient","id":"differs","gender":"other"}')`.execute(db);
     await sql`insert into fhir.resource_history (resource_type, id, version, op, resource, content_hash) values ('Patient', 'differs', 1, 'upsert', '{"resourceType":"Patient","id":"differs","gender":"unknown"}', 'stale')`.execute(db);
+    // 5. A current row whose history row at that version is a deletion marker with no document.
+    //    Nothing writes this, but the view must never show a current record with no document.
+    await sql`insert into fhir.fhir_resources (resource_type, id, version, version_id, resource) values ('Patient', 'marker', 2, '2', '{"resourceType":"Patient","id":"marker","gender":"male"}')`.execute(db);
+    await sql`insert into fhir.resource_history (resource_type, id, version, op, resource) values ('Patient', 'marker', 2, 'delete', null)`.execute(db);
     // 4. Deleted: history only, no current row.
     await sql`insert into fhir.resource_history (resource_type, id, version, op, resource) values ('Patient', 'gone', 1, 'upsert', '{"resourceType":"Patient","id":"gone"}'), ('Patient', 'gone', 2, 'delete', null)`.execute(db);
 
@@ -74,6 +78,9 @@ describe.skipIf(!url)('migration 130: one copy of each document', () => {
     // Where the two differed, the current document won, and its stale hash is gone.
     const fixed = (await sql<any>`select resource ->> 'gender' as gender, content_hash from fhir.resource_history where id = 'differs'`.execute(db)).rows[0];
     expect(fixed).toEqual({ gender: 'other', content_hash: null });
+    expect((await sql<any>`select op, resource ->> 'gender' as gender, content_hash from fhir.resource_history where id = 'marker'`.execute(db)).rows[0])
+      .toEqual({ op: 'upsert', gender: 'male', content_hash: null });
+    expect((await sql<{ n: number }>`select count(*)::int as n from fhir.fhir_resources where resource is null`.execute(db)).rows[0].n).toBe(0);
     // Older versions and a deleted record's history are untouched.
     expect((await sql<any>`select version::int as v, op, content_hash from fhir.resource_history where id in ('normal', 'gone') order by id, version`.execute(db)).rows)
       .toEqual([{ v: 1, op: 'upsert', content_hash: null }, { v: 2, op: 'delete', content_hash: null }, { v: 1, op: 'upsert', content_hash: 'h1' }, { v: 2, op: 'upsert', content_hash: 'h2' }]);

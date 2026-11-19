@@ -11,8 +11,10 @@ import { type Kysely, sql } from 'kysely';
 // Before the switch each current row gets the history row the view will read:
 //  - Records seeded by older migrations were inserted straight into the current table and have no
 //    history row. They get one, at their current version.
-//  - Where a history row of the current version holds another document, the current document wins:
-//    it is what every reader has seen. Its stored hash no longer describes it, so the hash is cleared.
+//  - Where a history row of the current version holds another document, or none, the current
+//    document wins: it is what every reader has seen. Its stored hash no longer describes it, so the
+//    hash is cleared. Going down cannot bring the replaced document back. No code writes such a row;
+//    this is so that the view can never show a current record with a different or an empty document.
 export async function up(db: Kysely<unknown>): Promise<void> {
   await sql`insert into fhir.resource_history (resource_type, id, version, op, resource)
     select r.resource_type, r.id, r.version, 'upsert', r.resource
@@ -23,12 +25,12 @@ export async function up(db: Kysely<unknown>): Promise<void> {
   const differing = await sql<{ n: number | string }>`select count(*) as n
     from fhir.fhir_resources r
     join fhir.resource_history h on h.resource_type = r.resource_type and h.id = r.id and h.version = r.version
-    where h.resource::text <> r.resource::text`.execute(db);
+    where h.resource is null or h.resource::text <> r.resource::text`.execute(db);
   if (Number(differing.rows[0]?.n ?? 0) > 0) {
-    await sql`update fhir.resource_history h set resource = r.resource, content_hash = null
+    await sql`update fhir.resource_history h set resource = r.resource, op = 'upsert', content_hash = null
       from fhir.fhir_resources r
       where h.resource_type = r.resource_type and h.id = r.id and h.version = r.version
-        and h.resource::text <> r.resource::text`.execute(db);
+        and (h.resource is null or h.resource::text <> r.resource::text)`.execute(db);
   }
 
   await sql`create table fhir.fhir_current (
@@ -47,6 +49,11 @@ export async function up(db: Kysely<unknown>): Promise<void> {
   await sql`insert into fhir.fhir_current (resource_type, id, version, version_id, source_system, plugin_id, plugin_version, batch_id, created_at, updated_at)
     select resource_type, id, version, version_id, source_system, plugin_id, plugin_version, batch_id, created_at, updated_at
     from fhir.fhir_resources`.execute(db);
+  // Fresh statistics for the new table, so the first queries over the view plan well. Asked for
+  // only where the database has it: pg-mem does not, and a refused statement would end the
+  // migration's transaction on PostgreSQL.
+  const canAnalyze = await sql<{ v: string }>`select version() as v`.execute(db).then((r) => /PostgreSQL/i.test(r.rows[0]?.v ?? ''), () => false);
+  if (canAnalyze) await sql`analyze fhir.fhir_current`.execute(db);
   await sql`drop table fhir.fhir_resources`.execute(db);
   // The columns of the table it replaces, in the same order.
   await sql`create view fhir.fhir_resources as
