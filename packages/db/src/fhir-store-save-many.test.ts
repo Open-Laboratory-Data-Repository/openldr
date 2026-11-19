@@ -160,3 +160,101 @@ describe('fhirStore.saveMany', () => {
     await db.destroy();
   }, 60_000);
 });
+
+// Item 16: a check save skips a record whose content is the latest stored content.
+describe('fhirStore.saveMany with skipUnchanged', () => {
+  const versions = async (db: Awaited<ReturnType<typeof makeMigratedDb>>, id: string) =>
+    (await db.selectFrom('fhir.resource_history').select(['version', 'op']).where('id', '=', id).orderBy('version').execute()).map((r) => `${Number(r.version)}:${r.op}`);
+  const changes = async (db: Awaited<ReturnType<typeof makeMigratedDb>>, id: string) =>
+    (await db.selectFrom('fhir.change_log').select('version').where('resource_id', '=', id).execute()).length;
+  const p1 = { resourceType: 'Patient', id: 'p1', name: [{ family: 'A' }] };
+  const org = { resourceType: 'Organization', id: 'lab-1', name: 'Lab one' };
+
+  it('a_record_whose_content_is_the_stored_content_is_not_written_again', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as never);
+    await store.saveMany([p1] as never);
+    const refs = await store.saveMany([{ ...p1 }] as never, {}, { skipUnchanged: true });
+    expect(refs).toEqual([{ resourceType: 'Patient', id: 'p1', version: 1 }]);
+    expect(await versions(db, 'p1')).toEqual(['1:upsert']);
+    expect(await changes(db, 'p1')).toBe(1);
+    await db.destroy();
+  });
+
+  it('a_changed_record_is_saved_and_the_unchanged_one_beside_it_is_skipped', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as never);
+    await store.saveMany([org, p1] as never);
+    const refs = await store.saveMany([{ ...org }, { ...p1, name: [{ family: 'B' }] }] as never, {}, { skipUnchanged: true });
+    expect(refs).toEqual([{ resourceType: 'Organization', id: 'lab-1', version: 1 }, { resourceType: 'Patient', id: 'p1', version: 2 }]);
+    expect(await versions(db, 'lab-1')).toEqual(['1:upsert']);
+    expect(await versions(db, 'p1')).toEqual(['1:upsert', '2:upsert']);
+    expect(((await store.get('Patient', 'p1')) as unknown as { name: Array<{ family: string }> }).name[0].family).toBe('B');
+    await db.destroy();
+  });
+
+  it('without_skipUnchanged_an_identical_save_still_makes_a_version', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as never);
+    await store.saveMany([p1] as never);
+    await store.saveMany([{ ...p1 }] as never);
+    await store.saveMany([{ ...p1 }] as never, {}, { skipUnchanged: false });
+    expect(await versions(db, 'p1')).toEqual(['1:upsert', '2:upsert', '3:upsert']);
+    await db.destroy();
+  });
+
+  it('a_record_deleted_since_is_saved_again', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as never);
+    await store.saveMany([p1] as never);
+    await store.delete('Patient', 'p1');
+    const refs = await store.saveMany([{ ...p1 }] as never, {}, { skipUnchanged: true });
+    expect(refs[0].version).toBe(3);
+    expect(await versions(db, 'p1')).toEqual(['1:upsert', '2:delete', '3:upsert']);
+    expect(await store.get('Patient', 'p1')).not.toBeNull();
+    await db.destroy();
+  });
+
+  it('a_version_stored_without_a_hash_is_never_skipped', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as never);
+    await store.saveMany([p1] as never);
+    // As a row from before the hash column, or one written by an amendment or by sync.
+    await db.updateTable('fhir.resource_history').set({ content_hash: null }).where('id', '=', 'p1').execute();
+    await store.saveMany([{ ...p1 }] as never, {}, { skipUnchanged: true });
+    expect(await versions(db, 'p1')).toEqual(['1:upsert', '2:upsert']);
+    // The version just written has its hash, so the next identical save is skipped.
+    await store.saveMany([{ ...p1 }] as never, {}, { skipUnchanged: true });
+    expect(await versions(db, 'p1')).toEqual(['1:upsert', '2:upsert']);
+    await db.destroy();
+  });
+
+  it('the_same_record_twice_in_one_call_is_written_once_and_A_B_A_three_times', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as never);
+    const refs = await store.saveMany([p1, { ...p1 }] as never, {}, { skipUnchanged: true });
+    expect(refs.map((r) => r.version)).toEqual([1, 1]);
+    expect(await versions(db, 'p1')).toEqual(['1:upsert']);
+    const b = { ...p1, name: [{ family: 'B' }] };
+    const again = await store.saveMany([{ ...p1 }, b, { ...p1 }] as never, {}, { skipUnchanged: true });
+    expect(again.map((r) => r.version)).toEqual([1, 2, 3]);
+    expect(await versions(db, 'p1')).toEqual(['1:upsert', '2:upsert', '3:upsert']);
+    expect(((await store.get('Patient', 'p1')) as unknown as { name: Array<{ family: string }> }).name[0].family).toBe('A');
+    await db.destroy();
+  });
+
+  it('a_call_that_skips_everything_writes_nothing_and_sends_no_wake_up', async () => {
+    const counter = countNotifies();
+    const db = (await makeMigratedDb()).withPlugin(counter.plugin);
+    const store = createFhirStore(db as never);
+    await store.saveMany([org, p1] as never, { batchId: 'first' });
+    const before = counter.count();
+    await store.saveMany([{ ...org }, { ...p1 }] as never, { batchId: 'second' }, { skipUnchanged: true });
+    expect(counter.count()).toBe(before);
+    // Migrations seed a few records of their own, so count only these two.
+    expect((await db.selectFrom('fhir.change_log').select('seq').where('resource_id', 'in', ['lab-1', 'p1']).execute()).length).toBe(2);
+    // The stored row keeps the run that wrote it.
+    expect((await store.getWithProvenance('Patient', 'p1'))!.provenance.batchId).toBe('first');
+    await db.destroy();
+  });
+});

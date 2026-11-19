@@ -14,7 +14,9 @@ export interface PersistDeps {
   logger: Logger;
 }
 
-export type PersistOpts = ValidateBatchOpts;
+/** `skipUnchanged` is handed to `fhirStore.saveMany`: a record whose content is already the latest
+ *  stored version is not written again. Only the import check sets it. */
+export type PersistOpts = ValidateBatchOpts & { skipUnchanged?: boolean };
 
 // Projection is asynchronous (R2): persist writes the canonical resource + change_log (via
 // fhirStore.save) and returns immediately; the projection worker tails change_log and updates the
@@ -37,7 +39,7 @@ export async function persistResources(
   if (opts) {
     const v = await validateBatch(resources, opts);
     if (!v.ok) throw appError('VA0002', { details: { outcome: v.outcome } });
-    return saveAll(deps, v.resources, provenance);
+    return saveAll(deps, v.resources, provenance, opts.skipUnchanged === true);
   }
   // Back-compat path (no opts): per-resource structural validation, as before. Every resource is
   // checked before any is saved.
@@ -47,12 +49,13 @@ export async function persistResources(
     if (!validation.ok) throw new OpenLdrError('cannot persist invalid FHIR resource');
     valid.push(validation.resource);
   }
-  return saveAll(deps, valid, provenance);
+  return saveAll(deps, valid, provenance, false);
 }
 
 // One transaction for the whole list (item 16): a database error on any resource saves none of
 // them, so a request is never left half-saved.
-async function saveAll(deps: PersistDeps, resources: FhirResource[], provenance: Provenance): Promise<PersistResult[]> {
-  await deps.fhirStore.saveMany(resources, provenance);
+async function saveAll(deps: PersistDeps, resources: FhirResource[], provenance: Provenance, skipUnchanged: boolean): Promise<PersistResult[]> {
+  if (skipUnchanged) await deps.fhirStore.saveMany(resources, provenance, { skipUnchanged: true });
+  else await deps.fhirStore.saveMany(resources, provenance);
   return resources.map(() => ({ saved: true, flattened: 'deferred' as const }));
 }

@@ -114,7 +114,7 @@ export interface FhirStore {
   save(resource: FhirResource, provenance?: Provenance): Promise<SavedRef>;
   /** Saves every resource in one transaction, in order, with one projection wake-up after the
    *  commit. A failure on any resource saves none of them (item 16: a request is saved whole). */
-  saveMany(resources: FhirResource[], provenance?: Provenance): Promise<SavedRef[]>;
+  saveMany(resources: FhirResource[], provenance?: Provenance, opts?: SaveManyOpts): Promise<SavedRef[]>;
   get(resourceType: string, id: string): Promise<FhirResource | null>;
   /** Cheap existence check for the latest version of a resource. */
   exists(resourceType: string, id: string): Promise<boolean>;
@@ -136,6 +136,10 @@ export interface FhirStore {
   // survivor, write one merge Provenance, and emit sync_amendments outbox rows. One transaction.
   mergePatients(input: MergeInput): Promise<MergeResult>;
 }
+
+/** `skipUnchanged`: do not write a record whose content is the latest stored version of it
+ *  (item 16, design 2026-11-19-check-skip-unchanged). Only the import check asks for it. */
+export interface SaveManyOpts { skipUnchanged?: boolean }
 
 function contentHash(serialized: string): string {
   return createHash('sha256').update(serialized).digest('hex');
@@ -229,7 +233,7 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
   // Writes a list inside the caller's transaction with a few multi-row statements (item 16 slice 2a):
   // one versions lookup, then one insert each into fhir_resources, resource_history and change_log.
   // Each row is built as a single save builds it.
-  async function writeMany(trx: Kysely<InternalSchema>, resources: FhirResource[], provenance: Provenance, site: string | null): Promise<SavedRef[]> {
+  async function writeMany(trx: Kysely<InternalSchema>, resources: FhirResource[], provenance: Provenance, site: string | null, skipUnchanged: boolean): Promise<{ refs: SavedRef[]; written: number }> {
     // Ids first: a resource without one gets it before keys are grouped.
     const items = resources.map((resource) => ({ resource, resourceType: resource.resourceType, id: (resource as { id?: string }).id ?? randomUUID() }));
     const keyOf = (resourceType: string, id: string): string => `${resourceType}\u0000${id}`;
@@ -257,25 +261,59 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
       }
     }
 
+    // Skip unchanged (item 16): the hash of the latest stored version of each key that has one. Only
+    // an upsert with a hash counts. A tombstone, an amendment, a version from sync and a row from
+    // before the hash column have none, so a record they are the latest version of is never skipped.
+    const latestHash = new Map<string, string>();
+    if (skipUnchanged) {
+      const stored = distinct.filter((k) => (highest.get(keyOf(k.resourceType, k.id)) ?? 0) > 0);
+      for (const part of chunksOf(stored)) {
+        const found = await trx
+          .selectFrom('fhir.resource_history')
+          .select(['resource_type', 'id', 'op', 'content_hash'])
+          .where((eb) => eb.or(part.map((k) => eb.and([
+            eb('resource_type', '=', k.resourceType),
+            eb('id', '=', k.id),
+            eb('version', '=', highest.get(keyOf(k.resourceType, k.id))!),
+          ]))))
+          .execute();
+        for (const row of found) {
+          if (row.op === 'upsert' && row.content_hash) latestHash.set(keyOf(row.resource_type, row.id), row.content_hash);
+        }
+      }
+    }
+
     const prov = {
       source_system: provenance.sourceSystem ?? null,
       plugin_id: provenance.pluginId ?? null,
       plugin_version: provenance.pluginVersion ?? null,
       batch_id: provenance.batchId ?? null,
     };
-    // Versions are numbered in input order, so a key that comes twice gets max+1 then max+2.
-    const rows = items.map(({ resource, resourceType, id }) => {
+    // Versions are numbered in input order, so a key that comes twice gets max+1 then max+2. With
+    // skipUnchanged, a record whose hash is the hash of the key's latest version, stored or from
+    // earlier in this call, is not written: its ref carries that version.
+    const refs: SavedRef[] = [];
+    const rows: Array<{ key: string; resourceType: string; id: string; next: number; serialized: string; contentHashHex: string }> = [];
+    for (const { resource, resourceType, id } of items) {
       const key = keyOf(resourceType, id);
-      const next = (highest.get(key) ?? 0) + 1;
-      highest.set(key, next);
-      const nowIso = new Date().toISOString();
       // Hash the pre-stamp content so identical content hashes stably (excludes the volatile
       // server-stamped meta.versionId / meta.lastUpdated we add below).
       const contentHashHex = contentHash(JSON.stringify({ ...resource, id }));
+      if (skipUnchanged && latestHash.get(key) === contentHashHex) {
+        refs.push({ resourceType, id, version: highest.get(key)! });
+        continue;
+      }
+      const next = (highest.get(key) ?? 0) + 1;
+      highest.set(key, next);
+      latestHash.set(key, contentHashHex);
+      const nowIso = new Date().toISOString();
       const meta = { ...(resource as { meta?: Record<string, unknown> }).meta, versionId: String(next), lastUpdated: nowIso };
       const serialized = JSON.stringify({ ...resource, id, meta });
-      return { key, resourceType, id, next, serialized, contentHashHex };
-    });
+      rows.push({ key, resourceType, id, next, serialized, contentHashHex });
+      refs.push({ resourceType, id, version: next });
+    }
+    // Nothing changed: no write at all, so the transaction takes no id and adds no change row.
+    if (rows.length === 0) return { refs, written: 0 };
 
     // The canonical row holds the latest version only. A key that comes twice sends just its last
     // row: PostgreSQL refuses an upsert that would update one row twice in a statement.
@@ -303,7 +341,7 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
     for (const part of chunksOf(rows)) {
       await trx
         .insertInto('fhir.resource_history')
-        .values(part.map((r) => ({ resource_type: r.resourceType, id: r.id, version: r.next, op: 'upsert' as const, resource: r.serialized })))
+        .values(part.map((r) => ({ resource_type: r.resourceType, id: r.id, version: r.next, op: 'upsert' as const, resource: r.serialized, content_hash: r.contentHashHex })))
         .execute();
     }
     // INVARIANT (load-bearing for the projection safe-frontier): the change_log insert must NOT be
@@ -318,13 +356,15 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         .values(part.map((r) => ({ resource_type: r.resourceType, resource_id: r.id, version: r.next, op: 'upsert' as const, content_hash: r.contentHashHex, site_id: site })))
         .execute();
     }
-    return rows.map((r) => ({ resourceType: r.resourceType, id: r.id, version: r.next }));
+    return { refs, written: rows.length };
   }
 
-  async function saveMany(resources: FhirResource[], provenance: Provenance = {}): Promise<SavedRef[]> {
+  async function saveMany(resources: FhirResource[], provenance: Provenance = {}, opts: SaveManyOpts = {}): Promise<SavedRef[]> {
     if (resources.length === 0) return [];
     const site = await resolveSiteId();
-    const refs = await db.transaction().execute((trx) => writeMany(trx, resources, provenance, site));
+    const { refs, written } = await db.transaction().execute((trx) => writeMany(trx, resources, provenance, site, opts.skipUnchanged === true));
+    // A call that skipped every record changed nothing, so there is nothing to wake anyone for.
+    if (written === 0) return refs;
     // Best-effort wakeup for the projection worker; interval polling is the correctness-bearing
     // path, so a notify failure (e.g. pg-mem in tests) must never affect the save.
     try { await sql`select pg_notify('fhir_changes', '')`.execute(db); } catch { /* ignore */ }

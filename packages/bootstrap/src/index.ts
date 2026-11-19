@@ -840,6 +840,16 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
       level: await validationStrictness.get(),
       resolveServiceRequest: (id: string) => canonicalFhirStore.exists('ServiceRequest', id),
     });
+  // The import check's saves. The same path, but a record whose content is already the latest stored
+  // version is not written again (item 16): the plugin sends the same Organization with every
+  // request, and a check run again over a loaded source would otherwise double the history. No other
+  // save skips, so a laboratory that sends the same result twice still records two arrivals.
+  const importCheckPersist = async (resources: unknown[], prov: Provenance) =>
+    persistResources({ fhirStore: canonicalFhirStore, logger }, resources, prov, {
+      level: await validationStrictness.get(),
+      resolveServiceRequest: (id: string) => canonicalFhirStore.exists('ServiceRequest', id),
+      skipUnchanged: true,
+    });
   const marketplaceForms = createFormArtifactInstaller({ forms, installStore: marketplaceInstalls, audit });
 
   // Seed a default marketplace registry from the legacy env vars the first time (table empty),
@@ -1960,7 +1970,7 @@ const reporting: ReportingApi = {
     plugins,
     pluginData,
     audit: importAudit,
-    persist: workflowPersist,
+    persist: importCheckPersist,
     copyStore: importCopyStore,
     held: importHeld,
     corrections: importCorrections,
