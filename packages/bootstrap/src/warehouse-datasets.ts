@@ -194,3 +194,41 @@ export function createDatasetRefresher(deps: {
   timer.unref?.();
   return { tickOnce, stop() { stopped = true; clearInterval(timer); } };
 }
+
+/** PostgreSQL's words for a table that is not there, when the table is a dataset. A report can run
+ *  before its dataset's first build, or after a first build that failed. */
+const MISSING_DATASET = /relation "dataset\.([a-z][a-z0-9_]*)" does not exist/;
+
+/** A plain sentence for a database error that means a dataset is not built yet. Null for any other. */
+export function datasetNotBuiltMessage(message: string): string | null {
+  const m = MISSING_DATASET.exec(message);
+  return m ? `The dataset ${m[1]} is still being built. Try again when it is ready.` : null;
+}
+
+/** Runs `operation`. An error that means a dataset is not built yet is thrown again with the plain
+ *  sentence. Every other error passes through unchanged. */
+export async function withDatasetMessage<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (err) {
+    const plain = datasetNotBuiltMessage(err instanceof Error ? err.message : String(err));
+    if (plain) throw new Error(plain);
+    throw err;
+  }
+}
+
+/** One dataset as a list shows it. `stale` is true when the warehouse has changed since its last
+ *  build, or it was never built. */
+export interface DatasetListItem {
+  name: string; ownerPack: string; rowCount: number | null; builtAt: string | null; buildMs: number | null; lastError: string | null; stale: boolean;
+}
+
+/** The list for the Query page and the CLI: one definition of `stale` for both. */
+export async function listDatasetsWithState(service: Pick<WarehouseDatasetService, 'list'>, internalDb: Kysely<InternalSchema>): Promise<DatasetListItem[]> {
+  const [all, reading] = await Promise.all([service.list(), readWarehouseReading(internalDb)]);
+  return all.map((d) => ({
+    name: d.name, ownerPack: d.ownerPack, rowCount: d.rowCount, builtAt: d.builtAt, buildMs: d.buildMs, lastError: d.lastError,
+    stale: d.builtAtSeq === null || d.builtAtSeq < reading.head,
+  }));
+}
+

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { dialectFor, exportCustomQueries, importCustomQueries, CustomQueryTransferError, type AppContext } from '@openldr/bootstrap';
+import { dialectFor, exportCustomQueries, importCustomQueries, CustomQueryTransferError, type AppContext, type DatasetBuildResult, type DatasetListItem } from '@openldr/bootstrap';
 import { CustomQueryInputSchema, validateSelectSqlForSave } from '@openldr/dashboards';
 import type { CustomQueryGroupStore, CustomQueryStore } from '@openldr/db';
 import { holdsCapability, requireCapability } from './rbac';
@@ -24,6 +24,13 @@ export interface QueryRouteDeps {
     getByName(name: string): Promise<{ name: string; columns: unknown; rows: unknown[]; publishedTable?: string | null } | null>;
   };
   runConnectorSql(input: { connectorId: string; sql: string; rowCap?: number; offset?: number }): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
+  /** Datasets a content pack defines, kept as warehouse tables. Absent: the list is empty. */
+  warehouseDatasets?: {
+    list(): Promise<DatasetListItem[]>;
+    /** Throws `no dataset named <name>` for an unknown name. A build that fails is in the result. */
+    rebuild(name: string): Promise<DatasetBuildResult>;
+    remove(name: string): Promise<void>;
+  };
 }
 
 export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: QueryRouteDeps): void {
@@ -336,6 +343,40 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
       const { rows } = await deps.runConnectorSql({ connectorId: body.data.connectorId, sql: body.data.optionsSql });
       return rows.slice(0, ROW_CAP).map((r) => Object.values(r)[0]);
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
+  });
+
+  // ---- Pack datasets ----
+  // Datasets a content pack defines. Each is a real warehouse table, `dataset.<name>`, so the Query
+  // page browses one through the warehouse connector like any table. These routes add what the table
+  // itself cannot say: who owns it, when it was built, and whether its last build failed.
+  app.get('/api/query/warehouse-datasets', GUARD, async () => (deps.warehouseDatasets ? deps.warehouseDatasets.list() : []));
+
+  const unknownDataset = (e: unknown): boolean => e instanceof Error && e.message.startsWith('no dataset named ');
+
+  app.post('/api/query/warehouse-datasets/:name/rebuild', MANAGE, async (req, reply) => {
+    const { name } = req.params as { name: string };
+    if (!deps.warehouseDatasets) { reply.code(404); return { error: 'dataset not found' }; }
+    try {
+      const result = await deps.warehouseDatasets.rebuild(name);
+      await recordAudit(ctx, req, { action: 'dataset.rebuild', entityType: 'dataset', entityId: name, before: null, after: null, metadata: { ...result } });
+      return result;
+    } catch (e) {
+      if (unknownDataset(e)) { reply.code(404); return { error: 'dataset not found' }; }
+      throw e;
+    }
+  });
+
+  app.delete('/api/query/warehouse-datasets/:name', MANAGE, async (req, reply) => {
+    const { name } = req.params as { name: string };
+    if (!deps.warehouseDatasets) { reply.code(404); return { error: 'dataset not found' }; }
+    try {
+      await deps.warehouseDatasets.remove(name);
+      await recordAudit(ctx, req, { action: 'dataset.delete', entityType: 'dataset', entityId: name, before: null, after: null });
+      return { ok: true };
+    } catch (e) {
+      if (unknownDataset(e)) { reply.code(404); return { error: 'dataset not found' }; }
+      throw e;
+    }
   });
 
   // ---- Datasets ----

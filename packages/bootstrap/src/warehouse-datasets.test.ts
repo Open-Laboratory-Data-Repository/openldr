@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { advanceCursor, createFhirStore, createWarehouseDatasetStore } from '@openldr/db';
-import { createWarehouseDatasetService, createDatasetRefresher } from './warehouse-datasets';
+import { createWarehouseDatasetService, createDatasetRefresher, datasetNotBuiltMessage, withDatasetMessage } from './warehouse-datasets';
 import { readWarehouseReading } from './warehouse-status';
 
 const quiet = { info() {}, warn() {}, error() {}, debug() {} } as never;
@@ -200,3 +200,17 @@ describe('pack datasets: the refresher', () => {
     refresher.stop();
   });
 });
+
+describe('pack datasets: a report run before its dataset exists', () => {
+  it('names_the_dataset_that_is_not_built_yet', () => {
+    expect(datasetNotBuiltMessage('relation "dataset.zm_request_times" does not exist')).toBe('The dataset zm_request_times is still being built. Try again when it is ready.');
+    expect(datasetNotBuiltMessage('relation "patients_x" does not exist')).toBeNull();
+    expect(datasetNotBuiltMessage('syntax error at or near "selct"')).toBeNull();
+  });
+  it('replaces_only_that_error', async () => {
+    await expect(withDatasetMessage(async () => { throw new Error('relation "dataset.abc" does not exist'); })).rejects.toThrow('The dataset abc is still being built. Try again when it is ready.');
+    await expect(withDatasetMessage(async () => { throw new Error('division by zero'); })).rejects.toThrow('division by zero');
+    expect(await withDatasetMessage(async () => 4)).toBe(4);
+  });
+});
+

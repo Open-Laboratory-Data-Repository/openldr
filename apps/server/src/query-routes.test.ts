@@ -719,3 +719,71 @@ describe('SQL Server database level', () => {
     expect(ran).toBe(false);
   });
 });
+
+describe('pack datasets on the Query page', () => {
+  const ROWS = [
+    { name: 'zm_request_times', ownerPack: 'reports-zm', rowCount: 4239703, builtAt: '2026-11-19T11:00:00.000Z', buildMs: 28000, lastError: null, stale: false },
+    { name: 'zm_broken', ownerPack: 'reports-zm', rowCount: null, builtAt: null, buildMs: null, lastError: 'relation "nope" does not exist', stale: true },
+  ];
+  function withDatasets() {
+    const calls: string[] = [];
+    const deps = makeDeps();
+    deps.warehouseDatasets = {
+      list: async () => ROWS,
+      rebuild: async (name) => { calls.push(`rebuild ${name}`); if (name === 'nope') throw new Error('no dataset named nope'); return { name, ok: true, rows: 7, ms: 12 }; },
+      remove: async (name) => { calls.push(`remove ${name}`); if (name === 'nope') throw new Error('no dataset named nope'); },
+    };
+    return { deps, calls };
+  }
+
+  it('lists_them_for_anyone_who_can_run_queries', async () => {
+    const { deps } = withDatasets();
+    const app = await build(deps, ['query.run']);
+    const res = await app.inject({ method: 'GET', url: '/api/query/warehouse-datasets' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(ROWS);
+  });
+
+  it('answers_an_empty_list_where_the_context_has_none', async () => {
+    const app = await build(makeDeps(), ['query.run']);
+    expect((await app.inject({ method: 'GET', url: '/api/query/warehouse-datasets' })).json()).toEqual([]);
+  });
+
+  it('rebuild_and_delete_need_query_manage', async () => {
+    const { deps, calls } = withDatasets();
+    const app = await build(deps, ['query.run']);
+    expect((await app.inject({ method: 'POST', url: '/api/query/warehouse-datasets/zm_request_times/rebuild' })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'DELETE', url: '/api/query/warehouse-datasets/zm_request_times' })).statusCode).toBe(403);
+    expect(calls).toEqual([]);
+  });
+
+  it('rebuilds_one_and_audits_it', async () => {
+    auditRecord.mockClear();
+    const { deps, calls } = withDatasets();
+    const app = await build(deps);
+    const res = await app.inject({ method: 'POST', url: '/api/query/warehouse-datasets/zm_request_times/rebuild' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ name: 'zm_request_times', ok: true, rows: 7, ms: 12 });
+    expect(calls).toEqual(['rebuild zm_request_times']);
+    expect((auditRecord.mock.calls as unknown[][]).map((c) => c[0])).toEqual([expect.objectContaining({ action: 'dataset.rebuild', entityType: 'dataset', entityId: 'zm_request_times' })]);
+  });
+
+  it('deletes_one_and_audits_it', async () => {
+    auditRecord.mockClear();
+    const { deps, calls } = withDatasets();
+    const app = await build(deps);
+    expect((await app.inject({ method: 'DELETE', url: '/api/query/warehouse-datasets/zm_request_times' })).statusCode).toBe(200);
+    expect(calls).toEqual(['remove zm_request_times']);
+    expect((auditRecord.mock.calls as unknown[][]).map((c) => c[0])).toEqual([expect.objectContaining({ action: 'dataset.delete', entityType: 'dataset', entityId: 'zm_request_times' })]);
+  });
+
+  it('an_unknown_dataset_is_a_404_with_no_audit', async () => {
+    auditRecord.mockClear();
+    const { deps } = withDatasets();
+    const app = await build(deps);
+    expect((await app.inject({ method: 'POST', url: '/api/query/warehouse-datasets/nope/rebuild' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'DELETE', url: '/api/query/warehouse-datasets/nope' })).statusCode).toBe(404);
+    expect(auditRecord).not.toHaveBeenCalled();
+  });
+});
+

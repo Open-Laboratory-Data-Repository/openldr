@@ -61,7 +61,7 @@ import { createSyncRuntime, type SyncRuntime, type BuiltPush, type BuiltPull } f
 import { createRetryQuarantine } from './sync-retry-quarantine';
 import { createSyncActivityTracker } from './sync-activity-tracker';
 import { createWarehouseStatusReader, readWarehouseReading, type WarehouseStatusReader } from './warehouse-status';
-import { createWarehouseDatasetService, createDatasetRefresher, type WarehouseDatasetService } from './warehouse-datasets';
+import { createWarehouseDatasetService, createDatasetRefresher, withDatasetMessage, type WarehouseDatasetService } from './warehouse-datasets';
 import { encodePushBody, advertisesGzip } from './sync-gzip';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
 import { createResourceLoader } from './reexpand-value-sets';
@@ -1451,7 +1451,9 @@ const reporting: ReportingApi = {
       await blob.put(objectKey, bytes, contentType);
       return { objectKey, contentType, fileName: safe, byteSize: bytes.byteLength };
     },
-    runConnectorSql: (input) => connectorSqlRunner(input),
+    // One place for every report, dashboard and Query page run: a dataset that is not built yet
+    // reads as a plain sentence, not as PostgreSQL's missing-relation error.
+    runConnectorSql: (input) => withDatasetMessage(() => connectorSqlRunner(input)),
     runConnectorMongo: (input) => connectorMongoRunner(input),
     runConnectorRedis: (input) => connectorRedisRunner(input),
     runConnectorEmail: (input) => connectorEmailRunner(input),
@@ -2211,7 +2213,7 @@ export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
 export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
 export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
-export { createWarehouseDatasetService, createDatasetRefresher, type WarehouseDatasetService, type PackDataset, type DatasetBuildResult } from './warehouse-datasets';
+export { createWarehouseDatasetService, createDatasetRefresher, datasetNotBuiltMessage, withDatasetMessage, listDatasetsWithState, type WarehouseDatasetService, type PackDataset, type DatasetBuildResult, type DatasetListItem } from './warehouse-datasets';
 export { readWarehouseReading, withRate, createWarehouseStatusReader, type WarehouseReading, type WarehouseStatus, type WarehouseStatusReader } from './warehouse-status';
 export type { ActivityService, ActivityImportRun, ActivityCopyRun, ActivityCheckRun, ActivityLifecycle, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig, readSigningKeys } from './sync-settings';
