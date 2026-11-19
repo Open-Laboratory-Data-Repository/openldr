@@ -68,3 +68,18 @@ one after another. The warehouse was about half behind at every row.
 
 At the last row one report was stopped by the 30 s statement limit. Server health call: 2 to 5 ms
 throughout, worst 0.33 s.
+
+Tanzania full at 770f37f2, the check finished and the warehouse complete (2026-11-19):
+
+| Date | Warehouse | Dashboard | 77 reports | Reports over 10 s | Stopped by the 30 s limit |
+|---|---|---|---|---|---|
+| 2026-11-19 | complete, 18 GB | 4.0 s | 369 s | 13 | 4 |
+
+72 of the 77 reports parse dates from text columns. Those 72 take 339 of the 369 seconds.
+
+## Warehouse catch-up after an import
+
+| Date | Commit | Dataset | Backlog when the check ended | Time to catch up |
+|---|---|---|---|---|
+| 2026-11-19 | 770f37f2 | Tanzania full | 14,030,722 change rows | 35 min, with two test runs of faster variants in the middle |
+
