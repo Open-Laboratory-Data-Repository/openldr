@@ -1030,7 +1030,7 @@ export const fr: EnShape = {
       installComingSoon: 'Installer (bientôt)',
       typeContentPack: 'Pack de contenu',
       packSteps: 'Étapes',
-      packStep: { 'code-system': 'Système de codes', 'value-set': 'Ensemble de valeurs', 'facility-register': 'Registre des établissements', 'link-matching': 'Appariement de liens', 'custom-queries': 'Requêtes personnalisées', 'test-mappings': 'Correspondances de tests', 'result-mappings': 'Correspondances de résultats' },
+      packStep: { 'code-system': 'Système de codes', 'value-set': 'Ensemble de valeurs', 'facility-register': 'Registre des établissements', 'link-matching': 'Appariement de liens', 'custom-queries': 'Requêtes personnalisées', 'test-mappings': 'Correspondances de tests', 'result-mappings': 'Correspondances de résultats', datasets: 'Jeux de données' },
       packFailedAt: "Échec à l'étape {{step}} : {{error}}",
       packFailed: "Échec : {{error}}",
       installAgain: 'Installer à nouveau',

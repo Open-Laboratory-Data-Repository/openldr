@@ -1034,7 +1034,7 @@ export const en = {
       installComingSoon: 'Install (coming soon)',
       typeContentPack: 'Content pack',
       packSteps: 'Steps',
-      packStep: { 'code-system': 'Code system', 'value-set': 'Value set', 'facility-register': 'Facility register', 'link-matching': 'Link matching', 'custom-queries': 'Custom queries', 'test-mappings': 'Test mappings', 'result-mappings': 'Result mappings' },
+      packStep: { 'code-system': 'Code system', 'value-set': 'Value set', 'facility-register': 'Facility register', 'link-matching': 'Link matching', 'custom-queries': 'Custom queries', 'test-mappings': 'Test mappings', 'result-mappings': 'Result mappings', datasets: 'Datasets' },
       packFailedAt: 'Failed at step {{step}}: {{error}}',
       packFailed: "Failed: {{error}}",
       installAgain: 'Install again',

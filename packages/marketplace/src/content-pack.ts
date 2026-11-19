@@ -3,7 +3,10 @@ import { z } from 'zod';
 export const CONTENT_PACK_FORMAT_VERSION = 1;
 export class ContentPackError extends Error {}
 const NEWER = 'this pack needs a newer CE';
-const KINDS = ['code-system', 'value-set', 'facility-register', 'link-matching', 'custom-queries', 'test-mappings', 'result-mappings'] as const;
+const KINDS = ['code-system', 'value-set', 'facility-register', 'link-matching', 'custom-queries', 'test-mappings', 'result-mappings', 'datasets'] as const;
+
+/** A dataset's name: it becomes a table name in the warehouse's `dataset` schema. */
+export const DATASET_NAME = /^[a-z][a-z0-9_]{2,47}$/;
 
 const fhir = (resourceType: 'CodeSystem' | 'ValueSet') =>
   z.object({ resourceType: z.literal(resourceType), url: z.string().min(1) }).passthrough();
@@ -36,6 +39,24 @@ const stepSchema = z.discriminatedUnion('kind', [
     mappings: z.array(z.object({
       system: z.string().min(1), code: z.string().min(1), loinc: z.string().regex(/^\d{1,7}-\d$/),
     })).min(1),
+  }),
+  // Datasets: each a name and one SELECT. CE stores the SELECT's result as a table in the warehouse and
+  // rebuilds it after the warehouse changes, so a report reads a table made once and does not redo a
+  // heavy step on every run. A CE without this kind refuses the pack as needing a newer CE.
+  z.object({
+    kind: z.literal('datasets'),
+    tables: z.array(z.object({
+      name: z.string().regex(DATASET_NAME),
+      sql: z.string().min(1),
+      // Each entry is the columns of one plain index.
+      indexes: z.array(z.array(z.string().min(1)).min(1)).optional(),
+    })).min(1).superRefine((tables, ctx) => {
+      const seen = new Set<string>();
+      tables.forEach((t, i) => {
+        if (seen.has(t.name)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i, 'name'], message: `the dataset ${t.name} is listed twice` });
+        seen.add(t.name);
+      });
+    }),
   }),
 ]);
 
@@ -75,6 +96,8 @@ export function summarizeContentPack(pack: ContentPack): { kind: string; label: 
         return { kind: s.kind, label: 'Test mappings', count: s.mappings.length };
       case 'result-mappings':
         return { kind: s.kind, label: 'Result mappings', count: s.mappings.length };
+      case 'datasets':
+        return { kind: s.kind, label: s.tables.map((t) => t.name).join(', '), count: s.tables.length };
     }
   });
 }
