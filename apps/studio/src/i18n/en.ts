@@ -1195,6 +1195,23 @@ export const en = {
     },
   },
   activity: {
+    warehouse: {
+      label: 'Warehouse',
+      upToDate: 'Up to date. Dashboards and reports show everything saved.',
+      behind: '{{changes}} changes behind.',
+      measuring: 'Measuring the time left…',
+      fallingBehind: 'Falling behind. Records are being saved faster than the warehouse takes them.',
+      left: {
+        underMinute: 'Under a minute left.',
+        minutes: 'About {{minutes}} min left.',
+        hours: 'About {{hours}} h {{minutes}} min left.',
+      },
+      rate: '{{rate}} changes a second',
+      shownUpTo: 'Shows records saved up to {{when}}',
+      meaning: 'Dashboards and reports read the warehouse. Until it catches up, they show less than was saved.',
+      waitingRetry_one: '{{records}} record was refused by the warehouse and waits for another try.',
+      waitingRetry_other: '{{records}} records were refused by the warehouse and wait for another try.',
+    },
     newestFirst: 'Newest payloads first.',
     searchPlaceholder: 'Search payloads…',
     refresh: 'Refresh',

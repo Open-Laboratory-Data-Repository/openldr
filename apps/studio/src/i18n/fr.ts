@@ -1183,6 +1183,23 @@ export const fr: EnShape = {
     },
   },
   activity: {
+    warehouse: {
+      label: 'Entrepôt',
+      upToDate: 'À jour. Les tableaux de bord et les rapports affichent tout ce qui est enregistré.',
+      behind: '{{changes}} modifications de retard.',
+      measuring: 'Mesure du temps restant…',
+      fallingBehind: 'Le retard augmente. Les enregistrements arrivent plus vite que l’entrepôt ne les prend.',
+      left: {
+        underMinute: 'Moins d’une minute restante.',
+        minutes: 'Environ {{minutes}} min restantes.',
+        hours: 'Environ {{hours}} h {{minutes}} min restantes.',
+      },
+      rate: '{{rate}} modifications par seconde',
+      shownUpTo: 'Affiche les enregistrements jusqu’au {{when}}',
+      meaning: 'Les tableaux de bord et les rapports lisent l’entrepôt. Tant qu’il a du retard, ils affichent moins que ce qui est enregistré.',
+      waitingRetry_one: '{{records}} enregistrement refusé par l’entrepôt attend un nouvel essai.',
+      waitingRetry_other: '{{records}} enregistrements refusés par l’entrepôt attendent un nouvel essai.',
+    },
     newestFirst: 'Charges les plus récentes en premier.',
     searchPlaceholder: 'Rechercher des charges utiles…',
     refresh: 'Actualiser',

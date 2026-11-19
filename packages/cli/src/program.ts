@@ -5,7 +5,7 @@ import { exitCodeFor, formatHealthTable } from './format';
 import { redactError } from './redact-error';
 import { sendLogsToStderr } from '@openldr/core';
 import { runFhirValidate, formatFhirValidate } from './fhir';
-import { runDbMigrate, runDbReset, runDbSeed, runDbReproject } from './db';
+import { runDbMigrate, runDbReset, runDbSeed, runDbReproject, runDbWarehouseStatus } from './db';
 import { runAuthRebindIssuer, runAuthSetupCode } from './auth';
 import { runDashboardsShare } from './dashboards';
 import { runUsersScope, type UsersScopeOpts } from './users-scope';
@@ -429,6 +429,25 @@ export function buildProgram(): Command {
         process.exitCode = await runDbReproject(opts);
       } catch (err) {
         process.stderr.write(`db reproject failed: ${redactError(err)}\n`);
+        process.exitCode = 1;
+      }
+    });
+
+  db.command('warehouse-status')
+    .description('Show how far the warehouse is behind the records saved, and how long it needs to catch up')
+    .option('--json', 'emit JSON', false)
+    .option('--seconds <n>', 'seconds between the two readings that measure the rate; 0 reads once', '5')
+    .action(async (opts: { json: boolean; seconds: string }) => {
+      try {
+        const seconds = Number(opts.seconds);
+        if (!Number.isFinite(seconds) || seconds < 0 || seconds > 300) {
+          process.stderr.write('db warehouse-status: --seconds must be a number from 0 to 300\n');
+          process.exitCode = 1;
+          return;
+        }
+        process.exitCode = await runDbWarehouseStatus({ json: opts.json, seconds });
+      } catch (err) {
+        process.stderr.write(`db warehouse-status failed: ${redactError(err)}\n`);
         process.exitCode = 1;
       }
     });

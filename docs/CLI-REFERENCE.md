@@ -57,6 +57,7 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 | `openldr errors list` | List the error-code catalog. |
 | `openldr fhir validate <file>` | Validate a FHIR JSON resource or bundle. |
 | `openldr db migrate/reset/seed` | Manage internal and target database schema and seed data. |
+| `openldr db warehouse-status` | Show how far the warehouse is behind the records saved, how fast it is catching up, and the time left. `--seconds <n>` sets the gap between the two readings that measure the rate (default 5, 0 reads once). Read-only. |
 | `openldr target-store test` | Probe the analytics warehouse adapter. |
 | `openldr terminology ...` | Import, query, translate, and administer terminology assets. |
 | `openldr forms list/extract` | List forms or extract QuestionnaireResponse data. |

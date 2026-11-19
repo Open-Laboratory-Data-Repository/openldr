@@ -213,6 +213,7 @@ const SETTING = 'a setting name or value, stored as text';
 const WHEN = 'a date, time, year or sync cursor';
 const PERSON = 'a name written into a record as is; refusing it through the app is a later task';
 const REASON: Record<string, string> = {
+  '--seconds': 'a number of seconds',
   // positional arguments
   action: CHOICE, batchId: ID, capability: ID, code: ID, columns: 'column names in the warehouse', connector: ID,
   conceptMapUrl: URI, copy: ID, display: TEXT, entityId: ID, entityType: CHOICE, field: SETTING, id: ID, idA: ID, idB: ID,
@@ -395,6 +396,7 @@ const NOT_A_PATH: Record<string, string[]> = {
   'market sites': ['id', 'site', 'state'],
   'market remove': ['id', 'version'],
   'artifact publish': ['--approved-by'],
+  'db warehouse-status': ['--seconds'],
 };
 
 describe('paths on app commands', () => {

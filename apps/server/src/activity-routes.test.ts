@@ -7,6 +7,8 @@ const RECENT = [
 ];
 const LIFECYCLE = { correlationId: 'A', runs: [], stages: [] };
 
+const WAREHOUSE = { head: 1000, cursor: 400, behind: 600, waitingRetry: 0, oldestWaitingAt: '2026-11-19T10:00:00.000Z', readAt: '2026-11-19T10:05:00.000Z', appliedPerSecond: 50, secondsLeft: 12, fallingBehind: false };
+
 function fakeCtx() {
   const calls: { listRecent: any[]; getLifecycle: string[] } = { listRecent: [], getLifecycle: [] };
   return {
@@ -15,6 +17,7 @@ function fakeCtx() {
         listRecent: async (opts: any) => { calls.listRecent.push(opts); return RECENT; },
         getLifecycle: async (id: string) => { calls.getLifecycle.push(id); return id === 'A' ? LIFECYCLE : null; },
       },
+      warehouseStatus: { read: async () => WAREHOUSE },
     } as any,
     calls,
   };
@@ -65,5 +68,19 @@ describe('activity routes', () => {
     const app = appWithUser(['lab_technician'], (a) => registerActivityRoutes(a, ctx), []);
     const res = await app.inject({ method: 'GET', url: '/api/activity' });
     expect(res.statusCode).toBe(403);
+  });
+
+  it('GET /api/warehouse/status returns how far the warehouse is behind', async () => {
+    const { ctx } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerActivityRoutes(a, ctx), ['activity.view']);
+    const res = await app.inject({ method: 'GET', url: '/api/warehouse/status' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(WAREHOUSE);
+  });
+
+  it('GET /api/warehouse/status is refused without activity.view', async () => {
+    const { ctx } = fakeCtx();
+    const app = appWithUser(['lab_technician'], (a) => registerActivityRoutes(a, ctx), []);
+    expect((await app.inject({ method: 'GET', url: '/api/warehouse/status' })).statusCode).toBe(403);
   });
 });

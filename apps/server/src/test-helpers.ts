@@ -568,6 +568,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     numberSettings: { get: async () => 0, all: async () => [], set: async () => 0, invalidate: () => {} } as never,
     validationStrictness: { get: async () => 'high', set: async () => {} } as never,
     activity: { getLifecycle: async () => null, listRecent: async () => [] } as never,
+    warehouseStatus: { read: async () => ({ head: 0, cursor: 0, behind: 0, waitingRetry: 0, oldestWaitingAt: null, readAt: new Date(0).toISOString(), appliedPerSecond: null, secondsLeft: null, fallingBehind: false }) },
     sync: { status: async () => ({ enabled: false, mode: 'push', centralUrl: '', siteId: '', push: null, pull: null, pendingPush: 0 }), triggerNow: () => {} } as never,
     syncActivity: { list: async () => [] } as never,
     syncRuntime: { reconcile: async () => {} } as never,
