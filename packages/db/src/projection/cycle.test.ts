@@ -174,7 +174,7 @@ describe('runProjectionCycle in bulk (item 16)', () => {
     const externalDb = await makeMigratedExternalDb();
     const fhirStore = createFhirStore(internalDb as never);
     const real = createRelationalWriter(externalDb as never, 'postgres');
-    const calls = { write: [] as string[], writeMany: [] as string[][], deleteById: [] as string[] };
+    const calls = { write: [] as string[], writeMany: [] as string[][], deleteById: [] as string[], order: [] as string[] };
     let failMany = false;
     let failOne: string | null = null;
     const relationalWriter = {
@@ -187,10 +187,11 @@ describe('runProjectionCycle in bulk (item 16)', () => {
       },
       async writeMany(items: Array<{ resource: unknown; provenance: never }>) {
         calls.writeMany.push(items.map((it) => (it.resource as { id: string }).id));
+        calls.order.push('writeMany');
         if (failMany) throw new Error('warehouse refused the batch');
         return real.writeMany(items);
       },
-      async deleteById(resourceType: string, id: string) { calls.deleteById.push(id); return real.deleteById(resourceType, id); },
+      async deleteById(resourceType: string, id: string) { calls.deleteById.push(id); calls.order.push(`delete ${id}`); return real.deleteById(resourceType, id); },
     };
     const run = (ids: string[], onProjected?: (t: string, r: Record<string, unknown>) => Promise<void>) => createProjectionRunner({
       internalDb: internalDb as never, fhirStore, relationalWriter: relationalWriter as never, logger,
@@ -231,7 +232,8 @@ describe('runProjectionCycle in bulk (item 16)', () => {
     for (const id of ['p1', 'p2', 'p3']) await w.fhirStore.save({ resourceType: 'Patient', id } as never);
     w.failMany(true);
     w.failOne('p2');
-    expect(await w.run(['p1', 'p2', 'p3'])).toBe(3);
+    // The cycle reports what it projected: two of the three.
+    expect(await w.run(['p1', 'p2', 'p3'])).toBe(2);
     expect(w.calls.write).toEqual(['p1', 'p2', 'p3']);
     expect(await w.patients()).toEqual(['p1', 'p3']);
     const waiting = await w.internalDb.selectFrom('fhir.projection_retries').select('resource_id').execute();
@@ -258,6 +260,51 @@ describe('runProjectionCycle in bulk (item 16)', () => {
     await w.run(['p1', 'p2']);
     const events = await w.externalDb.selectFrom('ingest_events' as never).select(['resource_id', 'version'] as never).orderBy('resource_id' as never).orderBy('version' as never).execute() as Array<{ resource_id: string; version: number | string }>;
     expect(events.map((e) => `${e.resource_id}:${Number(e.version)}`)).toEqual(['p1:1', 'p1:2', 'p2:1']);
+    await w.done();
+  });
+
+  it('deleted_records_are_removed_before_the_batch_is_written', async () => {
+    // Two resource types can share one warehouse table by id (Organization and Location). Removing
+    // after writing could delete a row the same batch just wrote.
+    const w = await world();
+    for (const id of ['p1', 'p2']) await w.fhirStore.save({ resourceType: 'Patient', id } as never);
+    await w.fhirStore.delete('Patient', 'p1');
+    await w.run(['p1', 'p2']);
+    expect(w.calls.order).toEqual(['delete p1', 'writeMany']);
+    await w.done();
+  });
+
+  it('a_cycle_whose_every_record_fails_reports_nothing_projected', async () => {
+    // So the worker ends its catch-up and waits for the next tick while the warehouse is down.
+    const w = await world();
+    await w.fhirStore.save({ resourceType: 'Patient', id: 'p1' } as never);
+    w.failMany(true);
+    w.failOne('p1');
+    expect(await w.run(['p1'])).toBe(0);
+    expect((await w.internalDb.selectFrom('fhir.projection_retries').select('resource_id').execute()).map((r) => r.resource_id)).toEqual(['p1']);
+    await w.done();
+  });
+
+  it('the_hook_runs_once_per_record_after_its_waiting_retry_is_cleared', async () => {
+    const w = await world();
+    await w.fhirStore.save({ resourceType: 'Patient', id: 'p1' } as never);
+    await w.internalDb.insertInto('fhir.projection_retries').values({ resource_type: 'Patient', resource_id: 'p1', attempts: 1, next_attempt_at: new Date(Date.now() - 1000) } as never).execute();
+    const waitingAtHook: number[] = [];
+    await w.run(['p1'], async () => {
+      waitingAtHook.push((await w.internalDb.selectFrom('fhir.projection_retries').select('resource_id').execute()).length);
+    });
+    expect(waitingAtHook).toEqual([0]);
+    await w.done();
+  });
+
+  it('when_the_batch_fails_the_hook_still_runs_for_each_record_projected_alone', async () => {
+    const w = await world();
+    for (const id of ['p1', 'p2', 'p3']) await w.fhirStore.save({ resourceType: 'Patient', id } as never);
+    w.failMany(true);
+    w.failOne('p2');
+    const seen: string[] = [];
+    await w.run(['p1', 'p2', 'p3'], async (_t, r) => { seen.push(r.id as string); });
+    expect(seen).toEqual(['p1', 'p3']);
     await w.done();
   });
 

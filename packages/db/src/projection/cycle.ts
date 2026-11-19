@@ -35,6 +35,8 @@ export interface ProjectionDeps {
 }
 
 export interface ProjectionRunner {
+  /** One batch. Resolves to the number of records it projected: 0 when there was nothing to do,
+   *  and 0 when every record of the batch failed and now waits for a retry. */
   runCycle(): Promise<number>;
 }
 
@@ -116,7 +118,7 @@ async function readCurrent(
  *  check. Any throw here leaves the batch to the caller, which tries each record alone, so one bad
  *  record costs the others nothing but that second try. Every write is an upsert or a replace, so
  *  a record written here and then again alone ends the same. */
-async function applyBatch(tasks: ProjectionTask[], deps: ProjectionDeps): Promise<void> {
+async function applyBatch(tasks: ProjectionTask[], deps: ProjectionDeps): Promise<Array<{ task: ProjectionTask; resource: unknown; provenance: Provenance }>> {
   const current = await readCurrent(deps.internalDb, tasks);
   const found: Array<{ task: ProjectionTask; resource: unknown; provenance: Provenance }> = [];
   const gone: ProjectionTask[] = [];
@@ -125,19 +127,27 @@ async function applyBatch(tasks: ProjectionTask[], deps: ProjectionDeps): Promis
     if (row) found.push({ task, ...row });
     else gone.push(task);
   }
-  if (found.length > 0) await deps.relationalWriter.writeMany(found.map((f) => ({ resource: f.resource, provenance: f.provenance })));
+  // Deletes first. Two resource types can share one warehouse table by id (Organization and
+  // Location both fill `facilities`), so a delete after the write could remove a row this batch
+  // just wrote for the type that still exists.
   for (const task of gone) await deps.relationalWriter.deleteById(task.resourceType, task.id);
+  if (found.length > 0) await deps.relationalWriter.writeMany(found.map((f) => ({ resource: f.resource, provenance: f.provenance })));
   // Every arrival of every record, found or gone, for the reasons `applyProjection` gives.
   const ledger = tasks.filter((t) => isLedgerResourceType(t.resourceType));
   if (ledger.length > 0) await deps.relationalWriter.writeIngestEvents(await readArrivalsMany(deps.internalDb, ledger));
-  if (deps.onProjected) {
-    for (const f of found) {
-      try {
-        await deps.onProjected(f.task.resourceType, f.resource as Record<string, unknown>, f.provenance);
-      } catch (err) {
-        // As in `applyProjection`: the clinical projection already landed, only the hook failed.
-        deps.logger.error({ err, task: f.task }, 'onProjected hook failed; ignoring (clinical projection already applied)');
-      }
+  return found;
+}
+
+/** The hooks of a batch that projected in bulk. Run only once nothing more of the batch can fail,
+ *  so a batch that falls back to one record at a time never fires a hook twice. */
+async function fireHooks(found: Array<{ task: ProjectionTask; resource: unknown; provenance: Provenance }>, deps: ProjectionDeps): Promise<void> {
+  if (!deps.onProjected) return;
+  for (const f of found) {
+    try {
+      await deps.onProjected(f.task.resourceType, f.resource as Record<string, unknown>, f.provenance);
+    } catch (err) {
+      // As in `applyProjection`: the clinical projection already landed, only the hook failed.
+      deps.logger.error({ err, task: f.task }, 'onProjected hook failed; ignoring (clinical projection already applied)');
     }
   }
 }
@@ -156,11 +166,16 @@ export function createProjectionRunner(deps: ProjectionDeps): ProjectionRunner {
       }
       const batch = [...tasks.values()];
       let inBulk = false;
+      /** Records this cycle projected. The worker goes on to the next cycle only while this is
+       *  above 0, so a warehouse that refuses everything ends the catch-up until the next tick. */
+      let projected = 0;
       if (batch.length > 0) {
         try {
-          await applyBatch(batch, deps);
+          const found = await applyBatch(batch, deps);
           await clearRetries(deps.internalDb, batch);
           inBulk = true;
+          projected = batch.length;
+          await fireHooks(found, deps);
         } catch (err) {
           deps.logger.warn({ err, records: batch.length }, 'projection batch failed; projecting its records one at a time');
         }
@@ -170,6 +185,7 @@ export function createProjectionRunner(deps: ProjectionDeps): ProjectionRunner {
           try {
             await applyProjection(task, deps);
             await clearRetry(deps.internalDb, task);
+            projected += 1;
           } catch (err) {
             // If persistence fails, reject this cycle before advancing the cursor.
             await deferRetry(deps.internalDb, task);
@@ -179,7 +195,7 @@ export function createProjectionRunner(deps: ProjectionDeps): ProjectionRunner {
       }
       if (plan.newCursor > cursor) await advanceCursor(deps.internalDb, 'projection', plan.newCursor);
       pendingGaps = plan.pendingGaps;
-      return tasks.size;
+      return projected;
     },
   };
 }
