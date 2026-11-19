@@ -73,6 +73,13 @@ Every save makes a new version, whatever the content. Measured on 5,000 real req
 - A skipped save is not an arrival in the warehouse's arrival record. For a check run again over
   the same source that is correct: nothing arrived.
 
+- Found by the branch review: a check run again no longer re-sends unchanged records to the
+  warehouse. Someone who used a second check run to refill a wiped warehouse must now use
+  `openldr db reproject`, which is the command made for that.
+- Found by the branch review: if another save writes a new version of a record between the check's
+  read and its write, the check's skip stands. The result is the same as if the check had saved
+  first. Before, the check's save failed on the duplicate version and the request was marked failed.
+
 ## Tests and proof
 
 - pg-mem unit tests on `saveMany`: unchanged skipped, changed saved, mixed list, deleted since,

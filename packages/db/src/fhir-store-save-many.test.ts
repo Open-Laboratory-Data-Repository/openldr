@@ -243,6 +243,48 @@ describe('fhirStore.saveMany with skipUnchanged', () => {
     await db.destroy();
   });
 
+  it('an_amended_record_is_never_skipped', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as never);
+    // An amendment needs a record owned by a lab site, so this install has one.
+    await db.insertInto('app_settings').values({ key: 'sync.site_id', value: 'lab-a' } as never).execute();
+    const obs = { resourceType: 'Observation', id: 'obs-1', status: 'final', code: { text: 'Hb' }, valueString: 'first' };
+    await store.saveMany([obs] as never);
+    await store.amend({ resourceType: 'Observation', id: 'obs-1', status: 'amended', patch: { valueString: 'corrected' }, agent: 'central-reviewer', reason: 'value re-validated' });
+    // The check sends the content it sent before. The stored record is now the amended one, so this is a change.
+    const refs = await store.saveMany([{ ...obs }] as never, {}, { skipUnchanged: true });
+    expect(refs[0].version).toBe(3);
+    expect(await versions(db, 'obs-1')).toEqual(['1:upsert', '2:upsert', '3:upsert']);
+    expect(((await store.get('Observation', 'obs-1')) as unknown as { valueString: string }).valueString).toBe('first');
+    await db.destroy();
+  });
+
+  it('a_record_changed_by_sync_since_is_never_skipped', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as never);
+    await store.saveMany([p1] as never);
+    await store.applyRemote({ resourceType: 'Patient', id: 'p1', version: 2, op: 'upsert', siteId: 'lab-a', resource: { ...p1, name: [{ family: 'Remote' }] } as never });
+    const refs = await store.saveMany([{ ...p1 }] as never, {}, { skipUnchanged: true });
+    expect(refs[0].version).toBe(3);
+    expect(await versions(db, 'p1')).toEqual(['1:upsert', '2:upsert', '3:upsert']);
+    await db.destroy();
+  });
+
+  it('the_skip_lookup_works_across_a_chunk_boundary', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as never);
+    const many = Array.from({ length: 1001 }, (_, i) => ({ resourceType: 'Patient', id: `m${i}`, gender: 'male' }));
+    await store.saveMany(many as never);
+    // All 1,001 again, with the first and the last changed.
+    const again = many.map((r, i) => (i === 0 || i === 1000 ? { ...r, gender: 'female' } : { ...r }));
+    const refs = await store.saveMany(again as never, {}, { skipUnchanged: true });
+    expect(refs.filter((r) => r.version === 2).map((r) => r.id)).toEqual(['m0', 'm1000']);
+    expect(refs.filter((r) => r.version === 1)).toHaveLength(999);
+    const rows = await db.selectFrom('fhir.resource_history').select('id').where('id', 'like', 'm%').where('version', '=', 2).execute();
+    expect(rows.map((r) => r.id).sort()).toEqual(['m0', 'm1000']);
+    await db.destroy();
+  }, 60_000);
+
   it('a_call_that_skips_everything_writes_nothing_and_sends_no_wake_up', async () => {
     const counter = countNotifies();
     const db = (await makeMigratedDb()).withPlugin(counter.plugin);
