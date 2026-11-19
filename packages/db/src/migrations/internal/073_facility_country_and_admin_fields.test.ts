@@ -1,10 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { sql } from 'kysely';
-import { makeMigratedDb } from './test-helpers';
+import { makeMigratedDbUpTo } from './test-helpers';
 import { up, down, BOUND_FIELDS_SNAPSHOT, COUNTRY_CONCEPTS } from './073_facility_country_and_admin_fields';
 import { BOUND_FIELDS_SNAPSHOT as PREV_BOUND_FIELDS_SNAPSHOT } from './072_facility_level_status_valuesets';
 import { createTerminologyAdminStore } from '../../terminology-admin-store';
 import { ISO3166_COUNTRIES } from '../../iso3166';
+
+// These tests run an older migration's own up() and down() again. Those write fhir.fhir_resources,
+// which migration 130 turns into a view. On a real install they ran before 130, so the database
+// here stops just before it (see makeMigratedDbUpTo).
+const makeMigratedDb = () => makeMigratedDbUpTo('129_resource_history_content_hash');
 
 // pg-mem hands a jsonb column back already parsed, not as a JSON string — same guard as
 // 072_facility_level_status_valuesets.test.ts.

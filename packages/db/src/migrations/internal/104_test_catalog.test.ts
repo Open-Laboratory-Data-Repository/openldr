@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { makeMigratedDb, makeMigratedDbUpTo } from './test-helpers';
+import { makeMigratedDbUpTo } from './test-helpers';
 import { up, down, CATALOG_SYSTEM, CATEGORY_SYSTEM, CATEGORY_VALUE_SET } from './104_test_catalog';
+
+// These tests run an older migration's own up() and down() again. Those write fhir.fhir_resources,
+// which migration 130 turns into a view. On a real install they ran before 130, so the database
+// here stops just before it (see makeMigratedDbUpTo).
+const makeMigratedDb = () => makeMigratedDbUpTo('129_resource_history_content_hash');
 
 describe('104 test catalog', () => {
   it('seeds the catalog and category systems under the System publisher', async () => {

@@ -471,6 +471,60 @@ HONEST NON-PROOF:
 - The built standalone app and the Docker image were not run.
 - No reference copy in the bench, so the twin-keys path ran only in unit tests.
 
+## Built result: one copy of each document, branch `perf/store-document-once` (2026-11-19)
+
+The third of the three. The operator asked why the document was stored twice, and whether now, with
+nothing in production, is the time to change it. Design, as built:
+
+- **`fhir.fhir_current`** is the current table: one narrow row per record (type, id, version,
+  provenance, two timestamps), with no document. Migration 130 makes it.
+- **`fhir.fhir_resources` stays, as a view**: `fhir_current` joined to the history row of the
+  current version, with the columns the old table had. So every reader keeps its query. Only the
+  store's five writes changed, and `exists` now reads the narrow table.
+- **Before the switch every current row gets the history row the view reads.** Older migrations
+  seeded records straight into the current table, with no history row (13 of 17 in the sample).
+  They get one. Where a history row of the current version held another document, the current
+  document wins, because it is what every reader has seen, and its stored hash is cleared.
+- Tests of older migrations that run those migrations' own `up()` and `down()` again now build
+  their database up to migration 129 (`makeMigratedDbUpTo`, the helper made for this case). On a
+  real install those migrations run before 130.
+
+Measured, same 5,000 requests, quiet machine, both with the page save and three pages ahead:
+
+| | `main` | Branch |
+|---|---|---|
+| Requests a second | 527.7 and 527.0 | 537.2 and 525.1 |
+| WAL for the run | 147 MiB | 100 MiB |
+| Current table | 62.6 MiB | 13.5 MiB |
+| Three tables together | 136.2 MiB | 87.6 MiB |
+| Projection alone, reading the current records | 12,400 records a second | 11,600 to 11,800 |
+| With the projection worker | 546 a second, caught up 2 s after | 532 a second, caught up 3 s after |
+
+- A third less write-ahead log and 36 percent less disk for the three tables. The check is as
+  fast as before. Reading through the view costs the projection about 5 percent.
+- Same stored result: the change list after a branch run is byte-identical to a `main` run, and so
+  is the list after a run stopped at 2,500 read and started again. A run again writes nothing.
+- Same warehouse: the projection over the view gives the same 11 warehouse tables with `main`'s
+  code, with the branch's code, and as the warehouse built before migration 130 (arrival times aside).
+- The migration on real data: a database loaded by `main` in the old shape, 58,543 current records.
+  Migration 130 took 0.49 s. The reader-visible rows have the same count and digest before and
+  after, timestamps included. 13 seeded records got their history row. The tables went from 126.0
+  to 77.0 MiB.
+- 17 tests on real PostgreSQL pass, among them: readers see the same rows across the migration for
+  a normal record, a seeded one, one whose history row differed and a deleted one; going down
+  brings the table back with the same rows; up again works.
+
+HONEST NON-PROOF:
+- The migration ran on 58,543 records. An install with millions was not run. The work is one
+  anti-join, one comparison join, one narrow copy and a drop, so it should scale with the row
+  count, at about 8 s per million by this run. Not measured.
+- SQL Server and MySQL are warehouse engines only. The internal database is always PostgreSQL, so
+  the view needs nothing from them. Not run on them.
+- pg-mem cannot drop a view, so `down` runs only in the live test.
+- The built standalone app and the Docker image were not run.
+- No reader was found that writes `fhir.fhir_resources` outside the store. A plugin or script that
+  did would now fail, loudly, on the view.
+
 ## HONEST NON-PROOF
 
 - Proven for this sample since the first draft: a re-run gives the same hashes (see "Measured").

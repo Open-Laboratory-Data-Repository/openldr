@@ -1,6 +1,23 @@
 import type { ColumnType, Generated, JSONColumnType } from 'kysely';
 import type { FhirResource } from '@openldr/fhir';
 
+/** The current version of each record: one narrow row, with no document (migration 130). The
+ *  document is the history row of `version`. Every write of a current record goes here. */
+export interface FhirCurrentTable {
+  resource_type: string;
+  id: string;
+  version: Generated<number>;
+  version_id: string | null;
+  source_system: string | null;
+  plugin_id: string | null;
+  plugin_version: string | null;
+  batch_id: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+/** Since migration 130 a VIEW, for reading only: `fhir_current` joined to the history row of the
+ *  current version. It has the columns the table it replaced had. Write to `fhir.fhir_current`. */
 export interface FhirResourcesTable {
   resource_type: string;
   id: string;
@@ -1104,6 +1121,7 @@ export interface InternalSchema {
   auth_issuer_binding: { id: number; issuer: string };
   'fhir.projection_retries': ProjectionRetriesTable;
   'fhir.fhir_resources': FhirResourcesTable;
+  'fhir.fhir_current': FhirCurrentTable;
   'fhir.resource_history': ResourceHistoryTable;
   'fhir.change_log': ChangeLogTable;
   'fhir.change_cursors': ChangeCursorsTable;

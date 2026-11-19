@@ -170,9 +170,15 @@ async function main() {
     await internalDb.connection().execute(async (heldConn) => {
       await sql`begin`.execute(heldConn);
       // Canonical row for heldId in the held txn (so it COULD project if it were visible/safe).
+      // Since migration 130 a current record is its narrow row plus the history row of its version.
+      // fhir.fhir_resources is a view over the two and cannot be written to.
       await sql`
-        insert into fhir.fhir_resources (resource_type, id, version, version_id, resource)
-        values ('Patient', ${heldId}, 1, '1', ${JSON.stringify({ resourceType: 'Patient', id: heldId, name: [{ family: 'Held' }] })}::jsonb)
+        insert into fhir.resource_history (resource_type, id, version, op, resource)
+        values ('Patient', ${heldId}, 1, 'upsert', ${JSON.stringify({ resourceType: 'Patient', id: heldId, name: [{ family: 'Held' }] })}::jsonb)
+      `.execute(heldConn);
+      await sql`
+        insert into fhir.fhir_current (resource_type, id, version, version_id)
+        values ('Patient', ${heldId}, 1, '1')
       `.execute(heldConn);
       const hr = await sql<{ seq: string }>`
         insert into fhir.change_log (resource_type, resource_id, version, op)
@@ -296,7 +302,7 @@ async function main() {
     try {
       await sql`delete from fhir.change_log where resource_id like 'proj-accept-%'`.execute(internalDb);
       await sql`delete from fhir.resource_history where id like 'proj-accept-%'`.execute(internalDb);
-      await sql`delete from fhir.fhir_resources where id like 'proj-accept-%'`.execute(internalDb);
+      await sql`delete from fhir.fhir_current where id like 'proj-accept-%'`.execute(internalDb);
     } catch { /* ignore cleanup errors */ }
     await internal.close();
     await external.close();

@@ -476,8 +476,13 @@ describe('reprojectAll', () => {
       expansion: { contains: [{ system: 'sys', code, display: code }] },
     });
     for (const r of [mk('vs1', 'A'), mk('vs2', 'B')]) {
-      await internalDb.insertInto('fhir.fhir_resources')
-        .values({ resource_type: 'ValueSet', id: r.id, version: 1, version_id: '1', resource: JSON.stringify(r) } as never)
+      // Straight into the tables, with no change row. Since migration 130 a current record is its
+      // narrow row plus the history row of its version; fhir.fhir_resources is a view over the two.
+      await internalDb.insertInto('fhir.resource_history')
+        .values({ resource_type: 'ValueSet', id: r.id, version: 1, op: 'upsert', resource: JSON.stringify(r) } as never)
+        .execute();
+      await internalDb.insertInto('fhir.fhir_current')
+        .values({ resource_type: 'ValueSet', id: r.id, version: 1, version_id: '1' } as never)
         .execute();
     }
 

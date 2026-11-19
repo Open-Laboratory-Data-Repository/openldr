@@ -128,6 +128,7 @@ import * as m126 from './126_dashboard_access';
 import * as m127 from './127_user_data_scopes';
 import * as m128 from './128_import_check_held_codes';
 import * as m129 from './129_resource_history_content_hash';
+import * as m130 from './130_fhir_one_document_copy';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -260,4 +261,5 @@ export const internalMigrations: Record<string, Migration> = {
   '127_user_data_scopes': { up: m127.up, down: m127.down },
   '128_import_check_held_codes': { up: m128.up, down: m128.down },
   '129_resource_history_content_hash': { up: m129.up, down: m129.down },
+  '130_fhir_one_document_copy': { up: m130.up, down: m130.down },
 };

@@ -196,13 +196,12 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
       .values({ resource_type: v.resourceType, id: v.id, version: v.version, op: 'upsert', resource: serialized })
       .execute();
     await trx
-      .insertInto('fhir.fhir_resources')
-      .values({ resource_type: v.resourceType, id: v.id, version: v.version, version_id: String(v.version), resource: serialized })
+      .insertInto('fhir.fhir_current')
+      .values({ resource_type: v.resourceType, id: v.id, version: v.version, version_id: String(v.version) })
       .onConflict((oc) =>
         oc.columns(['resource_type', 'id']).doUpdateSet({
           version: v.version,
           version_id: String(v.version),
-          resource: serialized,
           updated_at: sql`now()`,
         }),
       )
@@ -327,13 +326,12 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
     for (const row of rows) last.set(row.key, row);
     for (const part of chunksOf([...last.values()])) {
       await trx
-        .insertInto('fhir.fhir_resources')
-        .values(part.map((r) => ({ resource_type: r.resourceType, id: r.id, version: r.next, version_id: String(r.next), resource: r.serialized, ...prov })))
+        .insertInto('fhir.fhir_current')
+        .values(part.map((r) => ({ resource_type: r.resourceType, id: r.id, version: r.next, version_id: String(r.next), ...prov })))
         .onConflict((oc) =>
           oc.columns(['resource_type', 'id']).doUpdateSet((eb) => ({
             version: eb.ref('excluded.version'),
             version_id: eb.ref('excluded.version_id'),
-            resource: eb.ref('excluded.resource'),
             source_system: eb.ref('excluded.source_system'),
             plugin_id: eb.ref('excluded.plugin_id'),
             plugin_version: eb.ref('excluded.plugin_version'),
@@ -424,12 +422,12 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
                  || jsonb_build_object('versionId', v::text, 'lastUpdated', ${nowIso}::text)) as doc
         from numbered where keep
       ), cur as (
-        insert into fhir.fhir_resources (resource_type, id, version, version_id, resource, source_system, plugin_id, plugin_version, batch_id)
-        select distinct on (t, i) t, i, v, v::text, doc,
+        insert into fhir.fhir_current (resource_type, id, version, version_id, source_system, plugin_id, plugin_version, batch_id)
+        select distinct on (t, i) t, i, v, v::text,
                ${provenance.sourceSystem ?? null}::text, ${provenance.pluginId ?? null}::text, ${provenance.pluginVersion ?? null}::text, ${provenance.batchId ?? null}::text
         from stamped order by t, i, n desc
         on conflict (resource_type, id) do update set
-          version = excluded.version, version_id = excluded.version_id, resource = excluded.resource,
+          version = excluded.version, version_id = excluded.version_id,
           source_system = excluded.source_system, plugin_id = excluded.plugin_id,
           plugin_version = excluded.plugin_version, batch_id = excluded.batch_id, updated_at = now()
       ), hist as (
@@ -506,7 +504,7 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
 
     async exists(resourceType, id) {
       const row = await db
-        .selectFrom('fhir.fhir_resources')
+        .selectFrom('fhir.fhir_current')
         .select((eb) => eb.lit(1).as('one'))
         .where('resource_type', '=', resourceType)
         .where('id', '=', id)
@@ -540,7 +538,7 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
       const site = await resolveSiteId();
       return db.transaction().execute(async (trx) => {
         const existing = await trx
-          .selectFrom('fhir.fhir_resources')
+          .selectFrom('fhir.fhir_current')
           .select('version')
           .where('resource_type', '=', resourceType)
           .where('id', '=', id)
@@ -562,7 +560,7 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
           .insertInto('fhir.change_log')
           .values({ resource_type: resourceType, resource_id: id, version: next, op: 'delete', content_hash: null, site_id: site })
           .execute();
-        await trx.deleteFrom('fhir.fhir_resources').where('resource_type', '=', resourceType).where('id', '=', id).execute();
+        await trx.deleteFrom('fhir.fhir_current').where('resource_type', '=', resourceType).where('id', '=', id).execute();
         return { deleted: true, version: next };
       });
     },
@@ -660,24 +658,24 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
           // the plain INSERT lands; on conflict we advance the canonical row ONLY when the stored version is
           // strictly less than the incoming version. The WHERE qualifies the EXISTING (target) row — Postgres
           // exposes it under the unqualified relation name in ON CONFLICT DO UPDATE, so
-          // `sql.ref('fhir_resources.version')` renders that reference.
+          // `sql.ref('fhir_current.version')` renders that reference. The document itself is the history
+          // row written above: the current row only names its version (migration 130).
           await trx
-            .insertInto('fhir.fhir_resources')
-            .values({ resource_type: resourceType, id, version, version_id: String(version), resource: content! })
+            .insertInto('fhir.fhir_current')
+            .values({ resource_type: resourceType, id, version, version_id: String(version) })
             .onConflict((oc) =>
               oc
                 .columns(['resource_type', 'id'])
                 .doUpdateSet({
                   version,
                   version_id: String(version),
-                  resource: content!,
                   updated_at: sql`now()`,
                 })
-                .where(sql.ref('fhir_resources.version'), '<', version),
+                .where(sql.ref('fhir_current.version'), '<', version),
             )
             .execute();
         } else if (isNewest && op === 'delete') {
-          await trx.deleteFrom('fhir.fhir_resources').where('resource_type', '=', resourceType).where('id', '=', id).execute();
+          await trx.deleteFrom('fhir.fhir_current').where('resource_type', '=', resourceType).where('id', '=', id).execute();
         }
 
         // change_log stamped with the ORIGIN site_id (ownership stamp) — NOT resolveSiteId(), which is the
