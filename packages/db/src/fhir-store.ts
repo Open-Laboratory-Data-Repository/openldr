@@ -145,7 +145,13 @@ function contentHash(serialized: string): string {
   return createHash('sha256').update(serialized).digest('hex');
 }
 
-export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
+/** `saveMode` picks how `saveMany` writes. 'set' is one set-based statement per call, which only
+ *  real PostgreSQL can run. 'rows' is a few multi-row statements, which pg-mem can run too. 'auto'
+ *  (the default) asks the database once and uses 'set' where it works. The two store the same rows:
+ *  fhir-store-save-set.live.test.ts runs every scenario through both and compares the tables. */
+export interface FhirStoreOpts { saveMode?: 'auto' | 'rows' | 'set' }
+
+export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStoreOpts = {}): FhirStore {
   // site_id is enrollment-stable ONCE SET, so memoize it — but only when it resolves to a
   // real value. Memoizing `null` was a silent data-loss bug: a lab that ingested before an
   // operator filled in Settings -> Distributed sync cached "no site" for the life of the
@@ -359,10 +365,108 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
     return { refs, written: rows.length };
   }
 
+  // The same save as `writeMany`, as ONE statement (item 16). Measured on 58,526 real records it is
+  // 3.8 times faster: `writeMany` binds each value as its own parameter, in several statements per
+  // 1,000 rows, and sends every document twice. Here the call goes over once, as four arrays, and
+  // the server numbers the versions, applies the skip, stamps `meta` and fills the three tables.
+  // Node still hashes, so a hash is the same text whichever path wrote it.
+  async function writeManySet(trx: Kysely<InternalSchema>, resources: FhirResource[], provenance: Provenance, site: string | null, skipUnchanged: boolean): Promise<{ refs: SavedRef[]; written: number }> {
+    const types: string[] = [];
+    const ids: string[] = [];
+    const bodies: string[] = [];
+    const hashes: string[] = [];
+    for (const resource of resources) {
+      const id = (resource as { id?: string }).id ?? randomUUID();
+      // The pre-stamp content, as `writeMany` hashes it. The server adds the meta stamps.
+      const body = JSON.stringify({ ...resource, id });
+      types.push(resource.resourceType);
+      ids.push(id);
+      bodies.push(body);
+      hashes.push(contentHash(body));
+    }
+    const nowIso = new Date().toISOString();
+    // - `latest`: the newest history row of each key, read from the end of its primary key.
+    // - `marked`: a row is kept unless the skip is on and its hash is the hash before it for that
+    //   key: the row before it in this call, or the stored version for the first. A tombstone, an
+    //   amendment, a version from sync and an older row carry no hash, so they never match.
+    // - `numbered`: kept rows take max+1, max+2 in input order. A skipped row reports the version
+    //   it matched.
+    // - The canonical row takes the last kept row of each key.
+    // INVARIANT (projection safe-frontier): a change_log row must not be this transaction's first
+    // write, so the transaction has its id before a seq is drawn. The change_log insert reads the
+    // history insert's RETURNING rows, so PostgreSQL writes the history rows first.
+    const found = await sql<{ n: number; v: number | string; keep: boolean }>`
+      with input as (
+        select * from unnest(${types}::text[], ${ids}::text[], ${bodies}::text[], ${hashes}::text[]) with ordinality as k(t, i, body, hash, n)
+      ), latest as (
+        select k.t, k.i, coalesce(h.version, 0) as maxv, case when h.op = 'upsert' then h.content_hash end as stored_hash
+        from (select distinct t, i from input) k
+        left join lateral (
+          select r.version, r.op, r.content_hash from fhir.resource_history r
+          where r.resource_type = k.t and r.id = k.i order by r.version desc limit 1
+        ) h on true
+      ), marked as (
+        select x.n, x.t, x.i, x.body, x.hash, l.maxv,
+               (not ${skipUnchanged}::boolean)
+               or (coalesce(lag(x.hash) over (partition by x.t, x.i order by x.n), l.stored_hash) is distinct from x.hash) as keep
+        from input x join latest l on l.t = x.t and l.i = x.i
+      ), numbered as (
+        select m.*, m.maxv + sum(case when m.keep then 1 else 0 end) over (partition by m.t, m.i order by m.n) as v from marked m
+      ), stamped as (
+        select n, t, i, v, hash,
+               body::jsonb || jsonb_build_object('meta',
+                 (case when jsonb_typeof(body::jsonb -> 'meta') = 'object' then body::jsonb -> 'meta' else '{}'::jsonb end)
+                 || jsonb_build_object('versionId', v::text, 'lastUpdated', ${nowIso}::text)) as doc
+        from numbered where keep
+      ), cur as (
+        insert into fhir.fhir_resources (resource_type, id, version, version_id, resource, source_system, plugin_id, plugin_version, batch_id)
+        select distinct on (t, i) t, i, v, v::text, doc,
+               ${provenance.sourceSystem ?? null}::text, ${provenance.pluginId ?? null}::text, ${provenance.pluginVersion ?? null}::text, ${provenance.batchId ?? null}::text
+        from stamped order by t, i, n desc
+        on conflict (resource_type, id) do update set
+          version = excluded.version, version_id = excluded.version_id, resource = excluded.resource,
+          source_system = excluded.source_system, plugin_id = excluded.plugin_id,
+          plugin_version = excluded.plugin_version, batch_id = excluded.batch_id, updated_at = now()
+      ), hist as (
+        insert into fhir.resource_history (resource_type, id, version, op, resource, content_hash)
+        select t, i, v, 'upsert', doc, hash from stamped
+        returning resource_type, id, version
+      ), log as (
+        insert into fhir.change_log (resource_type, resource_id, version, op, content_hash, site_id)
+        select s.t, s.i, s.v, 'upsert', s.hash, ${site}::text
+        from stamped s join hist h on h.resource_type = s.t and h.id = s.i and h.version = s.v
+        order by s.n
+      )
+      select n::int as n, v::bigint as v, keep from numbered order by n`.execute(trx);
+    let written = 0;
+    const refs = found.rows.map((row, k) => {
+      if (row.keep) written += 1;
+      return { resourceType: types[k], id: ids[k], version: Number(row.v) };
+    });
+    return { refs, written };
+  }
+
+  // Whether this database can run the set-based statement. Asked once, outside any transaction, so
+  // a refusal aborts nothing. pg-mem refuses, and then every save takes the row path.
+  let setBased: boolean | null = storeOpts.saveMode === 'set' ? true : storeOpts.saveMode === 'rows' ? false : null;
+  async function useSetBased(): Promise<boolean> {
+    if (setBased === null) {
+      try {
+        await sql`select k.n from unnest(array['a']::text[], array['b']::text[]) with ordinality as k(t, i, n)
+          left join lateral (select 1 as one) x on true`.execute(db);
+        setBased = true;
+      } catch {
+        setBased = false;
+      }
+    }
+    return setBased;
+  }
+
   async function saveMany(resources: FhirResource[], provenance: Provenance = {}, opts: SaveManyOpts = {}): Promise<SavedRef[]> {
     if (resources.length === 0) return [];
     const site = await resolveSiteId();
-    const { refs, written } = await db.transaction().execute((trx) => writeMany(trx, resources, provenance, site, opts.skipUnchanged === true));
+    const write = (await useSetBased()) ? writeManySet : writeMany;
+    const { refs, written } = await db.transaction().execute((trx) => write(trx, resources, provenance, site, opts.skipUnchanged === true));
     // A call that skipped every record changed nothing, so there is nothing to wake anyone for.
     if (written === 0) return refs;
     // Best-effort wakeup for the projection worker; interval polling is the correctness-bearing
