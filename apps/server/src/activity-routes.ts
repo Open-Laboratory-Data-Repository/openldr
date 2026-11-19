@@ -15,7 +15,7 @@ export function registerActivityRoutes(app: FastifyInstance<any, any, any, any>,
 
   // How far the warehouse is behind the records saved. The dashboard and the reports read the
   // warehouse, so this is what tells a reader that their numbers are not complete yet.
-  app.get('/api/warehouse/status', VIEW, async () => ctx.warehouseStatus.read());
+  app.get('/api/warehouse/status', VIEW, async () => ({ ...(await ctx.warehouseStatus.read()), datasetsBuilding: ctx.warehouseDatasets.building() }));
 
   app.get('/api/activity/:correlationId', VIEW, async (req, reply) => {
     const { correlationId } = req.params as { correlationId: string };

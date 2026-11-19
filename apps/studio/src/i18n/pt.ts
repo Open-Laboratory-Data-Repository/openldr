@@ -1196,6 +1196,7 @@ export const pt: EnShape = {
       },
       rate: '{{rate}} por segundo',
       shownUpTo: 'dados até {{when}}',
+      datasetsBuilding: 'a reconstruir conjuntos de dados',
       waitingRetry_one: '{{records}} recusado, a aguardar nova tentativa',
       waitingRetry_other: '{{records}} recusados, a aguardar nova tentativa',
     },

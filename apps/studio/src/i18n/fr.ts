@@ -1196,6 +1196,7 @@ export const fr: EnShape = {
       },
       rate: '{{rate}} par seconde',
       shownUpTo: 'données jusqu’à {{when}}',
+      datasetsBuilding: 'reconstruction des jeux de données',
       waitingRetry_one: '{{records}} refusé, nouvel essai en attente',
       waitingRetry_other: '{{records}} refusés, nouvel essai en attente',
     },

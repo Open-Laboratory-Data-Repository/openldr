@@ -397,6 +397,8 @@ const NOT_A_PATH: Record<string, string[]> = {
   'market remove': ['id', 'version'],
   'artifact publish': ['--approved-by'],
   'db warehouse-status': ['--seconds'],
+  'db datasets rebuild': ['name'],
+  'db datasets delete': ['name'],
 };
 
 describe('paths on app commands', () => {

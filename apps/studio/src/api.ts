@@ -3544,6 +3544,8 @@ export interface WarehouseStatus {
   appliedPerSecond: number | null;
   secondsLeft: number | null;
   fallingBehind: boolean;
+  /** True while the server rebuilds a pack's datasets. Absent from a server older than pack datasets. */
+  datasetsBuilding?: boolean;
 }
 export const fetchWarehouseStatus = (): Promise<WarehouseStatus> =>
   authFetch('/api/warehouse/status').then((r) => okJson<WarehouseStatus>(r, 'load warehouse status'));

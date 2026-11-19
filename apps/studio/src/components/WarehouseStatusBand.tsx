@@ -64,6 +64,7 @@ export function WarehouseStatusBand({ className }: { className?: string }) {
   const details = [
     behind && status.appliedPerSecond !== null ? t('activity.warehouse.rate', { rate: n(status.appliedPerSecond) }) : null,
     behind && upTo ? t('activity.warehouse.shownUpTo', { when: upTo }) : null,
+    status.datasetsBuilding ? t('activity.warehouse.datasetsBuilding') : null,
     status.waitingRetry > 0 ? t('activity.warehouse.waitingRetry', { count: status.waitingRetry, records: n(status.waitingRetry) }) : null,
   ].filter((d): d is string => d !== null);
 

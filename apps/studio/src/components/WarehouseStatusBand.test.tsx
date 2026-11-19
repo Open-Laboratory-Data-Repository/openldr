@@ -47,6 +47,12 @@ describe('WarehouseStatusBand', () => {
     expect(await screen.findByText('3 refused, waiting to retry')).toBeInTheDocument();
   });
 
+  it('says_when_pack_datasets_are_being_rebuilt', async () => {
+    status.mockResolvedValue({ ...base, datasetsBuilding: true });
+    render(<WarehouseStatusBand />);
+    expect(await screen.findByText('rebuilding datasets')).toBeInTheDocument();
+  });
+
   it('shows_nothing_when_the_status_cannot_be_read', async () => {
     offline = 1;
     const { container } = render(<WarehouseStatusBand />);

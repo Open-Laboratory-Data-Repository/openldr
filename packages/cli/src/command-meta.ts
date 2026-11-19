@@ -213,6 +213,11 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // maintenance action, so it takes the danger zone's key (settings-routes.ts:32, :507).
   'db reproject': { kind: 'app', capability: 'settings.danger_zone', destructive: true },
   'db warehouse-status': { kind: 'app', capability: 'activity.view' },
+  // Listing is a read, so it takes the same view key as `db warehouse-status`. Changes take
+  // query.manage, as the Query page's dataset routes do.
+  'db datasets list': { kind: 'app', capability: 'activity.view' },
+  'db datasets rebuild': { kind: 'app', capability: 'query.manage' },
+  'db datasets delete': { kind: 'app', capability: 'query.manage', destructive: true },
 
   // No route exports the whole dataset, patient details included. data.export is new, and only
   // lab_admin holds it.

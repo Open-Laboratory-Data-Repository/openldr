@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   seedDatabase: vi.fn(),
   recordAuditEvent: vi.fn(),
   reprojectAll: vi.fn(),
+  listDatasetsWithState: vi.fn(),
 }));
 
 vi.mock('@openldr/config', () => ({
@@ -19,6 +20,7 @@ vi.mock('@openldr/bootstrap', () => ({
   createAppContext: mocks.createAppContext,
   seedDatabase: mocks.seedDatabase,
   recordAuditEvent: mocks.recordAuditEvent,
+  listDatasetsWithState: mocks.listDatasetsWithState,
 }));
 
 vi.mock('@openldr/db', () => ({
@@ -397,3 +399,74 @@ describe('db warehouse-status', () => {
     expect(warehouseStatusLines({ ...base, appliedPerSecond: 50, secondsLeft: null, fallingBehind: true })[3]).toBe('timeLeft = falling behind: records are being saved faster than the warehouse takes them');
   });
 });
+
+describe('db datasets', () => {
+  const service = { rebuild: vi.fn(), remove: vi.fn() };
+  let out = '';
+  let err = '';
+  beforeEach(() => {
+    out = ''; err = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((c: unknown) => { out += String(c); return true; });
+    vi.spyOn(process.stderr, 'write').mockImplementation((c: unknown) => { err += String(c); return true; });
+    service.rebuild.mockReset(); service.remove.mockReset();
+    mocks.listDatasetsWithState.mockReset(); mocks.recordAuditEvent.mockReset(); mocks.dbCtx.close.mockReset(); mocks.appCtx.close.mockReset();
+    mocks.createDbContext.mockResolvedValue({ ...mocks.dbCtx, warehouseDatasets: service });
+    mocks.createAppContext.mockResolvedValue(mocks.appCtx);
+  });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('list_prints_one_line_for_each_dataset', async () => {
+    mocks.listDatasetsWithState.mockResolvedValue([
+      { name: 'zm_request_times', ownerPack: 'reports-zm', rowCount: 4239703, builtAt: '2026-11-19T11:00:00.000Z', buildMs: 28400, lastError: null, stale: false },
+      { name: 'zm_broken', ownerPack: 'reports-zm', rowCount: null, builtAt: null, buildMs: null, lastError: 'relation "nope" does not exist', stale: true },
+    ]);
+    const { runDbDatasetsList } = await import('./db');
+    expect(await runDbDatasetsList({ json: false })).toBe(0);
+    expect(out.trimEnd().split('\n')).toEqual([
+      'zm_request_times  reports-zm  4239703 rows  built 2026-11-19T11:00:00.000Z in 28 s',
+      'zm_broken  reports-zm  not built  stale  error: relation "nope" does not exist',
+    ]);
+    expect(mocks.dbCtx.close).toHaveBeenCalled();
+  });
+
+  it('list_says_so_when_there_are_none', async () => {
+    mocks.listDatasetsWithState.mockResolvedValue([]);
+    const { runDbDatasetsList } = await import('./db');
+    expect(await runDbDatasetsList({ json: false })).toBe(0);
+    expect(out).toBe('No datasets. A content pack installs them.\n');
+  });
+
+  it('rebuild_prints_each_result_audits_and_fails_when_a_build_failed', async () => {
+    service.rebuild.mockResolvedValue([{ name: 'one', ok: true, rows: 7, ms: 1200 }, { name: 'two', ok: false, error: 'relation "nope" does not exist' }]);
+    const { runDbDatasetsRebuild } = await import('./db');
+    expect(await runDbDatasetsRebuild(undefined, { json: false })).toBe(1);
+    expect(service.rebuild).toHaveBeenCalledWith(undefined);
+    expect(out.trimEnd().split('\n')).toEqual(['one  rebuilt  7 rows in 1 s', 'two  failed  relation "nope" does not exist']);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(mocks.appCtx, expect.objectContaining({ actorType: 'cli' }), expect.objectContaining({ action: 'dataset.rebuild', entityType: 'dataset', entityId: 'all' }));
+  });
+
+  it('rebuild_of_an_unknown_name_fails_with_one_line', async () => {
+    service.rebuild.mockRejectedValue(new Error('no dataset named nope'));
+    const { runDbDatasetsRebuild } = await import('./db');
+    expect(await runDbDatasetsRebuild('nope', { json: false })).toBe(1);
+    expect(err).toBe('no dataset named nope\n');
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('delete_refuses_without_force', async () => {
+    const { runDbDatasetsDelete } = await import('./db');
+    expect(await runDbDatasetsDelete('abc', { json: false, force: false })).toBe(1);
+    expect(err).toContain('db datasets delete refused');
+    expect(service.remove).not.toHaveBeenCalled();
+  });
+
+  it('delete_with_force_removes_and_audits', async () => {
+    service.remove.mockResolvedValue(undefined);
+    const { runDbDatasetsDelete } = await import('./db');
+    expect(await runDbDatasetsDelete('abc', { json: false, force: true })).toBe(0);
+    expect(service.remove).toHaveBeenCalledWith('abc');
+    expect(out).toBe('Deleted the dataset abc.\n');
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(mocks.appCtx, expect.objectContaining({ actorType: 'cli' }), expect.objectContaining({ action: 'dataset.delete', entityId: 'abc' }));
+  });
+});
+

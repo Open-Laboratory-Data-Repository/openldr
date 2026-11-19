@@ -18,6 +18,7 @@ function fakeCtx() {
         getLifecycle: async (id: string) => { calls.getLifecycle.push(id); return id === 'A' ? LIFECYCLE : null; },
       },
       warehouseStatus: { read: async () => WAREHOUSE },
+      warehouseDatasets: { building: () => true },
     } as any,
     calls,
   };
@@ -75,7 +76,8 @@ describe('activity routes', () => {
     const app = appWithUser(['lab_admin'], (a) => registerActivityRoutes(a, ctx), ['activity.view']);
     const res = await app.inject({ method: 'GET', url: '/api/warehouse/status' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual(WAREHOUSE);
+    // With whether pack datasets are being rebuilt in this server right now.
+    expect(res.json()).toEqual({ ...WAREHOUSE, datasetsBuilding: true });
   });
 
   it('GET /api/warehouse/status is refused without activity.view', async () => {
