@@ -269,6 +269,12 @@ export function buildProgram(): Command {
     .action(async (plugin: string, copy: string, key: string, opts: { set: string[]; reason?: string; json: boolean }) => {
       try { process.exitCode = await runImportCheckCorrect(plugin, copy, key, opts); } catch (err) { process.stderr.write(`import check correct failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
+  checkRuns.command('choices <plugin> <copy>').description('List the values a held request\'s fields may be corrected to, such as the specimen codes of the source')
+    .option('--field <name>', 'only this field')
+    .option('--json', 'emit JSON', false)
+    .action(async (plugin: string, copy: string, opts: { field?: string; json: boolean }) => {
+      try { process.exitCode = await runImportCheckChoices(plugin, copy, opts); } catch (err) { process.stderr.write(`import check choices failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
   checkRuns.command('recheck <plugin> <copy> <key>').description('Check one corrected held request again, in the run that held it').option('--json', 'emit JSON', false)
     .action(async (plugin: string, copy: string, key: string, opts: { json: boolean }) => {
       try { process.exitCode = await runImportCheckRecheck(plugin, copy, key, opts); } catch (err) { process.stderr.write(`import check recheck failed: ${redactError(err)}\n`); process.exitCode = 1; }
@@ -1842,5 +1848,5 @@ import { runDoctor } from './doctor';
 import {
   runImportAllow, runImportAllowed, runImportFailures, runImportResume, runImportRevoke, runImportStart, runImportStatus, runImportStop,
 } from './import';
-import { runImportCheckCorrect, runImportCheckHeld, runImportCheckRecheck, runImportCheckStart, runImportCheckStatus, runImportCheckStop } from './import-check';
+import { runImportCheckChoices, runImportCheckCorrect, runImportCheckHeld, runImportCheckRecheck, runImportCheckStart, runImportCheckStatus, runImportCheckStop } from './import-check';
 import { runImportCopyDelete, runImportCopyStart, runImportCopyStatus, runImportCopyStop } from './import-copy';

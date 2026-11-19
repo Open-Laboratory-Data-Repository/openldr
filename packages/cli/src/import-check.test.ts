@@ -27,7 +27,7 @@ vi.mock('@openldr/bootstrap', () => ({
 
 import { COMMAND_META } from './command-meta';
 import {
-  formatCheckRun, runImportCheckCorrect, runImportCheckHeld, runImportCheckRecheck, runImportCheckStart, runImportCheckStatus, runImportCheckStop,
+  formatCheckRun, runImportCheckChoices, runImportCheckCorrect, runImportCheckHeld, runImportCheckRecheck, runImportCheckStart, runImportCheckStatus, runImportCheckStop,
 } from './import-check';
 
 // A source key and a patient value that must never be printed from a run. The key sits in the cursor.
@@ -239,6 +239,27 @@ describe('import check CLI', () => {
       checks.recheck = vi.fn(async () => run({ status: 'queued', driver: null, recheck: { keys: [SECRET_KEY], returnTo: 'completed', finishedAt: null } } as never));
       expect(await runImportCheckRecheck('v1-check', 'c0ffee', SECRET_KEY, { json: true })).toBe(0);
       expect(out.join('')).not.toContain(SECRET_KEY);
+    });
+
+    // demo.4 item 11: the values a person may pick, so a correction from the CLI can use a real code.
+    it('choices prints each field with its codes and names, and --field keeps one field', async () => {
+      (checks as Record<string, unknown>).choices = vi.fn(async () => ({
+        specimen: [{ code: 'BM', description: 'Bone marrow' }, { code: 'FNA', description: 'Fine needle aspirate' }],
+        sex: [{ code: 'F', description: 'Female' }],
+      }));
+      expect(await runImportCheckChoices('v1-check', 'c0ffee', { json: false })).toBe(0);
+      expect((checks as Record<string, ReturnType<typeof vi.fn>>).choices).toHaveBeenCalledWith('v1-check', 'c0ffee');
+      expect(out.join('')).toBe('specimen  BM  Bone marrow\nspecimen  FNA  Fine needle aspirate\nsex  F  Female\n');
+      out.length = 0;
+      expect(await runImportCheckChoices('v1-check', 'c0ffee', { json: true, field: 'specimen' })).toBe(0);
+      expect(JSON.parse(out.join(''))).toEqual({ specimen: [{ code: 'BM', description: 'Bone marrow' }, { code: 'FNA', description: 'Fine needle aspirate' }] });
+      expect(mocks.recordCheckRead).toHaveBeenCalledWith(expect.anything(), expect.anything(), { pluginId: 'v1-check', copyId: 'c0ffee', kind: 'choices' });
+    });
+
+    it('choices says so when a field has no list', async () => {
+      (checks as Record<string, unknown>).choices = vi.fn(async () => ({}));
+      expect(await runImportCheckChoices('v1-check', 'c0ffee', { json: false, field: 'specimen' })).toBe(0);
+      expect(out.join('')).toBe('no list of values for specimen\n');
     });
 
     it('recheck queues the run and prints it', async () => {

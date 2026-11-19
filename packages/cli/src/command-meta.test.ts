@@ -239,6 +239,7 @@ const REASON: Record<string, string> = {
   '--start-page': 'a Studio page route, not a file', '--status': CHOICE, '--submit': 'role slugs or ids, comma separated', '--survivor': ID, '--system': URI,
   '--timezone': 'an IANA time zone name', '--to': WHEN, '--url': URI, '--username': ID, '--valueset': URI,
   '--version': 'a version number', '--where': FILTER, '--year': WHEN,
+  '--field': 'a correctable field name, not a file',
   '--facility': 'register facility ids, comma separated', '--district': 'Region/District names, comma separated', '--region': 'region names, comma separated',
 };
 // Per command, so a new option is reviewed for that command and not let through by its name alone.
@@ -271,6 +272,7 @@ const NOT_A_PATH: Record<string, string[]> = {
   'import check stop': ['plugin', 'run'],
   'import check correct': ['plugin', 'copy', 'key', '--set', '--reason'],
   'import check recheck': ['plugin', 'copy', 'key'],
+  'import check choices': ['plugin', 'copy', '--field'],
   'import check held': ['plugin', 'copy', '--label', '--reason', '--laboratory', '--offset', '--limit'],
   'settings flags set': ['key', 'value'],
   'settings numbers set': ['key', 'value'],

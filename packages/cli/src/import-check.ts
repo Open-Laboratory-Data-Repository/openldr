@@ -160,6 +160,35 @@ export async function runImportCheckCorrect(pluginId: string, copyId: string, ke
   } finally { await ctx.close(); }
 }
 
+export interface ImportCheckChoicesOpts extends JsonOpt {
+  /** One field only. */
+  field?: string;
+}
+
+/** `import check choices`: the values a person may pick for each correctable field that has a
+ *  fixed list, read from the copy's dictionaries by the plugin (demo.4 item 11). Use a code from it
+ *  in `import check correct --set field=code`. */
+export async function runImportCheckChoices(pluginId: string, copyId: string, opts: ImportCheckChoicesOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const all = await ctx.importChecks.choices(pluginId, copyId);
+    // The list comes from the copy's dictionaries, so the read is audited as the held reads are.
+    await recordCheckRead(ctx, cliNamedActor(), { pluginId, copyId, kind: 'choices' });
+    const shown = opts.field === undefined ? all : (all[opts.field] ? { [opts.field]: all[opts.field]! } : {});
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(shown) + '\n');
+      return 0;
+    }
+    const lines = Object.entries(shown).flatMap(([field, list]) => list.map((c) => `${field}  ${c.code}  ${c.description}`));
+    if (lines.length === 0) {
+      process.stdout.write(opts.field === undefined ? 'no field of this plugin has a list of values\n' : `no list of values for ${opts.field}\n`);
+      return 0;
+    }
+    process.stdout.write(lines.join('\n') + '\n');
+    return 0;
+  } finally { await ctx.close(); }
+}
+
 /** `import check recheck`: checks one corrected held request again, in the run that held it. */
 export async function runImportCheckRecheck(pluginId: string, copyId: string, key: string, opts: JsonOpt): Promise<number> {
   const ctx = await createAppContext(loadConfig());
