@@ -22,7 +22,18 @@ export function createProjectionWorker(deps: ProjectionWorkerDeps): ProjectionWo
   function tickOnce(): Promise<void> {
     if (stopped) return Promise.resolve();
     if (activeCycle) return activeCycle;
-    activeCycle = Promise.resolve().then(() => deps.runCycle()).then(() => undefined)
+    // A cycle takes one batch. While a cycle still projects something there may be more waiting,
+    // so the next one starts at once (item 16). Waiting for the next notify or the 2 s timer here
+    // left the warehouse 205 s behind a 20 s import check. Each cycle yields to the event loop
+    // first, so a long catch-up does not starve the rest of the server.
+    activeCycle = (async () => {
+      for (;;) {
+        if (stopped) return;
+        const projected = await deps.runCycle();
+        if (!(projected > 0)) return;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    })()
       .catch((err) => { deps.logger.error({ err }, 'projection cycle failed'); })
       .finally(() => { activeCycle = undefined; });
     return activeCycle;

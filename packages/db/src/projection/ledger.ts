@@ -68,6 +68,30 @@ export function toArrivalEvent(row: ResourceHistoryRow): ArrivalEvent {
  *  null`) is data going AWAY, not an arrival. `ingest_events` has no `op` column to record a
  *  retraction separately — if that is ever needed it is a deliberate design change with its own
  *  migration, not a filter tweak here. */
+/** `readArrivals` for a whole batch: every arrival of every given record, in a statement per
+ *  resource type. The same rows `readArrivals` gives for each record alone. */
+export async function readArrivalsMany(
+  internalDb: Kysely<InternalSchema>, keys: Array<{ resourceType: string; id: string }>,
+): Promise<ArrivalEvent[]> {
+  const byType = new Map<string, string[]>();
+  for (const k of keys) byType.set(k.resourceType, [...(byType.get(k.resourceType) ?? []), k.id]);
+  const out: ArrivalEvent[] = [];
+  for (const [resourceType, ids] of byType) {
+    for (let i = 0; i < ids.length; i += 1000) {
+      const rows = await internalDb
+        .selectFrom('fhir.resource_history')
+        .select(['resource_type', 'id', 'version', 'recorded_at'])
+        .where('resource_type', '=', resourceType)
+        .where('id', 'in', ids.slice(i, i + 1000))
+        .where('op', '=', 'upsert')
+        .orderBy('id').orderBy('version')
+        .execute();
+      for (const row of rows) out.push(toArrivalEvent(row));
+    }
+  }
+  return out;
+}
+
 export async function readArrivals(
   internalDb: Kysely<InternalSchema>, resourceType: string, id: string,
 ): Promise<ArrivalEvent[]> {

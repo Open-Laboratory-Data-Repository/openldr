@@ -26,6 +26,31 @@ describe('createProjectionWorker', () => {
     }
   });
 
+  it('one_tick_keeps_running_cycles_until_one_projects_nothing (item 16)', async () => {
+    const answers = [3, 2, 0, 5];
+    const runCycle = vi.fn(async () => answers.shift() ?? 0);
+    const worker = createProjectionWorker({ runCycle, intervalMs: 60_000, logger: { info() {}, error() {} } });
+    try {
+      await worker.tickOnce();
+      // 3, then 2, then 0 ends the tick. The 5 waits for the next tick.
+      expect(runCycle).toHaveBeenCalledTimes(3);
+      await worker.tickOnce();
+      expect(runCycle).toHaveBeenCalledTimes(5);
+    } finally {
+      await worker.stop();
+    }
+  });
+
+  it('a_stop_ends_the_catch_up_after_the_cycle_in_flight (item 16)', async () => {
+    let calls = 0;
+    let worker!: ReturnType<typeof createProjectionWorker>;
+    const runCycle = vi.fn(async () => { calls += 1; if (calls === 2) void worker.stop(); return 1; });
+    worker = createProjectionWorker({ runCycle, intervalMs: 60_000, logger: { info() {}, error() {} } });
+    await worker.tickOnce();
+    await worker.stop();
+    expect(runCycle).toHaveBeenCalledTimes(2);
+  });
+
   it('waits for a blocked cycle and rejects future dispatch after stop', async () => {
     let release!: () => void;
     const blocked = new Promise<void>((resolve) => { release = resolve; });
