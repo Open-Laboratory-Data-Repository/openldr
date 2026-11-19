@@ -130,6 +130,8 @@ Votre laboratoire peut aussi proposer des dispositions nommées de la barre lat�
 
 Sans choix personnel, Studio utilise la page de démarrage de votre disposition lorsqu'elle est disponible. Sinon, il ouvre le tableau de bord. Choisir explicitement **Tableau de bord** l'ouvre en premier.
 
+Si votre rôle ne peut pas ouvrir le tableau de bord, Studio ouvre votre page de démarrage, ou sinon la première page de votre barre latérale.
+
 ## Dépannage
 
 **La page choisie ne s'ouvre pas en premier**

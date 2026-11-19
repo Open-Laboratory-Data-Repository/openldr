@@ -130,6 +130,8 @@ Your lab may also offer named sidebar layouts. If **Layout** appears in your use
 
 Without your own start-page choice, Studio uses your layout's start page when it is available. Otherwise it opens Dashboard. Choosing **Dashboard** explicitly makes Dashboard open first.
 
+If your role cannot open Dashboard, Studio opens your start page, or else the first page in your sidebar.
+
 ## Troubleshooting
 
 **My chosen page does not open first**
