@@ -15,6 +15,10 @@ import type { PluginRunner, RunOptions } from './runner';
  *     - No egress requested (allowedHosts empty) -> FOREGROUND (in-process). Faster (no
  *       worker spawn); used by ingest converters and sink dry-runs. HTTP is unavailable
  *       here — the http_request stub throws if a foreground plugin attempts egress.
+ *     - `offThread` asked for, in a process that allows it -> WORKER too, with no egress. Used by
+ *       the import check's decode call, which takes over a second a page and would hold the
+ *       main thread for that long. A new worker starts for each call (about 20 ms), so a small
+ *       call is faster in the foreground and must not ask for this.
  *     - Egress requested (allowedHosts non-empty) -> WORKER (off-thread). The SDK's
  *       HttpContext performs the fetch on the host restricted to allowedHosts and bridges
  *       it back to the synchronous wasm call via SharedArrayBuffer + Atomics. This is the
@@ -41,6 +45,24 @@ import type { PluginRunner, RunOptions } from './runner';
  * marker — so the marker names the plugin id + entrypoint that was running when the worker
  * took the process down.
  */
+const LOADER_FLAGS = ['--import', '--require', '-r', '--loader', '--experimental-loader'];
+
+/**
+ * Whether a plugin call can run on a worker thread in this process. Not when the process was
+ * started with a loader flag: the SDK's worker inherits it, and under `tsx` that crashes the whole
+ * process (apps/server/dev.mjs says why). The server, the standalone and the CLI start clean.
+ */
+export function canRunOffThread(execArgv: readonly string[] = process.execArgv): boolean {
+  return !execArgv.some((arg) => LOADER_FLAGS.some((flag) => arg === flag || arg.startsWith(`${flag}=`)));
+}
+
+/** Whether this call takes the worker path: always for pinned hosts, as before; for `offThread`
+ *  only where `canRunOffThread` allows it. */
+export function usesWorker(opts: Pick<RunOptions, 'allowedHosts' | 'offThread'>, execArgv: readonly string[] = process.execArgv): boolean {
+  if ((opts.allowedHosts?.length ?? 0) > 0) return true;
+  return opts.offThread === true && canRunOffThread(execArgv);
+}
+
 export function createExtismRunner(): PluginRunner {
   return {
     async run(wasm: Uint8Array, input: Uint8Array, opts: RunOptions): Promise<Uint8Array> {
@@ -51,7 +73,8 @@ export function createExtismRunner(): PluginRunner {
 
       // Egress requires the off-thread worker path — the only one that can perform HTTP.
       // No host pinned ⇒ stay in-process (ingest converters, sink dry-runs): faster, no egress.
-      const useWorker = (opts.allowedHosts?.length ?? 0) > 0;
+      // A call that asks for `offThread` takes the worker too, where the process allows it.
+      const useWorker = usesWorker(opts);
 
       const plugin = await createPlugin(
         { wasm: [{ data: wasm }] },

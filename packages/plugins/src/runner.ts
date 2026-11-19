@@ -11,6 +11,8 @@ export interface RunOptions {
   host: RunnerHostFns;
   config?: Record<string, string>;
   allowedHosts?: string[]; // net-egress allowlist; undefined/[] = default-deny (no egress)
+  /** Runs the call on a worker thread when the process allows it (see `canRunOffThread`). */
+  offThread?: boolean;
 }
 
 /**
