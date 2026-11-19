@@ -218,10 +218,10 @@ La ligne **Entrepôt** en haut d'Activity indique où il en est. Elle se met à 
 | La ligne indique | Signification |
 | --- | --- |
 | À jour | Tout ce qui est enregistré est dans l'entrepôt. Les tableaux de bord et les rapports sont complets. |
-| Des modifications de retard, avec un temps restant | L'entrepôt rattrape son retard. Le temps est une estimation calculée sur les dernières secondes. |
+| Un nombre en retard, avec un temps restant | L'entrepôt rattrape son retard. Le temps est une estimation calculée sur les dernières secondes. |
 | Le retard augmente | Les enregistrements arrivent plus vite que l'entrepôt ne les prend, comme pendant un import. Le temps restant apparaît à la fin de l'import. |
 
-**Affiche les enregistrements jusqu'au** donne l'heure du plus ancien enregistrement encore en attente. Les rapports sont complets pour ce qui a été enregistré avant.
+**données jusqu'à** donne l'heure du plus ancien enregistrement encore en attente. Les rapports sont complets pour ce qui a été enregistré avant.
 
 Dans un terminal, `openldr db warehouse-status` affiche les mêmes chiffres.
 

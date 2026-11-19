@@ -54,34 +54,49 @@ export function WarehouseStatusBand({ className }: { className?: string }) {
     const p = timeLeftParts(status.secondsLeft);
     timeLeft = t(`activity.warehouse.left.${p.key}`, { hours: p.hours, minutes: p.minutes });
   }
-  const upTo = status.oldestWaitingAt
-    ? new Date(status.oldestWaitingAt).toLocaleString(i18n.language, { dateStyle: 'medium', timeStyle: 'short' })
-    : null;
+  // Today's records need the time only. Older ones need the date too.
+  let upTo: string | null = null;
+  if (status.oldestWaitingAt) {
+    const at = new Date(status.oldestWaitingAt);
+    const today = at.toDateString() === new Date().toDateString();
+    upTo = at.toLocaleString(i18n.language, today ? { timeStyle: 'short' } : { dateStyle: 'medium', timeStyle: 'short' });
+  }
+  const details = [
+    behind && status.appliedPerSecond !== null ? t('activity.warehouse.rate', { rate: n(status.appliedPerSecond) }) : null,
+    behind && upTo ? t('activity.warehouse.shownUpTo', { when: upTo }) : null,
+    status.waitingRetry > 0 ? t('activity.warehouse.waitingRetry', { count: status.waitingRetry, records: n(status.waitingRetry) }) : null,
+  ].filter((d): d is string => d !== null);
 
   return (
     <div
       role="status"
       aria-label={t('activity.warehouse.label')}
-      className={cn('flex flex-col gap-1 border-b border-border px-3 py-2 text-sm', className)}
+      className={cn('flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-3 py-2 text-sm', className)}
     >
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span
-          aria-hidden
-          className={cn('h-2 w-2 shrink-0 rounded-full', behind ? 'bg-amber-500' : 'bg-emerald-500')}
-        />
-        <span className="font-medium">{t('activity.warehouse.label')}</span>
-        <span>{behind ? t('activity.warehouse.behind', { changes: n(status.behind) }) : t('activity.warehouse.upToDate')}</span>
-        {behind && <span className="font-medium">{timeLeft}</span>}
-      </div>
-      {behind && (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 pl-4 text-xs text-muted-foreground">
-          {status.appliedPerSecond !== null && <span>{t('activity.warehouse.rate', { rate: n(status.appliedPerSecond) })}</span>}
-          {upTo && <span>{t('activity.warehouse.shownUpTo', { when: upTo })}</span>}
-        </div>
+      <span className="flex items-center gap-2">
+        <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', behind ? 'bg-amber-500' : 'bg-emerald-500')} />
+        <span className="text-muted-foreground">{t('activity.warehouse.label')}</span>
+      </span>
+      {behind ? (
+        <>
+          <span className="font-medium tabular-nums">{t('activity.warehouse.behind', { changes: n(status.behind) })}</span>
+          <span className="font-medium tabular-nums">
+            <span aria-hidden className="mr-3 font-normal text-muted-foreground">/</span>
+            {timeLeft}
+          </span>
+        </>
+      ) : (
+        <span className="font-medium">{t('activity.warehouse.upToDate')}</span>
       )}
-      {behind && <p className="pl-4 text-xs text-muted-foreground">{t('activity.warehouse.meaning')}</p>}
-      {status.waitingRetry > 0 && (
-        <p className="pl-4 text-xs text-muted-foreground">{t('activity.warehouse.waitingRetry', { count: status.waitingRetry, records: n(status.waitingRetry) })}</p>
+      {details.length > 0 && (
+        <span className="flex flex-wrap items-center gap-x-2 text-xs tabular-nums text-muted-foreground sm:ml-auto">
+          {details.map((d, i) => (
+            <span key={d} className="flex items-center gap-x-2">
+              {i > 0 && <span aria-hidden>·</span>}
+              {d}
+            </span>
+          ))}
+        </span>
       )}
     </div>
   );
