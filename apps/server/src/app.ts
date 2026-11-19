@@ -233,6 +233,8 @@ export async function buildApp(ctx: AppContext) {
       },
       rebuild: async (name) => (await ctx.warehouseDatasets.rebuild(name))[0]!,
       remove: (name) => ctx.warehouseDatasets.remove(name),
+      setGroup: (name, group) => ctx.warehouseDatasets.setGroup(name, group),
+      renameGroup: (from, to) => ctx.warehouseDatasets.renameGroup(from, to),
     },
     runConnectorSql: (input) => {
       // Optional on WorkflowServices, but always wired in bootstrap for the server context.

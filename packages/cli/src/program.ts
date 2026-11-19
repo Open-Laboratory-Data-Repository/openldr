@@ -5,7 +5,7 @@ import { exitCodeFor, formatHealthTable } from './format';
 import { redactError } from './redact-error';
 import { sendLogsToStderr } from '@openldr/core';
 import { runFhirValidate, formatFhirValidate } from './fhir';
-import { runDbMigrate, runDbReset, runDbSeed, runDbReproject, runDbWarehouseStatus, runDbDatasetsList, runDbDatasetsRebuild, runDbDatasetsDelete } from './db';
+import { runDbMigrate, runDbReset, runDbSeed, runDbReproject, runDbWarehouseStatus, runDbDatasetsList, runDbDatasetsRebuild, runDbDatasetsDelete, runDbDatasetsMove } from './db';
 import { runAuthRebindIssuer, runAuthSetupCode } from './auth';
 import { runDashboardsShare } from './dashboards';
 import { runUsersScope, type UsersScopeOpts } from './users-scope';
@@ -472,6 +472,18 @@ export function buildProgram(): Command {
         process.exitCode = await runDbDatasetsRebuild(name, opts);
       } catch (err) {
         process.stderr.write(`db datasets rebuild failed: ${redactError(err)}\n`);
+        process.exitCode = 1;
+      }
+    });
+  datasets.command('move <name>')
+    .description('Put a dataset in a Query page group, or in none when --group is left out')
+    .option('--group <group>', 'the group to move it to; a new name makes the group')
+    .option('--json', 'emit JSON', false)
+    .action(async (name: string, opts: { json: boolean; group?: string }) => {
+      try {
+        process.exitCode = await runDbDatasetsMove(name, opts);
+      } catch (err) {
+        process.stderr.write(`db datasets move failed: ${redactError(err)}\n`);
         process.exitCode = 1;
       }
     });

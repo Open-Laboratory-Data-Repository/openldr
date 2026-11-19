@@ -2111,6 +2111,8 @@ export const en = {
   },
   query: {
     dataset: {
+      groupDescription: 'Groups arrange the Datasets list. A dataset keeps working whichever group it is in.',
+      confirmDeleteGroupBody: 'Its datasets are not deleted. They move out of the group.',
       rowActions: 'Actions for {{name}}',
       details: 'Details',
       rebuild: 'Rebuild',

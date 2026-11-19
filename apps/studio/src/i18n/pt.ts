@@ -2001,6 +2001,8 @@ export const pt: EnShape = {
   },
   query: {
     dataset: {
+      groupDescription: 'Os grupos organizam a lista Datasets. Um conjunto de dados funciona em qualquer grupo.',
+      confirmDeleteGroupBody: 'Os seus conjuntos de dados não são eliminados. Saem do grupo.',
       rowActions: 'Ações para {{name}}',
       details: 'Detalhes',
       rebuild: 'Reconstruir',

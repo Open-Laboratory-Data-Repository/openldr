@@ -378,6 +378,8 @@ Select the dots, then **Rebuild**. A message says when it finishes. On a large w
 
 **Expected result:** The row count and the last-built time update.
 
+A dataset starts in a group named for the pack that installed it. To move it, select the dots, then **Move to group**. Choose a group, **New group**, or **No group**. The dots beside a group rename or delete the group. Deleting a group keeps its datasets.
+
 OpenLDR also rebuilds datasets by itself, once the warehouse has caught up with what was saved. During a large import nothing rebuilds until the import ends. So a report that reads a dataset can be one rebuild behind the warehouse. The **Warehouse** line on [Activity](/docs/activity) says "rebuilding datasets" while that runs.
 
 From a terminal, `openldr db datasets list` shows the same list, and `openldr db datasets rebuild` rebuilds them.

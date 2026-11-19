@@ -13,7 +13,7 @@ export interface DatasetRef { id: string; name: string; rowCount: number }
 /** A dataset a content pack defines. It is the warehouse table `dataset.<name>`. `connectorId` is the
  *  warehouse connector to browse it through, or null where there is none. */
 export interface PackDatasetRef {
-  name: string; ownerPack: string; rowCount: number | null; builtAt: string | null; buildMs: number | null;
+  name: string; ownerPack: string; group: string | null; rowCount: number | null; builtAt: string | null; buildMs: number | null;
   lastError: string | null; stale: boolean; connectorId: string | null;
 }
 export interface DatasetBuildResult { name: string; ok: boolean; rows?: number; ms?: number; error?: string }
@@ -35,6 +35,12 @@ export const queryApi = {
   warehouseDatasets: () => authFetch('/api/query/warehouse-datasets').then(j<PackDatasetRef[]>),
   rebuildDataset: (name: string) => authFetch(`/api/query/warehouse-datasets/${encodeURIComponent(name)}/rebuild`, { method: 'POST' }).then(j<DatasetBuildResult>),
   removeDataset: (name: string) => authFetch(`/api/query/warehouse-datasets/${encodeURIComponent(name)}`, { method: 'DELETE' }).then(j<{ ok: true }>),
+  /** Moves a pack dataset to a group, or to none with null. */
+  setDatasetGroup: (name: string, group: string | null) =>
+    authFetch(`/api/query/warehouse-datasets/${encodeURIComponent(name)}/group`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ group }) }).then(j<{ ok: true }>),
+  /** Renames a dataset group. With `to` null the group is removed and its datasets keep no group. */
+  renameDatasetGroup: (from: string, to: string | null) =>
+    authFetch('/api/query/warehouse-dataset-groups/rename', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ from, to }) }).then(j<{ moved: number }>),
   // The datasets/:name route returns { columns, rows, rowCount } with no `ms`, so omit it from the type.
   datasetRows: (name: string) => authFetch(`/api/query/datasets/${encodeURIComponent(name)}`).then(j<Omit<RunResult, 'ms'>>),
   run: (body: { connectorId: string; sql: string; params?: CustomQueryParam[]; values?: Record<string, unknown>; limit?: number; offset?: number }) =>

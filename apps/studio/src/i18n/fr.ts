@@ -2001,6 +2001,8 @@ export const fr: EnShape = {
   },
   query: {
     dataset: {
+      groupDescription: 'Les groupes organisent la liste Datasets. Un jeu de données fonctionne quel que soit son groupe.',
+      confirmDeleteGroupBody: 'Ses jeux de données ne sont pas supprimés. Ils sortent du groupe.',
       rowActions: 'Actions pour {{name}}',
       details: 'Détails',
       rebuild: 'Reconstruire',

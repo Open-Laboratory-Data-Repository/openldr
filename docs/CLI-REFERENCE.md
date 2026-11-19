@@ -58,7 +58,7 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 | `openldr fhir validate <file>` | Validate a FHIR JSON resource or bundle. |
 | `openldr db migrate/reset/seed` | Manage internal and target database schema and seed data. |
 | `openldr db warehouse-status` | Show how far the warehouse is behind the records saved, how fast it is catching up, and the time left. `--seconds <n>` sets the gap between the two readings that measure the rate (default 5, 0 reads once). Read-only. |
-| `openldr db datasets list/rebuild/delete` | The datasets a content pack defines, kept as warehouse tables. `list` shows each one's pack, rows, last build and any build error. `rebuild [name]` rebuilds one or all from the warehouse as it is now, and exits 1 if a build failed. `delete <name>` removes a dataset and its table, and refuses without `--force`. |
+| `openldr db datasets list/rebuild/move/delete` | The datasets a content pack defines, kept as warehouse tables. `list` shows each one's pack, rows, last build and any build error. `rebuild [name]` rebuilds one or all from the warehouse as it is now, and exits 1 if a build failed. `move <name> [--group <group>]` puts a dataset in a Query page group, or in none. `delete <name>` removes a dataset and its table, and refuses without `--force`. |
 | `openldr target-store test` | Probe the analytics warehouse adapter. |
 | `openldr terminology ...` | Import, query, translate, and administer terminology assets. |
 | `openldr forms list/extract` | List forms or extract QuestionnaireResponse data. |

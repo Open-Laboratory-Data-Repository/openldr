@@ -378,6 +378,8 @@ Sélectionnez les points, puis **Reconstruire**. Un message signale la fin. Sur 
 
 **Résultat attendu :** le nombre de lignes et la date de dernière construction sont mis à jour.
 
+Un jeu de données commence dans un groupe portant le nom du pack qui l'a installé. Pour le déplacer, sélectionnez les points, puis **Déplacer vers le groupe**. Choisissez un groupe, **Nouveau groupe** ou **Aucun groupe**. Les points à côté d'un groupe permettent de le renommer ou de le supprimer. Supprimer un groupe conserve ses jeux de données.
+
 OpenLDR reconstruit aussi les jeux de données lui-même, une fois l'entrepôt à jour. Pendant un import volumineux, rien n'est reconstruit avant la fin de l'import. Un rapport qui lit un jeu de données peut donc avoir une reconstruction de retard sur l'entrepôt. La ligne **Entrepôt** dans [Activity](/docs/activity) affiche « reconstruction des jeux de données » pendant ce temps.
 
 Dans un terminal, `openldr db datasets list` affiche la même liste et `openldr db datasets rebuild` les reconstruit.

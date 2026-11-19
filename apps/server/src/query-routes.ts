@@ -31,6 +31,9 @@ export interface QueryRouteDeps {
     /** Throws `no dataset named <name>` for an unknown name. A build that fails is in the result. */
     rebuild(name: string): Promise<DatasetBuildResult>;
     remove(name: string): Promise<void>;
+    /** Throws `no dataset named <name>` for an unknown name. */
+    setGroup(name: string, group: string | null): Promise<void>;
+    renameGroup(from: string, to: string | null): Promise<number>;
   };
 }
 
@@ -378,6 +381,35 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
       if (unknownDataset(e)) { reply.code(404); return { error: 'dataset not found' }; }
       throw e;
     }
+  });
+
+  // A dataset's group is where it sits in the Query page list, as a custom query's is. It starts as
+  // the name of the pack that installed it. A group is only a name the datasets carry.
+  const DatasetGroupBody = z.object({ group: z.string().max(200).nullable() });
+  app.put('/api/query/warehouse-datasets/:name/group', MANAGE, async (req, reply) => {
+    const { name } = req.params as { name: string };
+    const parsed = DatasetGroupBody.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    if (!deps.warehouseDatasets) { reply.code(404); return { error: 'dataset not found' }; }
+    try {
+      await deps.warehouseDatasets.setGroup(name, parsed.data.group);
+      await recordAudit(ctx, req, { action: 'dataset.move', entityType: 'dataset', entityId: name, before: null, after: null, metadata: { group: parsed.data.group } });
+      return { ok: true };
+    } catch (e) {
+      if (unknownDataset(e)) { reply.code(404); return { error: 'dataset not found' }; }
+      throw e;
+    }
+  });
+
+  // `to` null removes the group and keeps its datasets, with no group.
+  const RenameGroupBody = z.object({ from: z.string().min(1).max(200), to: z.string().max(200).nullable() });
+  app.post('/api/query/warehouse-dataset-groups/rename', MANAGE, async (req, reply) => {
+    const parsed = RenameGroupBody.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    if (!deps.warehouseDatasets) return { moved: 0 };
+    const moved = await deps.warehouseDatasets.renameGroup(parsed.data.from, parsed.data.to);
+    if (moved > 0) await recordAudit(ctx, req, { action: 'dataset.group.rename', entityType: 'dataset', entityId: `group:${parsed.data.from}`, before: null, after: null, metadata: { ...parsed.data, moved } });
+    return { moved };
   });
 
   // ---- Datasets ----

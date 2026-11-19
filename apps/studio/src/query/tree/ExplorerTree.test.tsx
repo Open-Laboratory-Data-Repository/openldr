@@ -13,11 +13,13 @@ vi.mock('../api', () => ({ queryApi: {
   tables: vi.fn(async () => ['products']),
   datasets: vi.fn(async () => [{ id: 'd1', name: 'AMR', rowCount: 2 }]),
   warehouseDatasets: vi.fn(async () => [
-    { name: 'zm_request_times', ownerPack: 'reports-zm', rowCount: 4239703, builtAt: '2026-11-19T11:00:00.000Z', buildMs: 28000, lastError: null, stale: false, connectorId: 'c1' },
-    { name: 'zm_broken', ownerPack: 'reports-zm', rowCount: null, builtAt: null, buildMs: null, lastError: 'relation "nope" does not exist', stale: true, connectorId: 'c1' },
+    { name: 'zm_request_times', ownerPack: 'reports-zm', group: 'reports-zm', rowCount: 4239703, builtAt: '2026-11-19T11:00:00.000Z', buildMs: 28000, lastError: null, stale: false, connectorId: 'c1' },
+    { name: 'zm_broken', ownerPack: 'reports-zm', group: 'reports-zm', rowCount: null, builtAt: null, buildMs: null, lastError: 'relation "nope" does not exist', stale: true, connectorId: 'c1' },
   ]),
   rebuildDataset: vi.fn(async (name: string) => ({ name, ok: true, rows: 7, ms: 12 })),
   removeDataset: vi.fn(async () => ({ ok: true })),
+  setDatasetGroup: vi.fn(async () => ({ ok: true })),
+  renameDatasetGroup: vi.fn(async () => ({ moved: 2 })),
   list: vi.fn(async () => [
     { id: 'cq1', name: 'Q1', connectorId: 'c1', sql: '', params: [], groupId: null },
     { id: 'cq2', name: 'TB LAM', connectorId: 'c1', sql: '', params: [], groupId: 'g1' },
@@ -199,7 +201,7 @@ describe('ExplorerTree', () => {
 });
 
 describe('pack datasets in the explorer', () => {
-  beforeEach(() => { caps = 'all'; useQueryStore.getState().reset(); vi.mocked(queryApi.rebuildDataset).mockClear(); vi.mocked(queryApi.removeDataset).mockClear(); });
+  beforeEach(() => { caps = 'all'; useQueryStore.getState().reset(); vi.mocked(queryApi.rebuildDataset).mockClear(); vi.mocked(queryApi.removeDataset).mockClear(); vi.mocked(queryApi.setDatasetGroup).mockClear(); vi.mocked(queryApi.renameDatasetGroup).mockClear(); });
 
   async function openDatasets() {
     render(<ExplorerTree />);
@@ -232,7 +234,7 @@ describe('pack datasets in the explorer', () => {
   it('offers_details_rebuild_and_delete_and_only_details_without_query_manage', async () => {
     await openDatasets();
     openMenu(screen.getByLabelText('Actions for zm_request_times'));
-    expect(within(screen.getByRole('menu')).getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Details', 'Rebuild', 'Delete dataset']);
+    expect(within(screen.getByRole('menu')).getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Details', 'Move to group', 'Rebuild', 'Delete dataset']);
   });
 
   it('offers_only_details_without_query_manage', async () => {
@@ -269,5 +271,42 @@ describe('pack datasets in the explorer', () => {
     expect(within(sheet).getByText('Not built yet')).toBeInTheDocument();
     expect(within(sheet).getByText('relation "nope" does not exist')).toBeInTheDocument();
   });
-});
 
+  it('a_dataset_with_no_group_is_listed_below_the_groups', async () => {
+    vi.mocked(queryApi.warehouseDatasets).mockResolvedValueOnce([
+      { name: 'zm_loose', ownerPack: 'reports-zm', group: null, rowCount: 3, builtAt: '2026-11-19T11:00:00.000Z', buildMs: 10, lastError: null, stale: false, connectorId: 'c1' },
+    ]);
+    render(<ExplorerTree />);
+    fireEvent.click(await screen.findByText('Datasets'));
+    expect(await screen.findByText('zm_loose')).toBeInTheDocument();
+  });
+
+  it('moves_a_dataset_to_no_group_from_its_menu', async () => {
+    await openDatasets();
+    openMenu(screen.getByLabelText('Actions for zm_request_times'));
+    const sub = screen.getByRole('menuitem', { name: 'Move to group' });
+    fireEvent.pointerMove(sub); fireEvent.keyDown(sub, { key: 'ArrowRight' });
+    await act(async () => { fireEvent.click(await screen.findByRole('menuitem', { name: 'No group' })); });
+    await waitFor(() => expect(queryApi.setDatasetGroup).toHaveBeenCalledWith('zm_request_times', null));
+  });
+
+  it('a_new_group_from_the_menu_moves_the_dataset_into_it', async () => {
+    await openDatasets();
+    openMenu(screen.getByLabelText('Actions for zm_request_times'));
+    const sub = screen.getByRole('menuitem', { name: 'Move to group' });
+    fireEvent.pointerMove(sub); fireEvent.keyDown(sub, { key: 'ArrowRight' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'New group' }));
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Turnaround' } });
+    openMenu(screen.getByRole('button', { name: 'Name actions' }));
+    await act(async () => { fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' })); });
+    await waitFor(() => expect(queryApi.setDatasetGroup).toHaveBeenCalledWith('zm_request_times', 'Turnaround'));
+  });
+
+  it('renames_a_group_and_deleting_one_keeps_its_datasets', async () => {
+    await openDatasets();
+    openMenu(screen.getByLabelText('Actions for group “reports-zm”'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete group' }));
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Delete group' })); });
+    await waitFor(() => expect(queryApi.renameDatasetGroup).toHaveBeenCalledWith('reports-zm', null));
+  });
+});

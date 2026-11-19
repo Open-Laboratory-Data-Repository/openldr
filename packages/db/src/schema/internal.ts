@@ -858,6 +858,8 @@ export interface WarehouseDatasetsTable {
   build_ms: number | null;
   row_count: number | null;
   last_error: string | null;
+  /** The Query page group it sits in (migration 132). Null: no group. */
+  group_name: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

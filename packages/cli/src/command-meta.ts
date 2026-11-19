@@ -217,6 +217,7 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // query.manage, as the Query page's dataset routes do.
   'db datasets list': { kind: 'app', capability: 'activity.view' },
   'db datasets rebuild': { kind: 'app', capability: 'query.manage' },
+  'db datasets move': { kind: 'app', capability: 'query.manage' },
   'db datasets delete': { kind: 'app', capability: 'query.manage', destructive: true },
 
   // No route exports the whole dataset, patient details included. data.export is new, and only

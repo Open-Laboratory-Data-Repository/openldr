@@ -401,7 +401,7 @@ describe('db warehouse-status', () => {
 });
 
 describe('db datasets', () => {
-  const service = { rebuild: vi.fn(), remove: vi.fn() };
+  const service = { rebuild: vi.fn(), remove: vi.fn(), setGroup: vi.fn() };
   let out = '';
   let err = '';
   beforeEach(() => {
@@ -417,14 +417,14 @@ describe('db datasets', () => {
 
   it('list_prints_one_line_for_each_dataset', async () => {
     mocks.listDatasetsWithState.mockResolvedValue([
-      { name: 'zm_request_times', ownerPack: 'reports-zm', rowCount: 4239703, builtAt: '2026-11-19T11:00:00.000Z', buildMs: 28400, lastError: null, stale: false },
-      { name: 'zm_broken', ownerPack: 'reports-zm', rowCount: null, builtAt: null, buildMs: null, lastError: 'relation "nope" does not exist', stale: true },
+      { name: 'zm_request_times', ownerPack: 'reports-zm', group: 'reports-zm', rowCount: 4239703, builtAt: '2026-11-19T11:00:00.000Z', buildMs: 28400, lastError: null, stale: false },
+      { name: 'zm_broken', ownerPack: 'reports-zm', group: null, rowCount: null, builtAt: null, buildMs: null, lastError: 'relation "nope" does not exist', stale: true },
     ]);
     const { runDbDatasetsList } = await import('./db');
     expect(await runDbDatasetsList({ json: false })).toBe(0);
     expect(out.trimEnd().split('\n')).toEqual([
-      'zm_request_times  reports-zm  4239703 rows  built 2026-11-19T11:00:00.000Z in 28 s',
-      'zm_broken  reports-zm  not built  stale  error: relation "nope" does not exist',
+      'zm_request_times  reports-zm  group reports-zm  4239703 rows  built 2026-11-19T11:00:00.000Z in 28 s',
+      'zm_broken  reports-zm  no group  not built  stale  error: relation "nope" does not exist',
     ]);
     expect(mocks.dbCtx.close).toHaveBeenCalled();
   });
@@ -467,6 +467,22 @@ describe('db datasets', () => {
     expect(service.remove).toHaveBeenCalledWith('abc');
     expect(out).toBe('Deleted the dataset abc.\n');
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(mocks.appCtx, expect.objectContaining({ actorType: 'cli' }), expect.objectContaining({ action: 'dataset.delete', entityId: 'abc' }));
+  });
+
+  it('move_puts_a_dataset_in_a_group_or_in_none', async () => {
+    service.setGroup.mockReset(); service.setGroup.mockResolvedValue(undefined);
+    const { runDbDatasetsMove } = await import('./db');
+    expect(await runDbDatasetsMove('abc', { json: false, group: ' Turnaround ' })).toBe(0);
+    expect(await runDbDatasetsMove('abc', { json: false })).toBe(0);
+    expect(service.setGroup.mock.calls).toEqual([['abc', 'Turnaround'], ['abc', null]]);
+    expect(out).toBe('Moved abc to the group Turnaround.\nMoved abc out of its group.\n');
+  });
+
+  it('move_of_an_unknown_dataset_fails_with_one_line', async () => {
+    service.setGroup.mockReset(); service.setGroup.mockRejectedValue(new Error('no dataset named nope'));
+    const { runDbDatasetsMove } = await import('./db');
+    expect(await runDbDatasetsMove('nope', { json: false, group: 'x' })).toBe(1);
+    expect(err).toBe('no dataset named nope\n');
   });
 });
 

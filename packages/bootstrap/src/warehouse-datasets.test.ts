@@ -120,6 +120,28 @@ describe('pack datasets: install and rebuild', () => {
   });
 });
 
+describe('pack datasets: groups', () => {
+  it('moves_a_dataset_trims_the_name_and_blank_means_no_group', async () => {
+    const w = await world();
+    await w.service.install('p', [{ name: 'abc', sql: 'select 1' }]);
+    await w.service.setGroup('abc', '  Turnaround  ');
+    expect((await w.service.list())[0].group).toBe('Turnaround');
+    await w.service.setGroup('abc', '   ');
+    expect((await w.service.list())[0].group).toBeNull();
+    await expect(w.service.setGroup('nope', 'x')).rejects.toThrow('no dataset named nope');
+    await expect(w.service.setGroup('abc', 'x'.repeat(201))).rejects.toThrow('at most 200');
+    await w.db.destroy();
+  });
+  it('renames_a_group_and_removes_one', async () => {
+    const w = await world();
+    await w.service.install('p', [{ name: 'abc', sql: 'select 1' }, { name: 'abd', sql: 'select 2' }]);
+    expect(await w.service.renameGroup('p', 'Viral load')).toBe(2);
+    expect(await w.service.renameGroup('Viral load', null)).toBe(2);
+    expect((await w.service.list()).map((d) => d.group)).toEqual([null, null]);
+    await w.db.destroy();
+  });
+});
+
 describe('pack datasets: refresh', () => {
   it('refresh_does_nothing_while_the_warehouse_is_behind', async () => {
     const w = await world();

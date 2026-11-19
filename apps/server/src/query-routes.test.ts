@@ -722,8 +722,8 @@ describe('SQL Server database level', () => {
 
 describe('pack datasets on the Query page', () => {
   const ROWS = [
-    { name: 'zm_request_times', ownerPack: 'reports-zm', rowCount: 4239703, builtAt: '2026-11-19T11:00:00.000Z', buildMs: 28000, lastError: null, stale: false, connectorId: 'c1' },
-    { name: 'zm_broken', ownerPack: 'reports-zm', rowCount: null, builtAt: null, buildMs: null, lastError: 'relation "nope" does not exist', stale: true, connectorId: 'c1' },
+    { name: 'zm_request_times', ownerPack: 'reports-zm', group: 'reports-zm', rowCount: 4239703, builtAt: '2026-11-19T11:00:00.000Z', buildMs: 28000, lastError: null, stale: false, connectorId: 'c1' },
+    { name: 'zm_broken', ownerPack: 'reports-zm', group: null, rowCount: null, builtAt: null, buildMs: null, lastError: 'relation "nope" does not exist', stale: true, connectorId: 'c1' },
   ];
   function withDatasets() {
     const calls: string[] = [];
@@ -732,6 +732,8 @@ describe('pack datasets on the Query page', () => {
       list: async () => ROWS,
       rebuild: async (name) => { calls.push(`rebuild ${name}`); if (name === 'nope') throw new Error('no dataset named nope'); return { name, ok: true, rows: 7, ms: 12 }; },
       remove: async (name) => { calls.push(`remove ${name}`); if (name === 'nope') throw new Error('no dataset named nope'); },
+      setGroup: async (name, group) => { calls.push(`group ${name} ${group}`); if (name === 'nope') throw new Error('no dataset named nope'); },
+      renameGroup: async (from, to) => { calls.push(`rename ${from} ${to}`); return from === 'empty' ? 0 : 2; },
     };
     return { deps, calls };
   }
@@ -785,5 +787,34 @@ describe('pack datasets on the Query page', () => {
     expect((await app.inject({ method: 'DELETE', url: '/api/query/warehouse-datasets/nope' })).statusCode).toBe(404);
     expect(auditRecord).not.toHaveBeenCalled();
   });
-});
 
+  it('moves_a_dataset_to_a_group_or_to_none_and_audits_it', async () => {
+    auditRecord.mockClear();
+    const { deps, calls } = withDatasets();
+    const app = await build(deps);
+    expect((await app.inject({ method: 'PUT', url: '/api/query/warehouse-datasets/zm_request_times/group', payload: { group: 'Turnaround' } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'PUT', url: '/api/query/warehouse-datasets/zm_request_times/group', payload: { group: null } })).statusCode).toBe(200);
+    expect(calls).toEqual(['group zm_request_times Turnaround', 'group zm_request_times null']);
+    expect((auditRecord.mock.calls as unknown[][]).map((c) => (c[0] as { action: string }).action)).toEqual(['dataset.move', 'dataset.move']);
+    expect((await app.inject({ method: 'PUT', url: '/api/query/warehouse-datasets/nope/group', payload: { group: 'x' } })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'PUT', url: '/api/query/warehouse-datasets/zm_request_times/group', payload: {} })).statusCode).toBe(400);
+  });
+
+  it('renames_or_removes_a_group_and_audits_only_when_something_moved', async () => {
+    auditRecord.mockClear();
+    const { deps, calls } = withDatasets();
+    const app = await build(deps);
+    expect((await app.inject({ method: 'POST', url: '/api/query/warehouse-dataset-groups/rename', payload: { from: 'reports-zm', to: 'Viral load' } })).json()).toEqual({ moved: 2 });
+    expect((await app.inject({ method: 'POST', url: '/api/query/warehouse-dataset-groups/rename', payload: { from: 'empty', to: null } })).json()).toEqual({ moved: 0 });
+    expect(calls).toEqual(['rename reports-zm Viral load', 'rename empty null']);
+    expect(auditRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it('moving_and_renaming_need_query_manage', async () => {
+    const { deps, calls } = withDatasets();
+    const app = await build(deps, ['query.run']);
+    expect((await app.inject({ method: 'PUT', url: '/api/query/warehouse-datasets/zm_request_times/group', payload: { group: 'x' } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'POST', url: '/api/query/warehouse-dataset-groups/rename', payload: { from: 'a', to: 'b' } })).statusCode).toBe(403);
+    expect(calls).toEqual([]);
+  });
+});

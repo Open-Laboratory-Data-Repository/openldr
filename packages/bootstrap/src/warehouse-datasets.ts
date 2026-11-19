@@ -32,6 +32,11 @@ export interface WarehouseDatasetService {
   refreshDue(): Promise<string[]>;
   /** Drops the built table and forgets the dataset. */
   remove(name: string): Promise<void>;
+  /** Moves a dataset to a Query page group, or to none (null or blank). Throws for an unknown name. */
+  setGroup(name: string, group: string | null): Promise<void>;
+  /** Renames a group, or with `to` null or blank removes it and leaves its datasets with no group.
+   *  Resolves to how many datasets it held. */
+  renameGroup(from: string, to: string | null): Promise<number>;
   /** True while a build runs in this process. */
   building(): boolean;
 }
@@ -51,6 +56,13 @@ export interface WarehouseDatasetDeps {
 function errorText(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
   return redact(message.split('\n')[0] ?? '').slice(0, 500);
+}
+
+/** A group name as stored: trimmed, at most 200 characters as for query groups, blank means none. */
+function groupName(group: string | null): string | null {
+  const name = (group ?? '').trim();
+  if (name.length > 200) throw new Error('a group name is at most 200 characters');
+  return name === '' ? null : name;
 }
 
 export function createWarehouseDatasetService(deps: WarehouseDatasetDeps): WarehouseDatasetService {
@@ -158,6 +170,9 @@ export function createWarehouseDatasetService(deps: WarehouseDatasetDeps): Wareh
       });
     },
 
+    setGroup: async (name, group) => deps.store.setGroup(name, groupName(group)),
+    renameGroup: async (from, to) => deps.store.renameGroup(from, groupName(to)),
+
     building: () => waiting > 0,
   };
   return service;
@@ -228,14 +243,14 @@ export async function withDatasetMessage<T>(operation: () => Promise<T>): Promis
 /** One dataset as a list shows it. `stale` is true when the warehouse has changed since its last
  *  build, or it was never built. */
 export interface DatasetListItem {
-  name: string; ownerPack: string; rowCount: number | null; builtAt: string | null; buildMs: number | null; lastError: string | null; stale: boolean;
+  name: string; ownerPack: string; group: string | null; rowCount: number | null; builtAt: string | null; buildMs: number | null; lastError: string | null; stale: boolean;
 }
 
 /** The list for the Query page and the CLI: one definition of `stale` for both. */
 export async function listDatasetsWithState(service: Pick<WarehouseDatasetService, 'list'>, internalDb: Kysely<InternalSchema>): Promise<DatasetListItem[]> {
   const [all, reading] = await Promise.all([service.list(), readWarehouseReading(internalDb)]);
   return all.map((d) => ({
-    name: d.name, ownerPack: d.ownerPack, rowCount: d.rowCount, builtAt: d.builtAt, buildMs: d.buildMs, lastError: d.lastError,
+    name: d.name, ownerPack: d.ownerPack, group: d.group, rowCount: d.rowCount, builtAt: d.builtAt, buildMs: d.buildMs, lastError: d.lastError,
     stale: d.builtAtSeq === null || d.builtAtSeq < reading.head,
   }));
 }

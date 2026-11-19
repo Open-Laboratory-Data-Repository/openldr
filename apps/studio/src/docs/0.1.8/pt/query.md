@@ -378,6 +378,8 @@ Selecione os pontos e depois **Reconstruir**. Uma mensagem indica quando termina
 
 **Resultado esperado:** o número de linhas e a data da última construção são atualizados.
 
+Um conjunto de dados começa num grupo com o nome do pacote que o instalou. Para o mover, selecione os pontos e depois **Mover para o grupo**. Escolha um grupo, **Novo grupo** ou **Sem grupo**. Os pontos ao lado de um grupo permitem mudar-lhe o nome ou eliminá-lo. Eliminar um grupo mantém os seus conjuntos de dados.
+
 O OpenLDR também reconstrói os conjuntos de dados sozinho, quando o armazém fica atualizado. Durante uma importação grande, nada é reconstruído até a importação terminar. Por isso, um relatório que lê um conjunto de dados pode estar uma reconstrução atrás do armazém. A linha **Armazém** em [Activity](/docs/activity) mostra «a reconstruir conjuntos de dados» enquanto isso decorre.
 
 Num terminal, `openldr db datasets list` mostra a mesma lista e `openldr db datasets rebuild` reconstrói-os.

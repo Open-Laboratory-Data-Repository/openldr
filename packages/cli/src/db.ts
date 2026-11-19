@@ -216,7 +216,7 @@ export async function runDbWarehouseStatus(opts: JsonOpt & { seconds: number }):
 
 /** One line for `db datasets list`. */
 function datasetLine(d: DatasetListItem): string {
-  const parts = [d.name, d.ownerPack];
+  const parts = [d.name, d.ownerPack, d.group ? `group ${d.group}` : 'no group'];
   if (d.builtAt === null) parts.push('not built');
   else parts.push(`${d.rowCount ?? 0} rows`, `built ${d.builtAt} in ${formatDuration((d.buildMs ?? 0) / 1000)}`);
   if (d.stale) parts.push('stale');
@@ -298,6 +298,27 @@ export async function runDbDatasetsDelete(name: string, opts: JsonOpt & { force:
     }
     await auditDataset('dataset.delete', name, {});
     emit(opts.json, { ok: true, name }, `Deleted the dataset ${name}.`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** `openldr db datasets move <name> [--group <group>]`: puts a dataset in a Query page group, or in
+ *  none when no group is given. A group is only a name: naming a new one makes it. */
+export async function runDbDatasetsMove(name: string, opts: JsonOpt & { group?: string }): Promise<number> {
+  const ctx = await createDbContext(loadConfig());
+  try {
+    const group = opts.group && opts.group.trim() ? opts.group.trim() : null;
+    try {
+      await ctx.warehouseDatasets.setGroup(name, group);
+    } catch (err) {
+      const message = redactError(err);
+      if (opts.json) emit(true, { ok: false, error: message }, '');
+      else process.stderr.write(`${message}\n`);
+      return 1;
+    }
+    emit(opts.json, { ok: true, name, group }, group ? `Moved ${name} to the group ${group}.` : `Moved ${name} out of its group.`);
     return 0;
   } finally {
     await ctx.close();

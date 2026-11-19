@@ -68,4 +68,33 @@ describe('warehouse dataset store (pack datasets, migration 131)', () => {
     expect((await store.list()).map((d) => d.name)).toEqual(['abd']);
     await db.destroy();
   });
+
+  it('a_new_dataset_starts_in_a_group_named_for_its_pack_and_a_reinstall_keeps_where_it_was_moved', async () => {
+    const { db, store } = await world();
+    await store.replaceForPack('reports-zm', [{ name: 'abc', sql: 'select 1' }, { name: 'abd', sql: 'select 2' }]);
+    expect((await store.list()).map((d) => d.group)).toEqual(['reports-zm', 'reports-zm']);
+    await store.setGroup('abc', 'Turnaround');
+    await store.setGroup('abd', null);
+    await store.replaceForPack('reports-zm', [{ name: 'abc', sql: 'select 11' }, { name: 'abd', sql: 'select 2' }, { name: 'abe', sql: 'select 3' }]);
+    expect((await store.list()).map((d) => [d.name, d.group])).toEqual([['abc', 'Turnaround'], ['abd', null], ['abe', 'reports-zm']]);
+    await db.destroy();
+  });
+
+  it('renames_a_group_and_removing_a_group_keeps_its_datasets_with_no_group', async () => {
+    const { db, store } = await world();
+    await store.replaceForPack('p', [{ name: 'abc', sql: 'select 1' }, { name: 'abd', sql: 'select 2' }]);
+    await store.setGroup('abd', 'Other');
+    expect(await store.renameGroup('p', 'Viral load')).toBe(1);
+    expect((await store.list()).map((d) => d.group)).toEqual(['Viral load', 'Other']);
+    expect(await store.renameGroup('Viral load', null)).toBe(1);
+    expect((await store.list()).map((d) => d.group)).toEqual([null, 'Other']);
+    expect(await store.renameGroup('nope', 'x')).toBe(0);
+    await db.destroy();
+  });
+
+  it('setting_the_group_of_an_unknown_dataset_is_refused', async () => {
+    const { db, store } = await world();
+    await expect(store.setGroup('nope', 'x')).rejects.toThrow('no dataset named nope');
+    await db.destroy();
+  });
 });
