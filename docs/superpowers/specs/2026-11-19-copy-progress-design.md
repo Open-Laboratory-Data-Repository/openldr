@@ -54,6 +54,10 @@ copy shows.
 - Rows added to the source during the copy: the total is the count at the drive's start.
 - The page size shrinks after timeouts: the time left rises once the average catches up.
 
+Measured on one full copy of the Tanzania source (24.3 minutes): 19 minutes shown at minute 2, 22
+real; within a minute from minute 12 on. The first pages are the small dictionaries and older,
+lighter requests, so the early average is fast.
+
 ## Where it shows
 
 - CLI: `formatCopyRun` adds `45.2% of 2342719 keys, about 31 min left`, and `total=` per set.

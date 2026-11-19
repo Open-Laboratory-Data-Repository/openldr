@@ -738,14 +738,22 @@ count and content digest. A projection cycle writes the warehouse first and then
 in the other database (`packages/db/src/projection/cycle.ts:203` and `:225`). A kill between the
 two makes the next start write that batch again, and the second write gives the same rows.
 
+### Full source, all three changes
+
+24.3 minutes, 95,912 requests a minute, against 58.6 minutes and 39,720 before: 2.4 times. The same
+2,326,075 requests and 48,182,311 rows. The count of the requests set gave 2,326,075, the source's
+own number. The seven counts took 2.0 s.
+
 ### HONEST NON-PROOF
 
-- No full-source copy has run with these changes yet. The gain on the full source is expected from
-  the sample, not measured.
+- The full-source copy with all three changes (24.3 minutes against 58.6) wrote to the scratch
+  Postgres, not the standalone's embedded Postgres at its defaults. Writes took 1,066 s of its
+  1,455 s, overlapped with reading, so a slower Postgres could lengthen it. Not measured there.
 - The time of the counts on the full source was not measured. Each count has a 30-second limit, and
   a count that runs out leaves the total unknown.
-- The estimate's accuracy over a whole copy was not measured. It was checked in unit tests and by
-  eye on the sample record only.
+- The estimate was checked over one full copy only: about 15% low in the first minutes (19 min
+  shown at minute 2, 22 real), within a minute from minute 12. Not checked: a copy that restarts,
+  or a slow link.
 - Phone width was checked in headless Chromium at 375 px on a preview of the plugin page with a fake
   copy, not on a real phone or in a live CE. The table scrolls sideways inside itself at that
   width, as it did before, so the progress line is cut until the table is swiped.

@@ -40,8 +40,16 @@ Tanzania full, whole run at 770f37f2: 60 minutes. 2,130,022 saved, 163,451 held,
 | Date | Commit | Dataset | Time | Requests a minute |
 |---|---|---|---|---|
 | 2026-11-19 | 770f37f2 | Tanzania full | 58.6 min | 39,720 average, 27,575 slowest minute, 53,500 fastest |
+| 2026-11-19 | 6daedb65 | Tanzania full, bench Postgres | 24.3 min | 95,912 average |
 
 19.9 GiB copied. Page size 500. No interruption.
+
+6daedb65 run: page 2,000, 6 detail queries at once, the next page read ahead. Same totals as the
+770f37f2 run: 2,326,075 requests, 48,182,311 rows, 19.90 GiB. Written to the scratch Postgres on
+port 54399, not the standalone's, so the Postgres side differs from the 770f37f2 row. Peak memory
+861 MiB. SQL Server averaged 1.26 cores, the copy process 0.70. The seven counts took 2.0 s. The
+time left it showed: 19 min at minute 2 (22 real), 15 at minute 8 (16 real), 12 at minute 12 (12
+real), within a minute from then on. Output: `~/.cache/openldr-speed-bench/copy/full-a.txt`.
 
 Copy 250k, before and after each item of the copy work (2026-11-19, base commit 0ef2a49b). Runs
 on one range share SQL Server's cache, and two runs of one setting differ by up to 15%.
