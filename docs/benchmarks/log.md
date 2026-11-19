@@ -33,7 +33,22 @@ Datasets:
 | 2026-11-19 | 770f37f2 | Bench 5k | one copy of each document | 525 to 537 |
 | 2026-11-19 | 770f37f2 | Tanzania full | whole run, projection running beside it | 625 to 680 |
 
+| 2026-11-19 | 4d748753 (demo.10) | Tanzania full, fresh standalone | whole run, no v1 reference prefix, 69.2 min net | 560 |
+| 2026-11-19 | 4d748753 (demo.10) | Tanzania full, fresh standalone | whole run, compared with the v1 reference (TZDISA), 80.5 min | 481 |
+
 Tanzania full, whole run at 770f37f2: 60 minutes. 2,130,022 saved, 163,451 held, 32,602 failed.
+
+demo.10 runs (2026-11-19, evidence in `~/.local/share/demo10-evidence/`). Both read 2,326,075.
+
+- Without the prefix: 18:00:17 to 19:14:18, 74.0 min wall. The disk filled and the server was down
+  4 min 50 s, so 69.2 min net. 2,130,022 saved, 196,052 held, 1 failed. Every saved request was
+  "unchecked", because without `requestIdPrefix=TZDISA` no key matches the v1 reference.
+- With the prefix: 19:16:07 to 20:36:38, 80.5 min. 2,129,331 saved, 196,743 held, 1 failed.
+  Labels: 1,612,554 passed, 516,778 unchecked, 691 held by the check, 195,988 held by the rules,
+  64 held by both. The comparison costs about 14% against the run without it.
+- The 32,602 that failed at 770f37f2 are now held. The disk used about 60 GB in the second run.
+
+Not proved: why 516,778 requests found no v1 record. The v1 reference holds 1,739,522 keys.
 
 ## Import: copy
 
@@ -41,6 +56,12 @@ Tanzania full, whole run at 770f37f2: 60 minutes. 2,130,022 saved, 163,451 held,
 |---|---|---|---|---|
 | 2026-11-19 | 770f37f2 | Tanzania full | 58.6 min | 39,720 average, 27,575 slowest minute, 53,500 fastest |
 | 2026-11-19 | 6daedb65 | Tanzania full, bench Postgres | 24.3 min | 95,912 average |
+| 2026-11-19 | demo.9, before migration 134 | Tanzania full, fresh standalone | stopped at 70.3%, 34.7 min | about 117,000 to 51%, then under 22,000 |
+| 2026-11-19 | 4d748753 (demo.10) | Tanzania full, fresh standalone | 17.0 min | 136,560 average |
+| 2026-11-19 | 4d748753 (demo.10) | v1 reference (OpenLDRData_TZ), fresh standalone | 6.8 min | 1,739,522 keys, 13,955,346 rows |
+
+demo.9: past 51% the delete before each page scanned the whole table (see migration 134). demo.10:
+17:35:38 to 17:52:40, 48,198,955 rows, 19.90 GiB, 0 skipped. Same machine and settings as demo.9.
 
 19.9 GiB copied. Page size 500. No interruption.
 
