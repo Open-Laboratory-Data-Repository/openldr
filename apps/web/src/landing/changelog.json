@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "6daedb65",
+          "type": "perf",
+          "scope": "import",
+          "title": "The copy sends a page's detail queries together and reads the next page while it stores this one"
+        },
+        {
+          "hash": "1817ae11",
+          "type": "feat",
+          "scope": "import",
+          "title": "The copy shows its total, percentage and time left, and reads pages of 2,000 keys"
+        },
+        {
           "hash": "841199b9",
           "type": "feat",
           "scope": "query",
