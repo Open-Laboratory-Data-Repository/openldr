@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "87dc9a04",
+          "type": "feat",
+          "scope": "activity",
+          "title": "Show how far the warehouse is behind, with the time left, on the Activity page and in openldr db warehouse-status"
+        },
+        {
           "hash": "f891e0e7",
           "type": "fix",
           "scope": "bootstrap",
