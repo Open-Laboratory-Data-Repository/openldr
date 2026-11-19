@@ -96,6 +96,25 @@ describe('first page', () => {
     expect(await screen.findByTestId('dashboard')).toBeTruthy();
   });
 
+  // demo.4 item 6: a lab technician has no dashboards.view, so `/` showed Access denied right
+  // after sign-in. Such a user goes to their first sidebar page, on every visit to `/`.
+  it('sends a user who cannot open the Dashboard to their first sidebar page, every time', async () => {
+    caps = ['query.run'];
+    (api.getMyPreferences as any).mockResolvedValue({});
+    app('/');
+    expect(await screen.findByTestId('query')).toBeTruthy();
+    fireEvent.click(screen.getByText('home'));
+    expect(await screen.findByTestId('query')).toBeTruthy();
+    expect(screen.queryByTestId('dashboard')).toBeNull();
+  });
+
+  it("uses that user's saved first page when they can open it", async () => {
+    caps = ['query.run', 'reports.view'];
+    (api.getMyPreferences as any).mockResolvedValue({ startPage: '/query' });
+    app('/');
+    expect(await screen.findByTestId('query')).toBeTruthy();
+  });
+
   it('passes straight through when no user is signed in', () => {
     mockUser = null;
     app('/');

@@ -18,7 +18,7 @@ export const EVERYTHING: DataScope = { limited: false };
 export const LIMITED_SCOPE_DROPS: readonly string[] = [
   'reports.view', 'reports.run', 'reports.export', 'reports.edit_templates',
   'patients.view', 'patients.manage', 'patients.view_identifiers',
-  'query.run', 'data.export',
+  'query.run', 'query.manage', 'data.export',
   'dashboards.create', 'dashboards.edit',
   'workflows.view', 'workflows.edit', 'workflows.run',
   'connectors.manage', 'audit.view', 'activity.view', 'imports.correct_held',

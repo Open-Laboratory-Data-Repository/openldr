@@ -475,6 +475,7 @@ export const pt: EnShape = {
       },
       query: {
         run: { label: 'Usar a consola de consultas', description: 'Executar consultas SQL avulsas sobre os dados de análise.' },
+        manage: { label: 'Gerir consultas guardadas', description: 'Editar, renomear, mover e apagar qualquer consulta guardada, gerir grupos de consultas e substituir consultas na importação.' },
       },
       users: {
         view: { label: 'Ver utilizadores', description: 'Abrir a área de Utilizadores e ver as contas.' },
@@ -1991,6 +1992,7 @@ export const pt: EnShape = {
     filterTables: 'Filtrar…', noConnectors: 'Nenhum conector de base de dados', rows: 'linhas',
     runParameters: 'Parâmetros de execução', runWithValues: 'Executar com estes valores', runActions: 'Ações de execução', anyValue: '(todos)',
     savedToast: 'Consulta personalizada “{{name}}” guardada',
+    copyName: '{{name}} (cópia)',
     deleteQuery: 'Eliminar consulta', confirmDeleteQuery: 'Eliminar esta consulta personalizada?',
     renameQuery: 'Renomear consulta',
     groups: {

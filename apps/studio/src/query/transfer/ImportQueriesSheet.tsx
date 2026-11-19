@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { queryApi, type ConnectorRef, type QueryTransferFile } from '../api';
 import { useQueryStore } from '../store';
+import { useAuth } from '@/auth/AuthProvider';
 
 const DEFAULT_CONNECTOR = 'Target Warehouse (Postgres)';
 
@@ -42,6 +43,8 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
   const [fileName, setFileName] = useState('');
   const [fileError, setFileError] = useState<string | null>(null);
   const [replace, setReplace] = useState(false);
+  // Replacing saved queries needs query.manage (demo.4 item 13). Without it, existing names are skipped.
+  const canReplace = useAuth().hasCapability('query.manage');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -154,8 +157,10 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
           {!connectorName && connectors.length > 0 && (
             <p className="col-span-2 m-0 text-xs text-muted-foreground">{t('query.transfer.chooseConnector')}</p>
           )}
-          <Label>{t('query.transfer.replace')}</Label>
-          <Switch checked={replace} onCheckedChange={setReplace} aria-label={t('query.transfer.replace')} />
+          {canReplace && <>
+            <Label>{t('query.transfer.replace')}</Label>
+            <Switch checked={replace} onCheckedChange={setReplace} aria-label={t('query.transfer.replace')} />
+          </>}
         </div>
 
         {fileError && <div className="mx-6 mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{fileError}</div>}

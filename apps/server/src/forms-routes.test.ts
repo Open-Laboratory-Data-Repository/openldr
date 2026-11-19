@@ -495,6 +495,22 @@ function fakeCtx(): AppContext & {
 }
 
 describe('forms routes', () => {
+  // demo.4 item 2: a schema with no sections was stored, then publish answered 500 from
+  // toQuestionnaire. The schema is checked on the way in, so the caller gets a 400 instead.
+  it('refuses a form schema without fields or sections lists, on create and on update', async () => {
+    const app = authedApp(fakeCtx());
+    const { sections: _s, ...noSections } = sampleSchema as Record<string, unknown>;
+    const { fields: _f, ...noFields } = sampleSchema as Record<string, unknown>;
+    for (const schema of [noSections, noFields, { ...sampleSchema, sections: [null] }, 'not a schema']) {
+      const res = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Bad', schema } });
+      expect(res.statusCode).toBe(400);
+    }
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Good', schema: sampleSchema } });
+    expect(created.statusCode).toBe(201);
+    const updated = await app.inject({ method: 'PUT', url: `/api/forms/${created.json().id}`, payload: { name: 'Good', schema: noSections } });
+    expect(updated.statusCode).toBe(400);
+  });
+
   it('creates, lists, publishes, exports questionnaires, and validates responses', async () => {
     const app = authedApp(fakeCtx());
 
@@ -685,7 +701,7 @@ describe('forms routes', () => {
     const app = authedApp(ctx);
     const created = await app.inject({
       method: 'POST', url: '/api/forms',
-      payload: { name: 'Specimen intake', schema: { fields: [] }, targetPages: ['forms'] },
+      payload: { name: 'Specimen intake', schema: { fields: [], sections: [] }, targetPages: ['forms'] },
     });
     const id = created.json().id as string;
     await app.inject({ method: 'POST', url: `/api/forms/${id}/publish`, payload: {} });
@@ -704,7 +720,7 @@ describe('forms routes', () => {
     const app = authedApp(fakeCtx());
     const created = await app.inject({
       method: 'POST', url: '/api/forms',
-      payload: { name: 'Specimen intake', schema: { fields: [] }, targetPages: ['forms'] },
+      payload: { name: 'Specimen intake', schema: { fields: [], sections: [] }, targetPages: ['forms'] },
     });
     const id = created.json().id as string;
 
@@ -718,7 +734,7 @@ describe('forms routes', () => {
     const app = authedApp(fakeCtx());
     const created = await app.inject({
       method: 'POST', url: '/api/forms',
-      payload: { name: 'Specimen intake', schema: { fields: [] }, targetPages: ['forms'] },
+      payload: { name: 'Specimen intake', schema: { fields: [], sections: [] }, targetPages: ['forms'] },
     });
     const id = created.json().id as string;
 
@@ -739,7 +755,7 @@ describe('forms routes', () => {
     const ctx = fakeCtx();
     const created = await authedApp(ctx).inject({
       method: 'POST', url: '/api/forms',
-      payload: { name: 'Specimen intake', schema: { fields: [] }, targetPages: ['forms'] },
+      payload: { name: 'Specimen intake', schema: { fields: [], sections: [] }, targetPages: ['forms'] },
     });
     const id = created.json().id as string;
     await authedApp(ctx).inject({ method: 'POST', url: `/api/forms/${id}/publish`, payload: {} });

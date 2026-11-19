@@ -835,9 +835,12 @@ async function exchange(
 ): Promise<number> {
   const { url, credential, out, err, signals } = input;
   const auth: Record<string, string> = credential.authorization ? { authorization: credential.authorization } : {};
+  // keep-alive, not the close that agent: false sends: with close, the server ends the socket
+  // right after a refusal, and a file still being sent then meets EPIPE before the answer is read,
+  // so a 401 sometimes showed as a lost connection (demo.4 item 3). The finally below closes it.
   const req = sendRequest(endpoint(url, 'api/cli/run'), {
     method: 'POST',
-    headers: { 'content-type': 'application/x-ndjson', accept: 'application/x-ndjson', ...auth },
+    headers: { 'content-type': 'application/x-ndjson', accept: 'application/x-ndjson', connection: 'keep-alive', ...auth },
   });
   req.on('error', () => {}); // every error is read from the promises below
   const stopUpload = new AbortController();

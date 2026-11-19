@@ -284,7 +284,10 @@ export function Connectors() {
           ? res.metadata
             ? t('settings.connectors.testOk', { dataElements: res.metadata.dataElements, orgUnits: res.metadata.orgUnits })
             : t('settings.connectors.testOkSimple')
-          : t('settings.connectors.testFailed', { error: (res as { ok: false; error: string }).error }),
+          : res.hint
+            // The same advice the diagnose sheet gives, in the user's language.
+            ? t('settings.connectors.testFailed', { error: t(`settings.connectors.diagnose.hint.${res.hint}`) })
+            : t('settings.connectors.testFailed', { error: res.error }),
       }));
     } catch (e) {
       setTestResult((r) => ({ ...r, [c.id]: t('settings.connectors.testFailed', { error: e instanceof Error ? e.message : String(e) }) }));

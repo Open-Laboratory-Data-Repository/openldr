@@ -12,7 +12,7 @@ describe('capabilities under a data limit', () => {
     expect([...LIMITED_SCOPE_DROPS].sort()).toEqual([
       'activity.view', 'audit.view', 'connectors.manage', 'dashboards.create', 'dashboards.edit', 'data.export',
       'facilities.view', 'imports.correct_held', 'patients.manage', 'patients.view', 'patients.view_identifiers',
-      'query.run', 'reports.edit_templates', 'reports.export', 'reports.run', 'reports.view',
+      'query.manage', 'query.run', 'reports.edit_templates', 'reports.export', 'reports.run', 'reports.view',
       'sync.manage', 'sync.view', 'workflows.edit', 'workflows.run', 'workflows.view',
     ]);
   });

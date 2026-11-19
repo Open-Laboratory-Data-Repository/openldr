@@ -103,6 +103,39 @@ describe('import check held store', () => {
     expect(await keys({ laboratory: 'L1' })).toEqual([['B', 'E'], 2]);
   });
 
+  // demo.4 item 10: the Held back list filters by finding code, and counts each code it holds.
+  it('filters by finding code and counts the codes, following the other filters, and the codes go with their row', async () => {
+    await store.put(item('A', { laboratory: 'L1', codes: ['specimen_missing'] }));
+    await store.put(item('B', { laboratory: 'L1', codes: ['specimen_missing', 'record_has_no_observations'] }));
+    await store.put(item('C', { laboratory: 'L2', codes: ['record_has_no_observations'] }));
+    await store.put(item('D', { reason: 'error', error: 'E_X' }));
+    await store.put(item('E', { copyId: 'c2', codes: ['specimen_missing'] }));
+    const keys = async (f: Record<string, unknown>) => {
+      const r = await store.list('c1', { ...f, offset: 0, limit: 10 });
+      const i = await store.listItems('c1', { ...f, offset: 0, limit: 10 });
+      expect(i.rows.map((row) => row.key)).toEqual(r.rows.map((row) => row.key));
+      const after = await store.listItems('c1', { ...f, after: null, limit: 10 });
+      expect(after.rows.map((row) => row.key)).toEqual(r.rows.map((row) => row.key));
+      return [r.rows.map((row) => row.key), r.total];
+    };
+    expect(await keys({ finding: 'specimen_missing' })).toEqual([['A', 'B'], 2]);
+    expect(await keys({ finding: 'record_has_no_observations', laboratory: 'L2' })).toEqual([['C'], 1]);
+    expect(await keys({ finding: 'nothing_like_it' })).toEqual([[], 0]);
+    // An underscore is a plain letter here, not a wildcard.
+    expect(await keys({ finding: 'specimen_missin_' })).toEqual([[], 0]);
+    expect(await store.codes('c1', {})).toEqual([{ code: 'record_has_no_observations', count: 2 }, { code: 'specimen_missing', count: 2 }]);
+    expect(await store.codes('c1', { laboratory: 'L1' })).toEqual([{ code: 'specimen_missing', count: 2 }, { code: 'record_has_no_observations', count: 1 }]);
+    expect(await store.codes('c1', { reason: 'error' })).toEqual([]);
+    // A put again replaces the codes; removing a row takes its codes away.
+    await store.put(item('B', { laboratory: 'L1', codes: ['record_has_no_observations'] }));
+    expect(await keys({ finding: 'specimen_missing' })).toEqual([['A'], 1]);
+    await store.remove('c1', ['A']);
+    expect(await store.codes('c1', {})).toEqual([{ code: 'record_has_no_observations', count: 2 }]);
+    expect(await store.deleteSome('c1', 100)).toBe(3);
+    expect(await store.codes('c1', {})).toEqual([]);
+    expect(await store.codes('c2', {})).toEqual([{ code: 'specimen_missing', count: 1 }]);
+  });
+
   it('get returns the JSON as stored, and null for a missing key', async () => {
     const findings = { a: [1, 2, { b: null }] };
     const check = [{ c: 'd' }, 3];

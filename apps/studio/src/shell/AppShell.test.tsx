@@ -19,7 +19,7 @@ vi.mock('@/auth/AuthProvider', () => ({
   }),
 }));
 
-import { AppShell } from './AppShell';
+import { AppShell, visibleNav } from './AppShell';
 
 beforeEach(() => {
   try {
@@ -60,6 +60,14 @@ describe('AppShell', () => {
     expect(screen.getByRole('link', { name: 'Forms' })).toHaveAttribute('href', '/forms');
     expect(screen.getByRole('link', { name: 'Users' })).toHaveAttribute('href', '/users');
     expect(screen.getByRole('link', { name: 'Audit' })).toHaveAttribute('href', '/audit');
+  });
+
+  // demo.4 item 8: a user with a facility data limit loses audit.view, but Audit stayed in the
+  // menu and then failed. The menu entry now names the capability its page needs.
+  it('shows Audit only to a user who can read the audit log', () => {
+    const pages = (caps: string[]) => visibleNav((c) => caps.includes(c), null).map((n) => n.to);
+    expect(pages(['dashboards.view'])).not.toContain('/audit');
+    expect(pages(['dashboards.view', 'audit.view'])).toContain('/audit');
   });
 
   it('toggles theme via the navbar icon button', () => {

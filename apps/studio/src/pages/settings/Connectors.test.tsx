@@ -271,6 +271,18 @@ describe('Connectors page', () => {
     expect(await screen.findByText(/connection ok/i)).toBeTruthy();
   });
 
+  // demo.4 item 7: a self-signed certificate showed Node's --use-system-ca advice. The server now
+  // sends hint tlsCertificate, and the row shows the translated advice to trust the certificate.
+  it('shows the Trust server certificate advice for a certificate failure', async () => {
+    (api.listConnectors as any).mockResolvedValue([dbConn]);
+    (api.testConnector as any).mockResolvedValue({ ok: false, error: 'Failed to connect to db:1433 - self-signed certificate', hint: 'tlsCertificate' });
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await screen.findByTestId('actions-c2');
+    openRowActions('c2');
+    fireEvent.click(await screen.findByTestId('test-c2'));
+    expect(await screen.findByText(/turn on Trust server certificate/i)).toBeTruthy();
+  });
+
   it('removes a connector after confirm', async () => {
     (api.deleteConnector as any).mockResolvedValue(undefined);
     render(<MemoryRouter><Connectors /></MemoryRouter>);

@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { open, rename, unlink, type FileHandle } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import {
-  HELD_ITEMS_LIMIT_MAX, HELD_LABEL_MAX, HELD_LIST_LIMIT_MAX, LABORATORY_CODE, checkIdOf, createAppContext, isLiveCheck, recordCheckRead,
+  FINDING_CODE, HELD_ITEMS_LIMIT_MAX, HELD_LABEL_MAX, HELD_LIST_LIMIT_MAX, LABORATORY_CODE, checkIdOf, createAppContext, isLiveCheck, recordCheckRead,
   type CheckRun, type ImportActor,
 } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
@@ -160,6 +160,35 @@ export async function runImportCheckCorrect(pluginId: string, copyId: string, ke
   } finally { await ctx.close(); }
 }
 
+export interface ImportCheckChoicesOpts extends JsonOpt {
+  /** One field only. */
+  field?: string;
+}
+
+/** `import check choices`: the values a person may pick for each correctable field that has a
+ *  fixed list, read from the copy's dictionaries by the plugin (demo.4 item 11). Use a code from it
+ *  in `import check correct --set field=code`. */
+export async function runImportCheckChoices(pluginId: string, copyId: string, opts: ImportCheckChoicesOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const all = await ctx.importChecks.choices(pluginId, copyId);
+    // The list comes from the copy's dictionaries, so the read is audited as the held reads are.
+    await recordCheckRead(ctx, cliNamedActor(), { pluginId, copyId, kind: 'choices' });
+    const shown = opts.field === undefined ? all : (all[opts.field] ? { [opts.field]: all[opts.field]! } : {});
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(shown) + '\n');
+      return 0;
+    }
+    const lines = Object.entries(shown).flatMap(([field, list]) => list.map((c) => `${field}  ${c.code}  ${c.description}`));
+    if (lines.length === 0) {
+      process.stdout.write(opts.field === undefined ? 'no field of this plugin has a list of values\n' : `no list of values for ${opts.field}\n`);
+      return 0;
+    }
+    process.stdout.write(lines.join('\n') + '\n');
+    return 0;
+  } finally { await ctx.close(); }
+}
+
 /** `import check recheck`: checks one corrected held request again, in the run that held it. */
 export async function runImportCheckRecheck(pluginId: string, copyId: string, key: string, opts: JsonOpt): Promise<number> {
   const ctx = await createAppContext(loadConfig());
@@ -174,6 +203,8 @@ export interface ImportCheckHeldOpts extends JsonOpt {
   label?: string;
   reason?: string;
   laboratory?: string;
+  /** A finding code (demo.4 item 10). */
+  finding?: string;
   offset?: string;
   limit?: string;
   export?: string;
@@ -183,7 +214,7 @@ export interface ImportCheckHeldOpts extends JsonOpt {
 /** A filter of the held list, with the bounds the plugin broker gives it (the `import.check.held`
  *  op). The numbers come from the broker's own constants. One page of the export is the most the
  *  broker allows for `heldItems`. */
-interface HeldFilters { reason?: 'held' | 'error'; label?: string; laboratory?: string }
+interface HeldFilters { reason?: 'held' | 'error'; label?: string; laboratory?: string; finding?: string }
 const LIST_LIMIT_DEFAULT = 50;
 
 function heldFilters(opts: ImportCheckHeldOpts): HeldFilters {
@@ -200,7 +231,27 @@ function heldFilters(opts: ImportCheckHeldOpts): HeldFilters {
     if (!LABORATORY_CODE.test(opts.laboratory)) throw new Error('--laboratory must be 1 to 32 letters, digits, dots, dashes or underscores');
     f.laboratory = opts.laboratory;
   }
+  if (opts.finding !== undefined) {
+    if (!FINDING_CODE.test(opts.finding)) throw new Error('--finding must be a finding code: lower-case letters, digits and underscores, starting with a letter');
+    f.finding = opts.finding;
+  }
   return f;
+}
+
+/** `import check codes`: each finding code of the copy's held requests, with how many carry it, most
+ *  first (demo.4 item 10). Use one with `import check held --finding`. Bare codes and counts only. */
+export async function runImportCheckCodes(pluginId: string, copyId: string, opts: Pick<ImportCheckHeldOpts, 'reason' | 'label' | 'laboratory' | 'json'>): Promise<number> {
+  const { finding: _none, ...filters } = heldFilters(opts);
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const codes = await ctx.importChecks.heldCodes(pluginId, copyId, filters);
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(codes) + '\n');
+      return 0;
+    }
+    process.stdout.write(codes.length === 0 ? 'no finding codes\n' : codes.map((c) => `${c.code}  ${c.count}`).join('\n') + '\n');
+    return 0;
+  } finally { await ctx.close(); }
 }
 
 export async function runImportCheckHeld(pluginId: string, copyId: string, opts: ImportCheckHeldOpts): Promise<number> {

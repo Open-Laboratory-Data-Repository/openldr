@@ -339,6 +339,12 @@ describe('import source entrypoints', () => {
     const types = ['microsoft-sql'];
     expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: { copy: 'c', twinKeys: 't' } })).toThrow(/twinKeys needs decode/);
   });
+  it('refuses choices without decode, and keeps a choices name with decode (demo.4 item 11)', () => {
+    const types = ['microsoft-sql'];
+    expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: { copy: 'c', choices: 'h' } })).toThrow(/choices needs decode/);
+    const ok = { connectorTypes: types, entrypoints: { copy: 'c', decode: 'd', choices: 'h' } };
+    expect(importSourceSchema.parse(ok)).toEqual(ok);
+  });
   it('refuses decode without copy', () => {
     const types = ['microsoft-sql'];
     expect(() => importSourceSchema.parse({ connectorTypes: types, entrypoints: { queries: 'q', map: 'm', decode: 'd' } })).toThrow(/decode needs copy/);

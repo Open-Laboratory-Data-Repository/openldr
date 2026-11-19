@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { dialectFor, exportCustomQueries, importCustomQueries, CustomQueryTransferError, type AppContext } from '@openldr/bootstrap';
 import { CustomQueryInputSchema, validateSelectSqlForSave } from '@openldr/dashboards';
 import type { CustomQueryGroupStore, CustomQueryStore } from '@openldr/db';
-import { requireCapability } from './rbac';
+import { holdsCapability, requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 import { prepareSelect } from './run-stored-query';
 
@@ -28,6 +28,9 @@ export interface QueryRouteDeps {
 
 export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: QueryRouteDeps): void {
   const GUARD = { preHandler: requireCapability('query.run') };
+  // Changing a saved query or a group needs its own permission (demo.4 item 13). Running, saving a
+  // new query, copying and export stay with query.run.
+  const MANAGE = { preHandler: [requireCapability('query.run'), requireCapability('query.manage')] };
 
   // ---- Custom Query CRUD ----
   app.get('/api/custom-queries', GUARD, async () => deps.customQueries.list());
@@ -54,7 +57,7 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     return { id };
   });
 
-  app.put('/api/custom-queries/:id', GUARD, async (req, reply) => {
+  app.put('/api/custom-queries/:id', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
     const existing = await deps.customQueries.get(id);
     if (!existing) { reply.code(404); return { error: 'not found' }; }
@@ -72,7 +75,7 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     return { ok: true };
   });
 
-  app.delete('/api/custom-queries/:id', GUARD, async (req) => {
+  app.delete('/api/custom-queries/:id', MANAGE, async (req) => {
     const { id } = req.params as { id: string };
     const before = await deps.customQueries.get(id);
     await deps.customQueries.remove(id);
@@ -88,7 +91,7 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
 
   app.get('/api/custom-query-groups', GUARD, async () => deps.customQueryGroups.list());
 
-  app.post('/api/custom-query-groups', GUARD, async (req, reply) => {
+  app.post('/api/custom-query-groups', MANAGE, async (req, reply) => {
     const parsed = GroupBody.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     if (await deps.customQueryGroups.getByName(parsed.data.name)) { reply.code(409); return { error: 'name already exists' }; }
@@ -100,7 +103,7 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     return { id: created.id };
   });
 
-  app.put('/api/custom-query-groups/:id', GUARD, async (req, reply) => {
+  app.put('/api/custom-query-groups/:id', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
     const existing = await deps.customQueryGroups.get(id);
     if (!existing) { reply.code(404); return { error: 'not found' }; }
@@ -116,7 +119,7 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     return { ok: true };
   });
 
-  app.delete('/api/custom-query-groups/:id', GUARD, async (req) => {
+  app.delete('/api/custom-query-groups/:id', MANAGE, async (req) => {
     const { id } = req.params as { id: string };
     const before = await deps.customQueryGroups.get(id);
     await deps.customQueryGroups.remove(id);
@@ -127,7 +130,7 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
   });
 
   const MoveBody = z.object({ groupId: z.string().min(1).nullable() });
-  app.put('/api/custom-queries/:id/group', GUARD, async (req, reply) => {
+  app.put('/api/custom-queries/:id/group', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
     const existing = await deps.customQueries.get(id);
     if (!existing) { reply.code(404); return { error: 'not found' }; }
@@ -162,13 +165,19 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
   app.post('/api/custom-queries/import', GUARD, async (req, reply) => {
     const parsed = ImportBody.safeParse(req.body ?? {});
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    // A replace overwrites saved queries, so it is a change: it needs query.manage.
+    if (parsed.data.replace && !holdsCapability(req.user!, 'query.manage')) {
+      reply.code(403);
+      return { error: 'insufficient capability', capability: 'query.manage' };
+    }
     // Read the current rows first, so a replace can be audited with its before state.
     const beforeByName = new Map((await deps.customQueries.list()).map((q) => [q.name, q]));
     try {
       const result = await importCustomQueries(
         { customQueries: deps.customQueries, customQueryGroups: deps.customQueryGroups, connectors: deps.connectors },
         parsed.data.file,
-        { connectorName: parsed.data.connectorName, replace: parsed.data.replace ?? false },
+        // Groups are arranged only by a caller with query.manage (Codex review C13-R1).
+        { connectorName: parsed.data.connectorName, replace: parsed.data.replace ?? false, arrange: holdsCapability(req.user!, 'query.manage') },
       );
       for (const r of result.results) {
         if (r.outcome === 'skipped') continue;

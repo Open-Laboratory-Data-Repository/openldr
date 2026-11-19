@@ -134,7 +134,7 @@ Estes casos foram reproduzidos em Linux com o iniciador instalado e a CLI real n
 | `ingest` | Carrega um ficheiro através do pipeline (opcionalmente com um plugin). |
 | `facilities` | Importa um registo nacional de unidades: `suggest-map`, `suggest-values`, `import` (mapeamento de colunas e valores; consulte **Unidades** na Documentação do estúdio). |
 | `test-catalog` | O catálogo nacional de exames: `list` dos testes, `import` de uma lista a partir de CSV ou Excel, `export` em CSV, `enable` ou `disable` de um teste neste laboratório, e `retire` ou `restore` de um teste quando esta instalação é dona do catálogo. |
-| `query` | Consultas personalizadas: `export` para um ficheiro JSON, `import` a partir de um (`--force` substitui os nomes existentes). |
+| `query` | Consultas personalizadas: `export` para um ficheiro JSON, `import` a partir de um (`--force` substitui os nomes existentes e exige **Gerir consultas guardadas**; sem essa permissão, uma importação acrescenta as novas consultas sem grupo). |
 | `pipeline` | Inspeciona lotes de ingestão: `status`, `retry`, `logs`. |
 | `queue` | Inspeciona a fila de eventos. |
 | `provenance` | Ferramentas de auditoria da proveniência. |
@@ -506,7 +506,9 @@ Uma tarefa longa cortada por um reinício regista-o. A maioria continua sozinha;
 Uma verificação de fonte retém um pedido quando as suas regras encontram um erro. Uma pessoa com a permissão **Corrigir pedidos retidos** pode corrigir os campos do pedido e verificá-lo de novo. As linhas da fonte não mudam; a correção fica guardada ao lado, com quem, quando e porquê.
 
 - `openldr import check correct <plugin> <copy> <key> --set campo=valor --reason "porquê"` corrige um ou mais campos. Repita `--set` para cada campo. Um valor vazio limpa o campo. O plugin decide que campos podem ser corrigidos.
+- `openldr import check choices <plugin> <copy> [--field specimen]` lista os valores possíveis de um campo, por exemplo os códigos de amostra da fonte. Use um desses códigos em `--set`.
 - `openldr import check recheck <plugin> <copy> <key>` verifica o pedido de novo na execução que o reteve. Se passar, é gravado e sai da lista de pedidos retidos. Execute `import check held` para ver o resultado.
+- `openldr import check codes <plugin> <copy>` lista os códigos de constatação dos pedidos retidos, cada um com o número de pedidos que o têm. `openldr import check held <plugin> <copy> --finding <code>` lista apenas os pedidos com um deles.
 
 ## Quem pode abrir e submeter um formulário
 

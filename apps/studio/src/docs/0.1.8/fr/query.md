@@ -6,6 +6,8 @@ Commencez avec votre connecteur et vos données reçues. Aucun exemple de donné
 
 Vous avez besoin de **Use query workbench**. Les requêtes lisent les données. Les instructions modifiant les données ou les tables sont refusées. Une nouvelle installation crée un connecteur vers le moteur d'entrepôt configuré. Ces images utilisent **Target Warehouse (Postgres)**. Les autres sources nécessitent un connecteur de base correspondant et activé.
 
+Pour renommer, modifier, déplacer ou supprimer une requête enregistrée, ou gérer les groupes, il faut aussi **Gérer les requêtes enregistrées**. Sans cette permission, l'Explorateur n'affiche aucun menu de ligne, et Enregistrer sur une requête enregistrée garde l'original et enregistre une copie sous un nouveau nom. Un import ajoute les nouvelles requêtes sans groupe.
+
 Les requêtes intégrées enregistrées peuvent alimenter des rapports. Consultez-les librement, mais comprenez ces dépendances avant de changer le SQL ou les identifiants de paramètres.
 
 ## Parcourir une table source
@@ -476,7 +478,7 @@ Utilisez `./openldr` dans votre dossier installé sous Linux ou macOS, `.\openld
 ./openldr query import data/queries.json
 ```
 
-L'export écrase un fichier de sortie existant. L'import ignore les noms existants par défaut. Ajoutez `--force` seulement pour les remplacer volontairement. Le contenu propre à un système de laboratoire doit rester dans des paquets gérés par l'opérateur.
+L'export écrase un fichier de sortie existant. L'import ignore les noms existants par défaut. Ajoutez `--force` seulement pour les remplacer volontairement. `--force` exige **Gérer les requêtes enregistrées**. Le contenu propre à un système de laboratoire doit rester dans des paquets gérés par l'opérateur.
 
 ## Fichier de requête facultatif pour s'exercer
 

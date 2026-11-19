@@ -71,6 +71,9 @@ export const importSourceSchema = z.object({
     // request shares with another. Both need `copy`, and `twinKeys` needs `decode`.
     decode: z.string().min(1).optional(),
     twinKeys: z.string().min(1).optional(),
+    // `choices` gives the values a person may pick for a correctable field, read from the copy's
+    // dictionaries (demo.4 item 11). Needs `decode`.
+    choices: z.string().min(1).optional(),
   }).superRefine((e, ctx) => {
     if ((e.queries === undefined) !== (e.map === undefined)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'importSource.entrypoints needs both queries and map, or neither' });
@@ -82,6 +85,9 @@ export const importSourceSchema = z.object({
     }
     if (e.twinKeys !== undefined && e.decode === undefined) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'importSource.entrypoints twinKeys needs decode' });
+    }
+    if (e.choices !== undefined && e.decode === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'importSource.entrypoints choices needs decode' });
     }
   }),
   // Stamped on every saved record as its source system. Defaults to the plugin id.
@@ -168,7 +174,7 @@ export function parseArtifactManifest(raw: unknown): ArtifactManifest {
       throw new Error(`artifact ${manifest.id}: payload.importSource requires the host:import capability`);
     }
     const exported = new Set(manifest.payload.entrypoints);
-    for (const name of [entrypoints.queries, entrypoints.checks, entrypoints.map, entrypoints.copy, entrypoints.decode, entrypoints.twinKeys]) {
+    for (const name of [entrypoints.queries, entrypoints.checks, entrypoints.map, entrypoints.copy, entrypoints.decode, entrypoints.twinKeys, entrypoints.choices]) {
       if (name !== undefined && !exported.has(name)) {
         throw new Error(`artifact ${manifest.id}: import entrypoint '${name}' is not in payload.entrypoints`);
       }

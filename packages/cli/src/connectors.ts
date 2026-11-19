@@ -99,7 +99,7 @@ export async function runConnectorTest(id: string): Promise<number> {
     await recordAuditEvent(ctx, cliNamedActor(), {
       action: 'connector.test', entityType: 'connector', entityId: id, metadata: { outcome: result.ok ? 'ok' : 'failed' },
     });
-    process.stdout.write(result.ok ? 'Connection OK\n' : `Connection failed: ${redactError(new Error(result.error))}\n`);
+    process.stdout.write(result.ok ? 'Connection OK\n' : `Connection failed: ${redactError(new Error(result.error))}\n${result.hint ? `${DIAGNOSE_HINT_TEXT[result.hint]}\n` : ''}`);
     return result.ok ? 0 : 1;
   } finally { await ctx.close(); }
 }

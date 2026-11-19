@@ -42,6 +42,8 @@ const HEARTBEAT_MS = 30_000;
 /** The most row JSON the dictionaries of one copy may hold, over every set. */
 const DICTIONARY_CAP = 64 * 1024 * 1024;
 const LABEL = /^[a-z][a-z0-9_]{0,31}$/;
+/** A finding code the plugin names for a held request: a bare word, never a source value. */
+export const FINDING_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 const MAX_LABELS = 12;
 const OTHER_LABEL = 'other';
 /** A laboratory code as a group may name it. Anything else is no laboratory. */
@@ -134,7 +136,8 @@ export interface ImportCheckStartInput {
 }
 
 /** A page of the held list. Each filter given narrows it. */
-export interface HeldFilter { reason?: HeldReason; label?: string; laboratory?: string; offset: number; limit: number }
+/** `finding`: only requests the plugin named this finding code for (demo.4 item 10). */
+export interface HeldFilter { reason?: HeldReason; label?: string; laboratory?: string; finding?: string; offset: number; limit: number }
 /** A page of `heldItems`: by offset as `held`, or by key with `after` (a key, or null for the
  *  start). With `after`, `offset` is ignored and the answer adds `next`. */
 export type HeldItemsFilter = Omit<HeldFilter, 'offset'> & ({ offset: number; after?: undefined } | { after: string | null; offset?: number });
@@ -149,6 +152,11 @@ export interface ImportCheckService {
   held(pluginId: string, copyId: string, opts: HeldFilter): Promise<{ rows: HeldRow[]; total: number }>;
   /** A held request, with its corrections and the fields the plugin lets a person correct. */
   heldItem(pluginId: string, copyId: string, key: string): Promise<HeldItemView | null>;
+  /** The values a person may pick for each correctable field that has a fixed list, from the
+   *  copy's dictionaries, as the plugin reads them (demo.4 item 11). A plugin that names no
+   *  `choices` entrypoint has none: an empty object. A field the plugin does not let a person
+   *  correct is never in it. */
+  choices(pluginId: string, copyId: string): Promise<Record<string, FieldChoice[]>>;
   /** Stores corrections to a held request. Refuses a field the plugin does not declare, an empty
    *  reason, and a request that is not held by rules or check. */
   correct(input: ImportCheckCorrectInput): Promise<{ corrections: Correction[] }>;
@@ -159,6 +167,9 @@ export interface ImportCheckService {
    *  read by key: the rows past that key, and `next`, the last key of the page or null when no row
    *  is left. A page read by key does not move when a check adds or removes rows before it. */
   heldItems(pluginId: string, copyId: string, opts: HeldItemsFilter): Promise<{ items: HeldItem[]; total: number; next?: string | null }>;
+  /** Each finding code of the copy's held requests that match the filter, with how many carry it,
+   *  most first (demo.4 item 10). */
+  heldCodes(pluginId: string, copyId: string, opts: Omit<HeldFilter, 'offset' | 'limit' | 'finding'>): Promise<Array<{ code: string; count: number }>>;
   /** Server only. Take every run that needs a driver and start driving it. Does not wait. */
   tick(): Promise<void>;
   /** Resolves when this process is driving nothing. */
@@ -184,6 +195,20 @@ export interface ImportCheckServiceDeps extends Pick<ImportServiceDeps, 'plugins
   /** Injectable for tests; the wait while CE's own database does not answer. */
   sleep?: (ms: number) => Promise<void>;
 }
+
+/** One value a person may pick for a field: the code stored, and the name shown beside it. */
+export interface FieldChoice { code: string; description: string }
+
+/** The most values one field may offer, and the length of a code and of a name. */
+const CHOICES_MAX = 5000;
+const CHOICE_CODE_MAX = 40;
+const CHOICE_DESCRIPTION_MAX = 200;
+const choicesOutputSchema = z.object({
+  choices: z.record(z.array(z.object({
+    code: z.string().min(1).max(CHOICE_CODE_MAX),
+    description: z.string().max(CHOICE_DESCRIPTION_MAX),
+  })).max(CHOICES_MAX)),
+});
 
 export interface ImportCheckCorrectInput {
   pluginId: string;
@@ -299,6 +324,9 @@ const groupSchema = z.object({
   laboratory: z.unknown().optional(),
   // The values as read of the correctable fields. Read with care in `validFields`.
   fields: z.unknown().optional(),
+  // The finding codes of a held request, for the Held back filter (demo.4 item 10). Read with care
+  // in `validCodes`: a bad code is left out, never a bad answer.
+  codes: z.unknown().optional(),
 });
 const decodeOutputSchema = z.object({ groups: z.array(groupSchema) });
 const twinKeysOutputSchema = z.object({ keys: z.array(z.string()) });
@@ -372,6 +400,29 @@ async function declaredSets(sink: Sink, plugin: Checker, copy: CopyRun): Promise
   return new Map(parsed.data.sets.map((s) => [s.name, s.detailQueries.length > 0 ? s.detailQueries.map((q) => q.name) : [s.name]]));
 }
 
+/** Every set the plugin names for the source copy but `requests`, read whole, by set name. A set
+ *  with no row is handed as an empty list. All of them together are held to DICTIONARY_CAP. */
+async function readCopyDictionaries(copyStore: ImportCopyStore, copyId: string, names: string[]): Promise<Record<string, Array<Record<string, unknown>>>> {
+  const out: Record<string, Array<Record<string, unknown>>> = {};
+  let used = 0;
+  for (const name of names) {
+    let rows: CopyRow[];
+    try {
+      rows = await copyStore.readSet(copyId, name, DICTIONARY_CAP - used);
+    } catch (err) {
+      // Built from the count where the read stopped, never from a row, and never named the set's
+      // size: the read stops early.
+      if (err instanceof CopySetTooLargeError) {
+        throw new CheckFault(`the dictionaries of copy ${copyId} hold more than ${used + err.bytes} bytes of rows; the limit is ${DICTIONARY_CAP} bytes`);
+      }
+      throw new OwnDbFault(`OpenLDR's own database failed a read (${sqlState(err)})`);
+    }
+    for (const r of rows) used += Buffer.byteLength(JSON.stringify(r.row), 'utf8');
+    out[name] = rows.map((r) => r.row);
+  }
+  return out;
+}
+
 /** The status of a live check that reads this copy, as its source or its reference, or null. For
  *  the copy service, which refuses a start or a remove of such a copy. */
 export async function liveCheckStatus(pluginData: PluginDataStore, pluginId: string, copyId: string): Promise<CheckStatus | null> {
@@ -413,6 +464,19 @@ function validFields(raw: unknown, declared: string[]): Record<string, string | 
     const v = (raw as Record<string, unknown>)[name];
     if (v === null) out[name] = null;
     else if (typeof v === 'string') out[name] = storable(v.slice(0, CORRECTION_VALUE_MAX)) as string;
+  }
+  return out;
+}
+
+/** The most finding codes one held request keeps. */
+const CODES_MAX = 50;
+/** The finding codes a held group sent: bare words like a label, each once, at most CODES_MAX. */
+function validCodes(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const c of raw) {
+    if (typeof c === 'string' && FINDING_CODE.test(c) && !out.includes(c)) out.push(c);
+    if (out.length === CODES_MAX) break;
   }
   return out;
 }
@@ -632,28 +696,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
         return names;
       };
 
-      /** Every set the plugin names for the source copy but `requests`, read whole, by set name.
-       *  A set with no row is handed as an empty list. */
-      const readDictionaries = async (names: string[]): Promise<Record<string, Array<Record<string, unknown>>>> => {
-        const out: Record<string, Array<Record<string, unknown>>> = {};
-        let used = 0;
-        for (const name of names) {
-          let rows: CopyRow[];
-          try {
-            rows = await deps.copyStore.readSet(run.copyId, name, DICTIONARY_CAP - used);
-          } catch (err) {
-            // Built from the count where the read stopped, never from a row, and never named the
-            // set's size: the read stops early.
-            if (err instanceof CopySetTooLargeError) {
-              throw new CheckFault(`the dictionaries of copy ${run.copyId} hold more than ${used + err.bytes} bytes of rows; the limit is ${DICTIONARY_CAP} bytes`);
-            }
-            throw new OwnDbFault(`OpenLDR's own database failed a read (${sqlState(err)})`);
-          }
-          for (const r of rows) used += Buffer.byteLength(JSON.stringify(r.row), 'utf8');
-          out[name] = rows.map((r) => r.row);
-        }
-        return out;
-      };
+      const readDictionaries = (names: string[]) => readCopyDictionaries(deps.copyStore, run.copyId, names);
 
       /** What one drive learns once: the copies as they stood, the detail names, the dictionaries. */
       interface Prepared {
@@ -835,6 +878,7 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
               // refuses a NUL or a lone surrogate, so those are replaced.
               findings: storable(group.findings ?? null), check: storable(group.check ?? null),
               fields: validFields(group.fields, correctable),
+              codes: validCodes(group.codes),
               // A recheck keeps the pass that first held it, so its count stays where it was made (re-review H4).
               pass: rechecking ? passOf.get(key) ?? null : run.pass ?? null,
             }));
@@ -1187,6 +1231,11 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       return ownDb('read', () => deps.held.list(copyId, opts));
     },
 
+    async heldCodes(pluginId, copyId, opts) {
+      await ownCopy(pluginId, copyId);
+      return ownDb('read', () => deps.held.codes(copyId, opts));
+    },
+
     async heldItem(pluginId, copyId, key) {
       await ownCopy(pluginId, copyId);
       const item = await ownDb('read', () => deps.held.get(copyId, key));
@@ -1194,6 +1243,33 @@ export function createImportCheckService(deps: ImportCheckServiceDeps): ImportCh
       const correctable = correctableOf(await resolveChecker(pluginId));
       const corrections = deps.corrections ? (await ownDb('read', () => deps.corrections!.listFor(copyId, [key]))).get(key) ?? [] : [];
       return { ...item, corrections, correctable };
+    },
+
+    async choices(pluginId, copyId) {
+      const plugin = await resolveChecker(pluginId);
+      const entrypoint = plugin.source.entrypoints.choices;
+      const correctable = correctableOf(plugin);
+      if (entrypoint === undefined || correctable.length === 0) return {};
+      const copy = await completedCopy(pluginId, copyId);
+      await assertAllowed(pluginId, [copy]);
+      const sink = await loadImportSink(deps.plugins, plugin);
+      const sets = await declaredSets(sink, plugin, copy);
+      const dictionaries = await readCopyDictionaries(deps.copyStore, copy.id, [...sets.keys()].filter((n) => n !== REQUESTS));
+      let raw: unknown;
+      try {
+        raw = await sink.invoke(entrypoint, { options: copy.options, dictionaries, fields: correctable });
+      } catch {
+        // Fixed: the plugin's own text is never shown.
+        throw new Error('the plugin refused the choices call');
+      }
+      const parsed = choicesOutputSchema.safeParse(raw);
+      if (!parsed.success) throw new Error("the plugin's choices answer was not valid");
+      const out: Record<string, FieldChoice[]> = {};
+      for (const field of correctable) {
+        const list = parsed.data.choices[field];
+        if (list) out[field] = list.map((c) => ({ code: storable(c.code) as string, description: storable(c.description) as string }));
+      }
+      return out;
     },
 
     async correct(input) {

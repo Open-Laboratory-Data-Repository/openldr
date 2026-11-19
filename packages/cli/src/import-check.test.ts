@@ -16,6 +16,7 @@ vi.mock('@openldr/config', async (importOriginal) => ({
 vi.mock('@openldr/bootstrap', () => ({
   createAppContext: mocks.createAppContext,
   LABORATORY_CODE: /^[A-Za-z0-9._-]{1,32}$/,
+  FINDING_CODE: /^[a-z][a-z0-9_]{0,63}$/,
   // The numbers the plugin broker checks a held request page against.
   HELD_LABEL_MAX: 64, HELD_LIST_LIMIT_MAX: 100, HELD_ITEMS_LIMIT_MAX: 200,
   checkIdOf: (copyId: string) => `check-of-${copyId}`,
@@ -27,7 +28,7 @@ vi.mock('@openldr/bootstrap', () => ({
 
 import { COMMAND_META } from './command-meta';
 import {
-  formatCheckRun, runImportCheckCorrect, runImportCheckHeld, runImportCheckRecheck, runImportCheckStart, runImportCheckStatus, runImportCheckStop,
+  formatCheckRun, runImportCheckChoices, runImportCheckCodes, runImportCheckCorrect, runImportCheckHeld, runImportCheckRecheck, runImportCheckStart, runImportCheckStatus, runImportCheckStop,
 } from './import-check';
 
 // A source key and a patient value that must never be printed from a run. The key sits in the cursor.
@@ -241,6 +242,27 @@ describe('import check CLI', () => {
       expect(out.join('')).not.toContain(SECRET_KEY);
     });
 
+    // demo.4 item 11: the values a person may pick, so a correction from the CLI can use a real code.
+    it('choices prints each field with its codes and names, and --field keeps one field', async () => {
+      (checks as Record<string, unknown>).choices = vi.fn(async () => ({
+        specimen: [{ code: 'BM', description: 'Bone marrow' }, { code: 'FNA', description: 'Fine needle aspirate' }],
+        sex: [{ code: 'F', description: 'Female' }],
+      }));
+      expect(await runImportCheckChoices('v1-check', 'c0ffee', { json: false })).toBe(0);
+      expect((checks as Record<string, ReturnType<typeof vi.fn>>).choices).toHaveBeenCalledWith('v1-check', 'c0ffee');
+      expect(out.join('')).toBe('specimen  BM  Bone marrow\nspecimen  FNA  Fine needle aspirate\nsex  F  Female\n');
+      out.length = 0;
+      expect(await runImportCheckChoices('v1-check', 'c0ffee', { json: true, field: 'specimen' })).toBe(0);
+      expect(JSON.parse(out.join(''))).toEqual({ specimen: [{ code: 'BM', description: 'Bone marrow' }, { code: 'FNA', description: 'Fine needle aspirate' }] });
+      expect(mocks.recordCheckRead).toHaveBeenCalledWith(expect.anything(), expect.anything(), { pluginId: 'v1-check', copyId: 'c0ffee', kind: 'choices' });
+    });
+
+    it('choices says so when a field has no list', async () => {
+      (checks as Record<string, unknown>).choices = vi.fn(async () => ({}));
+      expect(await runImportCheckChoices('v1-check', 'c0ffee', { json: false, field: 'specimen' })).toBe(0);
+      expect(out.join('')).toBe('no list of values for specimen\n');
+    });
+
     it('recheck queues the run and prints it', async () => {
       expect(await runImportCheckRecheck('v1-check', 'c0ffee', SECRET_KEY, { json: false })).toBe(0);
       expect(checks.recheck).toHaveBeenCalledWith({ pluginId: 'v1-check', copyId: 'c0ffee', key: SECRET_KEY, actor: cli });
@@ -251,6 +273,21 @@ describe('import check CLI', () => {
 
   describe('held', () => {
     const heldOpts = { json: false };
+
+    // demo.4 item 10: the held list by finding code, and the codes with counts.
+    it('--finding filters the list by a finding code, and refuses one that is not a bare word', async () => {
+      checks.held.mockResolvedValue({ rows: [], total: 0 });
+      expect(await runImportCheckHeld('v1-check', 'c0ffee', { ...heldOpts, finding: 'specimen_missing' })).toBe(0);
+      expect(checks.held).toHaveBeenCalledWith('v1-check', 'c0ffee', { finding: 'specimen_missing', offset: 0, limit: 50 });
+      await expect(runImportCheckHeld('v1-check', 'c0ffee', { ...heldOpts, finding: 'Not A Code' })).rejects.toThrow(/--finding/);
+    });
+
+    it('codes lists each finding code with its count, most first, and takes the filters', async () => {
+      (checks as Record<string, unknown>).heldCodes = vi.fn(async () => [{ code: 'specimen_missing', count: 2385 }, { code: 'panel_specimen_mismatch', count: 41 }]);
+      expect(await runImportCheckCodes('v1-check', 'c0ffee', { json: false, laboratory: 'TBG' })).toBe(0);
+      expect((checks as Record<string, ReturnType<typeof vi.fn>>).heldCodes).toHaveBeenCalledWith('v1-check', 'c0ffee', { laboratory: 'TBG' });
+      expect(out.join('')).toBe('specimen_missing  2385\npanel_specimen_mismatch  41\n');
+    });
 
     it('lists the rows with no findings, then the total, and asks for 50 from 0 by default', async () => {
       checks.held.mockResolvedValue({ rows: [heldRow(1), heldRow(2, { reason: 'error', label: null, laboratory: null, error: 'DECODE_FAILED' })], total: 7 });

@@ -53,14 +53,14 @@ describe('system role presets', () => {
       'reports.view', 'reports.run', 'reports.export', 'reports.edit_templates',
       'forms.view', 'forms.submit', 'forms.edit', 'forms.publish',
       'workflows.view', 'workflows.edit', 'workflows.run', 'workflows.manage_secrets',
-      'query.run',
+      'query.run', 'query.manage',
       'terminology.view', 'terminology.manage',
       'facilities.view', 'facilities.manage',
       'patients.view', 'patients.view_identifiers', 'patients.manage',
       'activity.view', 'notifications.view',
     ]);
     expect(role('data_analyst')).toEqual([
-      'dashboards.view', 'reports.view', 'reports.run', 'reports.export', 'forms.view', 'query.run',
+      'dashboards.view', 'reports.view', 'reports.run', 'reports.export', 'forms.view', 'query.run', 'query.manage',
       'terminology.view', 'facilities.view', 'patients.view', 'activity.view', 'notifications.view',
     ]);
     expect(role('system_auditor')).toEqual([

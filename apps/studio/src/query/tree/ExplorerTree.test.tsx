@@ -25,6 +25,11 @@ vi.mock('../api', () => ({ queryApi: {
   removeGroup: vi.fn(async () => ({ ok: true })),
 } }));
 
+let caps: string[] | 'all' = 'all';
+vi.mock('@/auth/AuthProvider', () => ({
+  useAuth: () => ({ hasCapability: (c: string) => caps === 'all' || caps.includes(c) }),
+}));
+
 // Radix menus open on pointerDown in jsdom, with Enter as the fallback.
 function openMenu(trigger: HTMLElement) {
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
@@ -58,7 +63,18 @@ describe('groupQueries and dropMove', () => {
 });
 
 describe('ExplorerTree', () => {
-  beforeEach(() => { vi.clearAllMocks(); useQueryStore.getState().reset(); });
+  beforeEach(() => { vi.clearAllMocks(); useQueryStore.getState().reset(); caps = 'all'; });
+
+  // demo.4 item 13: without query.manage the saved list is read-only, so no change menu shows.
+  it('shows no rename, move, delete or group menus without query.manage', async () => {
+    caps = ['query.run'];
+    await openQueries();
+    fireEvent.click(screen.getByText('TB'));
+    await screen.findByText('TB LAM');
+    expect(screen.queryByRole('button', { name: 'Custom query actions' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Actions for “Q1”' })).toBeNull();
+    expect(screen.queryAllByRole('button', { name: /actions/i })).toEqual([]);
+  });
 
   it('Refresh reloads the custom queries and every open connector branch', async () => {
     await openQueries();

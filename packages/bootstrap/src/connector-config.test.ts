@@ -86,6 +86,29 @@ it('tests a database connector with its stored credentials and reports the failu
   } finally { await db.destroy(); }
 });
 
+// demo.4 item 7: a SQL Server with a self-signed certificate failed Test with Node's own advice to
+// run Node.js with --use-system-ca, which a lab user cannot do. The fix is the connector's
+// "Trust server certificate" switch, so the result names that instead.
+it('points a certificate failure to Trust server certificate, not to a Node.js flag', async () => {
+  const db = await makeMigratedDb();
+  try {
+    const store = createConnectorStore(db);
+    const key = randomBytes(32).toString('base64');
+    await store.create({ id: 'ms', name: 'MS', type: 'microsoft-sql', kind: 'database', config: { host: 'db', password: 'p' } }, key);
+    const nodeText = 'Failed to connect to 127.0.0.1:14341 - self-signed certificate; if the root CA is installed locally, try running Node.js with --use-system-ca';
+    expect(await testHostConnector(store, 'ms', key, async () => { throw new Error(nodeText); })).toEqual({
+      ok: false, error: 'Failed to connect to 127.0.0.1:14341 - self-signed certificate', hint: 'tlsCertificate',
+    });
+    // Only a SQL Server connector has that switch (Codex review B7-R1), so other types get no hint.
+    for (const type of ['postgres', 'mysql']) {
+      await store.create({ id: type, name: type, type, kind: 'database', config: { host: 'db', password: 'p' } }, key);
+      expect(await testHostConnector(store, type, key, async () => { throw new Error(nodeText); })).toEqual({
+        ok: false, error: 'Failed to connect to 127.0.0.1:14341 - self-signed certificate',
+      });
+    }
+  } finally { await db.destroy(); }
+});
+
 it('removes a connector and hands back what it removed', async () => {
   const db = await makeMigratedDb();
   try {

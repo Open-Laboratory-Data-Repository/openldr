@@ -3447,7 +3447,8 @@ export interface ConnectorMetadataCounts {
 }
 export type ConnectorTestResult =
   | { ok: true; metadata?: ConnectorMetadataCounts }
-  | { ok: false; error: string };
+  // hint: the server's advice for a failure it recognises (demo.4 item 7).
+  | { ok: false; error: string; hint?: 'tlsCertificate' };
 export interface ConnectorCreateInput {
   name: string; pluginId?: string; type?: string; config: Record<string, string>; allowedHost?: string;
 }

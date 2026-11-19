@@ -270,7 +270,7 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
       try {
         const result = await testHostConnector(connectors, id, key());
         await auditTest(result.ok ? 'ok' : 'failed', result.ok ? undefined : 'error');
-        return result.ok ? result : { ok: false, error: redact(result.error) };
+        return result.ok ? result : { ok: false, error: redact(result.error), ...(result.hint ? { hint: result.hint } : {}) };
       } catch (e) {
         await auditTest('failed', 'error');
         return { ok: false, error: redact(e instanceof Error ? e.message : String(e)) };

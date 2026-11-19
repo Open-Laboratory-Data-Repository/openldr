@@ -130,6 +130,8 @@ O laboratório também pode disponibilizar disposições com nome para a barra l
 
 Sem uma escolha pessoal, o Studio usa a página inicial da sua disposição quando está disponível. Caso contrário, abre o painel. Escolher **Painel** explicitamente faz com que abra primeiro.
 
+Se a sua função não pode abrir o painel, o Studio abre a sua página inicial, ou então a primeira página da sua barra lateral.
+
 ## Resolução de problemas
 
 **A página escolhida não abre primeiro**

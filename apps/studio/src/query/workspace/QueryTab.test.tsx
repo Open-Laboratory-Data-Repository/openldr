@@ -18,10 +18,17 @@ vi.mock('../api', () => ({ queryApi: {
   groups: vi.fn(async () => []),
 } }));
 
+let caps: string[] | 'all' = 'all';
+vi.mock('@/auth/AuthProvider', () => ({
+  useAuth: () => ({ hasCapability: (c: string) => caps === 'all' || caps.includes(c) }),
+}));
+beforeEach(() => { caps = 'all'; });
+
 const tab: QueryTabModel = { id: 't1', kind: 'query', title: 'Query #1', connectorId: 'c1', sql: 'select 1 as n', params: [], dirty: false };
 
 describe('QueryTab', () => {
   beforeEach(() => vi.clearAllMocks());
+
   it('runs a query with no params and shows results', async () => {
     render(<QueryTab tab={tab} />);
     fireEvent.click(screen.getByRole('button', { name: /run/i }));
@@ -59,6 +66,23 @@ describe('saving named queries', () => {
     await user.click(screen.getByRole('button', { name: trigger }));
     await user.click(screen.getByRole('menuitem', { name }));
   }
+
+  // demo.4 item 13: without query.manage a saved query cannot be changed. Save makes a copy under a
+  // new name and the tab then edits the copy; Rename is not offered.
+  it('saves a copy of a saved query without query.manage, and offers no Rename', async () => {
+    caps = ['query.run'];
+    useQueryStore.setState({ tabs: [{ ...tab, title: 'Lab totals', customQueryId: 'theirs' }] });
+    render(<Workspace />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Query actions' }));
+    expect(screen.queryByRole('menuitem', { name: 'Rename' })).toBeNull();
+    await user.click(screen.getByRole('menuitem', { name: 'Save' }));
+    expect(await screen.findByLabelText('Name')).toHaveValue('Lab totals (copy)');
+    await action('Save', 'Name actions');
+    await waitFor(() => expect(queryApi.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Lab totals (copy)', sql: 'select 1 as n' })));
+    expect(queryApi.update).not.toHaveBeenCalled();
+    expect(useQueryStore.getState().tabs[0]).toMatchObject({ title: 'Lab totals (copy)', customQueryId: 'saved-new' });
+  });
 
   it('asks for a name before first save and updates the saved query on subsequent saves', async () => {
     render(<Workspace />);

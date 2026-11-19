@@ -36,6 +36,7 @@ const RAW: Omit<CapabilityMeta, never>[] = [
   { key: 'workflows.manage_secrets', group: 'workflows', label: 'Manage workflow secrets', description: 'View and set encrypted workflow secrets.' },
   // Query
   { key: 'query.run', group: 'query', label: 'Use query workbench', description: 'Run ad-hoc SQL queries against analytics data.' },
+  { key: 'query.manage', group: 'query', label: 'Manage saved queries', description: 'Edit, rename, move and delete any saved query, manage query groups, and replace queries on import.' },
   // Users
   { key: 'users.view', group: 'users', label: 'View users', description: 'Open the Users workspace and see accounts.' },
   { key: 'users.manage', group: 'users', label: 'Manage users', description: 'Create, edit, enable, and disable user accounts.' },

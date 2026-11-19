@@ -16,6 +16,7 @@ import { StatusIcon, IconButton, Sep, type RunStatus } from './toolbar-bits';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { QueryNameSheet } from './QueryNameSheet';
+import { useAuth } from '@/auth/AuthProvider';
 
 export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
   const { t } = useTranslation();
@@ -32,6 +33,9 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
   const [lastValues, setLastValues] = useState<Record<string, unknown>>({});
   const [nameOpen, setNameOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Changing a saved query needs query.manage (demo.4 item 13). Without it, Save makes a copy.
+  const canManage = useAuth().hasCapability('query.manage');
+  const copying = !!tab.customQueryId && !canManage;
 
   useEffect(() => { queryApi.connectors().then(setConnectors); }, []);
 
@@ -54,7 +58,7 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
     const input = { name, connectorId: tab.connectorId ?? '', sql: tab.sql, params: tab.params };
     setSaving(true);
     try {
-      if (tab.customQueryId) await queryApi.update(tab.customQueryId, input);
+      if (tab.customQueryId && !copying) await queryApi.update(tab.customQueryId, input);
       else { const { id } = await queryApi.create(input); patchQuery(tab.id, { customQueryId: id }); }
       patchQuery(tab.id, { title: name, dirty: false });
       useQueryStore.getState().refreshSavedQueries();
@@ -64,7 +68,7 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
 
   const save = () => {
     if (saving) return;
-    if (!tab.customQueryId) { setNameOpen(true); return; }
+    if (!tab.customQueryId || copying) { setNameOpen(true); return; }
     void persist(tab.title).catch((cause: unknown) => {
       const message = cause instanceof Error ? cause.message : String(cause);
       setStatus('error'); setError(message); toast.error(message);
@@ -72,7 +76,7 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
   };
 
   const saveName = async (name: string) => {
-    if (!tab.customQueryId) return persist(name);
+    if (!tab.customQueryId || copying) return persist(name);
     setSaving(true);
     try {
       await queryApi.update(tab.customQueryId, { name });
@@ -112,7 +116,7 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem disabled={saving} onSelect={save}>{t('query.save')}</DropdownMenuItem>
-                <DropdownMenuItem disabled={saving} onSelect={() => setNameOpen(true)}>{t('query.rename')}</DropdownMenuItem>
+                {!copying && <DropdownMenuItem disabled={saving} onSelect={() => setNameOpen(true)}>{t('query.rename')}</DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>
             <Sep />
@@ -148,7 +152,7 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
           />
         )}
       </div>
-      {nameOpen && <QueryNameSheet initialName={tab.title} onClose={() => setNameOpen(false)} onSave={saveName} />}
+      {nameOpen && <QueryNameSheet initialName={copying ? t('query.copyName', { name: tab.title }) : tab.title} onClose={() => setNameOpen(false)} onSave={saveName} />}
       <RunParamsSheet open={sheetOpen} onClose={() => setSheetOpen(false)} params={tab.params}
         connectorId={tab.connectorId ?? ''} onRun={(values) => { setSheetOpen(false); void execute(values, 0); }} />
       <ParametersEditor open={paramsOpen} parameters={tab.params} onClose={() => setParamsOpen(false)}

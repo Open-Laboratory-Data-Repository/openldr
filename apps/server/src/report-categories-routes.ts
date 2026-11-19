@@ -18,8 +18,9 @@ export function registerReportCategoryRoutes(
     const p = ReportCategoryListSchema.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
     const before = await ctx.reportCategories.list();
+    // A jsonb column on real Postgres refuses a bare array, so the lists go in an object.
     await ctx.reportCategories.save(p.data);
-    await recordAudit(ctx, req, { action: 'report-category.update', entityType: 'report-category', entityId: 'global', before, after: p.data });
+    await recordAudit(ctx, req, { action: 'report-category.update', entityType: 'report-category', entityId: 'global', before: { categories: before }, after: { categories: p.data } });
     return p.data;
   });
 }

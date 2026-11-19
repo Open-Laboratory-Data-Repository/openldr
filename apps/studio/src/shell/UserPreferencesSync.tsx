@@ -78,6 +78,8 @@ export function UserPreferencesSync() {
 /**
  * Wraps the `/` route. The first time the app lands on `/`, it sends the user to their saved first
  * page instead, if that page is in their sidebar. Every later visit to `/` shows the children.
+ * A user who cannot open the Dashboard is sent on every visit: to their saved first page, else the
+ * first page in their sidebar. `/` is Access denied for them (demo.4 item 6).
  */
 export function StartPageGate({ children }: { children: ReactNode }) {
   const { user, hasCapability } = useAuth();
@@ -92,14 +94,17 @@ export function StartPageGate({ children }: { children: ReactNode }) {
   }, [decided]);
 
   // No user: nothing to read. The route's own guard handles it.
-  if (!firstLanding || !user) return <>{children}</>;
+  if (!user) return <>{children}</>;
+  const dashboard = hasCapability('dashboards.view');
+  if (!firstLanding && dashboard) return <>{children}</>;
   if (!loaded) return <LoadingState className="h-dvh" />;
   // The user's own first page, else their layout's: the first of those that is in their sidebar.
-  // An explicit '/' (Dashboard picked under a layout) stops there.
+  // An explicit '/' (Dashboard picked under a layout) stops there, for a user who can open it.
   const layout = layoutInForce(prefs, list);
-  if (prefs.startPage === '/') return <>{children}</>;
+  if (dashboard && prefs.startPage === '/') return <>{children}</>;
   const shown = visibleNav(hasCapability, layout);
   const target = [prefs.startPage, layout?.startPage ?? undefined]
-    .find((p): p is string => !!p && p !== '/' && shown.some((n) => n.to === p));
+    .find((p): p is string => !!p && p !== '/' && shown.some((n) => n.to === p))
+    ?? (dashboard ? undefined : shown.find((n) => n.to !== '/')?.to);
   return target ? <Navigate to={target} replace /> : <>{children}</>;
 }

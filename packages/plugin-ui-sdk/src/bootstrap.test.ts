@@ -76,6 +76,9 @@ describe('SDK_BOOTSTRAP_V1', () => {
     await check.correct({ copyId: 'cp1', key: 'REQ1', values: { dob_age: '2023-03-11', sex: null }, reason: 'typed wrong' });
     await check.recheck({ copyId: 'cp1', key: 'REQ1' });
     await check.access();
+    await check.choices({ copyId: 'cp1' });
+    await check.heldCodes({ copyId: 'cp1', laboratory: 'LAB-1' });
+    await check.held({ copyId: 'cp1', finding: 'specimen_missing', offset: 0, limit: 10 });
     expect(sent.map((m) => m.op)).toEqual([
       { kind: 'import.check.start', copyId: 'cp1', referenceCopyId: null, options: { tz: '+02:00' }, pageSize: 200 },
       { kind: 'import.check.list' },
@@ -90,9 +93,12 @@ describe('SDK_BOOTSTRAP_V1', () => {
       { kind: 'import.check.correct', copyId: 'cp1', key: 'REQ1', values: { dob_age: '2023-03-11', sex: null }, reason: 'typed wrong' },
       { kind: 'import.check.recheck', copyId: 'cp1', key: 'REQ1' },
       { kind: 'import.check.access' },
+      { kind: 'import.check.choices', copyId: 'cp1' },
+      { kind: 'import.check.heldCodes', copyId: 'cp1', laboratory: 'LAB-1' },
+      { kind: 'import.check.held', copyId: 'cp1', finding: 'specimen_missing', offset: 0, limit: 10 },
     ]);
     // After is sent as given, a null included: null asks for the first page.
-    expect(sent.at(-5)!.op).toHaveProperty('after', null);
+    expect(sent.at(-8)!.op).toHaveProperty('after', null);
   });
 
   it('files.download sends the host operation and resolves with nothing', async () => {

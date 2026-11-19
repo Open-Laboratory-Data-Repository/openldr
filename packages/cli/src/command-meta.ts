@@ -283,6 +283,9 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // Held corrections: a corrector needs only this key, not connectors.manage (design 2026-11-18-held-corrections).
   'import check correct': { kind: 'app', capability: 'imports.correct_held' },
   'import check recheck': { kind: 'app', capability: 'imports.correct_held' },
+  'import check choices': { kind: 'app', capability: 'imports.correct_held' },
+  // demo.4 item 10: bare codes and counts.
+  'import check codes': { kind: 'app', capability: 'connectors.manage' },
   'import check held': { kind: 'app', capability: 'connectors.manage', destructive: true, paths: [outFile('--export', { private: true, keepExistingUnless: '--force' })] },
 
   // No route sends a file through the pipeline with any converter. It writes clinical records.
@@ -343,7 +346,8 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // No route. It lists FHIR resources with no source, plugin or batch: a read-only oversight check.
   'provenance audit': { kind: 'app', capability: 'audit.view' },
 
-  // query-routes.ts:30: every custom-query route needs query.run, export (:148) and import (:162) included.
+  // query-routes.ts: every custom-query route needs query.run, export and import included. Import with
+  // --force replaces saved queries, so query.ts also checks query.manage, as the route does.
   'query export': { kind: 'app', capability: 'query.run', paths: [outFile('--out')] },
   'query import': { kind: 'app', capability: 'query.run', destructive: true, paths: [inFile('file')] },
 

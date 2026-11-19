@@ -52,7 +52,7 @@ it('offers the import commands', () => {
   expect(copyStart.options.filter((option) => option.mandatory).map((option) => option.long)).toEqual(['--plugin', '--connector']);
   expect(copyStart.options.some((option) => option.long === '--follow')).toBe(false);
   const check = imports.commands.find((command) => command.name() === 'check')!;
-  expect(check.commands.map((command) => command.name())).toEqual(['start', 'status', 'stop', 'correct', 'recheck', 'held']);
+  expect(check.commands.map((command) => command.name())).toEqual(['start', 'status', 'stop', 'correct', 'choices', 'recheck', 'held', 'codes']);
   const checkStart = check.commands.find((command) => command.name() === 'start')!;
   expect(checkStart.options.filter((option) => option.mandatory).map((option) => option.long)).toEqual(['--plugin', '--copy']);
 });

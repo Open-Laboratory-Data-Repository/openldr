@@ -7,6 +7,10 @@ vi.mock('../api', () => ({ queryApi: {
   connectors: vi.fn(),
   importQueries: vi.fn(),
 } }));
+let caps: string[] | 'all' = 'all';
+vi.mock('@/auth/AuthProvider', () => ({
+  useAuth: () => ({ hasCapability: (c: string) => caps === 'all' || caps.includes(c) }),
+}));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 
 import { toast } from 'sonner';
@@ -35,6 +39,7 @@ async function menuItem(testId: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  caps = 'all';
   vi.mocked(queryApi.list).mockResolvedValue([{ id: 'q1', name: 'Alpha', connectorId: 'c', sql: 'x', params: [] }]);
   vi.mocked(queryApi.connectors).mockResolvedValue([
     { id: 'c1', name: 'Other', type: 'postgres' },
@@ -43,6 +48,15 @@ beforeEach(() => {
 });
 
 describe('ImportQueriesSheet', () => {
+  // demo.4 item 13: replacing saved queries needs query.manage, so the switch is not offered.
+  it('offers no replace switch without query.manage, so existing names are skipped', async () => {
+    caps = ['query.run'];
+    render(<ImportQueriesSheet open onOpenChange={() => {}} />);
+    await chooseFile(FILE);
+    expect(await screen.findByText('exists (skip)')).toBeInTheDocument();
+    expect(screen.queryByRole('switch')).toBeNull();
+  });
+
   it('marks each query new or exists (skip), and replace flips skip to replace', async () => {
     render(<ImportQueriesSheet open onOpenChange={() => {}} />);
     await chooseFile(FILE);

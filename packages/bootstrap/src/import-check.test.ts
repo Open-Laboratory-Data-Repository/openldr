@@ -157,6 +157,8 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
   let decodeFn: (input: DecodeInput) => unknown = (input) => ({ groups: input.keys.map(pass) });
   let twinFn: (keys: string[]) => unknown = (keys) => ({ keys: keys.map((k) => `T-${k}`) });
   const copyCalls: Array<Record<string, string>> = [];
+  const choicesCalls: unknown[] = [];
+  let choicesFn: (input: unknown) => unknown = () => ({ choices: {} });
   /** The plugin's copy answer. The source names requests (two details) and one dictionary; a copy
    *  made with the option role=reference names the set twins. */
   let copyFn: (options: Record<string, string>) => unknown = (options) => (options.role === 'reference'
@@ -172,6 +174,10 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
       const i = input as { options: Record<string, string>; keys: string[] };
       twinCalls.push(structuredClone(i));
       return twinFn(i.keys);
+    }
+    if (entrypoint === 'import_choices') {
+      choicesCalls.push(structuredClone(input));
+      return choicesFn(input);
     }
     if (entrypoint === 'import_copy') {
       const i = input as { options: Record<string, string> };
@@ -247,7 +253,8 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
     interruptions, corrections, refuseAudit,
     gateAudit: (action: string) => { let release!: () => void; auditGates.set(action, new Promise<void>((r) => { release = r; })); return () => { auditGates.delete(action); release(); }; },
     svc, service, copies, raw, audited, runSaves, decodeCalls, twinCalls, invoke, persisted, clock, sleeps, plugins,
-    readSetCalls, readCalls, heldPuts, copyCalls, allowedCalls,
+    readSetCalls, readCalls, heldPuts, copyCalls, allowedCalls, choicesCalls,
+    setChoices: (fn: (input: unknown) => unknown) => { choicesFn = fn; },
     revoke: (connectorId: string) => { allowedConnectors.delete(connectorId); },
     setCopy: (fn: (options: Record<string, string>) => unknown) => { copyFn = fn; }, realHeld, seedCopy, setCopyStatus,
     setDecode: (fn: (input: DecodeInput) => unknown) => { decodeFn = fn; },
@@ -2088,5 +2095,70 @@ describe('held corrections (design 2026-11-18-held-corrections)', () => {
     await plain.svc.start({ ...START, pageSize: 10 });
     await drive(plain.svc);
     expect('corrections' in (plain.decodeCalls[0] as object)).toBe(false);
+  });
+});
+
+// demo.4 item 11: a person correcting a held specimen picks it from the source's own list. The list
+// comes from the copy's dictionaries, as the plugin reads them; CE knows nothing of the source.
+describe('choices for a correctable field', () => {
+  const WITH_CHOICES = { ...CHECKER, choices: 'import_choices' };
+
+  it('asks the plugin with the copy dictionaries and keeps only correctable fields', async () => {
+    const w = await world({ entrypoints: WITH_CHOICES, corrections: ['specimen', 'sex'] });
+    await sourceCopy(w, keysOf(1));
+    w.setChoices(() => ({ choices: { specimen: [{ code: 'FNA', description: 'Fine needle aspirate' }], ward: [{ code: 'W1', description: 'Ward one' }] } }));
+    expect(await w.svc.choices(PLUGIN, SRC)).toEqual({ specimen: [{ code: 'FNA', description: 'Fine needle aspirate' }] });
+    expect(w.choicesCalls).toHaveLength(1);
+    const input = w.choicesCalls[0] as { fields: string[]; dictionaries: Record<string, Row[]>; options: Record<string, string> };
+    expect(input.fields).toEqual(['specimen', 'sex']);
+    expect(Object.keys(input.dictionaries)).toEqual(['facilities']);
+    expect(input.dictionaries.facilities).toHaveLength(2);
+  });
+
+  it('is empty for a plugin that names no choices entrypoint, and never calls it', async () => {
+    const w = await world({ corrections: ['specimen'] });
+    await sourceCopy(w, keysOf(1));
+    expect(await w.svc.choices(PLUGIN, SRC)).toEqual({});
+    expect(w.choicesCalls).toHaveLength(0);
+  });
+
+  it('refuses an answer that is not valid, with a fixed sentence', async () => {
+    const w = await world({ entrypoints: WITH_CHOICES, corrections: ['specimen'] });
+    await sourceCopy(w, keysOf(1));
+    w.setChoices(() => ({ choices: { specimen: [{ code: '', description: SECRET }] } }));
+    await expect(w.svc.choices(PLUGIN, SRC)).rejects.toThrow("the plugin's choices answer was not valid");
+    w.setChoices(() => { throw new Error(SECRET); });
+    await expect(w.svc.choices(PLUGIN, SRC)).rejects.toThrow('the plugin refused the choices call');
+  });
+
+  it('refuses a copy the plugin may no longer read', async () => {
+    const w = await world({ entrypoints: WITH_CHOICES, corrections: ['specimen'] });
+    await sourceCopy(w, keysOf(1));
+    w.revoke('c1');
+    await expect(w.svc.choices(PLUGIN, SRC)).rejects.toThrow(/no longer allowed/);
+  });
+});
+
+// demo.4 item 10: the Held back list filters by finding code and counts each code. The plugin
+// names the codes with each held request; a bad code is left out, never a bad answer.
+describe('held finding codes', () => {
+  it('stores the codes a held group names, filters by one, and counts them', async () => {
+    const w = await world();
+    await sourceCopy(w, keysOf(3));
+    w.setDecode((input) => ({
+      groups: [
+        { key: input.keys[0], held: true, label: 'held_rules', codes: ['specimen_missing', 'specimen_missing', 'Bad Code', SECRET, 7] },
+        { key: input.keys[1], held: true, label: 'held_rules', codes: ['specimen_missing', 'record_has_no_observations'] },
+        { key: input.keys[2], held: true, label: 'held_rules', codes: 'not a list' },
+      ],
+    }));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const keysWith = async (finding: string) => (await w.svc.held(PLUGIN, SRC, { finding, offset: 0, limit: 10 })).rows.map((r) => r.key);
+    expect(await keysWith('specimen_missing')).toEqual(['REQ0001', 'REQ0002']);
+    expect(await keysWith('record_has_no_observations')).toEqual(['REQ0002']);
+    expect((await w.svc.heldItems(PLUGIN, SRC, { finding: 'specimen_missing', after: null, limit: 10 })).items.map((i) => i.key)).toEqual(['REQ0001', 'REQ0002']);
+    expect(await w.svc.heldCodes(PLUGIN, SRC, {})).toEqual([{ code: 'specimen_missing', count: 2 }, { code: 'record_has_no_observations', count: 1 }]);
+    await expect(w.svc.heldCodes(PLUGIN, 'no-such-copy', {})).rejects.toThrow(/not found/);
   });
 });

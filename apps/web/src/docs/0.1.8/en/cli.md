@@ -134,7 +134,7 @@ These cases were reproduced on Linux with the installed launcher and real CLI in
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
 | `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see **Facilities** in the studio's Docs). |
 | `test-catalog` | The national test catalog: `list` the tests, `import` a list from CSV or Excel, `export` it as CSV, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog. |
-| `query` | Custom queries: `export` them to a JSON file, `import` them from one (`--force` replaces existing names). |
+| `query` | Custom queries: `export` them to a JSON file, `import` them from one (`--force` replaces existing names and needs **Manage saved queries**; without it, an import adds new queries with no group). |
 | `pipeline` | Inspect ingest batches: `status`, `retry`, `logs`. |
 | `queue` | Inspect the event queue. |
 | `provenance` | Provenance audit tooling. |
@@ -499,7 +499,9 @@ A long job cut off by a restart records it. Most carry on by themselves; these c
 A source check holds a request back when its rules find an error. Someone with the **Correct held requests** permission can correct the request's fields and check it again. The source rows stay as they are; the correction is kept beside them with who, when and why.
 
 - `openldr import check correct <plugin> <copy> <key> --set field=value --reason "why"` corrects one or more fields. Repeat `--set` for each field. An empty value clears the field. The plugin decides which fields can be corrected.
+- `openldr import check choices <plugin> <copy> [--field specimen]` lists the values a field may be corrected to, such as the source's specimen codes. Use a code from it in `--set`.
 - `openldr import check recheck <plugin> <copy> <key>` checks the request again in the run that held it. If it now passes it is saved and leaves the held list. Run `import check held` to see the result.
+- `openldr import check codes <plugin> <copy>` lists the finding codes of the held requests, each with how many requests carry it. `openldr import check held <plugin> <copy> --finding <code>` lists only the requests with one of them.
 
 ## Who may open and submit a form
 

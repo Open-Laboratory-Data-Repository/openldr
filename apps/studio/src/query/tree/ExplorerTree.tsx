@@ -9,6 +9,7 @@ import {
 } from '@dnd-kit/core';
 import { queryApi, type ConnectorRef, type DatasetRef } from '../api';
 import { useQueryStore } from '../store';
+import { useAuth } from '@/auth/AuthProvider';
 import type { CustomQuery, CustomQueryGroup } from '../custom-query-types';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { TruncatedText } from '@/components/ui/truncated-text';
@@ -93,10 +94,10 @@ function DropTarget({ groupId, children }: { groupId: string | null; children: R
   );
 }
 
-function DraggableQuery({ id, children }: { id: string; children: React.ReactNode }): JSX.Element {
+function DraggableQuery({ id, disabled, children }: { id: string; disabled?: boolean; children: React.ReactNode }): JSX.Element {
   // Only the pointer listeners. The row inside is already a button, and keyboard users move a
   // query with the row's "Move to group" menu.
-  const { setNodeRef, listeners, isDragging } = useDraggable({ id: queryDragId(id) });
+  const { setNodeRef, listeners, isDragging } = useDraggable({ id: queryDragId(id), disabled });
   return (
     <div ref={setNodeRef} {...listeners} className={`group flex min-w-0 items-center ${isDragging ? 'opacity-40' : ''}`}>
       {children}
@@ -127,6 +128,9 @@ const fetchTables = (s: Scope, schema: string): Promise<string[]> =>
 
 export function ExplorerTree(): JSX.Element {
   const { t } = useTranslation();
+  // Changing a saved query or a group needs query.manage (demo.4 item 13). Without it the list is
+  // read-only: open, run, and save a copy from the tab.
+  const canManage = useAuth().hasCapability('query.manage');
   const openTableTab = useQueryStore((s) => s.openTableTab);
   const openDatasetTab = useQueryStore((s) => s.openDatasetTab);
   const openQueryTab = useQueryStore((s) => s.openQueryTab);
@@ -291,11 +295,11 @@ export function ExplorerTree(): JSX.Element {
   const grouped = groupQueries(queries, groups);
 
   const queryRow = (q: CustomQuery, depth: number) => (
-    <DraggableQuery key={q.id} id={q.id}>
+    <DraggableQuery key={q.id} id={q.id} disabled={!canManage}>
       <div className="min-w-0 flex-1">
         <Row depth={depth} onClick={() => openQueryTab({ customQueryId: q.id, title: q.name, connectorId: q.connectorId, sql: q.sql, params: q.params })} icon={<Zap className="h-3.5 w-3.5" />} label={q.name} />
       </div>
-      <RowMenu label={t('query.groups.rowActions', { name: q.name })}>
+      {canManage && <RowMenu label={t('query.groups.rowActions', { name: q.name })}>
         <DropdownMenuItem onSelect={() => setNameSheet({ kind: 'renameQuery', query: q })}>{t('query.rename')}</DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>{t('query.groups.moveTo')}</DropdownMenuSubTrigger>
@@ -311,7 +315,7 @@ export function ExplorerTree(): JSX.Element {
         </DropdownMenuSub>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteId(q.id)}>{t('query.deleteQuery')}</DropdownMenuItem>
-      </RowMenu>
+      </RowMenu>}
     </DraggableQuery>
   );
 
@@ -349,9 +353,9 @@ export function ExplorerTree(): JSX.Element {
             <div className="min-w-0 flex-1">
               <Row depth={0} open={!!openBranch.queries} onClick={() => toggle('queries')} icon={<Zap className="h-3.5 w-3.5" />} label={t('query.customQueries')} />
             </div>
-            <RowMenu label={t('query.groups.branchActions')}>
+            {canManage && <RowMenu label={t('query.groups.branchActions')}>
               <DropdownMenuItem onSelect={() => setNameSheet({ kind: 'newGroup' })}>{t('query.groups.newGroup')}</DropdownMenuItem>
-            </RowMenu>
+            </RowMenu>}
           </div>
         </DropTarget>
         {openBranch.queries && (
@@ -363,11 +367,11 @@ export function ExplorerTree(): JSX.Element {
                     <div className="min-w-0 flex-1">
                       <Row depth={1} open={!!openBranch[`g:${g.id}`]} onClick={() => toggle(`g:${g.id}`)} icon={<Folder className="h-3.5 w-3.5" />} label={g.name} count={inGroup.length} />
                     </div>
-                    <RowMenu label={t('query.groups.groupActions', { name: g.name })}>
+                    {canManage && <RowMenu label={t('query.groups.groupActions', { name: g.name })}>
                       <DropdownMenuItem onSelect={() => setNameSheet({ kind: 'renameGroup', group: g })}>{t('query.groups.rename')}</DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteGroup(g)}>{t('query.groups.delete')}</DropdownMenuItem>
-                    </RowMenu>
+                    </RowMenu>}
                   </div>
                 </DropTarget>
                 {openBranch[`g:${g.id}`] && (inGroup.length > 0

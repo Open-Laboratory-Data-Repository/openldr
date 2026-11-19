@@ -43,14 +43,53 @@ function makeDeps(): QueryRouteDeps {
   };
 }
 
-async function build(deps = makeDeps()): Promise<FastifyInstance> {
+async function build(deps = makeDeps(), capabilities: string[] = ['query.run', 'query.manage']): Promise<FastifyInstance> {
   const app = Fastify();
   // Inject an authenticated actor with the analyst role.
-  app.addHook('preHandler', async (req) => { (req as any).user = { sub: 'u1', roles: ['data_analyst'], capabilities: ['query.run'] }; });
+  app.addHook('preHandler', async (req) => { (req as any).user = { sub: 'u1', roles: ['data_analyst'], capabilities }; });
   registerQueryRoutes(app, fakeCtx(), deps);
   await app.ready();
   return app;
 }
+
+// demo.4 item 13: anyone with query.run could rename, move or delete any saved query. Changing a
+// saved query now needs query.manage; running, saving a new one, copying and export stay open.
+describe('saved queries need query.manage to change', () => {
+  it('lets query.run alone create, read, export and add by import, and refuses every change', async () => {
+    const deps = makeDeps();
+    const manager = await build(deps);
+    const runner = await build(deps, ['query.run']);
+    const made = await runner.inject({ method: 'POST', url: '/api/custom-queries', payload: { name: 'Mine', connectorId: 'c1', sql: 'select 1', params: [] } });
+    expect(made.statusCode).toBe(200);
+    const id = made.json().id as string;
+    const group = (await manager.inject({ method: 'POST', url: '/api/custom-query-groups', payload: { name: 'G' } })).json().id as string;
+    expect((await runner.inject({ method: 'GET', url: `/api/custom-queries/${id}` })).statusCode).toBe(200);
+    const exported = await runner.inject({ method: 'POST', url: '/api/custom-queries/export', payload: { ids: [id] } });
+    expect(exported.statusCode).toBe(200);
+    const file = exported.json();
+    const changes = [
+      { method: 'PUT', url: `/api/custom-queries/${id}`, payload: { name: 'Renamed' } },
+      { method: 'DELETE', url: `/api/custom-queries/${id}` },
+      { method: 'PUT', url: `/api/custom-queries/${id}/group`, payload: { groupId: group } },
+      { method: 'POST', url: '/api/custom-query-groups', payload: { name: 'H' } },
+      { method: 'PUT', url: `/api/custom-query-groups/${group}`, payload: { name: 'G2' } },
+      { method: 'DELETE', url: `/api/custom-query-groups/${group}` },
+      { method: 'POST', url: '/api/custom-queries/import', payload: { file, replace: true } },
+    ] as const;
+    for (const c of changes) {
+      const res = await runner.inject(c as never);
+      expect(res.statusCode, `${c.method} ${c.url}`).toBe(403);
+    }
+    expect((await deps.customQueries.get(id))?.name).toBe('Mine');
+    expect((await runner.inject({ method: 'POST', url: '/api/custom-queries/import', payload: { file } })).statusCode).toBe(200);
+    // An add-only import makes the queries, but no group (Codex review C13-R1).
+    const grouped = { ...file, queries: [{ ...file.queries[0], name: 'Imported', group: 'Made by import' }] };
+    expect((await runner.inject({ method: 'POST', url: '/api/custom-queries/import', payload: { file: grouped, connectorName: 'PG' } })).statusCode).toBe(200);
+    expect((await deps.customQueryGroups.list()).map((g) => g.name)).toEqual(['G']);
+    expect((await deps.customQueries.getByName('Imported'))?.groupId ?? null).toBeNull();
+    expect((await manager.inject({ method: 'PUT', url: `/api/custom-queries/${id}`, payload: { name: 'Renamed' } })).statusCode).toBe(200);
+  });
+});
 
 describe('custom-queries CRUD', () => {
   let app: FastifyInstance;
