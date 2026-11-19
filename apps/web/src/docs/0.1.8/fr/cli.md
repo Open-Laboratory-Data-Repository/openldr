@@ -134,7 +134,7 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `ingest` | Ingère un fichier par le pipeline (en option via un plugin). |
 | `facilities` | Importe un registre national d'établissements : `suggest-map`, `suggest-values`, `import` (correspondance des colonnes et des valeurs, voir **Établissements** dans la documentation du studio). |
 | `test-catalog` | Le catalogue national des examens : `list` liste les examens, `import` importe une liste depuis un fichier CSV ou Excel, `export` l'exporte en CSV, `enable` ou `disable` active ou désactive un examen dans ce laboratoire, et `retire` ou `restore` retire ou rétablit un examen là où cette installation possède le catalogue. |
-| `query` | Requêtes personnalisées : `export` les exporte dans un fichier JSON, `import` les importe depuis un fichier (`--force` remplace les noms existants). |
+| `query` | Requêtes personnalisées : `export` les exporte dans un fichier JSON, `import` les importe depuis un fichier (`--force` remplace les noms existants et exige **Gérer les requêtes enregistrées** ; sans cette permission, un import ajoute les nouvelles requêtes sans groupe). |
 | `pipeline` | Examine les lots d'ingestion : `status`, `retry`, `logs`. |
 | `queue` | Examine la file d'événements. |
 | `provenance` | Outils d'audit de provenance. |
@@ -481,6 +481,7 @@ Une tâche longue coupée par un redémarrage l’enregistre. La plupart reprenn
 Une vérification de source retient une demande quand ses règles trouvent une erreur. Une personne qui a la permission **Corriger les demandes retenues** peut corriger les champs de la demande et la vérifier à nouveau. Les lignes de la source ne changent pas ; la correction est gardée à côté, avec qui, quand et pourquoi.
 
 - `openldr import check correct <plugin> <copy> <key> --set champ=valeur --reason "pourquoi"` corrige un ou plusieurs champs. Répétez `--set` pour chaque champ. Une valeur vide efface le champ. Le plugin décide quels champs peuvent être corrigés.
+- `openldr import check choices <plugin> <copy> [--field specimen]` liste les valeurs possibles d'un champ, par exemple les codes de prélèvement de la source. Utilisez un de ces codes dans `--set`.
 - `openldr import check recheck <plugin> <copy> <key>` vérifie à nouveau la demande dans l'exécution qui l'a retenue. Si elle passe, elle est enregistrée et quitte la liste des demandes retenues. Lancez `import check held` pour voir le résultat.
 
 ## Qui peut ouvrir et soumettre un formulaire
