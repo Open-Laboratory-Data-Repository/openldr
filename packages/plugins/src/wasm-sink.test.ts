@@ -53,6 +53,15 @@ describe('createWasmSink', () => {
     expect(opts.allowedHosts).toEqual(['x:443']);
   });
 
+  it('invoke_passes_offThread_to_the_runner', async () => {
+    const runner = runnerReturning('{}');
+    const sink = createWasmSink(sinkManifest, new Uint8Array(), runner, logger);
+    await sink.invoke('health_check', {}, { offThread: true });
+    await sink.invoke('health_check', {});
+    expect((runner.run as any).mock.calls[0][2].offThread).toBe(true);
+    expect((runner.run as any).mock.calls[1][2].offThread).toBeUndefined();
+  });
+
   it('fail-closes when a host is pinned but the plugin lacks net-egress', async () => {
     const grant = [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }] as any; // no net-egress
     const runner = runnerReturning('{}');

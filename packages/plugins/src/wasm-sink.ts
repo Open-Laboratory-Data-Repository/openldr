@@ -12,6 +12,9 @@ export interface SinkInvokeOptions {
   /** Concrete egress host(s) the connector pins for this call, e.g. ['dhis2.example.org:443'].
    *  Omit/empty for a dry-run (no network). */
   allowedHosts?: string[];
+  /** Run the call on a worker thread when the process allows it. For a long call only: a worker
+   *  starts for each call, which costs more than a small call takes. */
+  offThread?: boolean;
 }
 
 /** A loaded sink plugin: invoke one of its named entrypoints with a JSON request,
@@ -79,6 +82,7 @@ export function createWasmSink(
         config: opts.config,
         host,
         allowedHosts: opts.allowedHosts,
+        offThread: opts.offThread,
       });
     } finally {
       doneOp();

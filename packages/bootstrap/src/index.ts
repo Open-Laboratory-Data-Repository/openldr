@@ -49,7 +49,7 @@ import { withRegisteredResourceId } from './content-pack-terminology';
 import { checkCustomQueryFile, importCustomQueries } from './custom-query-transfer';
 import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
-import { type PluginRuntime } from '@openldr/plugins';
+import { canRunOffThread, type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore, type DataScope, FACILITY_REGISTRY_SYSTEM } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
@@ -1968,6 +1968,9 @@ const reporting: ReportingApi = {
     // A check stops when the plugin may no longer read the connector of its source or reference.
     allowed: (pluginId) => imports.allowed(pluginId),
     driverId: importDriverId,
+    // Decode runs on a worker thread, one page ahead of the saves (item 16), unless this process
+    // was started with a loader flag, where a worker would crash it (apps/server/dev.mjs says why).
+    decodeOffThread: canRunOffThread(),
   });
   const pluginBroker = createPluginBroker({
     plugins,
