@@ -63,7 +63,7 @@ const CHECKER = { copy: 'import_copy', decode: 'import_decode', twinKeys: 'impor
 
 let internalDb: Awaited<ReturnType<typeof makeMigratedDb>>;
 
-async function world(opts: { entrypoints?: Record<string, string>; corrections?: string[]; decodeOffThread?: boolean } = {}) {
+async function world(opts: { entrypoints?: Record<string, string>; corrections?: string[]; decodeOffThread?: boolean; decodePagesAhead?: number; persistPage?: boolean } = {}) {
   const raw = createPluginDataStore(internalDb);
   const plainCheckPuts: string[] = [];
   const runSaves: CheckRun[] = [];
@@ -203,6 +203,17 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
     persisted.push({ resources, batchId: provenance.batchId });
     return [];
   };
+  /** The page save, when a world asks for it: each request of the page through the same fake save,
+   *  so a request `failPersist` refuses fails alone, as the real page save leaves it. */
+  const pageCalls: string[][] = [];
+  const persistPage = async (requests: Array<{ key: string; resources: unknown[] }>, provenance: { batchId: string }) => {
+    pageCalls.push(requests.map((r) => r.key));
+    const out: Array<{ key: string; error?: unknown }> = [];
+    for (const r of requests) {
+      try { await persist(r.resources, provenance); out.push({ key: r.key }); } catch (error) { out.push({ key: r.key, error }); }
+    }
+    return out;
+  };
   const clock = { now: Date.UTC(2026, 10, 16, 12, 0, 0) };
   const sleeps: number[] = [];
   const connectors = { get: async () => null, getDecryptedConfig: async () => ({}) };
@@ -228,6 +239,8 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
     now: () => new Date(clock.now),
     sleep: async (ms) => { sleeps.push(ms); },
     ...(opts.decodeOffThread !== undefined ? { decodeOffThread: opts.decodeOffThread } : {}),
+    ...(opts.decodePagesAhead !== undefined ? { decodePagesAhead: opts.decodePagesAhead } : {}),
+    ...(opts.persistPage ? { persistPage: persistPage as never } : {}),
   });
   const svc = service();
   worlds.push({ plainCheckPuts });
@@ -262,7 +275,7 @@ async function world(opts: { entrypoints?: Record<string, string>; corrections?:
     interruptions, corrections, refuseAudit,
     gateAudit: (action: string) => { let release!: () => void; auditGates.set(action, new Promise<void>((r) => { release = r; })); return () => { auditGates.delete(action); release(); }; },
     svc, service, copies, raw, audited, runSaves, decodeCalls, twinCalls, invoke, persisted, clock, sleeps, plugins,
-    readSetCalls, readCalls, heldPuts, copyCalls, allowedCalls, choicesCalls,
+    readSetCalls, readCalls, heldPuts, copyCalls, allowedCalls, choicesCalls, pageCalls,
     setChoices: (fn: (input: unknown) => unknown) => { choicesFn = fn; },
     revoke: (connectorId: string) => { allowedConnectors.delete(connectorId); },
     setCopy: (fn: (options: Record<string, string>) => unknown) => { copyFn = fn; }, realHeld, seedCopy, setCopyStatus,
@@ -2375,5 +2388,125 @@ describe('check: decode off the main thread (item 16)', () => {
     await drive(w.svc);
     for (const id of savedIds(w)) expect(['REQ0001', 'REQ0002']).toContain(id);
     expect((await w.stored())!.driver).toBe('server-2');
+  });
+});
+
+describe('check: a page is saved with one call, and decoded several pages ahead (item 16)', () => {
+  const savedIds = (w: World) => w.persisted.map((p) => (p.resources[0] as { id: string }).id);
+  const hold = (key: string): Group => ({ key, held: true, findings: [{ code: 'x' }], label: 'held' } as unknown as Group);
+
+  it('the_passing_requests_of_a_page_are_saved_with_one_call', async () => {
+    const w = await world({ persistPage: true });
+    await sourceCopy(w, keysOf(4));
+    w.setDecode((input) => ({ groups: input.keys.map((k) => (k === 'REQ0002' ? hold(k) : pass(k))) }));
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    expect(w.pageCalls).toEqual([['REQ0001'], ['REQ0003', 'REQ0004']]);
+    expect(savedIds(w)).toEqual(['REQ0001', 'REQ0003', 'REQ0004']);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { read: 4, saved: 3, held: 1, failed: 0 } });
+  });
+
+  it('a_request_the_page_save_refuses_fails_alone', async () => {
+    const w = await world({ persistPage: true });
+    await sourceCopy(w, keysOf(4));
+    w.failPersist((resources) => ((resources[0] as { id: string }).id === 'REQ0002' ? Object.assign(new Error('refused'), { code: 'VA0002' }) : null));
+    await w.svc.start({ ...START, pageSize: 4 });
+    await drive(w.svc);
+    expect(savedIds(w)).toEqual(['REQ0001', 'REQ0003', 'REQ0004']);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { read: 4, saved: 3, failed: 1 } });
+    // The code the save gave is kept with the request, as for a request saved alone.
+    expect((await plainHeld(w, 'REQ0002'))!).toMatchObject({ reason: 'error', error: 'VA0002' });
+  });
+
+  it('a_run_with_page_saves_ends_as_a_run_with_request_saves_does', async () => {
+    const run = async (persistPage: boolean) => {
+      const w = await world({ persistPage });
+      await sourceCopy(w, keysOf(9));
+      w.setDecode((input) => ({ groups: input.keys.map((k) => (k === 'REQ0003' ? hold(k) : k === 'REQ0005' ? ({ key: k, error: 'BAD_ROW' } as unknown as Group) : pass(k))) }));
+      w.failPersist((resources) => ((resources[0] as { id: string }).id === 'REQ0007' ? Object.assign(new Error('refused'), { code: '23514' }) : null));
+      await w.svc.start({ ...START, pageSize: 4 });
+      await drive(w.svc);
+      const stored = (await w.svc.get(PLUGIN, CHECK))!;
+      const held = (await w.heldAll()).rows.map((r) => [r.key, r.reason, r.error]).sort();
+      return { ids: savedIds(w), status: stored.status, counts: stored.counts, cursor: stored.cursor, held, pages: w.pageCalls.length };
+    };
+    const { pages: withPages, ...paged } = await run(true);
+    const { pages: withoutPages, ...single } = await run(false);
+    expect(paged).toEqual(single);
+    expect(withPages).toBe(3);
+    expect(withoutPages).toBe(0);
+    expect(paged.counts).toMatchObject({ read: 9, saved: 6, held: 1, failed: 2 });
+  });
+
+  it('with_two_pages_ahead_two_more_pages_are_decoded_before_the_first_save', async () => {
+    const w = await world({ decodeOffThread: true, decodePagesAhead: 2 });
+    await sourceCopy(w, keysOf(8));
+    const order: string[] = [];
+    w.setDecode((input) => { order.push(`decode ${input.keys[0]}`); return { groups: input.keys.map(pass) }; });
+    w.failPersist((resources) => { order.push(`save ${(resources[0] as { id: string }).id}`); return null; });
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    expect(order.slice(0, 5)).toEqual(['decode REQ0001', 'decode REQ0003', 'decode REQ0005', 'save REQ0001', 'save REQ0002']);
+    // One more page is decoded as each page is used, so two stay ahead.
+    expect(order.indexOf('decode REQ0007')).toBeLessThan(order.indexOf('save REQ0003'));
+    expect(w.decodeCalls.map((c) => c.keys)).toEqual([keysOf(2), keysOf(4).slice(2), keysOf(6).slice(4), keysOf(8).slice(6)]);
+    expect(savedIds(w)).toEqual(keysOf(8));
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', cursor: 'REQ0008', counts: { read: 8, saved: 8 } });
+  });
+
+  it('a_page_ahead_that_fails_throws_away_the_pages_read_after_it', async () => {
+    const w = await world({ decodeOffThread: true, decodePagesAhead: 3 });
+    await sourceCopy(w, keysOf(12));
+    let calls = 0;
+    w.setDecode((input) => {
+      calls += 1;
+      // Call 2 is the first page ahead. It fails, and again when decoded in line, so the page is halved.
+      if (input.keys[0] === 'REQ0003' && input.keys.length === 2 && calls < 6) throw new Error('plugin timed out after 30000ms');
+      return { groups: input.keys.map(pass) };
+    });
+    await w.svc.start({ ...START, pageSize: 2 });
+    await drive(w.svc);
+    expect(savedIds(w)).toEqual(keysOf(12));
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', counts: { read: 12, saved: 12, failed: 0 } });
+  });
+
+  it('a_stop_waits_for_every_page_ahead', async () => {
+    const w = await world({ decodeOffThread: true, decodePagesAhead: 2 });
+    await sourceCopy(w, keysOf(8));
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let calls = 0;
+    let finished = 0;
+    w.setDecode(async (input) => {
+      calls += 1;
+      if (calls > 1) await gate;
+      finished += 1;
+      return { groups: input.keys.map(pass) };
+    });
+    let stopping: Promise<unknown> | null = null;
+    w.failPersist(() => { stopping ??= w.svc.stop(PLUGIN, CHECK, ADMIN); return null; });
+    await w.svc.start({ ...START, pageSize: 2 });
+    await w.svc.tick();
+    let idle = false;
+    const done = w.svc.idle().then(() => { idle = true; });
+    for (let i = 0; i < 200 && calls < 3; i++) await new Promise((r) => setTimeout(r, 5));
+    await stopping;
+    for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 5));
+    expect(calls).toBe(3);
+    expect(idle).toBe(false);
+    release();
+    await done;
+    expect(finished).toBe(3);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'stopped', cursor: 'REQ0002', counts: { read: 2, saved: 2 } });
+  });
+
+  it('page_saves_and_pages_ahead_together_save_each_request_once_in_key_order', async () => {
+    const w = await world({ decodeOffThread: true, decodePagesAhead: 3, persistPage: true });
+    await sourceCopy(w, keysOf(11));
+    await w.svc.start({ ...START, pageSize: 3 });
+    await drive(w.svc);
+    expect(savedIds(w)).toEqual(keysOf(11));
+    expect(w.pageCalls).toEqual([keysOf(3), keysOf(6).slice(3), keysOf(9).slice(6), keysOf(11).slice(9)]);
+    expect((await w.svc.get(PLUGIN, CHECK))!).toMatchObject({ status: 'completed', cursor: 'REQ0011', counts: { read: 11, saved: 11 } });
   });
 });

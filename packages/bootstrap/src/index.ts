@@ -10,7 +10,7 @@ import { createBlobFromConfig } from './s3-config';
 import { requireOidcIssuer, type Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
-import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, LOCAL_MAP_URL, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, persistRequests, createTerminologyStore, createTerminologyAdminStore, LOCAL_MAP_URL, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -846,6 +846,13 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   // save skips, so a laboratory that sends the same result twice still records two arrivals.
   const importCheckPersist = async (resources: unknown[], prov: Provenance) =>
     persistResources({ fhirStore: canonicalFhirStore, logger }, resources, prov, {
+      level: await validationStrictness.get(),
+      resolveServiceRequest: (id: string) => canonicalFhirStore.exists('ServiceRequest', id),
+      skipUnchanged: true,
+    });
+  // A whole page of the import check: each request checked on its own, in order, then one save.
+  const importCheckPersistPage = async (requests: Array<{ key: string; resources: unknown[] }>, prov: Provenance) =>
+    persistRequests({ fhirStore: canonicalFhirStore, logger }, requests, prov, {
       level: await validationStrictness.get(),
       resolveServiceRequest: (id: string) => canonicalFhirStore.exists('ServiceRequest', id),
       skipUnchanged: true,
@@ -1981,6 +1988,11 @@ const reporting: ReportingApi = {
     // Decode runs on a worker thread, one page ahead of the saves (item 16), unless this process
     // was started with a loader flag, where a worker would crash it (apps/server/dev.mjs says why).
     decodeOffThread: canRunOffThread(),
+    // Three pages decode ahead of the saves: a page takes about 1.3 s to decode on one core and
+    // well under half a second to save, so three workers keep the saves fed (measured 2026-11-19).
+    decodePagesAhead: 3,
+    // The passing requests of a page go to the database in one call (item 16).
+    persistPage: importCheckPersistPage,
   });
   const pluginBroker = createPluginBroker({
     plugins,
