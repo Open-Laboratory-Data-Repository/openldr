@@ -120,6 +120,17 @@ corrections it was sent, and the promise of the decode answer.
   (`packages/core/src/crash-log.ts:60-64`).
 - Known and unchanged: a worker that throws outside a call ends the server process
   (`extism-runner.ts:33-42`). The network path has the same risk today.
+- Found by the branch review: on a worker the plugin's time limit really ends a decode. On the
+  main thread the timer could never fire while the plugin ran, so a decode slower than the limit
+  (30 s by default, `manifest.ts:21`) simply finished. Now such a page fails as timed out and is
+  halved, as any failed page is. A page of 500 takes about 1.3 s here, so this needs a box about
+  20 times slower, or a far larger page.
+- Found by the branch review: the next page's rows are sent to the plugin before that page's own
+  permission check. If an admin revokes the connector while a page saves, one more page of rows
+  reaches the plugin than before. Nothing of it is saved, because the check at the top of the next
+  page stops the run, and the plugin has no network.
+- The worker risk above now applies to every page of a check, not only to network calls. Not
+  tested: a worker that runs out of memory.
 
 ## Left to the builder
 
