@@ -1,6 +1,6 @@
 # Datasets that a report pack defines, stored as warehouse tables: design
 
-Date: 2026-11-19. Status: for approval.
+Date: 2026-11-19. Status: approved and built. Merged to `main` at `6f2999cd`.
 
 ## The problem
 
@@ -170,5 +170,10 @@ On the full Tanzania warehouse, with the new pack installed:
 - A rebuild reads the whole warehouse. On a small lab machine it competes with reports for 30
   seconds or more. It runs one table at a time to limit that.
 - A report can be one rebuild behind the warehouse. The Warehouse line says so.
-- The pack's SELECT runs with CE's warehouse login inside `create table as`. The select-only check
-  and the pack's signature are the guards, the same two that guard a report today.
+- The pack's SELECT runs with CE's warehouse login. An earlier version of this line said its guards
+  were "the same two that guard a report today". That was wrong, and the whole-branch review caught
+  it: a report also runs read-only, with a time limit, and cannot carry a second statement. The
+  build now has those guards too (`packages/db/src/warehouse-dataset-build.ts`): the rows are read
+  inside a read-only transaction into a working table, the SELECT is wrapped so text after a `;` is
+  an error, each statement has a time limit, and the session is reset before the connection is
+  reused. The cost is a second copy of the rows.

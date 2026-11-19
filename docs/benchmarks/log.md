@@ -83,3 +83,35 @@ Tanzania full at 770f37f2, the check finished and the warehouse complete (2026-1
 |---|---|---|---|---|
 | 2026-11-19 | 770f37f2 | Tanzania full | 14,030,722 change rows | 35 min, with two test runs of faster variants in the middle |
 
+## Pack datasets
+
+Tanzania full, warehouse complete (18 GB). A test pack with 11 datasets, made by lifting each slow
+report's leading steps that take no parameter. Installed through `market install`.
+
+| Date | Commit | What | Time |
+|---|---|---|---|
+| 2026-11-19 | feat/pack-datasets before the review fixes | install: build all 11 datasets (four were built twice by a fault since fixed) | 205 s |
+| 2026-11-19 | same | automatic rebuild of all 11 after one record was saved | about 95 s |
+| 2026-11-19 | 6f2999cd | rebuild all 11 with the guarded build (rows read read-only into a working table, then copied) | 151 s |
+| 2026-11-19 | 6f2999cd | largest dataset, 4,239,703 rows, guarded build | 32 s and 60 s (two datasets of that size) |
+
+Reports, original against the one rewritten to read a dataset, same parameters. Every output was
+equal row for row.
+
+| Date | Report | Before | After |
+|---|---|---|---|
+| 2026-11-19 | Date completeness by lab area | 31.4 s | 2.9 s |
+| 2026-11-19 | VL turnaround by month | 5.7 s | 0.7 s |
+| 2026-11-19 | Date completeness by lab | 5.8 s | 0.6 s |
+| 2026-11-19 | Requests received by week | 47.9 s | 20.8 s |
+| 2026-11-19 | Requests received by week (VLEID copy) | 20.7 s | 13.7 s |
+| 2026-11-19 | VL results | 12.6 s | 7.7 s |
+| 2026-11-19 | Client by ART number | 13.6 s | 8.2 s |
+| 2026-11-19 | Days since last transmission | 8.8 s | 8.1 s |
+| 2026-11-19 | All eight | 147 s | 63 s |
+
+Not proved: 9 of the 18 slow reports have a first step that takes a parameter and could not be
+lifted this way. They need the report rewritten. One rewritten report was not compared, because the
+script gave it a blank for a required date. The report times are from before the guarded build and
+were not taken again, since the built tables hold the same rows.
+
