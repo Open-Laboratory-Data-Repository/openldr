@@ -45,7 +45,7 @@ export const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon
   { to: '/users', labelKey: 'nav.users', end: false, icon: Users, caps: ['users.view'] },
   // Sites lives under Settings → Sites (not a top-level nav item) so it isn't mistaken for a
   // Facilities / master facility list.
-  { to: '/audit', labelKey: 'nav.audit', end: false, icon: ShieldCheck },
+  { to: '/audit', labelKey: 'nav.audit', end: false, icon: ShieldCheck, caps: ['audit.view'] },
   { to: '/activity', labelKey: 'nav.activity', end: false, icon: Activity, caps: ['activity.view'] },
   { to: '/docs', labelKey: 'nav.docs', end: false, icon: BookOpen },
 ];

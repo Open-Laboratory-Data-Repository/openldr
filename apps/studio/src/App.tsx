@@ -48,7 +48,7 @@ export function App() {
       <Route path="/auth/callback" element={<CallbackPage />} />
       <Route path="/access-denied" element={<RequireCapability><AccessDeniedPage /></RequireCapability>} />
       <Route path="/" element={<StartPageGate><RequireCapability cap="dashboards.view"><DashboardPage /></RequireCapability></StartPageGate>} />
-      <Route path="/reports" element={<Reports />} />
+      <Route path="/reports" element={<RequireCapability cap="reports.view"><Reports /></RequireCapability>} />
       <Route path="/workflows" element={<RequireCapability cap="workflows.view"><WorkflowList /></RequireCapability>} />
       <Route path="/workflows/new" element={<RequireCapability cap="workflows.view"><Workflows /></RequireCapability>} />
       <Route path="/workflows/:id" element={<RequireCapability cap="workflows.view"><Workflows /></RequireCapability>} />
@@ -86,8 +86,8 @@ export function App() {
         <Route path="laboratory" element={<RequireCapability cap="settings.view"><Laboratory /></RequireCapability>} />
         <Route path="data-exposure" element={<RequireCapability cap="data_exposure.manage"><DataExposure /></RequireCapability>} />
       </Route>
-      <Route path="/audit" element={<Audit />} />
-      <Route path="/activity" element={<Activity />} />
+      <Route path="/audit" element={<RequireCapability cap="audit.view"><Audit /></RequireCapability>} />
+      <Route path="/activity" element={<RequireCapability cap="activity.view"><Activity /></RequireCapability>} />
       <Route path="/notifications" element={<Notifications />} />
       <Route path="/forms" element={<Forms />} />
       <Route path="/forms/new" element={<FormBuilderPage />} />
