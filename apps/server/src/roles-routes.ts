@@ -198,8 +198,10 @@ export function registerRolesRoutes(app: FastifyInstance<any, any, any, any>, ct
         action: 'user.assign_role',
         entityType: 'user',
         entityId: subject,
-        before: before as unknown as Record<string, unknown>,
-        after: after as unknown as Record<string, unknown>,
+        // A jsonb column on real Postgres refuses a bare array, so the lists go in an object
+        // (the dashboard share audit does the same).
+        before: { roles: before },
+        after: { roles: after },
       });
       return after;
     } catch (e) {
