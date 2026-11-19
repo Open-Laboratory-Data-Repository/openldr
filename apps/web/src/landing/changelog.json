@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "82afcf4c",
+          "type": "fix",
+          "scope": "db",
+          "title": "Migration 130 also replaces a history row with no document, refreshes statistics, and the projection acceptance script writes the new tables (item 16 review)"
+        },
+        {
+          "hash": "18e86cbe",
+          "type": "perf",
+          "scope": "db",
+          "title": "Each document is stored once, in its history row (item 16)"
+        },
+        {
           "hash": "6a7c7e28",
           "type": "fix",
           "scope": "db",
