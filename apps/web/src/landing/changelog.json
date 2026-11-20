@@ -6,6 +6,18 @@
       "version": "v0.1.12-rc.1",
       "entries": [
         {
+          "hash": "e38ba5115",
+          "type": "feat",
+          "scope": "workflows",
+          "title": "The default Ingest logs held items instead of failing, and the answer says what was held"
+        },
+        {
+          "hash": "f97c42abf",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Remove on an older plugin version removes only that version, and the detail follows an update"
+        },
+        {
           "hash": "391c3e005",
           "type": "fix",
           "scope": "studio",
