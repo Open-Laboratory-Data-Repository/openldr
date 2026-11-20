@@ -116,6 +116,34 @@ After disabling, open the same detail dots and select **Enable**. The action upd
 
 **Expected result:** The installed plugin can load again when enabled. This does not change its external connection settings.
 
+## Update an installed plugin
+
+When the Marketplace has a newer version of an installed plugin, its card says **Update to** and the new version.
+
+### 1. Open the plugin
+
+On **Browse** or **Installed**, open the plugin's card.
+
+### 2. Choose Update
+
+Open the detail dots and select **Update to** the new version. Review the new version's permissions, then approve.
+
+**Expected result:** The new version is the active one. The older version stays installed and is listed under **Installed versions**. A read or check that is running carries on. If the new version reads different data, the read stops and asks to be read again.
+
+## Roll back to an older version
+
+Do this when a new version causes a problem.
+
+### 1. Open the older version
+
+On **Installed**, open the older version of the plugin.
+
+### 2. Choose Rollback
+
+Open the detail dots and select **Rollback**.
+
+**Expected result:** The older version is active again. The card says the newer version is available, without asking you to update.
+
 ## Remove an installed plugin
 
 Check dependent workflows and imports before removing a plugin.
@@ -126,13 +154,23 @@ Open the installed plugin detail dots and select **Remove**.
 
 ![Remove uninstalls this plugin.](marketplace-guide-remove.png)
 
-### 2. Confirm the plugin id
+### 2. Choose what to keep
 
-In the confirmation, choose **Remove** to uninstall this plugin or Cancel to keep it. The practice capture removes test-sink.
+The Remove sheet lists the reads and checks the plugin is running. Removing stops these first and waits until they have stopped. Then choose what to keep:
 
-![Confirm the plugin id before removing it.](marketplace-guide-remove-confirm.png)
+- **Keep everything.** Install the plugin again later and carry on where it stopped. Its copied data keeps using disk space, and the sheet shows how much.
+- **Keep settings, delete copied data.** Frees the disk. Connector access and the plugin's settings stay. Every source has to be added and read again, and corrections made to held requests are lost.
+- **Delete everything.** The server is as if the plugin was never installed.
 
-**Expected result:** The removed plugin is no longer installed. Its available registry card can still appear in Browse.
+Requests already saved into OpenLDR are never deleted. They are the laboratory's data, not the plugin's.
+
+![Choose what to keep before removing the plugin.](marketplace-guide-remove-confirm.png)
+
+### 3. Choose Remove
+
+Open the sheet's dots and select **Remove**.
+
+**Expected result:** The plugin is no longer installed, and nothing of it is running. If a read does not stop within two minutes, the sheet says which one, removes nothing, and you can try again. From the command line, `openldr plugin remove <id> --keep all|settings|nothing` does the same and refuses without `--force` when it would stop or delete anything.
 
 ## Add a registry
 
