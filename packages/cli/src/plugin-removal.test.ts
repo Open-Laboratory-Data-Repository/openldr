@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@openldr/config', () => ({ loadConfig: vi.fn(() => ({})) }));
 
-const removal = vi.hoisted(() => ({ plan: vi.fn(), remove: vi.fn() }));
+const removal = vi.hoisted(() => ({ plan: vi.fn(), remove: vi.fn(), removeVersion: vi.fn() }));
 const close = vi.hoisted(() => vi.fn(async () => {}));
 
 vi.mock('@openldr/bootstrap', async (orig) => {
@@ -13,8 +13,8 @@ vi.mock('@openldr/bootstrap', async (orig) => {
   return { ...actual, createAppContext: vi.fn(async () => ({ pluginRemoval: removal, close })) };
 });
 
-import { PluginStillStopping } from '@openldr/bootstrap';
-import { runWholePluginRemove } from './plugin-removal';
+import { ActiveVersionRemoval, PluginStillStopping } from '@openldr/bootstrap';
+import { runPluginVersionRemove, runWholePluginRemove } from './plugin-removal';
 
 let out: string[];
 let err: string[];
@@ -67,5 +67,20 @@ describe('plugin remove, the whole plugin', () => {
     removal.remove.mockRejectedValue(new PluginStillStopping(['cp1']));
     expect(await runWholePluginRemove('cdr-source', { force: true, json: false })).toBe(1);
     expect(err.join('')).toContain('cp1');
+  });
+});
+
+describe('plugin remove --version', () => {
+  it('removes one older version and stops nothing', async () => {
+    removal.removeVersion.mockResolvedValue(undefined);
+    expect(await runPluginVersionRemove('cdr-source', '0.1.4', { json: false })).toBe(0);
+    expect(removal.removeVersion).toHaveBeenCalledWith('cdr-source', '0.1.4', expect.objectContaining({ type: 'cli' }));
+    expect(removal.remove).not.toHaveBeenCalled();
+  });
+
+  it('refuses the active version and says what to do instead', async () => {
+    removal.removeVersion.mockRejectedValue(new ActiveVersionRemoval('cdr-source', '0.1.5'));
+    expect(await runPluginVersionRemove('cdr-source', '0.1.5', { json: false })).toBe(1);
+    expect(err.join('')).toMatch(/0\.1\.5 is the active version/);
   });
 });

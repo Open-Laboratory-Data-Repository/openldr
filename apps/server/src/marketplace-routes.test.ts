@@ -4,7 +4,7 @@ import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { CE_VERSION, PluginStillStopping, type AppContext } from '@openldr/bootstrap';
+import { CE_VERSION, PluginStillStopping, ActiveVersionRemoval, type AppContext } from '@openldr/bootstrap';
 import { generatePublisherKeypair, packBundle, signManifest, keyFingerprint } from '@openldr/marketplace';
 import { createPluginRuntime } from '@openldr/plugins';
 import { createRegistryStore, createAppSettingsStore } from '@openldr/db';
@@ -96,11 +96,17 @@ function fakePlugins() {
 }
 
 /** A removal that records its calls. `stuck` makes remove throw PluginStillStopping. */
-function fakeRemoval(o: { stuck?: string[] } = {}) {
+function fakeRemoval(o: { stuck?: string[]; activeVersion?: string } = {}) {
   const calls: Array<{ id: string; keep: string; actor: unknown }> = [];
+  const versionCalls: Array<{ id: string; version: string }> = [];
   return {
     calls,
+    versionCalls,
     removal: {
+      removeVersion: async (id: string, version: string) => {
+        if (version === o.activeVersion) throw new ActiveVersionRemoval(id, version);
+        versionCalls.push({ id, version });
+      },
       plan: async (id: string) => ({ running: [{ kind: 'copy', id: 'cp1', label: 'c1', status: 'running' }], copies: 1, copiedBytes: 2048, id }),
       remove: async (id: string, opts: { keep: string; actor: unknown }) => {
         if (o.stuck) throw new PluginStillStopping(o.stuck);
@@ -360,11 +366,26 @@ describe('marketplace routes', () => {
     await app.inject({ method: 'POST', url: '/api/marketplace/demo/disable' });
     await app.inject({ method: 'POST', url: '/api/marketplace/demo/enable' });
     await app.inject({ method: 'POST', url: '/api/marketplace/demo/rollback', payload: { version: '1.0.0' } });
-    await app.inject({ method: 'DELETE', url: '/api/marketplace/demo?version=0.9.0' });
     expect(calls.setEnabled).toEqual([{ id: 'demo', enabled: false }, { id: 'demo', enabled: true }]);
     expect(calls.rollback).toEqual([{ id: 'demo', version: '1.0.0' }]);
-    // One older version: the runtime removes that row only, and nothing is stopped.
-    expect(calls.remove).toEqual([{ id: 'demo', version: '0.9.0' }]);
+  });
+
+  it('DELETE of one older version goes through removeVersion and stops nothing', async () => {
+    const r = fakeRemoval({ activeVersion: '1.0.0' });
+    const { app } = await appWith({}, fakePlugins().runtime, { seed: [localReg()], pluginRemoval: r.removal });
+    const res = await app.inject({ method: 'DELETE', url: '/api/marketplace/demo?version=0.9.0' });
+    expect(res.statusCode).toBe(200);
+    expect(r.versionCalls).toEqual([{ id: 'demo', version: '0.9.0' }]);
+    expect(r.calls).toEqual([]);
+  });
+
+  it('DELETE of the active version by version is refused with 409', async () => {
+    const r = fakeRemoval({ activeVersion: '1.0.0' });
+    const { app } = await appWith({}, fakePlugins().runtime, { seed: [localReg()], pluginRemoval: r.removal });
+    const res = await app.inject({ method: 'DELETE', url: '/api/marketplace/demo?version=1.0.0' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/active version/);
+    expect(r.versionCalls).toEqual([]);
   });
 
   it('DELETE of a whole plugin goes through the removal and keeps everything', async () => {

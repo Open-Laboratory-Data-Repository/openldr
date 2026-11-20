@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createPluginRemoval, PluginStillStopping } from './plugin-removal';
+import { createPluginRemoval, PluginStillStopping, ActiveVersionRemoval } from './plugin-removal';
 
 // Layer: the order of a removal, over fake read and check services. The services' own stop and
 // delete are proven in import-copy.test.ts and import-check.test.ts; this proves only that removal
@@ -47,7 +47,10 @@ function setup(o: { copies?: Run[]; checks?: Run[]; imports?: Run[]; settleAfter
   const importCopies = fakeService('copy', copies, log, o.settleAfter === undefined ? 1 : o.settleAfter);
   const importChecks = fakeService('check', checks, log, o.settleAfter === undefined ? 1 : o.settleAfter);
   const imports = fakeService('import', o.imports ?? [], log, o.settleAfter === undefined ? 1 : o.settleAfter);
-  const plugins = { remove: vi.fn(async () => { log.push('remove plugin'); }) };
+  const plugins = {
+    remove: vi.fn(async (_id: string, version?: string) => { log.push(version ? `remove version ${version}` : 'remove plugin'); }),
+    list: vi.fn(async () => [{ id: 'cdr-source', version: '0.1.4', active: false }, { id: 'cdr-source', version: '0.1.5', active: true }]),
+  };
   const pluginData = { purgeExcept: vi.fn(async (_p: string, keep: string[]) => { log.push(`purge except ${keep.join(',')}`); }) };
   const audit = vi.fn(async () => {});
   const removal = createPluginRemoval({
@@ -106,6 +109,20 @@ describe('plugin removal', () => {
     expect(plan.running.map((r) => [r.kind, r.id])).toEqual([['check', 'ck1'], ['import', 'im1'], ['copy', 'cp1']]);
     await removal.remove('cdr-source', { keep: 'all', actor });
     expect(log).toEqual(['stop check ck1', 'stop import im1', 'stop copy cp1', 'remove plugin']);
+  });
+
+  it('removing one older version removes that row only and stops nothing', async () => {
+    const { removal, log } = setup();
+    await removal.removeVersion('cdr-source', '0.1.4', actor);
+    expect(log).toEqual(['remove version 0.1.4']);
+  });
+
+  it('removing the active version by version is refused: it would remove the plugin with its work running', async () => {
+    const { removal, log } = setup();
+    const err = await removal.removeVersion('cdr-source', '0.1.5', actor).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ActiveVersionRemoval);
+    expect((err as Error).message).toMatch(/0\.1\.5 is the active version/);
+    expect(log).toEqual([]);
   });
 
   it('nothing running: stops nothing and removes the plugin', async () => {

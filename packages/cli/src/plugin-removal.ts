@@ -1,4 +1,4 @@
-import { createAppContext, PluginStillStopping, REMOVE_KEEPS, type ImportActor, type RemoveKeep } from '@openldr/bootstrap';
+import { ActiveVersionRemoval, createAppContext, PluginStillStopping, REMOVE_KEEPS, type ImportActor, type RemoveKeep } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { cliActor } from './cli-actor';
 
@@ -43,6 +43,27 @@ export async function runWholePluginRemove(id: string, opts: { keep?: string; fo
   } catch (err) {
     if (err instanceof PluginStillStopping) {
       process.stderr.write(`${err.message}\n`);
+      return 1;
+    }
+    throw err;
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** `plugin remove <id> --version <v>` and `market remove <id> <v>`: one installed version that is
+ *  not the active one. Refuses the active version, which would remove the plugin with its work
+ *  still running. */
+export async function runPluginVersionRemove(id: string, version: string, opts: { json: boolean }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    await ctx.pluginRemoval.removeVersion(id, version, actor());
+    if (opts.json) process.stdout.write(`${JSON.stringify({ removed: id, version })}\n`);
+    else process.stdout.write(`removed ${id}@${version}\n`);
+    return 0;
+  } catch (err) {
+    if (err instanceof ActiveVersionRemoval) {
+      process.stderr.write(`${err.message}.\n`);
       return 1;
     }
     throw err;

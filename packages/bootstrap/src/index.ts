@@ -2373,7 +2373,7 @@ export type { ImportCopyService, CopyRun, CopyStatus, CopySetProgress, CopyEstim
 export { checkIdOf, FINDING_CODE, isLiveCheck, LABORATORY_CODE } from './import-check';
 export type { ImportCheckService, ImportCheckStartInput, HeldItemsFilter, CheckRun, CheckStatus, CheckCounts, CheckLaboratory } from './import-check';
 export { CopySetChangedError, copyEstimate, formatTimeLeft } from './import-copy';
-export { createPluginRemoval, PluginStillStopping, REMOVE_KEEPS, type PluginRemoval, type RemovalPlan, type RemoveKeep } from './plugin-removal';
+export { createPluginRemoval, PluginStillStopping, ActiveVersionRemoval, REMOVE_KEEPS, type PluginRemoval, type RemovalPlan, type RemoveKeep } from './plugin-removal';
 export {
   runSetupChecks, setupCheckDeps, SETUP_CHECK_TITLE, SETUP_HINT_TEXT,
   type SetupCheck, type SetupCheckDeps, type SetupCheckId, type SetupHint, type SetupReport, type SetupStatus,

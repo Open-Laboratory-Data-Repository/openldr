@@ -14,7 +14,7 @@ import { runList as runReportDesignList, runDelete as runReportDesignDelete, run
 import { runList as runReportDefList, runDelete as runReportDefDelete } from './report-def';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
-import { runWholePluginRemove } from './plugin-removal';
+import { runPluginVersionRemove, runWholePluginRemove } from './plugin-removal';
 import { runReportList, runReportRun, runReportGlassExport } from './report';
 import { runAuditList } from './audit';
 import { runWorkflowReceiptsList, runWorkflowReceiptShow, runWorkflowSetEnabled, runWorkflowRunContinue } from './workflows';
@@ -1452,7 +1452,7 @@ export function buildProgram(): Command {
     .option('--json', 'emit JSON', false)
     .action(async (id: string, opts: { version?: string; keep?: string; force: boolean; json: boolean }) => {
       try {
-        process.exitCode = opts.version ? await runPluginRemove(id, opts) : await runWholePluginRemove(id, opts);
+        process.exitCode = opts.version ? await runPluginVersionRemove(id, opts.version, opts) : await runWholePluginRemove(id, opts);
       } catch (err) { process.stderr.write(`plugin remove failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 
@@ -1701,7 +1701,7 @@ export function buildProgram(): Command {
     .option('--json', 'emit JSON', false)
     .action(async (id: string, version: string | undefined, opts: { keep?: string; force: boolean; json: boolean }) => {
       try {
-        process.exitCode = version ? await runMarketRemove(id, version, opts) : await runWholePluginRemove(id, opts);
+        process.exitCode = version ? await runPluginVersionRemove(id, version, opts) : await runWholePluginRemove(id, opts);
       } catch (err) { process.stderr.write(`market remove failed: ${String(err)}\n`); process.exitCode = 1; }
     });
 

@@ -29,8 +29,16 @@ export class PluginStillStopping extends Error {
   }
 }
 
+/** Removing the active version by version would remove the plugin with its work still running. */
+export class ActiveVersionRemoval extends Error {
+  constructor(readonly pluginId: string, readonly version: string) {
+    super(`${version} is the active version of ${pluginId}. Remove the whole plugin, which stops its work first, or roll back to another version before removing this one`);
+    this.name = 'ActiveVersionRemoval';
+  }
+}
+
 export interface PluginRemovalDeps {
-  plugins: Pick<PluginRuntime, 'remove'>;
+  plugins: Pick<PluginRuntime, 'remove' | 'list'>;
   importCopies: Pick<ImportCopyService, 'list' | 'get' | 'stop' | 'remove'>;
   importChecks: Pick<ImportCheckService, 'list' | 'get' | 'stop'>;
   imports: Pick<ImportService, 'list' | 'get' | 'stop'>;
@@ -42,6 +50,8 @@ export interface PluginRemovalDeps {
 export interface PluginRemoval {
   plan(pluginId: string): Promise<RemovalPlan>;
   remove(pluginId: string, o: { keep: RemoveKeep; actor: ImportActor; waitMs?: number }): Promise<{ stopped: string[]; deletedCopies: number }>;
+  /** Removes one installed version that is not the active one. Stops nothing: the active version keeps running. */
+  removeVersion(pluginId: string, version: string, actor: ImportActor): Promise<void>;
 }
 
 /** A copy's records stay when everything else goes: a copy being deleted removes its own. */
@@ -111,5 +121,11 @@ export function createPluginRemoval(deps: PluginRemovalDeps): PluginRemoval {
     return { stopped, deletedCopies };
   }
 
-  return { plan, remove };
+  async function removeVersion(pluginId: string, version: string, actor: ImportActor) {
+    const rows = (await deps.plugins.list()).filter((p) => p.id === pluginId);
+    if (rows.some((p) => p.version === version && p.active)) throw new ActiveVersionRemoval(pluginId, version);
+    await deps.plugins.remove(pluginId, version, { actor: { id: actor.id, name: actor.name } });
+  }
+
+  return { plan, remove, removeVersion };
 }
