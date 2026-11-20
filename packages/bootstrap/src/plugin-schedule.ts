@@ -69,6 +69,9 @@ export interface PluginScheduleRunnerDeps {
     trigger?: string;
   }) => Promise<unknown>;
   logger: { error(obj: unknown, msg?: string): void };
+  /** Whether the plugin is installed. A removed plugin's schedule neither runs nor re-arms, so its
+   *  chain of due events ends; the schedule itself is kept as a setting (design 2026-11-20). */
+  isInstalled?: (pluginId: string) => Promise<boolean>;
 }
 
 export interface PluginScheduleRunner {
@@ -138,6 +141,7 @@ export function createPluginScheduleRunner(deps: PluginScheduleRunnerDeps): Plug
         const { pluginId, scheduleId } = payload as { pluginId?: string; scheduleId?: string };
         if (typeof pluginId !== 'string' || typeof scheduleId !== 'string') return;
         if (!(await getSchedule(pluginId, scheduleId))) return;
+        if (deps.isInstalled && !(await deps.isInstalled(pluginId))) return;
         await runDue(pluginId, scheduleId);
         // Re-fetch after the run so a mid-run disable/edit (cadence change) is honored
         // when re-arming, rather than re-arming from a stale pre-run snapshot.

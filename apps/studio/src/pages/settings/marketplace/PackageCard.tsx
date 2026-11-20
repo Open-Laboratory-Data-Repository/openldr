@@ -8,7 +8,11 @@ export function PackageCard({ entry, onClick }: { entry: CardEntry; onClick: () 
   // A failed pack shows its red failure line below, never a green Active badge beside it.
   const failedPack = entry.type === 'content-pack' && entry.status === 'failed';
   const stateBadge = failedPack ? null : entry.installed
-    ? (entry.active
+    ? (entry.update
+        ? (entry.update.rolledBack
+            ? <Badge variant="outline" className="opacity-70">{t('settings.marketplace.newerAvailable', { version: entry.update.version })}</Badge>
+            : <Badge variant="outline" className="border-primary text-primary">{t('settings.marketplace.updateTo', { version: entry.update.version })}</Badge>)
+      : entry.active
         ? <Badge variant="outline" className="border-emerald-500 text-emerald-700">{t('settings.marketplace.active')}</Badge>
         : <Badge variant="outline">{t('settings.marketplace.installed')}</Badge>)
     : <Badge variant="outline" className="opacity-70">{t('settings.marketplace.install')}</Badge>;

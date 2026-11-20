@@ -11,6 +11,7 @@ import {
   getPublishStatus, publishArtifact,
   type AvailableArtifact, type InstalledArtifact,
 } from '@/api';
+import { RemovePluginSheet } from './marketplace/RemovePluginSheet';
 import { MarketplaceTabs } from './marketplace/MarketplaceTabs';
 import { capabilityLine, packFailureText, type CardEntry } from './marketplace/util';
 import { notifyPluginsChanged } from '@/plugins/pluginEvents';
@@ -170,8 +171,22 @@ export function Marketplace() {
         </DialogContent>
       </Dialog>
 
+      {/* A plugin's removal stops its reads and checks and asks what to keep (design 2026-11-20). */}
+      <RemovePluginSheet
+        pluginId={pendingRemove?.type === 'plugin' ? pendingRemove.id : ''}
+        open={pendingRemove?.type === 'plugin'}
+        onOpenChange={(o) => { if (!o) setPendingRemove(null); }}
+        onRemoved={() => {
+          const id = pendingRemove?.id ?? '';
+          setPendingRemove(null);
+          toast.success(t('settings.marketplace.removeSheet.removed', { id }));
+          notifyPluginsChanged();
+          void load();
+        }}
+      />
+
       <ConfirmDialog
-        open={pendingRemove !== null}
+        open={pendingRemove !== null && pendingRemove.type !== 'plugin'}
         onOpenChange={(o) => { if (!o) setPendingRemove(null); }}
         title={t('settings.marketplace.removeTitle', { id: pendingRemove?.id ?? '' })}
         description={t('settings.marketplace.removeDescription')}

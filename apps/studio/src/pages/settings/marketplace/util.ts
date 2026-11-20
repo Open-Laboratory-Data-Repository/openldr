@@ -1,4 +1,5 @@
 import type { AvailableArtifact, ArtifactPayloadMeta, InstalledArtifact } from '@/api';
+import { compareVersions } from '@/docs/version';
 
 /** A minimal, source-agnostic shape for a card + detail header. */
 export interface CardEntry {
@@ -23,6 +24,26 @@ export interface CardEntry {
   status?: 'installed' | 'failed'; // content-pack only
   failedStep?: number | null;
   error?: string | null;
+  /** Installed only: a newer Marketplace version than the active one, if any. */
+  update?: NewerVersion | null;
+  /** Installed only: every installed version of this id, for the detail view. */
+  installedVersions?: { version: string; active: boolean }[];
+}
+
+export interface NewerVersion { version: string; ref: string; rolledBack: boolean }
+
+/** The newest Marketplace version of `id` that is newer than the active one, or null.
+ *  `rolledBack` is true when a newer version is installed but an older one is active: the person
+ *  went back on purpose, so the page offers the update quietly. */
+export function newerAvailable(id: string, activeVersion: string, available: AvailableArtifact[], installedVersions: string[]): NewerVersion | null {
+  let best: AvailableArtifact | null = null;
+  for (const b of available) {
+    if (b.id !== id || compareVersions(b.version, activeVersion) <= 0) continue;
+    if (!best || compareVersions(b.version, best.version) > 0) best = b;
+  }
+  if (!best) return null;
+  const rolledBack = installedVersions.some((v) => compareVersions(v, activeVersion) > 0);
+  return { version: best.version, ref: best.ref, rolledBack };
 }
 
 // i18n key per capability kind. i18next reads ':' as a namespace separator, so the kinds are not

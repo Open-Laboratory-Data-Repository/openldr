@@ -24,6 +24,8 @@ function fakePluginData(): PluginDataStore & { dump(): Map<string, PluginDataEnt
       return out.map((e) => ({ collection: e.collection, key: e.key, doc: e.doc, updatedAt: e.updatedAt }));
     },
     async purge(p) { for (const key of [...m.keys()]) if (m.get(key)!.pluginId === p) m.delete(key); },
+    async pluginIds(c) { return [...new Set([...m.values()].filter((e) => e.collection === c).map((e) => e.pluginId))]; },
+    async purgeExcept(p, keep) { for (const key of [...m.keys()]) { const e = m.get(key)!; if (e.pluginId === p && !keep.includes(e.collection)) m.delete(key); } },
     dump() { return new Map([...m.entries()].map(([key, v]) => [key, { collection: v.collection, key: v.key, doc: v.doc, updatedAt: v.updatedAt }])); },
   };
 }
@@ -79,11 +81,11 @@ describe('createPluginScheduleApi', () => {
   });
 });
 
-function runnerFixture() {
+function runnerFixture(o: { installed?: boolean } = {}) {
   const pd = fakePluginData();
   const push = vi.fn(async () => ({ kind: 'aggregate' }));
   const logger = { error: vi.fn() };
-  const runner = createPluginScheduleRunner({ pluginData: pd, push, logger });
+  const runner = createPluginScheduleRunner({ pluginData: pd, push, logger, isInstalled: async () => o.installed ?? true });
   return { pd, push, logger, runner };
 }
 
@@ -168,6 +170,18 @@ describe('plugin schedule runner runDue', () => {
 });
 
 describe('plugin schedule runner registerRunner', () => {
+
+  it('a due schedule of a removed plugin neither runs nor re-arms, so it stops firing (design 2026-11-20)', async () => {
+    const { pd, push, logger, runner } = runnerFixture({ installed: false });
+    await seedSchedule(pd);
+    await seedMapping(pd);
+    const eventing = fakeEventing();
+    await runner.registerRunner(eventing as never);
+    await eventing.handlers['plugin.schedule.due']!({ type: 'plugin.schedule.due', payload: { pluginId: PID, scheduleId: 'sch1' } });
+    expect(push).not.toHaveBeenCalled();
+    expect(eventing.publish).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+  });
   it('subscribes to plugin.schedule.due; firing runs + re-arms with a future availableAt', async () => {
     const { pd, push, runner } = runnerFixture();
     await seedSchedule(pd);

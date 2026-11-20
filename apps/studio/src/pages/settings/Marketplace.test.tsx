@@ -8,7 +8,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster:
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return { ...actual,
-    listInstalledArtifacts: vi.fn(), listAvailableArtifacts: vi.fn(), getAvailableArtifact: vi.fn(),
+    listInstalledArtifacts: vi.fn(), listAvailableArtifacts: vi.fn(), getAvailableArtifact: vi.fn(), getRemovalPlan: vi.fn(), removePlugin: vi.fn(),
     installArtifact: vi.fn(), setArtifactEnabled: vi.fn(), rollbackArtifact: vi.fn(), removeArtifact: vi.fn(), detachArtifact: vi.fn(), refreshRegistry: vi.fn(),
     getPublishStatus: vi.fn(), publishArtifact: vi.fn(),
     // Registries is a real tab now that the page's ⋯ reaches into it.
@@ -83,6 +83,31 @@ describe('Marketplace', () => {
     expect((await screen.findAllByText(/Patient/)).length).toBeGreaterThan(0); // consent dialog
     fireEvent.click(screen.getByTestId('approve-install'));
     await waitFor(() => expect(api.installArtifact).toHaveBeenCalledWith('whonet-narrow', [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]));
+  });
+
+  it('an installed plugin with a newer bundle says Update on its Browse card', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue(oneBundle);
+    (api.listInstalledArtifacts as any).mockResolvedValue([
+      { id: 'whonet-sqlite', version: '0.9.0', active: true, enabled: true, approvedBy: 'admin', type: 'plugin', publisher: null, capabilities: [], legacy: false },
+    ]);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    const card = await screen.findByTestId('card-whonet-narrow');
+    expect(card.textContent).toContain('Update to 1.0.0');
+  });
+
+  it('Remove on a plugin opens the remove sheet, not the plain confirm', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue(oneBundle);
+    (api.listInstalledArtifacts as any).mockResolvedValue([
+      { id: 'whonet-sqlite', version: '1.0.0', active: true, enabled: true, approvedBy: 'admin', type: 'plugin', publisher: null, capabilities: [], legacy: false },
+    ]);
+    (api.getRemovalPlan as any).mockResolvedValue({ running: [], copies: 0, copiedBytes: 0 });
+    mockDetail();
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId('card-whonet-narrow'));
+    await openDetailMenu();
+    fireEvent.click(await screen.findByText('Remove'));
+    expect(await screen.findByTestId('remove-plugin-sheet')).toBeTruthy();
+    await waitFor(() => expect(api.getRemovalPlan).toHaveBeenCalledWith('whonet-sqlite'));
   });
 
   it('installs a form-template bundle from Browse after consent', async () => {

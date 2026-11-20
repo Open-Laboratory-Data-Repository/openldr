@@ -25,6 +25,18 @@ describe('PackageCard', () => {
     expect(screen.getByText(/Active/i)).toBeTruthy();
   });
 
+  it('says Update to the newer version for an installed plugin that has one', () => {
+    render(<PackageCard entry={{ ...base, ref: undefined, installed: true, active: true, update: { version: '1.2.0', ref: 'r', rolledBack: false } }} onClick={() => {}} />);
+    expect(screen.getByText('Update to 1.2.0')).toBeTruthy();
+    expect(screen.queryByText(/^Active$/)).toBeNull();
+  });
+
+  it('after a rollback, says the newer version is available, quietly', () => {
+    render(<PackageCard entry={{ ...base, ref: undefined, installed: true, active: true, update: { version: '1.2.0', ref: 'r', rolledBack: true } }} onClick={() => {}} />);
+    expect(screen.getByText('1.2.0 available')).toBeTruthy();
+    expect(screen.queryByText(/Update to/)).toBeNull();
+  });
+
   it('shows an Install affordance for a non-installed registry item', () => {
     render(<PackageCard entry={base} onClick={() => {}} />);
     expect(screen.getByText(/Install/i)).toBeTruthy();

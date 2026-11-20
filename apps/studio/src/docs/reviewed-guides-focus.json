@@ -6694,17 +6694,17 @@
   },
   "marketplace-guide-remove-confirm.png": {
     "crop": {
-      "x": 391.0,
-      "y": 244.375,
-      "width": 498,
-      "height": 311.25
+      "x": 896,
+      "y": 150,
+      "width": 384,
+      "height": 450
     },
     "targets": [
       {
-        "x": 416,
-        "y": 295.734375,
-        "width": 448,
-        "height": 208.53125
+        "x": 912,
+        "y": 300,
+        "width": 360,
+        "height": 214
       }
     ],
     "source": {

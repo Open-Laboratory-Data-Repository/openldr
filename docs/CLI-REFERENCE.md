@@ -297,6 +297,27 @@ All four go through the app and need `connectors.manage`. `start` and `delete` a
 destructive. Exit code 0 when the request was recorded or the answer was printed, and 1 on a
 refusal.
 
+## Removing a plugin
+
+Removes a plugin without leaving its work running. `plugin remove` and `market remove` do the same.
+
+    openldr plugin remove <id> [--keep all|settings|nothing] [--force] [--json]
+    openldr plugin remove <id> --version <v>
+    openldr market remove <id> [version] [--keep all|settings|nothing] [--force] [--json]
+
+Without a version, the whole plugin goes. Its running checks are stopped first, then its running
+reads, and the command waits up to two and a half minutes until each has stopped. A running OpenLDR server
+does the stopping. If one has not stopped, it prints `still stopping: <ids>. Nothing was removed. A
+running OpenLDR server stops them; try again in a minute` and exits 1.
+
+`--keep` says what stays. `all`, the default, keeps the plugin's settings and copied data, so it
+can be installed again and carry on. `settings` keeps connector access and the plugin's settings
+and deletes every copy of read data and the held lists. `nothing` deletes all of the plugin's data.
+Requests a check saved into OpenLDR are never deleted.
+
+It refuses without `--force` when anything is running or anything would be deleted, and names
+what it would stop. With a version, only that installed version is removed and nothing is stopped.
+
 ## Checking a copied source
 
 Checks a finished copy with a plugin that decodes each request. The check reads the copy, not the

@@ -47,6 +47,28 @@ describe('plugin-data store', () => {
     expect(await s.get('p2', 'c', 'a')).toEqual({ n: 9 }); // other namespace untouched
   });
 
+  it('purgeExcept empties a namespace but the named collections, and no other plugin', async () => {
+    const s = createPluginDataStore(db);
+    await s.put('p1', '__import-copies', 'cp1', { n: 1 });
+    await s.put('p1', '__import-allowed', 'conn', { n: 2 });
+    await s.put('p1', 'own', 'k', { n: 3 });
+    await s.put('p2', 'own', 'k', { n: 9 });
+    await s.purgeExcept('p1', ['__import-copies']);
+    expect(await s.get('p1', '__import-copies', 'cp1')).toEqual({ n: 1 });
+    expect(await s.list('p1', '__import-allowed')).toEqual([]);
+    expect(await s.list('p1', 'own')).toEqual([]);
+    expect(await s.get('p2', 'own', 'k')).toEqual({ n: 9 });
+  });
+
+  it('pluginIds lists each plugin with a document in a collection, once', async () => {
+    const s = createPluginDataStore(db);
+    await s.put('p1', '__import-copies', 'a', { n: 1 });
+    await s.put('p1', '__import-copies', 'b', { n: 2 });
+    await s.put('p2', '__import-copies', 'a', { n: 3 });
+    await s.put('p3', 'own', 'a', { n: 4 });
+    expect((await s.pluginIds('__import-copies')).sort()).toEqual(['p1', 'p2']);
+  });
+
   it('rejects an invalid filter field name', async () => {
     const s = createPluginDataStore(db);
     await s.put('p1', 'c', 'a', { type: 'x' });

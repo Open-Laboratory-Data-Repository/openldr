@@ -154,8 +154,10 @@ of the same task, not follow-up work. If you cannot finish one, say which and wh
 **2. CLI parity.** Admin, settings, danger-zone, and maintenance features must also be
 `openldr` CLI commands. Labs run headless, so operators work from the CLI.
 Put shared logic in `@openldr/bootstrap` so the Fastify route and the CLI call identical
-code. Never duplicate. Destructive commands refuse without `--force`. Audit as
-`actorName: 'cli'`. Pattern: `packages/cli/src/*.ts`, registered in `index.ts`.
+code. Never duplicate. Destructive commands refuse without `--force`. Audit through
+`cliActor()` (`packages/cli/src/cli-actor.ts`): actor type `cli` with the OS user's name, or the
+signed-in user in served mode. The operator chose this on 2026-11-20. Pattern:
+`packages/cli/src/*.ts`, registered in `index.ts`.
 
 **3. Docs.** In-app docs and web docs, in **en, fr, and pt**. A missing i18n key renders
 as literal braces, so a partial translation ships broken and the user sees it.

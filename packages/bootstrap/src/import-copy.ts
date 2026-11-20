@@ -924,11 +924,17 @@ export function createImportCopyService(deps: ImportCopyServiceDeps): ImportCopy
 
   /** One tick: claim every run that needs a driver and launch it. Only one runs at a time (`tick`). */
   async function takeWork(): Promise<void> {
-    for (const row of await deps.plugins.list()) {
-      for (const stored of await listRuns(row.id)) {
+    // A removed plugin can leave copies being deleted (design 2026-11-20-plugin-update-and-remove):
+    // the delete needs no plugin code, so its copies are found from their records, and only a
+    // delete is taken for a plugin that is no longer installed.
+    const installed = new Set((await deps.plugins.list()).map((p) => p.id));
+    const withCopies = await ownDb('read', () => deps.pluginData.pluginIds(COPIES)).catch(() => [] as string[]);
+    for (const pluginId of [...installed, ...withCopies.filter((id) => !installed.has(id))]) {
+      for (const stored of await listRuns(pluginId)) {
         // Checked before each claim: after a release this process takes nothing more.
         if (released) return;
         if (local.has(stored.id)) continue;
+        if (!installed.has(pluginId) && stored.status !== 'deleting') continue;
         // Waiting for a first driver: a queued copy, or a delete nobody has begun.
         const unclaimed = stored.status === 'queued' || (stored.status === 'deleting' && (stored.driver ?? null) === null);
         // Its driver has gone: no write for 2 minutes, and not driven here.

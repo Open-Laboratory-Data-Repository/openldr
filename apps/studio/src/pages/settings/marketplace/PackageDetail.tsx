@@ -17,6 +17,7 @@ import { PayloadPreview } from './PayloadPreview';
 import { RequirementsChecklist } from './RequirementsChecklist';
 import { ReadmeMarkdown } from './ReadmeMarkdown';
 import { capabilityLine, packFailureText, type CardEntry } from './util';
+import { compareVersions } from '@/docs/version';
 import { PluginSitesSheet } from './PluginSitesSheet';
 
 interface PackageDetailProps {
@@ -144,6 +145,19 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                     {t('settings.marketplace.installComingSoon')}
                   </DropdownMenuItem>
                 ) : null}
+                {entry.installed && entry.update && installableType ? (
+                  // Update installs the newer version, which becomes the active one; the older stays
+                  // for Rollback. Consent covers the NEW version's capabilities, read from its detail.
+                  <DropdownMenuItem
+                    data-testid="detail-update"
+                    onSelect={() => {
+                      const u = entry.update!;
+                      void getAvailableArtifact(u.ref).then((d) => onInstall({ ...entry, ref: u.ref, version: u.version }, d?.capabilities ?? []));
+                    }}
+                  >
+                    {t('settings.marketplace.updateTo', { version: entry.update.version })}
+                  </DropdownMenuItem>
+                ) : null}
                 {entry.installed ? (
                   isPack ? (
                     <>
@@ -266,6 +280,18 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 )}</dd></div>
                 {(detail?.license ?? entry.license) ? <div className="flex justify-between gap-2"><dt className="text-muted-foreground">{t('settings.marketplace.license')}</dt><dd className="text-right text-foreground/90">{detail?.license ?? entry.license}</dd></div> : null}
               </dl>
+              {entry.installedVersions && entry.installedVersions.length > 0 ? (
+                <div className="mt-3">
+                  <p className="mb-1 text-xs text-muted-foreground">{t('settings.marketplace.installedVersions')}</p>
+                  <ul className="m-0 list-none space-y-0.5 p-0 text-[13px]" data-testid="installed-versions">
+                    {[...entry.installedVersions].sort((a, b) => compareVersions(b.version, a.version)).map((v) => (
+                      <li key={v.version} className={v.active ? 'text-foreground' : 'text-muted-foreground'}>
+                        {v.active ? t('settings.marketplace.activeVersion', { version: v.version }) : v.version}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </section>
 
             <section>

@@ -1349,6 +1349,30 @@ describe('copy: stop, release and delete', () => {
     expect(await w.svc.list(PLUGIN)).toEqual([]);
   });
 
+  it('a delete finishes after the plugin was removed (design 2026-11-20: removal deletes copied data)', async () => {
+    const w = await world(keysOf(4));
+    await w.svc.start(START);
+    await drive(w.svc);
+    expect((await w.rows()).length).toBeGreaterThan(0);
+    await w.svc.remove(PLUGIN, COPY, ADMIN);
+    // The removal then removes the plugin itself: it is no longer in the plugin list.
+    w.plugins.splice(0);
+    await drive(w.svc);
+    expect(await w.rows()).toEqual([]);
+    expect(await w.stored()).toBeNull();
+  });
+
+  it('a copy of a removed plugin that is not being deleted is left alone', async () => {
+    const w = await world(keysOf(4));
+    await w.svc.start(START);
+    await drive(w.svc);
+    const rows = (await w.rows()).length;
+    w.plugins.splice(0);
+    await drive(w.svc);
+    expect((await w.rows()).length).toBe(rows);
+    expect((await w.stored())?.status).toBe('completed');
+  });
+
   it('a finished delete writes one audit row, by the system, with the copy id and the row count', async () => {
     const w = await world(keysOf(2));
     await w.svc.start(START);

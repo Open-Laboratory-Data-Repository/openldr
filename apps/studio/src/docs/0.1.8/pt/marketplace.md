@@ -116,9 +116,37 @@ Depois de desativar, abra os mesmos pontos dos detalhes e selecione **Enable**. 
 
 **Resultado esperado:** o plugin instalado pode voltar a carregar quando ativado. Isto não altera as definições de ligações externas.
 
+## Atualizar um plugin instalado
+
+Quando o Marketplace tem uma versão mais recente de um plugin instalado, o seu cartão mostra **Atualizar para** e a nova versão.
+
+### 1. Abrir o plugin
+
+Em **Browse** ou **Installed**, abra o cartão do plugin.
+
+### 2. Escolher a atualização
+
+Abra os pontos do detalhe e selecione **Atualizar para** a nova versão. Reveja as permissões da nova versão e aprove.
+
+**Resultado esperado:** a nova versão fica ativa. A versão anterior continua instalada e aparece em **Versões instaladas**. Uma leitura ou verificação em curso continua. Se a nova versão ler outros dados, a leitura para e pede para ser lida de novo.
+
+## Voltar a uma versão anterior
+
+Faça-o quando uma nova versão causar um problema.
+
+### 1. Abrir a versão anterior
+
+Em **Installed**, abra a versão anterior do plugin.
+
+### 2. Escolher Rollback
+
+Abra os pontos do detalhe e selecione **Rollback**.
+
+**Resultado esperado:** a versão anterior volta a estar ativa. O cartão indica que a versão mais recente está disponível, sem pedir para atualizar.
+
 ## Remover um plugin instalado
 
-Verifique os workflows e as importações dependentes antes de remover um plugin.
+Verifique os workflows e importações dependentes antes de remover um plugin.
 
 ### 1. Escolher Remove
 
@@ -126,13 +154,23 @@ Abra os pontos do detalhe do plugin instalado e selecione **Remove**.
 
 ![Remove desinstala este plugin.](marketplace-guide-remove.png)
 
-### 2. Confirmar o identificador do plugin
+### 2. Escolher o que manter
 
-Na confirmação, escolha **Remove** para desinstalar ou Cancel para manter. A captura de prática remove test-sink.
+A folha de remoção lista as leituras e verificações em curso do plugin. A remoção para-as primeiro e espera até estarem paradas. Depois escolha o que manter:
 
-![Confirme o identificador antes de remover o plugin.](marketplace-guide-remove-confirm.png)
+- **Manter tudo.** Instale o plugin de novo mais tarde e continue onde parou. Os dados copiados continuam a ocupar espaço em disco, e a folha mostra quanto.
+- **Manter definições, apagar dados copiados.** Liberta o disco. O acesso aos conectores e as definições do plugin ficam. Cada origem tem de ser adicionada e lida de novo, e as correções a pedidos retidos perdem-se.
+- **Apagar tudo.** O servidor fica como se o plugin nunca tivesse sido instalado.
 
-**Resultado esperado:** o plugin removido já não está instalado. O cartão do registo pode continuar a aparecer em Browse.
+Os pedidos já guardados no OpenLDR nunca são apagados. São dados do laboratório, não do plugin.
+
+![Escolha o que manter antes de remover o plugin.](marketplace-guide-remove-confirm.png)
+
+### 3. Escolher Remover
+
+Abra os pontos da folha e selecione **Remover**.
+
+**Resultado esperado:** o plugin deixa de estar instalado e nada dele fica em curso. Se uma leitura não parar em dois minutos e meio, a folha diz qual, não remove nada, e pode tentar de novo. Na linha de comandos, `openldr plugin remove <id> --keep all|settings|nothing` faz o mesmo e recusa sem `--force` quando pararia ou apagaria alguma coisa.
 
 ## Adicionar um registo
 

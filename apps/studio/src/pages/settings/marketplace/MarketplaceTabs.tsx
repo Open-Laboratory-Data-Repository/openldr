@@ -13,7 +13,7 @@ import type { AvailableArtifact, InstalledArtifact } from '@/api';
 import { PackageCard } from './PackageCard';
 import { PackageDetail } from './PackageDetail';
 import { RegistriesTab } from './RegistriesTab';
-import { availableToEntry, installedToEntry, withBrowseRef, type CardEntry } from './util';
+import { availableToEntry, installedToEntry, newerAvailable, withBrowseRef, type CardEntry } from './util';
 
 interface MarketplaceTabsProps {
   configured: boolean;
@@ -118,7 +118,26 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
   const registriesApi = useRef<{ openCreate: () => void } | null>(null);
   const bindRegistries = useCallback((api: { openCreate: () => void }) => { registriesApi.current = api; }, []);
 
-  const installedById = useMemo(() => new Map(props.installed.map((a) => [a.id, a])), [props.installed]);
+  // One row per id: the active version when several are installed (a later inactive row must not
+  // stand in for it), and every installed version of each id, for the Update badge.
+  const installedById = useMemo(() => {
+    const m = new Map<string, InstalledArtifact>();
+    for (const a of props.installed) if (a.active || !m.has(a.id)) m.set(a.id, a);
+    return m;
+  }, [props.installed]);
+  const versionsById = useMemo(() => {
+    const m = new Map<string, { version: string; active: boolean }[]>();
+    for (const a of props.installed) m.set(a.id, [...(m.get(a.id) ?? []), { version: a.version, active: a.active }]);
+    return m;
+  }, [props.installed]);
+  /** Marks an installed plugin's entry with the newer Marketplace version, if any. Only the active
+   *  version's entry carries it: an inactive row on the Installed tab is not what an update replaces. */
+  const withUpdate = useCallback((e: CardEntry, version: string): CardEntry => {
+    const active = installedById.get(e.id);
+    if (e.type !== 'plugin' || !active || active.version !== version) return e;
+    const installedVersions = versionsById.get(e.id) ?? [];
+    return { ...e, installedVersions, update: newerAvailable(e.id, active.version, props.available, installedVersions.map((v) => v.version)) };
+  }, [installedById, versionsById, props.available]);
 
   const browseEntries = useMemo(() => props.available
     .filter((b) => {
@@ -126,7 +145,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
       const typeMatch = typeFilter === 'all' || b.type === typeFilter;
       return textMatch && typeMatch;
     })
-    .map((b) => availableToEntry(b, installedById)), [props.available, filter, typeFilter, installedById]);
+    .map((b) => { const e = availableToEntry(b, installedById); return e.installed ? withUpdate(e, installedById.get(b.id)!.version) : e; }), [props.available, filter, typeFilter, installedById, withUpdate]);
 
   const installedEntries = useMemo(() => props.installed
     .filter((a) => {
@@ -134,17 +153,19 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
       const typeMatch = typeFilter === 'all' || a.type === typeFilter;
       return textMatch && typeMatch;
     })
-    .map((a) => withBrowseRef(installedToEntry(a), props.available)), [props.installed, props.available, filter, typeFilter]);
+    .map((a) => withUpdate(withBrowseRef(installedToEntry(a), props.available), a.version)), [props.installed, props.available, filter, typeFilter, withUpdate]);
 
   const selectedEntry = useMemo(() => {
     if (!selected) return null;
     if (selected.source === 'browse') {
       const bundle = props.available.find((entry) => entry.id === selected.id && entry.ref === selected.ref && entry.type === selected.type);
-      return bundle ? availableToEntry(bundle, installedById) : null;
+      if (!bundle) return null;
+      const e = availableToEntry(bundle, installedById);
+      return e.installed ? withUpdate(e, installedById.get(bundle.id)!.version) : e;
     }
     const artifact = props.installed.find((entry) => entry.id === selected.id && entry.version === selected.version && entry.type === selected.type);
-    return artifact ? withBrowseRef(installedToEntry(artifact), props.available) : null;
-  }, [selected, props.available, props.installed, installedById]);
+    return artifact ? withUpdate(withBrowseRef(installedToEntry(artifact), props.available), artifact.version) : null;
+  }, [selected, props.available, props.installed, installedById, withUpdate]);
 
   if (selectedEntry) {
     return (
