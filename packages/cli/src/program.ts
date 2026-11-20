@@ -14,6 +14,7 @@ import { runList as runReportDesignList, runDelete as runReportDesignDelete, run
 import { runList as runReportDefList, runDelete as runReportDefDelete } from './report-def';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
+import { runWholePluginRemove } from './plugin-removal';
 import { runReportList, runReportRun, runReportGlassExport } from './report';
 import { runAuditList } from './audit';
 import { runWorkflowReceiptsList, runWorkflowReceiptShow, runWorkflowSetEnabled, runWorkflowRunContinue } from './workflows';
@@ -1444,10 +1445,15 @@ export function buildProgram(): Command {
     });
   plugin
     .command('remove <id>')
-    .option('--version <v>', 'specific version (default: all)')
+    .description('Remove a plugin. The whole plugin stops its reads and checks first; refuses without --force when anything runs or would be deleted')
+    .option('--version <v>', 'one installed version only (default: the whole plugin)')
+    .option('--keep <what>', 'whole plugin only: all, settings or nothing (default all)')
+    .option('--force', 'stop running work and delete as --keep says', false)
     .option('--json', 'emit JSON', false)
-    .action(async (id: string, opts: { version?: string; json: boolean }) => {
-      try { process.exitCode = await runPluginRemove(id, opts); } catch (err) { process.stderr.write(`plugin remove failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    .action(async (id: string, opts: { version?: string; keep?: string; force: boolean; json: boolean }) => {
+      try {
+        process.exitCode = opts.version ? await runPluginRemove(id, opts) : await runWholePluginRemove(id, opts);
+      } catch (err) { process.stderr.write(`plugin remove failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 
   const report = program.command('report').description('Domain reports over the analytics DB');
@@ -1689,10 +1695,14 @@ export function buildProgram(): Command {
     });
   market
     .command('remove <id> [version]')
-    .description('Remove a plugin (all versions or a specific one)')
+    .description('Remove a plugin: one version, or the whole plugin, which stops its reads and checks first')
+    .option('--keep <what>', 'whole plugin only: all, settings or nothing (default all)')
+    .option('--force', 'stop running work and delete as --keep says', false)
     .option('--json', 'emit JSON', false)
-    .action(async (id: string, version: string | undefined, opts: { json: boolean }) => {
-      try { process.exitCode = await runMarketRemove(id, version, opts); } catch (err) { process.stderr.write(`market remove failed: ${String(err)}\n`); process.exitCode = 1; }
+    .action(async (id: string, version: string | undefined, opts: { keep?: string; force: boolean; json: boolean }) => {
+      try {
+        process.exitCode = version ? await runMarketRemove(id, version, opts) : await runWholePluginRemove(id, opts);
+      } catch (err) { process.stderr.write(`market remove failed: ${String(err)}\n`); process.exitCode = 1; }
     });
 
   const artifact = program.command('artifact').description('Author marketplace artifacts (scaffold/build/sign/publish)');
