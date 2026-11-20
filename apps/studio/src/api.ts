@@ -2987,6 +2987,28 @@ export async function removeArtifact(id: string, version?: string): Promise<void
   await apiDelete(`/api/marketplace/${encodeURIComponent(id)}${qs}`, 'remove artifact');
 }
 
+/** What removing a plugin would stop, and how much it copied (design 2026-11-20). */
+export interface RemovalPlan {
+  running: Array<{ kind: 'copy' | 'check'; id: string; label: string; status: string }>;
+  copies: number;
+  copiedBytes: number;
+}
+export type RemoveKeep = 'all' | 'settings' | 'nothing';
+
+export const getRemovalPlan = (id: string): Promise<RemovalPlan> =>
+  apiGet<RemovalPlan>(`/api/marketplace/${encodeURIComponent(id)}/removal`, 'plan the removal');
+
+/** Stops the plugin's reads and checks, then removes it, keeping what was chosen. A 409 means
+ *  something did not stop in time: the error carries `stillStopping`, and nothing was removed. */
+export async function removePlugin(id: string, keep: RemoveKeep): Promise<{ stopped: string[]; deletedCopies: number }> {
+  const res = await authFetch(`/api/marketplace/${encodeURIComponent(id)}/remove`, jbody({ keep }, 'POST'));
+  if (res.status === 409) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string; stillStopping?: string[] };
+    throw Object.assign(new Error(body.error ?? 'still stopping'), { stillStopping: body.stillStopping ?? [] });
+  }
+  return okJson(res, 'remove plugin');
+}
+
 export async function detachArtifact(id: string): Promise<void> {
   const r = await authFetch(`/api/marketplace/${encodeURIComponent(id)}/detach`, { method: 'POST' });
   if (!r.ok) throw new Error(`detach failed: ${r.status}`);
