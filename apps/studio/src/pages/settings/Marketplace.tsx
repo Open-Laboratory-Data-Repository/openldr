@@ -17,6 +17,12 @@ import { capabilityLine, packFailureText, type CardEntry } from './marketplace/u
 import { notifyPluginsChanged } from '@/plugins/pluginEvents';
 import { PayloadPreview } from './marketplace/PayloadPreview';
 
+/** An installed plugin version that is not the active one. Removing it removes that version only;
+ *  the Remove sheet, which stops work and removes the whole plugin, is for the active version. */
+function isOlderVersion(entry: CardEntry): boolean {
+  return entry.type === 'plugin' && entry.installed === true && entry.active === false;
+}
+
 export function Marketplace() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -101,7 +107,8 @@ export function Marketplace() {
     if (!pendingRemove) return;
     const entry = pendingRemove;
     setPendingRemove(null);
-    try { await removeArtifact(entry.id); notifyPluginsChanged(); await load(); }
+    // An older plugin version (not the active one) is removed alone. Its plugin and data stay.
+    try { await removeArtifact(entry.id, isOlderVersion(entry) ? entry.version : undefined); notifyPluginsChanged(); await load(); }
     catch (e) { toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
   }, [pendingRemove, t, load]);
 
@@ -174,7 +181,7 @@ export function Marketplace() {
       {/* A plugin's removal stops its reads and checks and asks what to keep (design 2026-11-20). */}
       <RemovePluginSheet
         pluginId={pendingRemove?.type === 'plugin' ? pendingRemove.id : ''}
-        open={pendingRemove?.type === 'plugin'}
+        open={pendingRemove?.type === 'plugin' && !isOlderVersion(pendingRemove)}
         onOpenChange={(o) => { if (!o) setPendingRemove(null); }}
         onRemoved={() => {
           const id = pendingRemove?.id ?? '';
@@ -186,10 +193,14 @@ export function Marketplace() {
       />
 
       <ConfirmDialog
-        open={pendingRemove !== null && pendingRemove.type !== 'plugin'}
+        open={pendingRemove !== null && (pendingRemove.type !== 'plugin' || isOlderVersion(pendingRemove))}
         onOpenChange={(o) => { if (!o) setPendingRemove(null); }}
-        title={t('settings.marketplace.removeTitle', { id: pendingRemove?.id ?? '' })}
-        description={t('settings.marketplace.removeDescription')}
+        title={pendingRemove && isOlderVersion(pendingRemove)
+          ? t('settings.marketplace.removeVersionTitle', { id: pendingRemove.id, version: pendingRemove.version })
+          : t('settings.marketplace.removeTitle', { id: pendingRemove?.id ?? '' })}
+        description={pendingRemove && isOlderVersion(pendingRemove)
+          ? t('settings.marketplace.removeVersionDescription')
+          : t('settings.marketplace.removeDescription')}
         confirmLabel={t('settings.marketplace.remove')}
         destructive
         onConfirm={() => { void doRemove(); }}

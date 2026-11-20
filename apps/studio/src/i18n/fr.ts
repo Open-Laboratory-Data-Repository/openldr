@@ -1040,6 +1040,8 @@ export const fr: EnShape = {
       installPluginOnly: 'Seuls les artefacts de plugin peuvent être installés pour l\'instant.',
       removeTitle: 'Supprimer {{id}} ?',
       removeDescription: 'Ceci désinstalle l\'artefact de ce déploiement.',
+      removeVersionTitle: 'Supprimer {{id}} {{version}} ?',
+      removeVersionDescription: 'Ceci supprime seulement cette ancienne version. La version active continue de fonctionner, et ses paramètres et données restent.',
       installedToast: '{{id}} installé',
       errorToast: 'Erreur marketplace : {{error}}',
       browse: 'Parcourir',

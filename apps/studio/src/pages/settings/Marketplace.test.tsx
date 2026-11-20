@@ -110,6 +110,54 @@ describe('Marketplace', () => {
     await waitFor(() => expect(api.getRemovalPlan).toHaveBeenCalledWith('whonet-sqlite'));
   });
 
+  // Two installed versions after an Update: 1.0.0 active, 0.9.0 kept. Found on Windows, 2026-11-20:
+  // Remove on the older card removed the whole plugin, both versions and its data.
+  const twoVersions = [
+    { id: 'whonet-sqlite', version: '1.0.0', active: true, enabled: true, approvedBy: 'admin', type: 'plugin', publisher: null, capabilities: [], legacy: false },
+    { id: 'whonet-sqlite', version: '0.9.0', active: false, enabled: true, approvedBy: 'admin', type: 'plugin', publisher: null, capabilities: [], legacy: false },
+  ];
+  async function openInstalledCard(version: string): Promise<void> {
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Installed/ }), { button: 0 });
+    const cards = await screen.findAllByTestId(/^card-/);
+    const card = cards.find((c) => c.textContent?.includes(`v${version}`));
+    if (!card) throw new Error(`no installed card for ${version}`);
+    fireEvent.click(card);
+  }
+
+  it('Remove on an older installed version removes only that version, after a confirm naming it', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue(oneBundle);
+    (api.listInstalledArtifacts as any).mockResolvedValue(twoVersions);
+    (api.removeArtifact as any).mockResolvedValue(undefined);
+    (api.getRemovalPlan as any).mockResolvedValue({ running: [], copies: 0, copiedBytes: 0 });
+    mockDetail();
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    await openInstalledCard('0.9.0');
+    await openDetailMenu();
+    fireEvent.click(await screen.findByText('Remove'));
+    expect(await screen.findByText(/Remove whonet-sqlite 0\.9\.0\?/)).toBeTruthy();
+    expect(screen.queryByTestId('remove-plugin-sheet')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(api.removeArtifact).toHaveBeenCalledWith('whonet-sqlite', '0.9.0'));
+    expect(api.removePlugin).not.toHaveBeenCalled();
+  }, 20000);
+
+  it('the active version\'s detail shows the new version once the update installs', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue(oneBundle);
+    (api.listInstalledArtifacts as any).mockResolvedValue([{ ...twoVersions[1], active: true }]);
+    (api.installArtifact as any).mockResolvedValue({ id: 'whonet-sqlite', version: '1.0.0' });
+    mockDetail();
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    await openInstalledCard('0.9.0');
+    await openDetailMenu();
+    // The update lands: 1.0.0 is installed and active, 0.9.0 is kept.
+    (api.listInstalledArtifacts as any).mockResolvedValue(twoVersions);
+    fireEvent.click(await screen.findByTestId('detail-update'));
+    fireEvent.click(await screen.findByTestId('approve-install'));
+    await waitFor(() => expect(api.installArtifact).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText(/v1\.0\.0/)).toBeTruthy());
+    expect(screen.queryByText(/v0\.9\.0/)).toBeNull();
+  }, 20000);
+
   it('installs a form-template bundle from Browse after consent', async () => {
     (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [{ ref: 'demo-form-1', id: 'demo-form', version: '1.0.0', type: 'form-template', publisher: { id: 'p', name: 'P' }, valid: true }] });
     (api.listInstalledArtifacts as any).mockResolvedValue([]);
