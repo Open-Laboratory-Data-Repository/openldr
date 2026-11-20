@@ -116,6 +116,14 @@ describe('PackageDetail', () => {
     expect(screen.queryByTestId('detail-update')).toBeNull();
   });
 
+  it('lists the installed versions, newest first, with the active one marked', async () => {
+    const installed: CardEntry = { ...entry, ref: undefined, version: '0.1.4', installed: true, active: true, enabled: true,
+      installedVersions: [{ version: '0.1.4', active: true }, { version: '0.1.10', active: false }, { version: '0.1.5', active: false }] };
+    render(<PackageDetail entry={installed} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
+    const list = await screen.findByTestId('installed-versions');
+    expect([...list.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['0.1.10', '0.1.5', '0.1.4 (active)']);
+  });
+
   it('Install calls onInstall with the fetched capabilities', async () => {
     mockDetail();
     const onInstall = vi.fn();

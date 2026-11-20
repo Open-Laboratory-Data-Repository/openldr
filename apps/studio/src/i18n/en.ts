@@ -988,6 +988,8 @@ export const en = {
       install: 'Install',
       updateTo: 'Update to {{version}}',
       newerAvailable: '{{version}} available',
+      installedVersions: 'Installed versions',
+      activeVersion: '{{version}} (active)',
       verified: 'Verified',
       unverified: 'Unverified',
       firstUse: 'New publisher',

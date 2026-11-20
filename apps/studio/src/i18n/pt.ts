@@ -984,6 +984,8 @@ export const pt: EnShape = {
       install: 'Instalar',
       updateTo: 'Atualizar para {{version}}',
       newerAvailable: '{{version}} disponível',
+      installedVersions: 'Versões instaladas',
+      activeVersion: '{{version}} (ativa)',
       verified: 'Verificado',
       unverified: 'Não verificado',
       firstUse: 'Novo editor',

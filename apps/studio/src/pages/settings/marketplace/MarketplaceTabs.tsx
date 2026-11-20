@@ -126,8 +126,8 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
     return m;
   }, [props.installed]);
   const versionsById = useMemo(() => {
-    const m = new Map<string, string[]>();
-    for (const a of props.installed) m.set(a.id, [...(m.get(a.id) ?? []), a.version]);
+    const m = new Map<string, { version: string; active: boolean }[]>();
+    for (const a of props.installed) m.set(a.id, [...(m.get(a.id) ?? []), { version: a.version, active: a.active }]);
     return m;
   }, [props.installed]);
   /** Marks an installed plugin's entry with the newer Marketplace version, if any. Only the active
@@ -135,7 +135,8 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
   const withUpdate = useCallback((e: CardEntry, version: string): CardEntry => {
     const active = installedById.get(e.id);
     if (e.type !== 'plugin' || !active || active.version !== version) return e;
-    return { ...e, update: newerAvailable(e.id, active.version, props.available, versionsById.get(e.id) ?? []) };
+    const installedVersions = versionsById.get(e.id) ?? [];
+    return { ...e, installedVersions, update: newerAvailable(e.id, active.version, props.available, installedVersions.map((v) => v.version)) };
   }, [installedById, versionsById, props.available]);
 
   const browseEntries = useMemo(() => props.available
