@@ -6,6 +6,12 @@
       "version": "v0.1.12-rc.1",
       "entries": [
         {
+          "hash": "51579382d",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "The seed's demo patient no longer hides Load sample data"
+        },
+        {
           "hash": "e38ba5115",
           "type": "feat",
           "scope": "workflows",
