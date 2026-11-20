@@ -29,7 +29,7 @@ A página diz o que os dados de exemplo contêm: **Os dados de exemplo acrescent
 
 Para continuar sem eles, selecione **Saltar**.
 
-O Studio só oferece dados de exemplo enquanto a instalação não tiver dados de laboratório. Um paciente, um pedido de análise, uma amostra, um resultado ou uma resposta de formulário guardada contam como dados de laboratório. Uma organização ou um local também. Assim que existir um, este passo deixa de aparecer, e um segundo carregamento é recusado.
+O Studio só oferece dados de exemplo enquanto a instalação não tiver dados de laboratório. Um paciente, um pedido de análise, uma amostra, um resultado ou uma resposta de formulário guardada contam como dados de laboratório. Uma organização ou um local também. O paciente, a organização e o local de demonstração que uma instalação Docker cria no primeiro arranque não contam. Assim que existir um, este passo deixa de aparecer, e um segundo carregamento é recusado.
 
 Se saltar este passo, pode carregar os dados mais tarde a partir do menu de pontos de Definições → Verificações de instalação, enquanto a instalação continuar sem dados de laboratório. Veja [Verificações da configuração](/docs/setup-checks).
 
