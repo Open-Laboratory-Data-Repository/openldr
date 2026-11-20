@@ -29,7 +29,7 @@ La page indique ce que contiennent les données d'exemple : **Les données d'exe
 
 Pour continuer sans elles, sélectionnez **Passer**.
 
-Studio ne propose les données d'exemple que tant que l'installation ne contient aucune donnée de laboratoire. Un patient, une demande d'analyse, un échantillon, un résultat ou une réponse de formulaire enregistrée comptent comme données de laboratoire. Une organisation ou un site aussi. Dès qu'il en existe un, cette étape n'apparaît plus, et un second chargement est refusé.
+Studio ne propose les données d'exemple que tant que l'installation ne contient aucune donnée de laboratoire. Un patient, une demande d'analyse, un échantillon, un résultat ou une réponse de formulaire enregistrée comptent comme données de laboratoire. Une organisation ou un site aussi. Le patient, l'organisation et le site de démonstration qu'une installation Docker crée à son premier démarrage ne comptent pas. Dès qu'il en existe un, cette étape n'apparaît plus, et un second chargement est refusé.
 
 Si vous passez cette étape, vous pourrez charger les données plus tard depuis le menu à points de Paramètres → Vérifications d’installation, tant que l'installation ne contient toujours aucune donnée de laboratoire. Voir [Vérifications de configuration](/docs/setup-checks).
 

@@ -29,7 +29,7 @@ The page says what sample data holds: **Sample data adds 60 fictional lab orders
 
 To go on without it, select **Skip**.
 
-Studio offers sample data only while the install holds no lab data. A patient, a lab request, a specimen, a result or a saved form response counts as lab data. So does an organization or a location. Once one exists, this step does not appear, and a second load is refused.
+Studio offers sample data only while the install holds no lab data. A patient, a lab request, a specimen, a result or a saved form response counts as lab data. So does an organization or a location. The demo patient, organization and location that a Docker install creates when it first starts do not count. Once one exists, this step does not appear, and a second load is refused.
 
 If you skip it, you can load it later from the dots menu under Settings → Setup checks, while the install still holds no lab data. See [Setup checks](/docs/setup-checks).
 

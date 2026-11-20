@@ -66,6 +66,37 @@ describe('installHoldsLabData', () => {
     });
   }
 
+  // A default Docker install boots with SEED_ON_START=true, so seedDatabase writes these three
+  // before anyone signs in. Found 2026-11-20 on the rc.3 Docker install: they made the install look
+  // like it held lab data, so Load sample data was hidden and the sample dashboard stayed at 0.
+  it('is false when the FHIR store holds only what the seed wrote', async () => {
+    const { deps, fhirStore } = await build();
+    for (const [resourceType, id] of [['Organization', 'seed-org'], ['Location', 'seed-loc'], ['Patient', 'seed-pat']]) {
+      await fhirStore.save({ resourceType, id } as never);
+    }
+    expect(await installHoldsLabData(deps)).toBe(false);
+  });
+
+  it('is true when another Patient sits beside the seed patient', async () => {
+    const { deps, fhirStore } = await build();
+    await fhirStore.save({ resourceType: 'Patient', id: 'seed-pat' } as never);
+    await fhirStore.save({ resourceType: 'Patient', id: 'p-real' } as never);
+    expect(await installHoldsLabData(deps)).toBe(true);
+  });
+
+  it('is false when the patients table holds only the seed row', async () => {
+    const { deps, targetDb } = await build();
+    await targetDb.insertInto('patients').values({ id: 'seed-pat', source_system: 'seed' }).execute();
+    expect(await installHoldsLabData(deps)).toBe(false);
+  });
+
+  it('is true when the patients table holds a row from another source', async () => {
+    const { deps, targetDb } = await build();
+    await targetDb.insertInto('patients').values({ id: 'seed-pat', source_system: 'seed' }).execute();
+    await targetDb.insertInto('patients').values({ id: 'p2', source_system: 'cli' }).execute();
+    expect(await installHoldsLabData(deps)).toBe(true);
+  });
+
   it('is false when the FHIR store holds only other types', async () => {
     const { deps, fhirStore } = await build();
     await fhirStore.save({ resourceType: 'ValueSet', id: 'vs-1', url: 'urn:x', status: 'active' } as never);

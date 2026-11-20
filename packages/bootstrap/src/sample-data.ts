@@ -3,6 +3,7 @@ import type { Config } from '@openldr/config';
 import type { ExternalSchema, TargetEngine } from '@openldr/db';
 import { createDbContext } from './db-context';
 import { seedDatabase, type FormSeedTarget } from './seed';
+import { SEED_RESOURCE_IDS, SEED_SOURCE } from './seed-ids';
 import { createIngestContext } from './ingest-context';
 import { ingestAndWait, type IngestOutcome } from './ingest-and-wait';
 // A copy of apps/web/public/docs-samples/openldr-sample-lab-data.json. A package may not import
@@ -14,9 +15,10 @@ import sampleLabData from './samples/sample-lab-data.json';
 // depcruise counts a type-only import as a cycle. index.ts builds the deps (sampleDataDeps).
 
 /** FHIR resource types that mean the install holds lab data. seedEssentials, which runs on every
- *  boot, writes none of them, so a fresh install holds none. seedDatabase writes an Organization,
- *  a Location and a Patient, so a second load is refused. A QuestionnaireResponse is a saved form
- *  response, which is a lab record too. */
+ *  boot, writes none of them. seedDatabase writes an Organization, a Location and a Patient, and a
+ *  default Docker install runs it at boot (SEED_ON_START), so those three are not counted: see
+ *  SEED_RESOURCE_IDS. The sample orders are, so a second load is refused. A QuestionnaireResponse
+ *  is a saved form response, which is a lab record too. */
 export const LAB_DATA_RESOURCE_TYPES = [
   'Patient', 'ServiceRequest', 'Specimen', 'Observation', 'DiagnosticReport', 'Organization', 'Location',
   'QuestionnaireResponse',
@@ -49,9 +51,14 @@ export interface SampleDataCounts {
   sampleResources: number;
 }
 
+/** The ids seedDatabase writes. A resource with one of these is the seed's, not lab data. */
+const SEED_IDS: ReadonlySet<string> = new Set(Object.values(SEED_RESOURCE_IDS));
+
 async function tableHasRow(deps: SampleDataDeps, table: (typeof LAB_DATA_TABLES)[number]): Promise<boolean> {
-  // SQL Server has no LIMIT. Kysely compiles .limit() as written, so it needs TOP there.
-  const base = deps.targetDb.selectFrom(table).select('id');
+  // SQL Server has no LIMIT. Kysely compiles .limit() as written, so it needs TOP there. A row the
+  // seed wrote does not count. A row with no source label does.
+  const base = deps.targetDb.selectFrom(table).select('id')
+    .where((eb) => eb.or([eb('source_system', 'is', null), eb('source_system', '!=', SEED_SOURCE)]));
   const row = await (deps.targetEngine === 'mssql' ? base.top(1) : base.limit(1)).executeTakeFirst();
   return row !== undefined;
 }
@@ -59,7 +66,9 @@ async function tableHasRow(deps: SampleDataDeps, table: (typeof LAB_DATA_TABLES)
 /** True when the install holds lab data. Sample data is refused then. */
 export async function installHoldsLabData(deps: SampleDataDeps): Promise<boolean> {
   for (const type of LAB_DATA_RESOURCE_TYPES) {
-    if ((await deps.listByType(type, 1)).length > 0) return true;
+    // One more than the seed's ids, so a real resource shows even when the seed's sorts first.
+    const found = await deps.listByType(type, SEED_IDS.size + 1);
+    if (found.some((r) => !SEED_IDS.has(String((r as { id?: unknown }).id)))) return true;
   }
   for (const table of LAB_DATA_TABLES) {
     if (await tableHasRow(deps, table)) return true;

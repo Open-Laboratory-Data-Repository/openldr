@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { SEED_RESOURCE_IDS, SEED_SOURCE } from './seed-ids';
 import { sampleForms, type FormStore } from '@openldr/forms';
 import { buildDefaultWorkflows, type Workflow, type WorkflowStore } from '@openldr/workflows';
 import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
@@ -278,28 +279,28 @@ export async function seedEssentials(app: EssentialSeedTarget): Promise<{ formsS
 // target-warehouse connector. Safe to re-run: existing forms are matched by name and only
 // unpublished ones get published; the connector is deduped by name and key-guarded.
 export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<SeedResult> {
-  const org = { resourceType: 'Organization', id: 'seed-org', name: 'Seed Central Lab' };
+  const org = { resourceType: 'Organization', id: SEED_RESOURCE_IDS.organization, name: 'Seed Central Lab' };
   const loc = {
     resourceType: 'Location',
-    id: 'seed-loc',
+    id: SEED_RESOURCE_IDS.location,
     status: 'active',
     name: 'Seed Bench',
-    managingOrganization: { reference: 'Organization/seed-org' },
+    managingOrganization: { reference: `Organization/${SEED_RESOURCE_IDS.organization}` },
   };
   const patient = {
     resourceType: 'Patient',
-    id: 'seed-pat',
+    id: SEED_RESOURCE_IDS.patient,
     // A name and an identifier, so a patient picker (which searches the warehouse by both) can
     // find the sample patient on a Lab order.
     identifier: [{ system: 'urn:openldr:seed:patient', value: 'SEED-0001' }],
     name: [{ family: 'Sample', given: ['Seed'] }],
     gender: 'female',
     birthDate: '1990-01-01',
-    managingOrganization: { reference: 'Organization/seed-org' },
+    managingOrganization: { reference: `Organization/${SEED_RESOURCE_IDS.organization}` },
   };
   const resources: { id: string; flattened: string }[] = [];
   for (const r of [org, loc, patient]) {
-    const out = await db.persist(r, { sourceSystem: 'seed' });
+    const out = await db.persist(r, { sourceSystem: SEED_SOURCE });
     resources.push({ id: r.id, flattened: out.flattened });
   }
 
