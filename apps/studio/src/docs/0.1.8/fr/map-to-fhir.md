@@ -145,9 +145,9 @@ Le panneau refuse d'enregistrer tant qu'un champ obligatoire n'a ni colonne ni v
 
 ## Relier la sortie des lignes retenues
 
-Sur une nouvelle installation, le workflow fourni **Ingest** utilise Map to FHIR. **sortie** va vers **Persist store**, et rien n'est relié à **retenus**, à dessein. Ingest refuse donc un message entier dès qu'une partie ne peut pas être stockée. L'exécution échoue, l'émetteur reçoit une erreur, et rien de ce message n'est stocké. Une installation mise en place avant cette version garde son ancien graphe Ingest. **Reset to default** donne le nouveau, et supprime toute modification faite à l'ancien.
+Sur une nouvelle installation, le workflow fourni **Ingest** utilise Map to FHIR. **sortie** va vers **Persist store**, et **retenus** va vers une étape **Log held**. Ingest stocke donc les bonnes parties d'un message et journalise chaque partie retenue avec sa raison. La réponse à l'émetteur dit combien de parties ont été retenues, et pourquoi. Une installation mise en place avant cette version garde son ancien graphe Ingest. **Reset to default** donne le nouveau, et supprime toute modification faite à l'ancien.
 
-Reliez **retenus** dans votre propre workflow, quand les bonnes lignes doivent être stockées et les mauvaises mises de côté. Laissez cette sortie libre dans **Ingest**.
+Pour refuser un message entier dès qu'une partie est retenue, supprimez le lien qui part de **retenus**. Une seule ligne retenue fait alors échouer l'exécution, et rien de ce message n'est stocké.
 
 1. Recherchez `Log` dans la bibliothèque de nœuds.
 2. Glissez **Log** à côté de **Map to FHIR**.
@@ -194,7 +194,7 @@ Dans **History**, le résultat du nœud Map to FHIR liste jusqu'à 20 raisons. N
 
 - **no mapping for this shape.** La ligne a une colonne qu'aucun mappage enregistré du nœud ne connaît. Obtenez un échantillon avec cette ligne et enregistrez un mappage pour elle.
 - **more than one saved mapping fits this row.** Deux mappages enregistrés connaissent toutes ses colonnes. Gardez un mappage par fichier, ou utilisez un nœud par fichier.
-- **L'exécution échoue avec « held port is not connected ».** Dans **Ingest**, c'est ainsi qu'un message impossible à stocker est refusé. L'erreur donne les premières raisons. Corrigez les données ou le mappage, puis renvoyez le message. Dans votre propre workflow, reliez **retenus** à un nœud Log pour stocker les bonnes lignes et mettre les mauvaises de côté.
+- **L'exécution échoue avec « held port is not connected ».** Rien n'est relié à **retenus**, donc une seule ligne retenue fait échouer l'exécution. L'erreur donne les premières raisons. Corrigez les données ou le mappage, puis renvoyez le message. Pour stocker les bonnes lignes et mettre les mauvaises de côté, reliez **retenus** à un nœud Log, comme le fait **Ingest**.
 - **nothing at body.** L'élément ne contient rien sous `body`, ou seulement une liste vide ou une valeur unique. Après **Extract from File**, laissez **Chemin source** vide. Après un webhook, vérifiez que l'émetteur envoie bien un corps.
 - **not a row.** La liste sous le chemin source contient autre chose qu'une ligne, par exemple un nombre ou un texte. Chaque élément de la liste doit être un objet avec des colonnes.
 - **Écouter ne trouve rien.** Enregistrez d'abord le workflow. Sélectionnez ensuite **Écouter** et envoyez le message dans la minute.

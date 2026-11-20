@@ -342,10 +342,10 @@ FHIR Bundle até o repor.
   **Map to FHIR** resolve as referências internas e divide-o em **um item por recurso**,
   porque o **Persist store guarda um recurso FHIR por cada item de entrada**. É o mesmo
   caminho de escrita, com o mesmo **controlo de rigor da validação**, que a CLI usa.
-- **Map to FHIR verifica cada Bundle a esse nível antes do Persist store.** O Ingest recusa
-  uma mensagem inteira quando alguma parte dela não pode ser guardada. A execução falha, nada
-  dela é guardado, e o webhook responde HTTP 500, como antes. Os motivos estão no nó Map to
-  FHIR da execução, em History. Consulte [Map to FHIR](/docs/map-to-fhir).
+- **Map to FHIR verifica cada Bundle a esse nível antes do Persist store.** O Ingest guarda as
+  partes de uma mensagem que consegue mapear. Uma parte que não pode ser guardada é retida: segue
+  para o passo **Log held** e não é guardada. O webhook responde HTTP 200 com `held` e
+  `heldReasons` quando algo foi retido. Consulte [Map to FHIR](/docs/map-to-fhir).
 - **Um só webhook trata testes e questionários em conjunto.** O Persist guarda todos os
   recursos, e a projeção encaminha cada um pelo `resourceType` (`Observation` →
   `lab_results`, `ServiceRequest` → `lab_requests`, `QuestionnaireResponse` →

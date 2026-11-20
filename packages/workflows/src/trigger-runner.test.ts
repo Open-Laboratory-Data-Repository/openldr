@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createWorkflowTriggerRunner } from './trigger-runner';
+import { createWorkflowTriggerRunner, heldSummary } from './trigger-runner';
 import { runWorkflow } from './engine/run-workflow';
 
 function fakeEventing() {
@@ -367,4 +367,19 @@ it('builds a run using the reserved identity without recording it', async () => 
   const { executeWorkflowRun } = await import('./trigger-runner');
   const run = await executeWorkflowRun({ runWorkflow }, { nodes: [{ id: 't', type: 'trigger', data: {} }], edges: [] }, { id: 'reserved', workflowId: 'w', source: 'webhook', input: { test: true } });
   expect(run).toMatchObject({ id: 'reserved', workflowId: 'w', triggerSource: 'webhook', status: 'completed' });
+});
+
+describe('heldSummary', () => {
+  it('adds up held items across Map to FHIR steps and keeps the first reasons', () => {
+    const metas = [
+      { mapped: 3, held: 2, heldReasons: ['no mapping for this shape', 'not a row'] },
+      { batchId: 'b1', persisted: 3 },
+      { mapped: 0, held: 5, heldReasons: ['a', 'b', 'c', 'd', 'e'] },
+    ];
+    expect(heldSummary(metas)).toEqual({ count: 7, reasons: ['no mapping for this shape', 'not a row', 'a', 'b', 'c'] });
+  });
+
+  it('is undefined when nothing was held', () => {
+    expect(heldSummary([{ mapped: 2, held: 0, heldReasons: [] }, { batchId: 'b', persisted: 2 }, undefined])).toBeUndefined();
+  });
 });

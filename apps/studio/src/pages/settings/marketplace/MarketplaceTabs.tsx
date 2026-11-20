@@ -110,7 +110,9 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [selected, setSelected] = useState<{ source: 'browse' | 'installed'; id: string; version: string; type: string; ref?: string } | null>(null);
+  // `followActive`: the active version's card was opened. The detail then shows whichever version is
+  // active, so after Update it shows the new version, not the one that was clicked.
+  const [selected, setSelected] = useState<{ source: 'browse' | 'installed'; id: string; version: string; type: string; ref?: string; followActive?: boolean } | null>(null);
   const [tab, setTab] = useState('browse');
   /** RegistriesTab owns its create dialog. The ⋯ that opens it now lives up here on the tab strip,
    *  so the child hands its opener up once via `onReady` rather than the parent lifting all of that
@@ -163,7 +165,10 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
       const e = availableToEntry(bundle, installedById);
       return e.installed ? withUpdate(e, installedById.get(bundle.id)!.version) : e;
     }
-    const artifact = props.installed.find((entry) => entry.id === selected.id && entry.version === selected.version && entry.type === selected.type);
+    const active = selected.followActive ? installedById.get(selected.id) : undefined;
+    const artifact = active && active.type === selected.type
+      ? active
+      : props.installed.find((entry) => entry.id === selected.id && entry.version === selected.version && entry.type === selected.type);
     return artifact ? withUpdate(withBrowseRef(installedToEntry(artifact), props.available), artifact.version) : null;
   }, [selected, props.available, props.installed, installedById, withUpdate]);
 
@@ -279,7 +284,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
             <div className="px-1 py-6 text-center text-sm text-muted-foreground">{t('settings.marketplace.emptyInstalled')}</div>
           ) : (
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-              {installedEntries.map((e) => <PackageCard key={e.id} entry={e} onClick={() => setSelected({ source: 'installed', id: e.id, version: e.version, type: e.type })} />)}
+              {installedEntries.map((e) => <PackageCard key={`${e.id}@${e.version}`} entry={e} onClick={() => setSelected({ source: 'installed', id: e.id, version: e.version, type: e.type, followActive: e.active === true })} />)}
             </div>
           )}
         </div>

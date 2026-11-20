@@ -1040,6 +1040,8 @@ export const pt: EnShape = {
       installPluginOnly: 'Por enquanto só é possível instalar artefactos de plugin.',
       removeTitle: 'Remover {{id}}?',
       removeDescription: 'Isto desinstala o artefacto desta implementação.',
+      removeVersionTitle: 'Remover {{id}} {{version}}?',
+      removeVersionDescription: 'Isto remove apenas esta versão antiga. A versão ativa continua a funcionar, e as suas definições e dados mantêm-se.',
       installedToast: '{{id}} instalado',
       errorToast: 'Erro no marketplace: {{error}}',
       browse: 'Explorar',

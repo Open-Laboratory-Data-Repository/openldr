@@ -751,7 +751,14 @@ export function registerWorkflowRoutes(
         if (controller.signal.aborted) return;
       }
       if (receipt.status === 'completed' && receipt.outcome) {
-        return { ok: true, runId: receipt.outcome.runId, correlationId: receipt.outcome.correlationId };
+        const { runId, correlationId, held } = receipt.outcome;
+        if (!held) return { ok: true, runId, correlationId };
+        // The run completed, but Map to FHIR held some items back (its held port goes to a node,
+        // as the default Ingest's does). Still a 200, as the good items are stored, but say so.
+        return {
+          ok: true, runId, correlationId, held: held.count, heldReasons: held.reasons,
+          message: `${held.count} item(s) were held and not stored. Fix them and send them again. Run ${runId} has every reason.`,
+        };
       }
       if (receipt.status === 'failed') {
         return reply.code(500).send({ ok: false, requestId: receipt.id, runId: receipt.runId, correlationId: receipt.outcome?.correlationId ?? null, status: 'failed', error: 'workflow execution failed; inspect the recorded run before resubmitting' });

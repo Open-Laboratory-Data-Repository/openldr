@@ -44,6 +44,26 @@ export interface RunOutcome {
   status: WorkflowRun['status'];
   error: string | null;
   nodeMeta: Record<string, unknown>;
+  /** Items Map to FHIR held back in this run, when any were. A run that completes can still have
+   *  held some, when its held port goes to a node such as a Log. Callers must report them. */
+  held?: HeldSummary;
+}
+
+export interface HeldSummary { count: number; reasons: string[] }
+
+/** Held items across a run's Map to FHIR steps (their meta has `heldReasons`): how many, and the
+ *  first `maxReasons` reasons. Undefined when none were held. */
+export function heldSummary(metas: unknown[], maxReasons = 5): HeldSummary | undefined {
+  let count = 0;
+  const reasons: string[] = [];
+  for (const m of metas) {
+    if (!m || typeof m !== 'object') continue;
+    const meta = m as { held?: unknown; heldReasons?: unknown };
+    if (!Array.isArray(meta.heldReasons)) continue;
+    if (typeof meta.held === 'number' && Number.isFinite(meta.held)) count += meta.held;
+    for (const r of meta.heldReasons) if (reasons.length < maxReasons) reasons.push(String(r));
+  }
+  return count > 0 ? { count, reasons } : undefined;
 }
 
 export interface WorkflowTriggerRunner {
@@ -115,7 +135,8 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     for (const r of (run.result as Awaited<ReturnType<typeof deps.runWorkflow>>).results) {
       if (r.meta !== undefined) nodeMeta[r.nodeId] = r.meta;
     }
-    return { runId: run.id, correlationId: run.correlationId ?? null, status: run.status, error: run.error, nodeMeta };
+    const held = heldSummary(Object.values(nodeMeta));
+    return { runId: run.id, correlationId: run.correlationId ?? null, status: run.status, error: run.error, nodeMeta, ...(held ? { held } : {}) };
   }
 
   /**

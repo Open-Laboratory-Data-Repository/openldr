@@ -453,6 +453,27 @@ describe('workflow routes', () => {
     expect(res.json()).toMatchObject({ ok: false, runId: 'run-x', status: 'failed', error: 'workflow execution failed; inspect the recorded run before resubmitting' });
   });
 
+  // The default Ingest sends held rows to a Log (2026-11-20). The sender must still hear about them,
+  // or a 200 would hide rows that were not stored.
+  it('POST /api/workflows/hooks/:path says how many rows were held, and why, on a completed run', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    ctx.workflows.runner.runAndRecord = async () => ({
+      runId: 'run-h', correlationId: null, status: 'completed' as const, error: null, nodeMeta: {},
+      held: { count: 2, reasons: ['no mapping for this shape', 'not a row'] },
+    });
+    ctx.workflows.webhooks.register('hello', { workflowId: 'wf-hook', secret: 's3cret' });
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/workflows/hooks/hello',
+      headers: { 'x-webhook-token': 's3cret' }, payload: { name: 'a' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, runId: 'run-h', held: 2, heldReasons: ['no mapping for this shape', 'not a row'] });
+    expect(res.json().message).toMatch(/2 item\(s\) were held and not stored/);
+  });
+
   it('POST /api/workflows/hooks/:path reports a disabled/absent workflow as 409, not 200', async () => {
     const app = Fastify();
     const ctx = fakeCtx();

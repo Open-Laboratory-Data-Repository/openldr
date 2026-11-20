@@ -145,9 +145,9 @@ O painel recusa guardar enquanto um campo obrigatório não tiver coluna nem val
 
 ## Ligar a saída dos retidos
 
-Numa instalação nova, o workflow fornecido **Ingest** usa Map to FHIR. **saída** segue para **Persist store**, e nada está ligado a **retidos**, de propósito. Por isso o Ingest recusa uma mensagem inteira quando alguma parte dela não pode ser guardada. A execução falha, o emissor recebe um erro, e nada dessa mensagem é guardado. Uma instalação feita antes desta versão mantém o grafo Ingest antigo. **Reset to default** aplica o novo e elimina qualquer alteração feita ao antigo.
+Numa instalação nova, o workflow fornecido **Ingest** usa Map to FHIR. **saída** segue para **Persist store**, e **retidos** segue para um passo **Log held**. Por isso o Ingest guarda as partes boas de uma mensagem e regista cada parte retida com o seu motivo. A resposta ao emissor diz quantas partes foram retidas, e porquê. Uma instalação feita antes desta versão mantém o grafo Ingest antigo. **Reset to default** aplica o novo e elimina qualquer alteração feita ao antigo.
 
-Ligue **retidos** no seu próprio workflow, quando as linhas boas devem ser guardadas e as más postas de parte. No **Ingest**, deixe esta saída sem ligação.
+Para recusar uma mensagem inteira quando alguma parte é retida, apague a ligação que sai de **retidos**. Uma única linha retida faz então falhar a execução, e nada dessa mensagem é guardado.
 
 1. Pesquise `Log` na biblioteca de nós.
 2. Arraste **Log** para junto de **Map to FHIR**.
@@ -194,7 +194,7 @@ Em **History**, o resultado do nó Map to FHIR lista até 20 motivos. Registe ap
 
 - **no mapping for this shape.** A linha tem uma coluna que nenhum mapeamento guardado do nó conhece. Obtenha uma amostra com essa linha e guarde um mapeamento para ela.
 - **more than one saved mapping fits this row.** Dois mapeamentos guardados conhecem todas as suas colunas. Mantenha um mapeamento por ficheiro, ou use um nó por ficheiro.
-- **A execução falha com "held port is not connected".** No **Ingest**, é assim que uma mensagem que não pode ser guardada é recusada. O erro indica os primeiros motivos. Corrija os dados ou o mapeamento e envie de novo. No seu próprio workflow, ligue **retidos** a um nó Log para guardar as linhas boas e pôr as más de parte.
+- **A execução falha com "held port is not connected".** Nada está ligado a **retidos**, por isso uma única linha retida faz falhar a execução. O erro indica os primeiros motivos. Corrija os dados ou o mapeamento e envie de novo. Para guardar as linhas boas e pôr as más de parte, ligue **retidos** a um nó Log, como faz o **Ingest**.
 - **nothing at body.** O item não tem nada em `body`, ou só uma lista vazia ou um valor único. Depois de **Extract from File**, deixe **Caminho de origem** em branco. Depois de um webhook, confirme que o emissor envia um corpo.
 - **not a row.** A lista no caminho de origem contém algo que não é uma linha, como um número ou um texto. Cada elemento da lista tem de ser um objeto com colunas.
 - **Escutar não encontra nada.** Guarde primeiro o workflow. Depois selecione **Escutar** e envie a mensagem dentro de um minuto.

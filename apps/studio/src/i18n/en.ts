@@ -1044,6 +1044,8 @@ export const en = {
       installPluginOnly: 'Only plugin artifacts can be installed for now.',
       removeTitle: 'Remove {{id}}?',
       removeDescription: 'This uninstalls the artifact from this deployment.',
+      removeVersionTitle: 'Remove {{id}} {{version}}?',
+      removeVersionDescription: 'This removes only this older version. The active version keeps running, and its settings and data stay.',
       installedToast: 'Installed {{id}}',
       errorToast: 'Marketplace error: {{error}}',
       browse: 'Browse',

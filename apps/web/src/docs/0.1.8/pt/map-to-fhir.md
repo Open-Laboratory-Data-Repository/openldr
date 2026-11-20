@@ -14,7 +14,7 @@ Cada conjunto de registos passa pelas verificações do OpenLDR ao nível de val
 
 Use-o quando um sistema de laboratório envia a sua própria exportação e não consegue enviar FHIR. Uma pessoa mapeia as colunas uma vez, no studio, sobre uma amostra real. Depois disso, cada ficheiro novo com essas colunas é mapeado sem ajuda.
 
-Numa instalação nova, o workflow fornecido **Ingest** já o usa. O webhook, `/api/workflows/hooks/ingest`, envia cada pedido para Map to FHIR. **saída** segue para **Persist store**. Nada está ligado a **retidos**, de propósito. Uma instalação feita antes desta versão mantém o grafo Ingest antigo. **Reset to default** no workflow Ingest aplica o novo e elimina qualquer alteração feita ao antigo.
+Numa instalação nova, o workflow fornecido **Ingest** já o usa. O webhook, `/api/workflows/hooks/ingest`, envia cada pedido para Map to FHIR. **saída** segue para **Persist store**. **retidos** segue para um passo **Log held**. Uma instalação feita antes desta versão mantém o grafo Ingest antigo. **Reset to default** no workflow Ingest aplica o novo e elimina qualquer alteração feita ao antigo.
 
 O guia da aplicação **Map to FHIR** mostra passo a passo como mapear um ficheiro.
 
@@ -40,7 +40,7 @@ Cada linha dá então um resultado por cada coluna de análise com valor, ligado
 
 ## O que o emissor vê
 
-O webhook responde pela execução inteira. O workflow predefinido **Ingest** recusa uma mensagem inteira quando alguma parte dela não pode ser guardada. Como nada está ligado a **retidos**, uma única linha retida faz falhar o nó e a execução, e o Persist store não corre. Nada dessa mensagem é guardado. O emissor recebe HTTP 500 com `ok: false`, o identificador da execução e o erro `workflow execution failed; inspect the recorded run before resubmitting`. Os motivos não vêm na resposta. Estão na execução, no nó Map to FHIR, em **History**.
+O webhook responde pela execução inteira. O workflow predefinido **Ingest** guarda as partes de uma mensagem que consegue mapear. Cada parte retida segue para **Log held** com o seu motivo e não é guardada. O emissor recebe HTTP 200 com `ok: true`, o `runId` e, quando algo foi retido, `held` (quantas), `heldReasons` (até cinco motivos) e uma `message` que pede para as corrigir e enviar de novo. Todos os motivos estão na execução, no nó Map to FHIR, em **History**. Se nada estiver ligado a **retidos**, uma única linha retida faz falhar a execução. O emissor recebe então HTTP 500 com `ok: false`, o identificador da execução e o erro `workflow execution failed; inspect the recorded run before resubmitting`.
 
 Uma execução concluída responde HTTP 200 com `ok: true` e o seu `runId`.
 
@@ -95,4 +95,4 @@ Estes são os motivos de retenção mais frequentes. O motivo de uma regra come�
 - **basedOn ServiceRequest not found in batch or store.** Um resultado de laboratório FHIR indica um pedido que não está na mesma execução nem guardado.
 - **nothing at body.** O item não tem nada em `body`, ou só uma lista vazia ou um valor único. Depois de Extract from File, deixe o caminho de origem em branco. Depois de um webhook, confirme que o emissor envia um corpo.
 - **not a row.** A lista no caminho de origem contém algo que não é uma linha, como um número ou um texto.
-- **held port is not connected.** É uma falha da execução, não um motivo de retenção. O erro indica até cinco motivos. No **Ingest**, é assim que uma mensagem que não pode ser guardada é recusada. No seu próprio workflow, ligue **retidos** a um nó Log para manter as linhas boas.
+- **held port is not connected.** É uma falha da execução, não um motivo de retenção. O erro indica até cinco motivos. Acontece quando nada está ligado a **retidos**. Ligue **retidos** a um nó Log para manter as linhas boas, como faz o **Ingest**.

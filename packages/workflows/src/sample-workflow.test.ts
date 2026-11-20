@@ -29,8 +29,8 @@ describe('buildDefaultWorkflows', () => {
     expect(hook?.data).toMatchObject({ secret: 'ingest-secret', path: 'ingest', method: 'POST' });
   });
 
-  it('is webhook, Map to FHIR, Persist store and Log, with no Switch, Unwrap or Form Validate', () => {
-    expect(nodeIds()).toEqual(['log-1', 'map-1', 'persist-1', 'trigger-1']);
+  it('is webhook, Map to FHIR, Persist store and two Logs, with no Switch, Unwrap or Form Validate', () => {
+    expect(nodeIds()).toEqual(['held-log-1', 'log-1', 'map-1', 'persist-1', 'trigger-1']);
     const actions = ingest.definition.nodes.map((n) => n.data.action ?? n.data.templateId);
     expect(actions).not.toContain('unwrap-bundle');
     expect(actions).not.toContain('form-validate');
@@ -52,14 +52,24 @@ describe('buildDefaultWorkflows', () => {
     expect(evt?.data.config).toMatchObject({ source: 'webhook-ingest' });
   });
 
-  it('sends out to Persist then Log, and leaves held unwired so a held item fails the run', () => {
+  // Changed 2026-11-20: a new user's first run failed outright when one row was held, and the
+  // graph gave no hint why. Held now goes to a Log, and the webhook and form answers report it.
+  it('sends out to Persist then Log, and held to a Log of its own', () => {
     const edges = ingest.definition.edges.map((e) => [e.source, e.sourceHandle ?? null, e.target]);
     expect(edges).toEqual([
       ['trigger-1', null, 'map-1'],
       ['map-1', 'out', 'persist-1'],
       ['persist-1', null, 'log-1'],
+      ['map-1', 'held', 'held-log-1'],
     ]);
-    expect(ingest.definition.edges.some((e) => e.sourceHandle === 'held')).toBe(false);
+    const heldLog = ingest.definition.nodes.find((n) => n.id === 'held-log-1');
+    expect(heldLog?.data).toMatchObject({ action: 'log', level: 'warn' });
+    expect(String(heldLog?.data.message)).toContain('{{ $json.reason }}');
+  });
+
+  it('says held rows are logged and reported, not stored', () => {
+    expect(ingest.description).toMatch(/held/i);
+    expect(ingest.description).not.toMatch(/the run fails with the reasons and nothing from it is stored/);
   });
 
   it('describes the new graph, not the old Switch', () => {

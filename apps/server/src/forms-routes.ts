@@ -620,6 +620,21 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       };
     }
 
+    if (outcome.held) {
+      // The run completed, but Map to FHIR held the submission back (the default Ingest sends held
+      // items to a Log since 2026-11-20). Not submitted: say so, with the reasons.
+      const persisted = persistedCount(outcome.nodeMeta);
+      const stored = persisted > 0
+        ? ` ${persisted} resource(s) were stored. Do NOT resubmit the whole form; quote run ${outcome.runId}.`
+        : ` Fix it and submit again.`;
+      reply.code(422);
+      return {
+        ok: false, runId: outcome.runId, correlationId: outcome.correlationId, status: outcome.status,
+        held: outcome.held.count, heldReasons: outcome.held.reasons, persisted,
+        error: `This submission was held back and not stored: ${outcome.held.reasons.join('; ')}.${stored}`,
+      };
+    }
+
     await recordAudit(ctx, req, {
       action: 'form.response.submit', entityType: 'form', entityId: f.id,
       before: null, after: response, metadata: { formId: f.id, runId: outcome.runId },

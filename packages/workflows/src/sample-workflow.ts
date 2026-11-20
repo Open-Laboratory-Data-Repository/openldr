@@ -6,14 +6,16 @@ import type { Workflow } from './types';
 //     Webhook (POST /api/workflows/hooks/ingest, X-Webhook-Token)
 //       -> Map to FHIR (sourcePath 'body'; target Lab result; allowed form: "Lab order"; no mapping)
 //            out  -> Persist Store (source: webhook-ingest, emits data.persisted) -> Log
-//            held -> nothing, on purpose
+//            held -> Log held (a warning per held item, with its reason)
 //     Map to FHIR sends FHIR (a Bundle, a resource list or one resource) on as its resources, turns
 //     answers to the "Lab order" form into records, and holds anything else with a reason. A lab
-//     adds saved mappings for its own rows in the studio. With `held` unwired, one held item fails
-//     the node and the run, naming the count and the first reasons, and Persist does not run. So a
-//     sender whose data cannot be stored gets an error, as before Map to FHIR, never a 200. A
-//     workflow that should store the good rows and set the bad ones aside wires `held` to a node of
-//     its own. ONE persist stores every resource and the
+//     adds saved mappings for its own rows in the studio. Good items are stored; held items go to
+//     the Log. Until 2026-11-20 `held` was unwired, so one held item failed the whole run, and a
+//     new user's first post failed with no hint on the canvas why. Held items are still never
+//     hidden: the webhook answer carries `held` and `heldReasons` (workflows-routes.ts), and a form
+//     submission with anything held answers 422, not "submitted" (forms-routes.ts). A workflow
+//     that should refuse a message with any held part unwires `held` again: Map to FHIR then fails
+//     the run, naming the count and the first reasons. ONE persist stores every resource and the
 //     projection routes each by resourceType (Observation -> lab_results, ServiceRequest ->
 //     lab_requests, QuestionnaireResponse -> questionnaire_responses, and so on).
 //
@@ -67,8 +69,9 @@ export function buildDefaultWorkflows({ orderFormId, webhookSecret }: DefaultWor
       'Ingestion. POST to /api/workflows/hooks/ingest with header X-Webhook-Token. Map to FHIR ' +
       'sends FHIR on as its resources, turns answers to the "Lab order" form into records, and ' +
       'turns rows into records by the mappings saved in the node. Records go to Persist store ' +
-      'and emit data.persisted. If any part of a message cannot be mapped or fails the checks, ' +
-      'the run fails with the reasons and nothing from it is stored. ' +
+      'and emit data.persisted. A part of a message that cannot be mapped or fails the checks ' +
+      'is held: it is not stored, it goes to the "Log held" step with its reason, and the ' +
+      'webhook answer says how many were held and why. ' +
       'Enabled by default: form capture submits through it. Copy the webhook secret to let ' +
       'external senders post to it too.',
     enabled: true,
@@ -126,11 +129,26 @@ export function buildDefaultWorkflows({ orderFormId, webhookSecret }: DefaultWor
             iconName: 'Terminal',
           },
         },
+        {
+          id: 'held-log-1',
+          type: 'action',
+          position: { x: 660, y: 340 },
+          data: {
+            label: 'Log held',
+            action: 'log',
+            message: 'Held, not stored: {{ $json.reason }}',
+            level: 'warn',
+            config: {},
+            templateId: 'log',
+            iconName: 'Terminal',
+          },
+        },
       ],
       edges: [
         { id: 'e1', source: 'trigger-1', target: 'map-1' },
         { id: 'e2', source: 'map-1', target: 'persist-1', sourceHandle: 'out' },
         { id: 'e3', source: 'persist-1', target: 'log-1' },
+        { id: 'e4', source: 'map-1', target: 'held-log-1', sourceHandle: 'held' },
       ],
     },
   };
