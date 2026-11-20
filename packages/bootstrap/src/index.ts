@@ -1883,7 +1883,10 @@ const reporting: ReportingApi = {
   });
   // Generic per-plugin schedule store + host runner (fires plugin schedules headlessly;
   // for DHIS2 it drives the orchestration push). Completes the broker's deferred `schedules` dep.
-  const pluginScheduleRunner = createPluginScheduleRunner({ pluginData, push: (input) => dhis2Orch.push(input), logger });
+  const pluginScheduleRunner = createPluginScheduleRunner({
+    pluginData, push: (input) => dhis2Orch.push(input), logger,
+    isInstalled: async (pluginId) => (await plugins.list()).some((p) => p.id === pluginId),
+  });
 
   // Generic plugin-node executor: resolves the node's plugin + connector, enforces capabilities,
   // and invokes the wasm {items,config} entrypoint. Mutates the same workflowServices object the

@@ -81,11 +81,11 @@ describe('createPluginScheduleApi', () => {
   });
 });
 
-function runnerFixture() {
+function runnerFixture(o: { installed?: boolean } = {}) {
   const pd = fakePluginData();
   const push = vi.fn(async () => ({ kind: 'aggregate' }));
   const logger = { error: vi.fn() };
-  const runner = createPluginScheduleRunner({ pluginData: pd, push, logger });
+  const runner = createPluginScheduleRunner({ pluginData: pd, push, logger, isInstalled: async () => o.installed ?? true });
   return { pd, push, logger, runner };
 }
 
@@ -170,6 +170,18 @@ describe('plugin schedule runner runDue', () => {
 });
 
 describe('plugin schedule runner registerRunner', () => {
+
+  it('a due schedule of a removed plugin neither runs nor re-arms, so it stops firing (design 2026-11-20)', async () => {
+    const { pd, push, logger, runner } = runnerFixture({ installed: false });
+    await seedSchedule(pd);
+    await seedMapping(pd);
+    const eventing = fakeEventing();
+    await runner.registerRunner(eventing as never);
+    await eventing.handlers['plugin.schedule.due']!({ type: 'plugin.schedule.due', payload: { pluginId: PID, scheduleId: 'sch1' } });
+    expect(push).not.toHaveBeenCalled();
+    expect(eventing.publish).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+  });
   it('subscribes to plugin.schedule.due; firing runs + re-arms with a future availableAt', async () => {
     const { pd, push, runner } = runnerFixture();
     await seedSchedule(pd);
