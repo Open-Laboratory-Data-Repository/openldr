@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { CE_VERSION, readPluginSites, updatePluginSite, PluginSitesError } from '@openldr/bootstrap';
+import { CE_VERSION, readPluginSites, updatePluginSite, PluginSitesError, PluginStillStopping, REMOVE_KEEPS, type RemoveKeep } from '@openldr/bootstrap';
 import {
   verifyBundle, readGrant, isCompatible, readBundle,
   LocalRegistrySource, HttpRegistrySource, type RegistrySource, type Capability,
@@ -417,10 +417,43 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     return { ok: true };
   });
 
-  app.delete('/api/marketplace/:id', MANAGE, async (req) => {
+  // Removing a whole plugin stops its reads and checks first (design 2026-11-20-plugin-update-and-
+  // remove). Removing one version only drops that row: the active version keeps running.
+  app.delete('/api/marketplace/:id', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
     const version = (req.query as { version?: string } | undefined)?.version;
-    await ctx.plugins.remove(id, version, { actor: actor(req) });
-    return { ok: true };
+    if (version) {
+      await ctx.plugins.remove(id, version, { actor: actor(req) });
+      return { ok: true };
+    }
+    return removeWhole(id, 'all', req, reply).then((r) => ('error' in r ? r : { ok: true }));
   });
+
+  app.get('/api/marketplace/:id/removal', MANAGE, async (req) => {
+    const { id } = req.params as { id: string };
+    return ctx.pluginRemoval.plan(id);
+  });
+
+  app.post('/api/marketplace/:id/remove', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const keep = (req.body as { keep?: unknown } | undefined)?.keep;
+    if (typeof keep !== 'string' || !(REMOVE_KEEPS as readonly string[]).includes(keep)) {
+      reply.code(400);
+      return { error: `keep must be one of ${REMOVE_KEEPS.join(', ')}` };
+    }
+    return removeWhole(id, keep as RemoveKeep, req, reply);
+  });
+
+  async function removeWhole(id: string, keep: RemoveKeep, req: FastifyRequest, reply: { code: (n: number) => unknown }) {
+    const a = actor(req);
+    try {
+      return await ctx.pluginRemoval.remove(id, { keep, actor: { type: 'user', id: a.id ?? null, name: a.name } });
+    } catch (err) {
+      if (err instanceof PluginStillStopping) {
+        reply.code(409);
+        return { error: err.message, stillStopping: err.ids };
+      }
+      throw err;
+    }
+  }
 }

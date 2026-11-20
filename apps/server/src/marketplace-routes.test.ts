@@ -4,7 +4,7 @@ import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { CE_VERSION, type AppContext } from '@openldr/bootstrap';
+import { CE_VERSION, PluginStillStopping, type AppContext } from '@openldr/bootstrap';
 import { generatePublisherKeypair, packBundle, signManifest, keyFingerprint } from '@openldr/marketplace';
 import { createPluginRuntime } from '@openldr/plugins';
 import { createRegistryStore, createAppSettingsStore } from '@openldr/db';
@@ -95,9 +95,25 @@ function fakePlugins() {
   };
 }
 
-function fakeCtx(plugins: unknown, cfg: Record<string, unknown>, internalDb: unknown, marketplaceForms?: unknown, audited?: unknown[], marketplacePacks?: unknown): AppContext {
+/** A removal that records its calls. `stuck` makes remove throw PluginStillStopping. */
+function fakeRemoval(o: { stuck?: string[] } = {}) {
+  const calls: Array<{ id: string; keep: string; actor: unknown }> = [];
   return {
-    cfg, plugins, internalDb, logger: { error() {}, warn() {}, info() {}, debug() {} },
+    calls,
+    removal: {
+      plan: async (id: string) => ({ running: [{ kind: 'copy', id: 'cp1', label: 'c1', status: 'running' }], copies: 1, copiedBytes: 2048, id }),
+      remove: async (id: string, opts: { keep: string; actor: unknown }) => {
+        if (o.stuck) throw new PluginStillStopping(o.stuck);
+        calls.push({ id, keep: opts.keep, actor: opts.actor });
+        return { stopped: ['cp1'], deletedCopies: opts.keep === 'all' ? 0 : 1 };
+      },
+    },
+  };
+}
+
+function fakeCtx(plugins: unknown, cfg: Record<string, unknown>, internalDb: unknown, marketplaceForms?: unknown, audited?: unknown[], marketplacePacks?: unknown, pluginRemoval?: unknown): AppContext {
+  return {
+    cfg, plugins, internalDb, pluginRemoval: pluginRemoval ?? fakeRemoval().removal, logger: { error() {}, warn() {}, info() {}, debug() {} },
     appSettings: createAppSettingsStore(internalDb as never),
     audit: { record: async (e: unknown) => { audited?.push(e); } },
     numberSettings: { get: async () => 67_108_864, all: async () => [], set: async () => 0, invalidate: () => {} },
@@ -113,9 +129,9 @@ type SeedRegistry = { id: string; name: string; kind: 'local' | 'http'; location
 async function appWith(
   cfg: Record<string, unknown>,
   plugins: unknown,
-  opts: { roles?: string[]; capabilities?: string[]; fetchImpl?: typeof fetch; marketplaceForms?: unknown; marketplacePacks?: unknown; seed?: SeedRegistry[] } = {},
+  opts: { roles?: string[]; capabilities?: string[]; fetchImpl?: typeof fetch; marketplaceForms?: unknown; marketplacePacks?: unknown; seed?: SeedRegistry[]; pluginRemoval?: unknown } = {},
 ) {
-  const { roles = ['lab_admin'], capabilities = ['marketplace.view', 'marketplace.manage'], fetchImpl, marketplaceForms, marketplacePacks, seed = [] } = opts;
+  const { roles = ['lab_admin'], capabilities = ['marketplace.view', 'marketplace.manage'], fetchImpl, marketplaceForms, marketplacePacks, seed = [], pluginRemoval } = opts;
   const db = await makeMigratedDb();
   const store = createRegistryStore(db);
   for (const r of seed) await store.create(r);
@@ -124,7 +140,7 @@ async function appWith(
     req.user = { id: 'admin', username: 'admin', displayName: null, roles, capabilities } as never;
   });
   const audited: Array<{ action: string; entityType: string; entityId: string; metadata?: Record<string, unknown> }> = [];
-  registerMarketplaceRoutes(app, fakeCtx(plugins, cfg, db, marketplaceForms, audited, marketplacePacks), fetchImpl);
+  registerMarketplaceRoutes(app, fakeCtx(plugins, cfg, db, marketplaceForms, audited, marketplacePacks, pluginRemoval), fetchImpl);
   return { app, db, store, audited };
 }
 
@@ -344,10 +360,59 @@ describe('marketplace routes', () => {
     await app.inject({ method: 'POST', url: '/api/marketplace/demo/disable' });
     await app.inject({ method: 'POST', url: '/api/marketplace/demo/enable' });
     await app.inject({ method: 'POST', url: '/api/marketplace/demo/rollback', payload: { version: '1.0.0' } });
-    await app.inject({ method: 'DELETE', url: '/api/marketplace/demo' });
+    await app.inject({ method: 'DELETE', url: '/api/marketplace/demo?version=0.9.0' });
     expect(calls.setEnabled).toEqual([{ id: 'demo', enabled: false }, { id: 'demo', enabled: true }]);
     expect(calls.rollback).toEqual([{ id: 'demo', version: '1.0.0' }]);
-    expect(calls.remove).toEqual([{ id: 'demo', version: undefined }]);
+    // One older version: the runtime removes that row only, and nothing is stopped.
+    expect(calls.remove).toEqual([{ id: 'demo', version: '0.9.0' }]);
+  });
+
+  it('DELETE of a whole plugin goes through the removal and keeps everything', async () => {
+    const { runtime, calls } = fakePlugins();
+    const r = fakeRemoval();
+    const { app } = await appWith({}, runtime, { seed: [localReg()], pluginRemoval: r.removal });
+    const res = await app.inject({ method: 'DELETE', url: '/api/marketplace/demo' });
+    expect(res.statusCode).toBe(200);
+    expect(r.calls.map((c) => [c.id, c.keep])).toEqual([['demo', 'all']]);
+    expect(calls.remove).toEqual([]);
+  });
+
+  it('GET removal plans what a removal would stop and what it holds', async () => {
+    const { app } = await appWith({}, fakePlugins().runtime, { seed: [localReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/demo/removal' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ running: [{ kind: 'copy', id: 'cp1' }], copies: 1, copiedBytes: 2048 });
+  });
+
+  it('POST remove carries out the chosen keep, as the signed-in user', async () => {
+    const r = fakeRemoval();
+    const { app } = await appWith({}, fakePlugins().runtime, { seed: [localReg()], pluginRemoval: r.removal });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/demo/remove', payload: { keep: 'settings' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ stopped: ['cp1'], deletedCopies: 1 });
+    expect(r.calls).toEqual([{ id: 'demo', keep: 'settings', actor: expect.objectContaining({ id: 'admin' }) }]);
+  });
+
+  it('POST remove refuses a keep it does not know', async () => {
+    const r = fakeRemoval();
+    const { app } = await appWith({}, fakePlugins().runtime, { seed: [localReg()], pluginRemoval: r.removal });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/demo/remove', payload: { keep: 'some' } });
+    expect(res.statusCode).toBe(400);
+    expect(r.calls).toEqual([]);
+  });
+
+  it('POST remove says which reads are still stopping, with 409', async () => {
+    const r = fakeRemoval({ stuck: ['cp1'] });
+    const { app } = await appWith({}, fakePlugins().runtime, { seed: [localReg()], pluginRemoval: r.removal });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/demo/remove', payload: { keep: 'all' } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ stillStopping: ['cp1'] });
+  });
+
+  it('the removal routes need marketplace.manage', async () => {
+    const { app } = await appWith({}, fakePlugins().runtime, { seed: [localReg()], capabilities: ['marketplace.view'] });
+    expect((await app.inject({ method: 'GET', url: '/api/marketplace/demo/removal' })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'POST', url: '/api/marketplace/demo/remove', payload: { keep: 'all' } })).statusCode).toBe(403);
   });
 
   it('install dispatches a form-template bundle to ctx.marketplaceForms', async () => {
