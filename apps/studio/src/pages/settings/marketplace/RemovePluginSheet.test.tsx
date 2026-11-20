@@ -12,7 +12,7 @@ import { RemovePluginSheet } from './RemovePluginSheet';
 // Layer: what the Remove sheet shows and sends, in jsdom, over a mocked API. The server's stop and
 // delete are proven in plugin-removal.test.ts and marketplace-routes.test.ts.
 
-const plan = { running: [{ kind: 'copy' as const, id: 'cp1', label: 'c1', status: 'running' }], copies: 2, copiedBytes: 21 * 1024 ** 3 };
+const plan = { running: [{ kind: 'copy' as const, id: 'cp1', label: 'c1', status: 'running' }, { kind: 'import' as const, id: 'im1', label: 'c2', status: 'running' }], copies: 2, copiedBytes: 21 * 1024 ** 3 };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -32,6 +32,7 @@ describe('RemovePluginSheet', () => {
     render(<RemovePluginSheet pluginId="cdr-source" open onOpenChange={() => {}} onRemoved={() => {}} />);
     const running = await screen.findByTestId('remove-running');
     expect(running.textContent).toContain('cp1');
+    expect(running.textContent).toContain('Import im1 (running)');
     expect(running.textContent).toMatch(/Removing stops/);
   });
 

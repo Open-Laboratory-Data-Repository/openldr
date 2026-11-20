@@ -2027,7 +2027,7 @@ const reporting: ReportingApi = {
     // The passing requests of a page go to the database in one call (item 16).
     persistPage: importCheckPersistPage,
   });
-  const pluginRemoval = createPluginRemoval({ plugins, importCopies, importChecks, pluginData, audit: importAudit });
+  const pluginRemoval = createPluginRemoval({ plugins, importCopies, importChecks, imports, pluginData, audit: importAudit });
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,

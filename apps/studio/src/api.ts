@@ -2989,7 +2989,7 @@ export async function removeArtifact(id: string, version?: string): Promise<void
 
 /** What removing a plugin would stop, and how much it copied (design 2026-11-20). */
 export interface RemovalPlan {
-  running: Array<{ kind: 'copy' | 'check'; id: string; label: string; status: string }>;
+  running: Array<{ kind: 'copy' | 'check' | 'import'; id: string; label: string; status: string }>;
   copies: number;
   copiedBytes: number;
 }

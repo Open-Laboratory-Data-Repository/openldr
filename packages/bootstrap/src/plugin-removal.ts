@@ -2,6 +2,7 @@ import type { PluginRuntime } from '@openldr/plugins';
 import type { PluginDataStore } from '@openldr/db';
 import type { ImportCopyService } from './import-copy';
 import type { ImportCheckService } from './import-check';
+import type { ImportService } from './import-run';
 import { auditQuietly, type ImportActor, type ImportServiceDeps } from './import-run';
 
 // Removing a plugin never leaves its work running (design 2026-11-20-plugin-update-and-remove).
@@ -14,8 +15,8 @@ export type RemoveKeep = 'all' | 'settings' | 'nothing';
 export const REMOVE_KEEPS: readonly RemoveKeep[] = ['all', 'settings', 'nothing'];
 
 export interface RemovalPlan {
-  /** Checks first, then reads: the order removal stops them in. */
-  running: Array<{ kind: 'copy' | 'check'; id: string; label: string; status: string }>;
+  /** Checks, then one-pass imports, then reads: the order removal stops them in. */
+  running: Array<{ kind: 'copy' | 'check' | 'import'; id: string; label: string; status: string }>;
   copies: number;
   copiedBytes: number;
 }
@@ -32,6 +33,7 @@ export interface PluginRemovalDeps {
   plugins: Pick<PluginRuntime, 'remove'>;
   importCopies: Pick<ImportCopyService, 'list' | 'get' | 'stop' | 'remove'>;
   importChecks: Pick<ImportCheckService, 'list' | 'get' | 'stop'>;
+  imports: Pick<ImportService, 'list' | 'get' | 'stop'>;
   pluginData: Pick<PluginDataStore, 'purgeExcept'>;
   audit: ImportServiceDeps['audit'];
   sleep?: (ms: number) => Promise<void>;
@@ -51,9 +53,10 @@ export function createPluginRemoval(deps: PluginRemovalDeps): PluginRemoval {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
 
   async function plan(pluginId: string): Promise<RemovalPlan> {
-    const [copies, checks] = await Promise.all([deps.importCopies.list(pluginId), deps.importChecks.list(pluginId)]);
+    const [copies, checks, imports] = await Promise.all([deps.importCopies.list(pluginId), deps.importChecks.list(pluginId), deps.imports.list(pluginId)]);
     const running: RemovalPlan['running'] = [
       ...checks.filter((c) => LIVE.has(c.status)).map((c) => ({ kind: 'check' as const, id: c.id, label: c.copyId, status: c.status })),
+      ...imports.filter((r) => LIVE.has(r.status)).map((r) => ({ kind: 'import' as const, id: r.id, label: r.connectorId, status: r.status })),
       ...copies.filter((c) => LIVE.has(c.status)).map((c) => ({ kind: 'copy' as const, id: c.id, label: c.connectorId, status: c.status })),
     ];
     const copiedBytes = copies.reduce((sum, c) => sum + Object.values(c.sets ?? {}).reduce((s, set) => s + (set.bytes ?? 0), 0), 0);
@@ -67,7 +70,9 @@ export function createPluginRemoval(deps: PluginRemovalDeps): PluginRemoval {
     for (let i = 0; i < tries && pending.length > 0; i += 1) {
       const still: RemovalPlan['running'] = [];
       for (const item of pending) {
-        const run = item.kind === 'check' ? await deps.importChecks.get(pluginId, item.id) : await deps.importCopies.get(pluginId, item.id);
+        const run = item.kind === 'check' ? await deps.importChecks.get(pluginId, item.id)
+          : item.kind === 'import' ? await deps.imports.get(pluginId, item.id)
+            : await deps.importCopies.get(pluginId, item.id);
         if (run && LIVE.has(run.status)) still.push(item);
       }
       pending = still;
@@ -83,6 +88,7 @@ export function createPluginRemoval(deps: PluginRemovalDeps): PluginRemoval {
     for (const item of running) {
       if (item.status === 'stopping') continue;
       if (item.kind === 'check') await deps.importChecks.stop(pluginId, item.id, o.actor);
+      else if (item.kind === 'import') await deps.imports.stop(pluginId, item.id, o.actor);
       else await deps.importCopies.stop(pluginId, item.id, o.actor);
     }
     await waitStopped(pluginId, running, o.waitMs ?? 120_000);

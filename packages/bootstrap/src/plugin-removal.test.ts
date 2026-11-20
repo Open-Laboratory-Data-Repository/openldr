@@ -12,7 +12,7 @@ const actor = { type: 'user' as const, id: 'u1', name: 'admin' };
 
 /** A service whose stop moves a run to `stopping`, and whose get settles it to `stopped` after
  *  `settleAfter` reads (never, when null). The log records the order of calls across services. */
-function fakeService(kind: 'copy' | 'check', runs: Run[], log: string[], settleAfter: number | null = 1) {
+function fakeService(kind: 'copy' | 'check' | 'import', runs: Run[], log: string[], settleAfter: number | null = 1) {
   const reads = new Map<string, number>();
   return {
     async list() { return runs.map((r) => ({ ...r })); },
@@ -40,17 +40,18 @@ function fakeService(kind: 'copy' | 'check', runs: Run[], log: string[], settleA
   };
 }
 
-function setup(o: { copies?: Run[]; checks?: Run[]; settleAfter?: number | null } = {}) {
+function setup(o: { copies?: Run[]; checks?: Run[]; imports?: Run[]; settleAfter?: number | null } = {}) {
   const log: string[] = [];
   const copies = o.copies ?? [{ id: 'cp1', status: 'running', connectorId: 'c1', sets: { requests: { bytes: 2_000 }, results: { bytes: 500 } } }];
   const checks = o.checks ?? [{ id: 'ck1', status: 'running', copyId: 'cp1' }];
   const importCopies = fakeService('copy', copies, log, o.settleAfter === undefined ? 1 : o.settleAfter);
   const importChecks = fakeService('check', checks, log, o.settleAfter === undefined ? 1 : o.settleAfter);
+  const imports = fakeService('import', o.imports ?? [], log, o.settleAfter === undefined ? 1 : o.settleAfter);
   const plugins = { remove: vi.fn(async () => { log.push('remove plugin'); }) };
   const pluginData = { purgeExcept: vi.fn(async (_p: string, keep: string[]) => { log.push(`purge except ${keep.join(',')}`); }) };
   const audit = vi.fn(async () => {});
   const removal = createPluginRemoval({
-    plugins: plugins as never, importCopies: importCopies as never, importChecks: importChecks as never,
+    plugins: plugins as never, importCopies: importCopies as never, importChecks: importChecks as never, imports: imports as never,
     pluginData: pluginData as never, audit, sleep: async () => {},
   });
   return { removal, log, copies, checks, plugins, pluginData, audit };
@@ -97,6 +98,14 @@ describe('plugin removal', () => {
     expect((err as PluginStillStopping).ids).toEqual(['ck1', 'cp1']);
     expect(log).toEqual(['stop check ck1', 'stop copy cp1']);
     expect(plugins.remove).not.toHaveBeenCalled();
+  });
+
+  it('a one-pass import that runs is stopped too, before the reads', async () => {
+    const { removal, log } = setup({ imports: [{ id: 'im1', status: 'running', connectorId: 'c2' }] });
+    const plan = await removal.plan('cdr-source');
+    expect(plan.running.map((r) => [r.kind, r.id])).toEqual([['check', 'ck1'], ['import', 'im1'], ['copy', 'cp1']]);
+    await removal.remove('cdr-source', { keep: 'all', actor });
+    expect(log).toEqual(['stop check ck1', 'stop import im1', 'stop copy cp1', 'remove plugin']);
   });
 
   it('nothing running: stops nothing and removes the plugin', async () => {

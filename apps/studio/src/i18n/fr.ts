@@ -992,6 +992,7 @@ export const fr: EnShape = {
         running: 'En cours',
         runningCopy: 'Lecture {{id}} ({{status}})',
         runningCheck: 'Vérification {{id}} ({{status}})',
+        runningImport: 'Importation {{id}} ({{status}})',
         stops: 'La suppression les arrête d’abord et attend qu’ils soient arrêtés.',
         nothingRunning: 'Rien de ce plugin n’est en cours.',
         keep: 'Que garder',

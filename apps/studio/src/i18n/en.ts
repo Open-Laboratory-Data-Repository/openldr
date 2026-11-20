@@ -996,6 +996,7 @@ export const en = {
         running: 'Running now',
         runningCopy: 'Read {{id}} ({{status}})',
         runningCheck: 'Check {{id}} ({{status}})',
+        runningImport: 'Import {{id}} ({{status}})',
         stops: 'Removing stops these first and waits until they have stopped.',
         nothingRunning: 'Nothing of this plugin is running.',
         keep: 'What to keep',

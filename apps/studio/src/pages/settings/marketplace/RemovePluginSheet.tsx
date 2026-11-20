@@ -97,7 +97,7 @@ export function RemovePluginSheet({ pluginId, open, onOpenChange, onRemoved }: {
                   <>
                     <ul className="m-0 list-none space-y-0.5 p-0">
                       {plan.running.map((r) => (
-                        <li key={r.id}>{t(r.kind === 'copy' ? `${P}.runningCopy` : `${P}.runningCheck`, { id: r.id, status: r.status })}</li>
+                        <li key={r.id}>{t(r.kind === 'copy' ? `${P}.runningCopy` : r.kind === 'import' ? `${P}.runningImport` : `${P}.runningCheck`, { id: r.id, status: r.status })}</li>
                       ))}
                     </ul>
                     <p className="m-0 text-muted-foreground">{t(`${P}.stops`)}</p>
