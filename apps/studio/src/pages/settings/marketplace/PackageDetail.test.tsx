@@ -36,7 +36,8 @@ function mockDetail(over: Partial<api.AvailableArtifactDetail> = {}) {
 async function openDetailMenu(): Promise<void> {
   const trigger = await screen.findByTestId('detail-menu');
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-  if (!screen.queryByTestId('detail-install') && !screen.queryByTestId('detail-publish')) {
+  // Any item means the menu is open; Enter would close it again.
+  if (screen.queryAllByRole('menuitem').length === 0) {
     fireEvent.keyDown(trigger, { key: 'Enter' });
   }
 }
@@ -89,6 +90,30 @@ describe('PackageDetail', () => {
     expect(await screen.findByText(/Converts WHONET SQLite/)).toBeTruthy();
     expect(screen.getByText(/emit-fhir/)).toBeTruthy();
     expect(screen.getByText(/Compatible with CE/)).toBeTruthy();
+  });
+
+  it('an installed plugin with a newer version offers Update, with the new version\'s capabilities', async () => {
+    mockDetail({ ref: 'whonet-1.2.0', version: '1.2.0', capabilities: [{ kind: 'emit-fhir', resourceTypes: ['Patient', 'Specimen'] }] });
+    const onInstall = vi.fn();
+    const installed: CardEntry = { ...entry, ref: undefined, installed: true, active: true, enabled: true, update: { version: '1.2.0', ref: 'whonet-1.2.0', rolledBack: false } };
+    render(<PackageDetail entry={installed} onBack={() => {}} onInstall={onInstall} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
+    await openDetailMenu();
+    const item = await screen.findByTestId('detail-update');
+    expect(item.textContent).toBe('Update to 1.2.0');
+    fireEvent.click(item);
+    await waitFor(() => expect(onInstall).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'whonet-sqlite', ref: 'whonet-1.2.0', version: '1.2.0' }),
+      [{ kind: 'emit-fhir', resourceTypes: ['Patient', 'Specimen'] }],
+    ));
+    expect(api.getAvailableArtifact).toHaveBeenCalledWith('whonet-1.2.0');
+  });
+
+  it('an installed plugin with no newer version offers no Update', async () => {
+    const installed: CardEntry = { ...entry, ref: undefined, installed: true, active: true, enabled: true };
+    render(<PackageDetail entry={installed} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
+    await openDetailMenu();
+    await screen.findAllByRole('menuitem');
+    expect(screen.queryByTestId('detail-update')).toBeNull();
   });
 
   it('Install calls onInstall with the fetched capabilities', async () => {

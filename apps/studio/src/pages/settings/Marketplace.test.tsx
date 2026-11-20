@@ -85,6 +85,16 @@ describe('Marketplace', () => {
     await waitFor(() => expect(api.installArtifact).toHaveBeenCalledWith('whonet-narrow', [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]));
   });
 
+  it('an installed plugin with a newer bundle says Update on its Browse card', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue(oneBundle);
+    (api.listInstalledArtifacts as any).mockResolvedValue([
+      { id: 'whonet-sqlite', version: '0.9.0', active: true, enabled: true, approvedBy: 'admin', type: 'plugin', publisher: null, capabilities: [], legacy: false },
+    ]);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    const card = await screen.findByTestId('card-whonet-narrow');
+    expect(card.textContent).toContain('Update to 1.0.0');
+  });
+
   it('installs a form-template bundle from Browse after consent', async () => {
     (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [{ ref: 'demo-form-1', id: 'demo-form', version: '1.0.0', type: 'form-template', publisher: { id: 'p', name: 'P' }, valid: true }] });
     (api.listInstalledArtifacts as any).mockResolvedValue([]);

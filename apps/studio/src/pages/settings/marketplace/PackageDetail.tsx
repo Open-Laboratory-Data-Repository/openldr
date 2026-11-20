@@ -144,6 +144,19 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                     {t('settings.marketplace.installComingSoon')}
                   </DropdownMenuItem>
                 ) : null}
+                {entry.installed && entry.update && installableType ? (
+                  // Update installs the newer version, which becomes the active one; the older stays
+                  // for Rollback. Consent covers the NEW version's capabilities, read from its detail.
+                  <DropdownMenuItem
+                    data-testid="detail-update"
+                    onSelect={() => {
+                      const u = entry.update!;
+                      void getAvailableArtifact(u.ref).then((d) => onInstall({ ...entry, ref: u.ref, version: u.version }, d?.capabilities ?? []));
+                    }}
+                  >
+                    {t('settings.marketplace.updateTo', { version: entry.update.version })}
+                  </DropdownMenuItem>
+                ) : null}
                 {entry.installed ? (
                   isPack ? (
                     <>

@@ -986,6 +986,8 @@ export const en = {
       publisher: 'Publisher',
       version: 'Version',
       install: 'Install',
+      updateTo: 'Update to {{version}}',
+      newerAvailable: '{{version}} available',
       verified: 'Verified',
       unverified: 'Unverified',
       firstUse: 'New publisher',
