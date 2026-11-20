@@ -36,6 +36,7 @@ Datasets:
 | 2026-11-19 | 4d748753 (demo.10) | Tanzania full, fresh standalone | whole run, no v1 reference prefix, 69.2 min net | 560 |
 | 2026-11-19 | 4d748753 (demo.10) | Tanzania full, fresh standalone | whole run, compared with the v1 reference (TZDISA), 80.5 min | 481 |
 | 2026-11-20 | 4dcf8e4c (0.1.12-rc.1) | Tanzania full, Docker install on Docker Desktop | whole run, compared with the v1 reference (TZDISA), 99.0 min | 392 |
+| 2026-11-20 | 4dcf8e4c (0.1.12-rc.1) | Tanzania full, Docker install on Docker Engine (no VM) | whole run, compared with the v1 reference (TZDISA), 94.7 min | 409 |
 
 Tanzania full, whole run at 770f37f2: 60 minutes. 2,130,022 saved, 163,451 held, 32,602 failed.
 
@@ -62,6 +63,8 @@ Not proved: why 516,778 requests found no v1 record. The v1 reference holds 1,73
 | 2026-11-19 | 4d748753 (demo.10) | v1 reference (OpenLDRData_TZ), fresh standalone | 6.8 min | 1,739,522 keys, 13,955,346 rows |
 | 2026-11-20 | 4dcf8e4c (0.1.12-rc.1) | Tanzania full, Docker install on Docker Desktop | 22.3 min | 104,300 average |
 | 2026-11-20 | 4dcf8e4c (0.1.12-rc.1) | v1 reference (OpenLDRData_TZ), Docker install on Docker Desktop | 7.6 min | 1,739,522 keys, 13,955,346 rows |
+| 2026-11-20 | 4dcf8e4c (0.1.12-rc.1) | Tanzania full, Docker install on Docker Engine (no VM) | 20.8 min | 112,000 average |
+| 2026-11-20 | 4dcf8e4c (0.1.12-rc.1) | v1 reference (OpenLDRData_TZ), Docker install on Docker Engine (no VM) | 9.6 min | 1,739,522 keys, 13,955,346 rows |
 
 0.1.12-rc.1 runs (2026-11-20, evidence in `~/.local/share/rc1-evidence/`): installed by `install/install.sh
 --version 0.1.12-rc.1 --seedless --auth local` on Docker Desktop, whose VM has 16 GB and a disk
@@ -69,6 +72,14 @@ image. DISA read 01:53:48 to 02:16:06, 48,198,955 rows, 19.90 GiB, 0 skipped. Ch
 04:03:50, every count equal to the demo.10 recheck: 2,129,331 saved, 196,743 held, 1 failed,
 1,612,554 passed, 516,778 unchecked. Not proved: that the gap against the standalone is Docker
 Desktop's VM and not Docker itself. A run on Docker Engine with no VM would show it.
+
+Docker Engine run (2026-11-20, evidence in `~/.local/share/native-evidence/`): the same rc.1 images
+on Docker Engine 29.5.2 with no VM (96 GB, 32 CPUs), plugin cdr-source 0.1.6 against 0.1.4 in the
+Docker Desktop run. DISA read 08:51:21 to 09:12:07, reference read 09:13:01 to 09:22:34, check
+09:23:21 to 10:58:04. Every count equal to the Docker Desktop run. Against Docker Desktop: the DISA
+read 7% faster, the check 4% faster, the reference read 26% slower. Still 18% slower than the
+standalone on the check. Not proved: the source SQL Server stayed in the Docker Desktop VM in both
+runs, so the reads cross that VM either way, and one run each says nothing about spread.
 
 demo.9: past 51% the delete before each page scanned the whole table (see migration 134). demo.10:
 17:35:38 to 17:52:40, 48,198,955 rows, 19.90 GiB, 0 skipped. Same machine and settings as demo.9.
