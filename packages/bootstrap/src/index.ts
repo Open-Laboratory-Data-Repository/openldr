@@ -90,6 +90,7 @@ import { createPatientDuplicates, type PatientDuplicates } from './patient-dupli
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { brokerAccessDetails } from './check-read-audit';
 import { createImportService, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
+import { createPluginRemoval, type PluginRemoval } from './plugin-removal';
 import { createImportCopyService, type ImportCopyService } from './import-copy';
 import { createImportCheckService, deleteCheckRecord, liveCheckStatus, type ImportCheckService } from './import-check';
 import { startImportDriver } from './import-driver';
@@ -576,6 +577,8 @@ export interface AppContext {
   /** Checks of a finished copy (import-check.ts). The CLI reaches the service through here. Only a
    *  context built with `runImportDriver` drives them. */
   importChecks: ImportCheckService;
+  /** Removes a plugin without leaving its reads or checks running (design 2026-11-20). */
+  pluginRemoval: PluginRemoval;
   connectors: ConnectorStore;
   appSettings: AppSettingStore;
   featureFlags: FeatureFlags;
@@ -2024,6 +2027,7 @@ const reporting: ReportingApi = {
     // The passing requests of a page go to the database in one call (item 16).
     persistPage: importCheckPersistPage,
   });
+  const pluginRemoval = createPluginRemoval({ plugins, importCopies, importChecks, pluginData, audit: importAudit });
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,
@@ -2158,6 +2162,7 @@ const reporting: ReportingApi = {
     imports,
     importCopies,
     importChecks,
+    pluginRemoval,
     connectors: connectorStore,
     appSettings,
     labIdentity,
@@ -2368,6 +2373,7 @@ export type { ImportCopyService, CopyRun, CopyStatus, CopySetProgress, CopyEstim
 export { checkIdOf, FINDING_CODE, isLiveCheck, LABORATORY_CODE } from './import-check';
 export type { ImportCheckService, ImportCheckStartInput, HeldItemsFilter, CheckRun, CheckStatus, CheckCounts, CheckLaboratory } from './import-check';
 export { CopySetChangedError, copyEstimate, formatTimeLeft } from './import-copy';
+export { createPluginRemoval, PluginStillStopping, REMOVE_KEEPS, type PluginRemoval, type RemovalPlan, type RemoveKeep } from './plugin-removal';
 export {
   runSetupChecks, setupCheckDeps, SETUP_CHECK_TITLE, SETUP_HINT_TEXT,
   type SetupCheck, type SetupCheckDeps, type SetupCheckId, type SetupHint, type SetupReport, type SetupStatus,

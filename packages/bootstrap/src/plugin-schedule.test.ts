@@ -24,6 +24,7 @@ function fakePluginData(): PluginDataStore & { dump(): Map<string, PluginDataEnt
       return out.map((e) => ({ collection: e.collection, key: e.key, doc: e.doc, updatedAt: e.updatedAt }));
     },
     async purge(p) { for (const key of [...m.keys()]) if (m.get(key)!.pluginId === p) m.delete(key); },
+    async purgeExcept(p, keep) { for (const key of [...m.keys()]) { const e = m.get(key)!; if (e.pluginId === p && !keep.includes(e.collection)) m.delete(key); } },
     dump() { return new Map([...m.entries()].map(([key, v]) => [key, { collection: v.collection, key: v.key, doc: v.doc, updatedAt: v.updatedAt }])); },
   };
 }
