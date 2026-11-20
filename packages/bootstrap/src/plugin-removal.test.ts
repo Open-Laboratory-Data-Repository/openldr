@@ -72,6 +72,19 @@ describe('plugin removal', () => {
     expect(plan.copiedBytes).toBe(2_500);
   });
 
+  it('plan does not count a copy that is already being deleted (found in the live check)', async () => {
+    const { removal } = setup({
+      copies: [
+        { id: 'cp1', status: 'deleting', connectorId: 'c1', sets: { requests: { bytes: 1_800 } } },
+        { id: 'cp2', status: 'completed', connectorId: 'c2', sets: { requests: { bytes: 300 } } },
+      ],
+      checks: [],
+    });
+    const plan = await removal.plan('cdr-source');
+    expect(plan.copies).toBe(1);
+    expect(plan.copiedBytes).toBe(300);
+  });
+
   it('keep all: stops the check, then the read, waits, then removes only the plugin', async () => {
     const { removal, log, copies } = setup();
     const r = await removal.remove('cdr-source', { keep: 'all', actor });

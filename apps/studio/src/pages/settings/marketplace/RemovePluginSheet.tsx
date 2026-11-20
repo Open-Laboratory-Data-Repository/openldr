@@ -64,25 +64,28 @@ export function RemovePluginSheet({ pluginId, open, onOpenChange, onRemoved }: {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="gap-0 overflow-y-auto p-0" data-testid="remove-plugin-sheet">
-        <SheetHeader className="border-b border-border px-6 py-4">
-          <div className="flex items-start justify-between gap-2">
-            <SheetTitle>{t(`${P}.title`, { id: pluginId })}</SheetTitle>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t(`${P}.actions`)} data-testid="remove-plugin-menu" disabled={busy}>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem className="text-destructive" disabled={!plan || busy} data-testid="remove-plugin-confirm" onSelect={() => { void doRemove(); }}>
-                  {t(`${P}.remove`)}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onOpenChange(false)}>{t(`${P}.cancel`)}</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+        <SheetHeader className="border-b border-border px-6 py-4" data-testid="remove-plugin-header">
+          <SheetTitle>{t(`${P}.title`, { id: pluginId })}</SheetTitle>
           <SheetDescription>{t(`${P}.intro`)}</SheetDescription>
         </SheetHeader>
+        {/* The dots sit in their own row, as in FieldEditorSheet: in the header they would lie under
+            the sheet's close button, which takes the click (found in the live check, 2026-11-20). */}
+        <div className="flex items-center justify-between border-b border-border px-6 py-3">
+          <h3 className="m-0 text-sm font-medium text-foreground">{t(`${P}.remove`)}</h3>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t(`${P}.actions`)} data-testid="remove-plugin-menu" disabled={busy}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem className="text-destructive" disabled={!plan || busy} data-testid="remove-plugin-confirm" onSelect={() => { void doRemove(); }}>
+                {t(`${P}.remove`)}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onOpenChange(false)}>{t(`${P}.cancel`)}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         {!plan && !error ? (
           <div className="min-h-[16rem]"><LoadingState /></div>

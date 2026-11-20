@@ -45,6 +45,12 @@ describe('RemovePluginSheet', () => {
     expect(screen.getByTestId('remove-saved-kept').textContent).toMatch(/never deleted/);
   });
 
+  it('keeps its dots menu out of the header, where the sheet\'s close button sits (found in the live check)', async () => {
+    render(<RemovePluginSheet pluginId="cdr-source" open onOpenChange={() => {}} onRemoved={() => {}} />);
+    const trigger = await screen.findByTestId('remove-plugin-menu');
+    expect(trigger.closest('[data-testid="remove-plugin-header"]')).toBeNull();
+  });
+
   it('Remove sends the chosen keep and reports back', async () => {
     const onRemoved = vi.fn();
     render(<RemovePluginSheet pluginId="cdr-source" open onOpenChange={() => {}} onRemoved={onRemoved} />);

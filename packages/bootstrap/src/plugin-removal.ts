@@ -69,8 +69,10 @@ export function createPluginRemoval(deps: PluginRemovalDeps): PluginRemoval {
       ...imports.filter((r) => LIVE.has(r.status)).map((r) => ({ kind: 'import' as const, id: r.id, label: r.connectorId, status: r.status })),
       ...copies.filter((c) => LIVE.has(c.status)).map((c) => ({ kind: 'copy' as const, id: c.id, label: c.connectorId, status: c.status })),
     ];
-    const copiedBytes = copies.reduce((sum, c) => sum + Object.values(c.sets ?? {}).reduce((s, set) => s + (set.bytes ?? 0), 0), 0);
-    return { running, copies: copies.filter((c) => c.status !== 'deleting').length, copiedBytes };
+    // A copy already being deleted is going anyway: it is neither counted nor offered as space to free.
+    const kept = copies.filter((c) => c.status !== 'deleting');
+    const copiedBytes = kept.reduce((sum, c) => sum + Object.values(c.sets ?? {}).reduce((s, set) => s + (set.bytes ?? 0), 0), 0);
+    return { running, copies: kept.length, copiedBytes };
   }
 
   /** Waits until every id has left the live statuses, polling once a second. */
