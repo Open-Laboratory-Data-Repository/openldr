@@ -306,8 +306,9 @@ Removes a plugin without leaving its work running. `plugin remove` and `market r
     openldr market remove <id> [version] [--keep all|settings|nothing] [--force] [--json]
 
 Without a version, the whole plugin goes. Its running checks are stopped first, then its running
-reads, and the command waits up to two minutes until each has stopped. If one has not, it prints
-`still stopping: <ids>. Nothing was removed; try again in a minute` and exits 1.
+reads, and the command waits up to two and a half minutes until each has stopped. A running OpenLDR server
+does the stopping. If one has not stopped, it prints `still stopping: <ids>. Nothing was removed. A
+running OpenLDR server stops them; try again in a minute` and exits 1.
 
 `--keep` says what stays. `all`, the default, keeps the plugin's settings and copied data, so it
 can be installed again and carry on. `settings` keeps connector access and the plugin's settings

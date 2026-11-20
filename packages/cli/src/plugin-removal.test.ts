@@ -67,6 +67,7 @@ describe('plugin remove, the whole plugin', () => {
     removal.remove.mockRejectedValue(new PluginStillStopping(['cp1']));
     expect(await runWholePluginRemove('cdr-source', { force: true, json: false })).toBe(1);
     expect(err.join('')).toContain('cp1');
+    expect(err.join('')).toMatch(/running OpenLDR server/);
   });
 });
 

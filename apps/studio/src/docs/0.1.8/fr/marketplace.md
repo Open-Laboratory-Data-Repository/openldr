@@ -170,7 +170,7 @@ Les demandes déjà enregistrées dans OpenLDR ne sont jamais supprimées. Ce so
 
 Ouvrez les points de la fiche et sélectionnez **Supprimer**.
 
-**Résultat attendu :** le plugin n'est plus installé et rien de lui ne tourne. Si une lecture ne s'arrête pas en deux minutes, la fiche indique laquelle, ne supprime rien, et vous pouvez réessayer. En ligne de commande, `openldr plugin remove <id> --keep all|settings|nothing` fait de même et refuse sans `--force` quand il arrêterait ou supprimerait quelque chose.
+**Résultat attendu :** le plugin n'est plus installé et rien de lui ne tourne. Si une lecture ne s'arrête pas en deux minutes et demie, la fiche indique laquelle, ne supprime rien, et vous pouvez réessayer. En ligne de commande, `openldr plugin remove <id> --keep all|settings|nothing` fait de même et refuse sans `--force` quand il arrêterait ou supprimerait quelque chose.
 
 ## Ajouter un registre
 

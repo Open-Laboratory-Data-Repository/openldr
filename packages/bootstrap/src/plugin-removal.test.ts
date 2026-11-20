@@ -125,6 +125,20 @@ describe('plugin removal', () => {
     expect(log).toEqual([]);
   });
 
+  it('waits longer than the two minutes after which another process takes over an orphaned stop', async () => {
+    const sleeps: number[] = [];
+    const log: string[] = [];
+    const stuck = [{ id: 'cp1', status: 'running', connectorId: 'c1', sets: {} }];
+    const svc = fakeService('copy', stuck, log, null);
+    const removal = createPluginRemoval({
+      plugins: { remove: vi.fn(), list: vi.fn(async () => []) } as never, importCopies: svc as never,
+      importChecks: fakeService('check', [], log) as never, imports: fakeService('import', [], log) as never,
+      pluginData: { purgeExcept: vi.fn() } as never, audit: vi.fn(async () => {}), sleep: async (ms) => { sleeps.push(ms); },
+    });
+    await removal.remove('cdr-source', { keep: 'all', actor }).catch(() => {});
+    expect(sleeps.reduce((a, b) => a + b, 0)).toBeGreaterThan(120_000);
+  });
+
   it('nothing running: stops nothing and removes the plugin', async () => {
     const { removal, log } = setup({ copies: [{ id: 'cp1', status: 'completed', connectorId: 'c1', sets: {} }], checks: [{ id: 'ck1', status: 'completed', copyId: 'cp1' }] });
     const r = await removal.remove('cdr-source', { keep: 'all', actor });

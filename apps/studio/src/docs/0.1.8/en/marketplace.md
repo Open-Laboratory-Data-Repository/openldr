@@ -170,7 +170,7 @@ Requests already saved into OpenLDR are never deleted. They are the laboratory's
 
 Open the sheet's dots and select **Remove**.
 
-**Expected result:** The plugin is no longer installed, and nothing of it is running. If a read does not stop within two minutes, the sheet says which one, removes nothing, and you can try again. From the command line, `openldr plugin remove <id> --keep all|settings|nothing` does the same and refuses without `--force` when it would stop or delete anything.
+**Expected result:** The plugin is no longer installed, and nothing of it is running. If a read does not stop within two and a half minutes, the sheet says which one, removes nothing, and you can try again. From the command line, `openldr plugin remove <id> --keep all|settings|nothing` does the same and refuses without `--force` when it would stop or delete anything.
 
 ## Add a registry
 

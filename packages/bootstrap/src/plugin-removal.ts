@@ -24,7 +24,7 @@ export interface RemovalPlan {
 /** Some reads or checks did not stop within the wait. Nothing was deleted or removed. */
 export class PluginStillStopping extends Error {
   constructor(readonly ids: string[]) {
-    super(`still stopping: ${ids.join(', ')}. Nothing was removed; try again in a minute`);
+    super(`still stopping: ${ids.join(', ')}. Nothing was removed. A running OpenLDR server stops them; try again in a minute`);
     this.name = 'PluginStillStopping';
   }
 }
@@ -101,7 +101,9 @@ export function createPluginRemoval(deps: PluginRemovalDeps): PluginRemoval {
       else if (item.kind === 'import') await deps.imports.stop(pluginId, item.id, o.actor);
       else await deps.importCopies.stop(pluginId, item.id, o.actor);
     }
-    await waitStopped(pluginId, running, o.waitMs ?? 120_000);
+    // Past the 2 minutes after which a server takes over a stop whose driver died
+    // (import-run.ts STALE_MS), so an orphaned stop still settles within one try.
+    await waitStopped(pluginId, running, o.waitMs ?? 150_000);
 
     let deletedCopies = 0;
     if (o.keep !== 'all') {

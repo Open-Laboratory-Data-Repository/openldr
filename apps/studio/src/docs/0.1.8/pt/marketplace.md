@@ -170,7 +170,7 @@ Os pedidos já guardados no OpenLDR nunca são apagados. São dados do laborató
 
 Abra os pontos da folha e selecione **Remover**.
 
-**Resultado esperado:** o plugin deixa de estar instalado e nada dele fica em curso. Se uma leitura não parar em dois minutos, a folha diz qual, não remove nada, e pode tentar de novo. Na linha de comandos, `openldr plugin remove <id> --keep all|settings|nothing` faz o mesmo e recusa sem `--force` quando pararia ou apagaria alguma coisa.
+**Resultado esperado:** o plugin deixa de estar instalado e nada dele fica em curso. Se uma leitura não parar em dois minutos e meio, a folha diz qual, não remove nada, e pode tentar de novo. Na linha de comandos, `openldr plugin remove <id> --keep all|settings|nothing` faz o mesmo e recusa sem `--force` quando pararia ou apagaria alguma coisa.
 
 ## Adicionar um registo
 
