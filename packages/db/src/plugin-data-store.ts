@@ -32,6 +32,8 @@ export interface PluginDataStore {
   /** Remove a plugin namespace but the named collections: a removal that must leave records a
    *  running job still owns (a copy being deleted removes its own record when it is done). */
   purgeExcept(pluginId: string, keepCollections: string[]): Promise<void>;
+  /** Every plugin with at least one document in `collection`, installed or not. */
+  pluginIds(collection: string): Promise<string[]>;
 }
 
 export function createPluginDataStore(db: Kysely<InternalSchema>): PluginDataStore {
@@ -98,6 +100,11 @@ export function createPluginDataStore(db: Kysely<InternalSchema>): PluginDataSto
 
     async purge(pluginId) {
       await db.deleteFrom('plugin_data').where('plugin_id', '=', pluginId).execute();
+    },
+
+    async pluginIds(collection) {
+      const rows = await db.selectFrom('plugin_data').select('plugin_id').distinct().where('collection', '=', collection).execute();
+      return rows.map((r) => r.plugin_id);
     },
 
     async purgeExcept(pluginId, keepCollections) {

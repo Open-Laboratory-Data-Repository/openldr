@@ -60,6 +60,15 @@ describe('plugin-data store', () => {
     expect(await s.get('p2', 'own', 'k')).toEqual({ n: 9 });
   });
 
+  it('pluginIds lists each plugin with a document in a collection, once', async () => {
+    const s = createPluginDataStore(db);
+    await s.put('p1', '__import-copies', 'a', { n: 1 });
+    await s.put('p1', '__import-copies', 'b', { n: 2 });
+    await s.put('p2', '__import-copies', 'a', { n: 3 });
+    await s.put('p3', 'own', 'a', { n: 4 });
+    expect((await s.pluginIds('__import-copies')).sort()).toEqual(['p1', 'p2']);
+  });
+
   it('rejects an invalid filter field name', async () => {
     const s = createPluginDataStore(db);
     await s.put('p1', 'c', 'a', { type: 'x' });
