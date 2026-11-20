@@ -3,7 +3,7 @@ import { sql, type Kysely, type Selectable } from 'kysely';
 import type { InternalSchema } from '@openldr/db';
 import type { EventingPort } from '@openldr/ports';
 import type { BinaryRef } from './engine/items';
-import type { RunOutcome } from './trigger-runner';
+import { heldSummary, type RunOutcome } from './trigger-runner';
 import type { WorkflowRun } from './types';
 import { WorkflowDefinitionSchema } from './types';
 import { AUTH_HEADER_RE } from './secret-fields';
@@ -186,7 +186,10 @@ export function createWorkflowReceiptService(deps: ReceiptDeps): WorkflowReceipt
     // Unexpected execution/persistence errors leave the durable start intact. Redelivery must not replay it.
     const run = await deps.execute(start.definition, start.row.run_id, start.row.workflow_id, parseJson(start.row.input), parseJson<Record<string, BinaryRef>>(start.row.files));
     // Full node results remain in workflow_runs, outside paginated receipt metadata.
-    const outcome: RunOutcome = { runId: start.row.run_id, correlationId: run.correlationId ?? null, status: run.status, error: run.error, nodeMeta: {} };
+    // Held counts do ride along: the webhook answer must say what was held, even on a 200.
+    const results = (run.result as { results?: { meta?: unknown }[] } | null | undefined)?.results ?? [];
+    const held = heldSummary(results.map((r) => r.meta));
+    const outcome: RunOutcome = { runId: start.row.run_id, correlationId: run.correlationId ?? null, status: run.status, error: run.error, nodeMeta: {}, ...(held ? { held } : {}) };
     await db.transaction().execute(async trx => {
       const event = await trx.selectFrom('outbox_events').selectAll().where('id', '=', start.row.event_id).forUpdate().executeTakeFirst();
       if (event?.status !== 'processing' || event.claim_token !== start.token) return;

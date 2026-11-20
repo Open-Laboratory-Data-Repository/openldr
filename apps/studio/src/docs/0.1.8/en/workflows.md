@@ -320,7 +320,7 @@ To send FHIR as XML, set `Content-Type: application/fhir+xml` and post the file 
 
 A completed response contains `ok`, `runId` and `correlationId`. A 202 response means accepted, with a request identifier and polling URL. Follow that URL with the current token. Respect Retry-After. Reuse the same idempotency key and identical input for a retry. Different input with the same key returns 409.
 
-On a new install, **Ingest** refuses a whole message when any part of it cannot be stored. The run fails, the sender gets HTTP 500, and nothing from that message is stored. History shows the reasons on the **Map to FHIR** node.
+On a new install, **Ingest** stores the parts of a message it can map and holds the rest. Held parts are not stored. They go to the **Log held** step with their reason. The webhook still answers HTTP 200, and adds `held`, `heldReasons` and a `message` that says how many were held. A form submission with a held part is refused with its reasons. History shows each reason on the **Map to FHIR** node.
 
 ## Optional fictional practice files
 

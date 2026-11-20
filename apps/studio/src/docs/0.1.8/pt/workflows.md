@@ -320,7 +320,7 @@ Para enviar FHIR em XML, use `Content-Type: application/fhir+xml` e envie o fich
 
 Uma resposta concluída contém `ok`, `runId` e `correlationId`. Uma resposta 202 significa aceite, com identificador do pedido e URL de consulta. Siga esse URL com o token atual. Respeite Retry-After. Reutilize a mesma chave de idempotência e uma entrada idêntica para repetir. Entrada diferente com a mesma chave devolve 409.
 
-Numa instalação nova, o **Ingest** recusa uma mensagem inteira quando alguma parte dela não pode ser guardada. A execução falha, o emissor recebe HTTP 500, e nada dessa mensagem é guardado. History mostra os motivos no nó **Map to FHIR**.
+Numa instalação nova, o **Ingest** guarda as partes de uma mensagem que consegue mapear e retém o resto. As partes retidas não são guardadas. Seguem para o passo **Log held** com o seu motivo. O webhook responde na mesma HTTP 200, e acrescenta `held`, `heldReasons` e uma `message` que diz quantas foram retidas. Um envio de formulário com uma parte retida é recusado, com os motivos. History mostra cada motivo no nó **Map to FHIR**.
 
 ## Ficheiros fictícios opcionais de prática
 

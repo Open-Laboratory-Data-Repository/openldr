@@ -1443,6 +1443,28 @@ describe('forms routes', () => {
     expect(res.json().error).toMatch(/disabled|not enabled|unavailable/i);
   });
 
+  // The default Ingest sends held rows to a Log (2026-11-20), so a run can complete with the
+  // submission held back. The clerk must not be told it was submitted.
+  it('reports a held submission as not stored, even when the run completed', async () => {
+    const ctx = fakeCtx();
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async () => ({ runId: 'run-h', correlationId: null, status: 'completed', error: null, nodeMeta: {}, held: { count: 1, reasons: ['failed the business-rule check'] } }) },
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'O', schema: referenceSchema, targetPages: ['forms'] } });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`,
+      payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+    });
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toMatchObject({ ok: false, runId: 'run-h', held: 1 });
+    expect(res.json().error).toMatch(/held back and not stored/);
+    expect(res.json().error).toContain('failed the business-rule check');
+  });
+
   it('reports a failed run rather than success', async () => {
     const ctx = fakeCtx();
     (ctx as any).workflows = {

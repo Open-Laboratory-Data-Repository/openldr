@@ -5,7 +5,7 @@ export { MAX_SUBWORKFLOW_DEPTH, assertSubWorkflowAllowed, extractTerminalItems }
 export { createWorkflowRunStore, type WorkflowRunStore } from './run-store';
 export { createWorkflowScheduleStore, type WorkflowScheduleStore } from './schedule-store';
 export { createWebhookRegistry, type WebhookRegistry, type WebhookEntry } from './webhook-registry';
-export { executeWorkflowRun, createWorkflowTriggerRunner, type WorkflowTriggerRunner, type RunOutcome } from './trigger-runner';
+export { executeWorkflowRun, createWorkflowTriggerRunner, heldSummary, type WorkflowTriggerRunner, type RunOutcome, type HeldSummary } from './trigger-runner';
 export { nextCronDate } from './cron';
 export { guardedFetch, parseAllowlist, type WorkflowServices, type SqlResult, type HttpRequest, type HttpResponse, type ExportArtifactInput, type ExportArtifactResult } from './engine/services';
 export { createWorkflowDatasetStore, type WorkflowDatasetStore, type DatasetInput } from './dataset-store';
