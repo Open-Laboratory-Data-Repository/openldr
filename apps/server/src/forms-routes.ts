@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import AdmZip from 'adm-zip';
-import { EntrySiteError, FormAccessError, TEST_CATALOG_SYSTEM, drivesAppPage, findCatalogBand, formOpenRule, repeatMessage, setFormAccess, type AppContext, type ResultBand } from '@openldr/bootstrap';
+import { EntrySiteError, FormAccessError, OrderExists, TEST_CATALOG_SYSTEM, drivesAppPage, findCatalogBand, formOpenRule, repeatMessage, setFormAccess, type AppContext, type ResultBand } from '@openldr/bootstrap';
 import { FormEntryRepeat, type FormEntry, type FormEntrySaved } from '@openldr/db';
 import { EVERYTHING } from '@openldr/rbac';
 import { redact } from '@openldr/core';
 import type { ExtractionContext, FormSchema } from '@openldr/forms';
 import { FormCreateInputSchema } from '@openldr/forms/pure';
-import { entryFacilitiesOf, extractorsForForm, isEntityAnswer, labOrderId, linkToOrder, isCodingAnswer, parseTestDetails, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
+import { entryFacilitiesOf, entryKeyOf, extractorsForForm, isEntityAnswer, labOrderId, linkToOrder, isCodingAnswer, parseTestDetails, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
@@ -48,23 +48,6 @@ function extractionContextFor(schema: FormSchema, answers: Record<string, unknow
     context.subject = { reference: answer.reference, ...(answer.display ? { display: answer.display } : {}) };
   }
   return context;
-}
-
-/**
- * Give each ServiceRequest the fixed id of its test (lab slices 1b and 2, ruling 1): built from the
- * requesting facility's code (null when none was picked), the requisition number and the test. The
- * test is the request's last coding, since the extractor writes a catalog test's LOINC link in front
- * of it. A request with no requisition number or no test keeps no id, and linkToOrder mints one.
- */
-type Extracted = Parameters<typeof linkToOrder>[0];
-function withFixedOrderIds(resources: Extracted, facilityCode: string | null): Extracted {
-  return resources.map((r) => {
-    if (r.resourceType !== 'ServiceRequest' || r.id) return r;
-    const requisition = r.requisition?.value;
-    const test = r.code?.coding?.at(-1);
-    if (!requisition || !test?.system || !test.code) return r;
-    return { ...r, id: labOrderId(facilityCode, requisition, { system: test.system, code: test.code }) };
-  });
 }
 
 /** The Corlix fhir-path a Lab order binds its tests to. */
@@ -556,17 +539,21 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     const codingBefore = await catalogCodingsBefore(ctx, f.schema, p.data.answers);
     if (codingBefore) extractionContext.codingBefore = codingBefore;
     if (matchedBands.size > 0) extractionContext.testBands = matchedBands;
-    // Each test's order gets its fixed id, then every Observation and Specimen is pointed at the
-    // orders (2026-10-11 spec, part 1), so lab_results.request_id fills and reports can join a
-    // result to its order.
-    const facilityCode = entryFacilitiesOf(f.schema, p.data.answers).order?.facility?.code ?? null;
-    const resources = linkToOrder(
-      withFixedOrderIds(
-        extractorsForForm(f.schema as never).flatMap((ex) => ex.extract(response as never, questionnaire as never, extractionContext)),
-        facilityCode,
-      ),
-      randomUUID,
-    );
+    // Each test's order gets its fixed id from the picked facility's code (null when none was
+    // picked), the requisition number and the test (lab slices 1b and 2, ruling 1), and each test's
+    // results point at it. With no number there is no fixed id and linkToOrder mints one.
+    const requisition = entryKeyOf(f.schema, p.data.answers);
+    if (requisition) {
+      const facilityCode = entryFacilitiesOf(f.schema, p.data.answers).order?.facility?.code ?? null;
+      extractionContext.orderIdFor = (test) => labOrderId(facilityCode, requisition, test);
+    }
+    const extracted = extractorsForForm(f.schema as never).flatMap((ex) => ex.extract(response as never, questionnaire as never, extractionContext));
+    const orderIds = requisition
+      ? extracted.flatMap((r) => (r.resourceType === 'ServiceRequest' && r.id ? [r.id] : []))
+      : [];
+    // Point every other Observation and Specimen at the orders (2026-10-11 spec, part 1), so
+    // lab_results.request_id fills and reports can join a result to its order.
+    const resources = linkToOrder(extracted, randomUUID);
     if (resources.length === 0) {
       // A form that produces nothing is a form-configuration bug, so 400 is correct — but the
       // operator has to be able to read a diagnosis out of it. The commonest cause by far is a
@@ -611,10 +598,15 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
           // The dev-bypass and admin users carry EVERYTHING; a missing limit is no limit, as on dashboards.
           dataScope: req.user?.dataScope ?? EVERYTHING,
         },
+        orderIds,
       });
     } catch (err) {
       if (err instanceof EntrySiteError) {
         reply.code(403);
+        return { error: err.message };
+      }
+      if (err instanceof OrderExists) {
+        reply.code(409);
         return { error: err.message };
       }
       if (err instanceof FormEntryRepeat) {
@@ -684,10 +676,10 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     if (outcome.status !== 'completed') {
       // A failed run does NOT mean nothing was stored. `persist-1` runs before `log-1`, so a
       // failure in the Log node or in the `data.persisted` publish lands here with the resources
-      // already written. Telling the clerk only "failed" makes them resubmit — and
-      // every submission mints fresh ids (`linkToOrder` for the order and its Specimen,
-      // `unwrapBundle` for entries that still have none), so the retry writes a SECOND
-      // ServiceRequest and QuestionnaireResponse for the same clinical event.
+      // already written. Telling the clerk only "failed" makes them resubmit. An order with a
+      // requisition number has fixed ServiceRequest ids (`order-ids.ts`), so a retry updates those,
+      // but the form copy, the results and the Specimen get fresh ids each time (`linkToOrder`,
+      // `unwrapBundle`), so the retry writes a SECOND copy of each for the same clinical event.
       // The run's own metadata already knows; say what actually landed.
       //
       // NOT covered here: a run-store insert failure. `deps.runs.record(run)` throws INSIDE
@@ -702,7 +694,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       // may have persisted moments after this metadata was captured — so it must not assert the
       // retry is safe. It tells the clerk to check the run instead.
       const message = persisted > 0
-        ? `${persisted} resource(s) were stored before this submission failed. Do NOT resubmit — resubmitting would create a duplicate record. Quote run ${outcome.runId} when reporting this.`
+        ? `${persisted} resource(s) were stored before this submission failed. Do NOT resubmit. The orders keep their ids, but resubmitting would store a second copy of the form and its results. Quote run ${outcome.runId} when reporting this.`
         : `No stored records were reported for this run. Check run ${outcome.runId} before resubmitting.`;
       // redact, never verbatim: a Persist Store or DB-node failure can carry a connection
       // string, and `redact` masks DSN userinfo, `password=` and Authorization tokens.
