@@ -8,6 +8,94 @@ Use os seus registos e consultas de relatório. Não precisa de dados de exemplo
 
 O workflow fornecido **Ingest** também trata submissões Forms. Numa instalação nova, passa o que recebe por [Map to FHIR](/docs/map-to-fhir). Mantenha-o ativado. Editá-lo afeta todos os emissores que usam o webhook. Substitua um segredo apenas quando estiver preparado para atualizar esses emissores.
 
+## Enviar uma linha de ensaio ao workflow Ingest fornecido
+
+Pode usar **Ingest** sem criar outro workflow nem conhecer FHIR. FHIR é o formato padrão dos registos usado pelo OpenLDR. Numa instalação nova, os passos são **Ingest received**, **Map to FHIR**, **Persist store**, **Log persisted** e **Log held**. Map to FHIR transforma os seus campos em paciente, amostra, pedido e resultado ligados. Persist store guarda esses registos. Log held regista cada linha que não foi mapeada, com o motivo.
+
+Use a linha fictícia abaixo numa instalação de teste. Mantenha o workflow existente ativado. Uma instalação antiga pode ter outro grafo. Não reponha um workflow operacional para experimentar este exemplo.
+
+1. Abra **Workflows** no menu principal e selecione **Ingest**.
+2. Selecione **Ingest received**, depois a engrenagem **Configure** por cima.
+3. Copie **URL**. O caminho fornecido é `/api/workflows/hooks/ingest`.
+4. Peça o segredo guardado ao administrador. Não pode ser mostrado. A tarefa de configuração do segredo Ingest abaixo explica a substituição quando necessária.
+5. Substitua o URL e `YOUR_SECRET` abaixo e execute o comando no terminal.
+6. Abra **History** na barra do workflow e selecione a nova execução.
+
+```shell
+curl -i -X POST 'https://your-host/api/workflows/hooks/ingest' \
+  -H 'Content-Type: application/json' \
+  -H 'X-Webhook-Token: YOUR_SECRET' \
+  --data-binary '{
+    "patient_no": "DOCS-INGEST-001",
+    "patient_system": "urn:example:lab:patients",
+    "first_name": "Docs",
+    "surname": "Example",
+    "sample_no": "DOCS-SAMPLE-001",
+    "collected": "2026-11-18T09:00:00+02:00",
+    "test_code": "DEMO-TEST",
+    "result": 14.9,
+    "unit": "g/dL"
+  }'
+```
+
+**Resultado esperado:** a mensagem aparece em History. Sem um mapeamento guardado correspondente, Map to FHIR retém a linha e nada é guardado. A execução mostra mesmo assim **Completed**, com uma linha retida. O webhook responde HTTP 200 com `held: 1`, o motivo `no mapping for this shape` e uma `message`. Essa execução fornece a amostra para a tarefa seguinte. Envie só a linha acima. O webhook coloca-a em `body`.
+
+Já envia FHIR? Ingest aceita os registos FHIR suportados sem mapeamento dos campos de origem. Para os seus nomes de campos, continue abaixo.
+
+## Mapear a linha de ensaio
+
+Escolha os campos de origem ao lado dos nomes de laboratório. Não precisa de escrever caminhos FHIR.
+
+1. Feche History se estiver aberto.
+2. Selecione **Map to FHIR**, depois **Configure**.
+3. Confira que **Caminho de origem** é `body` e que o **Destino** é o resultado laboratorial.
+4. Abra **Ações do nó**, os pontos junto ao título, e selecione **Abrir mapeamento**.
+5. Abra **Ações do mapeamento**, os pontos no canto superior direito, e selecione **Usar a última execução guardada**.
+6. Escolha os campos abaixo em **Dos seus dados**. Mantenha **Sem regra** nas regras.
+7. Deixe os restantes campos **Não mapeado**.
+8. Abra **Ações do mapeamento** e selecione **Testar**.
+
+| Destino | Dos seus dados |
+|---------|----------------|
+| Número do paciente | `patient_no` |
+| Sistema do número do paciente | `patient_system` |
+| Nome próprio | `first_name` |
+| Apelido | `surname` |
+| Data de colheita | `collected` |
+| Número da amostra | `sample_no` |
+| Análise | `test_code` |
+| Resultado (número) | `result` |
+| Unidade de medida | `unit` |
+
+**Resultado esperado:** os três campos obrigatórios estão mapeados e a primeira linha passa. Testar mostra a conversão sem guardar registos. [Map to FHIR](/docs/map-to-fhir) explica regras, listas e a pré-visualização dos registos gerados.
+
+## Guardar o mapeamento e reenviar a linha
+
+1. Abra **Ações do mapeamento** e selecione **Guardar**.
+2. Feche o painel de mapeamento.
+3. Selecione **Save** na barra do workflow.
+4. Leia o aviso do workflow de sistema e selecione **Save anyway** para esta alteração pretendida.
+5. Envie novamente o mesmo comando curl.
+6. Abra **History** e escolha a nova execução pela hora.
+7. Selecione **Persist store** para consultar a saída guardada.
+
+**Resultado esperado:** a nova execução mostra **Completed**, uma linha mapeada, nenhuma retida e quatro registos guardados. Reenviar a mesma linha atualiza os mesmos registos. Não acrescenta outro paciente nem outro resultado.
+
+## Encontrar os registos de ensaio guardados
+
+1. Abra **Patients** no menu principal.
+2. Escreva `Docs Example` em **Search name or identifier**.
+3. Selecione o paciente e consulte **Identifiers** e **Requests** na ficha.
+4. Abra **Dashboard** no menu principal.
+5. Escolha **Lab Overview (Sample)** no seletor de dashboards, se estiver disponível.
+6. Selecione **Refresh** e procure `DEMO-TEST` em **Recent Orders**.
+
+**Resultado esperado:** o paciente tem um identificador e um pedido com um resultado. O dashboard pode mostrar o pedido pelo nome da análise. Uma célula Identifiers vazia na lista de pacientes não significa que a ficha não tenha identificadores.
+
+A linha de ensaio tem data de colheita mas não tem data do pedido. Limpe o filtro Period do dashboard para a procurar. Um dashboard pode mostrar apenas as análises mais frequentes. Por isso, um pedido novo pode não aparecer em **Orders by Test**. Verifique primeiro a gravação em History e na ficha do paciente.
+
+Se Map to FHIR retiver uma linha, consulte esse passo em History para ler o motivo. Uma estrutura de origem desconhecida precisa de um mapeamento guardado. Um identificador de paciente em falta precisa de dados corrigidos. No Ingest fornecido, **retidos** liga a **Log held**. As linhas válidas de uma mensagem são guardadas, e cada linha retida fica registada com o motivo. As linhas retidas não são guardadas. Corrija os dados ou o mapeamento e envie essas linhas novamente. [Map to FHIR](/docs/map-to-fhir) explica os motivos, e como recusar a mensagem inteira quando uma linha é retida.
+
 ## Encontrar um workflow
 
 Abra uma definição existente antes de a inspecionar ou alterar.

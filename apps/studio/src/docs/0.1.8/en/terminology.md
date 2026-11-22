@@ -8,6 +8,52 @@ You do not need documentation sample data. The screenshots use a built-in list a
 
 Reading needs permission to browse terminology. Creating, changing and importing need permission to manage terminology.
 
+## Open the ontology browser
+
+An ontology groups related concepts in a hierarchy. Use its browser to explore an imported code system without editing it. Your administrator must first load a distribution with its ontology.
+
+1. Open **Terminology** in the main menu.
+2. Select the publisher of the installed code system, for example **LOINC**.
+3. Open the dots at the far right of that code system's row in the table.
+4. Open **Ontology** in the row menu.
+5. Select **Browse**.
+
+**Expected result:** a **Browse** sheet opens with the code system's name. Its left side shows a search box and the hierarchy. The right side asks you to select a node for details.
+
+Opening the code system's name instead opens the flat term list. Use its row menu for the ontology browser.
+
+## Search the ontology
+
+Use your own code or term name. The LOINC example below uses the actual entry `718-7`, displayed as `Hgb Bld-mCnc` in the loaded distribution.
+
+1. Open the ontology browser as above.
+2. Type a code or part of a name in **Search the ontology...**, above the hierarchy.
+3. Wait for the matching entries.
+4. Select the intended entry after checking its full code. For the example, select `Hgb Bld-mCnc` with code `718-7`.
+5. Read the selected concept's details on the right.
+
+**Expected result:** selecting a search result clears the search and reveals its place in the hierarchy. Its name and code appear in the detail pane. Searching `718-7` can also match longer codes containing those characters, so check the complete code.
+
+## Browse a hierarchy
+
+1. Clear the search text if it is still present.
+2. Select the small arrow to the left of a category to expand it.
+3. Expand another category beneath it to follow a branch.
+4. Select an entry's name to read its details on the right.
+5. Select an expanded category's arrow again to collapse that branch.
+
+**Expected result:** child entries appear indented beneath their parent. The arrow changes the tree; selecting a name changes the detail pane. In the LOINC example, `Hgb Bld-mCnc` sits under the Hemoglobin branch.
+
+## Read and copy a concept
+
+1. Select the concept's row in the tree or search results.
+2. Check the displayed name and full code in the detail pane.
+3. Read the type badge, such as **CATEGORY** or **TERM**, and the **Children** count.
+4. Select **Copy code** for the code alone, or **Copy code + display** for the code and name.
+5. Select **Close** at the top right when you have finished.
+
+**Expected result:** the selected concept is copied. In the LOINC example, **Copy code** gives `718-7`. **Copy code + display** gives `718-7  Hgb Bld-mCnc`. Browsing and copying do not create a local term or change a form's allowed answers.
+
 ## Find a code and read its details
 
 Look for an existing code before creating another one. This example finds a test rejection reason in the built-in REJECT-TEST code system.
@@ -375,7 +421,21 @@ Select **Hide publishers** to give the table the width again.
 
 **Expected result:** the selected publisher remains in the breadcrumb. Scroll the table sideways when its remaining columns are off screen.
 
+## Limits
+
+- The ontology shows the distribution loaded on this installation. Releases can have different names or branches.
+- A search can match part of a code or name. Check the full code before copying.
+- The detail pane keeps the last selected concept while you search. Select a matching result before using its copy buttons.
+
 ## Troubleshooting
+
+### I cannot open the ontology browser
+
+Use the code system's row dots, then **Ontology**, then **Browse**. If the system or its ready ontology is absent, ask your administrator to prepare the approved distribution. The publisher's dots menu is for other actions.
+
+### The ontology search says No matches
+
+Shorten the search or check the code. Clear the search text to return to the tree. The details may still show your previous selection.
 
 ### The import says displayName required
 

@@ -8,6 +8,94 @@ Use your own records and reporting queries. No documentation sample data is requ
 
 The shipped **Ingest** workflow also handles Forms submissions. On a new install it sends what it receives through [Map to FHIR](/docs/map-to-fhir). Keep it enabled. Editing it affects every sender using its webhook. Replace a secret only when you are ready to update those senders.
 
+## Send a practice row to the shipped Ingest workflow
+
+You can use **Ingest** without building another workflow or knowing FHIR. FHIR is the standard record format OpenLDR uses. On a new install, the steps are **Ingest received**, **Map to FHIR**, **Persist store**, **Log persisted** and **Log held**. Map to FHIR turns your fields into linked patient, specimen, order and result records. Persist store saves those records. Log held records each row that could not be mapped, with its reason.
+
+Use the fictional row below in a test installation. Keep the existing workflow enabled. An older installation can have a different graph. Do not reset an operational workflow to try this example.
+
+1. Open **Workflows** in the main menu and select **Ingest**.
+2. Select **Ingest received**, then the gear labelled **Configure** above it.
+3. Copy **URL**. The shipped path is `/api/workflows/hooks/ingest`.
+4. Obtain the saved secret from your administrator. A saved secret cannot be viewed. The task **Set the Ingest webhook secret** below explains replacement when needed.
+5. Replace the URL and `YOUR_SECRET` below, then run the command in your terminal.
+6. Open **History** in the workflow toolbar and select the new run.
+
+```shell
+curl -i -X POST 'https://your-host/api/workflows/hooks/ingest' \
+  -H 'Content-Type: application/json' \
+  -H 'X-Webhook-Token: YOUR_SECRET' \
+  --data-binary '{
+    "patient_no": "DOCS-INGEST-001",
+    "patient_system": "urn:example:lab:patients",
+    "first_name": "Docs",
+    "surname": "Example",
+    "sample_no": "DOCS-SAMPLE-001",
+    "collected": "2026-11-18T09:00:00+02:00",
+    "test_code": "DEMO-TEST",
+    "result": 14.9,
+    "unit": "g/dL"
+  }'
+```
+
+**Expected result:** the message appears in History. Without a matching saved mapping, Map to FHIR holds the row and nothing is stored. The run still shows **Completed**, with one held row. The webhook answers HTTP 200 with `held: 1`, the reason `no mapping for this shape` and a `message`. That run supplies the sample for the next task. Send only the row above. The webhook puts it under `body`.
+
+Already sending FHIR? Ingest accepts supported FHIR records without a source-field mapping. For your own field names, continue below.
+
+## Map the practice row
+
+Choose your source fields beside the lab labels. You do not need to type FHIR paths.
+
+1. Close History if it is open.
+2. Select **Map to FHIR**, then **Configure**.
+3. Check **Source path** is `body` and **Target** is **Lab result**.
+4. Open **Node actions**, the dots beside the node title, and select **Open mapping**.
+5. Open **Mapping actions**, the dots at the top right, and select **Use the latest stored run**.
+6. Choose the fields below under **From your data**. Leave their rules as **No rule**.
+7. Leave the other fields **Not mapped**.
+8. Open **Mapping actions** and select **Test**.
+
+| Maps to | From your data |
+|---------|----------------|
+| Patient ID | `patient_no` |
+| Patient ID system | `patient_system` |
+| First name | `first_name` |
+| Last name | `surname` |
+| Collected date | `collected` |
+| Specimen number | `sample_no` |
+| Test | `test_code` |
+| Result (number) | `result` |
+| Unit | `unit` |
+
+**Expected result:** all three required fields are mapped and **Row 1** passes. Test previews the conversion without storing records. [Map to FHIR](/docs/map-to-fhir) explains rules, lists and generated-record previews.
+
+## Save the mapping and send the row again
+
+1. Open **Mapping actions** and select **Save**.
+2. Close the mapping panel.
+3. Select **Save** in the workflow toolbar.
+4. Read the system-workflow warning and select **Save anyway** for this intended change.
+5. Send the same curl command again.
+6. Open **History** and select the new run by its time.
+7. Select **Persist store** to inspect its recorded output.
+
+**Expected result:** the new run shows **Completed**, one mapped row, no held rows and four persisted records. Sending this same row again updates the same records. It does not add another patient or another result.
+
+## Find the stored practice records
+
+1. Open **Patients** in the main menu.
+2. Type `Docs Example` in **Search name or identifier**.
+3. Select the patient row and read **Identifiers** and **Requests** in its detail sheet.
+4. Open **Dashboard** in the main menu.
+5. Choose **Lab Overview (Sample)** in the dashboard selector, if it is available.
+6. Select **Refresh** and check **Recent Orders** for `DEMO-TEST`.
+
+**Expected result:** the patient has one identifier and one request with one result. The dashboard can show the order under its test name. A blank Identifiers cell in the patient list does not mean the detail has none.
+
+The practice row has a collected date but no order date. Clear the dashboard's Period filter when looking for it. A dashboard may show only its most frequent tests, so one new order may not appear in **Orders by Test**. History and the patient detail are the first checks for storage.
+
+If Map to FHIR holds a row, inspect that step in History for its reason. For example, an unknown source structure needs a saved mapping; a missing patient identifier needs corrected data. In the shipped Ingest workflow, **held** goes to **Log held**. The good rows of a message are stored, and each held row is logged with its reason. Held rows are not stored. Correct the data or mapping, then send those rows again. See [Map to FHIR](/docs/map-to-fhir) for held reasons, and for refusing a whole message when any row is held.
+
 ## Find a workflow
 
 Use this to open an existing definition before inspecting or changing it.
