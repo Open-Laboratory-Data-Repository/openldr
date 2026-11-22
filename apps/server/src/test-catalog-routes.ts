@@ -29,6 +29,7 @@ const band = z.object({
   name: z.string().nullish(),
   low: z.number().nullish(), high: z.number().nullish(), unit: z.string().nullish(),
   sex: z.string().nullish(), ageLow: z.number().nullish(), ageHigh: z.number().nullish(),
+  criticalLow: z.number().nullish(), criticalHigh: z.number().nullish(),
 });
 // zod strips what it does not declare, so a parameter list left out of this schema would vanish
 // between the sheet and the service without a word. Found live 2026-09-16.
@@ -47,6 +48,9 @@ const resultParam = z.object({
     name: b.name ?? null,
     low: b.low ?? null, high: b.high ?? null, unit: b.unit ?? null,
     sex: b.sex ?? null, ageLow: b.ageLow ?? null, ageHigh: b.ageHigh ?? null,
+    // Optional on the band, so a limit not given adds no key.
+    ...(b.criticalLow != null ? { criticalLow: b.criticalLow } : {}),
+    ...(b.criticalHigh != null ? { criticalHigh: b.criticalHigh } : {}),
   })),
 }));
 const testInput = z.object({

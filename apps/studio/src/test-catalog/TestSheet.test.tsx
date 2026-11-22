@@ -293,6 +293,33 @@ describe('TestSheet: result parameters', () => {
     ]);
   });
 
+  it('shows critical low and high beside the age fields and saves them', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    renderSheet({ target: { kind: 'edit', test: withParam } });
+    await addBand('HGB');
+    const block = screen.getByTestId('band-HGB-1');
+    const low = screen.getByLabelText(/critical low limit for HGB band 1/i);
+    const high = screen.getByLabelText(/critical high limit for HGB band 1/i);
+    expect(within(block).getByText('Critical low', { selector: 'label' }).getAttribute('for')).toBe(low.id);
+    expect(within(block).getByText('Critical high', { selector: 'label' }).getAttribute('for')).toBe(high.id);
+    fireEvent.change(screen.getByLabelText(/^low for HGB band 1/i), { target: { value: '12' } });
+    fireEvent.change(low, { target: { value: '7' } });
+    fireEvent.change(high, { target: { value: '20' } });
+    await save();
+    expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands).toEqual([
+      { name: null, low: 12, high: null, unit: null, sex: null, ageLow: null, ageHigh: null, criticalLow: 7, criticalHigh: 20 },
+    ]);
+  });
+
+  it('shows the critical limits a saved range already has', () => {
+    const oneBand: api.CatalogTest = { ...withParam, resultParams: [{ ...withParam.resultParams[0], bands: [
+      { name: null, low: 12, high: 15, unit: null, sex: null, ageLow: null, ageHigh: null, criticalLow: 7, criticalHigh: 20 },
+    ] }] };
+    renderSheet({ target: { kind: 'edit', test: oneBand } });
+    expect(screen.getByLabelText(/critical low limit for HGB band 1/i)).toHaveValue('7');
+    expect(screen.getByLabelText(/critical high limit for HGB band 1/i)).toHaveValue('20');
+  });
+
   it('saves a range name, sex and age the operator set', async () => {
     vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
     renderSheet({ target: { kind: 'edit', test: withParam } });

@@ -967,6 +967,36 @@ describe('test catalog: result parameters on a test', () => {
       .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1 has an age from above its age to.' });
   });
 
+  it('keeps critical limits through a save and a read', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    const withLimits = { ...HGB, bands: [range({ low: 12, high: 15, criticalLow: 7, criticalHigh: 20 }), range({ low: 11, criticalLow: 6 })] };
+    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [withLimits] });
+    const [stored] = (await catalog.get('FBC'))?.resultParams ?? [];
+    expect(stored.bands[0]).toMatchObject({ low: 12, high: 15, criticalLow: 7, criticalHigh: 20 });
+    expect(stored.bands[1]).toMatchObject({ low: 11, criticalLow: 6 });
+    expect('criticalHigh' in stored.bands[1]).toBe(false);
+  });
+
+  it('refuses critical limits inside the band or crossed, and allows one alone or at the edge', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    let n = 0;
+    const save = (b: object) => catalog.create({ code: `FBC${++n}`, display: 'Full blood count', resultParams: [{ ...HGB, bands: [range(b)] }] });
+    await expect(save({ low: 12, high: 15, criticalLow: 13 }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1: the critical low limit must be at or below the low limit.' });
+    await expect(save({ low: 12, high: 15, criticalHigh: 14 }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1: the critical high limit must be at or above the high limit.' });
+    await expect(save({ criticalLow: 20, criticalHigh: 10 }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1: the critical low limit must be below the critical high limit.' });
+    await expect(save({ criticalLow: 10, criticalHigh: 10 }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1: the critical low limit must be below the critical high limit.' });
+    // Each rule compares only what the band gives, and a limit equal to its edge is allowed.
+    await expect(save({ low: 12, high: 15, criticalLow: 12, criticalHigh: 15 })).resolves.toBeDefined();
+    await expect(save({ high: 15, criticalLow: 5 })).resolves.toBeDefined();
+    await expect(save({ criticalHigh: 20 })).resolves.toBeDefined();
+  });
+
   it('refuses a range whose sex is not one of the Patient codes', async () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);

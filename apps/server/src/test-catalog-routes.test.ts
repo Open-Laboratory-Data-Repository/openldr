@@ -386,6 +386,21 @@ describe('test catalog routes', () => {
     });
   });
 
+  it('carries critical limits through a create, and adds no key for a limit not given', async () => {
+    const { ctx, calls } = fakeCtx();
+    await appWith(ctx).inject({
+      method: 'POST', url: '/api/test-catalog',
+      payload: { code: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [
+        { low: 12, high: 15, criticalLow: 7, criticalHigh: 20 }, { low: 12, high: 15, criticalLow: null },
+      ] }] },
+    });
+    const created = calls.find((c) => c.method === 'create');
+    const bands = (created?.args[0] as { resultParams: Array<{ bands: unknown[] }> }).resultParams[0].bands;
+    expect(bands[0]).toEqual({ name: null, low: 12, high: 15, unit: null, sex: null, ageLow: null, ageHigh: null, criticalLow: 7, criticalHigh: 20 });
+    expect(bands[1]).toEqual({ name: null, low: 12, high: 15, unit: null, sex: null, ageLow: null, ageHigh: null });
+    expect(Object.keys(bands[1] as object)).not.toContain('criticalLow');
+  });
+
   it('POST /result-params answers the sex choices with their labels, so the studio names no code', async () => {
     const { ctx } = fakeCtx();
     const res = await appWith(ctx, ['forms.view']).inject({

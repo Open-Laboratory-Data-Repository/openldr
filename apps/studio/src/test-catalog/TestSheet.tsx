@@ -425,6 +425,18 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                                         />
                                       </Fragment>
                                     ))}
+                                    {(['criticalLow', 'criticalHigh'] as const).map((edge) => (
+                                      <Fragment key={edge}>
+                                        {label(edge, edge === 'criticalLow' ? 'testCatalog.sheet.bandCriticalLow' : 'testCatalog.sheet.bandCriticalHigh')}
+                                        <DecimalInput
+                                          id={id(edge)}
+                                          className="h-8"
+                                          aria-label={t(edge === 'criticalLow' ? 'testCatalog.sheet.bandCriticalLowFor' : 'testCatalog.sheet.bandCriticalHighFor', { code: p.code, n })}
+                                          value={band[edge] ?? null}
+                                          onValueChange={(v) => setBand({ [edge]: v })}
+                                        />
+                                      </Fragment>
+                                    ))}
                                   </div>
                                 </div>
                               );

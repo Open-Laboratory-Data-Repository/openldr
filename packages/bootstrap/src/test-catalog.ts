@@ -581,6 +581,16 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         if (band.ageLow !== null && band.ageHigh !== null && band.ageLow > band.ageHigh) {
           throw invalid(`${where} has an age from above its age to.`);
         }
+        // Each critical rule compares two values only when the band gives both.
+        if (band.criticalLow !== undefined && band.low !== null && band.criticalLow > band.low) {
+          throw invalid(`${where}: the critical low limit must be at or below the low limit.`);
+        }
+        if (band.criticalHigh !== undefined && band.high !== null && band.criticalHigh < band.high) {
+          throw invalid(`${where}: the critical high limit must be at or above the high limit.`);
+        }
+        if (band.criticalLow !== undefined && band.criticalHigh !== undefined && band.criticalLow >= band.criticalHigh) {
+          throw invalid(`${where}: the critical low limit must be below the critical high limit.`);
+        }
         if (band.sex !== null && !SEX_OPTIONS.some((s) => s.code === band.sex)) {
           throw invalid(`${where} names ${band.sex}, which is not a sex this install knows.`);
         }

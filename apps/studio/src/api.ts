@@ -2863,7 +2863,11 @@ export const catalogSpecimensFor = (
     .then((r) => okJson<{ specimens: { system: string; code: string; display: string | null }[] }>(r, 'narrow specimens'))
     .then((b) => b.specimens);
 
-export interface CatalogResultBand { name: string | null; low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null }
+export interface CatalogResultBand {
+  name: string | null; low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null;
+  /** Absent when the band sets none. The editor sends null for a limit it cleared, which the server drops. */
+  criticalLow?: number | null; criticalHigh?: number | null;
+}
 export interface CatalogSexOption { code: string; labels: Record<string, string> }
 /** Whether a range fits the patient on the order. Unknown means the record lacks the sex or age it names. */
 export type CatalogBandFit = 'yes' | 'no' | 'unknown';

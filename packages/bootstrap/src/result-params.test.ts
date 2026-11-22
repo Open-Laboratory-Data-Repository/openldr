@@ -13,6 +13,20 @@ describe('result parameters: reading what a test stored', () => {
     ]);
   });
 
+  it('reads the critical limits a band stored, and leaves them out when it stored none', () => {
+    const [param] = parseResultParams([
+      { system: 'urn:openldr:default_result', code: 'K', resultType: 'numeric', bands: [
+        { low: 3.5, high: 5.1, criticalLow: 2.5, criticalHigh: 6.5 },
+        { low: 3.5, high: 5.1, criticalHigh: 6.5 },
+        { low: 3.5, high: 5.1, criticalLow: '2.5' },
+      ] },
+    ]);
+    expect(param.bands[0]).toMatchObject({ criticalLow: 2.5, criticalHigh: 6.5 });
+    expect(param.bands[1].criticalHigh).toBe(6.5);
+    expect('criticalLow' in param.bands[1]).toBe(false);
+    expect('criticalLow' in param.bands[2]).toBe(false);
+  });
+
   it('reads a coded parameter with the value set its answers come from', () => {
     expect(parseResultParams([{ system: 'urn:openldr:default_result', code: 'MRDT', resultType: 'coded', valueSetUrl: 'urn:openldr:valueset:rdt-result' }]))
       .toEqual([{ system: 'urn:openldr:default_result', code: 'MRDT', resultType: 'coded', valueSetUrl: 'urn:openldr:valueset:rdt-result', bands: [] }]);
@@ -120,6 +134,17 @@ describe('result parameters: a submitted range against the catalog', () => {
     expect(findCatalogBand({ low: 11, high: 16, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null }, stored))
       .toEqual(band({ low: 11, high: 16 }));
     expect(findCatalogBand({ low: 5, high: 30, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null }, stored)).toBeNull();
+  });
+
+  it('treats critical limits as part of the band, and hands back the catalog copy with them', () => {
+    const catalog = [band({ low: 3.5, high: 5.1, criticalLow: 2.5, criticalHigh: 6.5 })];
+    const sent = { low: 3.5, high: 5.1, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null, criticalLow: 2.5, criticalHigh: 6.5 };
+    expect(findCatalogBand(sent, catalog)).toEqual(catalog[0]);
+    // Changed limits, or a band sent from before the limits were set, no longer match.
+    expect(findCatalogBand({ ...sent, criticalHigh: 7 }, catalog)).toBeNull();
+    expect(findCatalogBand({ low: 3.5, high: 5.1, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null }, catalog)).toBeNull();
+    // A critical limit sent as a string is refused, not coerced to none.
+    expect(findCatalogBand({ low: 3.5, high: 5.1, unit: 'g/dL', criticalLow: '2.5' }, [band({ low: 3.5, high: 5.1 })])).toBeNull();
   });
 
   it('refuses a band whose field has the wrong type rather than coercing it to null', () => {
