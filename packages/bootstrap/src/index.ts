@@ -2483,12 +2483,6 @@ export async function dangerClearAudit(ctx: AppContext): Promise<void> {
 export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
   const wiped = await wipeInternalDatabase(ctx.internalDb);
   ctx.logger.warn({ tables: wiped.length }, 'factory reset: internal DB wiped, reseeding');
-  const dbCtx = await createDbContext(ctx.cfg);
-  try {
-    await seedDatabase(dbCtx, ctx);
-  } finally {
-    await dbCtx.close();
-  }
   // Admin-lockout guard: wipeInternalDatabase() TRUNCATEs roles/role_capabilities/user_roles
   // along with everything else, and seedDatabase() deliberately does NOT reseed roles (that
   // seed is routed through createAppContext's unconditional boot-time call — see the comment
@@ -2496,7 +2490,15 @@ export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
   // would be left with zero roles — and once RBAC enforcement lands, nobody holding
   // `roles.manage` — until the process restarts. seedSystemRoles() is idempotent, so calling it
   // here is safe even though createAppContext already seeded it once at boot.
+  // It runs before seedDatabase(), as at boot, because the seed limits the new Lab order to
+  // seeded roles (design 2026-11-22-form-entries 5.6).
   await ctx.roles.seedSystemRoles();
+  const dbCtx = await createDbContext(ctx.cfg);
+  try {
+    await seedDatabase(dbCtx, ctx);
+  } finally {
+    await dbCtx.close();
+  }
   // The wipe empties the starter pack tables too, and only boot writes them. Without this the
   // builder offers no pack until the process restarts. Best-effort, as at boot.
   await ctx.starterPacks.replaceSeeded(seededStarterPacks()).catch((err) => {

@@ -333,6 +333,7 @@ function fakeCtx(): AppContext & {
           fhirVersion: form.fhirVersion,
           fhirProfileUrl: form.fhirProfileUrl,
           facilityId: form.facilityId,
+          targetPages: form.targetPages,
           fieldCount: form.schema.fields.length,
           updatedAt: form.updatedAt,
         })),
@@ -1691,6 +1692,27 @@ describe('forms routes', () => {
   // Submission is gated on forms.submit, NOT forms.view. forms.view is held by every system-role
   // preset — including system_auditor, described as "Read-only oversight plus the audit log" —
   // and this route now writes clinical records to fhir_resources and the flat read model.
+  // Design 2026-11-22-form-entries 5.6: a form that drives an app page (Users, Facility) is left
+  // out of the Forms list for a caller without forms.edit. Its page still loads it.
+  it('leaves page forms out of the forms list for a caller without forms.edit', async () => {
+    const ctx = fakeCtx();
+    const editor = authedApp(ctx);
+    const clerk = authedApp(ctx, ['forms.view', 'forms.submit']);
+    const ids: Record<string, string> = {};
+    for (const [name, targetPages] of [['Users', ['users']], ['Facility', ['facilities']], ['Lab order', ['forms']], ['Plain', []]] as const) {
+      const res = await editor.inject({ method: 'POST', url: '/api/forms', payload: { name, schema: sampleSchema, targetPages } });
+      ids[name] = res.json().id as string;
+      await editor.inject({ method: 'POST', url: `/api/forms/${ids[name]}/status`, payload: { status: 'published' } });
+    }
+    const names = async (app: ReturnType<typeof authedApp>, url: string) =>
+      ((await app.inject({ method: 'GET', url })).json() as Array<{ name: string }>).map((f) => f.name).sort();
+    expect(await names(clerk, '/api/forms')).toEqual(['Lab order', 'Plain']);
+    expect(await names(editor, '/api/forms')).toEqual(['Facility', 'Lab order', 'Plain', 'Users']);
+    // The Users and Facilities pages load their form by target page, unchanged.
+    expect(await names(clerk, '/api/forms/published?targetPage=users')).toEqual(['Users']);
+    expect(await names(clerk, '/api/forms/published?targetPage=facilities')).toEqual(['Facility']);
+  });
+
   describe('forms.submit capability gate', () => {
     async function seedFormWith(ctx: AppContext): Promise<string> {
       const created = await authedApp(ctx).inject({

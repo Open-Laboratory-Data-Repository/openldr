@@ -191,10 +191,21 @@ export function formOpenRules(ctx: Pick<AppContext, 'formAccess'>) {
   return { formUser, isEditor, mayOpen, openable };
 }
 
-export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
-  const { formUser, mayOpen, openable } = formOpenRules(ctx);
+/** True when the form is filled in on another app page, not on the Forms page. */
+function drivesAppPage(targetPages: string[] | null): boolean {
+  return !!targetPages && targetPages.length > 0 && !targetPages.includes('forms');
+}
 
-  app.get('/api/forms', VIEW, async (req) => openable(req, await ctx.forms.list()));
+export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
+  const { formUser, isEditor, mayOpen, openable } = formOpenRules(ctx);
+
+  // A form that drives an app page (Users, Facility) is left out of the Forms list for anyone who
+  // cannot edit forms; its page loads it through /published?targetPage= (design 2026-11-22-form-entries
+  // 5.6). Same rule as the studio's isStandalone: no target page, or the generic 'forms' page.
+  app.get('/api/forms', VIEW, async (req) => {
+    const forms = await openable(req, await ctx.forms.list());
+    return isEditor(req) ? forms : forms.filter((f) => !drivesAppPage(f.targetPages));
+  });
 
   app.get('/api/forms/published', VIEW, async (req) => {
     const query = req.query as Record<string, string | undefined>;

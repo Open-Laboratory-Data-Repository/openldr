@@ -44,7 +44,7 @@ export class FormAccessError extends Error {
  *  each once. The route and the CLI both call this, then audit `before` and `after`. */
 export async function setFormAccess(
   deps: {
-    access: FormAccessStore;
+    access: Pick<FormAccessStore, 'set'>;
     forms: { get(id: string): Promise<unknown | null> };
     roles: { list(): Promise<Array<{ id: string; slug: string }>> };
   },

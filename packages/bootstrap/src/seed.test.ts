@@ -55,6 +55,13 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
       },
     },
   };
+  // Seeded system roles (packages/rbac/src/presets.ts), by id and slug.
+  const roles = [
+    { id: 'role-admin', slug: 'lab_admin' },
+    { id: 'role-tech', slug: 'lab_technician' },
+    { id: 'role-manager', slug: 'lab_manager' },
+  ];
+  const access = new Map<string, { open: string[]; submit: string[] }>();
   const settings = new Map<string, string>();
   const reportDesigns: { id: string }[] = [];
   const reportDefs: { id: string; designId?: string }[] = [];
@@ -68,6 +75,7 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
     },
     forms: {
       list: async () => forms as never,
+      get: async (id: string) => (forms.find((f) => f.id === id) ?? null) as never,
       // Honour an explicit id exactly like the real store (FormInput.id): seeded forms use a
       // DETERMINISTIC id so central's and a lab's copies converge instead of duplicating over sync.
       // A fake that ignored it would keep passing while the real behaviour changed underneath.
@@ -146,10 +154,18 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
       },
       list: async () => reportDefs as never,
     },
+    formAccessStore: {
+      set: async (formId: string, next: { open: string[]; submit: string[] }) => {
+        const before = access.get(formId) ?? { open: [], submit: [] };
+        access.set(formId, next);
+        return { before, after: next };
+      },
+    },
+    roles: { list: async () => roles as never },
     terminology,
     cfg,
   };
-  return { app, workflows, connectors, dashboards, reportDesigns, reportDefs, valueSets, concepts, settings };
+  return { app, access, roles, workflows, connectors, dashboards, reportDesigns, reportDefs, valueSets, concepts, settings };
 }
 
 const fakeDb = { persist: vi.fn(async (r: { id: string }) => ({ flattened: JSON.stringify(r) })) } as unknown as DbContext;
@@ -372,6 +388,53 @@ describe('seedEssentials — always-seeded minimum (SEED_ON_START off)', () => {
       await expect(seedEssentials(app)).resolves.toBeTruthy();
       expect(warned()).toMatch(/could not read .* to compare it against TARGET_DATABASE_URL/);
     });
+  });
+});
+
+// Design 2026-11-22-form-entries 5.6: a new install limits the Lab order to Lab Technician and
+// Lab Manager. An install that already has the form keeps its list.
+describe('seed: the Lab order access list', () => {
+  const limited = { open: ['role-tech', 'role-manager'], submit: ['role-tech', 'role-manager'] };
+  const orderId = async (app: FormSeedTarget) => (await app.forms.list()).find((f) => f.name === 'Lab order')!.id;
+
+  it('limits a newly created Lab order to Lab Technician and Lab Manager, and no other form', async () => {
+    for (const seed of [(a: FormSeedTarget) => seedEssentials(a), (a: FormSeedTarget) => seedDatabase(fakeDb, a)]) {
+      const { app, access } = fakeApp();
+      await seed(app);
+      expect(access.get(await orderId(app))).toEqual(limited);
+      expect([...access.keys()]).toEqual([await orderId(app)]);
+    }
+  });
+
+  it('leaves a changed list alone on a second run', async () => {
+    const { app, access } = fakeApp();
+    await seedEssentials(app);
+    const id = await orderId(app);
+    access.set(id, { open: [], submit: [] });
+    await seedEssentials(app);
+    await seedDatabase(fakeDb, app);
+    expect(access.get(id)).toEqual({ open: [], submit: [] });
+  });
+
+  it('leaves the Lab order open with a warning when its roles are missing, and seeds the rest', async () => {
+    const { app, access, roles, workflows } = fakeApp();
+    roles.length = 0;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await seedEssentials(app);
+      expect(access.size).toBe(0);
+      expect(workflows).toHaveLength(2);
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/"Lab order" left open to every role: no role lab_technician/));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('leaves the list of a Lab order that was already there', async () => {
+    const { app, access } = fakeApp();
+    await app.forms.create({ id: 'form-old', name: 'Lab order', status: 'published' } as never);
+    await seedEssentials(app);
+    expect(access.has('form-old')).toBe(false);
   });
 });
 
