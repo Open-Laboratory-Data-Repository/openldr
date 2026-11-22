@@ -17,53 +17,73 @@ const FACILITY_LIMIT = 20;
 const MIN_QUERY = 2;
 const TEST_LIMIT = 50;
 
-const coding = z.object({ system: z.string().min(1), code: z.string().min(1) });
-const codingWithDisplay = coding.extend({ display: z.string().optional() });
-const optionalText = z.string().optional();
+// String caps, after form-entry-routes.ts (search 100, reason 500).
+const CODE_MAX = 100;
+const NAME_MAX = 100;
+const NUMBER_MAX = 100;
+const TEXT_MAX = 500;
+const URI_MAX = 500;
+const code = z.string().min(1).max(CODE_MAX);
+const system = z.string().min(1).max(URI_MAX);
+const requisition = z.string().trim().min(1).max(NUMBER_MAX);
+const name = z.string().max(NAME_MAX);
+const FULL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+// A blank date is no date: the service reads '' as left out.
+const isDate = (v: string): boolean => v === '' || (FULL_DATE.test(v) && !Number.isNaN(Date.parse(v)));
+// A FHIR dateTime with a time: a date, a time and a zone, which Specimen.receivedTime needs.
+const isDateTime = (v: string): boolean => v === '' ||
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(v) && !Number.isNaN(Date.parse(v));
 
-const ordersQuery = z.object({ requisition: z.string().trim().min(1) });
+const coding = z.object({ system, code });
+const codingWithDisplay = coding.extend({ display: z.string().max(TEXT_MAX).optional() });
+
+const ordersQuery = z.object({ requisition });
 const registerOrderBody = z.object({
-  requisition: z.string().min(1),
-  facilityCode: z.string().min(1),
-  patientId: z.string().min(1),
-  tests: z.array(coding).min(1),
-  priority: optionalText,
-  clinician: optionalText,
-  note: optionalText,
+  requisition,
+  facilityCode: code,
+  patientId: code,
+  tests: z.array(coding).min(1).max(TEST_LIMIT),
+  priority: code.optional(),
+  clinician: name.optional(),
+  note: z.string().max(TEXT_MAX).optional(),
 });
 // Extra keys pass through on purpose: the service refuses a change it may not make (the tests, the
 // number, the facility) and says how to fix it instead. zod would drop them without a word.
 const correctOrderBody = z.object({
-  requisition: z.string().min(1),
-  facilityCode: z.string().nullable(),
+  requisition,
+  facilityCode: code.nullable(),
   changes: z.object({
-    priority: z.string().nullable().optional(),
-    clinician: z.string().nullable().optional(),
-    note: z.string().nullable().optional(),
-    patientId: z.string().optional(),
+    priority: z.string().max(CODE_MAX).nullable().optional(),
+    clinician: name.nullable().optional(),
+    note: z.string().max(TEXT_MAX).nullable().optional(),
+    patientId: code.optional(),
   }).passthrough(),
-  reason: z.string(),
+  reason: z.string().max(TEXT_MAX),
 });
-const patientsQuery = z.object({ identifier: optionalText, name: optionalText, birthDate: optionalText });
+const patientsQuery = z.object({
+  identifier: z.string().max(CODE_MAX).optional(),
+  name: name.optional(),
+  birthDate: z.string().refine(isDate, 'must be a full date, YYYY-MM-DD').optional(),
+});
 // Sex is checked by the service against the Patient schema's own list (ruling 11).
 const registerPatientBody = z.object({
-  given: z.string(),
-  family: z.string(),
-  gender: z.string(),
-  birthDate: optionalText,
+  given: name,
+  family: name,
+  gender: z.string().max(CODE_MAX),
+  birthDate: z.string().refine(isDate, 'must be a full date, YYYY-MM-DD').optional(),
   ageYears: z.number().optional(),
-  identifier: z.object({ system: z.string(), value: z.string() }).optional(),
+  identifier: z.object({ system: z.string().max(URI_MAX), value: z.string().max(CODE_MAX) }).optional(),
 });
 const receiveSampleBody = z.object({
-  requisition: z.string().min(1),
-  facilityCode: z.string().nullable().optional(),
+  requisition,
+  facilityCode: code.nullable().optional(),
   type: codingWithDisplay,
   condition: codingWithDisplay.optional(),
-  serviceRequestIds: z.array(z.string()).optional(),
-  receivedTime: optionalText,
+  serviceRequestIds: z.array(code).max(TEST_LIMIT).optional(),
+  receivedTime: z.string().refine(isDateTime, 'must be a date and time with a zone, as 2026-11-23T08:00:00Z').optional(),
 });
-const choicesQuery = z.object({ requisition: z.string().trim().min(1), facility: optionalText });
-const searchQuery = z.object({ q: optionalText });
+const choicesQuery = z.object({ requisition, facility: z.string().max(CODE_MAX).optional() });
+const searchQuery = z.object({ q: z.string().max(NAME_MAX).optional() });
 
 /** A zod refusal in plain words: each field and what is wrong with it. */
 function plain(err: ZodError): string {

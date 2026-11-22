@@ -366,4 +366,34 @@ describe('lab reception routes', () => {
       expect(calls).toEqual([{ method: 'catalog.list', args: [{ enabled: true, status: 'active', limit: 50, offset: 0 }] }]);
     });
   });
+
+  describe('string caps and dates', () => {
+    it.each([
+      ['GET', '/api/lab/orders?requisition=' + 'R'.repeat(101), undefined],
+      ['POST', '/api/lab/orders', { ...ORDER_BODY, note: 'n'.repeat(501) }],
+      ['POST', '/api/lab/orders', { ...ORDER_BODY, clinician: 'c'.repeat(101) }],
+      ['POST', '/api/lab/orders/correct', { requisition: 'REQ-1', facilityCode: 'F1', changes: {}, reason: 'r'.repeat(501) }],
+      ['POST', '/api/lab/patients', { given: 'g'.repeat(101), family: 'Banda', gender: 'female', birthDate: '1990-01-02' }],
+      ['POST', '/api/lab/patients', { given: 'Ana', family: 'Banda', gender: 'female', birthDate: '02/01/1990' }],
+      ['POST', '/api/lab/patients', { given: 'Ana', family: 'Banda', gender: 'female', birthDate: '1990-02-31x' }],
+      ['GET', '/api/lab/patients?name=Ana%20Banda&birthDate=1990', undefined],
+      ['POST', '/api/lab/samples', { requisition: 'REQ-1', type: { system: 'urn:t', code: 'BLD' }, receivedTime: 'yesterday' }],
+      ['POST', '/api/lab/samples', { requisition: 'REQ-1', type: { system: 'urn:t', code: 'B'.repeat(101) } }],
+      ['GET', '/api/lab/facilities?q=' + 'q'.repeat(101), undefined],
+    ] as const)('%s %s refuses with 400 before calling anything', async (method, url, payload) => {
+      const { ctx, calls } = fakeCtx();
+      const res = await appWith(ctx, CAP).inject({ method, url, ...(payload ? { payload } : {}) } as never);
+      expect(res.statusCode).toBe(400);
+      expect(typeof res.json().error).toBe('string');
+      expect(calls).toEqual([]);
+    });
+
+    it('takes a blank birth date or receipt time as left out', async () => {
+      const { ctx, calls } = fakeCtx();
+      const app = appWith(ctx, CAP);
+      expect((await app.inject({ method: 'POST', url: '/api/lab/patients', payload: { given: 'Ana', family: 'Banda', gender: 'female', birthDate: '', ageYears: 3 } })).statusCode).toBe(201);
+      expect((await app.inject({ method: 'POST', url: '/api/lab/samples', payload: { requisition: 'REQ-1', type: { system: 'urn:t', code: 'BLD' }, receivedTime: '' } })).statusCode).toBe(200);
+      expect(calls.map((c) => c.method)).toEqual(['registerPatient', 'receiveSample']);
+    });
+  });
 });
