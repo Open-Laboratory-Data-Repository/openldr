@@ -1,6 +1,6 @@
 # Examples folder
 
-Date: 2026-11-20, updated 2026-11-22. Status: draft, waiting on the operator's approval.
+Date: 2026-11-20, updated 2026-11-22. Status: approved by the operator on 2026-11-22.
 
 ## Why
 
