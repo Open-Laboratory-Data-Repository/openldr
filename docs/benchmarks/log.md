@@ -267,3 +267,17 @@ of 0.1.2. Materialized in every query was worse: "Client by ART number" went fro
 
 Not proved: the seven facility-level queries return nothing here (no facility code is mapped in the
 Tanzania data), so their speed on real Zambia data is not measured. The lab queries return one lab.
+
+## Requisition lookup fill (migration 139, `openldr lab requisitions rebuild`)
+
+Dataset **Synthetic 1M**: 1,000,000 per-test ServiceRequests (500,000 requisition numbers, 300
+facilities) written straight into the FHIR tables of a clean standalone install on the Linux box
+(32 cores, 90 GB), embedded Postgres at its default settings. No change log rows, so nothing else ran.
+
+| Date | Commit | Dataset | What | Time |
+|---|---|---|---|---|
+| 2026-11-23 | 37d58cd | Synthetic 1M | `openldr lab requisitions rebuild --force` (the fill 139 runs, then the sweep) | 1 min 38 s for 1,000,005 rows |
+
+At that rate the Tanzania full store (2,326,075 requests, one request per test there) would take
+about 4 minutes, once, on the boot that runs 139. Not proved: 139 itself inside the migrator's single
+transaction, and real DISA request shapes. Evidence: the session scratchpad `lab-proof/r2/rebuild-time.txt`.
