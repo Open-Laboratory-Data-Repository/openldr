@@ -3,11 +3,14 @@ import { z } from 'zod';
 export const CONTENT_PACK_FORMAT_VERSION = 1;
 export class ContentPackError extends Error {}
 const NEWER = 'this pack needs a newer CE';
-const KINDS = ['code-system', 'value-set', 'facility-register', 'link-matching', 'custom-queries', 'test-mappings', 'result-mappings', 'datasets'] as const;
+const KINDS = ['code-system', 'value-set', 'facility-register', 'link-matching', 'custom-queries', 'test-mappings', 'result-mappings', 'datasets', 'needs', 'role', 'layout', 'form'] as const;
 
 /** A dataset's name: it becomes a table name in the warehouse's `dataset` schema. */
 /** No two underscores in a row: the build keeps `<name>__new` and `<name>__idx<n>` for itself. */
 export const DATASET_NAME = /^(?!.*__)[a-z][a-z0-9_]{2,47}$/;
+
+/** A role slug, layout key or form key: the pack's own stable name for an item it installs. */
+export const PACK_ITEM_KEY = /^[a-z][a-z0-9-]{1,47}$/;
 
 const fhir = (resourceType: 'CodeSystem' | 'ValueSet') =>
   z.object({ resourceType: z.literal(resourceType), url: z.string().min(1) }).passthrough();
@@ -59,7 +62,43 @@ const stepSchema = z.discriminatedUnion('kind', [
       });
     }),
   }),
+  // Profile steps. `needs` names the bundles a profile depends on; each `version` is a range for
+  // isCompatible. `role`, `layout` and `form` carry role slugs, never role ids, so a pack can name
+  // a role it makes in the same file. A CE without these kinds refuses the pack as needing a newer CE.
+  z.object({
+    kind: z.literal('needs'),
+    bundles: z.array(z.object({ id: z.string().min(1), version: z.string().min(1) })).min(1),
+  }),
+  z.object({
+    kind: z.literal('role'),
+    slug: z.string().regex(PACK_ITEM_KEY),
+    name: z.string().min(1),
+    description: z.string().optional(),
+    capabilities: z.array(z.string().min(1)).min(1),
+  }),
+  z.object({
+    kind: z.literal('layout'),
+    key: z.string().regex(PACK_ITEM_KEY),
+    name: z.string().min(1),
+    startPage: z.string().min(1).nullable(),
+    pages: z.array(z.string().min(1)),
+    roles: z.array(z.string().min(1)),
+  }),
+  z.object({
+    kind: z.literal('form'),
+    key: z.string().regex(PACK_ITEM_KEY),
+    questionnaire: z.object({ resourceType: z.literal('Questionnaire') }).passthrough(),
+    open: z.array(z.string().min(1)),
+    submit: z.array(z.string().min(1)),
+  }),
 ]);
+
+/** The key that names a role, layout or form step. A role's key is its slug. */
+function itemKey(s: z.infer<typeof stepSchema>): string | null {
+  if (s.kind === 'role') return s.slug;
+  if (s.kind === 'layout' || s.kind === 'form') return s.key;
+  return null;
+}
 
 export const contentPackSchema = z.object({
   formatVersion: z.literal(CONTENT_PACK_FORMAT_VERSION),
@@ -68,6 +107,16 @@ export const contentPackSchema = z.object({
   steps: z.array(stepSchema).min(1).superRefine((steps, ctx) => {
     const at = steps.map((s, i) => (s.kind === 'datasets' ? i : -1)).filter((i) => i >= 0);
     if (at.length > 1) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [at[1]], message: 'a pack has at most one datasets step' });
+    // A role, layout or form key names one item. A second step with the same kind and key would
+    // overwrite the first one on install.
+    const seen = new Set<string>();
+    steps.forEach((s, i) => {
+      const key = itemKey(s);
+      if (key === null) return;
+      const id = `${s.kind}:${key}`;
+      if (seen.has(id)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i], message: `the ${s.kind} ${key} is listed twice` });
+      seen.add(id);
+    });
   }),
 });
 export type ContentPack = z.infer<typeof contentPackSchema>;
@@ -107,6 +156,16 @@ export function summarizeContentPack(pack: ContentPack): { kind: string; label: 
         return { kind: s.kind, label: 'Result mappings', count: s.mappings.length };
       case 'datasets':
         return { kind: s.kind, label: s.tables.map((t) => t.name).join(', '), count: s.tables.length };
+      case 'needs':
+        return { kind: s.kind, label: s.bundles.map((b) => b.id).join(', '), count: s.bundles.length };
+      case 'role':
+        return { kind: s.kind, label: s.name, count: s.capabilities.length };
+      case 'layout':
+        return { kind: s.kind, label: s.name, count: s.pages.length };
+      case 'form': {
+        const title = (s.questionnaire as { title?: unknown }).title;
+        return { kind: s.kind, label: typeof title === 'string' && title !== '' ? title : s.key, count: 1 };
+      }
     }
   });
 }
