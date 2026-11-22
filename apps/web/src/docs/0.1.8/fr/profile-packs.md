@@ -12,16 +12,7 @@ Le guide intégré **Packs de profil** montre à un administrateur comment insta
 
 Un pack de contenu est un fichier `pack.json` placé à côté de son `manifest.json`. Les étapes s'exécutent dans l'ordre de la liste. Un pack peut mélanger les étapes de profil et les étapes plus anciennes, comme `code-system` ou `datasets`.
 
-```json
-{
-  "formatVersion": 1,
-  "steps": [
-    { "kind": "role", "slug": "sample-clerk", "...": "..." },
-    { "kind": "layout", "key": "collection-site", "...": "..." },
-    { "kind": "form", "key": "sample-dispatch", "...": "..." }
-  ]
-}
-```
+Le fichier est un seul objet avec `"formatVersion": 1` et une liste `steps`. Chaque section ci-dessous montre une étape de profil telle qu'elle figure dans cette liste. Placez les étapes dans l'ordre où elles doivent s'exécuter : un rôle avant la disposition et les formulaires qui le nomment.
 
 Un CE qui ne connaît pas un type d'étape refuse tout le pack avec `this pack needs a newer CE`, avant d'écrire quoi que ce soit. Un CE plus ancien n'installe donc jamais un profil à moitié.
 
@@ -113,7 +104,7 @@ OpenLDR vérifie toutes les étapes avant d'en écrire une seule. Un pack qui en
 
 - **Un pack ne modifie que ce qu'il a créé.** Le CE enregistre quel pack a créé chaque rôle, disposition et formulaire. Si un rôle avec le même identifiant, ou une disposition avec le même nom, existe déjà sans venir de ce pack, l'installation s'arrête et le nomme.
 - **Une disposition ou un formulaire ne nomme que les rôles du pack.** Chaque identifiant dans `roles`, `open` ou `submit` doit appartenir à une étape `role` placée plus tôt dans le même pack. Un pack ne peut pas rattacher sa disposition ou ses formulaires à un rôle créé par un administrateur, car faire d'une disposition le défaut d'un rôle modifierait ce rôle.
-- **La personne qui installe doit avoir roles.manage.** Installer un paquet demande `marketplace.manage`. Un pack avec une étape de rôle demande aussi `roles.manage`. Le message est `installing this pack needs the roles.manage capability`.
+- **La personne qui installe doit avoir roles.manage.** Installer un paquet demande `marketplace.manage`. Un pack avec une étape de rôle demande aussi `roles.manage`. C'est aussi le cas de toute mise à jour d'un pack qui a créé un rôle, même si la nouvelle version n'a plus d'étape de rôle, et de la suppression d'un tel pack. Les messages sont `installing this pack needs the roles.manage capability` et `removing this pack needs the roles.manage capability`.
 - **Un pack n'accorde pas plus que ce que détient la personne qui l'installe.** Si une étape de rôle liste une capacité que cette personne n'a pas, l'installation s'arrête avec `you cannot install a role that grants <key>, because you do not hold it`. Lancée sur la machine elle-même, la CLI n'est pas limitée par ces deux contrôles.
 
 Les étapes écrivent une à une, sans transaction autour. Si une étape de formulaire échoue après qu'une étape de rôle a écrit, le rôle reste. Réinstaller le même pack retrouve ce rôle par son identifiant et le met à jour. Chaque étape de profil peut s'exécuter deux fois sans dommage.
@@ -124,7 +115,7 @@ Une version plus récente du pack met à jour le rôle, la disposition et le for
 
 Si la nouvelle version ne contient plus un rôle ou une disposition créé par l'ancienne, la mise à jour le supprime. Si quelqu'un a encore ce rôle, la mise à jour s'arrête avant toute écriture et nomme chaque rôle avec ses utilisateurs. Un formulaire absent de la nouvelle version reste tel quel et n'appartient plus au pack.
 
-Supprimer le pack efface ses dispositions, puis ses rôles. La suppression refuse tant que quelqu'un a l'un de ses rôles, et liste ces personnes. Elle laisse ses formulaires publiés, avec toutes leurs réponses, pour qu'un administrateur les archive à la main. Elle ne touche pas aux systèmes de codes, requêtes, jeux de données et correspondances installés par le pack, ni aux paquets nommés dans `needs`.
+Supprimer le pack efface ses dispositions, puis ses rôles. Si le pack a créé un rôle, la suppression demande `roles.manage`. Sans elle, le message est `removing this pack needs the roles.manage capability`. La suppression refuse tant que quelqu'un a l'un de ses rôles, et liste ces personnes. Elle laisse ses formulaires publiés, avec toutes leurs réponses, pour qu'un administrateur les archive à la main. Elle ne touche pas aux systèmes de codes, requêtes, jeux de données et correspondances installés par le pack, ni aux paquets nommés dans `needs`.
 
 Sur un serveur central, un pack n'agit que sur ce serveur. Ses rôles et ses dispositions y restent. Ses formulaires rejoignent les laboratoires comme n'importe quel formulaire.
 
@@ -149,11 +140,13 @@ Pour l'exemple du site de prélèvement ci-dessus, la liste est :
 ]
 ```
 
+La liste doit avoir une ligne par étape du pack, dans le même ordre. Sinon, l'installation échoue avec `step list does not match pack.json`.
+
 Un pack de contenu ne déclare aucune capacité dans son manifeste et doit nommer un éditeur.
 
 ## Construire, signer et installer
 
-Un pack de profil se construit et se signe comme tout pack de contenu. `openldr artifact keygen` crée une clé d'éditeur. `openldr artifact pack <dir> --key <key>` remplit l'empreinte de `pack.json` et celle de la clé, signe le manifeste et écrit le paquet. [Interface en ligne de commande (CLI)](/docs/cli) liste les commandes `artifact` et `market`.
+Un pack de profil se construit et se signe comme tout pack de contenu. `openldr artifact keygen --out <dir>` crée une clé d'éditeur dans ce dossier. `openldr artifact pack <dir> --key <key>` remplit l'empreinte de `pack.json` et celle de la clé, signe le manifeste et écrit le paquet. [Interface en ligne de commande (CLI)](/docs/cli) liste les commandes `artifact` et `market`.
 
 Avant de publier, essayez le paquet sur une installation de test :
 
@@ -164,6 +157,6 @@ openldr market update <bundle-directory>
 openldr market remove <pack-id> --force
 ```
 
-`--dry-run` exécute tous les contrôles et n'écrit rien. `market update` installe une version plus récente d'un pack déjà installé. Sans `--force`, `market remove` affiche les rôles et les dispositions qu'il supprimerait, les formulaires qu'il garde, et les personnes qui ont encore l'un des rôles du pack. Il ne change rien.
+`--dry-run` n'écrit rien. Il fait les contrôles comme si vous déteniez toutes les capacités. Il ne teste donc ni la règle `roles.manage`, ni si vous détenez chaque capacité qu'un rôle accorde. `market update` installe une version plus récente d'un pack déjà installé. Sans `--force`, `market remove` affiche les rôles et les dispositions qu'il supprimerait, les formulaires qu'il garde, et les personnes qui ont encore l'un des rôles du pack. Il ne change rien.
 
 Connectez-vous ensuite au studio avec un compte qui a le rôle, et vérifiez que la barre latérale montre les pages de la disposition et que les formulaires s'ouvrent.

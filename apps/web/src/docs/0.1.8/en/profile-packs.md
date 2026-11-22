@@ -12,16 +12,7 @@ The in-app guide **Profile packs** shows an administrator how to install one, re
 
 A content pack is a `pack.json` file next to its `manifest.json`. The steps run in the order they are listed. A pack may mix the profile steps with the older ones, such as `code-system` or `datasets`.
 
-```json
-{
-  "formatVersion": 1,
-  "steps": [
-    { "kind": "role", "slug": "sample-clerk", "...": "..." },
-    { "kind": "layout", "key": "collection-site", "...": "..." },
-    { "kind": "form", "key": "sample-dispatch", "...": "..." }
-  ]
-}
-```
+The file is one object with `"formatVersion": 1` and a `steps` list. Each section below shows one profile step as it goes in that list. Put the steps in the order they should run: a role before the layout and forms that name it.
 
 A CE that does not know a step kind refuses the whole pack with `this pack needs a newer CE`, before it writes anything. So an older CE never half-installs a profile.
 
@@ -113,7 +104,7 @@ OpenLDR checks every step before it writes any of them. A pack that breaks one o
 
 - **A pack changes only what it made.** CE records which pack made each role, layout and form. If a role with the same slug, or a layout with the same name, already exists and this pack did not make it, the install stops and names it.
 - **A layout or form names only the pack's own roles.** Each slug in `roles`, `open` or `submit` must belong to a `role` step earlier in the same pack. A pack cannot attach its layout or its forms to a role an administrator made, because making a layout the default for a role would change that role.
-- **The installer needs roles.manage.** Installing a bundle needs `marketplace.manage`. A pack with a role step needs `roles.manage` as well. The message is `installing this pack needs the roles.manage capability`.
+- **The installer needs roles.manage.** Installing a bundle needs `marketplace.manage`. A pack with a role step needs `roles.manage` as well. So does any update of a pack that made a role, even when the new version has no role step, and so does removing such a pack. The messages are `installing this pack needs the roles.manage capability` and `removing this pack needs the roles.manage capability`.
 - **A pack grants no more than its installer holds.** If a role step lists a capability the person installing does not hold, the install stops with `you cannot install a role that grants <key>, because you do not hold it`. Run on the machine itself, the CLI is not limited by these two checks.
 
 Steps write one at a time, with no transaction around them. If a form step fails after a role step has written, the role stays. Installing the same pack again finds that role by its slug and updates it. Every profile step is safe to run twice.
@@ -124,7 +115,7 @@ A newer version of the pack updates the role, layout and form it made before. An
 
 If the newer version leaves out a role or layout the older one made, the update deletes it. If someone still holds that role, the update stops before any write and names each role with its users. A form the newer version leaves out stays as it is and no longer belongs to the pack.
 
-Removing the pack deletes its layouts, then its roles. It refuses while anyone holds one of its roles, and lists them. It keeps its forms published, with every response, so an administrator can archive them by hand. It leaves alone the code systems, queries, datasets and mappings the pack installed, and the bundles named in `needs`.
+Removing the pack deletes its layouts, then its roles. When the pack made a role, removing it needs `roles.manage`, and the message without it is `removing this pack needs the roles.manage capability`. It refuses while anyone holds one of its roles, and lists them. It keeps its forms published, with every response, so an administrator can archive them by hand. It leaves alone the code systems, queries, datasets and mappings the pack installed, and the bundles named in `needs`.
 
 On a central server, a pack acts on that server only. Its roles and layouts stay there. Its forms reach the labs the way any form does.
 
@@ -149,11 +140,13 @@ For the collection site example above, the list is:
 ]
 ```
 
+The list must have one line for each step in the pack, in the same order, or the install fails with `step list does not match pack.json`.
+
 A content pack declares no capabilities in its manifest and must name a publisher.
 
 ## Build, sign and install
 
-A profile pack is built and signed the same way as any content pack. `openldr artifact keygen` makes a publisher key. `openldr artifact pack <dir> --key <key>` fills in the hash of `pack.json` and the key's fingerprint, signs the manifest, and writes the bundle. [Command-line interface](/docs/cli) lists the `artifact` and `market` commands.
+A profile pack is built and signed the same way as any content pack. `openldr artifact keygen --out <dir>` makes a publisher key in that folder. `openldr artifact pack <dir> --key <key>` fills in the hash of `pack.json` and the key's fingerprint, signs the manifest, and writes the bundle. [Command-line interface](/docs/cli) lists the `artifact` and `market` commands.
 
 Before you publish, try the bundle on a test install:
 
@@ -164,6 +157,6 @@ openldr market update <bundle-directory>
 openldr market remove <pack-id> --force
 ```
 
-`--dry-run` runs every check and writes nothing. `market update` installs a newer version of an installed pack. `market remove` without `--force` prints the roles and layouts it would remove, the forms it keeps, and anyone who still holds one of the pack's roles, and changes nothing.
+`--dry-run` writes nothing. It runs the checks as if you held every capability, so it does not test the `roles.manage` rule or whether you hold each capability a role grants. `market update` installs a newer version of an installed pack. `market remove` without `--force` prints the roles and layouts it would remove, the forms it keeps, and anyone who still holds one of the pack's roles, and changes nothing.
 
 Then sign in to the studio as someone who holds the role, and check the sidebar shows the layout's pages and the forms open.

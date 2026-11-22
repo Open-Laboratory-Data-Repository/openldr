@@ -1,14 +1,10 @@
 # Pacotes de perfil
 
-Um pacote de perfil prepara esta instalação para um trabalho concreto, como um posto de colheita. Numa só instalação assinada, cria uma função, uma disposição da barra lateral e formulários. Os administradores instalam-no a partir do Marketplace e podem removê-lo lá mais tarde.
-
-Um pacote de perfil é um pacote de conteúdo. Instala-se e remove-se como qualquer outro. O que faz dele um perfil são os passos de função, de disposição ou de formulário.
-
-Para instalar ou remover um pacote que cria uma função, precisa de **Gerir o marketplace** e de **Gerir funções**. Um pacote não pode dar à sua função uma capacidade que o utilizador que o instala não tenha.
+Um pacote de perfil é um pacote de conteúdo assinado que prepara esta instalação para um trabalho concreto, como um posto de colheita. Numa só instalação, cria uma função, uma disposição da barra lateral e formulários. Os administradores instalam-no e removem-no no Marketplace.
 
 ## Instalar um pacote de perfil
 
-Faça isto quando a sua organização lhe entregar um pacote de perfil assinado para preparar um trabalho, por exemplo um posto de colheita.
+Faça isto quando a sua organização lhe entregar um pacote de perfil assinado para preparar um trabalho, por exemplo um posto de colheita. Precisa de **Gerir o marketplace** e de **Gerir funções**. Um pacote não pode dar à sua função uma capacidade que o utilizador que o instala não tenha.
 
 1. Abra **Definições** e depois **Marketplace**.
 2. Selecione **Explorar** e abra o cartão do pacote.
@@ -27,7 +23,7 @@ O OpenLDR verifica cada passo antes de escrever o que quer que seja. Se uma veri
 
 A janela de instalação mostra uma linha por passo, pela ordem em que o pacote os instala. Cada linha indica o tipo de passo e o seu nome. A maioria termina com um número.
 
-- **Depende de** lista os plugins e pacotes que têm de estar instalados antes, e quantos são. Se faltar um, ou se a versão for demasiado antiga, a instalação para antes de escrever.
+- **Depende de** lista os plugins e pacotes que têm de estar instalados antes, e quantos são. Se faltar um, ou se a versão estiver fora do intervalo indicado, a instalação para antes de escrever.
 - **Função** indica o nome da função e quantas capacidades concede. Selecione a seta à direita da linha para ver cada capacidade pelo nome.
 - **Disposição** indica o nome da barra lateral e quantas páginas mostra.
 - **Formulário** indica o título do formulário, sem número.
@@ -38,7 +34,7 @@ Leia todas as capacidades de cada função antes de aprovar. Quem receber a fun�
 
 ## Remover um pacote de perfil
 
-Faça isto quando a instalação já não precisar do trabalho que o pacote preparou.
+Faça isto quando a instalação já não precisar do trabalho que o pacote preparou. Precisa de **Gerir o marketplace**, e de **Gerir funções** se o pacote criou uma função.
 
 1. Abra **Definições** e depois **Marketplace**.
 2. Selecione **Instalados** e abra o pacote.
@@ -75,7 +71,9 @@ As mensagens abaixo vêm do servidor, em inglês. Uma palavra entre parênteses 
 - **A mensagem diz `installing this pack needs the roles.manage capability`.** Não tem **Gerir funções**. Peça a um administrador que a tenha para instalar o pacote.
 - **A mensagem diz `you cannot install a role that grants <capability>, because you do not hold it`.** Instale o pacote com uma conta que tenha essa capacidade.
 - **A mensagem diz `a role with the slug <slug> already exists and this pack did not make it`.** Alguém criou essa função à mão. O mesmo vale para `a layout named <name>`. Apague a sua se ninguém precisar dela, ou peça ao editor um pacote com outro nome.
-- **A mensagem diz `this pack needs <id> <version>, which is not installed`.** Instale primeiro esse plugin ou pacote, numa versão dentro do intervalo indicado.
+- **A mensagem diz `this pack needs <id> <range>, which is not installed`.** Instale primeiro esse plugin ou pacote, numa versão dentro do intervalo indicado.
+- **A mensagem diz `this pack needs <id> <range>; <version> is installed`.** A versão instalada está fora do intervalo. Instale uma versão dentro do intervalo indicado.
+- **A janela mostra `removing this pack needs the roles.manage capability`.** O pacote criou uma função, por isso removê-lo exige **Gerir funções**. Peça a um administrador que a tenha para remover o pacote.
 - **Remover fica desativado.** Alguém ainda tem uma das funções do pacote. Retire-lha primeiro em Utilizadores.
 
 ## Guias relacionados

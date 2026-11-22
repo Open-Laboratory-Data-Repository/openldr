@@ -12,16 +12,7 @@ O guia da aplicação **Pacotes de perfil** mostra a um administrador como insta
 
 Um pacote de conteúdo é um ficheiro `pack.json` ao lado do seu `manifest.json`. Os passos correm pela ordem da lista. Um pacote pode misturar os passos de perfil com os mais antigos, como `code-system` ou `datasets`.
 
-```json
-{
-  "formatVersion": 1,
-  "steps": [
-    { "kind": "role", "slug": "sample-clerk", "...": "..." },
-    { "kind": "layout", "key": "collection-site", "...": "..." },
-    { "kind": "form", "key": "sample-dispatch", "...": "..." }
-  ]
-}
-```
+O ficheiro é um só objeto com `"formatVersion": 1` e uma lista `steps`. Cada secção abaixo mostra um passo de perfil tal como entra nessa lista. Ponha os passos pela ordem em que devem correr: uma função antes da disposição e dos formulários que a nomeiam.
 
 Um CE que não conheça um tipo de passo recusa o pacote inteiro com `this pack needs a newer CE`, antes de escrever o que quer que seja. Assim, um CE mais antigo nunca instala um perfil pela metade.
 
@@ -113,7 +104,7 @@ O OpenLDR verifica todos os passos antes de escrever qualquer um. Um pacote que 
 
 - **Um pacote só altera o que criou.** O CE regista que pacote criou cada função, disposição e formulário. Se já existir uma função com o mesmo identificador, ou uma disposição com o mesmo nome, que este pacote não criou, a instalação para e indica-a.
 - **Uma disposição ou um formulário só nomeia funções do próprio pacote.** Cada identificador em `roles`, `open` ou `submit` tem de pertencer a um passo `role` anterior do mesmo pacote. Um pacote não pode associar a sua disposição nem os seus formulários a uma função criada por um administrador, porque tornar uma disposição a predefinição de uma função alteraria essa função.
-- **Quem instala precisa de roles.manage.** Instalar um pacote exige `marketplace.manage`. Um pacote com um passo de função exige também `roles.manage`. A mensagem é `installing this pack needs the roles.manage capability`.
+- **Quem instala precisa de roles.manage.** Instalar um pacote exige `marketplace.manage`. Um pacote com um passo de função exige também `roles.manage`. O mesmo vale para qualquer atualização de um pacote que criou uma função, mesmo que a nova versão já não tenha passos de função, e para a remoção desse pacote. As mensagens são `installing this pack needs the roles.manage capability` e `removing this pack needs the roles.manage capability`.
 - **Um pacote não concede mais do que quem o instala tem.** Se um passo de função listar uma capacidade que essa pessoa não tem, a instalação para com `you cannot install a role that grants <key>, because you do not hold it`. Executada na própria máquina, a CLI não fica limitada por estas duas verificações.
 
 Os passos escrevem um de cada vez, sem transação à volta. Se um passo de formulário falhar depois de um passo de função ter escrito, a função fica. Voltar a instalar o mesmo pacote encontra essa função pelo identificador e atualiza-a. Cada passo de perfil pode correr duas vezes sem problema.
@@ -124,7 +115,7 @@ Uma versão mais recente do pacote atualiza a função, a disposição e o formu
 
 Se a nova versão deixar de fora uma função ou disposição que a anterior criou, a atualização apaga-a. Se alguém ainda tiver essa função, a atualização para antes de qualquer escrita e indica cada função com os seus utilizadores. Um formulário que a nova versão deixe de fora fica como está e deixa de pertencer ao pacote.
 
-Remover o pacote apaga as suas disposições e depois as suas funções. A remoção recusa enquanto alguém tiver uma das suas funções, e lista essas pessoas. Mantém os formulários publicados, com todas as respostas, para que um administrador os arquive à mão. Não mexe nos sistemas de códigos, consultas, conjuntos de dados e correspondências que o pacote instalou, nem nos pacotes indicados em `needs`.
+Remover o pacote apaga as suas disposições e depois as suas funções. Se o pacote criou uma função, a remoção exige `roles.manage`. Sem ela, a mensagem é `removing this pack needs the roles.manage capability`. A remoção recusa enquanto alguém tiver uma das suas funções, e lista essas pessoas. Mantém os formulários publicados, com todas as respostas, para que um administrador os arquive à mão. Não mexe nos sistemas de códigos, consultas, conjuntos de dados e correspondências que o pacote instalou, nem nos pacotes indicados em `needs`.
 
 Num servidor central, um pacote só atua nesse servidor. As suas funções e disposições ficam lá. Os formulários chegam aos laboratórios como qualquer outro formulário.
 
@@ -149,11 +140,13 @@ Para o exemplo do posto de colheita acima, a lista é:
 ]
 ```
 
+A lista tem de ter uma linha por cada passo do pacote, pela mesma ordem. Caso contrário, a instalação falha com `step list does not match pack.json`.
+
 Um pacote de conteúdo não declara capacidades no manifesto e tem de indicar um editor.
 
 ## Construir, assinar e instalar
 
-Um pacote de perfil constrói-se e assina-se como qualquer pacote de conteúdo. `openldr artifact keygen` cria uma chave de editor. `openldr artifact pack <dir> --key <key>` preenche o hash de `pack.json` e a impressão digital da chave, assina o manifesto e escreve o pacote. [Interface de linha de comandos (CLI)](/docs/cli) lista os comandos `artifact` e `market`.
+Um pacote de perfil constrói-se e assina-se como qualquer pacote de conteúdo. `openldr artifact keygen --out <dir>` cria uma chave de editor nessa pasta. `openldr artifact pack <dir> --key <key>` preenche o hash de `pack.json` e a impressão digital da chave, assina o manifesto e escreve o pacote. [Interface de linha de comandos (CLI)](/docs/cli) lista os comandos `artifact` e `market`.
 
 Antes de publicar, experimente o pacote numa instalação de teste:
 
@@ -164,6 +157,6 @@ openldr market update <bundle-directory>
 openldr market remove <pack-id> --force
 ```
 
-`--dry-run` corre todas as verificações e não escreve nada. `market update` instala uma versão mais recente de um pacote já instalado. Sem `--force`, `market remove` mostra as funções e disposições que removeria, os formulários que mantém e quem ainda tem uma das funções do pacote. Não altera nada.
+`--dry-run` não escreve nada. Faz as verificações como se tivesse todas as capacidades. Por isso não testa a regra `roles.manage`, nem se tem cada capacidade que uma função concede. `market update` instala uma versão mais recente de um pacote já instalado. Sem `--force`, `market remove` mostra as funções e disposições que removeria, os formulários que mantém e quem ainda tem uma das funções do pacote. Não altera nada.
 
 Depois, entre no studio com uma conta que tenha a função e confirme que a barra lateral mostra as páginas da disposição e que os formulários abrem.

@@ -1,14 +1,10 @@
 # Profile packs
 
-A profile pack sets up one job on this install, such as a collection site. In one signed install it makes a role, a sidebar layout and forms. Administrators install it from Marketplace and can remove it there later.
-
-A profile pack is a content pack. It installs and is removed like any other content pack. What makes it a profile is that it carries role, layout or form steps.
-
-To install or remove a pack that makes a role, you need **Manage marketplace** and **Manage roles**. A pack cannot give its role a capability you do not hold yourself.
+A profile pack is a signed content pack that sets up one job on this install, such as a collection site. In one install it makes a role, a sidebar layout and forms. Administrators install and remove it in Marketplace.
 
 ## Install a profile pack
 
-Do this when your organisation gives you a signed profile pack to set up a job, for example a collection site.
+Do this when your organisation gives you a signed profile pack to set up a job, for example a collection site. You need **Manage marketplace** and **Manage roles**. A pack cannot give its role a capability you do not hold yourself.
 
 1. Open **Settings**, then **Marketplace**.
 2. Select **Browse**, then open the pack's card.
@@ -27,7 +23,7 @@ OpenLDR checks every step before it writes anything. If a check fails, a message
 
 The install prompt lists one line per step, in the order the pack installs them. Each line gives the kind of step and its name. Most lines end with a count.
 
-- **Needs** lists the plugins and packs that must be installed first, and how many. If one is missing or too old, the install stops before it writes anything.
+- **Needs** lists the plugins and packs that must be installed first, and how many. If one is missing or outside the version range, the install stops before it writes anything.
 - **Role** gives the role's name and how many capabilities it grants. Select the arrow at the right of the line to list each capability by name.
 - **Layout** gives the sidebar's name and how many pages it shows.
 - **Form** gives the form's title. It has no count.
@@ -38,7 +34,7 @@ Read every capability of every role before you approve. Anyone you later give th
 
 ## Remove a profile pack
 
-Do this when the install no longer needs the job the pack set up.
+Do this when the install no longer needs the job the pack set up. You need **Manage marketplace**, and **Manage roles** when the pack made a role.
 
 1. Open **Settings**, then **Marketplace**.
 2. Select **Installed**, then open the pack.
@@ -75,7 +71,9 @@ The messages below come from the server, in English. A word in angle brackets st
 - **The message says `installing this pack needs the roles.manage capability`.** You do not have **Manage roles**. Ask an administrator who has it to install the pack.
 - **The message says `you cannot install a role that grants <capability>, because you do not hold it`.** Install the pack as someone who holds that capability.
 - **The message says `a role with the slug <slug> already exists and this pack did not make it`.** Someone made that role by hand. The same applies to `a layout named <name>`. Delete yours if nobody needs it, or ask the publisher for a pack that uses another name.
-- **The message says `this pack needs <id> <version>, which is not installed`.** Install that plugin or pack first, at a version in the range given.
+- **The message says `this pack needs <id> <range>, which is not installed`.** Install that plugin or pack first, at a version in the range given.
+- **The message says `this pack needs <id> <range>; <version> is installed`.** The installed version is outside the range. Install a version in the range given.
+- **The prompt says `removing this pack needs the roles.manage capability`.** The pack made a role, so removing it needs **Manage roles**. Ask an administrator who has it to remove the pack.
 - **Remove stays off.** Someone still holds one of the pack's roles. Take it from them in Users first.
 
 ## Related guides

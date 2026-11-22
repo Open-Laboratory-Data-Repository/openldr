@@ -1,14 +1,10 @@
 # Packs de profil
 
-Un pack de profil prépare une installation pour un métier précis, par exemple un site de prélèvement. En une seule installation signée, il crée un rôle, une disposition de la barre latérale et des formulaires. Les administrateurs l'installent depuis Marketplace et peuvent l'y supprimer plus tard.
-
-Un pack de profil est un pack de contenu. Il s'installe et se supprime comme les autres. Ce qui en fait un profil, ce sont ses étapes de rôle, de disposition ou de formulaire.
-
-Pour installer ou supprimer un pack qui crée un rôle, il vous faut **Gérer la place de marché** et **Gérer les rôles**. Un pack ne peut pas donner à son rôle une capacité que vous n'avez pas vous-même.
+Un pack de profil est un pack de contenu signé qui prépare cette installation pour un métier précis, par exemple un site de prélèvement. En une seule installation, il crée un rôle, une disposition de la barre latérale et des formulaires. Les administrateurs l'installent et le suppriment dans Marketplace.
 
 ## Installer un pack de profil
 
-Faites-le quand votre organisation vous fournit un pack de profil signé pour préparer un métier, par exemple un site de prélèvement.
+Faites-le quand votre organisation vous fournit un pack de profil signé pour préparer un métier, par exemple un site de prélèvement. Il vous faut **Gérer la place de marché** et **Gérer les rôles**. Un pack ne peut pas donner à son rôle une capacité que vous n'avez pas vous-même.
 
 1. Ouvrez **Paramètres**, puis **Marketplace**.
 2. Sélectionnez **Parcourir**, puis ouvrez la fiche du pack.
@@ -27,7 +23,7 @@ OpenLDR vérifie chaque étape avant d'écrire quoi que ce soit. Si une vérific
 
 La fenêtre d'installation affiche une ligne par étape, dans l'ordre où le pack les installe. Chaque ligne donne le type d'étape et son nom. La plupart se terminent par un nombre.
 
-- **Dépend de** liste les plugins et les packs qui doivent être installés avant, et combien. S'il en manque un, ou si sa version est trop ancienne, l'installation s'arrête avant toute écriture.
+- **Dépend de** liste les plugins et les packs qui doivent être installés avant, et combien. S'il en manque un, ou si sa version sort de l'intervalle indiqué, l'installation s'arrête avant toute écriture.
 - **Rôle** donne le nom du rôle et le nombre de capacités qu'il accorde. Sélectionnez la flèche à droite de la ligne pour voir chaque capacité par son nom.
 - **Disposition** donne le nom de la barre latérale et le nombre de pages qu'elle affiche.
 - **Formulaire** donne le titre du formulaire, sans nombre.
@@ -38,7 +34,7 @@ Lisez toutes les capacités de chaque rôle avant d'approuver. Toute personne à
 
 ## Supprimer un pack de profil
 
-Faites-le quand l'installation n'a plus besoin du métier que le pack a préparé.
+Faites-le quand l'installation n'a plus besoin du métier que le pack a préparé. Il vous faut **Gérer la place de marché**, et **Gérer les rôles** si le pack a créé un rôle.
 
 1. Ouvrez **Paramètres**, puis **Marketplace**.
 2. Sélectionnez **Installés**, puis ouvrez le pack.
@@ -75,7 +71,9 @@ Les messages ci-dessous viennent du serveur, en anglais. Un mot entre chevrons r
 - **Le message dit `installing this pack needs the roles.manage capability`.** Vous n'avez pas **Gérer les rôles**. Demandez à un administrateur qui l'a d'installer le pack.
 - **Le message dit `you cannot install a role that grants <capability>, because you do not hold it`.** Installez le pack avec un compte qui a cette capacité.
 - **Le message dit `a role with the slug <slug> already exists and this pack did not make it`.** Quelqu'un a créé ce rôle à la main. Il en va de même pour `a layout named <name>`. Supprimez le vôtre si personne n'en a besoin, ou demandez à l'éditeur un pack qui utilise un autre nom.
-- **Le message dit `this pack needs <id> <version>, which is not installed`.** Installez d'abord ce plugin ou ce pack, dans une version comprise dans l'intervalle indiqué.
+- **Le message dit `this pack needs <id> <range>, which is not installed`.** Installez d'abord ce plugin ou ce pack, dans une version comprise dans l'intervalle indiqué.
+- **Le message dit `this pack needs <id> <range>; <version> is installed`.** La version installée sort de l'intervalle. Installez une version comprise dans l'intervalle indiqué.
+- **La fenêtre affiche `removing this pack needs the roles.manage capability`.** Le pack a créé un rôle, donc sa suppression demande **Gérer les rôles**. Demandez à un administrateur qui l'a de supprimer le pack.
 - **Supprimer reste inactif.** Quelqu'un a encore l'un des rôles du pack. Retirez-le-lui d'abord dans Utilisateurs.
 
 ## Guides associés
