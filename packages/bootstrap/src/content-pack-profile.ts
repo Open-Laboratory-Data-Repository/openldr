@@ -21,7 +21,8 @@ export interface ProfileDeps {
   forms: {
     /** Create (formId null) or update a form from a Questionnaire, publish it, return its id. */
     install(formId: string | null, questionnaire: unknown, versionLabel: string, actorId: string | null): Promise<string>;
-    /** Throws when the Questionnaire would not load. Writes nothing. */
+    /** Throws when the Questionnaire would not load, or when no extractor could ever save a response
+     *  to it. Writes nothing. */
     check(questionnaire: unknown): void;
     /** Sets who may open and submit the form. Takes role slugs. */
     setAccess(formId: string, access: { open: string[]; submit: string[] }): Promise<void>;

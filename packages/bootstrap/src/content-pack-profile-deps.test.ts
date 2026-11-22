@@ -9,6 +9,22 @@ import { installedBundleVersion, packFormDeps, roleMemberNames } from './content
 
 const Q = { resourceType: 'Questionnaire', status: 'active', title: 'Lab request', item: [{ linkId: 'a', text: 'A', type: 'string' }] };
 
+// Bound to an order the way the seeded Lab order is: the form-level resource type is ServiceRequest.
+const ORDER_Q = {
+  ...Q,
+  extension: [{ url: 'urn:corlix:questionnaire:fhir-resource-type', valueString: 'ServiceRequest' }],
+  item: [{ linkId: 'req', text: 'Requisition number', type: 'string',
+    extension: [{ url: 'urn:corlix:questionnaire:fhir-path', valueString: 'ServiceRequest.identifier.value' }] }],
+};
+
+// No resource type, but one field is a coded result, so the Observation extractor applies.
+const RESULT_Q = {
+  ...Q,
+  title: 'Result',
+  item: [{ linkId: 'r', text: 'Result', type: 'decimal', code: [{ system: 'urn:test:measurements', code: 'm1' }],
+    extension: [{ url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract', valueBoolean: true }] }],
+};
+
 describe('roleMemberNames', () => {
   it('names each holder by display name, else username, else subject, ordered by name then subject', async () => {
     const db = await makeMigratedDb();
@@ -44,8 +60,19 @@ async function formSetup() {
 describe('packFormDeps', () => {
   it('check throws on a Questionnaire that would not load, and passes a good one', async () => {
     const { deps } = await formSetup();
-    expect(() => deps.check(Q)).not.toThrow();
+    expect(() => deps.check(ORDER_Q)).not.toThrow();
+    expect(() => deps.check(RESULT_Q)).not.toThrow();
     expect(() => deps.check(null)).toThrow();
+  });
+
+  it('check refuses a form no extractor covers, since the submit route could never save it', async () => {
+    const { deps } = await formSetup();
+    expect(() => deps.check(Q)).toThrow(
+      'the form "Lab request" could never be saved: it is not bound to an order (ServiceRequest) and no field is marked as a result',
+    );
+    // A result flag with no code is not enough, the same as on the submit route.
+    const noCode = { ...RESULT_Q, item: [{ ...RESULT_Q.item[0], code: [] }] };
+    expect(() => deps.check(noCode)).toThrow('the form "Result" could never be saved');
   });
 
   it('install creates and publishes a form, then updates the same form on a second run', async () => {
