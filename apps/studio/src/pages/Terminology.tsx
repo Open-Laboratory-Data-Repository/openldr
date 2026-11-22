@@ -424,7 +424,7 @@ export function Terminology(): JSX.Element {
     if (!file) return;
     e.target.value = '';
     try {
-      const saved = await importValueSet(file);
+      const saved = await importValueSet(file, selectedPublisherId || undefined);
       await reload();
       toast.success(
         isValueSetCatalogImportResult(saved)

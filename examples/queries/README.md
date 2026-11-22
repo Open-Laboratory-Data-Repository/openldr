@@ -6,6 +6,8 @@ count results by test from the `lab_results` table.
 - `Example: results by test` has no parameters.
 - `Example: results in a period` has one date range parameter, `Period`. The SQL reads it as
   `{{param.from}}` and `{{param.to}}`.
+  It counts results by their specimen's date. That is the received time, or the collection date
+  when the received time is missing, so the workflow example's results fall inside a period.
 
 Both queries sit in a group named `Examples`.
 

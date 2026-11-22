@@ -11,9 +11,14 @@
     },
     {
       "name": "Example: results in a period",
-      "sql": "select coalesce(observation_desc, observation_code, '(unknown)') as test,\n  count(*) as results\nfrom lab_results\nwhere substring(result_timestamp,1,10) >= {{param.from}}\n  and substring(result_timestamp,1,10) <= {{param.to}}\ngroup by coalesce(observation_desc, observation_code, '(unknown)')\norder by results desc",
+      "sql": "select coalesce(r.observation_desc, r.observation_code, '(unknown)') as test,\n  count(*) as results\nfrom lab_results r\njoin specimens s on s.id = r.specimen_id\nwhere substring(s.received_time,1,10) >= {{param.from}}\n  and substring(s.received_time,1,10) <= {{param.to}}\ngroup by coalesce(r.observation_desc, r.observation_code, '(unknown)')\norder by results desc",
       "params": [
-        { "id": "period", "label": "Period", "type": "daterange", "required": true }
+        {
+          "id": "period",
+          "label": "Period",
+          "type": "daterange",
+          "required": true
+        }
       ],
       "group": "Examples"
     }

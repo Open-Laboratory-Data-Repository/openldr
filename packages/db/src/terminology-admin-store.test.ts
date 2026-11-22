@@ -589,6 +589,18 @@ describe('terminology admin store', () => {
       expect(list[0]!.primarySystem).toBe('s1');
     });
 
+    // Found on the dev check of 2026-11-22: a single ValueSet imported from a file was stored with
+    // no publisher, and studio lists value sets by publisher, so it never showed anywhere.
+    it('lists a single imported FHIR ValueSet under the publisher it was imported into', async () => {
+      const { s: admin } = await store();
+      const saved = await admin.valueSets.importFhir(
+        { resourceType: 'ValueSet', url: 'urn:example:vs', title: 'Example tests', status: 'draft', compose: { include: [] } },
+        { publisherId: 'pub-system' },
+      );
+      expect(saved.publisherId).toBe('pub-system');
+      expect((await admin.valueSets.list('pub-system')).map((v) => v.url)).toContain('urn:example:vs');
+    });
+
     it('updates by url (no duplicate row) and rejects immutable edits', async () => {
       const { s: admin, db } = await store();
       const a = await admin.valueSets.save({ url: 'urn:test:vs', version: null, name: null, title: 'v1', status: 'draft', experimental: false, description: null, compose: { include: [] } });

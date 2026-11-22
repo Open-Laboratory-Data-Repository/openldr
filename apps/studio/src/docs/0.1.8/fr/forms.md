@@ -480,7 +480,7 @@ Utilisez cette tâche pour ajouter un formulaire depuis un fichier `.form.json`.
 
 ### 1. Ouvrir le menu de la page
 
-Dans Forms, ouvrez les points à côté du champ de recherche.
+Dans Forms, ouvrez les points au bout de la barre d'outils, à droite.
 
 ### 2. Choisir Importer
 

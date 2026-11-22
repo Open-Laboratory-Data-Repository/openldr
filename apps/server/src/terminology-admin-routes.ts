@@ -438,7 +438,9 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
         reply.code(201);
         return result;
       }
-      const saved = await admin.valueSets.importFhir(resource);
+      // The publisher on screen when the file was imported, so studio lists the value set there.
+      const { publisherId } = req.query as { publisherId?: unknown };
+      const saved = await admin.valueSets.importFhir(resource, typeof publisherId === 'string' && publisherId.trim() !== '' ? { publisherId: publisherId.trim() } : undefined);
       await recordAudit(ctx, req, { action: 'value_set.import', entityType: 'value_set', entityId: saved.id, before: null, after: null, metadata: { id: saved.id, url: saved.url } });
       reply.code(201);
       return saved;

@@ -57,6 +57,14 @@ describe('ontology api client', () => {
     expect(source.closed).toBe(true);
   });
 
+  it('sends the publisher a value set is imported into', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ id: 'vs1', url: 'urn:test', status: 'active', compose: { include: [] } }) })) as unknown as typeof fetch;
+    vi.stubGlobal('fetch', fetchMock);
+    const file = new File(['{}'], 'value-set.json');
+    await importValueSet(file, 'pub-system');
+    expect(fetchMock).toHaveBeenCalledWith('/api/terminology/valuesets/import?publisherId=pub-system', expect.objectContaining({ method: 'POST', body: file }));
+  });
+
   it('uploads terminology and FHIR ValueSet files as raw request bodies', async () => {
     const fetchMock = vi.fn(async (url: RequestInfo | URL) => ({
       ok: true,

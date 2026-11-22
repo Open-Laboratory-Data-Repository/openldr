@@ -20,7 +20,7 @@ Every facility import belongs to a national register. Use a register named
 The register must exist first. Add it once, then import the file.
 
 ```
-openldr facilities register-source --url urn:example:facility-register --name "Example facility register" --code EXAMPLE
+openldr facilities register-source --url urn:example:facility-register --name "Example facility register" --code EXAMPLE-REG
 openldr facilities import examples/facilities/facilities.csv --national-system urn:example:facility-register
 ```
 

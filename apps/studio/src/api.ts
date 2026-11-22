@@ -2330,7 +2330,7 @@ export async function deleteValueSet(id: string): Promise<void> {
 export const duplicateValueSet = (id: string): Promise<ValueSet> => authFetch(`/api/terminology/valuesets/${id}/duplicate`, jbody({}, 'POST')).then((r) => okJson<ValueSet>(r, 'duplicate value set'));
 export const expandValueSet = (id: string, activeOnly = true): Promise<{ codes: ExpandedCode[]; total: number }> =>
   authFetch(`/api/terminology/valuesets/${id}/expand?activeOnly=${activeOnly}`).then((r) => okJson<{ codes: ExpandedCode[]; total: number }>(r, 'expand value set'));
-export const importValueSet = (resource: unknown | Blob): Promise<ValueSet | ValueSetCatalogImportResult> => {
+export const importValueSet = (resource: unknown | Blob, publisherId?: string): Promise<ValueSet | ValueSetCatalogImportResult> => {
   const init = resource instanceof Blob
     ? {
       method: 'POST',
@@ -2338,7 +2338,8 @@ export const importValueSet = (resource: unknown | Blob): Promise<ValueSet | Val
       body: resource,
     }
     : jbody(resource, 'POST');
-  return authFetch('/api/terminology/valuesets/import', init).then((r) => okJson<ValueSet | ValueSetCatalogImportResult>(r, 'import value set'));
+  const url = publisherId ? `/api/terminology/valuesets/import?publisherId=${encodeURIComponent(publisherId)}` : '/api/terminology/valuesets/import';
+  return authFetch(url, init).then((r) => okJson<ValueSet | ValueSetCatalogImportResult>(r, 'import value set'));
 };
 export const valueSetExportUrl = (id: string): string => `/api/terminology/valuesets/${id}/export`;
 
