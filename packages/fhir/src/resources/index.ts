@@ -4,6 +4,8 @@ export * from './location';
 export * from './specimen';
 export * from './service-request';
 export * from './diagnostic-report';
+export * from './task';
+export * from './provenance';
 export * from './observation';
 export * from './bundle';
 export * from './questionnaire';

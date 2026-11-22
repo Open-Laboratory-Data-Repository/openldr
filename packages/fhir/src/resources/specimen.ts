@@ -23,6 +23,7 @@ export const Specimen = z
       })
       .passthrough()
       .optional(),
+    condition: z.array(CodeableConcept).optional(),
   })
   .passthrough();
 export type Specimen = z.infer<typeof Specimen>;
