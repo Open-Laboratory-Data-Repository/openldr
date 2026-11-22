@@ -63,6 +63,7 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 | `openldr target-store test` | Probe the analytics warehouse adapter. |
 | `openldr terminology ...` | Import, query, translate, and administer terminology assets. |
 | `openldr forms list/extract` | List forms or extract QuestionnaireResponse data. |
+| `openldr forms entries/void-entry` | List a form's saved entries, or mark one as entered in error. See [Form entries](#form-entries). |
 | `openldr patients ...` | List and show patients, and label identifier systems. Masked unless `--identifiers`. |
 | `openldr ingest <file>` | **Ingest a data file through the pipeline** (accept + drain), optionally via a converter plugin. The primary "push data into CE" CLI. |
 | `openldr pipeline ...` | Inspect/retry ingest pipeline batches. |
@@ -254,6 +255,32 @@ ids, mark them as different people or undo that, and are audited. `export` write
 groups as CSV with names and identifiers, to stdout or to `--out`. It always writes an audit
 event that records the group count only. CE does not merge patients. The source system fixes
 duplicates.
+
+## Form entries
+
+Each saved form submission is an entry. These commands list a form's entries and mark one as
+entered in error. Both go through the app.
+
+    openldr forms entries <form> [--status active|incomplete|entered-in-error] [--limit <n>] [--offset <n>] [--json]
+    openldr forms void-entry <id> --reason <text> [--force] [--json]
+
+`<form>` is a form id or the form's exact name. A name that two forms share is refused, and
+the message names both ids. `entries` prints the requisition number, status, time entered,
+who entered it, facility code and summary of each entry, newest first. `--limit` (1 to 100,
+default 25) and `--offset` (default 0) page through them. `--json` prints the entries and the
+total. It needs `forms.view`.
+
+`void-entry` needs `forms.void_entries` and a reason of 1 to 500 characters. Without `--force`
+it shows the entry, changes nothing and exits 1. With `--force` it marks the entry as entered
+in error, which frees its requisition number, then saves every record the entry made again with
+that status. It prints how many records it saved again and how many it skipped. If the records
+could not be saved again, the entry stays marked and a warning says so. An entry already marked
+is refused. The change is audited against the signed-in account, or the OS user on a local run.
+
+A signed-in caller sees only the entries inside their data limit, plus the entries they made,
+and only for forms open to them. Any other entry answers `entry not found`. A local run has no
+data limit and opens every form. `forms list` follows the same rule as the Forms page: a form
+filled in on another page, such as Users, is left out for a caller who cannot edit forms.
 
 ## Copying a source database
 

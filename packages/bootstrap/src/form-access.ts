@@ -35,6 +35,28 @@ export function formAccess(deps: { access: FormAccessStore }) {
 }
 export type FormAccessCheck = ReturnType<typeof formAccess>;
 
+/** The open rule the form routes, the entries routes and the CLI share. An editor manages every
+ *  form, so opens every one; anyone else opens the forms their roles may open. */
+export function formOpenRule(access: Pick<FormAccessCheck, 'mayOpen' | 'visible'>) {
+  const isEditor = (user: FormUser): boolean => user.capabilities.includes('forms.edit');
+  return {
+    isEditor,
+    async mayOpen(user: FormUser, formId: string): Promise<boolean> {
+      return isEditor(user) || access.mayOpen(user, formId);
+    },
+    /** The forms of `formIds` the person may open. */
+    async openable(user: FormUser, formIds: string[]): Promise<Set<string>> {
+      return isEditor(user) ? new Set(formIds) : access.visible(user, formIds);
+    },
+  };
+}
+
+/** True when the form is filled in on another app page, not on the Forms page. Such a form is left
+ *  out of the forms list for anyone who cannot edit forms (design 2026-11-22-form-entries 5.6). */
+export function drivesAppPage(targetPages: string[] | null): boolean {
+  return !!targetPages && targetPages.length > 0 && !targetPages.includes('forms');
+}
+
 /** A refused change of a form's lists: the form or a role does not exist. */
 export class FormAccessError extends Error {
   constructor(message: string, readonly reason: 'no-form' | 'no-role') { super(message); }

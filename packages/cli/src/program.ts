@@ -10,6 +10,7 @@ import { runAuthRebindIssuer, runAuthSetupCode } from './auth';
 import { runDashboardsShare } from './dashboards';
 import { runUsersScope, type UsersScopeOpts } from './users-scope';
 import { runFormsExtract, runFormsList, runFormsLint, runFormsVersions, runFormsRestore, runFormsAccess } from './forms';
+import { runFormsEntries, runFormsVoidEntry } from './form-entries';
 import { runList as runReportDesignList, runDelete as runReportDesignDelete, runPublish as runReportDesignPublish, runVersions as runReportDesignVersions } from './report-design';
 import { runList as runReportDefList, runDelete as runReportDefDelete } from './report-def';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
@@ -1349,6 +1350,27 @@ export function buildProgram(): Command {
     .action(async (id: string, version: string, opts: { json: boolean; force: boolean }) => {
       try { process.exitCode = await runFormsRestore(id, version, opts); }
       catch (err) { process.stderr.write(`forms restore failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  forms
+    .command('entries <form>')
+    .description('List the saved entries of one form, newest first. <form> is a form id or its exact name')
+    .option('--status <status>', 'only entries with this status: active, incomplete or entered-in-error')
+    .option('--limit <n>', 'how many entries to show, 1 to 100', '25')
+    .option('--offset <n>', 'how many entries to skip', '0')
+    .option('--json', 'emit JSON', false)
+    .action(async (form: string, opts: { json: boolean; status?: string; limit: string; offset: string }) => {
+      try { process.exitCode = await runFormsEntries(form, opts); }
+      catch (err) { process.stderr.write(`forms entries failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  forms
+    .command('void-entry <id>')
+    .description('Mark a form entry as entered in error, which frees its requisition number and marks its saved records')
+    .requiredOption('--reason <text>', 'why the entry is in error, 1 to 500 characters')
+    .option('--force', 'confirm marking the entry; without it the entry is only shown', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (id: string, opts: { json: boolean; force: boolean; reason: string }) => {
+      try { process.exitCode = await runFormsVoidEntry(id, opts); }
+      catch (err) { process.stderr.write(`forms void-entry failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 
   const reportDesign = program.command('report-design').description('Report Designer page designs');

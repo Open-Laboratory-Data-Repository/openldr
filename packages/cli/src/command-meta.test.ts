@@ -219,7 +219,7 @@ const REASON: Record<string, string> = {
   item: 'a connector id or a dataset name',
   // positional arguments
   action: CHOICE, batchId: ID, capability: ID, code: ID, columns: 'column names in the warehouse', connector: ID,
-  conceptMapUrl: URI, copy: ID, display: TEXT, entityId: ID, entityType: CHOICE, field: SETTING, id: ID, idA: ID, idB: ID,
+  conceptMapUrl: URI, copy: ID, display: TEXT, entityId: ID, entityType: CHOICE, field: SETTING, form: 'a form id or name', id: ID, idA: ID, idB: ID,
   key: SETTING, keyId: ID, kind: CHOICE, level: CHOICE, loinc: ID, name: ID, plugin: ID, requestId: ID,
   resourceId: ID, resourceType: CHOICE, roles: ID, run: ID, site: CHOICE, siteId: ID, slug: ID, state: CHOICE,
   subject: ID, system: URI, systemId: ID, systemUrl: URI, table: 'a warehouse table name', 'target-code': ID,
@@ -367,6 +367,8 @@ const NOT_A_PATH: Record<string, string[]> = {
   'forms access': ['id', '--open', '--submit'],
   'forms versions': ['id'],
   'forms restore': ['id', 'version'],
+  'forms entries': ['form', '--status', '--limit', '--offset'],
+  'forms void-entry': ['id', '--reason'],
   'report-design delete': ['id'],
   'report-design publish': ['id'],
   'report-design versions': ['id'],

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import AdmZip from 'adm-zip';
-import { EntrySiteError, FormAccessError, TEST_CATALOG_SYSTEM, findCatalogBand, repeatMessage, setFormAccess, type AppContext, type ResultBand } from '@openldr/bootstrap';
+import { EntrySiteError, FormAccessError, TEST_CATALOG_SYSTEM, drivesAppPage, findCatalogBand, formOpenRule, repeatMessage, setFormAccess, type AppContext, type ResultBand } from '@openldr/bootstrap';
 import { FormEntryRepeat, type FormEntry, type FormEntrySaved } from '@openldr/db';
 import { EVERYTHING } from '@openldr/rbac';
 import { redact } from '@openldr/core';
@@ -176,24 +176,20 @@ const formAccessInput = z.object({
   submit: z.array(z.string().min(1).max(100)).max(200),
 });
 
-/** Per-form access (design 2026-11-18-roles-scope, part 1). An editor manages every form, so sees
- *  every form; anyone else sees and opens only the forms their roles may open. The entries routes
- *  use the same rule. */
+/** Per-form access (design 2026-11-18-roles-scope, part 1), by the rule the entries routes and the
+ *  CLI share (formOpenRule in @openldr/bootstrap): an editor sees every form, anyone else only the
+ *  forms their roles may open. */
 export function formOpenRules(ctx: Pick<AppContext, 'formAccess'>) {
+  const rule = formOpenRule(ctx.formAccess);
   const formUser = (req: FastifyRequest) => ({ roleIds: req.user?.roleIds ?? [], capabilities: req.user?.capabilities ?? [] });
-  const isEditor = (req: FastifyRequest) => (req.user?.capabilities ?? []).includes('forms.edit');
-  const mayOpen = async (req: FastifyRequest, id: string) => isEditor(req) || ctx.formAccess.mayOpen(formUser(req), id);
+  const isEditor = (req: FastifyRequest) => rule.isEditor(formUser(req));
+  const mayOpen = async (req: FastifyRequest, id: string) => rule.mayOpen(formUser(req), id);
   async function openable<T extends { id: string }>(req: FastifyRequest, forms: T[]): Promise<T[]> {
     if (isEditor(req)) return forms;
-    const seen = await ctx.formAccess.visible(formUser(req), forms.map((f) => f.id));
+    const seen = await rule.openable(formUser(req), forms.map((f) => f.id));
     return forms.filter((f) => seen.has(f.id));
   }
   return { formUser, isEditor, mayOpen, openable };
-}
-
-/** True when the form is filled in on another app page, not on the Forms page. */
-function drivesAppPage(targetPages: string[] | null): boolean {
-  return !!targetPages && targetPages.length > 0 && !targetPages.includes('forms');
 }
 
 export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
