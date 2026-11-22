@@ -3,9 +3,9 @@ import { SYSTEM_ROLES } from './presets';
 import { CAPABILITY_KEYS } from './catalog';
 
 describe('system role presets', () => {
-  it('defines the five system roles by slug', () => {
+  it('defines the six system roles by slug', () => {
     expect(SYSTEM_ROLES.map((r) => r.slug).sort()).toEqual(
-      ['data_analyst', 'lab_admin', 'lab_manager', 'lab_technician', 'system_auditor'],
+      ['data_analyst', 'lab_admin', 'lab_manager', 'lab_technician', 'reception', 'system_auditor'],
     );
   });
 
@@ -15,9 +15,9 @@ describe('system role presets', () => {
     expect(admin.capabilities.sort()).toEqual([...CAPABILITY_KEYS].sort());
   });
 
-  it('technician is data-entry-only', () => {
+  it('technician enters data and results at the bench', () => {
     const tech = SYSTEM_ROLES.find((r) => r.slug === 'lab_technician')!;
-    expect(tech.capabilities).toEqual(['forms.view', 'forms.submit']);
+    expect(tech.capabilities).toEqual(['forms.view', 'forms.submit', 'lab.results.enter', 'lab.worklist.view']);
   });
 
   // forms.submit WRITES clinical records (POST /api/forms/:id/responses runs the submission
@@ -58,6 +58,8 @@ describe('system role presets', () => {
       'facilities.view', 'facilities.manage',
       'patients.view', 'patients.view_identifiers', 'patients.manage',
       'activity.view', 'notifications.view',
+      'lab.receive', 'lab.reject', 'lab.results.enter', 'lab.results.authorise', 'lab.results.amend',
+      'lab.worklist.view', 'lab.settings',
     ]);
     expect(role('data_analyst')).toEqual([
       'dashboards.view', 'reports.view', 'reports.run', 'reports.export', 'forms.view', 'query.run', 'query.manage',
@@ -67,7 +69,7 @@ describe('system role presets', () => {
       'dashboards.view', 'reports.view', 'forms.view', 'terminology.view', 'facilities.view', 'patients.view',
       'activity.view', 'notifications.view', 'audit.view',
     ]);
-    expect(role('lab_technician')).toEqual(['forms.view', 'forms.submit']);
+    expect(role('lab_technician')).toEqual(['forms.view', 'forms.submit', 'lab.results.enter', 'lab.worklist.view']);
   });
 
   // Marking a form entry as entered in error withdraws a saved record, so only the roles that
@@ -75,6 +77,25 @@ describe('system role presets', () => {
   it('grants forms.void_entries to lab_admin and lab_manager only', () => {
     const holders = SYSTEM_ROLES.filter((r) => r.capabilities.includes('forms.void_entries')).map((r) => r.slug).sort();
     expect(holders).toEqual(['lab_admin', 'lab_manager']);
+  });
+
+  // The lab module (design 2026-11-22-lab-module). Reception registers and receives samples and
+  // finds the patient; the technician enters results; the manager holds every lab key.
+  it('reception receives, returns and rejects, and sees worklists and the masked patient index', () => {
+    const reception = SYSTEM_ROLES.find((r) => r.slug === 'reception')!;
+    expect(reception).toMatchObject({ name: 'Reception', locked: false });
+    expect(reception.capabilities).toEqual(['lab.receive', 'lab.reject', 'lab.worklist.view', 'patients.view']);
+  });
+
+  it('grants each lab key to the roles the lab module names', () => {
+    const holders = (key: string) => SYSTEM_ROLES.filter((r) => r.capabilities.includes(key)).map((r) => r.slug).sort();
+    expect(holders('lab.receive')).toEqual(['lab_admin', 'lab_manager', 'reception']);
+    expect(holders('lab.reject')).toEqual(['lab_admin', 'lab_manager', 'reception']);
+    expect(holders('lab.results.enter')).toEqual(['lab_admin', 'lab_manager', 'lab_technician']);
+    expect(holders('lab.results.authorise')).toEqual(['lab_admin', 'lab_manager']);
+    expect(holders('lab.results.amend')).toEqual(['lab_admin', 'lab_manager']);
+    expect(holders('lab.worklist.view')).toEqual(['lab_admin', 'lab_manager', 'lab_technician', 'reception']);
+    expect(holders('lab.settings')).toEqual(['lab_admin', 'lab_manager']);
   });
 
   it('every preset capability is a real catalog key', () => {

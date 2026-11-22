@@ -41,6 +41,15 @@ describe('docs registry', () => {
     expect(guide?.content).toContain('installing this pack needs the roles.manage capability');
     expect(searchDocs(buildIndex(list(locale)), guide!.title).map((hit) => hit.slug)).toContain('profile-packs');
   });
+  it.each(LOCALES)('authors and indexes the lab setup guide in %s', (locale) => {
+    const guide = resolve(locale, 'lab-setup');
+    expect(guide?.localeUsed).toBe(locale);
+    expect(guide?.content).toContain('/docs/laboratory');
+    expect(guide?.content).toContain('openldr lab sections remove haem --force');
+    expect(guide?.content).toContain('openldr lab settings set allow-self-authorise false');
+    expect(guide?.content).toContain('OPENLDR_KEY');
+    expect(searchDocs(buildIndex(list(locale)), guide!.title).map((hit) => hit.slug)).toContain('lab-setup');
+  });
   it.each(LOCALES)('authors and indexes the data exposure guide in %s', (locale) => {
     const guide = resolve(locale, 'data-exposure');
     expect(guide?.localeUsed).toBe(locale);
@@ -65,6 +74,7 @@ describe('docs registry', () => {
       'terminology',
       'facilities',
       'test-catalog',
+      'lab-setup',
       'patients',
       'forms',
       'workflows',
@@ -119,6 +129,7 @@ describe('docs registry', () => {
       terminology: ['start-here', 'forms', 'test-catalog', 'facilities'],
       facilities: ['terminology', 'start-here', 'dashboard', 'user-preferences'],
       'test-catalog': ['terminology', 'facilities'],
+      'lab-setup': ['laboratory', 'test-catalog', 'roles', 'users'],
       patients: ['facilities', 'test-catalog', 'data-exposure'],
       users: ['roles', 'audit', 'settings'],
       roles: ['users', 'audit', 'settings'],

@@ -2,7 +2,7 @@
 
 Laboratory stores the issuing laboratory name, address, contact details and logo used by report templates. It also sets the default facility register and the local time zone.
 
-Use your real laboratory details and approved logo. The pictures show a fictional laboratory in a test installation. No practice data is required. You need View settings to open the page and Edit general settings to save it.
+Use your real laboratory details and approved logo. The pictures show a fictional laboratory in a test installation. No practice data is required. You need View settings to open the page and Edit general settings to save it. The self-authorisation switch and the Sections table need Lab settings. An account with Lab settings alone can open the page. It then sees only the switch and the sections, under the title **Laboratory settings**.
 
 The issuing laboratory is the organisation producing reports. Facilities are the organisations sending work. Choosing a default register here does not create or import facilities.
 
@@ -122,6 +122,52 @@ Scroll down to the logo preview and Choose file control. Save changes through th
 
 ![Scroll to Logo. The preview and controls remain available.](laboratory-guide-phone-logo.png)
 
+## Allow a person to authorise their own results
+
+By default, the person who entered a result cannot authorise it. Turn this on only when your lab allows one person to do both. You need Lab settings. Result review is not in this release, so the switch has no effect yet. It is stored for when review arrives.
+
+### 1. Find the switch
+
+Open **Settings**, then **Laboratory**. Find **Allow a person to authorise results they entered**.
+
+### 2. Turn it on or off
+
+Select the switch. It saves as soon as you change it. There is no separate save step.
+
+**Expected result:** a message says **Saved.** The switch keeps its position when you reopen Laboratory.
+
+## Add a section
+
+A section is a part of the lab, such as haematology. A test can be filed under one section. You need Lab settings.
+
+### 1. Choose Add section
+
+Open the page dots at the top right and select **Add section**.
+
+### 2. Enter the code and name
+
+Type the code in **Code**, for example `haem`. Use lowercase letters, digits and dashes, starting with a letter. The code cannot change later. Type the name in **Name**, for example `Haematology`.
+
+### 3. Save the section
+
+Open the sheet dots and select **Save**.
+
+**Expected result:** a message says **Section haem added.** The section is listed under **Sections** and appears in the test catalog straight away.
+
+## Remove a section
+
+### 1. Choose Remove
+
+Open the dots on the section's row and select **Remove**.
+
+### 2. Confirm
+
+Read the prompt and select **Remove**.
+
+**Expected result:** a message says the section was removed. This cannot be undone. OpenLDR refuses to remove a section that a test still uses, and the message says how many tests use it.
+
+[Lab setup](/docs/lab-setup) shows where sections and the switch fit in setting up the lab, and the matching `openldr lab` commands.
+
 ## Use the details in report templates
 
 Report templates can use `{{lab.name}}`, `{{lab.address}}`, `{{lab.contact}}` and `{{lab.logo}}`. The page prints these token names below its description. Use Report Designer to place them in a template. Saving Laboratory does not edit a template.
@@ -144,6 +190,10 @@ The logo accepts PNG and JPEG, up to 256 KB. SVG, WebP and image web addresses a
 
 **A report does not show the saved details.** Check whether its template uses the laboratory tokens.
 
+**Add section is missing.** Your account does not have Lab settings.
+
+**A section is not removed.** A test still uses it. Move those tests to another section in Test catalog first.
+
 ## Related guides
 
-Read [Facilities](/docs/facilities) to register a source. Read [Setup checks](/docs/setup-checks) to review readiness. Read [Start here](/docs/start-here) for command-line setup.
+Read [Facilities](/docs/facilities) to register a source. Read [Setup checks](/docs/setup-checks) to review readiness. Read [Start here](/docs/start-here) for command-line setup. Read [Lab setup](/docs/lab-setup) to prepare the lab module.

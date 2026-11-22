@@ -81,6 +81,14 @@ const RAW: Omit<CapabilityMeta, never>[] = [
   { key: 'data.export', group: 'data', label: 'Export all data', description: 'Write every FHIR resource and every warehouse table to files, patient details included.' },
   // Imports: a held request's fields can be corrected and checked again (design 2026-11-18-held-corrections).
   { key: 'imports.correct_held', group: 'imports', label: 'Correct held requests', description: 'Open the held requests of a source check, correct their fields and check them again. Sees patient details.' },
+  // Lab: reception, the bench and lab settings (design 2026-11-22-lab-module).
+  { key: 'lab.receive', group: 'lab', label: 'Receive samples', description: 'Find and register requests, receive samples, correct a typo in a request, and link its patient.' },
+  { key: 'lab.reject', group: 'lab', label: 'Return and reject', description: 'Return a request to its site for correction, or reject a sample and ask for a redraw.' },
+  { key: 'lab.results.enter', group: 'lab', label: 'Enter results', description: 'Enter and change results that are not yet authorised.' },
+  { key: 'lab.results.authorise', group: 'lab', label: 'Authorise results', description: 'Authorise results entered by someone else.' },
+  { key: 'lab.results.amend', group: 'lab', label: 'Amend results', description: 'Correct a released result, with a reason.' },
+  { key: 'lab.worklist.view', group: 'lab', label: 'View worklists', description: "See the lab's worklists." },
+  { key: 'lab.settings', group: 'lab', label: 'Lab settings', description: "Set the lab's sections, which tests need review, and self-authorisation." },
 ];
 
 const GROUP_LABELS: Record<string, string> = {
@@ -104,6 +112,7 @@ const GROUP_LABELS: Record<string, string> = {
   ingest: 'Ingest',
   data: 'Data',
   imports: 'Imports',
+  lab: 'Lab',
 };
 
 export const CAPABILITIES: CapabilityMeta[] = RAW;

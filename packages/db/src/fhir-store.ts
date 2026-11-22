@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
-import type { FhirResource } from '@openldr/fhir';
+import { validateResource, type FhirResource } from '@openldr/fhir';
 import type { InternalSchema } from './schema/internal';
 import type { Provenance } from './provenance';
 import { provenanceFromRow } from './provenance';
@@ -110,6 +110,31 @@ export interface MergeResult {
 // `status`/version onto an arbitrary lab-owned resource type.
 export const AMENDABLE_TYPES: ReadonlySet<string> = new Set(['Observation', 'DiagnosticReport', 'ServiceRequest']);
 
+// Lab slice 1a: the resource types a lab may correct on its own install (spec 5.4 and 5.8).
+export const CORRECTABLE_TYPES: ReadonlySet<string> = new Set(['ServiceRequest', 'Specimen', 'Observation']);
+const CORRECTION_REASON_MAX = 500;
+
+export interface CorrectInput {
+  resourceType: 'ServiceRequest' | 'Specimen' | 'Observation';
+  id: string;
+  next: Record<string, unknown>; // the whole new resource body, same type and id
+  who: string; // Provenance agent.who.display
+  reason: string; // Provenance reason.text, required, trimmed, 1 to 500 characters
+  activity?: 'correct' | 'amend'; // default 'correct'
+}
+export interface CorrectResult {
+  resource: Record<string, unknown>; // the stored new version, with its meta stamps
+  provenanceId: string;
+  version: number;
+}
+/** Why `correct` refused. A refusal writes nothing. */
+export class CorrectionError extends Error {
+  constructor(readonly reason: 'not-found' | 'type' | 'invalid' | 'reason', message: string) {
+    super(message);
+    this.name = 'CorrectionError';
+  }
+}
+
 export interface FhirStore {
   save(resource: FhirResource, provenance?: Provenance): Promise<SavedRef>;
   /** Saves every resource in one transaction, in order, with one projection wake-up after the
@@ -131,6 +156,10 @@ export interface FhirStore {
   // Sync S6a: author a central amendment of a lab-owned resource — new version (keeping the owning
   // lab's site_id) + a Provenance resource + two sync_amendments outbox rows, all in one transaction.
   amend(input: AmendInput): Promise<AmendResult>;
+  // Lab slice 1a: a lab saves a new version of its own ServiceRequest, Specimen or Observation,
+  // validated, with a Provenance for who and why. Works with no sync site id and writes no
+  // sync_amendments rows. Throws CorrectionError before any write when it refuses.
+  correct(input: CorrectInput): Promise<CorrectResult>;
   // Sync S6b: atomically author an intra-lab patient merge — mark the duplicate Patient replaced
   // (active:false + link replaced-by survivor), re-point each referencing resource's subject to the
   // survivor, write one merge Provenance, and emit sync_amendments outbox rows. One transaction.
@@ -762,6 +791,74 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
         return { version: amendedVersion, provenanceId, siteId };
       });
       // Best-effort projection-worker wakeup; interval polling is the correctness path (matches save()).
+      try { await sql`select pg_notify('fhir_changes', '')`.execute(db); } catch { /* ignore */ }
+      return result;
+    },
+
+    async correct(input) {
+      const { resourceType, id, next } = input;
+      // Every check that needs no database runs first, so a refusal opens no transaction.
+      if (!CORRECTABLE_TYPES.has(resourceType)) {
+        throw new CorrectionError('type', `${resourceType} cannot be corrected (allowed: ${[...CORRECTABLE_TYPES].join(', ')})`);
+      }
+      const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+      if (reason.length < 1 || reason.length > CORRECTION_REASON_MAX) {
+        throw new CorrectionError('reason', `a correction needs a reason of 1 to ${CORRECTION_REASON_MAX} characters`);
+      }
+      const who = typeof input.who === 'string' ? input.who.trim() : '';
+      if (!who) throw new CorrectionError('invalid', 'a correction needs the name of who made it');
+      if (next?.resourceType !== resourceType || next?.id !== id) {
+        throw new CorrectionError('invalid', `the new body must be ${resourceType}/${id}`);
+      }
+      const checked = validateResource(next);
+      if (!checked.ok) {
+        const issues = checked.outcome.issue.map((i) => i.diagnostics ?? i.code).join('; ');
+        throw new CorrectionError('invalid', `${resourceType}/${id} is not valid: ${issues}`);
+      }
+
+      const site = await resolveSiteId();
+      const provenanceId = randomUUID();
+      const result = await db.transaction().execute(async (trx): Promise<CorrectResult> => {
+        const cur = await trx
+          .selectFrom('fhir.fhir_current')
+          .select(['source_system', 'plugin_id', 'plugin_version', 'batch_id'])
+          .where('resource_type', '=', resourceType)
+          .where('id', '=', id)
+          .executeTakeFirst();
+        if (!cur) throw new CorrectionError('not-found', `${resourceType}/${id} not found`);
+
+        // The record keeps where it came from: writeMany sets the provenance columns on the
+        // current row, so passing {} here would blank the source system and batch.
+        const { refs } = await writeMany(trx, [next as FhirResource], provenanceFromRow(cur), site, false);
+        const version = refs[0].version;
+
+        const nowIso = new Date().toISOString();
+        const activity = input.activity === 'amend'
+          ? { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-DataOperation', code: 'UPDATE' }], text: 'amend' }
+          : { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-DataOperation', code: 'UPDATE' }] };
+        const provBody: FhirResource = {
+          resourceType: 'Provenance',
+          id: provenanceId,
+          target: [{ reference: `${resourceType}/${id}/_history/${version}` }],
+          recorded: nowIso,
+          activity,
+          agent: [{ who: { display: who } }],
+          reason: [{ text: reason }],
+        };
+        // Built here, so a failure is a bug in this method. Throwing rolls the new version back.
+        const provChecked = validateResource(provBody);
+        if (!provChecked.ok) throw new Error(`correct built an invalid Provenance: ${JSON.stringify(provChecked.outcome.issue)}`);
+        await writeMany(trx, [provBody], {}, site, false);
+
+        const saved = await trx
+          .selectFrom('fhir.fhir_resources')
+          .select('resource')
+          .where('resource_type', '=', resourceType)
+          .where('id', '=', id)
+          .executeTakeFirstOrThrow();
+        return { resource: saved.resource as Record<string, unknown>, provenanceId, version };
+      });
+      // Best-effort projection-worker wakeup; interval polling is the correctness path (matches saveMany).
       try { await sql`select pg_notify('fhir_changes', '')`.execute(db); } catch { /* ignore */ }
       return result;
     },

@@ -1,5 +1,5 @@
 import type { Kysely } from 'kysely';
-import type { InternalSchema, Logger } from '@openldr/db';
+import { isLocalOnlyTerminologySystem, type InternalSchema, type Logger } from '@openldr/db';
 import type { ConceptsPage, MapElementsPage } from './batch';
 
 // How many upsert rows per INSERT statement. The delete-not-in reconcile is a single statement; only
@@ -49,6 +49,12 @@ interface MapDescriptor {
 export function createTerminologyBulkSync(deps: TerminologyBulkDeps): TerminologyBulkSync {
   return {
     async syncSystem(systemUrl, signalBody) {
+      // Each lab keeps its own copy of a local-only system (its sections). A central that still sends
+      // one must not replace it, so the record is applied as a no-op.
+      if (isLocalOnlyTerminologySystem(systemUrl)) {
+        deps.logger.info({ systemUrl }, 'terminology system is local to each node; pull ignored');
+        return;
+      }
       const desc = (signalBody ?? {}) as SystemDescriptor;
       const token = await deps.getToken();
 

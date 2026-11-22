@@ -245,6 +245,7 @@ const REASON: Record<string, string> = {
   '--version': 'a version number', '--where': FILTER, '--year': WHEN,
   '--field': 'a correctable field name, not a file',
   '--finding': FILTER,
+  '--section': ID, '--needs-review': CHOICE,
   '--facility': 'register facility ids, comma separated', '--district': 'Region/District names, comma separated', '--region': 'region names, comma separated',
 };
 // Per command, so a new option is reviewed for that command and not let through by its name alone.
@@ -296,6 +297,10 @@ const NOT_A_PATH: Record<string, string[]> = {
   'data-exposure show': ['table', 'columns'],
   'test-catalog list': ['--search', '--category', '--loinc', '--enabled', '--status', '--limit', '--offset'],
   'test-catalog enable': ['code'],
+  'lab sections add': ['code', 'name'],
+  'lab sections remove': ['code'],
+  'lab tests set': ['code', '--section', '--needs-review'],
+  'lab settings set': ['key', 'value'],
   'test-catalog disable': ['code'],
   'test-catalog retire': ['code'],
   'test-catalog restore': ['code'],
@@ -529,6 +534,7 @@ const READ_NAME_WRITE_KEY: Record<string, string> = {
   'connectors list': 'lists connectors; GET /api/connectors needs connectors.manage and the area has no view key (connectors-routes.ts:83)',
   'data-exposure list': 'lists hidden columns; GET /api/dashboards/column-policy needs data_exposure.manage (dashboards-routes.ts:143)',
   'data-exposure show': 'not a read: it exposes hidden columns, a write to the policy (dashboards-routes.ts:162)',
+  'lab sections list': 'lists the lab sections; GET /api/settings/lab/sections needs lab.settings and the area has no view key (settings-routes.ts LAB_SETTINGS)',
   'import status': 'shows import runs; Studio lets only lab_admin read them, like the connector routes (plugin-broker.ts:198)',
   'import check status': 'shows checks; it takes the key of import copy status, and its broker op only lab_admin may call (plugin-broker.ts:202)',
   'import copy status': 'shows copies; it takes the key of import status, and its broker op only lab_admin may call (plugin-broker.ts:202)',

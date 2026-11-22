@@ -5,13 +5,15 @@ import { buildDefaultWorkflows, type Workflow, type WorkflowStore } from '@openl
 import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
 import { seedReportDesigns, removeRetiredDemoDesigns, type ReportDesignStore } from '@openldr/report-designer';
 import { seedDataDrivenReports, DEFAULT_REPORT_CATEGORIES, type SeedDataDrivenReportsResult } from '@openldr/reporting';
-import type { ConnectorStore, TerminologyAdminStore, AppSettingStore, ReportStore, FormAccessStore, RoleStore } from '@openldr/db';
+import type { Kysely } from 'kysely';
+import type { ConnectorStore, TerminologyAdminStore, AppSettingStore, ReportStore, FormAccessStore, RoleStore, InternalSchema } from '@openldr/db';
 import { BUNDLED_TERMINOLOGY, readBundledTerminology, createCustomQueryStore, referenceCapture } from '@openldr/db';
 import { FEATURE_FLAGS } from '@openldr/config';
 import type { DbContext } from './db-context';
 import { REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
 import { LAB_IDENTITY_DEFAULTS } from './lab-identity-defaults';
 import { FormAccessError, setFormAccess } from './form-access';
+import { registerFhirCatalogValueSets } from './register-fhir-catalog';
 
 export interface SeedResult {
   resources: { id: string; flattened: string }[];
@@ -119,6 +121,9 @@ export interface EssentialSeedTarget {
   // The FHIR R4 ValueSet catalog is an essential since S6: the form builder's standard bindings
   // (`lookupBinding`) are only useful when the sets are held. AppContext satisfies it.
   terminology: { admin: { valueSets: Pick<TerminologyAdminStore['valueSets'], 'list' | 'importFhirCatalog'> } };
+  // The internal db, so the catalog sets can be registered for `$expand` on every boot
+  // (`registerFhirCatalogValueSets`). AppContext always has it; a test fake without it skips the step.
+  internalDb?: Kysely<InternalSchema>;
 }
 
 // Full structural shape of the forms surface seedDatabase needs — the essentials above plus the
@@ -448,6 +453,24 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
  * operator importing one hl7.org set by hand before the first boot.
  */
 export async function seedFhirValueSetCatalog(app: {
+  terminology: { admin: { valueSets: Pick<TerminologyAdminStore['valueSets'], 'list' | 'importFhirCatalog'> } };
+  internalDb?: Kysely<InternalSchema>;
+}): Promise<number> {
+  const imported = await importFhirValueSetCatalog(app);
+  // After the import, and on every boot: an install that imported the catalog before this step
+  // existed has the sets but no registration, so `$expand` found none of them.
+  if (app.internalDb) {
+    try {
+      const { registered } = await registerFhirCatalogValueSets(app.internalDb);
+      if (registered) console.log(`[seed] registered ${registered} FHIR R4 value set(s) for $expand`);
+    } catch (e) {
+      console.warn('[seed] FHIR R4 catalog registration skipped:', e instanceof Error ? e.message : String(e));
+    }
+  }
+  return imported;
+}
+
+async function importFhirValueSetCatalog(app: {
   terminology: { admin: { valueSets: Pick<TerminologyAdminStore['valueSets'], 'list' | 'importFhirCatalog'> } };
 }): Promise<number> {
   try {

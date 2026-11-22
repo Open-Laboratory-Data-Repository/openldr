@@ -9,6 +9,7 @@ import type { BlobStoragePort } from '@openldr/ports';
 import { createBlobFromConfig } from './s3-config';
 import { createResourceLoader } from './reexpand-value-sets';
 import { withLabTestsList } from './test-catalog';
+import { catalogStoredExpansion } from './register-fhir-catalog';
 
 function createOntologyApi(ontologyStore: OntologyStore) {
   return {
@@ -120,6 +121,8 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
     countConcepts: (q) => store.countConcepts(q),
     getResourceByUrl: withLabTestsList(db, (u) => store.getResourceByUrl(u)),
     translate: (q) => store.translate(q),
+    // The bundled FHIR catalog's codes are stored, not loaded as concepts (register-fhir-catalog.ts).
+    storedExpansion: catalogStoredExpansion(admin),
   });
   return {
     ops,

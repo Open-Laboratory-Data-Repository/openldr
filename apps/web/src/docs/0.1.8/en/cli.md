@@ -134,6 +134,7 @@ These cases were reproduced on Linux with the installed launcher and real CLI in
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
 | `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see **Facilities** in the studio's Docs). |
 | `test-catalog` | The national test catalog: `list` the tests, `import` a list from CSV or Excel, `export` it as CSV, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog. |
+| `lab` | This lab's own setup: `sections list`, `add` or `remove` (`--force`) the lab's sections, `tests set` a test's section and **Needs review** switch, and `settings set allow-self-authorise`. Needs **Lab settings**. |
 | `query` | Custom queries: `export` them to a JSON file, `import` them from one (`--force` replaces existing names and needs **Manage saved queries**; without it, an import adds new queries with no group). |
 | `pipeline` | Inspect ingest batches: `status`, `retry`, `logs`. |
 | `queue` | Inspect the event queue. |

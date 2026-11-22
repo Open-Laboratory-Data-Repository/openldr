@@ -86,6 +86,8 @@ import { createFacilityJobWorkerIfEnabled } from './facility-job-worker';
 import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
 import { createFacilityJobRunners } from './facility-job-runners';
 import { createTestCatalog, withLabTestsList, type TestCatalog } from './test-catalog';
+import { createLabSections, type LabSections } from './lab-sections';
+import { catalogStoredExpansion } from './register-fhir-catalog';
 import { createTestMapping, isTestMapRelevantRecord, type TestMapping } from './test-mapping';
 import { createResultFields, type ResultFields } from './result-fields';
 import { createPatientIdentifierSystems, type PatientIdentifierSystems } from './patient-identifier-systems';
@@ -508,7 +510,7 @@ export interface AppContext {
   pluginScheduleRunner: PluginScheduleRunner;
   users: UserStore;
   /** Capability-based roles (RBAC Task 4): system + custom roles, capability grants, and
-   *  user↔role assignment. Seeded with the 5 system roles on every `createAppContext` boot —
+   *  user↔role assignment. Seeded with the system roles on every `createAppContext` boot —
    *  see the `seedSystemRoles()` call beside its construction below. */
   roles: RoleStore;
   userProfiles: UserProfileStore;
@@ -604,6 +606,9 @@ export interface AppContext {
   /** The national test catalog (test catalog S1): the catalog code system, its LOINC links and this
    *  install's own settings for each test. The test catalog routes and CLI share it. */
   testCatalog: TestCatalog;
+  /** The lab's own section list (concepts of urn:openldr:cs:lab-section). The settings routes and
+   *  `openldr lab sections` share it. */
+  labSections: LabSections;
   /** Lab test codes mapped to catalog tests, and the warehouse copy test_map. */
   testMapping: TestMapping;
   /** The result dictionary and its LOINC links (result field mapping spec 4.5). */
@@ -692,6 +697,20 @@ export function capabilityBackfillEvents(
     entityId: roleId,
     metadata: { slug, capabilities },
   }));
+}
+
+/** Log a warning for each system slug that a lab's own custom role holds. The seed left that role
+ *  alone and did not create the system role, so an operator needs to know why it is missing. */
+export function warnBlockedSystemRoles(
+  logger: { warn: (obj: Record<string, unknown>, msg: string) => void },
+  blocked: CapabilityReconciliation['blocked'],
+): void {
+  for (const b of blocked) {
+    logger.warn(
+      { slug: b.slug, roleId: b.roleId, roleName: b.name },
+      'a custom role holds a system role slug; the system role was not created and the custom role was left unchanged',
+    );
+  }
 }
 
 /** Everything about an `AppContext` that depends on WHICH PROCESS is building it, rather than on
@@ -801,8 +820,8 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const reportRuns = createReportRunStore(internal.db);
   const reportSchedules = createReportScheduleStore(internal.db);
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
-  // RBAC Task 4: seed the 5 system roles (lab_admin/lab_manager/data_analyst/system_auditor/
-  // lab_technician) on every boot. Deliberately UNCONDITIONAL — NOT routed through seedDatabase()/
+  // RBAC Task 4: seed the system roles (lab_admin/lab_manager/data_analyst/system_auditor/
+  // lab_technician/reception) on every boot. Deliberately UNCONDITIONAL — NOT routed through seedDatabase()/
   // SEED_ON_START (apps/server/src/index.ts), because that flag defaults to false and only guards
   // optional demo/sample data (see seed.ts); a real production install would never seed roles if
   // this depended on it. seedSystemRoles() is idempotent (safe to call on every boot) so this
@@ -811,8 +830,9 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   // pre-migration DB or a transient connection failure logs a warning and never aborts boot.
   const reconciliation = await roles.seedSystemRoles().catch((err) => {
     logger.warn({ err }, 'system-role seed failed');
-    return { created: [], granted: [] } as CapabilityReconciliation;
+    return { created: [], granted: [], blocked: [] } as CapabilityReconciliation;
   });
+  warnBlockedSystemRoles(logger, reconciliation.blocked);
   // Reconciliation can GRANT a capability without an operator asking — the mechanism that repairs
   // a capability added to the catalog after this install's roles were created. Record it, so the
   // change is traceable rather than appearing as if by magic after an upgrade. recordAuditEvent is
@@ -1184,6 +1204,8 @@ const reporting: ReportingApi = {
       countConcepts: (q) => termStore.countConcepts(q),
       getResourceByUrl: withLabTestsList(termDb, (u) => termStore.getResourceByUrl(u)),
       translate: (q) => termStore.translate(q),
+      // The bundled FHIR catalog's codes are stored, not loaded as concepts (register-fhir-catalog.ts).
+      storedExpansion: catalogStoredExpansion(termAdmin),
     }),
     admin: termAdmin,
     ontology: termOntology,
@@ -1220,6 +1242,7 @@ const reporting: ReportingApi = {
     db: termDb, admin: termAdmin, ops: terminology.ops,
     onChanged: () => { void testMapping.requestRebuild(); },
   });
+  const labSections = createLabSections({ db: termDb, admin: termAdmin });
   // A changed LOINC link changes the loinc column of test_map's result rows.
   const resultFields = createResultFields({ db: termDb, admin: termAdmin, onChanged: () => { void testMapping.requestRebuild(); } });
   const patientIdentifierSystems = createPatientIdentifierSystems({ internalDb: termDb, externalDb, admin: termAdmin });
@@ -2212,6 +2235,7 @@ const reporting: ReportingApi = {
     updateCheck,
     facilityRegistry,
     testCatalog,
+    labSections,
     testMapping,
     resultFields,
     patientIdentifierSystems,
@@ -2296,6 +2320,7 @@ export { duplicateWorkflow, newWorkflowId } from './workflow-duplicate';
 export { setWorkflowEnabled } from './workflow-enabled';
 export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
+export { createLabSections, LabSectionError, LAB_SECTION_CODE, type LabSection, type LabSections } from './lab-sections';
 export { importFacilities, resolveKnownNationalSystem } from './facility-import';
 export {
   createTestCatalog, parseCatalogListQuery, catalogChangeAction, catalogImportAudit, readCatalogImportFile, TestCatalogError,

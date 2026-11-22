@@ -2,7 +2,7 @@
 
 Laboratory guarda o nome, a morada, os contactos e o logótipo do laboratório emissor usados nos modelos de relatório. Também define o registo de unidades predefinido e o fuso horário local.
 
-Use os dados reais e o logótipo aprovado do laboratório. As imagens mostram um laboratório fictício numa instalação de teste. Não precisa de dados de prática. View settings permite abrir a página. Edit general settings permite guardar.
+Use os dados reais e o logótipo aprovado do laboratório. As imagens mostram um laboratório fictício numa instalação de teste. Não precisa de dados de prática. View settings permite abrir a página. Edit general settings permite guardar. O interruptor de autovalidação e a tabela Secções precisam de Lab settings. Uma conta só com Lab settings pode abrir a página. Vê então apenas o interruptor e as secções, com o título **Definições do laboratório**.
 
 O laboratório emissor produz os relatórios. As unidades enviam os pedidos. Escolher aqui um registo predefinido não cria nem importa unidades.
 
@@ -122,6 +122,52 @@ Desça até à pré-visualização do logótipo e ao controlo Choose file. Guard
 
 ![Desça até Logo. A pré-visualização e os controlos continuam disponíveis.](laboratory-guide-phone-logo.png)
 
+## Permitir que uma pessoa valide os próprios resultados
+
+Por predefinição, a pessoa que introduziu um resultado não o pode validar. Ligue esta definição só quando o seu laboratório permite que uma pessoa faça as duas coisas. Precisa de Lab settings. A revisão de resultados não faz parte desta versão, por isso o interruptor ainda não tem efeito. Fica guardado para quando a revisão chegar.
+
+### 1. Encontrar o interruptor
+
+Abra **Definições** e depois **Laboratório**. Encontre **Permitir que uma pessoa autorize os resultados que introduziu**.
+
+### 2. Ligar ou desligar
+
+Selecione o interruptor. Guarda assim que o muda. Não há um passo de guardar à parte.
+
+**Resultado esperado:** uma mensagem diz **Guardado.** O interruptor mantém a posição quando volta a abrir Laboratório.
+
+## Adicionar uma secção
+
+Uma secção é uma parte do laboratório, como a hematologia. Um exame pode ser arquivado numa secção. Precisa de Lab settings.
+
+### 1. Escolher Adicionar secção
+
+Abra os pontos da página no canto superior direito e selecione **Adicionar secção**.
+
+### 2. Introduzir o código e o nome
+
+Escreva o código em **Código**, por exemplo `haem`. Use letras minúsculas, algarismos e hífenes, a começar por uma letra. O código não pode mudar depois. Escreva o nome em **Nome**, por exemplo `Hematologia`.
+
+### 3. Guardar a secção
+
+Abra os pontos do painel e selecione **Guardar**.
+
+**Resultado esperado:** uma mensagem diz **Secção haem adicionada.** A secção aparece em **Secções** e logo no catálogo de exames.
+
+## Remover uma secção
+
+### 1. Escolher Remover
+
+Abra os pontos da linha da secção e selecione **Remover**.
+
+### 2. Confirmar
+
+Leia o pedido de confirmação e selecione **Remover**.
+
+**Resultado esperado:** uma mensagem diz que a secção foi removida. Esta ação não pode ser desfeita. O OpenLDR recusa remover uma secção que um exame ainda usa, e a mensagem diz quantos exames a usam.
+
+[Configuração do laboratório](/docs/lab-setup) mostra o lugar das secções e do interruptor na configuração do laboratório, com os comandos `openldr lab` correspondentes.
+
 ## Usar os dados nos modelos de relatório
 
 Os modelos podem usar `{{lab.name}}`, `{{lab.address}}`, `{{lab.contact}}` e `{{lab.logo}}`. A página mostra estes nomes abaixo da descrição. Coloque-os num modelo com Report Designer. Guardar Laboratory não altera um modelo.
@@ -144,6 +190,10 @@ O logótipo aceita PNG e JPEG até 256 KB. SVG, WebP e endereços web de imagens
 
 **Um relatório não mostra os dados guardados.** Verifique se o modelo usa as variáveis do laboratório.
 
+**Adicionar secção não aparece.** A sua conta não tem Lab settings.
+
+**Uma secção não é removida.** Um exame ainda a usa. Mova primeiro esses exames para outra secção no catálogo de exames.
+
 ## Guias relacionados
 
-Leia [Unidades](/docs/facilities) para registar uma origem. Leia [Verificações de configuração](/docs/setup-checks) para avaliar a preparação. Leia [Começar aqui](/docs/start-here) para configurar a linha de comandos.
+Leia [Unidades](/docs/facilities) para registar uma origem. Leia [Verificações de configuração](/docs/setup-checks) para avaliar a preparação. Leia [Começar aqui](/docs/start-here) para configurar a linha de comandos. Leia [Configuração do laboratório](/docs/lab-setup) para preparar o módulo de laboratório.

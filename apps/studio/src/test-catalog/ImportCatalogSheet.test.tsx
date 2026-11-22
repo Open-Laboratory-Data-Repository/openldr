@@ -19,6 +19,7 @@ const OPTIONS: api.TestCatalogOptions = {
   resultParams: [],
   loinc: null,
   sexes: [],
+  sections: [],
 };
 const FILE: api.CatalogImportFile = {
   headers: ['Test code', 'Test name', 'Category', 'Specimens'],

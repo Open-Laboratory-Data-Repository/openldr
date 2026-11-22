@@ -172,6 +172,20 @@ Sélectionnez la ligne du rôle. Faites défiler le panneau pour lire sa descrip
 
 ![Le panneau de rôle utilise la largeur du téléphone. Faites défiler pour consulter ses capacités.](roles-guide-phone-sheet.png)
 
+## Les rôles et capacités du laboratoire
+
+Le groupe **Lab** contient sept capacités pour le module laboratoire : **Receive samples**, **Return and reject**, **Enter results**, **Authorise results**, **Amend results**, **View worklists** et **Lab settings**. Lisez la description près de chaque interrupteur. Ces noms s'affichent en anglais.
+
+Trois rôles système les utilisent.
+
+- **Reception** a **Receive samples**, **Return and reject**, **View worklists** et **View patient index**.
+- **Lab Technician** a **Use forms**, **Submit forms**, **Enter results** et **View worklists**.
+- **Lab Manager** a les sept capacités du laboratoire, en plus de ce qu'il avait déjà.
+
+La réception, les listes de travail et la vérification des résultats ne font pas partie de cette version. Aujourd'hui, seule **Lab settings** ouvre quelque chose : l'interrupteur d'auto-validation et les sections sur Laboratoire, ainsi que la section et la vérification d'un examen. Les six autres prennent effet dans des versions ultérieures.
+
+Sur une installation qui utilisait une version antérieure, Reception apparaît au premier démarrage du serveur sur cette version. Lab Technician et Lab Manager reçoivent leurs nouvelles capacités à ce démarrage, une seule fois. Si vous en retirez une ensuite, elle reste retirée. Reception est modifiable, mais ne peut pas être supprimé.
+
 ## Exercice facultatif
 
 Dans une installation de test, créez le rôle `Documentation reader`. Sélectionnez uniquement View dashboards. Ajoutez View reports avec la tâche de modification, puis supprimez le rôle d'exercice. Ne l'attribuez pas au personnel réel.
@@ -190,4 +204,4 @@ Créer un rôle ne l'attribue à personne. Les attributions se gèrent dans User
 
 ## Guides associés
 
-[Commencer ici](/docs/start-here) explique la CLI installée et de développement. Users explique l'attribution des rôles.
+[Commencer ici](/docs/start-here) explique la CLI installée et de développement. Users explique l'attribution des rôles. [Configuration du laboratoire](/docs/lab-setup) indique quel rôle du laboratoire donner à chaque personne.

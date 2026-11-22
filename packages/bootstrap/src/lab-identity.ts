@@ -1,7 +1,7 @@
 import type { AppSettingStore } from '@openldr/db';
 import {
-  LAB_IDENTITY_FIELDS, LAB_IDENTITY_KEYS, toIdentityTokens, validateLabIdentityValue,
-  type LabIdentity, type LabIdentityValidationError,
+  LAB_ALLOW_SELF_AUTHORISE_KEY, LAB_IDENTITY_FIELDS, LAB_IDENTITY_KEYS, parseAllowSelfAuthorise, toIdentityTokens,
+  validateLabIdentityValue, type LabIdentity, type LabIdentityValidationError,
 } from '@openldr/config';
 
 export interface LabIdentityService {
@@ -14,6 +14,10 @@ export interface LabIdentityService {
   tokens(): Promise<LabIdentity>;
   /** Writes only the supplied keys; `''` clears one. Returns validation errors WITHOUT writing. */
   set(patch: Record<string, string>, actor: string | null): Promise<LabIdentityValidationError[]>;
+  /** Whether the person who entered a result may also authorise it. False when nothing is stored. */
+  allowSelfAuthorise(): Promise<boolean>;
+  /** Store the switch as 'true' or 'false'. The caller checks lab.settings and audits. */
+  setAllowSelfAuthorise(value: boolean, actor: string | null): Promise<void>;
 }
 
 export function createLabIdentity(store: AppSettingStore): LabIdentityService {
@@ -42,6 +46,12 @@ export function createLabIdentity(store: AppSettingStore): LabIdentityService {
 
       for (const [key, value] of Object.entries(patch)) await store.set(key, value, actor);
       return [];
+    },
+    async allowSelfAuthorise() {
+      return parseAllowSelfAuthorise((await store.get(LAB_ALLOW_SELF_AUTHORISE_KEY))?.value);
+    },
+    async setAllowSelfAuthorise(value, actor) {
+      await store.set(LAB_ALLOW_SELF_AUTHORISE_KEY, value ? 'true' : 'false', actor);
     },
   };
 }

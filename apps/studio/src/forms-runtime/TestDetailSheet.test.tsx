@@ -187,6 +187,28 @@ describe('TestDetailSheet', () => {
     expect(screen.queryByText(/below|above|this range is for/i)).toBeNull();
   });
 
+  // A saved band that differs from the catalog's only in its critical limits is not that band.
+  it('shows no range picked when the saved band differs from every range only in its critical limits', async () => {
+    const typed = { specimen: null, rejection: null, results: [
+      { param: { system: numeric.system, code: 'HGB' }, resultType: 'numeric' as const, value: 12.5, unit: 'g/dL',
+        band: { ...LOWLAND, criticalLow: 7 } },
+    ] };
+    render(<TestDetailSheet test={test} params={[numeric]} detail={typed} sexes={sexes} onChange={() => {}} onClose={() => {}} />);
+    const picker = await screen.findByRole('combobox', { name: /range haemoglobin/i });
+    expect(picker).toHaveTextContent('Choose a range');
+    expect(screen.queryByText('12 to 15 g/dL')).toBeNull();
+  });
+
+  it('treats an absent critical limit and a null one as the same band', async () => {
+    const typed = { specimen: null, rejection: null, results: [
+      { param: { system: numeric.system, code: 'HGB' }, resultType: 'numeric' as const, value: 12.5, unit: 'g/dL',
+        band: { ...LOWLAND, criticalLow: null, criticalHigh: null } },
+    ] };
+    render(<TestDetailSheet test={test} params={[numeric]} detail={typed} sexes={sexes} onChange={() => {}} onClose={() => {}} />);
+    const picker = await screen.findByRole('combobox', { name: /range haemoglobin/i });
+    expect(picker).toHaveTextContent('Female 18+');
+  });
+
   it('warns when the picked range does not fit the patient, and allows it', async () => {
     const typed = { specimen: null, rejection: null, results: [
       { param: { system: numeric.system, code: 'HGB' }, resultType: 'numeric' as const, value: 14, unit: 'g/dL', band: MEN },

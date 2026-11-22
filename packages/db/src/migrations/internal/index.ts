@@ -135,6 +135,7 @@ import * as m133 from './133_explorer_groups';
 import * as m134 from './134_import_copy_rows_key_estimate';
 import * as m135 from './135_content_pack_items';
 import * as m136 from './136_form_entries';
+import * as m137 from './137_lab_groundwork';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -274,4 +275,5 @@ export const internalMigrations: Record<string, Migration> = {
   '134_import_copy_rows_key_estimate': { up: m134.up, down: m134.down },
   '135_content_pack_items': { up: m135.up, down: m135.down },
   '136_form_entries': { up: m136.up, down: m136.down },
+  '137_lab_groundwork': { up: m137.up, down: m137.down },
 };

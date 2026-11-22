@@ -9,6 +9,8 @@ export const ServiceRequest = z
     id: fhirId.optional(),
     meta: Meta.optional(),
     identifier: z.array(Identifier).optional(),
+    replaces: z.array(Reference).optional(),
+    requisition: Identifier.optional(),
     status: z.enum(['draft', 'active', 'on-hold', 'revoked', 'completed', 'entered-in-error', 'unknown']),
     intent: z.enum(['proposal', 'plan', 'directive', 'order', 'original-order', 'reflex-order', 'filler-order', 'instance-order', 'option']),
     category: z.array(CodeableConcept).optional(),

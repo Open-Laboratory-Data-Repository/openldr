@@ -538,7 +538,10 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     appSettings: {} as never,
     // Empty identity: every {{lab.*}} resolves to '' — the same as an install that never
     // configured a letterhead, which is what most route tests should be exercising anyway.
-    labIdentity: { all: async () => ({}), tokens: async () => ({}), set: async () => [] },
+    labIdentity: {
+      all: async () => ({}), tokens: async () => ({}), set: async () => [],
+      allowSelfAuthorise: async () => false, setAllowSelfAuthorise: async () => {},
+    },
     // Nothing cached and nothing polling: reads report the check ON with no update known, which is
     // what a fresh install looks like. buildApp does NOT arm the poller (the server process entry
     // does), so no test built on this context touches the network.
@@ -554,6 +557,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     facilityRegistry: {} as never,
     // No route test reaches it through this context. test-catalog-routes.test.ts builds its own fake.
     testCatalog: {} as never,
+    labSections: {} as never,
     testMapping: {} as never,
     resultFields: {} as never,
     patientIdentifierSystems: {} as never,

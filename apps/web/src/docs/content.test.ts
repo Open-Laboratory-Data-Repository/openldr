@@ -44,6 +44,21 @@ describe('website docs content', () => {
     expect(pageTitle('profile-packs', '0.1.8', 'pt')).toBe('Pacotes de perfil');
   });
 
+  it('documents the lab setup order, its commands and what is not in this release, in every language', () => {
+    for (const locale of ['en', 'fr', 'pt'] as const) {
+      const body = docPage('lab-setup', DEFAULT_DOC_VERSION, locale)!.body;
+      expect(body, locale).toContain('openldr lab sections add haem');
+      expect(body, locale).toContain('openldr lab tests set HGB --section haem --needs-review true');
+      expect(body, locale).toContain('openldr lab settings set allow-self-authorise false');
+      expect(body, locale).toContain('openldr lab sections remove haem --force');
+      expect(body, locale).toContain('section <code> is used by <n> tests');
+      expect(body, locale).toContain('OPENLDR_KEY');
+    }
+    expect(pageTitle('lab-setup', '0.1.8', 'en')).toBe('Set up a lab');
+    expect(pageTitle('lab-setup', '0.1.8', 'fr')).toBe('Configurer un laboratoire');
+    expect(pageTitle('lab-setup', '0.1.8', 'pt')).toBe('Configurar um laboratório');
+  });
+
   it('takes each page title from the file in the reader\'s language', () => {
     expect(pageTitle('upgrading', '0.1.8', 'en')).toBe('Planned upgrades');
     expect(pageTitle('upgrading', '0.1.8', 'fr')).toBe('Mises à niveau planifiées');
@@ -64,7 +79,7 @@ describe('website docs content', () => {
     expect(SLUGS).toEqual(expect.arrayContaining([
       'getting-started', 'desktop-app', 'requirements', 'install', 'windows-server', 'upgrading',
       'environment', 'auth-providers', 'load-data', 'map-to-fhir', 'connector-diagnose',
-      'cli', 'cli-access', 'standalone', 'development', 'profile-packs',
+      'cli', 'cli-access', 'standalone', 'development', 'profile-packs', 'lab-setup',
     ]));
   });
 });

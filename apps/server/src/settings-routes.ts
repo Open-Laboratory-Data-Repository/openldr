@@ -2,8 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { readFile } from 'node:fs/promises';
 import type { AppContext } from '@openldr/bootstrap';
-import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig, enrollSite, listSites, rotateSite, revokeSite, mergePatients } from '@openldr/bootstrap';
-import { LAB_IDENTITY_FIELDS, LAB_LOGO_MAX_BYTES, LAB_LOGO_MIME } from '@openldr/config';
+import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig, enrollSite, listSites, rotateSite, revokeSite, mergePatients, LabSectionError } from '@openldr/bootstrap';
+import { LAB_ALLOW_SELF_AUTHORISE_KEY, LAB_IDENTITY_FIELDS, LAB_LOGO_MAX_BYTES, LAB_LOGO_MIME } from '@openldr/config';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 import { readAppVersion } from './version';
@@ -32,6 +32,15 @@ const EDIT_GENERAL = { preHandler: requireCapability('settings.edit_general') };
 const DANGER_ZONE = { preHandler: requireCapability('settings.danger_zone') };
 const SYNC_VIEW = { preHandler: requireCapability('sync.view') };
 const SYNC_MANAGE = { preHandler: requireCapability('sync.manage') };
+// The lab-wide settings of the lab module (design 2026-11-22, 5.1): whether a person may authorise
+// results they entered, and the section list. Only these need lab.settings; the letterhead fields
+// keep settings.edit_general.
+const LAB_SETTINGS = { preHandler: requireCapability('lab.settings') };
+
+const AllowSelfAuthoriseSchema = z.object({ value: z.boolean() }).strict();
+const LabSectionSchema = z.object({ code: z.string(), name: z.string() }).strict();
+
+const LAB_SECTION_STATUS = { invalid: 400, 'not-found': 404, conflict: 409 } as const;
 
 // Duck-type by error name — robust across module/bundle boundaries and consistent with the
 // `IdentityAdminNotConfiguredError` handling in users-routes (that class lives in @openldr/ports,
@@ -84,7 +93,61 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     })),
     values: await ctx.labIdentity.all(),
     logo: { maxBytes: LAB_LOGO_MAX_BYTES, mimeTypes: LAB_LOGO_MIME },
+    allowSelfAuthorise: await ctx.labIdentity.allowSelfAuthorise(),
   }));
+
+  // The switch on its own, for a holder of lab.settings who cannot read the letterhead above
+  // (reports.view). The Laboratory page reads it from here when the account holds lab.settings.
+  app.get('/api/settings/lab/allow-self-authorise', LAB_SETTINGS, async () => ({
+    value: await ctx.labIdentity.allowSelfAuthorise(),
+  }));
+
+  // `openldr lab settings set allow-self-authorise` calls the same service and records the same action.
+  app.put('/api/settings/lab/allow-self-authorise', LAB_SETTINGS, async (req, reply) => {
+    const p = AllowSelfAuthoriseSchema.safeParse(req.body);
+    if (!p.success) return reply.code(400).send({ error: p.error.message });
+    const before = await ctx.labIdentity.allowSelfAuthorise();
+    await ctx.labIdentity.setAllowSelfAuthorise(p.data.value, req.user?.id ?? null);
+    const value = await ctx.labIdentity.allowSelfAuthorise();
+    await recordAudit(ctx, req, {
+      action: 'settings.lab.allow_self_authorise', entityType: 'settings', entityId: LAB_ALLOW_SELF_AUTHORISE_KEY,
+      before: { value: before }, after: { value },
+    });
+    return reply.send({ value });
+  });
+
+  // The lab's section list. `openldr lab sections list | add | remove` calls the same service.
+  app.get('/api/settings/lab/sections', LAB_SETTINGS, async () => ctx.labSections.listSections());
+
+  app.post('/api/settings/lab/sections', LAB_SETTINGS, async (req, reply) => {
+    const p = LabSectionSchema.safeParse(req.body);
+    if (!p.success) return reply.code(400).send({ error: p.error.message });
+    try {
+      const section = await ctx.labSections.addSection(p.data.code, p.data.name);
+      await recordAudit(ctx, req, {
+        action: 'settings.lab.section.add', entityType: 'lab_section', entityId: section.code, after: section,
+      });
+      return reply.code(201).send(section);
+    } catch (err) {
+      if (err instanceof LabSectionError) return reply.code(LAB_SECTION_STATUS[err.kind]).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.delete('/api/settings/lab/sections/:code', LAB_SETTINGS, async (req, reply) => {
+    const { code } = req.params as { code: string };
+    try {
+      const before = (await ctx.labSections.listSections()).find((s) => s.code === code) ?? null;
+      await ctx.labSections.removeSection(code);
+      await recordAudit(ctx, req, {
+        action: 'settings.lab.section.remove', entityType: 'lab_section', entityId: code, before,
+      });
+      return reply.code(204).send();
+    } catch (err) {
+      if (err instanceof LabSectionError) return reply.code(LAB_SECTION_STATUS[err.kind]).send({ error: err.message });
+      throw err;
+    }
+  });
 
   app.put('/api/settings/lab', EDIT_GENERAL, async (req, reply) => {
     const p = LabIdentityPatchSchema.safeParse(req.body);

@@ -23,6 +23,10 @@ export interface ResultBand {
   sex: string | null;
   ageLow: number | null;
   ageHigh: number | null;
+  /** The critical low limit. Absent when the band sets none. Slice 5 decides how results are flagged against it. */
+  criticalLow?: number;
+  /** The critical high limit. Absent when the band sets none. Slice 5 decides how results are flagged against it. */
+  criticalHigh?: number;
 }
 
 export interface TestResultParam {
@@ -48,9 +52,14 @@ function str(value: unknown): string | null {
 function toBand(value: unknown): ResultBand | null {
   if (!value || typeof value !== 'object') return null;
   const b = value as Record<string, unknown>;
+  const criticalLow = num(b.criticalLow);
+  const criticalHigh = num(b.criticalHigh);
+  // The critical limits are left out when not set, so a band stored without them reads back unchanged.
   return {
     name: str(b.name), low: num(b.low), high: num(b.high), unit: str(b.unit),
     sex: str(b.sex), ageLow: num(b.ageLow), ageHigh: num(b.ageHigh),
+    ...(criticalLow !== null ? { criticalLow } : {}),
+    ...(criticalHigh !== null ? { criticalHigh } : {}),
   };
 }
 
@@ -129,7 +138,7 @@ const SEX_LABELS: Record<string, Record<string, string>> = {
 export const SEX_OPTIONS: SexOption[] = Patient.shape.gender.unwrap().options
   .map((code) => ({ code, labels: SEX_LABELS[code] ?? { en: code } }));
 
-const NUMBER_FIELDS = ['low', 'high', 'ageLow', 'ageHigh'] as const;
+const NUMBER_FIELDS = ['low', 'high', 'ageLow', 'ageHigh', 'criticalLow', 'criticalHigh'] as const;
 const STRING_FIELDS = ['name', 'unit', 'sex'] as const;
 
 /**
@@ -150,8 +159,9 @@ function bandFieldTypesOk(raw: Record<string, unknown>): boolean {
 }
 
 /**
- * The catalog range a submitted band matches, field for field, name included. A missing name reads
- * as none, so a range saved before names existed still matches an unnamed one. Null when the value
+ * The catalog range a submitted band matches, field for field, name and critical limits included. A
+ * missing name reads as none, so a range saved before names existed still matches an unnamed one. A
+ * missing critical limit reads as none too. Null when the value
  * is not band-shaped, a field carries the wrong type, or no catalog range matches.
  */
 export function findCatalogBand(band: unknown, bands: ResultBand[]): ResultBand | null {
@@ -161,7 +171,8 @@ export function findCatalogBand(band: unknown, bands: ResultBand[]): ResultBand 
   const b = toBand(raw);
   if (!b) return null;
   return bands.find((c) => c.name === b.name && c.low === b.low && c.high === b.high && c.unit === b.unit
-    && c.sex === b.sex && c.ageLow === b.ageLow && c.ageHigh === b.ageHigh) ?? null;
+    && c.sex === b.sex && c.ageLow === b.ageLow && c.ageHigh === b.ageHigh
+    && (c.criticalLow ?? null) === (b.criticalLow ?? null) && (c.criticalHigh ?? null) === (b.criticalHigh ?? null)) ?? null;
 }
 
 /**

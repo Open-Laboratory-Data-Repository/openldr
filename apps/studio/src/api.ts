@@ -498,6 +498,8 @@ export interface LabIdentityResponse {
   fields: LabIdentityField[];
   values: LabIdentity;
   logo: { maxBytes: number; mimeTypes: string[] };
+  /** Whether the person who entered a result may also authorise it. Changing it needs lab.settings. */
+  allowSelfAuthorise: boolean;
 }
 
 export const fetchLabIdentity = (): Promise<LabIdentityResponse> =>
@@ -515,6 +517,30 @@ export const fetchLabIdentity = (): Promise<LabIdentityResponse> =>
  *  that had already landed. Reported 2026-08-21. */
 export const saveLabIdentity = (patch: LabIdentity): Promise<LabIdentity> =>
   authFetch('/api/settings/lab', jbody(patch, 'PUT')).then((r) => okJson<LabIdentity>(r, 'save lab identity'));
+
+/** The switch alone, for an account that holds lab.settings but cannot read the letterhead. */
+export const fetchAllowSelfAuthorise = (): Promise<{ value: boolean }> =>
+  authFetch('/api/settings/lab/allow-self-authorise').then((r) => okJson<{ value: boolean }>(r, 'load self-authorisation'));
+
+/** Returns the stored value. Needs lab.settings. */
+export const setAllowSelfAuthorise = (value: boolean): Promise<{ value: boolean }> =>
+  authFetch('/api/settings/lab/allow-self-authorise', jbody({ value }, 'PUT'))
+    .then((r) => okJson<{ value: boolean }>(r, 'save self-authorisation'));
+
+/** One of the lab's sections (a concept of urn:openldr:cs:lab-section). */
+export interface LabSection { code: string; name: string }
+
+export const listLabSections = (): Promise<LabSection[]> =>
+  authFetch('/api/settings/lab/sections').then((r) => okJson<LabSection[]>(r, 'list sections'));
+
+export const addLabSection = (section: LabSection): Promise<LabSection> =>
+  authFetch('/api/settings/lab/sections', jbody(section, 'POST')).then((r) => okJson<LabSection>(r, 'add section'));
+
+/** Keeps the server's words, so "section haem is used by 3 tests" reaches the toast. */
+export async function removeLabSection(code: string): Promise<void> {
+  const r = await authFetch(`/api/settings/lab/sections/${encodeURIComponent(code)}`, { method: 'DELETE' });
+  if (!r.ok) throw new Error(formatApiError('remove section', await errorDetail(r)));
+}
 
 export interface NumberSetting {
   id: string;
@@ -2641,7 +2667,14 @@ export interface CatalogTest {
   /** false when the test is retired. */
   active: boolean;
   /** This install's own settings. specimenTypes null means "use the catalog's list". */
-  lab: { enabled: boolean; specimenTypes: CatalogSpecimenCoding[] | null; localDisplay: string | null };
+  lab: {
+    enabled: boolean;
+    specimenTypes: CatalogSpecimenCoding[] | null;
+    localDisplay: string | null;
+    /** A code from the lab's section list, or null. */
+    section: string | null;
+    needsReview: boolean;
+  };
 }
 export interface TestCatalogListResult { rows: CatalogTest[]; total: number; ownedHere: boolean }
 export interface TestCatalogListParams {
@@ -2668,6 +2701,10 @@ export interface CatalogLabSettingsInput {
   enabled: boolean;
   specimenTypes: CatalogSpecimenCoding[] | null;
   localDisplay: string | null;
+  /** Left out keeps what is stored; null clears it. Sending it needs lab.settings. */
+  section?: string | null;
+  /** Left out keeps what is stored. Sending it needs lab.settings. */
+  needsReview?: boolean;
 }
 export interface TestCatalogOptions {
   categories: { code: string; display: string | null }[];
@@ -2678,6 +2715,8 @@ export interface TestCatalogOptions {
   loinc: { systemId: string; system: string } | null;
   /** The sexes a range may name, with labels by language, so the studio names no code. */
   sexes: CatalogSexOption[];
+  /** The lab's own sections. Empty until the lab adds one. */
+  sections: { code: string; display: string | null }[];
 }
 
 export function listTestCatalog(p: TestCatalogListParams = {}): Promise<TestCatalogListResult> {
@@ -2863,7 +2902,11 @@ export const catalogSpecimensFor = (
     .then((r) => okJson<{ specimens: { system: string; code: string; display: string | null }[] }>(r, 'narrow specimens'))
     .then((b) => b.specimens);
 
-export interface CatalogResultBand { name: string | null; low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null }
+export interface CatalogResultBand {
+  name: string | null; low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null;
+  /** Absent when the band sets none. The editor sends null for a limit it cleared, which the server drops. */
+  criticalLow?: number | null; criticalHigh?: number | null;
+}
 export interface CatalogSexOption { code: string; labels: Record<string, string> }
 /** Whether a range fits the patient on the order. Unknown means the record lacks the sex or age it names. */
 export type CatalogBandFit = 'yes' | 'no' | 'unknown';

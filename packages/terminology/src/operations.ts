@@ -54,7 +54,11 @@ export function createOperations(source: ConceptSource): Operations {
 
   async function expand(url: string, opts: ExpandOptions): Promise<ValueSet> {
     const vs = await loadValueSet(url);
-    const { codes, total } = await expandCompose((vs.compose ?? { include: [] }) as VsCompose, makeDeps(source), { seedUrls: [url] });
+    let { codes, total } = await expandCompose((vs.compose ?? { include: [] }) as VsCompose, makeDeps(source), { seedUrls: [url] });
+    if (codes.length === 0 && source.storedExpansion) {
+      codes = await source.storedExpansion(url);
+      total = codes.length;
+    }
     // FHIR $expand `filter`: a case-insensitive substring over code and display. Applied
     // before paging so `total` reflects the filtered set, which is what a type-ahead needs.
     const needle = opts.filter?.trim().toLowerCase();

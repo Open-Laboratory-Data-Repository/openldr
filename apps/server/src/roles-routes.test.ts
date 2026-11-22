@@ -119,7 +119,7 @@ function buildFakeRoleStore() {
       }
       userRoles.set(subject, new Set(roleIds));
     },
-    async seedSystemRoles() { return { created: [], granted: [] }; },
+    async seedSystemRoles() { return { created: [], granted: [], blocked: [] }; },
     async diagnoseCapabilities() { return { roles: [], orphaned: [], ledgerAvailable: true }; },
     async backfillUserFromRoleNames() { /* unused in these tests */ },
   };

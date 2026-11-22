@@ -60,6 +60,13 @@ async function seedTest(
   }).execute();
 }
 
+// A section the lab added to its own list (migration 137 seeds the list empty).
+async function addSection(db: Kysely<InternalSchema>, code: string, display: string): Promise<void> {
+  await db.insertInto('terminology_concepts').values({
+    system: 'urn:openldr:cs:lab-section', code, display, status: 'ACTIVE', properties: null,
+  }).execute();
+}
+
 // What the lab's terminology drain writes after pulling central's catalog (packages/sync/src/terminology-sync.ts).
 async function markCentral(db: Kysely<InternalSchema>): Promise<void> {
   await db.insertInto('terminology_systems')
@@ -148,7 +155,7 @@ describe('test catalog: reads', () => {
       rows: [{
         code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR],
         resultParams: [],
-        loinc: '25836-8', active: true, lab: { enabled: true, specimenTypes: [BLD], localDisplay: 'Viral load' },
+        loinc: '25836-8', active: true, lab: { enabled: true, specimenTypes: [BLD], localDisplay: 'Viral load', section: null, needsReview: true },
       }],
       total: 1,
       ownedHere: true,
@@ -231,7 +238,7 @@ describe('test catalog: writes', () => {
     expect(created).toEqual({
       code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR],
       resultParams: [],
-      loinc: '25836-8', active: true, lab: { enabled: false, specimenTypes: null, localDisplay: null },
+      loinc: '25836-8', active: true, lab: { enabled: false, specimenTypes: null, localDisplay: null, section: null, needsReview: true },
     });
     expect(await storedConcept(db, 'HIVVL')).toEqual({
       status: 'ACTIVE', properties: { shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR] },
@@ -353,7 +360,7 @@ describe('test catalog: this lab', () => {
     const { catalog } = await buildCatalog();
     await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
     const t = await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: '  Viral load ' });
-    expect(t.lab).toEqual({ enabled: true, specimenTypes: null, localDisplay: 'Viral load' });
+    expect(t.lab).toEqual({ enabled: true, specimenTypes: null, localDisplay: 'Viral load', section: null, needsReview: true });
   });
 
   it('lets a lab narrow the specimen list but never add to it', async () => {
@@ -367,6 +374,59 @@ describe('test catalog: this lab', () => {
     });
     expect((await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: null })).lab.specimenTypes)
       .toBeNull();
+  });
+
+  it('saves and reads a section and whether the test needs review', async () => {
+    const { db, catalog } = await buildCatalog();
+    await addSection(db, 'HAEM', 'Haematology');
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    const t = await catalog.setLabSettings('HIVVL', {
+      enabled: true, specimenTypes: null, localDisplay: null, section: 'HAEM', needsReview: false,
+    });
+    expect(t.lab).toEqual({ enabled: true, specimenTypes: null, localDisplay: null, section: 'HAEM', needsReview: false });
+    expect((await catalog.get('HIVVL'))?.lab).toMatchObject({ section: 'HAEM', needsReview: false });
+  });
+
+  it('keeps the stored section and review setting when the input leaves them out, and clears the section on null', async () => {
+    const { db, catalog } = await buildCatalog();
+    await addSection(db, 'HAEM', 'Haematology');
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: null, section: 'HAEM', needsReview: false });
+    expect((await catalog.setLabSettings('HIVVL', { enabled: false, specimenTypes: null, localDisplay: 'VL' })).lab)
+      .toEqual({ enabled: false, specimenTypes: null, localDisplay: 'VL', section: 'HAEM', needsReview: false });
+    expect((await catalog.setLabSettings('HIVVL', { enabled: false, specimenTypes: null, localDisplay: 'VL', section: null })).lab)
+      .toEqual({ enabled: false, specimenTypes: null, localDisplay: 'VL', section: null, needsReview: false });
+    expect((await catalog.setEnabled('HIVVL', true)).lab).toMatchObject({ section: null, needsReview: false });
+  });
+
+  it('sets only the section when the input names nothing else, keeping the stored lab fields', async () => {
+    const { db, catalog } = await buildCatalog();
+    await addSection(db, 'HAEM', 'Haematology');
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
+    expect((await catalog.setLabSettings('HIVVL', { section: 'HAEM' })).lab)
+      .toEqual({ enabled: false, specimenTypes: null, localDisplay: null, section: 'HAEM', needsReview: true });
+    await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: [UR], localDisplay: 'VL' });
+    expect((await catalog.setLabSettings('HIVVL', { needsReview: false })).lab)
+      .toEqual({ enabled: true, specimenTypes: [UR], localDisplay: 'VL', section: 'HAEM', needsReview: false });
+  });
+
+  it('refuses a section that is not in the lab section list, and writes nothing', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await expect(catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: null, section: 'NOPE' }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'no section NOPE' });
+    expect((await catalog.get('HIVVL'))?.lab).toEqual({ enabled: false, specimenTypes: null, localDisplay: null, section: null, needsReview: true });
+  });
+
+  it('offers the lab sections, none until the lab adds one', async () => {
+    const { db, catalog } = await buildCatalog();
+    expect((await catalog.options()).sections).toEqual([]);
+    await addSection(db, 'HAEM', 'Haematology');
+    await addSection(db, 'CHEM', 'Chemistry');
+    expect((await catalog.options()).sections).toEqual([
+      { code: 'CHEM', display: 'Chemistry' },
+      { code: 'HAEM', display: 'Haematology' },
+    ]);
   });
 
   it('refuses settings for a test not in the catalog', async () => {
@@ -403,7 +463,7 @@ describe('test catalog: this lab', () => {
     await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: [BLD], localDisplay: 'Viral load' });
 
     await bulk.syncSystem(TEST_CATALOG_SYSTEM, { kind: 'CodeSystem', generation: 2 });
-    expect((await catalog.get('HIVVL'))?.lab).toEqual({ enabled: true, specimenTypes: [BLD], localDisplay: 'Viral load' });
+    expect((await catalog.get('HIVVL'))?.lab).toEqual({ enabled: true, specimenTypes: [BLD], localDisplay: 'Viral load', section: null, needsReview: true });
     expect(codes(await catalog.list(q()))).toEqual(['CD4', 'HIVVL']);
     await expect(catalog.update('HIVVL', { display: 'Changed' })).rejects.toMatchObject({ kind: 'central-managed' });
   });
@@ -447,14 +507,14 @@ describe('test catalog: options and row changes', () => {
     const { catalog } = await buildCatalog();
     await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
     await catalog.setLabSettings('HIVVL', { enabled: false, specimenTypes: [UR], localDisplay: 'Viral load' });
-    expect((await catalog.setEnabled('HIVVL', true)).lab).toEqual({ enabled: true, specimenTypes: [UR], localDisplay: 'Viral load' });
-    expect((await catalog.setEnabled('HIVVL', false)).lab).toEqual({ enabled: false, specimenTypes: [UR], localDisplay: 'Viral load' });
+    expect((await catalog.setEnabled('HIVVL', true)).lab).toEqual({ enabled: true, specimenTypes: [UR], localDisplay: 'Viral load', section: null, needsReview: true });
+    expect((await catalog.setEnabled('HIVVL', false)).lab).toEqual({ enabled: false, specimenTypes: [UR], localDisplay: 'Viral load', section: null, needsReview: true });
   });
 
   it('switches on a test the lab has never touched', async () => {
     const { catalog } = await buildCatalog();
     await catalog.create({ code: 'CD4', display: 'CD4 count' });
-    expect((await catalog.setEnabled('CD4', true)).lab).toEqual({ enabled: true, specimenTypes: null, localDisplay: null });
+    expect((await catalog.setEnabled('CD4', true)).lab).toEqual({ enabled: true, specimenTypes: null, localDisplay: null, section: null, needsReview: true });
   });
 
   it('still switches a test on after central dropped a specimen the lab had kept', async () => {
@@ -965,6 +1025,36 @@ describe('test catalog: result parameters on a test', () => {
       .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1 has a low above its high.' });
     await expect(catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ ageLow: 20, ageHigh: 15 })] }] }))
       .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1 has an age from above its age to.' });
+  });
+
+  it('keeps critical limits through a save and a read', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    const withLimits = { ...HGB, bands: [range({ low: 12, high: 15, criticalLow: 7, criticalHigh: 20 }), range({ low: 11, criticalLow: 6 })] };
+    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [withLimits] });
+    const [stored] = (await catalog.get('FBC'))?.resultParams ?? [];
+    expect(stored.bands[0]).toMatchObject({ low: 12, high: 15, criticalLow: 7, criticalHigh: 20 });
+    expect(stored.bands[1]).toMatchObject({ low: 11, criticalLow: 6 });
+    expect('criticalHigh' in stored.bands[1]).toBe(false);
+  });
+
+  it('refuses critical limits inside the band or crossed, and allows one alone or at the edge', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    let n = 0;
+    const save = (b: object) => catalog.create({ code: `FBC${++n}`, display: 'Full blood count', resultParams: [{ ...HGB, bands: [range(b)] }] });
+    await expect(save({ low: 12, high: 15, criticalLow: 13 }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1: the critical low limit must be at or below the low limit.' });
+    await expect(save({ low: 12, high: 15, criticalHigh: 14 }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1: the critical high limit must be at or above the high limit.' });
+    await expect(save({ criticalLow: 20, criticalHigh: 10 }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1: the critical low limit must be below the critical high limit.' });
+    await expect(save({ criticalLow: 10, criticalHigh: 10 }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1: the critical low limit must be below the critical high limit.' });
+    // Each rule compares only what the band gives, and a limit equal to its edge is allowed.
+    await expect(save({ low: 12, high: 15, criticalLow: 12, criticalHigh: 15 })).resolves.toBeDefined();
+    await expect(save({ high: 15, criticalLow: 5 })).resolves.toBeDefined();
+    await expect(save({ criticalHigh: 20 })).resolves.toBeDefined();
   });
 
   it('refuses a range whose sex is not one of the Patient codes', async () => {

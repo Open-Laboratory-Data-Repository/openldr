@@ -157,3 +157,17 @@ export function toIdentityTokens(stored: Record<string, string | null | undefine
   }
   return out;
 }
+
+/**
+ * Whether the person who entered a result may also authorise it (lab module design 2026-11-22).
+ * A lab-wide policy, not part of the letterhead, so it is kept out of LAB_IDENTITY_FIELDS: those are
+ * strings printed on reports, edited under settings.edit_general, and this is a switch that needs
+ * lab.settings. Stored in app_settings as 'true' or 'false', as feature flags are. A missing row
+ * reads as false.
+ */
+export const LAB_ALLOW_SELF_AUTHORISE_KEY = 'lab.allowSelfAuthorise';
+
+/** Read the stored text of `lab.allowSelfAuthorise`. Only 'true' turns it on. */
+export function parseAllowSelfAuthorise(stored: string | null | undefined): boolean {
+  return stored === 'true';
+}
