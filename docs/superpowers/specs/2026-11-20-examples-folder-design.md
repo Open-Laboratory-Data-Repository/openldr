@@ -1,6 +1,6 @@
 # Examples folder
 
-Date: 2026-11-20. Status: draft, waiting on the operator.
+Date: 2026-11-20, updated 2026-11-22. Status: draft, waiting on the operator's approval.
 
 ## Why
 
@@ -63,17 +63,57 @@ one exists, and what the user should see afterwards.
 ## Workflow example and other installs
 
 A workflow's Map to FHIR node names its target and, where used, its accepted forms by id
-(`targetId`, `formIds`). A form that exists on one install may be missing on another. The example
-workflow must import into an empty install. Before it is written, the round trip is tested on the
-rc.1 install: export a workflow with a mapping, import it into a clean install, send the payload.
-What that shows decides whether the example uses no form, or ships the form beside it.
+(`targetId`, `formIds`). The example workflow must import into an empty install. Settled from the
+code on 2026-11-22, so no round-trip test on a real install is needed to decide it:
+
+- **No form.** `formIds` is `[]`. A form id the install lacks stops every run with
+  "form … not found" (`packages/bootstrap/src/map-to-fhir-service.ts:442`).
+- **Target `lab-result`.** It is built into the code (`packages/forms/src/map/targets.ts:126`), so
+  every install has it, seeded or `--seedless`.
+- **Its own webhook path**, not `ingest`. The shipped Ingest workflow holds `ingest`, and webhook
+  paths are claimed by one workflow (`WebhookPathClaimedError`, `packages/workflows/src/index.ts:48`).
+  `send.sh` posts to that path. The exact path is the builder's call.
+- **No secret, and switched off.** The operator chose this on 2026-11-22. Anything in the repo is
+  public, so a shipped secret would give every importing lab an endpoint anyone can post to. The
+  file has no secret and `"enabled": false`. Import would otherwise turn it on
+  (`apps/studio/src/workflows/WorkflowList.tsx:81`), and a webhook with no secret answers 401
+  (`apps/server/src/workflows-routes.ts:663`). The README says: set a secret on the webhook step,
+  turn the workflow on, then run `send.sh` with that secret in an environment variable, never
+  written into the file.
+- **It stores what it maps**, as the shipped Ingest does. The operator chose this on 2026-11-22:
+  the point is a working pipeline to share. Its steps match Ingest: webhook, Map to FHIR, Persist
+  store, a Log on persisted and a Log on held. `payload.json` uses an obviously made-up patient,
+  such as surname `Example` and an identifier starting `EXAMPLE-`. The README says to try it on a
+  test installation, as the in-app Ingest walkthrough does.
 
 ## The test
 
-One test file, for example `examples/examples.test.ts` run by a package that already depends on
-the schemas (bootstrap is the likely home). For each folder it reads every file and runs the
-validation in the table. It fails if a folder has a file the table does not cover, so a new example
-cannot skip the check.
+**Correction, found by the builder check on 2026-11-22.** The table's checks for dashboards,
+workflows and forms are not what studio runs. Studio reshapes those files in the browser before
+the server checks them:
+- Dashboard: studio adds the `id` that `DashboardSchema` requires (`apps/studio/src/dashboard/io.ts:61`).
+- Workflow: studio adds the `id` that `WorkflowSchema` requires (`WorkflowList.tsx:76`).
+- Form: studio wraps the file as `{ name, schema, ... }` before `formInput` sees it
+  (`apps/studio/src/pages/Forms.tsx:179-185`).
+
+So the test runs in two places (my call, 2026-11-22):
+- **In studio**, for dashboards, workflows and forms. It calls studio's own reshaping code, then
+  the schema. A copy of the reshaping inside a test could drift, which is the failure this test
+  exists to catch. If that code is not exported as a function today, the builder lifts it out
+  without changing what it does.
+- **In bootstrap**, for queries, facilities, terminology and the test catalog, calling the
+  functions in the table.
+
+For the **test catalog**, reading the file proves little: `readCatalogImportFile` only reads the
+table and suggests columns (`packages/bootstrap/src/test-catalog.ts:192-200`). The test also runs
+the column-mapping step with the suggested columns accepted (my call).
+
+For **terminology**, terms import into a code system the user picks first
+(`apps/server/src/terminology-admin-routes.ts:198-205`). The README starts with "create or pick a
+code system", which is the page's own first step (my call).
+
+Together the two test files fail if any `examples/` folder holds a file neither covers, so a new
+example cannot skip the check.
 
 What it proves: each file passes the same validation the import route runs. What it does not prove:
 that the import screen in studio accepts it, or that a dashboard's queries return rows. Those need
@@ -83,12 +123,31 @@ a real install, and are checked once by hand when the examples are written.
 
 Each of the seven how-to guides in `apps/studio/src/docs` (en, fr, pt) gets one line after its
 import step: "Examples you can import are in
-[examples/<folder>](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/main/examples/<folder>)."
-The web docs get the same line where they describe importing. The link points at `main`.
+[examples/<folder>](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v<version>/examples/<folder>)."
+The web docs get the same line where they describe importing.
+
+**The link points at the running version's tag, not `main`.** The operator chose this on
+2026-11-22. A lab runs a release, and a format change on `main` would hand it an example that
+does not import, which is the first anti-goal. The cost: examples added after a release appear
+only from the next one.
+
+Neither docs renderer fills in a version today. Both know their own: studio's
+`apps/studio/src/docs/version.ts:8` and web's `apps/web/src/docs/content.ts:42`, each from
+`__APP_VERSION__`. The builder adds one placeholder that the markdown link uses, replaced at render
+with that version. In studio that is the lab's installed version. On the public web docs it is
+the site's build, which is the latest release.
+
+Consequences, accepted:
+- A release before the one that ships `examples/` has no such folder at its tag. That is fine,
+  because its guides do not have the link either.
+- A development build whose version has no tag yet links to a page that does not exist. Labs run
+  releases only, so this is not fixed.
 
 ## Left to the builder
 
 - Where the test lives, and moving `formInput` so the test can reach it.
+- The placeholder's spelling, and the one place in each renderer that replaces it.
+- The example workflow's webhook path.
 - The test catalog's minimum columns: not confirmed. Settle by running the import on a real file.
 - The wording of each README, kept to the unslop rules.
 
