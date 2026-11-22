@@ -146,3 +146,7 @@ export { createWarehouseDatasetStore, type WarehouseDataset, type WarehouseDatas
 export { buildWarehouseDataset, dropWarehouseDataset, DATASET_SCHEMA } from './warehouse-dataset-build';
 export { createExplorerGroupStore, EXPLORER_GROUP_KINDS, type ExplorerGroupKind, type ExplorerGroupStore } from './explorer-group-store';
 export { createPackItemStore, type PackItem, type PackItemKind, type PackItemStore } from './pack-item-store';
+export {
+  createFormEntryStore, FormEntryRepeat, type FormEntry, type FormEntryFilter, type FormEntrySaved, type FormEntryStatus,
+  type FormEntryStore, type NewFormEntry,
+} from './form-entry-store';

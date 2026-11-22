@@ -1135,6 +1135,26 @@ export interface TestCatalogLabSettingsTable {
   updated_at: Generated<Date>;
 }
 
+/** One saved form submission (migration 136). `facility_id` is the facility register's row id.
+ *  `entry_key` is the requisition number. `saved` holds the ids of the records the save made. */
+export interface FormEntriesTable {
+  id: string;
+  form_id: string;
+  facility_id: string | null;
+  facility_code: string | null;
+  facility_name: string | null;
+  entry_key: string | null;
+  summary: JSONColumnType<{ label: string; value: string }[]>;
+  entered_by: string;
+  entered_by_name: string;
+  entered_at: Generated<Date>;
+  status: Generated<string>;
+  status_by: string | null;
+  status_at: Date | null;
+  status_reason: string | null;
+  saved: JSONColumnType<{ responseId: string | null; resources: { resourceType: string; id: string }[] }> | null;
+}
+
 export interface InternalSchema {
   auth_issuer_binding: { id: number; issuer: string };
   'fhir.projection_retries': ProjectionRetriesTable;
@@ -1223,6 +1243,8 @@ export interface InternalSchema {
   role_layout_defaults: RoleLayoutDefaultsTable;
   /** Which content pack made which role, layout or form (migration 135). */
   content_pack_items: { pack_id: string; kind: string; key: string; item_id: string };
+  /** One row per saved form submission (migration 136). */
+  form_entries: FormEntriesTable;
   connectors: ConnectorsTable;
   registries: RegistriesTable;
   plugin_data: PluginDataTable;
