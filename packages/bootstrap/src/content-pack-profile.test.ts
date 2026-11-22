@@ -437,7 +437,7 @@ describe('removeProfileItems', () => {
     expect(m.items).toHaveLength(4);
   });
 
-  it('deletes the layouts, then the roles, forgets the forms and leaves them published', async () => {
+  it('deletes the layouts, then the roles, and keeps the forms published with their rows', async () => {
     const m = memDeps();
     await runAll(m.deps, STEPS);
     const [roleId] = [...m.roles.keys()];
@@ -451,7 +451,22 @@ describe('removeProfileItems', () => {
     expect(m.layouts.size).toBe(0);
     expect(m.forms.get(formId)).toBeDefined();
     expect(m.access.get(formId)).toEqual({ open: ['sample-clerk'], submit: ['sample-clerk'] });
-    expect(m.items).toEqual([]);
+    expect(m.items).toEqual([{ packId: PACK, kind: 'form', key: 'lab-request', itemId: formId }]);
+  });
+
+  it('remove then install again updates the same forms, one copy each', async () => {
+    const m = memDeps();
+    const steps: ContentPackStep[] = [...STEPS, { kind: 'form', key: 'dispatch', questionnaire: { resourceType: 'Questionnaire', title: 'Dispatch' }, open: [], submit: [] }];
+    await runAll(m.deps, steps);
+    const formIds = [...m.forms.keys()].sort();
+    await removeProfileItems(m.deps, PACK, async () => undefined, 'all');
+    await checkProfileSteps(m.deps, PACK, steps, 'all');
+    await runAll(m.deps, steps, '1.0.1');
+    expect([...m.forms.keys()].sort()).toEqual(formIds);
+    expect(m.forms.size).toBe(2);
+    expect([...m.forms.values()].map((f) => f.version)).toEqual(['1.0.1', '1.0.1']);
+    expect(m.roles.size).toBe(1);
+    expect(m.layouts.size).toBe(1);
   });
 
   it('forgets a role and layout an admin already deleted, without reporting them', async () => {

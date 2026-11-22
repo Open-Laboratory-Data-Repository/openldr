@@ -218,21 +218,23 @@ export async function dropLeftOut(
     else if (s.kind === 'layout' || s.kind === 'form') keep.add(`${s.kind}:${s.key}`);
   }
   const items = (await deps.packItems.list(packId)).filter((i) => !keep.has(`${i.kind}:${i.key}`));
-  return removeItems(deps, packId, items, onRemoved);
+  return removeItems(deps, packId, items, onRemoved, { forgetForms: true });
 }
 
 /** What removing a whole pack takes out: names of the roles and layouts, and of the forms kept.
  *  A kept form that no longer exists shows its key. */
 export interface Removal { roles: string[]; layouts: string[]; formsKept: string[] }
 
-// Layouts name roles, so they go first. Forms go last, and only lose their owner.
+// Layouts name roles, so they go first. Forms go last, and stay.
 const REMOVAL_ORDER: Record<PackItemKind, number> = { layout: 0, role: 1, form: 2 };
 const inRemovalOrder = (items: PackItem[]): PackItem[] =>
   [...items].sort((a, b) => REMOVAL_ORDER[a.kind] - REMOVAL_ORDER[b.kind]);
 
 /** Throws when the pack owns a role and `caps` lacks roles.manage, and PackRemovalError when a user
  *  holds one of the pack's roles, listing every holder. Either way it deletes nothing. Otherwise it
- *  deletes its layouts, then its roles, and forgets its forms, which stay published (design 5.3). `onRemoved` runs right after each delete, as in dropLeftOut. */
+ *  deletes its layouts, then its roles. Its forms stay published and keep their rows, so installing
+ *  the pack again updates the same forms (design 5.3). `onRemoved` runs right after each delete, as
+ *  in dropLeftOut. */
 export async function removeProfileItems(
   deps: ProfileDeps, packId: string, onRemoved: (r: Removed) => Promise<void>, caps: InstallerCapabilities,
 ): Promise<Removal> {
@@ -240,9 +242,8 @@ export async function removeProfileItems(
   requireRolesManage(items.some((i) => i.kind === 'role'), caps, REMOVE_NEEDS_ROLES_MANAGE);
   const holders = await findHolders(deps, items);
   if (holders.length > 0) throw new PackRemovalError(holders);
-  // Named before removeItems forgets the items, while their form ids are still at hand.
   const formsKept = await formNames(deps, items);
-  const out = await removeItems(deps, packId, items, onRemoved);
+  const out = await removeItems(deps, packId, items, onRemoved, { forgetForms: false });
   return { roles: out.roles.map((r) => r.name), layouts: out.layouts.map((r) => r.name), formsKept };
 }
 
@@ -275,9 +276,11 @@ export async function previewRemoval(deps: ProfileDeps, packId: string): Promise
   return { ...out, holders: await findHolders(deps, items) };
 }
 
-/** Deletes the roles and layouts among `items`, in the order given, and forgets every item. */
+/** Deletes the roles and layouts among `items`, in the order given, and forgets them. Forgets the
+ *  forms too only when `forgetForms` is set. */
 async function removeItems(
   deps: ProfileDeps, packId: string, items: PackItem[], onRemoved: (r: Removed) => Promise<void>,
+  opts: { forgetForms: boolean },
 ): Promise<LeftOut> {
   const out: LeftOut = { roles: [], layouts: [], formsKept: [] };
   let layouts: LayoutList | null = null;
@@ -300,6 +303,7 @@ async function removeItems(
       }
     } else {
       out.formsKept.push(item.key);
+      if (!opts.forgetForms) continue;
     }
     await deps.packItems.remove(packId, item.kind, item.key);
   }

@@ -159,8 +159,9 @@ a content pack:
 
 1. Refuses if any user still holds a role the pack owns. It lists the users.
 2. Deletes the pack's layouts and roles.
-3. Leaves its forms exactly as they are, with every submitted response kept. The forms lose
-   their owner, so an admin can archive them by hand. Removal does not unpublish them. On a
+3. Leaves its forms exactly as they are, with every submitted response kept. The pack keeps
+   its record of the forms, so installing it again updates the same forms and does not copy
+   them. An admin can still archive them by hand. Removal does not unpublish them. On a
    server, archiving a form queues a delete for every lab that syncs from it
    (`packages/forms/src/store.ts:343`), and a pack removal must not do that on its own.
 4. Leaves code systems, queries, datasets and mappings alone, as removal does today.

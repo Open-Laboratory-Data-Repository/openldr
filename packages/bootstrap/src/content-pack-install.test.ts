@@ -627,7 +627,7 @@ describe('content pack installer: detach takes out what the pack made', () => {
     await s.installer.detach('p1', { actor });
     expect(profile.layouts.remove).toHaveBeenCalledWith('l1');
     expect(profile.roles.remove).toHaveBeenCalledWith('r1');
-    expect(profile.packItems.remove).toHaveBeenCalledWith('p1', 'form', 'lab-request');
+    expect(profile.packItems.remove).not.toHaveBeenCalledWith('p1', 'form', 'lab-request');
     expect(profile.forms.install).not.toHaveBeenCalled();
     expect(s.installs.rows.has('p1')).toBe(false);
     const source = { source: 'content-pack', pack: 'p1@1.2.0' };
