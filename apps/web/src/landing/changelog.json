@@ -2,6 +2,24 @@
   "generatedAt": "2026-11-22",
   "days": [
     {
+      "date": "2026-11-22",
+      "version": "v0.1.12",
+      "entries": [
+        {
+          "hash": "8c11713d9",
+          "type": "fix",
+          "scope": "release",
+          "title": "The check install works under Docker Desktop, and the gate runs typecheck uncached"
+        },
+        {
+          "hash": "eac9ffae3",
+          "type": "fix",
+          "scope": "release",
+          "title": "Rc and demo tags are not the last release"
+        }
+      ]
+    },
+    {
       "date": "2026-11-20",
       "version": "v0.1.12-rc.1",
       "entries": [
