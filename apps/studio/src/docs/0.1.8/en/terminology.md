@@ -271,6 +271,8 @@ Open the term dots menu again and select **Import terms**.
 
 ![Import terms opens the file chooser for the current code system.](terminology-guide-import-terms.png)
 
+Examples you can import are in [examples/terminology](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/terminology).
+
 ### 4. Select your prepared file
 
 Choose the file in your computer's file window. Import begins after you choose it. The screenshot shows the result after the example file was selected.

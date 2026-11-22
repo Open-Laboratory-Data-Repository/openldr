@@ -248,6 +248,8 @@ Um plugin com página própria, como um importador de origem do Marketplace, mos
 
 ## Exemplos opcionais de dados
 
+Há um exemplo completo em [examples/workflows](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/workflows). Tem um workflow para importar, um `payload.json` com linhas fictícias e `send.sh`, que envia essas linhas para o webhook do workflow.
+
 ### Exemplos de conteúdo
 
 **`bundle.json`**: o conversor `fhir-bundle` por omissão aceita um `Bundle` FHIR (lê cada

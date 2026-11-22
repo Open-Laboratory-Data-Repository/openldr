@@ -180,6 +180,8 @@ Em Tests, abra os pontos da página e selecione **Import**.
 
 ![Import abre o assistente de revisão do ficheiro.](test-catalog-guide-import-menu.png)
 
+Há exemplos para importar em [examples/test-catalog](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/test-catalog).
+
 ### 2. Escolher o ficheiro
 
 Selecione a área de ficheiro e escolha o seu CSV ou XLSX. O assistente lê o ficheiro e abre **Step 2 of 4: Columns**.

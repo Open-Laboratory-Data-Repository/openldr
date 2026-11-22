@@ -474,6 +474,26 @@ Selecione **Export**. O navegador descarrega o ficheiro JSON Questionnaire.
 
 **Resultado esperado:** o ficheiro contém a definição do formulário. Export não envia nem altera o formulário.
 
+## Importar um formulário de um ficheiro
+
+Use esta tarefa para juntar um formulário a partir de um ficheiro `.form.json`. A importação junta um formulário novo. Nunca substitui um formulário.
+
+### 1. Abrir o menu da página
+
+Em Forms, abra os pontos ao lado da caixa de pesquisa.
+
+### 2. Escolher Importar
+
+Selecione **Importar**. O seletor de ficheiros abre.
+
+### 3. Escolher o ficheiro
+
+Escolha o ficheiro `.form.json`.
+
+Há exemplos para importar em [examples/forms](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/forms).
+
+**Resultado esperado:** aparece o nome do formulário, seguido de **importado**. O formulário fica na lista como **Rascunho**. Publique-o quando estiver pronto.
+
 ## Criar um rascunho separado e consultar o estado de envio
 
 Use Duplicate para adaptar um formulário existente mantendo a definição original.

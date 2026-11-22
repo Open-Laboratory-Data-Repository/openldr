@@ -236,6 +236,8 @@ On Registry, open the page dots menu and select **Import facilities**.
 
 ![Choose Import facilities to open the three-step wizard.](facilities-guide-import-menu.png)
 
+Examples you can import are in [examples/facilities](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/facilities).
+
 ### 2. Choose your file
 
 Select the File area and choose your prepared file. Its name appears under Source. The format follows the file you chose.

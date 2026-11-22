@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z, ZodError } from 'zod';
 import { DashboardQueryError, DashboardShareError, setDashboardShare, type AppContext } from '@openldr/bootstrap';
-import { DashboardSchema, WidgetQuerySchema, PII_COLUMNS, bindQuery, NO_SCOPE_LINK, type Dashboard } from '@openldr/dashboards';
+import { DashboardSchema, WidgetQuerySchema, PII_COLUMNS, bindQuery, NO_SCOPE_LINK, sqlAuthoringRefusal, type Dashboard } from '@openldr/dashboards';
 import { EXTERNAL_TABLE_COLUMNS } from '@openldr/db/schema/external';
 import { EVERYTHING, type DataScope } from '@openldr/rbac';
 import { recordAudit } from './audit-helper';
@@ -63,21 +63,8 @@ function persistedSqlTemplates(prev: Dashboard | undefined): Set<string> {
 // does not match and is rejected. The server-seeded sample is inserted via the store directly,
 // bypassing this route.
 function assertSqlAuthoringAllowed(sqlEnabled: boolean, d: Dashboard, prevTemplates: Set<string>): void {
-  if (sqlEnabled) return;
-  for (const w of d.widgets) {
-    if (w.query.mode === 'sql') {
-      const sql = typeof w.query.sql === 'string' ? w.query.sql.trim() : '';
-      if (!prevTemplates.has(sql)) {
-        throw new DashboardQueryError('raw SQL widgets are disabled');
-      }
-    }
-  }
-  // New or changed filter options SQL is authoring too (review DS4); the stored one stays.
-  for (const f of d.filters ?? []) {
-    if (typeof f.optionsSql === 'string' && f.optionsSql.trim() !== '' && !prevTemplates.has(f.optionsSql.trim())) {
-      throw new DashboardQueryError('raw SQL is disabled, so a filter cannot get new options SQL');
-    }
-  }
+  const refusal = sqlAuthoringRefusal(d, sqlEnabled, prevTemplates);
+  if (refusal) throw new DashboardQueryError(refusal);
 }
 
 // A saved widget runs with only the dashboard's filter values from the caller (roles part 2).

@@ -1,0 +1,21 @@
+{
+  "format": "openldr.custom-queries",
+  "version": 1,
+  "exportedAt": "2026-11-22T00:00:00.000Z",
+  "queries": [
+    {
+      "name": "Example: results by test",
+      "sql": "select coalesce(observation_desc, observation_code, '(unknown)') as test,\n  count(*) as results\nfrom lab_results\ngroup by coalesce(observation_desc, observation_code, '(unknown)')\norder by results desc",
+      "params": [],
+      "group": "Examples"
+    },
+    {
+      "name": "Example: results in a period",
+      "sql": "select coalesce(observation_desc, observation_code, '(unknown)') as test,\n  count(*) as results\nfrom lab_results\nwhere substring(result_timestamp,1,10) >= {{param.from}}\n  and substring(result_timestamp,1,10) <= {{param.to}}\ngroup by coalesce(observation_desc, observation_code, '(unknown)')\norder by results desc",
+      "params": [
+        { "id": "period", "label": "Period", "type": "daterange", "required": true }
+      ],
+      "group": "Examples"
+    }
+  ]
+}

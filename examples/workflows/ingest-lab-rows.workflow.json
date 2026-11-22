@@ -1,0 +1,102 @@
+{
+  "name": "Example: ingest lab rows",
+  "description": "Example from the OpenLDR examples folder. POST payload.json to /api/workflows/hooks/examples/lab-rows with header X-Webhook-Token. Map to FHIR turns each row into a patient, specimen, order and result by the mapping saved in the node. Records go to Persist store. A row that cannot be mapped is held and goes to the Log held step with its reason. Set a secret on the webhook step before you turn this workflow on.",
+  "enabled": false,
+  "definition": {
+    "nodes": [
+      {
+        "id": "trigger-1",
+        "type": "webhook",
+        "position": { "x": 60, "y": 220 },
+        "data": {
+          "label": "Lab rows received",
+          "path": "examples/lab-rows",
+          "method": "POST",
+          "templateId": "webhook-trigger",
+          "iconName": "Webhook"
+        }
+      },
+      {
+        "id": "map-1",
+        "type": "action",
+        "position": { "x": 360, "y": 220 },
+        "data": {
+          "label": "Map to FHIR",
+          "action": "map-to-fhir",
+          "config": {
+            "sourcePath": "body",
+            "targetId": "lab-result",
+            "formIds": [],
+            "mappings": [
+              {
+                "shapeHash": "e0bd7e99dcab918b",
+                "fieldNames": ["birth_date", "collected", "family_name", "given_name", "patient_id", "result", "sex", "specimen_number", "test", "unit"],
+                "targetId": "lab-result",
+                "rows": [
+                  { "targetPath": "Patient.identifier.value", "from": { "field": "patient_id" } },
+                  { "targetPath": "Patient.name.given?use=official", "from": { "field": "given_name" } },
+                  { "targetPath": "Patient.name.family?use=official", "from": { "field": "family_name" } },
+                  { "targetPath": "Patient.gender", "from": { "field": "sex" } },
+                  { "targetPath": "Patient.birthDate", "from": { "field": "birth_date" } },
+                  { "targetPath": "Specimen.accessionIdentifier.value", "from": { "field": "specimen_number" } },
+                  { "targetPath": "Specimen.collection.collectedDateTime", "from": { "field": "collected" } },
+                  { "targetPath": "Observation.code", "from": { "field": "test" } },
+                  { "targetPath": "Observation.valueQuantity.value", "from": { "field": "result" } },
+                  { "targetPath": "Observation.valueQuantity.unit", "from": { "field": "unit" } }
+                ]
+              }
+            ]
+          },
+          "templateId": "map-to-fhir",
+          "iconName": "ArrowRightLeft"
+        }
+      },
+      {
+        "id": "persist-1",
+        "type": "action",
+        "position": { "x": 660, "y": 120 },
+        "data": {
+          "label": "Persist store",
+          "action": "persist-store",
+          "config": { "source": "examples-lab-rows" },
+          "templateId": "persist-store",
+          "iconName": "Database"
+        }
+      },
+      {
+        "id": "log-1",
+        "type": "action",
+        "position": { "x": 960, "y": 120 },
+        "data": {
+          "label": "Log persisted",
+          "action": "log",
+          "message": "Persisted example rows: {{ $json }}",
+          "level": "info",
+          "config": {},
+          "templateId": "log",
+          "iconName": "Terminal"
+        }
+      },
+      {
+        "id": "held-log-1",
+        "type": "action",
+        "position": { "x": 660, "y": 340 },
+        "data": {
+          "label": "Log held",
+          "action": "log",
+          "message": "Held, not stored: {{ $json.reason }}",
+          "level": "warn",
+          "config": {},
+          "templateId": "log",
+          "iconName": "Terminal"
+        }
+      }
+    ],
+    "edges": [
+      { "id": "e1", "source": "trigger-1", "target": "map-1" },
+      { "id": "e2", "source": "map-1", "target": "persist-1", "sourceHandle": "out" },
+      { "id": "e3", "source": "persist-1", "target": "log-1" },
+      { "id": "e4", "source": "map-1", "target": "held-log-1", "sourceHandle": "held" }
+    ]
+  }
+}

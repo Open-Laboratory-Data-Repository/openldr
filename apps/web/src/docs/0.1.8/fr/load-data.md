@@ -248,6 +248,8 @@ Un plugin qui a sa propre page, comme un importeur de source du Marketplace, y m
 
 ## Exemples de contenu facultatifs
 
+Un exemple complet se trouve dans [examples/workflows](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/workflows). Il contient un workflow à importer, un `payload.json` de lignes fictives et `send.sh`, qui envoie ces lignes au webhook du workflow.
+
 ### Exemples de contenus
 
 **`bundle.json`** : le convertisseur par défaut `fhir-bundle` prend un `Bundle` FHIR (il lit chaque `entry.resource`) ou une seule ressource. Voici une **soumission de laboratoire cliniquement complète** : un patient, la **demande** (`ServiceRequest`) et le **résultat** (`Observation`) rattaché à cette demande :

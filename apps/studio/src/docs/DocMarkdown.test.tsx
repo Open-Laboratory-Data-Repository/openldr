@@ -9,6 +9,7 @@ vi.mock('./screenshots', () => ({
 }));
 
 import { DocMarkdown } from './DocMarkdown';
+import { DOCS_VERSION } from './version';
 
 describe('DocMarkdown', () => {
   it('renders an approved CLI image on themed dots and retains them when enlarged', () => {
@@ -86,5 +87,10 @@ describe('DocMarkdown', () => {
   it('renders gfm strikethrough', () => {
     const { container } = render(<DocMarkdown content={'~~gone~~'} onImageClick={() => {}} />);
     expect(container.querySelector('del')).not.toBeNull();
+  });
+
+  it('renders an examples link with the running version', () => {
+    render(<DocMarkdown content={'[examples/dashboards](https://github.com/o/r/tree/v{{version}}/examples/dashboards)'} onImageClick={() => {}} />);
+    expect(screen.getByRole('link', { name: 'examples/dashboards' })).toHaveAttribute('href', `https://github.com/o/r/tree/v${DOCS_VERSION}/examples/dashboards`);
   });
 });

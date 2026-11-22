@@ -236,6 +236,8 @@ Em Registry, abra o menu da página e selecione **Import facilities**.
 
 ![Captura do Studio: Abrir Import facilities](facilities-guide-import-menu.png)
 
+Há exemplos para importar em [examples/facilities](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/facilities).
+
 ### 2. Escolher o ficheiro
 
 Selecione a área File e escolha o seu ficheiro. O nome aparece em Source. O formato acompanha o ficheiro escolhido.

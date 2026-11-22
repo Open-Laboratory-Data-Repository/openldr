@@ -522,6 +522,8 @@ Use them to:
 
 - **Copy a dashboard** to another install, or keep a backup.
 
+Examples you can import are in [examples/dashboards](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/dashboards).
+
 Importing a dashboard that holds SQL widgets fails while **Dashboard raw SQL** is off, with the message `raw SQL widgets are disabled`. That includes a copy of the sample dashboard. Turn the setting on first.
 
 ## Share a dashboard with some roles

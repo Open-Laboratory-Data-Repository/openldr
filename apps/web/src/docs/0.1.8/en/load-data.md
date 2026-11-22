@@ -248,6 +248,8 @@ A plugin with its own page, such as a source importer from the marketplace, show
 
 ## Optional payload examples
 
+A complete example is in [examples/workflows](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/workflows). It has a workflow to import, a `payload.json` of made-up rows, and `send.sh`, which posts those rows to the workflow's webhook.
+
 ### Example payloads
 
 **`bundle.json`** — the default `fhir-bundle` converter takes a FHIR `Bundle` (it reads each

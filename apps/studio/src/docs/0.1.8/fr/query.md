@@ -302,6 +302,8 @@ Ouvrez les points du panneau d'export et choisissez Download. Fermez le panneau 
 
 Utilisez un export de requêtes ou un paquet de contenu approuvé. Vérifiez le traitement des noms identiques avant application.
 
+Des exemples à importer se trouvent dans [examples/queries](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/queries).
+
 ### 1. Ouvrir Import queries
 
 Ouvrez Transfer actions et sélectionnez Import queries.

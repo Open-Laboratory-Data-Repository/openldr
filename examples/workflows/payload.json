@@ -1,0 +1,38 @@
+[
+  {
+    "patient_id": "EXAMPLE-0001",
+    "given_name": "Ada",
+    "family_name": "Example",
+    "sex": "female",
+    "birth_date": "1990-04-12",
+    "specimen_number": "EXAMPLE-SPEC-0001",
+    "collected": "2026-11-02T08:30:00Z",
+    "test": "Haemoglobin",
+    "result": 12.5,
+    "unit": "g/dL"
+  },
+  {
+    "patient_id": "EXAMPLE-0002",
+    "given_name": "Ben",
+    "family_name": "Example",
+    "sex": "male",
+    "birth_date": "1984-09-30",
+    "specimen_number": "EXAMPLE-SPEC-0002",
+    "collected": "2026-11-02T09:15:00Z",
+    "test": "Haemoglobin",
+    "result": 14.1,
+    "unit": "g/dL"
+  },
+  {
+    "patient_id": "EXAMPLE-0003",
+    "given_name": "Cleo",
+    "family_name": "Example",
+    "sex": "female",
+    "birth_date": "2001-01-17",
+    "specimen_number": "EXAMPLE-SPEC-0003",
+    "collected": "2026-11-03T10:05:00Z",
+    "test": "Glucose",
+    "result": 5.4,
+    "unit": "mmol/L"
+  }
+]

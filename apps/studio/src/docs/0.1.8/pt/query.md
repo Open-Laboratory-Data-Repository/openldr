@@ -302,6 +302,8 @@ Abra os pontos do painel de exportação e escolha Download. Feche o painel quan
 
 Use uma exportação de consultas ou um pacote de conteúdo aprovado. Confira o tratamento de nomes iguais antes de aplicar.
 
+Há exemplos para importar em [examples/queries](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/queries).
+
 ### 1. Abrir Import queries
 
 Abra Transfer actions e selecione Import queries.

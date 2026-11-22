@@ -368,6 +368,8 @@ Abra os pontos acima da lista de workflows.
 
 Selecione **Import** e escolha o ficheiro `.workflow.json` exportado no seletor de ficheiros.
 
+Há exemplos para importar em [examples/workflows](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/workflows).
+
 ![Import lê uma definição anteriormente exportada.](workflows-guide-import.png)
 
 **Resultado esperado:** o workflow personalizado importado aparece na lista. Import não o executa.

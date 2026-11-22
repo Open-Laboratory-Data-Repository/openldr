@@ -271,6 +271,8 @@ Rouvrez le menu des termes et sélectionnez **Import terms**.
 
 ![Capture de Studio : Choisir Import terms](terminology-guide-import-terms.png)
 
+Des exemples à importer se trouvent dans [examples/terminology](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/terminology).
+
 ### 4. Sélectionner le fichier préparé
 
 Choisissez le fichier dans la fenêtre de votre ordinateur. L'import commence dès la sélection. La capture montre le résultat après la sélection du fichier d'exemple.

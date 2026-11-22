@@ -4,6 +4,7 @@ import AdmZip from 'adm-zip';
 import { FormAccessError, TEST_CATALOG_SYSTEM, findCatalogBand, setFormAccess, type AppContext, type ResultBand } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import type { ExtractionContext, FormSchema } from '@openldr/forms';
+import { FormCreateInputSchema } from '@openldr/forms/pure';
 import { extractorsForForm, isEntityAnswer, linkToOrder, isCodingAnswer, parseTestDetails, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
@@ -13,30 +14,6 @@ import { makeCodingSystemResolver } from './coding-system-url';
 function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'form';
 }
-
-// Publish and the questionnaire export walk `fields` and `sections`, so a schema without both
-// lists answered 500 later (demo.4 item 2). Only the lists are checked, not each field: the
-// studio fills a field's missing keys when it loads a form (builderModel.ts), and older stored
-// forms rely on that.
-const formSchemaInput = z
-  .object({
-    fields: z.array(z.record(z.unknown())),
-    sections: z.array(z.record(z.unknown())),
-  })
-  .passthrough();
-
-const formInput = z.object({
-  name: z.string().min(1),
-  versionLabel: z.string().nullish(),
-  fhirResourceType: z.string().nullish(),
-  fhirVersion: z.string().nullish(),
-  fhirProfileUrl: z.string().nullish(),
-  facilityId: z.string().nullish(),
-  status: z.string().optional(),
-  active: z.boolean().optional(),
-  schema: formSchemaInput,
-  targetPages: z.array(z.string()).nullish(),
-});
 
 const publishInput = z.object({
   versionLabel: z.string().nullish(),
@@ -273,7 +250,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
   });
 
   app.post('/api/forms', EDIT, async (req, reply) => {
-    const p = formInput.safeParse(req.body);
+    const p = FormCreateInputSchema.safeParse(req.body);
     if (!p.success) {
       reply.code(400);
       return { error: p.error.message };
@@ -290,7 +267,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
   });
 
   app.put('/api/forms/:id', EDIT, async (req, reply) => {
-    const p = formInput.safeParse(req.body);
+    const p = FormCreateInputSchema.safeParse(req.body);
     if (!p.success) {
       reply.code(400);
       return { error: p.error.message };
