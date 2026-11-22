@@ -6,6 +6,30 @@
       "version": "v0.1.12",
       "entries": [
         {
+          "hash": "3b6e4d7d4",
+          "type": "fix",
+          "scope": "examples",
+          "title": "The lab overview dashboard imports with raw SQL off"
+        },
+        {
+          "hash": "e4f7f7e27",
+          "type": "feat",
+          "scope": "docs",
+          "title": "A {{version}} placeholder in links, filled with the running version"
+        },
+        {
+          "hash": "6be9c6988",
+          "type": "feat",
+          "scope": "examples",
+          "title": "Dashboards, a switched-off workflow with send.sh, and a form, each checked by studio's own import"
+        },
+        {
+          "hash": "cab2c9168",
+          "type": "feat",
+          "scope": "examples",
+          "title": "Queries, facilities, terminology, test catalog and the workflow payload, each checked by the import's own code"
+        },
+        {
           "hash": "8c11713d9",
           "type": "fix",
           "scope": "release",
