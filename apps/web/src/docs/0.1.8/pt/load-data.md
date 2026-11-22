@@ -128,6 +128,8 @@ Validar não importa. Corrija erros. Um ficheiro não encontrado pode estar fora
 
 Grava na instalação configurada. Sucesso indica lote e número de recursos. Zero recursos não prova importação útil. Verifique conversor e formato.
 
+Há exemplos para importar em [examples](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples).
+
 ```sh
 {{operator:data-ingest}}
 ```

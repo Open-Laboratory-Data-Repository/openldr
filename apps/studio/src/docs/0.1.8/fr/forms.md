@@ -474,6 +474,26 @@ Sélectionnez **Export**. Le navigateur télécharge le fichier JSON Questionnai
 
 **Résultat attendu :** le fichier contient la définition du formulaire. Export ne l'envoie ni ne le modifie.
 
+## Importer un formulaire depuis un fichier
+
+Utilisez cette tâche pour ajouter un formulaire depuis un fichier `.form.json`. L'import ajoute un nouveau formulaire. Il n'en remplace jamais un.
+
+### 1. Ouvrir le menu de la page
+
+Dans Forms, ouvrez les points à côté du champ de recherche.
+
+### 2. Choisir Importer
+
+Sélectionnez **Importer**. Le sélecteur de fichiers s'ouvre.
+
+### 3. Choisir le fichier
+
+Choisissez le fichier `.form.json`.
+
+Des exemples à importer se trouvent dans [examples/forms](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/forms).
+
+**Résultat attendu :** le nom du formulaire apparaît, suivi de **importé**. Le formulaire est listé en **Brouillon**. Publiez-le quand il est prêt.
+
 ## Créer un brouillon distinct et vérifier son état d'envoi
 
 Utilisez Duplicate pour adapter un formulaire existant tout en conservant sa définition d'origine.

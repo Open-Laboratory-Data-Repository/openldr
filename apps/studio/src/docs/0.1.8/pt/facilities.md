@@ -232,6 +232,8 @@ Use a origem registada que detém os códigos deste ficheiro. Os requisitos do f
 
 Em Registry, abra o menu da página e selecione **Import facilities**.
 
+Há exemplos para importar em [examples/facilities](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/facilities).
+
 ![Captura do Studio: Abrir Import facilities](facilities-guide-import-actions.png)
 
 ![Captura do Studio: Abrir Import facilities](facilities-guide-import-menu.png)

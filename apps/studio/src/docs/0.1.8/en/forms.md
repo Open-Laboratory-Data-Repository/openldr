@@ -474,6 +474,26 @@ Select **Export**. Your browser downloads the Questionnaire JSON file.
 
 **Expected result:** The downloaded file contains the form definition. Export does not submit or change the form.
 
+## Import a form from a file
+
+Use this to add a form from a `.form.json` file. Import adds a new form. It never replaces one.
+
+### 1. Open the page dots menu
+
+On Forms, open the dots menu beside the search box.
+
+### 2. Choose Import
+
+Select **Import**. Your file picker opens.
+
+### 3. Choose the file
+
+Choose the `.form.json` file.
+
+Examples you can import are in [examples/forms](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/forms).
+
+**Expected result:** **Imported** and the form name appear. The form is listed as **Draft**. Publish it when it is ready to use.
+
 ## Make a separate draft and inspect its submission state
 
 Use Duplicate when you want to adapt an existing form while retaining its original definition.

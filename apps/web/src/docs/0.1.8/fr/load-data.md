@@ -128,6 +128,8 @@ Valider n’importe pas. Corrigez les erreurs. Un fichier introuvable est souven
 
 Cela écrit dans l’installation configurée. Une réussite indique lot et nombre de ressources. Zéro ressource ne prouve pas un import utile. Vérifiez convertisseur et format.
 
+Des exemples à importer se trouvent dans [examples](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples).
+
 ```sh
 {{operator:data-ingest}}
 ```

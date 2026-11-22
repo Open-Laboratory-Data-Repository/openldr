@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve as resolvePath } from 'node:path';
 import type { DocGuide, DocSection } from './registry';
-import { DOC_GUIDES, list, resolve } from './registry';
+import { DOC_GUIDES, DOC_VERSIONS, list, resolve } from './registry';
 import { SCREENSHOTS } from './screenshots';
 import { allHeadingIds } from './toc';
 import screenshotManifest from './0.1.0/screenshot-manifest.json';
@@ -259,6 +261,50 @@ describe('authored guide structure', () => {
       }
     }
     expect(broken).toEqual([]);
+  });
+
+  // A link to `main` drifts from the install the reader runs. `{{version}}` is filled in at render.
+  it('every link to the examples folder uses the version placeholder', () => {
+    const guideFolders: Record<string, string> = {
+      dashboard: 'dashboards',
+      workflows: 'workflows',
+      forms: 'forms',
+      query: 'queries',
+      facilities: 'facilities',
+      terminology: 'terminology',
+      'test-catalog': 'test-catalog',
+    };
+    const repo = 'https://github.com/Open-Laboratory-Data-Repository/openldr';
+    const anyExamplesLink = /https:\/\/github\.com\/Open-Laboratory-Data-Repository\/openldr\/[^)\s]*examples[^)\s]*/g;
+    const wrong: string[] = [];
+    const missing: string[] = [];
+    const webDocs = resolvePath(__dirname, '../../../web/src/docs', DOC_VERSIONS[0]);
+    for (const locale of ['en', 'fr', 'pt'] as const) {
+      const pages = list(locale, DOC_VERSIONS[0])
+        .filter((section) => section.localeUsed === locale)
+        .map((section) => ({ name: `studio/${locale}/${section.slug}`, slug: section.slug, content: section.content }));
+      pages.push({
+        name: `web/${locale}/load-data`,
+        slug: 'load-data',
+        content: readFileSync(resolvePath(webDocs, locale, 'load-data.md'), 'utf8'),
+      });
+      for (const page of pages) {
+        for (const [href] of page.content.matchAll(anyExamplesLink)) {
+          if (!/^https:\/\/github\.com\/Open-Laboratory-Data-Repository\/openldr\/tree\/v\{\{version\}\}\/examples(\/[a-z-]+)?$/.test(href)) {
+            wrong.push(`${page.name}: ${href}`);
+          }
+        }
+        const folder = page.slug === 'load-data' ? '' : guideFolders[page.slug];
+        if (folder === undefined) continue;
+        const expected = `${repo}/tree/v{{version}}/examples${folder ? `/${folder}` : ''})`;
+        if (!page.content.includes(expected)) missing.push(page.name);
+      }
+      for (const slug of Object.keys(guideFolders)) {
+        if (!pages.some((page) => page.slug === slug)) missing.push(`studio/${locale}/${slug} (no page)`);
+      }
+    }
+    expect(wrong).toEqual([]);
+    expect(missing).toEqual([]);
   });
 
   // Two capture tools write into one folder. A shared name means one silently overwrites the other.

@@ -302,6 +302,8 @@ Open the export sheet dots and choose Download. Close the sheet when finished.
 
 Use this for an exported query file or an approved content pack. Check same-name behavior before applying it.
 
+Examples you can import are in [examples/queries](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/queries).
+
 ### 1. Open Import queries
 
 Open Transfer actions and select Import queries.

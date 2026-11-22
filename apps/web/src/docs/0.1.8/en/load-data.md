@@ -128,6 +128,8 @@ Validation is not ingestion. Correct reported errors first. A missing file often
 
 This writes into the configured installation. A successful run reports a batch and resource count. Zero resources is not useful proof of an import. Check the converter and source format.
 
+Examples you can import are in [examples](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples).
+
 ```sh
 {{operator:data-ingest}}
 ```

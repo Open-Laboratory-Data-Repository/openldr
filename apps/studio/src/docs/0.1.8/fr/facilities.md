@@ -232,6 +232,8 @@ Utilisez la source enregistrée qui possède les codes du fichier. Les exigences
 
 Dans Registry, ouvrez le menu de la page et sélectionnez **Import facilities**.
 
+Des exemples à importer se trouvent dans [examples/facilities](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/facilities).
+
 ![Capture de Studio : Ouvrir Import facilities](facilities-guide-import-actions.png)
 
 ![Capture de Studio : Ouvrir Import facilities](facilities-guide-import-menu.png)

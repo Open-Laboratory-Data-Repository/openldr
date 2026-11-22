@@ -176,6 +176,8 @@ Use an import when you have a list in CSV or Excel .xlsx format. Tests match by 
 
 On Tests, open the page dots menu and select **Import**.
 
+Examples you can import are in [examples/test-catalog](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/test-catalog).
+
 ![Open the Tests page dots menu.](test-catalog-guide-page-actions-step-1.png)
 
 ![Import opens the file review wizard.](test-catalog-guide-import-menu.png)

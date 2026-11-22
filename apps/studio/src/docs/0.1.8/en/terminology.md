@@ -269,6 +269,8 @@ Select **Download template**. Prepare your file using its columns and examples.
 
 Open the term dots menu again and select **Import terms**.
 
+Examples you can import are in [examples/terminology](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/terminology).
+
 ![Import terms opens the file chooser for the current code system.](terminology-guide-import-terms.png)
 
 ### 4. Select your prepared file

@@ -176,6 +176,8 @@ Importez une liste CSV ou Excel .xlsx. Les tests correspondent par code. L'impor
 
 Dans Tests, ouvrez les points de la page et sélectionnez **Import**.
 
+Des exemples à importer se trouvent dans [examples/test-catalog](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/test-catalog).
+
 ![Ouvrez le menu à points de la page Tests.](test-catalog-guide-page-actions-step-1.png)
 
 ![Import ouvre l'assistant d'examen du fichier.](test-catalog-guide-import-menu.png)

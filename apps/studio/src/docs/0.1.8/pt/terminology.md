@@ -269,6 +269,8 @@ Selecione **Download template**. Prepare o ficheiro com os campos e exemplos do 
 
 Abra novamente o menu dos termos e selecione **Import terms**.
 
+Há exemplos para importar em [examples/terminology](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/terminology).
+
 ![Captura do Studio: Escolher Import terms](terminology-guide-import-terms.png)
 
 ### 4. Selecionar o ficheiro preparado
