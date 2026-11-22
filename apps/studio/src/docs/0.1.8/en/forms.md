@@ -104,8 +104,8 @@ Do this when your account is limited to one site or a few sites. An administrato
 
 1. Select **Forms** in the main menu.
 2. Open the form's row dots and select **View/Run**.
-3. Check the facility field. If your limit names one facility, it is already filled in and you cannot change it.
-4. If your limit names several facilities, open the facility field and choose one of them.
+3. Check the facility field. If your limit covers one facility, it is already filled in and you cannot change it.
+4. If your limit covers several facilities, open the facility field and choose one of them.
 5. Complete the other fields.
 6. Open the dots menu at the top right and select **Submit**.
 
@@ -151,7 +151,7 @@ Two forms may use the same number, and so may two facilities. A form with no req
 
 ## Mark an entry as entered in error
 
-Do this when an entry should not have been saved, for example a wrong patient or a request entered twice. You need **Mark entries as entered in error**. The Lab Manager role has it.
+Do this when an entry should not have been saved, for example a wrong patient or a request entered twice. You need **Mark entries as entered in error**. The Administrator and Lab Manager roles have it.
 
 1. Open the form's **Entries** tab.
 2. Find the entry with **Search requisition**.
@@ -167,13 +167,13 @@ A marked order still counts in reports and dashboards today. No report leaves it
 
 ## Choose which answers the entries list shows
 
-The **Summary** column shows up to three answers of each entry. If no field is chosen, it shows the first three answered fields, apart from the requisition number.
+The **Summary** column shows up to three answers of each entry. If no field is chosen, it shows the first three answered top-level fields, apart from the requisition number. A field inside a group never appears there.
 
 1. Open the form in the builder.
 2. Select the field's Edit control.
 3. Turn on **Show in entries list**.
 4. Open the field-editor dots and select **Save**.
-5. Repeat for each field you want, up to three.
+5. Repeat for each field you want. You may choose any number, but the list shows the first three that are answered.
 6. Open the builder dots and select **Save draft**, then **Publish**.
 
 **Expected result:** new entries show the chosen answers under **Summary**. Entries saved before keep the summary they had.
@@ -706,7 +706,7 @@ The **Users** and **Facility** forms fill in the Users and Facilities pages. The
 
 **After marking, a message says `The entry is marked in error, but its saved records were not updated.`** The entry is marked and its number is free, but its order, samples and results are not marked. Ask an administrator to check the run the message names, or the ingest workflow.
 
-**After marking, a message says `The records this entry made are not known yet.`** The entry was still being saved. Its records are marked when that save finishes.
+**After marking, a message says `The records this entry made are not known yet. If its save is still running, they will be marked when it finishes.`** The server does not know yet which records the entry made. If its save is still running, the records are marked when it finishes.
 
 ## Related guides
 

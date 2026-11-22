@@ -100,12 +100,12 @@ Selecione **Submit** uma vez. Aguarde o resultado. Não envie novamente apenas p
 
 ## Preencher um formulário no seu próprio local
 
-Faça isto quando a sua conta está limitada a um local ou a alguns locais. Um administrador define esse limite em [Utilizadores](/docs/users).
+Faça isto quando a sua conta estiver limitada a um local ou a alguns locais. Um administrador define esse limite em [Utilizadores](/docs/users).
 
 1. Selecione **Formulários** no menu principal.
 2. Abra os pontos da linha do formulário e selecione **View/Run**.
-3. Verifique o campo da unidade. Se o seu limite indica uma só unidade, ela já está preenchida e não a pode alterar.
-4. Se o seu limite indica várias unidades, abra o campo da unidade e escolha uma delas.
+3. Verifique o campo da unidade. Se o seu limite abrange uma só unidade, ela já está preenchida e não a pode alterar.
+4. Se o seu limite abrange várias unidades, abra o campo da unidade e escolha uma delas.
 5. Preencha os outros campos.
 6. Abra o menu de pontos no canto superior direito e selecione **Submit**.
 
@@ -151,7 +151,7 @@ Dois formulários podem usar o mesmo número, e duas unidades também. Um formul
 
 ## Marcar um registo como introduzido por erro
 
-Faça isto quando um registo não devia ter sido guardado, por exemplo um paciente errado ou um pedido introduzido duas vezes. Precisa de **Marcar registos como introduzidos por erro**. A função Lab Manager tem esta permissão.
+Faça isto quando um registo não devia ter sido guardado, por exemplo um paciente errado ou um pedido introduzido duas vezes. Precisa de **Marcar registos como introduzidos por erro**. As funções Administrator e Lab Manager têm esta permissão.
 
 1. Abra o separador **Registos** do formulário.
 2. Encontre o registo com **Pesquisar requisição**.
@@ -167,13 +167,13 @@ Hoje, um pedido marcado ainda conta nos relatórios e nos painéis. Nenhum relat
 
 ## Escolher as respostas que a lista de registos mostra
 
-A coluna **Resumo** mostra até três respostas de cada registo. Se nenhum campo for escolhido, mostra os três primeiros campos respondidos, sem o número de requisição.
+A coluna **Resumo** mostra até três respostas de cada registo. Se nenhum campo for escolhido, mostra os três primeiros campos de primeiro nível respondidos, sem o número de requisição. Um campo dentro de um grupo nunca aparece aí.
 
 1. Abra o formulário no construtor.
 2. Selecione o controlo de edição do campo.
 3. Ative **Mostrar na lista de registos**.
 4. Abra os pontos do editor de campo e selecione **Guardar**.
-5. Repita para cada campo que quiser, até três.
+5. Repita para cada campo que quiser. Pode escolher quantos quiser, mas a lista mostra os três primeiros que têm resposta.
 6. Abra os pontos do construtor e selecione **Guardar rascunho** e depois **Publicar**.
 
 **Resultado esperado:** os novos registos mostram as respostas escolhidas em **Resumo**. Os registos guardados antes mantêm o resumo que tinham.
@@ -706,7 +706,7 @@ Os formulários **Users** e **Facility** preenchem as páginas Utilizadores e Un
 
 **Depois de marcar, uma mensagem diz `The entry is marked in error, but its saved records were not updated.`** O registo está marcado e o número está livre, mas o pedido, as amostras e os resultados não foram marcados. Peça a um administrador que verifique a execução indicada na mensagem, ou o fluxo de ingestão.
 
-**Depois de marcar, uma mensagem diz `The records this entry made are not known yet.`** O registo ainda estava a ser guardado. Os seus dados são marcados quando essa gravação terminar.
+**Depois de marcar, uma mensagem diz `The records this entry made are not known yet. If its save is still running, they will be marked when it finishes.`** O servidor ainda não sabe que dados o registo criou. Se a gravação ainda estiver a decorrer, esses dados são marcados quando ela terminar.
 
 ## Guias relacionados
 

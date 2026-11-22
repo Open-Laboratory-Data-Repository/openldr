@@ -104,8 +104,8 @@ Faites-le quand votre compte est limité à un site ou à quelques sites. Un adm
 
 1. Sélectionnez **Formulaires** dans le menu principal.
 2. Ouvrez les points de la ligne du formulaire et sélectionnez **View/Run**.
-3. Vérifiez le champ de l'établissement. Si votre limite nomme un seul établissement, il est déjà rempli et vous ne pouvez pas le changer.
-4. Si votre limite nomme plusieurs établissements, ouvrez le champ de l'établissement et choisissez-en un.
+3. Vérifiez le champ de l'établissement. Si votre limite couvre un seul établissement, il est déjà rempli et vous ne pouvez pas le changer.
+4. Si votre limite couvre plusieurs établissements, ouvrez le champ de l'établissement et choisissez-en un.
 5. Remplissez les autres champs.
 6. Ouvrez le menu de points en haut à droite et sélectionnez **Submit**.
 
@@ -151,7 +151,7 @@ Deux formulaires peuvent utiliser le même numéro, deux établissements aussi. 
 
 ## Marquer une saisie comme saisie par erreur
 
-Faites-le quand une saisie n'aurait pas dû être enregistrée, par exemple un mauvais patient ou une demande saisie deux fois. Il vous faut **Marquer des saisies comme erronées**. Le rôle Lab Manager l'a.
+Faites-le quand une saisie n'aurait pas dû être enregistrée, par exemple un mauvais patient ou une demande saisie deux fois. Il vous faut **Marquer des saisies comme erronées**. Les rôles Administrator et Lab Manager l'ont.
 
 1. Ouvrez l'onglet **Saisies** du formulaire.
 2. Trouvez la saisie avec **Rechercher un numéro de demande**.
@@ -167,13 +167,13 @@ Aujourd'hui, une demande marquée compte encore dans les rapports et les tableau
 
 ## Choisir les réponses affichées dans la liste des saisies
 
-La colonne **Résumé** affiche jusqu'à trois réponses de chaque saisie. Si aucun champ n'est choisi, elle affiche les trois premiers champs remplis, sans le numéro de demande.
+La colonne **Résumé** affiche jusqu'à trois réponses de chaque saisie. Si aucun champ n'est choisi, elle affiche les trois premiers champs remplis de premier niveau, sans le numéro de demande. Un champ placé dans un groupe n'y apparaît jamais.
 
 1. Ouvrez le formulaire dans le générateur.
 2. Sélectionnez la commande de modification du champ.
 3. Activez **Afficher dans la liste des saisies**.
 4. Ouvrez les points de l'éditeur de champ et sélectionnez **Enregistrer**.
-5. Recommencez pour chaque champ voulu, jusqu'à trois.
+5. Recommencez pour chaque champ voulu. Vous pouvez en choisir autant que vous voulez, mais la liste affiche les trois premiers qui ont une réponse.
 6. Ouvrez les points du générateur et sélectionnez **Enregistrer le brouillon**, puis **Publier**.
 
 **Résultat attendu :** les nouvelles saisies affichent les réponses choisies sous **Résumé**. Les saisies plus anciennes gardent leur résumé.
@@ -706,7 +706,7 @@ Les formulaires **Users** et **Facility** remplissent les pages Utilisateurs et 
 
 **Après le marquage, un message affiche `The entry is marked in error, but its saved records were not updated.`** La saisie est marquée et son numéro est libre, mais sa demande, ses échantillons et ses résultats ne sont pas marqués. Demandez à un administrateur de vérifier l'exécution nommée dans le message, ou le workflow d'ingestion.
 
-**Après le marquage, un message affiche `The records this entry made are not known yet.`** La saisie était encore en cours d'enregistrement. Ses enregistrements sont marqués à la fin de cet enregistrement.
+**Après le marquage, un message affiche `The records this entry made are not known yet. If its save is still running, they will be marked when it finishes.`** Le serveur ne sait pas encore quelles données la saisie a créées. Si sa sauvegarde est encore en cours, elles sont marquées quand cette sauvegarde se termine.
 
 ## Guides associés
 
