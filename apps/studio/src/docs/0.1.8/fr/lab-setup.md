@@ -48,7 +48,7 @@ Chaque examen a sa propre section et son propre réglage de vérification dans c
 
 **Résultat attendu :** un message indique que l'examen est enregistré. La section et l'interrupteur gardent votre choix quand vous rouvrez l'examen.
 
-Quand **Vérification requise** est activé, une seconde étape validera chaque résultat avant sa diffusion. Quand il est désactivé, un résultat sans valeur critique sera diffusé sans cette étape. Une valeur critique passe toujours en vérification.
+La vérification des résultats arrive dans une version ultérieure. Avec elle, quand **Vérification requise** est activé, une seconde étape validera chaque résultat avant sa diffusion. Quand il est désactivé, un résultat sans valeur critique sera diffusé sans cette étape. Une valeur critique passera toujours en vérification.
 
 **Section** est masqué tant que le laboratoire n'a aucune section. Sans **Lab settings**, vous pouvez lire les deux champs, mais pas les modifier.
 
@@ -64,7 +64,7 @@ Par défaut, la personne qui a saisi un résultat ne peut pas le valider. Active
 
 ## Ajouter des seuils critiques à un intervalle de référence
 
-Un seuil critique est une valeur si loin de l'intervalle qu'il faut agir tout de suite. La saisie des résultats signalera une valeur qui l'atteint ou le dépasse. Utilisez les seuils approuvés par votre laboratoire. Ne copiez pas les nombres d'un exemple.
+Un seuil critique est une valeur si loin de l'intervalle qu'il faut agir tout de suite. La saisie des résultats signalera une valeur qui le dépasse. Utilisez les seuils approuvés par votre laboratoire. Ne copiez pas les nombres d'un exemple.
 
 1. Ouvrez **Catalogue des examens** et ouvrez l'examen avec **Modifier**.
 2. Trouvez le champ de résultat et son intervalle de référence.
@@ -95,7 +95,7 @@ La page **Rôles** liste les sept capacités du laboratoire dans le groupe **Lab
 Il faut **Manage roles** pour donner un rôle à une personne.
 
 1. Ouvrez **Utilisateurs**.
-2. Trouvez le compte, ouvrez le menu à points de sa ligne et sélectionnez **Modifier**.
+2. Trouvez le compte, ouvrez le menu à points de sa ligne et sélectionnez **Modifier**. Sans administration d'identité disponible, le menu affiche **Modifier le rôle**.
 3. Ouvrez **Rôle** et sélectionnez **Reception**, **Lab Technician** ou **Lab Manager**.
 4. Ouvrez le menu à points du panneau et sélectionnez **Enregistrer**.
 
@@ -140,6 +140,6 @@ Pour une copie installée sous Linux ou macOS, utilisez `./openldr` au lieu de `
 ## Guides associés
 
 - [Laboratoire](/docs/laboratory)
-- [Catalogue de tests](/docs/test-catalog)
+- [Catalogue des examens](/docs/test-catalog)
 - [Rôles](/docs/roles)
 - [Utilisateurs](/docs/users)

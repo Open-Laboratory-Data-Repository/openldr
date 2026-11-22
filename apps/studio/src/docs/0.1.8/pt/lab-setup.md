@@ -48,7 +48,7 @@ Cada exame tem a sua própria secção e definição de revisão neste laborató
 
 **Resultado esperado:** uma mensagem diz que o exame foi guardado. A secção e o interruptor mantêm a sua escolha quando volta a abrir o exame.
 
-Com **Requer revisão** ligado, um segundo passo vai validar cada resultado antes de ser libertado. Com ele desligado, um resultado sem valor crítico vai ser libertado sem esse passo. Um valor crítico vai sempre para revisão.
+A revisão de resultados chega numa versão posterior. Com ela, com **Requer revisão** ligado, um segundo passo vai validar cada resultado antes de ser libertado. Com ele desligado, um resultado sem valor crítico vai ser libertado sem esse passo. Um valor crítico vai sempre passar por revisão.
 
 **Secção** fica oculto enquanto o laboratório não tiver secções. Sem **Lab settings** pode ler os dois campos, mas não os pode alterar.
 
@@ -64,7 +64,7 @@ Por predefinição, a pessoa que introduziu um resultado não o pode validar. Li
 
 ## Adicionar limites críticos a um intervalo de referência
 
-Um limite crítico é um valor tão fora do intervalo que alguém tem de agir logo. A introdução de resultados vai assinalar um valor que o atinja ou ultrapasse. Use os limites aprovados pelo seu laboratório. Não copie números de um exemplo.
+Um limite crítico é um valor tão fora do intervalo que alguém tem de agir logo. A introdução de resultados vai assinalar um valor que o ultrapasse. Use os limites aprovados pelo seu laboratório. Não copie números de um exemplo.
 
 1. Abra **Catálogo de exames** e abra o exame com **Editar**.
 2. Encontre o campo de resultado e o seu intervalo de referência.
@@ -95,7 +95,7 @@ A página **Funções** lista as sete capacidades do laboratório no grupo **Lab
 Precisa de **Manage roles** para dar uma função a uma pessoa.
 
 1. Abra **Utilizadores**.
-2. Encontre a conta, abra o menu de pontos da sua linha e selecione **Editar**.
+2. Encontre a conta, abra o menu de pontos da sua linha e selecione **Editar**. Sem administração de identidade, o menu mostra **Editar função**.
 3. Abra **Função** e selecione **Reception**, **Lab Technician** ou **Lab Manager**.
 4. Abra o menu de pontos do painel e selecione **Guardar**.
 
@@ -140,6 +140,6 @@ Numa cópia instalada em Linux ou macOS, use `./openldr` em vez de `pnpm openldr
 ## Guias relacionados
 
 - [Laboratório](/docs/laboratory)
-- [Catálogo de testes](/docs/test-catalog)
+- [Catálogo de exames](/docs/test-catalog)
 - [Funções](/docs/roles)
 - [Utilizadores](/docs/users)

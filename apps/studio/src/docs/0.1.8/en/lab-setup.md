@@ -46,7 +46,7 @@ Each test has its own section and review setting at this lab. A new test needs r
 
 **Expected result:** a message says the test was saved. The section and the switch keep your choice when you open the test again.
 
-When **Needs review** is on, a second step will authorise each result before it is released. When it is off, a result with no critical value will be released without that step. A critical value always goes to review.
+Result review comes in a later release. With it, when **Needs review** is on, a second step will authorise each result before it is released. When it is off, a result with no critical value will be released without that step. A critical value will always go to review.
 
 **Section** is hidden while the lab has no sections. Without **Lab settings** you can read both fields, but you cannot change them.
 
@@ -62,7 +62,7 @@ By default, the person who entered a result cannot authorise it. Turn this on on
 
 ## Add critical limits to a reference band
 
-A critical limit is a value so far out of range that someone must act at once. Result entry will flag a value at or beyond it. Use the limits your lab has approved. Do not copy numbers from an example.
+A critical limit is a value so far out of range that someone must act at once. Result entry will flag a value beyond it. Use the limits your lab has approved. Do not copy numbers from an example.
 
 1. Open **Test catalog** and open the test with **Edit**.
 2. Find the result field and its reference band.
@@ -93,7 +93,7 @@ The **Roles** page lists the seven lab capabilities in the **Lab** group: **Rece
 You need **Manage roles** to give a person a role.
 
 1. Open **Users**.
-2. Find the account, open its row dots and select **Edit**.
+2. Find the account, open its row dots and select **Edit**. With identity administration unavailable, this menu reads **Edit role**.
 3. Open **Role** and select **Reception**, **Lab Technician** or **Lab Manager**.
 4. Open the sheet's dots menu and select **Save**.
 

@@ -158,7 +158,7 @@ Sous **Ce laboratoire**, choisissez la section dans **Section**, ou choisissez *
 
 ### 3. Régler Vérification requise
 
-Activez **Vérification requise** quand une personne doit valider les résultats de cet examen avant leur diffusion. Désactivez-le pour diffuser sans vérification un résultat sans valeur critique. Un nouvel examen commence avec ce réglage activé.
+Activez **Vérification requise** quand une personne doit valider les résultats de cet examen avant leur diffusion. Quand la vérification des résultats arrivera, le désactiver diffusera sans vérification un résultat sans valeur critique. Un nouvel examen commence avec ce réglage activé.
 
 ### 4. Enregistrer l'examen
 

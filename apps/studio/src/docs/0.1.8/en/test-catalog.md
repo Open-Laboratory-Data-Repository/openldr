@@ -158,7 +158,7 @@ Under **This lab**, choose the section in **Section**, or choose **No section**.
 
 ### 3. Set Needs review
 
-Turn **Needs review** on when a person must authorise this test's results before release. Turn it off to release a result with no critical value without review. A new test starts with it on.
+Turn **Needs review** on when a person must authorise this test's results before release. When result review comes, turning it off will release a result with no critical value without review. A new test starts with it on.
 
 ### 4. Save the test
 

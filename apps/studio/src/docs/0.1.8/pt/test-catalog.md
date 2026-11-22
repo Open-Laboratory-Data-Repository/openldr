@@ -158,7 +158,7 @@ Em **Este laboratório**, escolha a secção em **Secção**, ou escolha **Sem s
 
 ### 3. Definir Requer revisão
 
-Ligue **Requer revisão** quando uma pessoa tem de validar os resultados deste exame antes de serem libertados. Desligue para libertar sem revisão um resultado sem valor crítico. Um exame novo começa com esta definição ligada.
+Ligue **Requer revisão** quando uma pessoa tem de validar os resultados deste exame antes de serem libertados. Quando a revisão de resultados chegar, desligar vai libertar sem revisão um resultado sem valor crítico. Um exame novo começa com esta definição ligada.
 
 ### 4. Guardar o exame
 
