@@ -51,7 +51,7 @@ The install leaves the bundles it needs alone, and so does removal.
 }
 ```
 
-Each capability must be a key the running CE knows. The keys are listed in `packages/rbac/src/catalog.ts` in the CE source, and the Roles page shows the same list by name. An unknown key fails the install with `unknown capability: <key>`.
+Each capability must be a key the running CE knows. The keys are listed in `packages/rbac/src/catalog.ts` in the CE source, and the Roles page shows the same list by name. An unknown key fails the install with `unknown capability: <key>`. A role may hold `forms.void_entries`, so its users can mark a form entry as entered in error.
 
 The slug must already be in its final form: lowercase letters, digits and single hyphens. CE refuses a slug it would change when it stores it.
 

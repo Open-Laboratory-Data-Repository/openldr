@@ -274,7 +274,7 @@ Faites-le quand une personne ne doit voir les chiffres des tableaux de bord que 
 
 Les lieux viennent du registre des établissements : on les choisit, on ne les tape jamais. Un district est listé avec sa région, car deux régions peuvent avoir un district du même nom. Une limite liste au plus 300 lieux ; au-delà, choisissez leur district ou leur région. **Limité** sans aucun lieu ne montre aucun chiffre de tableau de bord.
 
-Un utilisateur limité perd ces droits, quel que soit son rôle : rapports, patients, requêtes, exports, workflows, connecteurs, audit, activité, corrections en attente, registre des établissements et synchronisation. Il ne peut ni créer ni modifier de tableau de bord, et un widget écrit en SQL affiche **Non disponible avec votre limite de données**. Il garde les formulaires, y compris la recherche de patients dans un formulaire, que la limite ne couvre pas.
+Un utilisateur limité perd ces droits, quel que soit son rôle : rapports, patients, requêtes, exports, workflows, connecteurs, audit, activité, corrections en attente, registre des établissements et synchronisation. Il ne peut ni créer ni modifier de tableau de bord, et un widget écrit en SQL affiche **Non disponible avec votre limite de données**. Il garde les formulaires. Sur un formulaire, la limite décide de l'établissement qu'il peut saisir et des saisies qu'il voit. Lisez [Formulaires](/docs/forms). La limite ne couvre pas la recherche de patients dans un formulaire.
 
 ## Utiliser Users sur un téléphone
 

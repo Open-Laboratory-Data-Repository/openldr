@@ -98,6 +98,86 @@ Sélectionnez **Submit** une seule fois. Attendez le résultat. Ne renvoyez pas 
 
 ![Response captured confirme la réponse envoyée. Ne renvoyez que pour une autre demande voulue.](forms-guide-order-result.png)
 
+## Saisir un formulaire pour votre propre site
+
+Faites-le quand votre compte est limité à un site ou à quelques sites. Un administrateur fixe cette limite dans [Utilisateurs](/docs/users).
+
+1. Sélectionnez **Formulaires** dans le menu principal.
+2. Ouvrez les points de la ligne du formulaire et sélectionnez **View/Run**.
+3. Vérifiez le champ de l'établissement. Si votre limite nomme un seul établissement, il est déjà rempli et vous ne pouvez pas le changer.
+4. Si votre limite nomme plusieurs établissements, ouvrez le champ de l'établissement et choisissez-en un.
+5. Remplissez les autres champs.
+6. Ouvrez le menu de points en haut à droite et sélectionnez **Submit**.
+
+**Résultat attendu :** **Response captured.** s'affiche, et la saisie apparaît sous **Saisies**.
+
+Le serveur vérifie de nouveau l'établissement à l'envoi. Un formulaire n'est jamais enregistré pour un établissement hors de votre limite.
+
+## Voir les saisies d'un formulaire
+
+Chaque envoi d'un formulaire crée une saisie. L'onglet **Saisies** les liste, de la plus récente à la plus ancienne. Il vous faut **Utiliser les formulaires**, et vous devez avoir le droit d'ouvrir le formulaire.
+
+1. Sélectionnez **Formulaires** dans le menu principal.
+2. Ouvrez les points de la ligne du formulaire et sélectionnez **View/Run**.
+3. Sélectionnez l'onglet **Saisies**, à côté de **Nouvelle saisie**.
+4. Tapez le début d'un numéro de demande dans **Rechercher un numéro de demande**.
+5. Ouvrez la liste qui affiche **Tous les statuts** et choisissez **Active**, **Pas entièrement enregistrée** ou **Saisie par erreur**.
+6. Ouvrez la liste qui affiche **Tout le monde** et choisissez la personne qui a fait la saisie.
+7. Sélectionnez la ligne de la saisie.
+
+**Résultat attendu :** un panneau s'ouvre avec toutes les réponses de la saisie, en lecture seule, ainsi que l'auteur et la date de la saisie.
+
+Les colonnes sont **Demande**, **Résumé**, **Saisie le** et **Par**. Sur un téléphone, **Par** est masquée. **Tout le monde** propose seulement les personnes dont vous avez déjà vu des saisies pendant cette visite.
+
+Si votre compte n'a pas de limite de données, vous voyez toutes les saisies du formulaire. Si vous êtes limité à un site, vous voyez les saisies des établissements de votre limite, et les saisies que vous avez faites vous-même. Une saisie sur un formulaire sans champ d'établissement est visible par la personne qui l'a faite et par les utilisateurs sans limite.
+
+## Corriger un numéro de demande répété
+
+Un numéro de demande ne sert qu'une fois par formulaire et par établissement. Si vous envoyez un numéro déjà utilisé, rien n'est enregistré. Un message comme celui-ci s'affiche sous le champ du numéro de demande :
+
+`CS-0001 was already entered on 22 Nov 2026 at 13:50 by aisha.`
+
+1. Sélectionnez **Voir cette saisie** à la fin du message.
+2. Comparez cette saisie avec la demande que vous avez sous les yeux.
+3. S'il s'agit de la même demande, fermez le panneau et arrêtez-vous. Elle est déjà enregistrée.
+4. Si vous avez mal tapé le numéro, corrigez-le dans le champ du numéro de demande.
+5. Ouvrez le menu de points en haut à droite et sélectionnez **Submit**.
+
+**Résultat attendu :** **Response captured.** s'affiche. Le message disparaît dès que vous changez le numéro.
+
+Vos réponses restent à l'écran après le refus, vous n'avez donc pas à les retaper. Si c'est l'ancienne saisie qui est fausse, demandez à une personne autorisée de la marquer comme saisie par erreur. Son numéro redevient libre, et vous pouvez envoyer la vôtre. Le serveur écrit ce message en anglais. L'heure suit le fuseau horaire du laboratoire s'il est défini, sinon UTC.
+
+Deux formulaires peuvent utiliser le même numéro, deux établissements aussi. Un formulaire sans champ de numéro de demande n'a pas de contrôle des répétitions.
+
+## Marquer une saisie comme saisie par erreur
+
+Faites-le quand une saisie n'aurait pas dû être enregistrée, par exemple un mauvais patient ou une demande saisie deux fois. Il vous faut **Marquer des saisies comme erronées**. Le rôle Lab Manager l'a.
+
+1. Ouvrez l'onglet **Saisies** du formulaire.
+2. Trouvez la saisie avec **Rechercher un numéro de demande**.
+3. Ouvrez les points de la ligne de la saisie et sélectionnez **Marquer comme saisie par erreur**.
+4. Tapez dans **Motif** pourquoi la saisie est fausse.
+5. Sélectionnez **Marquer comme saisie par erreur**.
+
+**Résultat attendu :** un message indique `<numéro> est marquée comme saisie par erreur.` La ligne reste dans la liste, barrée, avec **Saisie par erreur** sous son résumé.
+
+Cette action est irréversible. La saisie reste enregistrée, et son panneau affiche **Marquée par**, **Marquée le** et **Motif**. La demande, les échantillons et les résultats que la saisie a enregistrés sont aussi marqués. Son numéro de demande peut être réutilisé. Le motif est obligatoire et compte au plus 500 caractères. Chaque marquage est inscrit dans **Audit**.
+
+Aujourd'hui, une demande marquée compte encore dans les rapports et les tableaux de bord. Aucun rapport ne l'écarte pour l'instant.
+
+## Choisir les réponses affichées dans la liste des saisies
+
+La colonne **Résumé** affiche jusqu'à trois réponses de chaque saisie. Si aucun champ n'est choisi, elle affiche les trois premiers champs remplis, sans le numéro de demande.
+
+1. Ouvrez le formulaire dans le générateur.
+2. Sélectionnez la commande de modification du champ.
+3. Activez **Afficher dans la liste des saisies**.
+4. Ouvrez les points de l'éditeur de champ et sélectionnez **Enregistrer**.
+5. Recommencez pour chaque champ voulu, jusqu'à trois.
+6. Ouvrez les points du générateur et sélectionnez **Enregistrer le brouillon**, puis **Publier**.
+
+**Résultat attendu :** les nouvelles saisies affichent les réponses choisies sous **Résumé**. Les saisies plus anciennes gardent leur résumé.
+
 ## Commencer un formulaire de demande
 
 Utilisez cette tâche si un formulaire existant ne recueille pas les informations nécessaires au workflow. Le créateur choisit une version du format de données de santé FHIR et un type de ressource.
@@ -600,6 +680,10 @@ Save de l'éditeur de champ applique une modification locale du créateur. Save 
 
 Enregistrer ou restaurer un contenu différent peut remettre un formulaire Published en Draft. Un contenu identique ne force pas ce changement. View/Run reste disponible, mais l'envoi exige l'état Published.
 
+Le panneau d'une saisie affiche chaque réponse sous le libellé actuel du champ. Si vous renommez un champ, les saisies plus anciennes affichent aussi le nouveau libellé.
+
+Les formulaires **Users** et **Facility** remplissent les pages Utilisateurs et Établissements. La liste des formulaires ne les montre qu'aux personnes qui ont **Modifier les formulaires**. Sur une nouvelle installation, le formulaire **Lab order** ne s'ouvre que pour les rôles Lab Technician et Lab Manager. Une personne qui gère les rôles ou modifie les formulaires l'ouvre toujours. Une installation qui avait déjà ce formulaire garde sa liste d'accès.
+
 ## Dépannage
 
 **Aucun patient correspondant.** Vérifiez la recherche et si votre flux habituel a fourni ce patient. Utilisez Patients pour inspecter le dossier reçu.
@@ -612,9 +696,21 @@ Enregistrer ou restaurer un contenu différent peut remettre un formulaire Publi
 
 **Restore laisse Draft.** Vérifiez le contenu restauré, puis publiez-le avec Publish lorsqu'il doit permettre à nouveau les envois.
 
+**Une saisie affiche Pas entièrement enregistrée.** L'enregistrement s'est arrêté après avoir stocké une partie de la saisie. Une demande existe peut-être, donc la saisie garde son numéro de demande. Ouvrez la saisie pour voir ce qu'elle contient. Demandez ensuite à une personne qui a **Marquer des saisies comme erronées** de la marquer, puis saisissez la demande de nouveau.
+
+**Submit affiche `this entry names a facility outside your limit`.** L'établissement choisi est hors de votre limite, ou vous l'avez laissé vide. Choisissez l'un de vos établissements.
+
+**Submit affiche `this form's facility field is free text, so it cannot be used by a user limited to a site`.** Un utilisateur limité ne peut utiliser qu'un champ d'établissement qui choisit dans le registre des établissements. Demandez à un éditeur de formulaires de changer le champ.
+
+**Submit affiche `your data limit names no facility, so you cannot enter this form`.** Votre limite ne liste aucun établissement. Le champ de l'établissement affiche alors **Votre compte n’est lié à aucun établissement. Demandez à un administrateur.** Demandez à un administrateur d'ajouter votre établissement dans Utilisateurs.
+
+**Après le marquage, un message affiche `The entry is marked in error, but its saved records were not updated.`** La saisie est marquée et son numéro est libre, mais sa demande, ses échantillons et ses résultats ne sont pas marqués. Demandez à un administrateur de vérifier l'exécution nommée dans le message, ou le workflow d'ingestion.
+
+**Après le marquage, un message affiche `The records this entry made are not known yet.`** La saisie était encore en cours d'enregistrement. Ses enregistrements sont marqués à la fin de cet enregistrement.
+
 ## Guides associés
 
-Lisez [Patients](/docs/patients) pour les dossiers reçus et [Catalogue des tests](/docs/test-catalog) pour les tests activés. Lisez [Workflows](/docs/workflows) pour le workflow de saisie et [Commencer ici](/docs/start-here) pour l'installation et la CLI.
+Lisez [Patients](/docs/patients) pour les dossiers reçus et [Catalogue des tests](/docs/test-catalog) pour les tests activés. Lisez [Workflows](/docs/workflows) pour le workflow de saisie et [Commencer ici](/docs/start-here) pour l'installation et la CLI. Lisez [Utilisateurs](/docs/users) pour limiter une personne à un site, et [Rôles](/docs/roles) pour donner à un rôle **Marquer des saisies comme erronées**.
 
 ## Exercice facultatif
 
