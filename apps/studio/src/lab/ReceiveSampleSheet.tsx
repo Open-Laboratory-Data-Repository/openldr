@@ -27,10 +27,11 @@ function requestsOf(order: ReceptionOrder): Array<{ id: string; names: string }>
 
 /** Receives a sample for an order: its type from the order's tests, its condition from the lab's
  *  sample-condition set, and which tests it serves (all of them unless the desk says otherwise). */
-export function ReceiveSampleSheet({ order, onClose, onReceived }: {
+export function ReceiveSampleSheet({ order, onClose, onReceived, onCloseAutoFocus }: {
   order: ReceptionOrder | null;
   onClose: () => void;
   onReceived: (order: ReceptionOrder) => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }): JSX.Element {
   const { t } = useTranslation();
   const open = order !== null;
@@ -46,7 +47,7 @@ export function ReceiveSampleSheet({ order, onClose, onReceived }: {
   useEffect(() => {
     if (!order) return undefined;
     let live = true;
-    setType(''); setCondition(NO_CONDITION);
+    setTypes([]); setType(''); setCondition(NO_CONDITION);
     setChosen(new Set(requestsOf(order).map((r) => r.id)));
     setTypesLoading(true);
     receptionSampleChoices(order.requisition, order.facility?.code ?? null)
@@ -89,7 +90,7 @@ export function ReceiveSampleSheet({ order, onClose, onReceived }: {
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg">
+      <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg" onCloseAutoFocus={onCloseAutoFocus}>
         <SheetHeader className="border-b border-border px-6 py-4">
           <SheetTitle>{t('reception.receive.title')}</SheetTitle>
           <SheetDescription>{order?.requisition}</SheetDescription>
@@ -125,13 +126,17 @@ export function ReceiveSampleSheet({ order, onClose, onReceived }: {
               </Select>
 
               <Label htmlFor="receive-condition" className="whitespace-nowrap">{t('reception.receive.condition')}</Label>
-              <Select value={condition} onValueChange={setCondition} disabled={conditions.loading}>
-                <SelectTrigger id="receive-condition"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_CONDITION}>{conditions.error ?? t('reception.receive.noCondition')}</SelectItem>
-                  {conditions.codes.map((c) => <SelectItem key={keyOf(c)} value={keyOf(c)}>{c.display ?? c.code}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {conditions.unusable ? (
+                <span id="receive-condition" className="text-muted-foreground">{conditions.error ?? t('reception.noOptions')}</span>
+              ) : (
+                <Select value={condition} onValueChange={setCondition} disabled={conditions.loading}>
+                  <SelectTrigger id="receive-condition"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_CONDITION}>{t('reception.receive.noCondition')}</SelectItem>
+                    {conditions.codes.map((c) => <SelectItem key={keyOf(c)} value={keyOf(c)}>{c.display ?? c.code}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
 
               <Label className="self-start whitespace-nowrap">{t('reception.receive.tests')}</Label>
               <div className="flex flex-col gap-2">

@@ -6,22 +6,31 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
-import type { ReceptionOrder } from '@/api';
+import type { ReceptionCoding, ReceptionOrder } from '@/api';
+import { displayOf } from './useValueSet';
 
 /** A key for one order: the same number may come from two facilities. */
 export function orderKey(order: Pick<ReceptionOrder, 'requisition' | 'facility'>): string {
   return `${order.facility?.code ?? ''}|${order.requisition}`;
 }
 
+/** A stored date and time in the reader's language and time zone, or as stored when it does not parse. */
+function localDateTime(value: string, language: string): string {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleString(language);
+}
+
 /** One found order on the Reception page: who sent it, for whom, its tests and its samples. Every
  *  action sits in the panel's ⋯ menu (AGENTS.md section 5). */
-export function OrderPanel({ order, onReceive, onLinkPatient, onCorrect }: {
+export function OrderPanel({ order, priorities, onReceive, onLinkPatient, onCorrect }: {
   order: ReceptionOrder;
+  /** The priority value set, so the panel shows a priority by its name. */
+  priorities: ReceptionCoding[];
   onReceive: () => void;
   onLinkPatient: () => void;
   onCorrect: () => void;
 }): JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const key = orderKey(order);
@@ -43,7 +52,7 @@ export function OrderPanel({ order, onReceive, onLinkPatient, onCorrect }: {
             {order.priority && (
               <>
                 <dt className="text-muted-foreground">{t('reception.panel.priority')}</dt>
-                <dd>{order.priority}</dd>
+                <dd>{displayOf(priorities, order.priority)}</dd>
               </>
             )}
             {order.clinician && (
@@ -89,7 +98,7 @@ export function OrderPanel({ order, onReceive, onLinkPatient, onCorrect }: {
             <TableRow key={`${test.serviceRequestId}|${test.system}|${test.code}`}>
               <TableCell>{test.display ?? test.code}</TableCell>
               <TableCell className="font-mono text-xs">{test.code}</TableCell>
-              <TableCell>{test.status}</TableCell>
+              <TableCell>{t(`reception.status.${test.status}`, { defaultValue: test.status })}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -112,7 +121,7 @@ export function OrderPanel({ order, onReceive, onLinkPatient, onCorrect }: {
               <li key={s.id} className="flex flex-wrap gap-x-3">
                 <span>{s.type ? (s.type.display ?? s.type.code) : t('reception.panel.noType')}</span>
                 {s.condition && <span className="text-muted-foreground">{s.condition}</span>}
-                {s.receivedTime && <span className="text-muted-foreground">{s.receivedTime}</span>}
+                {s.receivedTime && <span className="text-muted-foreground">{localDateTime(s.receivedTime, i18n.language)}</span>}
               </li>
             ))}
           </ul>

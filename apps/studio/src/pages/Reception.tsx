@@ -14,6 +14,7 @@ import { RegisterOrderSheet } from '@/lab/RegisterOrderSheet';
 import { PatientSheet, type PickedPatient } from '@/lab/PatientSheet';
 import { ReceiveSampleSheet } from '@/lab/ReceiveSampleSheet';
 import { CorrectOrderSheet } from '@/lab/CorrectOrderSheet';
+import { PRIORITY_VALUE_SET, useValueSet } from '@/lab/useValueSet';
 
 /**
  * The lab desk (lab module slices 1b and 2). One box takes a scanned or typed requisition number;
@@ -32,8 +33,16 @@ export function Reception() {
   const [correcting, setCorrecting] = useState<ReceptionOrder | null>(null);
   const [linking, setLinking] = useState<ReceptionOrder | null>(null);
   const seq = useRef(0);
+  const priorities = useValueSet(PRIORITY_VALUE_SET);
 
   useEffect(() => { box.current?.focus(); }, []);
+
+  /** Puts focus back in the scan box when a sheet or the page menu closes, so the next scan lands
+   *  there. Radix would otherwise focus the ⋯ button that opened it. */
+  const refocus = (event: Event): void => {
+    event.preventDefault();
+    box.current?.focus();
+  };
 
   const search = async (): Promise<void> => {
     const number = value.trim();
@@ -41,11 +50,14 @@ export function Reception() {
     const mine = ++seq.current;
     setSearched(number);
     setLoading(true);
+    // Select the number, so the next scan replaces it instead of adding to it.
+    box.current?.select();
     try {
       const rows = await findReceptionOrders(number);
       if (mine === seq.current) setOrders(rows);
     } catch (e) {
-      if (mine === seq.current) setOrders([]);
+      // A failed search is not a "not found": it offers no Register, only the error.
+      if (mine === seq.current) { setOrders([]); setSearched(null); }
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       if (mine === seq.current) setLoading(false);
@@ -95,7 +107,7 @@ export function Reception() {
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" onCloseAutoFocus={refocus}>
               <DropdownMenuItem data-testid="reception-search" disabled={!value.trim() || loading} onSelect={() => void search()}>
                 {t('reception.search')}
               </DropdownMenuItem>
@@ -123,6 +135,7 @@ export function Reception() {
                 <OrderPanel
                   key={orderKey(o)}
                   order={o}
+                  priorities={priorities.codes}
                   onReceive={() => setReceiving(o)}
                   onLinkPatient={() => setLinking(o)}
                   onCorrect={() => setCorrecting(o)}
@@ -138,13 +151,15 @@ export function Reception() {
         requisition={searched ?? ''}
         onClose={() => setRegisterOpen(false)}
         onRegistered={(o) => { setRegisterOpen(false); put(o); }}
+        onCloseAutoFocus={refocus}
       />
-      <ReceiveSampleSheet order={receiving} onClose={() => setReceiving(null)} onReceived={(o) => { setReceiving(null); put(o); }} />
-      <CorrectOrderSheet order={correcting} onClose={() => setCorrecting(null)} onCorrected={(o) => { setCorrecting(null); put(o); }} />
+      <ReceiveSampleSheet order={receiving} onClose={() => setReceiving(null)} onReceived={(o) => { setReceiving(null); put(o); }} onCloseAutoFocus={refocus} />
+      <CorrectOrderSheet order={correcting} onClose={() => setCorrecting(null)} onCorrected={(o) => { setCorrecting(null); put(o); }} onCloseAutoFocus={refocus} />
       <PatientSheet
         open={linking !== null}
         onClose={() => setLinking(null)}
         onPicked={(p) => { if (linking) void link(linking, p); }}
+        onCloseAutoFocus={refocus}
       />
     </AppShell>
   );

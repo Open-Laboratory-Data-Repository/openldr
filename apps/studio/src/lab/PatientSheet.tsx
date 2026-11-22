@@ -12,7 +12,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { LoadingState } from '@/components/ui/spinner';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { registerReceptionPatient, searchReceptionPatients, type ReceptionPatient } from '@/api';
-import { SEX_VALUE_SET, useValueSet } from './useValueSet';
+import { SEX_VALUE_SET, displayOf, useValueSet } from './useValueSet';
 
 export interface PickedPatient { id: string; display: string }
 
@@ -26,10 +26,12 @@ const EMPTY_REGISTER = { given: '', family: '', gender: '', birthDate: '', age: 
  * The Reception role cannot read the identifier-system list (`patients.view_identifiers`), so the
  * identifier on a registration is typed: a system the desk knows and a value. Both or neither.
  */
-export function PatientSheet({ open, onClose, onPicked }: {
+export function PatientSheet({ open, onClose, onPicked, onCloseAutoFocus }: {
   open: boolean;
   onClose: () => void;
   onPicked: (patient: PickedPatient) => void;
+  /** Where focus goes when the sheet closes. Radix's default is the control that opened it. */
+  onCloseAutoFocus?: (event: Event) => void;
 }): JSX.Element {
   const { t } = useTranslation();
   const sexes = useValueSet(SEX_VALUE_SET, open);
@@ -75,6 +77,8 @@ export function PatientSheet({ open, onClose, onPicked }: {
     const family = reg.family.trim();
     if (!given || !family || !reg.gender) { toast.error(t('reception.patient.registerNeeds')); return; }
     if (!reg.birthDate && reg.age.trim() === '') { toast.error(t('reception.patient.dateOrAge')); return; }
+    const age = Number(reg.age);
+    if (!reg.birthDate && !(Number.isInteger(age) && age >= 0)) { toast.error(t('reception.patient.ageInvalid')); return; }
     const idSystem = reg.idSystem.trim();
     const idValue = reg.idValue.trim();
     if (Boolean(idSystem) !== Boolean(idValue)) { toast.error(t('reception.patient.identifierBoth')); return; }
@@ -82,7 +86,7 @@ export function PatientSheet({ open, onClose, onPicked }: {
     try {
       const made = await registerReceptionPatient({
         given, family, gender: reg.gender,
-        ...(reg.birthDate ? { birthDate: reg.birthDate } : { ageYears: Number(reg.age) }),
+        ...(reg.birthDate ? { birthDate: reg.birthDate } : { ageYears: age }),
         ...(idSystem ? { identifier: { system: idSystem, value: idValue } } : {}),
       });
       toast.success(t('reception.patient.registered', { name: made.display }));
@@ -98,7 +102,7 @@ export function PatientSheet({ open, onClose, onPicked }: {
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg">
+      <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg" onCloseAutoFocus={onCloseAutoFocus}>
         <SheetHeader className="border-b border-border px-6 py-4">
           <SheetTitle>{t('reception.patient.title')}</SheetTitle>
           <SheetDescription>{t('reception.patient.description')}</SheetDescription>
@@ -145,7 +149,7 @@ export function PatientSheet({ open, onClose, onPicked }: {
                     <Label htmlFor={`found-${p.id}`} className="flex flex-col gap-0.5 font-normal">
                       <span>{p.name}</span>
                       <span className="text-xs text-muted-foreground">
-                        {[p.birthDate, p.gender, ...p.identifiers.map((i) => i.value)].filter(Boolean).join(' · ')}
+                        {[p.birthDate, displayOf(sexes.codes, p.gender), ...p.identifiers.map((i) => i.value)].filter(Boolean).join(' · ')}
                       </span>
                     </Label>
                   </div>
@@ -164,12 +168,16 @@ export function PatientSheet({ open, onClose, onPicked }: {
             <Label htmlFor="patient-family" className="whitespace-nowrap">{t('reception.patient.family')}</Label>
             <Input id="patient-family" value={reg.family} onChange={(e) => set({ family: e.target.value })} />
             <Label htmlFor="patient-sex" className="whitespace-nowrap">{t('reception.patient.sex')}</Label>
-            <Select value={reg.gender || undefined} onValueChange={(v) => set({ gender: v })} disabled={sexes.loading}>
-              <SelectTrigger id="patient-sex"><SelectValue placeholder={sexes.error ?? t('reception.patient.choose')} /></SelectTrigger>
-              <SelectContent>
-                {sexes.codes.map((s) => <SelectItem key={s.code} value={s.code}>{s.display ?? s.code}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            {sexes.unusable ? (
+              <span id="patient-sex" className="text-muted-foreground" data-testid="patient-sex-unusable">{sexes.error ?? t('reception.noOptions')}</span>
+            ) : (
+              <Select value={reg.gender || undefined} onValueChange={(v) => set({ gender: v })} disabled={sexes.loading}>
+                <SelectTrigger id="patient-sex"><SelectValue placeholder={t('reception.patient.choose')} /></SelectTrigger>
+                <SelectContent>
+                  {sexes.codes.map((s) => <SelectItem key={s.code} value={s.code}>{s.display ?? s.code}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
             <Label htmlFor="patient-new-birth-date" className="whitespace-nowrap">{t('reception.patient.birthDate')}</Label>
             <Input id="patient-new-birth-date" type="date" value={reg.birthDate} onChange={(e) => set({ birthDate: e.target.value, ...(e.target.value ? { age: '' } : {}) })} />
             <Label htmlFor="patient-age" className="whitespace-nowrap">{t('reception.patient.age')}</Label>

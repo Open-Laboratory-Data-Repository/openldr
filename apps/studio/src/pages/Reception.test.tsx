@@ -32,7 +32,9 @@ vi.mock('@/api', async (orig) => {
   };
 });
 
+import userEvent from '@testing-library/user-event';
 import * as api from '@/api';
+import { toast } from 'sonner';
 import { visibleNav } from '@/shell/AppShell';
 import { Reception } from './Reception';
 
@@ -87,6 +89,47 @@ describe('Reception', () => {
     expect(await screen.findByTestId('order-panel-F1|REQ-1')).toBeInTheDocument();
     expect(screen.getByText('Facility one')).toBeInTheDocument();
     expect(screen.getByText('Test one')).toBeInTheDocument();
+    // The request status shows by its name, not its code.
+    expect(screen.getByText('Active')).toBeInTheDocument();
+  });
+
+  it('lets the next scan replace the number just searched', async () => {
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([ORDER]);
+    const user = userEvent.setup();
+    renderPage();
+    await search('REQ-1');
+    await screen.findByTestId('order-panel-F1|REQ-1');
+    const box = screen.getByTestId('reception-scan') as HTMLInputElement;
+    expect(box).toHaveFocus();
+    // A scanner types into the focused box and presses Enter, with no click first.
+    await user.keyboard('REQ-2{Enter}');
+    expect(box).toHaveValue('REQ-2');
+    await waitFor(() => expect(api.findReceptionOrders).toHaveBeenLastCalledWith('REQ-2'));
+  });
+
+  it('puts focus back in the scan box when a sheet closes', async () => {
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([ORDER]);
+    renderPage();
+    await search('REQ-1');
+    await screen.findByTestId('order-panel-F1|REQ-1');
+    openMenu('order-actions-F1|REQ-1');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Correct order' }));
+    await screen.findByRole('dialog');
+    openMenu('correct-sheet-menu');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.getByTestId('reception-scan')).toHaveFocus());
+  });
+
+  it('keeps a failed search an error, with no not-found state and no Register', async () => {
+    vi.mocked(api.findReceptionOrders).mockRejectedValue(new Error('find order failed: 500'));
+    renderPage();
+    await search('REQ-1');
+    expect(toast.error).toHaveBeenCalledWith('find order failed: 500');
+    expect(screen.queryByText(/no order REQ-1/i)).toBeNull();
+    openMenu('reception-menu');
+    await screen.findByRole('menuitem', { name: 'Search' });
+    expect(screen.queryByRole('menuitem', { name: /register this order/i })).toBeNull();
   });
 
   it('offers Register this order in the page menu when nothing is found', async () => {

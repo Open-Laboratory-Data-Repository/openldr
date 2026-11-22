@@ -17,10 +17,11 @@ const NO_PRIORITY = '__none__';
 
 /** Fixes a typo on an order: priority, clinician and note, with a reason. The number, facility and
  *  tests are part of the order's ids and cannot be changed here (lab module ruling 12). */
-export function CorrectOrderSheet({ order, onClose, onCorrected }: {
+export function CorrectOrderSheet({ order, onClose, onCorrected, onCloseAutoFocus }: {
   order: ReceptionOrder | null;
   onClose: () => void;
   onCorrected: (order: ReceptionOrder) => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }): JSX.Element {
   const { t } = useTranslation();
   const open = order !== null;
@@ -71,7 +72,7 @@ export function CorrectOrderSheet({ order, onClose, onCorrected }: {
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg">
+      <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg" onCloseAutoFocus={onCloseAutoFocus}>
         <SheetHeader className="border-b border-border px-6 py-4">
           <SheetTitle>{t('reception.correct.title')}</SheetTitle>
           <SheetDescription>{t('reception.correct.description')}</SheetDescription>
@@ -94,13 +95,16 @@ export function CorrectOrderSheet({ order, onClose, onCorrected }: {
           <div className="border-t border-border" />
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-6 py-4 text-sm">
             <Label htmlFor="correct-priority" className="whitespace-nowrap">{t('reception.correct.priority')}</Label>
-            <Select value={priority} onValueChange={setPriority} disabled={priorities.loading}>
-              <SelectTrigger id="correct-priority"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_PRIORITY}>{priorities.error ?? t('reception.correct.noPriority')}</SelectItem>
-                {offered.map((p) => <SelectItem key={p.code} value={p.code}>{p.display ?? p.code}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <div className="flex flex-col gap-1">
+              <Select value={priority} onValueChange={setPriority} disabled={priorities.loading}>
+                <SelectTrigger id="correct-priority"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_PRIORITY}>{t('reception.correct.noPriority')}</SelectItem>
+                  {offered.map((p) => <SelectItem key={p.code} value={p.code}>{p.display ?? p.code}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {priorities.unusable && <span className="text-xs text-muted-foreground">{priorities.error ?? t('reception.noOptions')}</span>}
+            </div>
             <Label htmlFor="correct-clinician" className="whitespace-nowrap">{t('reception.correct.clinician')}</Label>
             <Input id="correct-clinician" value={clinician} onChange={(e) => setClinician(e.target.value)} />
             <Label htmlFor="correct-note" className="self-start whitespace-nowrap pt-2">{t('reception.correct.note')}</Label>

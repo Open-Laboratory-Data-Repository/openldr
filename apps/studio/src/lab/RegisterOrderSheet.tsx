@@ -20,6 +20,8 @@ import { PatientSheet, type PickedPatient } from './PatientSheet';
 import { PRIORITY_VALUE_SET, useValueSet } from './useValueSet';
 
 const SEARCH_DEBOUNCE_MS = 250;
+/** Radix Select cannot hold an empty value, so "no priority" is this sentinel in the picker only. */
+const NO_PRIORITY = '__none__';
 /** The facility search answers nothing under two characters (apps/server/src/lab-routes.ts). */
 const MIN_FACILITY_QUERY = 2;
 
@@ -29,11 +31,12 @@ const testKey = (c: { system: string; code: string }): string => `${c.system}|${
 /** Registers an order the desk could not find: the number as scanned, the sending facility, the
  *  tests and the patient. Lists are drawn in the sheet, not in a popover, which cannot scroll
  *  inside a Sheet (AGENTS.md section 6). */
-export function RegisterOrderSheet({ open, requisition, onClose, onRegistered }: {
+export function RegisterOrderSheet({ open, requisition, onClose, onRegistered, onCloseAutoFocus }: {
   open: boolean;
   requisition: string;
   onClose: () => void;
   onRegistered: (order: ReceptionOrder) => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }): JSX.Element {
   const { t } = useTranslation();
   const priorities = useValueSet(PRIORITY_VALUE_SET, open);
@@ -47,7 +50,7 @@ export function RegisterOrderSheet({ open, requisition, onClose, onRegistered }:
   const [tests, setTests] = useState<ReceptionCoding[]>([]);
   const [patient, setPatient] = useState<PickedPatient | null>(null);
   const [patientOpen, setPatientOpen] = useState(false);
-  const [priority, setPriority] = useState('');
+  const [priority, setPriority] = useState(NO_PRIORITY);
   const [clinician, setClinician] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -57,7 +60,7 @@ export function RegisterOrderSheet({ open, requisition, onClose, onRegistered }:
   useEffect(() => {
     if (!open) return;
     setNumber(requisition); setFacilityQuery(''); setFacilities([]); setFacility(null);
-    setTestQuery(''); setTests([]); setPatient(null); setPriority(''); setClinician(''); setNote('');
+    setTestQuery(''); setTests([]); setPatient(null); setPriority(NO_PRIORITY); setClinician(''); setNote('');
   }, [open, requisition]);
 
   useEffect(() => {
@@ -100,7 +103,7 @@ export function RegisterOrderSheet({ open, requisition, onClose, onRegistered }:
         facilityCode: facility.code,
         patientId: patient.id,
         tests: tests.map((x) => ({ system: x.system, code: x.code })),
-        ...(priority ? { priority } : {}),
+        ...(priority !== NO_PRIORITY ? { priority } : {}),
         ...(clinician.trim() ? { clinician: clinician.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
       });
@@ -116,7 +119,7 @@ export function RegisterOrderSheet({ open, requisition, onClose, onRegistered }:
   return (
     <>
       <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-        <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg">
+        <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg" onCloseAutoFocus={onCloseAutoFocus}>
           <SheetHeader className="border-b border-border px-6 py-4">
             <SheetTitle>{t('reception.register.title')}</SheetTitle>
             <SheetDescription>{t('reception.register.description')}</SheetDescription>
@@ -187,12 +190,17 @@ export function RegisterOrderSheet({ open, requisition, onClose, onRegistered }:
               </div>
 
               <Label htmlFor="register-priority" className="whitespace-nowrap">{t('reception.register.priority')}</Label>
-              <Select value={priority || undefined} onValueChange={setPriority} disabled={priorities.loading}>
-                <SelectTrigger id="register-priority"><SelectValue placeholder={priorities.error ?? t('reception.register.choose')} /></SelectTrigger>
-                <SelectContent>
-                  {priorities.codes.map((p) => <SelectItem key={p.code} value={p.code}>{p.display ?? p.code}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {priorities.unusable ? (
+                <span id="register-priority" className="text-muted-foreground">{priorities.error ?? t('reception.noOptions')}</span>
+              ) : (
+                <Select value={priority} onValueChange={setPriority} disabled={priorities.loading}>
+                  <SelectTrigger id="register-priority"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_PRIORITY}>{t('reception.register.noPriority')}</SelectItem>
+                    {priorities.codes.map((p) => <SelectItem key={p.code} value={p.code}>{p.display ?? p.code}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
 
               <Label htmlFor="register-clinician" className="whitespace-nowrap">{t('reception.register.clinician')}</Label>
               <Input id="register-clinician" value={clinician} onChange={(e) => setClinician(e.target.value)} />
