@@ -85,9 +85,13 @@ describe('GATE_TURBO_ARGS', () => {
     expect(GATE_TURBO_ARGS).toContain('--continue');
   });
 
-  it('runs the test task at the measured concurrency', () => {
-    expect(GATE_TURBO_ARGS.slice(0, 3)).toEqual(['turbo', 'run', 'test']);
-    expect(GATE_TURBO_ARGS).toContain('--concurrency=4');
+  // Measured 2026-11-22: turbo.json's test task does not depend on typecheck, so the 0.1.12 gate
+  // ran no typecheck at all. It also replayed 32 of 38 tasks from cache, and a test task's cache
+  // key misses changes in the packages it imports. AGENTS.md's gate is both halves, forced, at 2.
+  it('runs tests and typecheck, forced, at the repo gate concurrency', () => {
+    expect(GATE_TURBO_ARGS.slice(0, 4)).toEqual(['turbo', 'run', 'test', 'typecheck']);
+    expect(GATE_TURBO_ARGS).toContain('--force');
+    expect(GATE_TURBO_ARGS).toContain('--concurrency=2');
   });
 });
 

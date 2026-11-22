@@ -18,7 +18,7 @@ const TASK = /^[a-zA-Z0-9][a-zA-Z0-9:._-]*$/;
  *
  *  Two things that summary teaches, both of which a `(\S+?)#` match gets wrong:
  *  every failure is on ONE comma-separated line, and the failing task is not always `test` —
- *  `pnpm turbo run test` runs each package's typecheck too.
+ *  the gate runs each package's typecheck too (see GATE_TURBO_ARGS).
  *
  *  An empty result means nothing could be read. The caller must refuse on that, never re-run
  *  nothing and call the gate green. */
@@ -44,19 +44,25 @@ export function parseFailedTasks(turboOutput: string): FailedTask[] {
   return out;
 }
 
-/** The turbo run the release gate makes.
+/** The turbo run the release gate makes: tests and typecheck in one run.
+ *
+ *  ⛔ typecheck is named. turbo.json's test task does not depend on it, so `turbo run test`
+ *  alone typechecks nothing. Measured on the 0.1.12 dry run, 2026-11-22: 38 test tasks, no
+ *  typecheck task. The retry below re-runs a failed typecheck as `run typecheck`, as it does a test.
+ *
+ *  ⛔ --force. A test task has no `dependsOn`, so its cache key misses changes in the packages it
+ *  imports, and a cached pass can be stale. The 0.1.12 dry run replayed 32 of 38 tasks from cache.
  *
  *  ⛔ --continue. Without it turbo stops at the first failure and kills the tasks still running.
  *  They are neither passed nor in the Failed line, so the retry never covers them. Measured on the
  *  0.1.10 dry run: bootstrap failed, turbo cut off cli, server and studio mid-run, the retry
  *  re-ran bootstrap alone, and the gate said green with three packages never finished.
  *
- *  ⛔ --concurrency=4, not turbo's default. This box has 12 CPUs and 35 test tasks, each
- *  spawning its own vitest with workers up to the core count, so the default oversubscribes and
- *  tests fail on `Test timed out` rather than on anything real. Measured 2026-08-19 on a cold
- *  cache: the default failed 4 of 4 runs, each on a DIFFERENT package, every one passing when
- *  run alone; --concurrency=4 passed 35/35. */
-export const GATE_TURBO_ARGS = ['turbo', 'run', 'test', '--concurrency=4', '--continue'];
+ *  ⛔ --concurrency=2, the repo gate's setting (CLAUDE.md "Test gate"). The default oversubscribes
+ *  and tests fail on `Test timed out` rather than on anything real: measured 2026-08-19, the
+ *  default failed 4 of 4 cold runs, each on a different package. 4 passed then on this box, but
+ *  higher settings later ran a machine out of memory, and the forced 0.1.12 gate passed at 2. */
+export const GATE_TURBO_ARGS = ['turbo', 'run', 'test', 'typecheck', '--force', '--concurrency=2', '--continue'];
 
 /** How many tasks turbo neither passed nor failed, read off its summary:
  *

@@ -17,15 +17,16 @@
 // tests" — keep that list honest when editing here.
 
 import { execFileSync, spawn } from 'node:child_process';
-import { writeFileSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { resolveGitBash } from '../packages/release/src/git-bash';
 import { cleanupPlan, teardownCommand, type CleanupPlan } from '../packages/release/src/cleanup';
 import { buildReleaseManifest, parseReleaseManifest } from '../packages/release/src/manifest';
 import { evaluatePreconditions, newestReleaseTag, type ReleaseFacts } from '../packages/release/src/preconditions';
+import { releaseProbeParent } from '../packages/release/src/probe-dir';
 import {
   imagesWithTag,
   findPrivatePackages,
@@ -166,7 +167,7 @@ function newestTag(): string | null {
  *  --fail-if-no-match makes that impossible a second way: measured on pnpm 11.13.0, the same
  *  filter exits 1 with it and 0 without. */
 async function gateGreen(): Promise<boolean> {
-  // Why --continue and --concurrency=4: see GATE_TURBO_ARGS.
+  // Why typecheck, --force, --continue and --concurrency=2: see GATE_TURBO_ARGS.
   //
   // ⚠ The five releases before --concurrency=4 passed at the default only because 29 to 33 of the
   // 35 tasks came from cache, so almost nothing ran concurrently. That is luck, not evidence, and
@@ -426,7 +427,10 @@ async function main(): Promise<void> {
   // The stack it starts runs on ports 80/443. A failed release KEEPS it, because its logs are the
   // evidence when verification fails (see RELEASE.md). A finished release or a dry run removes it
   // at the end: `cleanupPlan` decides which, `cleanUp` acts.
-  const probe = mkdtempSync(join(tmpdir(), 'openldr-release-'));
+  // Under the home directory, not /tmp: Docker Desktop does not share /tmp. See releaseProbeParent.
+  const probeParent = releaseProbeParent(homedir());
+  mkdirSync(probeParent, { recursive: true });
+  const probe = mkdtempSync(join(probeParent, 'openldr-release-'));
   try {
     // --auth local: without it the installer asks which sign-in to use whenever it has a
     // terminal, and this step would wait on that question. local is what a new install gets.

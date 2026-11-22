@@ -31,7 +31,8 @@ pushed, and reports every problem at once:
    it does **not** re-run the generator or compare its output, so it cannot tell a stale
    changelog from a fresh one. Precondition 1's clean-tree check already implies it. Run
    `pnpm make:changelog` and commit the result yourself before releasing.
-6. Test gate green. A first failure is re-run alone, package by package, before it counts as a
+6. Test gate green. The gate runs tests and typecheck in one turbo run, with `--force` so no
+   result comes from cache, at `--concurrency=2`. A first failure is re-run alone, package by package, before it counts as a
    regression — this is usually a timeout under parallel load, not a real break (AGENTS.md
    `test-gate-flakiness-timeouts`). Which packages to retry is read out of turbo's own
    `Failed:` line; there is no operator-supplied override. The gate runs turbo with
@@ -104,8 +105,11 @@ Before `pnpm release`, update this release's upgrading guide in
 
 ### The verification install leaves a stack running
 
-Step 9 installs the published tag into a fresh `openldr-release-*` temporary directory and starts
-it, on **ports 80 and 443**. What happens to it depends on how the run ends:
+Step 9 installs the published tag into a fresh `~/.cache/openldr-release/openldr-release-*` folder
+and starts it, on **ports 80 and 443**. The folder is under the home directory because Docker
+Desktop does not share `/tmp`, and the install mounts files from it. On 0.1.12 a `/tmp` folder
+failed with "mounts denied" after the images were pushed. Stop anything else on ports 80 and 443
+first, or this step fails the same way. What happens to it depends on how the run ends:
 
 | Run ended | Stack | Directory |
 |---|---|---|
