@@ -358,7 +358,10 @@ describe('migrations 102 and 103 on the Lab order form', () => {
     const after = extract(order().fields);
     expect(before[0]).toMatchObject({ priority: 'urgent', identifier: [{ value: 'REF-42' }] });
     expect((after[0] as any).identifier).toEqual([{ system: 'urn:openldr:order:requisition', value: 'REF-42' }]);
-    const withoutIdentifier = (r: unknown[]) => r.map(({ identifier, ...rest }: any) => rest);
+    // Since lab slice 1b the number is also written to `requisition`, with the same system rule.
+    expect((after[0] as any).requisition).toEqual({ system: 'urn:openldr:order:requisition', value: 'REF-42' });
+    expect((before[0] as any).requisition).toEqual({ value: 'REF-42' });
+    const withoutIdentifier = (r: unknown[]) => r.map(({ identifier, requisition, ...rest }: any) => rest);
     expect(withoutIdentifier(after)).toEqual(withoutIdentifier(before));
   });
 });

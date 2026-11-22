@@ -7,7 +7,7 @@ import { EVERYTHING } from '@openldr/rbac';
 import { redact } from '@openldr/core';
 import type { ExtractionContext, FormSchema } from '@openldr/forms';
 import { FormCreateInputSchema } from '@openldr/forms/pure';
-import { extractorsForForm, isEntityAnswer, linkToOrder, isCodingAnswer, parseTestDetails, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
+import { entryFacilitiesOf, extractorsForForm, isEntityAnswer, labOrderId, linkToOrder, isCodingAnswer, parseTestDetails, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
@@ -48,6 +48,23 @@ function extractionContextFor(schema: FormSchema, answers: Record<string, unknow
     context.subject = { reference: answer.reference, ...(answer.display ? { display: answer.display } : {}) };
   }
   return context;
+}
+
+/**
+ * Give each ServiceRequest the fixed id of its test (lab slices 1b and 2, ruling 1): built from the
+ * requesting facility's code (null when none was picked), the requisition number and the test. The
+ * test is the request's last coding, since the extractor writes a catalog test's LOINC link in front
+ * of it. A request with no requisition number or no test keeps no id, and linkToOrder mints one.
+ */
+type Extracted = Parameters<typeof linkToOrder>[0];
+function withFixedOrderIds(resources: Extracted, facilityCode: string | null): Extracted {
+  return resources.map((r) => {
+    if (r.resourceType !== 'ServiceRequest' || r.id) return r;
+    const requisition = r.requisition?.value;
+    const test = r.code?.coding?.at(-1);
+    if (!requisition || !test?.system || !test.code) return r;
+    return { ...r, id: labOrderId(facilityCode, requisition, { system: test.system, code: test.code }) };
+  });
 }
 
 /** The Corlix fhir-path a Lab order binds its tests to. */
@@ -539,10 +556,15 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     const codingBefore = await catalogCodingsBefore(ctx, f.schema, p.data.answers);
     if (codingBefore) extractionContext.codingBefore = codingBefore;
     if (matchedBands.size > 0) extractionContext.testBands = matchedBands;
-    // Point every Observation and Specimen at the order (2026-10-11 spec, part 1), so
-    // lab_results.request_id fills and reports can join a result to its order.
+    // Each test's order gets its fixed id, then every Observation and Specimen is pointed at the
+    // orders (2026-10-11 spec, part 1), so lab_results.request_id fills and reports can join a
+    // result to its order.
+    const facilityCode = entryFacilitiesOf(f.schema, p.data.answers).order?.facility?.code ?? null;
     const resources = linkToOrder(
-      extractorsForForm(f.schema as never).flatMap((ex) => ex.extract(response as never, questionnaire as never, extractionContext)),
+      withFixedOrderIds(
+        extractorsForForm(f.schema as never).flatMap((ex) => ex.extract(response as never, questionnaire as never, extractionContext)),
+        facilityCode,
+      ),
       randomUUID,
     );
     if (resources.length === 0) {

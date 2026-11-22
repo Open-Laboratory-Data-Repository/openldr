@@ -33,13 +33,30 @@ describe('linkToOrder', () => {
     const out = linkToOrder([order(), specimen], counter()) as any[]
     expect(out[1].id).toBe('id-2')
     expect(out[0].specimen).toEqual([{ reference: 'Specimen/id-2' }])
+    expect(out[1].request).toEqual([{ reference: 'ServiceRequest/id-1' }])
   })
 
-  it('changes nothing when there is no order, or more than one', () => {
+  it('changes nothing when there is no order', () => {
     const none = [obs('HGB')]
     expect(linkToOrder(none, counter())).toEqual(none)
-    const two = [order(), order(), obs('HGB')]
-    expect(linkToOrder(two, counter())).toEqual(two)
+  })
+
+  it('links every Observation and the Specimen to all the orders, keeping each fixed id', () => {
+    const specimen = { resourceType: 'Specimen', status: 'unsatisfactory' } as FhirResource
+    const out = linkToOrder([order({ id: 'sr-a' }), order({ id: 'sr-b' }), obs('HGB'), specimen], counter()) as any[]
+    const both = [{ reference: 'ServiceRequest/sr-a' }, { reference: 'ServiceRequest/sr-b' }]
+    expect(out.map((r) => r.id)).toEqual(['sr-a', 'sr-b', undefined, 'id-1'])
+    expect(out[2].basedOn).toEqual(both)
+    expect(out[3].request).toEqual(both)
+    expect(out[0].specimen).toEqual([{ reference: 'Specimen/id-1' }])
+    expect(out[1].specimen).toEqual([{ reference: 'Specimen/id-1' }])
+  })
+
+  it('mints an id for each order that has none', () => {
+    const out = linkToOrder([order(), order(), obs('HGB')], counter()) as any[]
+    expect(out[0].id).toBe('id-1')
+    expect(out[1].id).toBe('id-2')
+    expect(out[2].basedOn).toEqual([{ reference: 'ServiceRequest/id-1' }, { reference: 'ServiceRequest/id-2' }])
   })
 
   it('does not change the resources it was given', () => {

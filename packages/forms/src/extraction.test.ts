@@ -7,6 +7,7 @@ import { TestResultsExtractor } from './extract/test-results'
 import { toTransactionBundle } from './to-transaction-bundle'
 import { makeField, makeSchema, definitionOf } from './__fixtures__/forms'
 import { isOrderRejectionField, orderRejectionFieldId } from './order-rejection-path'
+import { linkToOrder } from './link-to-order'
 
 const ctx = { subject: { reference: 'Patient/p1' }, authored: '2026-06-04T00:00:00Z' }
 
@@ -149,25 +150,48 @@ describe('ServiceRequestExtractor tests codings (test catalog S4)', () => {
       .toEqual([{ system: CATALOG, code: 'HIVVL', display: 'Viral load' }])
   })
 
-  it('names the order after its first test, so the warehouse keeps a test name', () => {
+  const twoTests = { tests: [{ system: CATALOG, code: 'HIVVL', display: 'Viral load' }, { system: CATALOG, code: 'CD4', display: 'CD4 count' }] }
+  const requests = (model: ReturnType<typeof order>, answers: Record<string, unknown>, extra: object = {}) =>
+    ServiceRequestExtractor.extract(toQuestionnaireResponse(model, answers as never), toQuestionnaire(model), { ...ctx, ...extra }) as any[]
+
+  it('names each order after its own test, so the warehouse keeps a test name', () => {
     // The warehouse keeps the first coding, which is the LOINC link and carries no name, so
     // panel_desc came out empty for every order taken in the studio. code.text is read first.
     const codingBefore = new Map([[`${CATALOG}|HIVVL`, { system: 'http://loinc.org', code: '25836-8' }]])
-    const model = order('reference')
-    const answers = { tests: [{ system: CATALOG, code: 'HIVVL', display: 'Viral load' }, { system: CATALOG, code: 'CD4', display: 'CD4 count' }] }
-    const request = ServiceRequestExtractor.extract(toQuestionnaireResponse(model, answers as never), toQuestionnaire(model), { ...ctx, codingBefore })[0] as any
-    expect(request.code.text).toBe('Viral load')
+    expect(requests(order('reference'), twoTests, { codingBefore }).map((r) => r.code.text)).toEqual(['Viral load', 'CD4 count'])
   })
 
-  it('writes the coding the context names in front of the test, test by test', () => {
+  it('writes the coding the context names in front of its own test only', () => {
     const codingBefore = new Map([[`${CATALOG}|HIVVL`, { system: 'http://loinc.org', code: '25836-8' }]])
-    expect(codings(order('reference'), {
-      tests: [{ system: CATALOG, code: 'HIVVL', display: 'Viral load' }, { system: CATALOG, code: 'CD4', display: 'CD4 count' }],
-    }, { codingBefore })).toEqual([
-      { system: 'http://loinc.org', code: '25836-8' },
-      { system: CATALOG, code: 'HIVVL', display: 'Viral load' },
-      { system: CATALOG, code: 'CD4', display: 'CD4 count' },
+    expect(requests(order('reference'), twoTests, { codingBefore }).map((r) => r.code.coding)).toEqual([
+      [{ system: 'http://loinc.org', code: '25836-8' }, { system: CATALOG, code: 'HIVVL', display: 'Viral load' }],
+      [{ system: CATALOG, code: 'CD4', display: 'CD4 count' }],
     ])
+  })
+
+  it('writes one ServiceRequest per test, each carrying the same requisition number', () => {
+    const model = makeSchema({
+      id: 'o', name: 'Order', fhirResourceType: 'ServiceRequest',
+      fields: [
+        makeField({ id: 'tests', displayLabel: 'Tests', fieldType: 'reference', order: 0, fhirPath: 'ServiceRequest.code', referenceMultiple: true, cardinality: { min: 1, max: '*' } }),
+        makeField({ id: 'num', displayLabel: 'Requisition', fieldType: 'text', order: 1, fhirPath: 'ServiceRequest.identifier.value', fhirDiscriminator: { system: 'urn:openldr:order:requisition' }, fhirValueField: 'value' }),
+        makeField({ id: 'prio', displayLabel: 'Priority', fieldType: 'text', order: 2, fhirPath: 'ServiceRequest.priority' }),
+      ],
+    })
+    const out = requests(model, { ...twoTests, num: 'CS-1', prio: 'urgent' })
+    expect(out).toHaveLength(2)
+    expect(out.map((r) => r.code.coding.map((c: any) => c.code))).toEqual([['HIVVL'], ['CD4']])
+    for (const r of out) {
+      expect(r.requisition).toEqual({ system: 'urn:openldr:order:requisition', value: 'CS-1' })
+      expect(r.identifier).toEqual([{ system: 'urn:openldr:order:requisition', value: 'CS-1' }])
+      expect(r).toMatchObject({ status: 'active', intent: 'order', priority: 'urgent', subject: ctx.subject })
+    }
+  })
+
+  it('writes one ServiceRequest with no code when no test is chosen', () => {
+    const out = requests(order('reference'), {})
+    expect(out).toHaveLength(1)
+    expect(out[0].code).toBeUndefined()
   })
 
   it('keeps a LOINC answer as LOINC, and an answer that names no system as LOINC', () => {
@@ -339,6 +363,25 @@ describe('order-level rejection (2026-10-11 spec, part 2)', () => {
     })
   })
 
+  it('revokes every order of a rejected 2-test order, and writes one Specimen that serves both', () => {
+    const { sr } = run({ tests: [{ system: CATALOG, code: 'FBC' }, { system: CATALOG, code: 'GLU' }], rej: REASON })
+    const requests = (sr as any[]).filter((r) => r.resourceType === 'ServiceRequest')
+    const specimens = (sr as any[]).filter((r) => r.resourceType === 'Specimen')
+    expect(requests).toHaveLength(2)
+    expect(specimens).toHaveLength(1)
+    for (const r of requests) {
+      expect(r.status).toBe('revoked')
+      expect(r.extension).toEqual([{ url: 'urn:openldr:ext:rejection', extension: [
+        { url: 'code', valueCode: 'UNLABELLED' }, { url: 'reason', valueString: 'Unlabelled specimen' },
+      ] }])
+    }
+    // The extractor sets no ids, so the Specimen's `request` is filled once the ids are known.
+    const linked = linkToOrder(sr, (() => { let n = 0; return () => `id-${++n}` })()) as any[]
+    const ids = linked.filter((r) => r.resourceType === 'ServiceRequest').map((r) => r.id)
+    expect(new Set(ids).size).toBe(2)
+    expect(linked.find((r) => r.resourceType === 'Specimen').request).toEqual(ids.map((id) => ({ reference: `ServiceRequest/${id}` })))
+  })
+
   it('gives the Specimen a type only when every test chose the same one', () => {
     const blood = { system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }
     const same = run({ tests: [{ system: CATALOG, code: 'FBC' }], details: typed(blood), rej: REASON }).sr as any[]
@@ -348,7 +391,7 @@ describe('order-level rejection (2026-10-11 spec, part 2)', () => {
       details: { ...typed(blood), [`${CATALOG}|GLU`]: { specimen: { system: 'urn:openldr:cs:local', code: 'UR' }, rejection: null, results: [] } },
       rej: REASON,
     }).sr as any[]
-    expect(mixed[1].type).toBeUndefined()
+    expect(mixed.find((r) => r.resourceType === 'Specimen').type).toBeUndefined()
   })
 
   it('falls back to the code when the reason has no display', () => {
