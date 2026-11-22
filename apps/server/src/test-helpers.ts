@@ -521,6 +521,8 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     forms: {} as never,
     formAccessStore: {} as never,
     formAccess: {} as never,
+    formEntryStore: {} as never,
+    formEntries: {} as never,
     dashboardAccessStore: {} as never,
     dashboardAccess: {} as never,
     dataScopes: { async get() { return { limited: false as const }; }, async set() { return { before: { limited: false as const }, after: { limited: false as const } }; } },

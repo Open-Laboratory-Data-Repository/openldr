@@ -480,6 +480,13 @@ function fakeCtx(): AppContext & {
         runAndRecord: async () => ({ runId: 'run-default', correlationId: null, status: 'completed', error: null }),
       },
     },
+    // The submit route writes a form entry before the save (design 2026-11-22-form-entries). Tests
+    // that care use the real service on a migrated database ('form entries on submit' below).
+    formEntries: {
+      facilityIdsOf: async () => null,
+      begin: async () => ({ id: 'entry-stub' }),
+      finish: async () => null,
+    },
     audits,
     fhirStoreCalls,
     fhirStoreExists,
@@ -1783,5 +1790,244 @@ describe('starter pack routes', () => {
   it('leaves GET /api/forms/:id working', async () => {
     const res = await appWithForms(ctx).inject({ method: 'GET', url: '/api/forms/form-1' });
     expect(res.json()).toEqual({ id: 'form-1' });
+  });
+});
+
+// Design 2026-11-22-form-entries: the submit route records an entry before the save, refuses a
+// repeated requisition number and a facility outside the user's limit, and settles the row after.
+describe('form entries on submit', () => {
+  const REGISTRY = 'urn:openldr:cs:facility-registry';
+  const field = (over: Record<string, unknown>) => ({
+    fhirPath: null, description: null, fieldType: 'text', required: false, enabled: true,
+    cardinality: { min: 0, max: '1' }, section: 'main', ...over,
+  });
+  /** A requisition form: a number and a facility, from the register or typed. */
+  const entrySchema = (facility: 'register' | 'free-text') => ({
+    ...sampleSchema,
+    id: 'entry-order',
+    fields: [
+      field({ id: 'num', displayLabel: 'Requisition', order: 0, fhirPath: 'ServiceRequest.identifier.value' }),
+      field({
+        id: 'fac', displayLabel: 'Facility', fieldType: 'facility', order: 1,
+        fhirPath: 'ServiceRequest.requester', fhirDiscriminator: { type: 'Organization' },
+        ...(facility === 'register' ? { referenceTarget: REGISTRY } : {}),
+      }),
+    ],
+  });
+  const siteA = { system: REGISTRY, code: 'A1', display: 'Site A' };
+  const siteB = { system: REGISTRY, code: 'B1', display: 'Site B' };
+  type Scope = { limited: false } | { limited: true; facilities: string[]; districts: never[]; regions: string[] };
+  const onlySiteA: Scope = { limited: true, facilities: ['reg-a'], districts: [], regions: [] };
+
+  async function world(opts: { run?: (input: any) => unknown; exists?: (type: string, id: string) => boolean } = {}) {
+    const { makeMigratedDb } = await import('@openldr/db/testing');
+    const { createFormEntryStore } = await import('@openldr/db');
+    const { createFormEntriesService, readScopeRegistryRows } = await import('@openldr/bootstrap');
+    const db = await makeMigratedDb();
+    for (const [id, code, name] of [['reg-a', 'A1', 'Site A'], ['reg-b', 'B1', 'Site B']]) {
+      await db.insertInto('facility_registry').values({
+        id, facility_system: 'urn:test:mfl', facility_code: code, name, region: 'Coast', district: name,
+        extras: '{}', source: 'test', created_at: NOW, updated_at: NOW,
+      } as never).execute();
+    }
+    const store = createFormEntryStore(db as never);
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).formEntries = createFormEntriesService({ store, registryRows: () => readScopeRegistryRows(db as never) });
+    (ctx as any).labIdentity = { tokens: async () => ({ 'lab.timezone': 'Africa/Dar_es_Salaam' }) };
+    (ctx as any).workflows = {
+      runner: {
+        runAndRecord: async (_w: string, _s: string, input: any) => {
+          runs.push(input);
+          return opts.run ? opts.run(input) : { runId: 'run-ok', correlationId: 'corr-1', status: 'completed', error: null };
+        },
+      },
+    };
+    if (opts.exists) (ctx as any).fhirStore = { exists: async (type: string, id: string) => opts.exists!(type, id) };
+
+    const appFor = (dataScope: Scope = { limited: false }, user = { id: 'u-aisha', username: 'aisha', displayName: 'Aisha M.' as string | null }) => {
+      const app = Fastify();
+      app.addHook('onRequest', async (req) => {
+        req.user = { ...user, roles: ['clerk'], capabilities: ALL_FORMS_CAPS, roleIds: [], dataScope } as never;
+      });
+      registerFormsRoutes(app, withAccess(ctx) as never);
+      return app;
+    };
+    const createForm = async (facility: 'register' | 'free-text' = 'register') =>
+      (await appFor().inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: entrySchema(facility), targetPages: ['forms'] } })).json().id as string;
+    const submit = (app: ReturnType<typeof appFor>, formId: string, answers: Record<string, unknown>) =>
+      app.inject({ method: 'POST', url: `/api/forms/${formId}/responses`, payload: { answers } });
+    const rows = async (formId: string) => (await store.list({ formId, limit: 50, offset: 0 })).entries;
+    return { db, store, ctx, runs, appFor, createForm, submit, rows };
+  }
+
+  it('answers the unchanged success body plus entryId, and the row names what the save stored', async () => {
+    const w = await world();
+    const formId = await w.createForm();
+    const res = await w.submit(w.appFor(), formId, { num: 'CS-0001', fac: siteA });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(Object.keys(body).sort()).toEqual(['correlationId', 'entryId', 'ok', 'resourceTypes', 'runId']);
+    expect(body).toMatchObject({ ok: true, runId: 'run-ok', correlationId: 'corr-1', resourceTypes: ['ServiceRequest'] });
+
+    const [row] = await w.rows(formId);
+    expect(row).toMatchObject({
+      id: body.entryId, status: 'active', facilityId: 'reg-a', facilityCode: 'A1', facilityName: 'Site A',
+      entryKey: 'CS-0001', enteredBy: 'u-aisha', enteredByName: 'Aisha M.',
+    });
+    // The ids in `saved` are the ids the bundle carried into the pipeline.
+    const entries = w.runs[0].body.entry as { resource: { resourceType: string; id: string } }[];
+    expect(row!.saved).toEqual({
+      responseId: entries[0]!.resource.id,
+      resources: entries.slice(1).map((e) => ({ resourceType: e.resource.resourceType, id: e.resource.id })),
+    });
+    expect(typeof row!.saved!.responseId).toBe('string');
+    await w.db.destroy();
+  });
+
+  it('uses the username when the user has no display name', async () => {
+    const w = await world();
+    const formId = await w.createForm();
+    await w.submit(w.appFor({ limited: false }, { id: 'u-2', username: 'proofclerk', displayName: null }), formId, { num: 'CS-1', fac: siteA });
+    expect((await w.rows(formId))[0]).toMatchObject({ enteredBy: 'u-2', enteredByName: 'proofclerk' });
+    await w.db.destroy();
+  });
+
+  it('refuses a repeated requisition number at the same site with 409 entry-repeat, and saves nothing', async () => {
+    const w = await world();
+    const formId = await w.createForm();
+    const first = await w.submit(w.appFor(), formId, { num: 'CS-0001', fac: siteA });
+    const [held] = await w.rows(formId);
+
+    const res = await w.submit(w.appFor(), formId, { num: 'CS-0001', fac: siteA });
+    expect(res.statusCode).toBe(409);
+    const at = new Date(held!.enteredAt);
+    const local = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Dar_es_Salaam', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at);
+    expect(res.json()).toEqual({
+      error: 'entry-repeat',
+      message: expect.stringMatching(new RegExp(`^CS-0001 was already entered on \\d{1,2} [A-Z][a-z]{2} \\d{4} at ${local} by Aisha M\\.$`)),
+      entry: { id: first.json().entryId, entryKey: 'CS-0001', enteredAt: held!.enteredAt, enteredByName: 'Aisha M.' },
+    });
+    expect(w.runs).toHaveLength(1);
+    expect(await w.rows(formId)).toHaveLength(1);
+
+    // Another site may use the same number.
+    expect((await w.submit(w.appFor(), formId, { num: 'CS-0001', fac: siteB })).statusCode).toBe(201);
+    await w.db.destroy();
+  });
+
+  it('refuses a limited user naming a facility outside the limit with 403, and saves nothing', async () => {
+    const w = await world();
+    const formId = await w.createForm();
+    const res = await w.submit(w.appFor(onlySiteA), formId, { num: 'CS-1', fac: siteB });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: 'this entry names a facility outside your limit' });
+    expect(w.runs).toHaveLength(0);
+    expect(await w.rows(formId)).toHaveLength(0);
+
+    // Inside the limit it saves.
+    expect((await w.submit(w.appFor(onlySiteA), formId, { num: 'CS-1', fac: siteA })).statusCode).toBe(201);
+    await w.db.destroy();
+  });
+
+  it('refuses a limited user on a form whose facility field is free text with 403, and saves nothing', async () => {
+    const w = await world();
+    const formId = await w.createForm('free-text');
+    const res = await w.submit(w.appFor(onlySiteA), formId, { num: 'CS-1', fac: 'Site A' });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: "this form's facility field is free text, so it cannot be used by a user limited to a site" });
+    expect(w.runs).toHaveLength(0);
+    expect(await w.rows(formId)).toHaveLength(0);
+    await w.db.destroy();
+  });
+
+  it('refuses a limited user whose limit names no facility with 403', async () => {
+    const w = await world();
+    const formId = await w.createForm();
+    const res = await w.submit(w.appFor({ limited: true, facilities: [], districts: [], regions: [] }), formId, { num: 'CS-1', fac: siteA });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: 'your data limit names no facility, so you cannot enter this form' });
+    expect(w.runs).toHaveLength(0);
+    await w.db.destroy();
+  });
+
+  it('removes the row when the save failed and stored nothing, so the number is free again', async () => {
+    let fail = true;
+    const w = await world({
+      run: () => (fail
+        ? { runId: 'run-none', correlationId: null, status: 'failed', error: 'persist blew up', nodeMeta: {} }
+        : { runId: 'run-ok', correlationId: null, status: 'completed', error: null }),
+      exists: () => false,
+    });
+    const formId = await w.createForm();
+    const res = await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA });
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toMatchObject({ ok: false, runId: 'run-none', persisted: 0 });
+    expect(await w.rows(formId)).toHaveLength(0);
+
+    fail = false;
+    expect((await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA })).statusCode).toBe(201);
+    await w.db.destroy();
+  });
+
+  it('removes the row when the ingest workflow is off', async () => {
+    const w = await world({ run: () => null, exists: () => false });
+    const formId = await w.createForm();
+    const res = await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain('wf-ingest');
+    expect(await w.rows(formId)).toHaveLength(0);
+    await w.db.destroy();
+  });
+
+  it('keeps the row incomplete when the save failed after storing the order, and the number stays refused', async () => {
+    const w = await world({
+      run: () => ({
+        runId: 'run-partial', correlationId: null, status: 'failed', error: 'log node blew up',
+        nodeMeta: { 'persist-1': { persisted: 2 } },
+      }),
+      // The order was stored; nothing else.
+      exists: (type) => type === 'ServiceRequest',
+    });
+    const formId = await w.createForm();
+    const res = await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA });
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toMatchObject({ ok: false, runId: 'run-partial', persisted: 2 });
+    expect(Object.keys(res.json())).not.toContain('entryId');
+
+    const [row] = await w.rows(formId);
+    const order = (w.runs[0].body.entry as { resource: { resourceType: string; id: string } }[])
+      .find((e) => e.resource.resourceType === 'ServiceRequest')!.resource;
+    expect(row).toMatchObject({ status: 'incomplete', saved: { responseId: null, resources: [{ resourceType: 'ServiceRequest', id: order.id }] } });
+
+    const again = await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA });
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toMatchObject({ error: 'entry-repeat', entry: { id: row!.id } });
+    expect(w.runs).toHaveLength(1);
+    await w.db.destroy();
+  });
+
+  it('keeps the row incomplete when the run says it stored records but none of the ids is found', async () => {
+    const w = await world({
+      run: () => ({ runId: 'run-p', correlationId: null, status: 'failed', error: 'boom', nodeMeta: { 'persist-1': { persisted: 1 } } }),
+      exists: () => false,
+    });
+    const formId = await w.createForm();
+    await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA });
+    expect((await w.rows(formId))[0]).toMatchObject({ status: 'incomplete', saved: { responseId: null, resources: [] } });
+    await w.db.destroy();
+  });
+
+  it('still answers success when settling the row fails after a completed save', async () => {
+    const w = await world();
+    const real = (w.ctx as any).formEntries;
+    (w.ctx as any).formEntries = { ...real, finish: async () => { throw new Error('db gone'); } };
+    const formId = await w.createForm();
+    const res = await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ ok: true, runId: 'run-ok' });
+    expect((await w.rows(formId))[0]).toMatchObject({ id: res.json().entryId, status: 'active', saved: null });
+    await w.db.destroy();
   });
 });

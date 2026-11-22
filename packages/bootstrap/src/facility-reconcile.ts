@@ -510,6 +510,17 @@ export function registryConceptCodeById(
 }
 
 /**
+ * The registry row id each concept code stands for: the inverse of `registryConceptCodeById`, over
+ * the same full register. A form's facility answer carries this code. Codes are unique, since a code
+ * two rows share becomes each row's own id.
+ */
+export function registryRowIdByConceptCode(
+  registry: readonly { id: string; name: string; facility_code: string | null }[],
+): Map<string, string> {
+  return new Map([...registryConceptCodeById(registry)].map(([id, code]) => [code, id]));
+}
+
+/**
  * Resolve every observed facility code through its mapping to a registry row.
  *
  * Reads both roles: the lab side from `diagnostic_reports.performer*` and the clinic side from

@@ -61,6 +61,16 @@ export async function setUserDataScope(
 /** A register row, as resolving a data limit needs it. */
 export interface ScopeRegistryRow { id: string; name: string; facility_code: string | null; region: string | null; district: string | null }
 
+/** True when a limited data limit covers this register row: it lists the row, or its district or region. */
+export function inDataScope(
+  r: Pick<ScopeRegistryRow, 'id' | 'region' | 'district'>,
+  scope: Extract<DataScope, { limited: true }>,
+): boolean {
+  return scope.facilities.includes(r.id)
+    || (r.region !== null && scope.regions.includes(r.region))
+    || scope.districts.some((d) => d.region === r.region && d.district === r.district);
+}
+
 /** A data limit turned into what the warehouse can match (`ResolvedScope` in @openldr/dashboards).
  *  Undefined for Everything. Facilities, regions and districts are matched in facility_map. Studio
  *  orders are not in facility_map: they carry the register code the picker emitted, so the codes of
@@ -80,10 +90,7 @@ export async function resolveDataScope(
   if (!scope.facilities.length && !scope.regions.length && !scope.districts.length) return { ...base, registryCodes: [] };
   const rows = await deps.registryRows();
   const codeById = registryConceptCodeById(rows);
-  const inScope = (r: ScopeRegistryRow) => scope.facilities.includes(r.id)
-    || (r.region !== null && scope.regions.includes(r.region))
-    || scope.districts.some((d) => d.region === r.region && d.district === r.district);
-  let codes = new Set(rows.filter(inScope).map((r) => codeById.get(r.id)!));
+  let codes = new Set(rows.filter((r) => inDataScope(r, scope)).map((r) => codeById.get(r.id)!));
   if (deps.usedRegistryCodes) {
     const used = new Set(await deps.usedRegistryCodes());
     codes = new Set([...codes].filter((c) => used.has(c)));
