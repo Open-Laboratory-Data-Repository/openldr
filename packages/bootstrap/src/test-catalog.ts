@@ -116,11 +116,13 @@ export interface CatalogTestInput {
   active?: boolean;
 }
 
+/** Every field left out keeps what is stored. A test the lab never set starts off, with the catalog's
+ *  specimens, no local name, no section, and needing review. */
 export interface LabSettingsInput {
-  enabled: boolean;
+  enabled?: boolean;
   /** null means "use the catalog's list". A list may only narrow it. */
-  specimenTypes: SpecimenCoding[] | null;
-  localDisplay: string | null;
+  specimenTypes?: SpecimenCoding[] | null;
+  localDisplay?: string | null;
   /** A code from the lab's section list (urn:openldr:cs:lab-section). null clears it. Left out keeps what is stored. */
   section?: string | null;
   /** Left out keeps what is stored. A test the lab never set needs review. */
@@ -748,23 +750,23 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     // sync: the table is this install's own.
     const test = await get(code);
     if (!test) throw notFound(code);
-    let specimenTypes: SpecimenCoding[] | null = null;
-    if (input.specimenTypes !== null) {
+    // undefined leaves the stored value; on a first save the column default applies.
+    let specimenTypes: SpecimenCoding[] | null | undefined = input.specimenTypes === undefined ? undefined : null;
+    if (input.specimenTypes != null) {
       specimenTypes = uniqueCodings(input.specimenTypes);
       const offered = new Set(test.specimenTypes.map(codingKey));
       const extra = specimenTypes.find((s) => !offered.has(codingKey(s)));
       if (extra) throw invalid(`Specimen ${extra.code} is not on this test's catalog list. A lab can narrow the list but not add to it.`);
     }
-    // undefined leaves the stored value; on a first save the column default applies.
     const section = input.section === undefined ? undefined : clean(input.section);
     if (section) {
       const offered = (await expandEntries(LAB_SECTION_VALUE_SET)).filter((e) => e.system === LAB_SECTION_SYSTEM);
       if (!offered.some((e) => e.code === section)) throw invalid(`no section ${section}`);
     }
     const values = {
-      enabled: input.enabled,
-      specimen_types: specimenTypes === null ? null : JSON.stringify(specimenTypes),
-      local_display: clean(input.localDisplay),
+      ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+      ...(specimenTypes !== undefined ? { specimen_types: specimenTypes === null ? null : JSON.stringify(specimenTypes) } : {}),
+      ...(input.localDisplay !== undefined ? { local_display: clean(input.localDisplay) } : {}),
       ...(section !== undefined ? { section } : {}),
       ...(input.needsReview !== undefined ? { needs_review: input.needsReview } : {}),
       updated_at: sql<Date>`now()`,

@@ -3,6 +3,10 @@ import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@/i18n';
 
+const caps = vi.hoisted(() => ({ set: new Set<string>() }));
+vi.mock('@/auth/AuthProvider', () => ({
+  useAuth: () => ({ user: null, loading: false, hasCapability: (c: string) => caps.set.has(c) }),
+}));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -82,6 +86,7 @@ async function pickCategory(name: RegExp) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  caps.set = new Set(['terminology.manage', 'lab.settings']);
 });
 
 describe('TestSheet', () => {
@@ -197,6 +202,14 @@ describe('TestSheet', () => {
     expect(api.setCatalogLabSettings).toHaveBeenCalledWith('HIVVL', {
       enabled: false, specimenTypes: null, localDisplay: null, section: null,
     });
+  });
+
+  it('shows the section and review switch but disables them for a user without lab.settings', () => {
+    caps.set = new Set(['terminology.manage']);
+    renderSheet({ target: { kind: 'edit', test: HIVVL }, options: WITH_SECTIONS });
+    expect(screen.getByRole('combobox', { name: 'Section' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Needs review' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'On at this lab' })).toBeEnabled();
   });
 
   it('lays the catalog and lab fields in one grid, so their labels share one column', () => {

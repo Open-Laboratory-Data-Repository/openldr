@@ -209,6 +209,40 @@ describe('test catalog routes', () => {
     }
   });
 
+  it('PUT /:code/lab lets a caller with only lab.settings set a section and the review setting', async () => {
+    const { ctx, calls, audit } = fakeCtx();
+    const body = { section: 'HAEM', needsReview: false };
+    const res = await appWith(ctx, ['lab.settings']).inject({ method: 'PUT', url: '/api/test-catalog/HIVVL/lab', payload: body });
+    expect(res.statusCode).toBe(200);
+    expect(calls.find((c) => c.method === 'setLabSettings')?.args).toEqual(['HIVVL', body]);
+    expect(audit).toMatchObject([{ action: 'test_catalog.lab_settings', entityId: 'HIVVL' }]);
+  });
+
+  it('PUT /:code/lab refuses a caller with only lab.settings who also sends an existing field', async () => {
+    for (const extra of [{ enabled: true }, { specimenTypes: null }, { localDisplay: 'VL' }]) {
+      const { ctx, calls } = fakeCtx();
+      const res = await appWith(ctx, ['lab.settings']).inject({
+        method: 'PUT', url: '/api/test-catalog/HIVVL/lab', payload: { section: 'HAEM', ...extra },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(calls).toEqual([]);
+    }
+  });
+
+  it('PUT /:code/lab refuses a body with no field to change', async () => {
+    const { ctx, calls } = fakeCtx();
+    const res = await appWith(ctx, ['terminology.manage', 'lab.settings']).inject({ method: 'PUT', url: '/api/test-catalog/HIVVL/lab', payload: {} });
+    expect(res.statusCode).toBe(400);
+    expect(calls).toEqual([]);
+  });
+
+  it('PUT /:code/lab refuses a caller with neither terminology.manage nor lab.settings', async () => {
+    const { ctx, calls } = fakeCtx();
+    const res = await appWith(ctx, ['terminology.view']).inject({ method: 'PUT', url: '/api/test-catalog/HIVVL/lab', payload: { section: 'HAEM' } });
+    expect(res.statusCode).toBe(403);
+    expect(calls).toEqual([]);
+  });
+
   it('GET /api/test-catalog/options returns the picker choices and needs terminology.view', async () => {
     const { ctx, calls } = fakeCtx();
     const res = await appWith(ctx).inject({ method: 'GET', url: '/api/test-catalog/options' });

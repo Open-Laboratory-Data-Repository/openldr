@@ -5,7 +5,7 @@ import {
 } from '@openldr/bootstrap';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
-import { holdsCapability, requireCapability } from './rbac';
+import { holdsCapability, requireAnyCapability, requireCapability } from './rbac';
 
 // Test catalog S1 (docs/superpowers/specs/2026-09-15-test-catalog-design.md, 4.6): terminology.view
 // to read, terminology.manage to change anything, central edits and lab settings alike.
@@ -17,9 +17,11 @@ const IMPORT_STEP = { ...MANAGE, bodyLimit: 16 * 1024 * 1024 };
 // holds forms.view and forms.submit only (packages/rbac/src/presets.ts:52). So that route takes the gate
 // reference search takes (reference-search-routes.ts:9), not terminology.view.
 const FORMS_VIEW = { preHandler: requireCapability('forms.view') };
-// A test's section and whether it needs review are lab settings (lab module design 5.1), so a lab
-// settings save that names either also needs lab.settings. The other lab fields keep terminology.manage.
+// A test's section and whether it needs review are lab settings (lab module design 5.1) and need
+// lab.settings. The other lab fields keep terminology.manage. A save names only the fields it changes,
+// so the route lets in either capability and then checks each field the body names.
 const LAB_SETTINGS = 'lab.settings';
+const LAB_FIELDS = { preHandler: requireAnyCapability('terminology.manage', LAB_SETTINGS) };
 // Must equal the urls migration 106 seeds.
 const ORDER_REJECT_VALUE_SET = 'urn:openldr:valueset:order-reject-reason';
 const TEST_REJECT_VALUE_SET = 'urn:openldr:valueset:test-reject-reason';
@@ -66,14 +68,14 @@ const testInput = z.object({
   loinc: z.string().nullish(),
   active: z.boolean().optional(),
 });
+// Every field left out keeps what is stored. A null section clears it.
 const labInput = z.object({
-  enabled: z.boolean(),
-  specimenTypes: z.array(coding).nullable(),
-  localDisplay: z.string().nullable(),
-  // Left out keeps what is stored. A null section clears it.
+  enabled: z.boolean().optional(),
+  specimenTypes: z.array(coding).nullable().optional(),
+  localDisplay: z.string().nullable().optional(),
   section: z.string().nullable().optional(),
   needsReview: z.boolean().optional(),
-});
+}).refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Name at least one lab setting to change.' });
 const enabledInput = z.object({ enabled: z.boolean() });
 const activeInput = z.object({ active: z.boolean() });
 const specimensInput = z.object({ tests: z.array(coding) });
@@ -176,12 +178,15 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     }
   });
 
-  app.put('/api/test-catalog/:code/lab', MANAGE, async (req, reply) => {
+  app.put('/api/test-catalog/:code/lab', LAB_FIELDS, async (req, reply) => {
     const { code } = req.params as { code: string };
     const parsed = labInput.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
-    const namesLabSetting = parsed.data.section !== undefined || parsed.data.needsReview !== undefined;
-    if (namesLabSetting && !holdsCapability(req.user!, LAB_SETTINGS)) {
+    const d = parsed.data;
+    const namesCatalogField = d.enabled !== undefined || d.specimenTypes !== undefined || d.localDisplay !== undefined;
+    const namesLabSetting = d.section !== undefined || d.needsReview !== undefined;
+    if ((namesCatalogField && !holdsCapability(req.user!, 'terminology.manage'))
+      || (namesLabSetting && !holdsCapability(req.user!, LAB_SETTINGS))) {
       return reply.code(403).send({ error: 'insufficient capability' });
     }
     try {

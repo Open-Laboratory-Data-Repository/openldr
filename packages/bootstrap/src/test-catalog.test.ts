@@ -399,6 +399,17 @@ describe('test catalog: this lab', () => {
     expect((await catalog.setEnabled('HIVVL', true)).lab).toMatchObject({ section: null, needsReview: false });
   });
 
+  it('sets only the section when the input names nothing else, keeping the stored lab fields', async () => {
+    const { db, catalog } = await buildCatalog();
+    await addSection(db, 'HAEM', 'Haematology');
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
+    expect((await catalog.setLabSettings('HIVVL', { section: 'HAEM' })).lab)
+      .toEqual({ enabled: false, specimenTypes: null, localDisplay: null, section: 'HAEM', needsReview: true });
+    await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: [UR], localDisplay: 'VL' });
+    expect((await catalog.setLabSettings('HIVVL', { needsReview: false })).lab)
+      .toEqual({ enabled: true, specimenTypes: [UR], localDisplay: 'VL', section: 'HAEM', needsReview: false });
+  });
+
   it('refuses a section that is not in the lab section list, and writes nothing', async () => {
     const { catalog } = await buildCatalog();
     await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });

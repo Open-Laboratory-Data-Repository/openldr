@@ -20,6 +20,7 @@ import {
   type CatalogResultBand, type TestCatalogOptions,
 } from '@/api';
 import { sexLabel } from '@/forms-runtime/rangeLabel';
+import { useAuth } from '@/auth/AuthProvider';
 
 // Test catalog S2 (spec 4.3): add or edit one test, and this lab's own settings for it. Copies
 // forms-builder/FieldEditorSheet.tsx (AGENTS.md section 5).
@@ -123,6 +124,9 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
   onSaved: () => void;
 }) {
   const { t, i18n } = useTranslation();
+  // The section and the review switch need lab.settings on the server, so without it they are shown
+  // but cannot be changed.
+  const canSetLab = useAuth().hasCapability('lab.settings');
   const [draft, setDraft] = useState<Draft>(() => draftFrom(null));
   // The test as last saved. A create that went through sets it, so saving again edits instead of
   // adding the test twice.
@@ -531,6 +535,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
               <>
                 <Label htmlFor="test-section" className="whitespace-nowrap">{t('testCatalog.sheet.section')}</Label>
                 <Select
+                  disabled={!canSetLab}
                   value={draft.labSection || NO_SECTION}
                   onValueChange={(v) => set({ labSection: v === NO_SECTION ? '' : v })}
                 >
@@ -546,6 +551,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
             <Label className="whitespace-nowrap">{t('testCatalog.sheet.needsReview')}</Label>
             <Switch
               aria-label={t('testCatalog.sheet.needsReview')}
+              disabled={!canSetLab}
               checked={draft.labNeedsReview}
               onCheckedChange={(v) => set({ labNeedsReview: v })}
             />
