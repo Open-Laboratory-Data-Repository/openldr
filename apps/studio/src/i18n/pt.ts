@@ -467,6 +467,7 @@ export const pt: EnShape = {
         submit: { label: 'Submeter formulários', description: 'Registar dados à mão: submeter um formulário ESCREVE registos clínicos no repositório FHIR e no modelo de leitura.' },
         edit: { label: 'Editar formulários', description: 'Criar e alterar definições de formulários; exportar pacotes de formulários.' },
         publish: { label: 'Publicar formulários', description: 'Publicar novas versões de formulários.' },
+        void_entries: { label: 'Marcar registos como introduzidos por erro', description: 'Retirar um registo de formulário guardado. O registo fica guardado, marcado como introduzido por erro.' },
       },
       workflows: {
         view: { label: 'Ver fluxos de trabalho', description: 'Abrir a área de Fluxos de trabalho e ver definições e execuções.' },

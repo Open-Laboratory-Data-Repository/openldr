@@ -11,7 +11,7 @@ export interface SystemRoleDef {
 const MANAGER = [
   'dashboards.view', 'dashboards.create', 'dashboards.edit', 'dashboards.delete',
   'reports.view', 'reports.run', 'reports.export', 'reports.edit_templates',
-  'forms.view', 'forms.submit', 'forms.edit', 'forms.publish',
+  'forms.view', 'forms.submit', 'forms.edit', 'forms.publish', 'forms.void_entries',
   'workflows.view', 'workflows.edit', 'workflows.run', 'workflows.manage_secrets',
   'query.run', 'query.manage',
   'terminology.view', 'terminology.manage',

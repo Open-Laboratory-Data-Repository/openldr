@@ -471,6 +471,7 @@ export const en = {
         submit: { label: 'Submit forms', description: 'Capture data by hand: submitting a form WRITES clinical records to the FHIR store and the read model.' },
         edit: { label: 'Edit forms', description: 'Create and modify form definitions; export form bundles.' },
         publish: { label: 'Publish forms', description: 'Publish new form versions.' },
+        void_entries: { label: 'Mark entries as entered in error', description: 'Withdraw a saved form entry. The entry stays on record, marked as entered in error.' },
       },
       workflows: {
         view: { label: 'View workflows', description: 'Open the Workflows workspace and see definitions and runs.' },

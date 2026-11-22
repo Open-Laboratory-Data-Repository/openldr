@@ -14,9 +14,19 @@ describe('capability catalog', () => {
   // 43 -> 45: ingest.run and data.export, for CLI commands that no Studio screen covers.
   // 45 -> 46: imports.correct_held, for correcting held requests (design 2026-11-18-held-corrections).
   // 46 -> 47: query.manage, for changing saved queries (design 2026-11-19-manage-saved-queries).
-  it('exposes 47 unique capability keys', () => {
-    expect(CAPABILITY_KEYS.length).toBe(47);
-    expect(new Set(CAPABILITY_KEYS).size).toBe(47);
+  // 47 -> 48: forms.void_entries, for marking a form entry as entered in error (plan 2026-11-22-form-entries).
+  it('exposes 48 unique capability keys', () => {
+    expect(CAPABILITY_KEYS.length).toBe(48);
+    expect(new Set(CAPABILITY_KEYS).size).toBe(48);
+  });
+
+  it('has forms.void_entries in the forms group', () => {
+    expect(CAPABILITIES.find((c) => c.key === 'forms.void_entries')).toEqual({
+      key: 'forms.void_entries',
+      group: 'forms',
+      label: 'Mark entries as entered in error',
+      description: 'Withdraw a saved form entry. The entry stays on record, marked as entered in error.',
+    });
   });
 
   it('has imports.correct_held in its own group', () => {

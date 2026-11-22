@@ -467,6 +467,7 @@ export const fr: EnShape = {
         submit: { label: 'Soumettre des formulaires', description: 'Saisir des données à la main : soumettre un formulaire ÉCRIT des données cliniques dans le magasin FHIR et le modèle de lecture.' },
         edit: { label: 'Modifier les formulaires', description: 'Créer et modifier des définitions de formulaire ; exporter des lots de formulaires.' },
         publish: { label: 'Publier des formulaires', description: 'Publier de nouvelles versions de formulaire.' },
+        void_entries: { label: 'Marquer des saisies comme erronées', description: 'Retirer une saisie de formulaire enregistrée. La saisie reste enregistrée, marquée comme saisie par erreur.' },
       },
       workflows: {
         view: { label: 'Voir les flux de travail', description: 'Ouvrir l’espace Flux de travail et voir les définitions et les exécutions.' },
