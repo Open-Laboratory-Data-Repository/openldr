@@ -22,10 +22,10 @@ Create or pick a code system first. Terms always import into a code system you c
 
 ```
 openldr terminology system create EXAMPLE "Example tests" --url urn:example:cs
-openldr terminology import resource examples/terminology/value-set.json
 ```
 
-The command line has no import for a terms CSV. Import `terms.csv` in studio.
+That creates the code system only. The command line has no import for a terms CSV or for the
+value set list. Import `terms.csv` and `value-set.json` in studio.
 
 ## What you see afterwards
 

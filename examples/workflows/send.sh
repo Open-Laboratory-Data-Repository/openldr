@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Posts payload.json to the example workflow's webhook.
-# Set OPENLDR_URL to your OpenLDR address, for example http://localhost:3000.
+# Set OPENLDR_URL to the address you open studio with.
 # Set OPENLDR_WEBHOOK_SECRET to the secret you put on the workflow's webhook step.
 set -eu
 

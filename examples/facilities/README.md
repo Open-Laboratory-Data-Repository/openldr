@@ -17,13 +17,14 @@ Every facility import belongs to a national register. Use a register named
 
 ## Import from the command line
 
-The register must exist first. Add it in studio as in step 3.
+The register must exist first. Add it once, then import the file.
 
 ```
+openldr facilities register-source --url urn:example:facility-register --name "Example facility register" --code EXAMPLE
 openldr facilities import examples/facilities/facilities.csv --national-system urn:example:facility-register
 ```
 
-That is a dry run. It reads the file and reports what it would write. Add `--apply` to write it.
+The import is a dry run. It reads the file and reports what it would write. Add `--apply` to write it.
 
 ## What you see afterwards
 

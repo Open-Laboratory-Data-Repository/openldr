@@ -28,11 +28,14 @@ There is no command for this. Use the Workflows page.
 
 ## Send the rows
 
-Run `send.sh` with two settings: your OpenLDR address and the secret you copied.
+Run `send.sh` with two settings: the address you open studio with, and the secret you copied.
 
 ```
-OPENLDR_URL=http://localhost:3000 OPENLDR_WEBHOOK_SECRET=<the secret> sh examples/workflows/send.sh
+OPENLDR_URL=<the address you open studio with> OPENLDR_WEBHOOK_SECRET=<the secret> sh examples/workflows/send.sh
 ```
+
+On an install with a self-signed certificate, curl needs that certificate. Add
+`CURL_CA_BUNDLE=<path to the install's certificate>` to the start of the command.
 
 The script stops if either setting is missing. It never holds a secret itself.
 
