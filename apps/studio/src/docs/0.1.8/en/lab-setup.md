@@ -105,7 +105,7 @@ Most of these capabilities open screens that come in later releases. Today only 
 
 ## Set up the lab from the command line
 
-Every task above, except critical limits and roles, is also an `openldr` command. Sign in first with `openldr login`, as a person who holds **Lab settings**. Read [Start here](/docs/start-here) for the installed and development CLI.
+Every task above, except critical limits and roles, is also an `openldr` command. Each command goes through the running OpenLDR server, as a person who holds **Lab settings**. On Linux and macOS, sign in first with `./openldr login`, or set an access key in `OPENLDR_KEY`. On Windows, set an access key in `OPENLDR_KEY` first. There the CLI signs in with an access key only. Read [Users](/docs/users) to make an access key. Read [Start here](/docs/start-here) for the installed and development CLI.
 
 Development checkout example:
 
@@ -118,7 +118,7 @@ pnpm openldr lab settings set allow-self-authorise false
 pnpm openldr lab sections remove haem --force
 ```
 
-For an installed Linux or macOS copy, use `./openldr` instead of `pnpm openldr`. On Windows, use `.\openldr.ps1` from your installation folder.
+For an installed Linux or macOS copy, use `./openldr` instead of `pnpm openldr`. On Windows, use `.\openldr.ps1` from your installation folder, with `OPENLDR_KEY` set. These commands were not run on Windows.
 
 `lab sections remove` refuses without `--force`, because a removal cannot be undone. Each command is recorded in the audit log under your account.
 

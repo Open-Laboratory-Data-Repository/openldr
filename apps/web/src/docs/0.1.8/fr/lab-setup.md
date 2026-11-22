@@ -25,7 +25,7 @@ Les étapes 1 à 3 se font sur la page des paramètres du laboratoire et dans le
 
 ## Les commandes
 
-Connectez-vous d'abord avec `openldr login`, en tant que personne qui détient **Lab settings**. [Connexion du CLI et clés d'accès](/docs/cli-access) explique la connexion. Chaque commande est inscrite dans le journal d'audit sous votre compte.
+Chaque commande passe par le serveur OpenLDR en marche, en tant que personne qui détient **Lab settings**. Sous Linux et macOS, connectez-vous d'abord avec `./openldr login`, ou définissez une clé d'accès dans `OPENLDR_KEY`. Sous Windows, `.\openldr.ps1` se connecte uniquement avec une clé d'accès, donc définissez d'abord `OPENLDR_KEY`. Les commandes n'ont pas été lancées sous Windows. [Connexion du CLI et clés d'accès](/docs/cli-access) explique la connexion. Chaque commande est inscrite dans le journal d'audit sous votre compte.
 
 ```sh
 openldr lab sections add haem Hématologie

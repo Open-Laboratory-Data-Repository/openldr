@@ -25,7 +25,7 @@ Steps 1 to 3 are on the Laboratory settings page and in the test catalog. Step 4
 
 ## The commands
 
-Sign in first with `openldr login`, as a person who holds **Lab settings**. [CLI sign-in and access keys](/docs/cli-access) explains signing in. Each command is recorded in the audit log under your account.
+Each command goes through the running OpenLDR server, as a person who holds **Lab settings**. On Linux and macOS, sign in first with `./openldr login`, or set an access key in `OPENLDR_KEY`. On Windows, `.\openldr.ps1` signs in with an access key only, so set `OPENLDR_KEY` first. The commands were not run on Windows. [CLI sign-in and access keys](/docs/cli-access) explains signing in. Each command is recorded in the audit log under your account.
 
 ```sh
 openldr lab sections add haem Haematology

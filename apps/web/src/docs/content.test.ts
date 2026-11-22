@@ -52,6 +52,7 @@ describe('website docs content', () => {
       expect(body, locale).toContain('openldr lab settings set allow-self-authorise false');
       expect(body, locale).toContain('openldr lab sections remove haem --force');
       expect(body, locale).toContain('section <code> is used by <n> tests');
+      expect(body, locale).toContain('OPENLDR_KEY');
     }
     expect(pageTitle('lab-setup', '0.1.8', 'en')).toBe('Set up a lab');
     expect(pageTitle('lab-setup', '0.1.8', 'fr')).toBe('Configurer un laboratoire');

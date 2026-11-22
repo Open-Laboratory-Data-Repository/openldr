@@ -47,6 +47,7 @@ describe('docs registry', () => {
     expect(guide?.content).toContain('/docs/laboratory');
     expect(guide?.content).toContain('openldr lab sections remove haem --force');
     expect(guide?.content).toContain('openldr lab settings set allow-self-authorise false');
+    expect(guide?.content).toContain('OPENLDR_KEY');
     expect(searchDocs(buildIndex(list(locale)), guide!.title).map((hit) => hit.slug)).toContain('lab-setup');
   });
   it.each(LOCALES)('authors and indexes the data exposure guide in %s', (locale) => {

@@ -25,7 +25,7 @@ Os passos 1 a 3 fazem-se na página de definições do laboratório e no catálo
 
 ## Os comandos
 
-Inicie sessão primeiro com `openldr login`, como uma pessoa que tem **Lab settings**. [Início de sessão do CLI e chaves de acesso](/docs/cli-access) explica como iniciar sessão. Cada comando fica registado no registo de auditoria com a sua conta.
+Cada comando passa pelo servidor OpenLDR em execução, como uma pessoa que tem **Lab settings**. Em Linux e macOS, inicie sessão primeiro com `./openldr login`, ou defina uma chave de acesso em `OPENLDR_KEY`. Em Windows, `.\openldr.ps1` inicia sessão apenas com uma chave de acesso, por isso defina primeiro `OPENLDR_KEY`. Os comandos não foram corridos em Windows. [Início de sessão do CLI e chaves de acesso](/docs/cli-access) explica como iniciar sessão. Cada comando fica registado no registo de auditoria com a sua conta.
 
 ```sh
 openldr lab sections add haem Hematologia

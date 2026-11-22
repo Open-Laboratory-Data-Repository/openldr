@@ -107,7 +107,7 @@ La plupart de ces capacités ouvrent des écrans qui arrivent dans des versions 
 
 ## Configurer le laboratoire en ligne de commande
 
-Chaque tâche ci-dessus, sauf les seuils critiques et les rôles, existe aussi comme commande `openldr`. Connectez-vous d'abord avec `openldr login`, en tant que personne qui détient **Lab settings**. Lisez [Commencer ici](/docs/start-here) pour la CLI installée et celle de développement.
+Chaque tâche ci-dessus, sauf les seuils critiques et les rôles, existe aussi comme commande `openldr`. Chaque commande passe par le serveur OpenLDR en marche, en tant que personne qui détient **Lab settings**. Sous Linux et macOS, connectez-vous d'abord avec `./openldr login`, ou définissez une clé d'accès dans `OPENLDR_KEY`. Sous Windows, définissez d'abord une clé d'accès dans `OPENLDR_KEY`. Le CLI s'y connecte uniquement avec une clé d'accès. Lisez [Utilisateurs](/docs/users) pour créer une clé d'accès. Lisez [Commencer ici](/docs/start-here) pour la CLI installée et celle de développement.
 
 Exemple dans une copie de développement :
 
@@ -120,7 +120,7 @@ pnpm openldr lab settings set allow-self-authorise false
 pnpm openldr lab sections remove haem --force
 ```
 
-Pour une copie installée sous Linux ou macOS, utilisez `./openldr` au lieu de `pnpm openldr`. Sous Windows, utilisez `.\openldr.ps1` depuis votre dossier d'installation.
+Pour une copie installée sous Linux ou macOS, utilisez `./openldr` au lieu de `pnpm openldr`. Sous Windows, utilisez `.\openldr.ps1` depuis votre dossier d'installation, avec `OPENLDR_KEY` défini. Ces commandes n'ont pas été lancées sous Windows.
 
 `lab sections remove` refuse sans `--force`, car une suppression est définitive. Chaque commande est inscrite dans le journal d'audit sous votre compte.
 
