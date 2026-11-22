@@ -1,5 +1,6 @@
 import { loadConfig, LAB_ALLOW_SELF_AUTHORISE_KEY } from '@openldr/config';
 import { createAppContext, recordAuditEvent } from '@openldr/bootstrap';
+import { rebuildRequisitions } from '@openldr/db';
 import { callerName, cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 
@@ -139,6 +140,30 @@ export async function runLabSettingsSet(key: string, value: string, opts: Opts):
     return 0;
   } catch (err) {
     return fail('lab settings set', redactError(err), opts.json);
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** `openldr lab requisitions rebuild --force`: empties `lab_requisitions` and indexes every current
+ *  ServiceRequest by its requisition number again, the same fill migration 139 runs. The projection
+ *  keeps the table current, so this is for repair: after a hook failure, or to drop the rows of
+ *  requests deleted from the store. It rewrites the whole table, so it refuses without --force. */
+export async function runLabRequisitionsRebuild(opts: Opts & { force: boolean }): Promise<number> {
+  if (!opts.force) {
+    process.stderr.write('Refusing to rebuild the requisition index without --force.\n');
+    return 1;
+  }
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const { indexed } = await rebuildRequisitions(ctx.internalDb);
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'lab.requisitions.rebuild', entityType: 'lab_requisitions', entityId: 'lab_requisitions', metadata: { indexed },
+    });
+    process.stdout.write(opts.json ? JSON.stringify({ indexed }) + '\n' : `Indexed ${indexed} orders by requisition number.\n`);
+    return 0;
+  } catch (err) {
+    return fail('lab requisitions rebuild', redactError(err), opts.json);
   } finally {
     await ctx.close();
   }

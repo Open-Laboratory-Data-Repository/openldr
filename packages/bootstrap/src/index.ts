@@ -81,6 +81,7 @@ export * from './update-check';
 export { createMapToFhirApi, MAP_TEST_MAX_ITEMS, MapConfigError, type MapToFhirApi, type MapTestResult } from './map-to-fhir-api';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { captureObservedFacilityFromProjection, captureObservedFacilitiesFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
+import { withRequisitionIndex } from './lab-requisition-hooks';
 import { createWorkflowSql } from './workflow-sql';
 import { createFacilityJobWorkerIfEnabled } from './facility-job-worker';
 import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
@@ -1633,11 +1634,17 @@ const reporting: ReportingApi = {
     // `applyProjection` just handed to `relationalWriter.write()` for this resource — i.e. the exact
     // value about to land in `diagnostic_reports.source_system` — passed through so the capture
     // lands in THAT feed's coding system rather than always the default one.
-    onProjected: (resourceType, resource, provenance) =>
-      captureObservedFacilityFromProjection({ admin: termAdmin, internalDb: internal.db }, resourceType, resource, provenance.sourceSystem ?? null, new Date().toISOString()),
-    // A batch that projected in bulk asks once for its distinct facilities (item 16).
-    onProjectedMany: (items) =>
-      captureObservedFacilitiesFromProjection({ admin: termAdmin, internalDb: internal.db }, items.map((it) => ({ resourceType: it.resourceType, resource: it.resource, sourceSystem: it.provenance.sourceSystem ?? null })), new Date().toISOString()),
+    //
+    // Lab slices 1b and 2: `withRequisitionIndex` also keeps `lab_requisitions` current for every
+    // projected ServiceRequest, from any source, before the facility capture runs. It catches and
+    // logs its own failure (lab-requisition-hooks.ts).
+    ...withRequisitionIndex({ internalDb: internal.db, logger }, {
+      onProjected: (resourceType, resource, provenance) =>
+        captureObservedFacilityFromProjection({ admin: termAdmin, internalDb: internal.db }, resourceType, resource, provenance.sourceSystem ?? null, new Date().toISOString()),
+      // A batch that projected in bulk asks once for its distinct facilities (item 16).
+      onProjectedMany: (items) =>
+        captureObservedFacilitiesFromProjection({ admin: termAdmin, internalDb: internal.db }, items.map((it) => ({ resourceType: it.resourceType, resource: it.resource, sourceSystem: it.provenance.sourceSystem ?? null })), new Date().toISOString()),
+    }),
   });
   const projectionWorker = createProjectionWorker({
     runCycle: () => projectionRunner.runCycle(),

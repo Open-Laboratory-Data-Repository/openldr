@@ -194,11 +194,12 @@ describe('openldr lab', () => {
   // (command-meta.ts), so each lab command needs lab.settings to run through the app.
   it('every lab command needs lab.settings in served mode, and remove is destructive', () => {
     const paths = Object.keys(COMMAND_META).filter((p) => p.startsWith('lab ')).sort();
-    expect(paths).toEqual(['lab sections add', 'lab sections list', 'lab sections remove', 'lab settings set', 'lab tests set']);
+    expect(paths).toEqual(['lab requisitions rebuild', 'lab sections add', 'lab sections list', 'lab sections remove', 'lab settings set', 'lab tests set']);
     for (const p of paths) {
       expect(COMMAND_META[p]?.kind, p).toBe('app');
       expect(COMMAND_META[p]?.capability, p).toBe('lab.settings');
     }
     expect(COMMAND_META['lab sections remove']?.destructive).toBe(true);
+    expect(COMMAND_META['lab requisitions rebuild']?.destructive).toBe(true);
   });
 });

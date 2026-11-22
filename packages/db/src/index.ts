@@ -151,3 +151,6 @@ export {
   createFormEntryStore, FormEntryRepeat, type FormEntry, type FormEntryFilter, type FormEntrySaved, type FormEntryStatus,
   type FormEntryStore, type NewFormEntry,
 } from './form-entry-store';
+export {
+  findByRequisition, indexRequisitions, rebuildRequisitions, requisitionRowOf, type RequisitionRow,
+} from './lab-requisitions';
