@@ -83,6 +83,9 @@ const MAX_REASON = 500;
 const NOT_UPDATED = 'The entry is marked in error, but its saved records were not updated.';
 const NOT_KNOWN = 'The entry is marked in error, but the records this entry made are not known, so they were not marked.';
 
+/** The same system actor the server's audit helper uses when no one is signed in. */
+const SYSTEM_ACTOR: AuditActor = { actorType: 'system', actorId: null, actorName: 'System' };
+
 interface ResaveResult { resaved: number; skipped: number; warning?: string }
 
 const EMPTY_LIMIT = 'your data limit names no facility, so you cannot enter this form';
@@ -149,6 +152,11 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
     if (row.status !== 'entered-in-error') return row;
     const r = await markInError(row.id, row.saved);
     if (r.warning) deps.logger.warn({ entryId: row.id, ...r }, 'form entry void: a save that settled after the void left records unmarked');
+    // The trail shows whether the records were marked. No person asked for this, so the actor is the system.
+    await deps.audit(SYSTEM_ACTOR, {
+      action: 'form.entry.void', entityType: 'form-entry', entityId: row.id, before: row, after: row,
+      metadata: { late: true, resaved: r.resaved, skipped: r.skipped, ...(r.warning ? { warning: r.warning } : {}) },
+    });
     return row;
   };
 

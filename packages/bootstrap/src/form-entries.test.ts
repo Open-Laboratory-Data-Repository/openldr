@@ -657,6 +657,45 @@ describe('form entries service: voidEntry', () => {
     }
   });
 
+  /** Begins an entry, voids it while its save runs, then settles the save with one stored order. */
+  async function lateSave(w: Awaited<ReturnType<typeof world>>) {
+    const begun = await w.service.begin({ form: { id: 'form-1', schema: orderForm('register') }, answers: { num: 'CS-1', fac: pick('A1') }, user: user({ limited: false }) });
+    await w.service.voidEntry({ entryId: begun.id, reason: 'typo', user: everyone, actor });
+    hold(w, 'ServiceRequest', 'sr-1', 'active');
+    await w.service.finish(begun.id, { ok: true, stored: { responseId: null, resources: [{ resourceType: 'ServiceRequest', id: 'sr-1' }] } });
+    return begun;
+  }
+  const SYSTEM = { actorType: 'system', actorId: null, actorName: 'System' };
+
+  it('audits a late marking that succeeds, as the system, with no warning', async () => {
+    const w = await world();
+    const begun = await lateSave(w);
+    expect(w.fakes.audits).toHaveLength(2);
+    const late = w.fakes.audits[1]!;
+    expect(late.actor).toEqual(SYSTEM);
+    expect(late.details).toMatchObject({
+      action: 'form.entry.void', entityType: 'form-entry', entityId: begun.id,
+      before: { status: 'entered-in-error' }, after: { status: 'entered-in-error', saved: { resources: [{ id: 'sr-1' }] } },
+      metadata: { late: true, resaved: 1, skipped: 0 },
+    });
+    expect(late.details.metadata).not.toHaveProperty('warning');
+    await w.db.destroy();
+  });
+
+  it('audits a late marking that fails, as the system, with the warning', async () => {
+    const w = await world();
+    w.fakes.outcome = () => ({ runId: 'run-9', correlationId: null, status: 'failed', error: 'boom', nodeMeta: {} });
+    const begun = await lateSave(w);
+    expect(w.fakes.audits).toHaveLength(2);
+    const late = w.fakes.audits[1]!;
+    expect(late.actor).toEqual(SYSTEM);
+    expect(late.details).toMatchObject({
+      action: 'form.entry.void', entityId: begun.id,
+      metadata: { late: true, resaved: 0, skipped: 0, warning: expect.stringMatching(/not updated.*run-9/) },
+    });
+    await w.db.destroy();
+  });
+
   it('a voided entry whose late save stored nothing keeps its row', async () => {
     const w = await world();
     const begun = await w.service.begin({ form: { id: 'form-1', schema: orderForm('register') }, answers: { num: 'CS-1', fac: pick('A1') }, user: user({ limited: false }) });
