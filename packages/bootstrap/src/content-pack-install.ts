@@ -324,12 +324,17 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     return row;
   }
 
-  /** Removes the roles and layouts the pack made, then its install record. Refuses with
-   *  PackRemovalError while a user holds one of its roles. Its forms stay published (design 5.3). */
-  async function detach(artifactId: string, opts: { actor: { id?: string | null; name: string } }): Promise<void> {
+  /** Removes the roles and layouts the pack made, then its install record. Refuses when the pack owns
+   *  a role and the caller lacks roles.manage, and with PackRemovalError while a user holds one of its
+   *  roles. Its forms stay published (design 5.3). `capabilities` absent means 'all', as on install. */
+  async function detach(
+    artifactId: string, opts: { actor: { id?: string | null; name: string; capabilities?: InstallerCapabilities } },
+  ): Promise<void> {
     const row = await installedPack(artifactId);
     const actor: Actor = { id: opts.actor.id ?? null, name: opts.actor.name };
-    const removed = await removeProfileItems(deps.profile, artifactId, recordRemoved(actor, `${artifactId}@${row.version}`));
+    const removed = await removeProfileItems(
+      deps.profile, artifactId, recordRemoved(actor, `${artifactId}@${row.version}`), opts.actor.capabilities ?? 'all',
+    );
     await installStore.remove(artifactId);
     await record({
       ...who(actor),

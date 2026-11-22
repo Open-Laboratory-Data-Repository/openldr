@@ -46,6 +46,15 @@ export class PackRemovalError extends Error {
 
 const holds = (caps: InstallerCapabilities, key: string): boolean => caps === 'all' || caps.includes(key);
 
+/** What removeProfileItems throws when the pack owns a role and the caller lacks roles.manage. The
+ *  server answers 403 for it. */
+export const REMOVE_NEEDS_ROLES_MANAGE = 'removing this pack needs the roles.manage capability';
+
+/** A pack that makes or deletes a role needs roles.manage as well as marketplace.manage (design 5.1a). */
+function requireRolesManage(touchesRoles: boolean, caps: InstallerCapabilities, message: string): void {
+  if (touchesRoles && !holds(caps, 'roles.manage')) throw new Error(message);
+}
+
 /** Throws on the first problem. Writes nothing. */
 export async function checkProfileSteps(
   deps: ProfileDeps, packId: string, steps: ContentPackStep[], caps: InstallerCapabilities,
@@ -53,9 +62,7 @@ export async function checkProfileSteps(
   const items = await deps.packItems.list(packId);
   // An update that leaves out a role this pack made deletes that role, so it needs roles.manage too.
   const touchesRoles = steps.some((s) => s.kind === 'role') || items.some((i) => i.kind === 'role');
-  if (touchesRoles && !holds(caps, 'roles.manage')) {
-    throw new Error('installing this pack needs the roles.manage capability');
-  }
+  requireRolesManage(touchesRoles, caps, 'installing this pack needs the roles.manage capability');
 
   const ownedId = (kind: PackItemKind, key: string): string | null =>
     items.find((i) => i.kind === kind && i.key === key)?.itemId ?? null;
@@ -223,13 +230,14 @@ const REMOVAL_ORDER: Record<PackItemKind, number> = { layout: 0, role: 1, form: 
 const inRemovalOrder = (items: PackItem[]): PackItem[] =>
   [...items].sort((a, b) => REMOVAL_ORDER[a.kind] - REMOVAL_ORDER[b.kind]);
 
-/** Throws PackRemovalError when a user holds one of the pack's roles, listing every holder, and
- *  deletes nothing. Otherwise deletes its layouts, then its roles, and forgets its forms, which stay
- *  published (design 5.3). `onRemoved` runs right after each delete, as in dropLeftOut. */
+/** Throws when the pack owns a role and `caps` lacks roles.manage, and PackRemovalError when a user
+ *  holds one of the pack's roles, listing every holder. Either way it deletes nothing. Otherwise it
+ *  deletes its layouts, then its roles, and forgets its forms, which stay published (design 5.3). `onRemoved` runs right after each delete, as in dropLeftOut. */
 export async function removeProfileItems(
-  deps: ProfileDeps, packId: string, onRemoved: (r: Removed) => Promise<void> = async () => undefined,
+  deps: ProfileDeps, packId: string, onRemoved: (r: Removed) => Promise<void>, caps: InstallerCapabilities,
 ): Promise<Removal> {
   const items = inRemovalOrder(await deps.packItems.list(packId));
+  requireRolesManage(items.some((i) => i.kind === 'role'), caps, REMOVE_NEEDS_ROLES_MANAGE);
   const holders = await findHolders(deps, items);
   if (holders.length > 0) throw new PackRemovalError(holders);
   // Named before removeItems forgets the items, while their form ids are still at hand.

@@ -638,6 +638,37 @@ describe('content pack installer: detach takes out what the pack made', () => {
     ]);
   });
 
+  it('refuses a caller without roles.manage when the pack owns a role, and deletes nothing', async () => {
+    const profile = fakeProfile(owned);
+    const s = setup({ profile });
+    await installed(s);
+    await expect(s.installer.detach('p1', { actor: { ...actor, capabilities: ['marketplace.manage'] } }))
+      .rejects.toThrow('removing this pack needs the roles.manage capability');
+    expect(s.installs.rows.has('p1')).toBe(true);
+    expect(profile.roles.remove).not.toHaveBeenCalled();
+    expect(profile.layouts.remove).not.toHaveBeenCalled();
+    expect(profile.packItems.remove).not.toHaveBeenCalled();
+    expect(events(s.audit)).toEqual([]);
+  });
+
+  it('detaches a pack that owns a role when the caller holds every capability', async () => {
+    const profile = fakeProfile(owned);
+    const s = setup({ profile });
+    await installed(s);
+    await s.installer.detach('p1', { actor: { ...actor, capabilities: 'all' } });
+    expect(profile.roles.remove).toHaveBeenCalledWith('r1');
+    expect(s.installs.rows.has('p1')).toBe(false);
+  });
+
+  it('detaches a pack that owns only a layout and a form without roles.manage', async () => {
+    const profile = fakeProfile(owned.filter((i) => i.kind !== 'role'));
+    const s = setup({ profile });
+    await installed(s);
+    await s.installer.detach('p1', { actor: { ...actor, capabilities: ['marketplace.manage'] } });
+    expect(profile.layouts.remove).toHaveBeenCalledWith('l1');
+    expect(s.installs.rows.has('p1')).toBe(false);
+  });
+
   it('removal previews the same lists and the holders, and writes nothing', async () => {
     const profile = fakeProfile(owned);
     profile.roleMembers.mockImplementation(async () => ['Ann'] as never);

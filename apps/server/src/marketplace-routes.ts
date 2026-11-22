@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { CE_VERSION, readPluginSites, updatePluginSite, PluginSitesError, PluginStillStopping, ActiveVersionRemoval, PackRemovalError, REMOVE_KEEPS, type RemoveKeep } from '@openldr/bootstrap';
+import { CE_VERSION, readPluginSites, updatePluginSite, PluginSitesError, PluginStillStopping, ActiveVersionRemoval, PackRemovalError, REMOVE_NEEDS_ROLES_MANAGE, REMOVE_KEEPS, type RemoveKeep } from '@openldr/bootstrap';
 import {
   verifyBundle, readGrant, isCompatible, readBundle,
   LocalRegistrySource, HttpRegistrySource, type RegistrySource, type Capability,
@@ -434,11 +434,18 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     const id = (req.params as { id: string }).id;
     if (await isInstalledPack(id)) {
       try {
-        await ctx.marketplacePacks.detach(id, { actor: actor(req) });
+        // As on install: a pack that owns a role needs roles.manage to remove it.
+        await ctx.marketplacePacks.detach(id, { actor: { ...actor(req), capabilities: req.user?.capabilities ?? [] } });
       } catch (err) {
-        if (!(err instanceof PackRemovalError)) throw err;
-        reply.code(409);
-        return { error: err.message, holders: err.holders };
+        if (err instanceof PackRemovalError) {
+          reply.code(409);
+          return { error: err.message, holders: err.holders };
+        }
+        if (err instanceof Error && err.message === REMOVE_NEEDS_ROLES_MANAGE) {
+          reply.code(403);
+          return { error: err.message };
+        }
+        throw err;
       }
     } else {
       await ctx.marketplaceForms.detach(id, { actor: actor(req) });

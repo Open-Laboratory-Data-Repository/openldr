@@ -580,8 +580,21 @@ describe('market commands', () => {
     const code = await runMarketRemoveCommand('demo-pack', undefined, { force: true, json: false });
     setActorOverride(undefined);
     expect(code).toBe(0);
-    expect(mockPacks.detach).toHaveBeenCalledWith('demo-pack', { actor: { id: null, name: 'tester' } });
+    expect(mockPacks.detach).toHaveBeenCalledWith('demo-pack', { actor: { id: null, name: 'tester', capabilities: 'all' } });
     expect(writeSpy.mock.calls.map((c) => String(c[0])).join('')).toContain('removed demo-pack');
+  });
+
+  it('remove pack --force: a served caller without roles.manage exits 1 with the message', async () => {
+    mockServedCaller.mockResolvedValueOnce({ id: 'u1', roleIds: ['r1'], capabilities: ['marketplace.manage'], dataScope: {} });
+    mockPacks.list.mockResolvedValueOnce(installedPack);
+    mockPacks.removal.mockResolvedValueOnce(plan);
+    // The real installer refuses before it deletes anything (bootstrap content-pack-install.test.ts).
+    mockPacks.detach.mockRejectedValueOnce(new Error('removing this pack needs the roles.manage capability'));
+    const { code, err } = await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: true, json: false }));
+    expect(code).toBe(1);
+    expect(err).toContain('market remove failed: removing this pack needs the roles.manage capability');
+    expect(mockPacks.detach.mock.calls[0][1].actor.capabilities).toEqual(['marketplace.manage']);
+    expect(writeSpy.mock.calls.map((c) => String(c[0])).join('')).not.toContain('removed demo-pack');
   });
 
   it('remove pack --force --json: prints the removal as JSON', async () => {

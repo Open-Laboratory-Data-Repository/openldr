@@ -402,7 +402,7 @@ async function removePack(ctx: AppContext, id: string, version: string | undefin
   }
   const a = cliActor();
   try {
-    await ctx.marketplacePacks.detach(id, { actor: { id: a.actorId ?? null, name: a.actorName } });
+    await ctx.marketplacePacks.detach(id, { actor: { id: a.actorId ?? null, name: a.actorName, capabilities: await installerCapabilities(ctx) } });
   } catch (err) {
     // A user was given one of the roles after the check above.
     if (err instanceof PackRemovalError) {

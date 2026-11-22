@@ -427,7 +427,7 @@ describe('removeProfileItems', () => {
     const [roleId] = [...m.roles.keys()];
     vi.mocked(m.deps.roleMembers).mockImplementation(async (rid: string) => (rid === roleId ? ['Ann'] : ['Bob', 'Cy']));
     const onRemoved = vi.fn(async () => undefined);
-    const err = await removeProfileItems(m.deps, PACK, onRemoved).catch((e: unknown) => e);
+    const err = await removeProfileItems(m.deps, PACK, onRemoved, 'all').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PackRemovalError);
     expect((err as PackRemovalError).holders).toEqual([{ role: 'sample-clerk', users: ['Ann'] }, { role: 'old-clerk', users: ['Bob', 'Cy'] }]);
     expect(m.deps.roles.remove).not.toHaveBeenCalled();
@@ -444,7 +444,7 @@ describe('removeProfileItems', () => {
     const [layoutId] = [...m.layouts.keys()];
     const [formId] = [...m.forms.keys()];
     const seen: string[] = [];
-    const out = await removeProfileItems(m.deps, PACK, async (r) => { seen.push(`${r.kind}:${r.itemId}`); });
+    const out = await removeProfileItems(m.deps, PACK, async (r) => { seen.push(`${r.kind}:${r.itemId}`); }, 'all');
     expect(out).toEqual({ roles: ['Sample Clerk'], layouts: ['Collection site'], formsKept: ['Lab request'] });
     expect(seen).toEqual([`layout:${layoutId}`, `role:${roleId}`]);
     expect(m.roles.size).toBe(0);
@@ -458,7 +458,7 @@ describe('removeProfileItems', () => {
     const m = memDeps();
     m.items.push({ packId: PACK, kind: 'role', key: 'old-clerk', itemId: 'r-gone' }, { packId: PACK, kind: 'layout', key: 'old', itemId: 'l-gone' });
     const onRemoved = vi.fn(async () => undefined);
-    await expect(removeProfileItems(m.deps, PACK, onRemoved)).resolves.toEqual({ roles: [], layouts: [], formsKept: [] });
+    await expect(removeProfileItems(m.deps, PACK, onRemoved, 'all')).resolves.toEqual({ roles: [], layouts: [], formsKept: [] });
     expect(onRemoved).not.toHaveBeenCalled();
     expect(m.deps.roles.remove).not.toHaveBeenCalled();
     expect(m.deps.layouts.remove).not.toHaveBeenCalled();
@@ -468,12 +468,12 @@ describe('removeProfileItems', () => {
   it('names a kept form by its key when the form no longer exists', async () => {
     const m = memDeps();
     m.items.push({ packId: PACK, kind: 'form', key: 'old-request', itemId: 'f-gone' });
-    await expect(removeProfileItems(m.deps, PACK)).resolves.toEqual({ roles: [], layouts: [], formsKept: ['old-request'] });
+    await expect(removeProfileItems(m.deps, PACK, async () => undefined, 'all')).resolves.toEqual({ roles: [], layouts: [], formsKept: ['old-request'] });
   });
 
   it('a pack that made nothing removes nothing', async () => {
     const m = memDeps();
-    await expect(removeProfileItems(m.deps, PACK)).resolves.toEqual({ roles: [], layouts: [], formsKept: [] });
+    await expect(removeProfileItems(m.deps, PACK, async () => undefined, 'all')).resolves.toEqual({ roles: [], layouts: [], formsKept: [] });
     expect(m.deps.packItems.remove).not.toHaveBeenCalled();
   });
 });
