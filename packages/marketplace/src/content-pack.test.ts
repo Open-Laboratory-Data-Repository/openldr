@@ -100,3 +100,27 @@ describe('content pack: datasets (pack datasets design)', () => {
   });
 });
 
+
+describe('content pack: profile steps (profile packs design)', () => {
+  it('parses the four profile steps', () => {
+    const pack = parseContentPack({ formatVersion: 1, steps: [
+      { kind: 'needs', bundles: [{ id: 'sample-tracking', version: '>=0.1.0' }] },
+      { kind: 'role', slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view', 'forms.submit', 'patients.view'] },
+      { kind: 'layout', key: 'collection-site', name: 'Collection site', startPage: '/forms', pages: ['/forms', '/patients', '/docs'], roles: ['sample-clerk'] },
+      { kind: 'form', key: 'lab-request', questionnaire: { resourceType: 'Questionnaire', title: 'Lab request' }, open: ['sample-clerk'], submit: ['sample-clerk'] },
+    ] });
+    expect(summarizeContentPack(pack)).toEqual([
+      { kind: 'needs', label: 'sample-tracking', count: 1 },
+      { kind: 'role', label: 'Sample Clerk', count: 3 },
+      { kind: 'layout', label: 'Collection site', count: 3 },
+      { kind: 'form', label: 'Lab request', count: 1 },
+    ]);
+  });
+  it('refuses a role with no capabilities', () => {
+    expect(() => parseContentPack({ formatVersion: 1, steps: [{ kind: 'role', slug: 'x-role', name: 'X', capabilities: [] }] })).toThrow(/invalid pack/);
+  });
+  it('refuses two steps with the same kind and key', () => {
+    const layout = { kind: 'layout', key: 'a-b', name: 'A', startPage: null, pages: ['/forms'], roles: [] };
+    expect(() => parseContentPack({ formatVersion: 1, steps: [layout, { ...layout, name: 'B' }] })).toThrow(/listed twice/);
+  });
+});

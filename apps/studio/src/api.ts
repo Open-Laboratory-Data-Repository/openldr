@@ -1975,6 +1975,8 @@ export interface RoleRecord {
   locked: boolean;
   capabilities: string[];
   memberCount: number;
+  /** The content pack that made this role, or null for one an admin made. */
+  ownerPack?: string | null;
 }
 export interface CapabilityMeta { key: string; group: string; label: string; description: string }
 export interface CapabilityGroup { key: string; label: string; capabilities: CapabilityMeta[] }
@@ -1985,7 +1987,8 @@ export const listRoles = (): Promise<RoleRecord[]> => apiGet('/api/roles', 'list
 
 // ── Layout presets ──────────────────────────────────────────────────────────
 // Mirrors LayoutPreset / LayoutList in @openldr/bootstrap (layout-presets.ts).
-export interface LayoutPreset { id: string; name: string; startPage: string | null; pages: string[]; roles: string[] }
+/** `ownerPack`: the content pack that made this layout, or null for one an admin made. */
+export interface LayoutPreset { id: string; name: string; startPage: string | null; pages: string[]; roles: string[]; ownerPack?: string | null }
 /** `myRoles`: the signed-in user's role slugs from user_roles (what the Roles page assigns). The
  *  sign-in token's roles are not used: they are empty on OIDC and go stale on Keycloak. */
 export interface LayoutList { layouts: LayoutPreset[]; roleOrder: string[]; myRoles?: string[] }
@@ -2895,14 +2898,28 @@ export interface ArtifactPayloadMeta {
   /** content-pack variant: the signed step list. */
   packSha256?: string;
   steps?: PackStep[];
+  /** Not signed and not in the manifest. The studio copies it here from the detail's `roles`, so the
+   *  install prompt can list each role's capabilities. */
+  roles?: PackRole[];
+  /** Copied the same way from the detail's `layouts`, so a layout line can name its pages. */
+  layouts?: PackLayout[];
   [k: string]: unknown;
 }
 export interface PackStep { kind: string; label: string; count: number }
+/** A content pack's role step, read from its pack.json by the available detail route. */
+export interface PackRole { slug: string; name: string; capabilities: string[] }
+/** A content pack's layout step, read from its pack.json by the available detail route. `roles`
+ *  holds the slugs of the roles it is the default for. */
+export interface PackLayout { key: string; name: string; pages: string[]; roles: string[] }
 export interface AvailableArtifactDetail extends AvailableArtifact {
   compatible: boolean;
   ceVersion: string;
   readme?: string;
   payload: ArtifactPayloadMeta;
+  /** content-pack only: each role step with its capability keys. */
+  roles?: PackRole[];
+  /** content-pack only: each layout step with its pages and role slugs. Absent from an older server. */
+  layouts?: PackLayout[];
 }
 export interface InstalledArtifact {
   id: string;
@@ -2962,7 +2979,7 @@ export const getInstalledArtifact = (id: string): Promise<InstalledArtifactDetai
   apiGet(`/api/marketplace/installed/${encodeURIComponent(id)}`, 'get installed artifact');
 
 /** A content pack install answers 200 even when a step failed: check `status`. */
-export interface InstallArtifactResult { id: string; version: string; status?: 'installed' | 'failed'; failedStep?: number; error?: string }
+export interface InstallArtifactResult { id: string; version: string; status?: 'installed' | 'failed'; failedStep?: number | null; error?: string }
 export const installArtifact = (ref: string, acknowledgedCapabilities: unknown[]): Promise<InstallArtifactResult> =>
   authFetch('/api/marketplace/install', jbody({ ref, acknowledgedCapabilities }, 'POST')).then((r) => okJson<InstallArtifactResult>(r, 'install artifact'));
 
@@ -3008,6 +3025,30 @@ export async function removePlugin(id: string, keep: RemoveKeep): Promise<{ stop
     throw Object.assign(new Error(body.error ?? 'still stopping'), { stillStopping: body.stillStopping ?? [] });
   }
   return okJson(res, 'remove plugin');
+}
+
+/** What removing an installed content pack deletes and keeps, and who still holds its roles. */
+export interface PackRemoval {
+  roles: string[];
+  layouts: string[];
+  formsKept: string[];
+  holders: PackRoleHolders[];
+}
+export interface PackRoleHolders { role: string; users: string[] }
+
+export const getPackRemoval = (id: string): Promise<PackRemoval> =>
+  apiGet<PackRemoval>(`/api/marketplace/${encodeURIComponent(id)}/removal`, 'plan the pack removal');
+
+/** Removes an installed content pack. A 409 means a user still holds one of its roles: nothing was
+ *  removed, and the answer names them. */
+export async function removePack(id: string): Promise<{ ok: true } | { ok: false; error: string; holders: PackRoleHolders[] }> {
+  const res = await authFetch(`/api/marketplace/${encodeURIComponent(id)}/detach`, { method: 'POST' });
+  if (res.status === 409) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string; holders?: PackRoleHolders[] };
+    return { ok: false, error: body.error ?? 'a user still holds a role of this pack', holders: body.holders ?? [] };
+  }
+  await okJson<unknown>(res, 'remove pack');
+  return { ok: true };
 }
 
 export async function detachArtifact(id: string): Promise<void> {

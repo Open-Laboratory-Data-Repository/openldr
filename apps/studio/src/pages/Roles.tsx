@@ -70,10 +70,17 @@ export function Roles() {
     {
       id: 'name', labelKey: 'roles.colName', type: 'text', defaultVisible: true, cellClassName: 'font-medium',
       accessor: (r) => (
-        <div className="flex items-center gap-2">
-          <TruncatedText text={r.name} className="max-w-[16rem]" />
-          {r.isSystem && <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">{t('roles.systemBadge')}</Badge>}
-          {r.locked && <Badge variant="secondary" className="shrink-0 text-[10px]">{t('roles.lockedBadge')}</Badge>}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <TruncatedText text={r.name} className="max-w-[16rem]" />
+            {r.isSystem && <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">{t('roles.systemBadge')}</Badge>}
+            {r.locked && <Badge variant="secondary" className="shrink-0 text-[10px]">{t('roles.lockedBadge')}</Badge>}
+          </div>
+          {/* The pack's next update overwrites an edit to this role, so say which pack owns it
+              (profile packs design 5.2). */}
+          {r.ownerPack ? (
+            <div data-testid="owner-pack" className="min-w-0"><TruncatedText as="div" text={t('roles.ownerPack', { id: r.ownerPack })} className="max-w-[16rem] text-xs font-normal text-muted-foreground" /></div>
+          ) : null}
         </div>
       ),
     },

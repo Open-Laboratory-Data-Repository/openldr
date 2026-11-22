@@ -39,7 +39,12 @@ export function registerRolesRoutes(app: FastifyInstance<any, any, any, any>, ct
   const VIEW = { preHandler: requireCapability('roles.view') };
   const MANAGE = { preHandler: requireCapability('roles.manage') };
 
-  app.get('/api/roles', VIEW, async () => ctx.roles.list());
+  // ownerPack names the content pack that made the role, so an admin knows the pack's next update
+  // overwrites an edit (profile packs design 5.2).
+  app.get('/api/roles', VIEW, async () => {
+    const owners = await ctx.packItems.owners('role');
+    return (await ctx.roles.list()).map((r) => ({ ...r, ownerPack: owners.get(r.id) ?? null }));
+  });
 
   app.get('/api/roles/catalog', VIEW, async () => ({ groups: CAPABILITY_GROUPS }));
 

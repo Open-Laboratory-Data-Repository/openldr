@@ -145,3 +145,4 @@ export { ISO3166_COUNTRIES } from './iso3166';
 export { createWarehouseDatasetStore, type WarehouseDataset, type WarehouseDatasetDef, type WarehouseDatasetStore } from './warehouse-dataset-store';
 export { buildWarehouseDataset, dropWarehouseDataset, DATASET_SCHEMA } from './warehouse-dataset-build';
 export { createExplorerGroupStore, EXPLORER_GROUP_KINDS, type ExplorerGroupKind, type ExplorerGroupStore } from './explorer-group-store';
+export { createPackItemStore, type PackItem, type PackItemKind, type PackItemStore } from './pack-item-store';

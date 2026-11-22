@@ -318,6 +318,26 @@ Requests a check saved into OpenLDR are never deleted.
 It refuses without `--force` when anything is running or anything would be deleted, and names
 what it would stop. With a version, only that installed version is removed and nothing is stopped.
 
+## Removing a content pack
+
+`market remove` also removes a content pack. When the id is an installed content pack, it removes
+the roles and layouts the pack made. The pack's forms stay published.
+
+    openldr market remove <id> [--force] [--json]
+
+Without `--force` it prints the roles and layouts it would remove, the forms it keeps, and anyone
+who still holds one of the pack's roles. Then it prints `use --force to remove it`, exits 1 and
+changes nothing.
+
+With `--force` it removes the pack and prints `removed <id>`. If a user still holds one of the
+pack's roles, it names each role with its users, exits 1 and removes nothing. Take the role away
+from those users first. A content pack is removed whole, so a version is refused. `--keep` is for
+plugins only.
+
+When the command runs through the server, `market install` passes the signed-in account's
+capabilities. A pack that carries a role then needs `roles.manage`, and its role cannot grant a
+capability that account does not hold. Run on the machine itself, it is not limited.
+
 ## Checking a copied source
 
 Checks a finished copy with a plugin that decodes each request. The check reads the copy, not the

@@ -10,7 +10,7 @@ import { createBlobFromConfig } from './s3-config';
 import { requireOidcIssuer, type Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
-import { createInternalDb, createFhirStore, createRelationalWriter, createWarehouseDatasetStore, createExplorerGroupStore, type ExplorerGroupStore, persistResources, persistRequests, createTerminologyStore, createTerminologyAdminStore, LOCAL_MAP_URL, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, createWarehouseDatasetStore, createExplorerGroupStore, type ExplorerGroupStore, persistResources, persistRequests, createTerminologyStore, createTerminologyAdminStore, LOCAL_MAP_URL, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createPackItemStore, type PackItemStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -45,11 +45,14 @@ import { createPluginScheduleApi, createPluginScheduleRunner, type PluginSchedul
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { createTrustStore } from '@openldr/marketplace';
 import { createContentPackInstaller, type ContentPackInstaller, type PackQueryChange } from './content-pack-install';
+import { installedBundleVersion, packFormDeps, roleMemberNames } from './content-pack-profile-deps';
+import { listLayouts, saveLayout, deleteLayout } from './layout-presets';
+import { CAPABILITY_KEYS } from '@openldr/rbac';
 import { withRegisteredResourceId } from './content-pack-terminology';
 import { checkCustomQueryFile, importCustomQueries } from './custom-query-transfer';
 import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
-import { canRunOffThread, type PluginRuntime } from '@openldr/plugins';
+import { canRunOffThread, createPluginStore, type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore, type DataScope, FACILITY_REGISTRY_SYSTEM } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
@@ -524,6 +527,8 @@ export interface AppContext {
   marketplaceForms: FormArtifactInstaller;
   /** Content packs: signed bundles of terminology, a facility register, link-matching and custom queries. */
   marketplacePacks: ContentPackInstaller;
+  /** Which content pack made each role, layout and form (profile packs design 5.2). */
+  packItems: PackItemStore;
   reporting: ReportingApi;
   health: HealthRegistry;
   terminology: {
@@ -1315,6 +1320,9 @@ const reporting: ReportingApi = {
   }
 
   const connectorStore = createConnectorStore(internal.db);
+  const packItems = createPackItemStore(internal.db);
+  // Read only, for a pack's needs step. The plugin runtime keeps its own store over the same table.
+  const pluginRows = createPluginStore(internal.db);
   // Built here, not beside `marketplaceForms`: it needs the terminology loaders, `facilityJobs` and `connectorStore`.
   const marketplacePacks = createContentPackInstaller({
     installStore: marketplaceInstalls,
@@ -1371,6 +1379,19 @@ const reporting: ReportingApi = {
     },
     planTestMappings: (mappings, level) => testMapping.planPack(mappings, level),
     applyTestMappings: (mappings, level) => testMapping.applyPack(mappings, level),
+    profile: {
+      packItems,
+      roles,
+      layouts: {
+        list: () => listLayouts(internal.db),
+        save: (id, input, actor) => saveLayout(internal.db, id, input, actor),
+        remove: (id) => deleteLayout(internal.db, id),
+      },
+      capabilityKeys: CAPABILITY_KEYS,
+      roleMembers: (roleId) => roleMemberNames(internal.db, roleId),
+      forms: packFormDeps({ forms, access: formAccessStore, roles }),
+      installedVersion: (bundleId) => installedBundleVersion({ plugins: pluginRows, installs: marketplaceInstalls }, bundleId),
+    },
   });
   const appSettings = createAppSettingsStore(internal.db, referenceCapture);
   const featureFlags = createFeatureFlags(appSettings);
@@ -2149,6 +2170,7 @@ const reporting: ReportingApi = {
     starterPacks,
     marketplaceForms,
     marketplacePacks,
+    packItems,
     reporting,
     health,
     terminology,
@@ -2499,3 +2521,4 @@ export * from './custom-query-transfer';
 export * from './facility-register-file';
 export * from './facility-register-source-input';
 export * from './content-pack-install';
+export * from './content-pack-profile';

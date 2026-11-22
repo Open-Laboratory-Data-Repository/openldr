@@ -250,11 +250,11 @@ Leia os detalhes acima da descrição e desça para as restantes secções.
 
 ## Pacotes de conteúdo e outros tipos de pacote
 
-Um pacote de conteúdo aplica as etapas declaradas de dados de referência por ordem. Reveja a lista e as contagens antes de instalar. Pode atualizar sistemas de códigos, conjuntos de valores, unidades, associações e consultas com nome. Uma nova tentativa pode substituir uma consulta alterada localmente.
+Um pacote de conteúdo aplica as etapas declaradas por ordem. Reveja a lista e as contagens antes de instalar. Pode atualizar sistemas de códigos, conjuntos de valores, unidades, associações e consultas com nome. Uma nova tentativa pode substituir uma consulta alterada localmente. Um pacote também pode criar uma função, uma disposição da barra lateral e formulários. O guia [Pacotes de perfil](/docs/profile-packs) explica esses passos.
 
 Se um pacote falhar durante a aplicação, as etapas anteriores podem ficar guardadas. Leia Failed at step N e o erro, corrija a causa e escolha Install novamente. Um pacote recusa assinaturas inválidas e verificações prévias com falha antes de escrever.
 
-**Detach** esquece o registo de um pacote ou modelo de formulário instalado, mantendo os dados criados. Não é uma desinstalação. Os plugins oferecem Remove. Uma versão antiga de plugin instalada pode oferecer Rollback. Estas opções dependem do tipo selecionado e das versões instaladas.
+**Desanexar** esquece o registo de um modelo de formulário instalado, mantendo os dados criados. Não é uma desinstalação. Um pacote de conteúdo instalado oferece antes **Remover**. Apaga as funções e as disposições que o pacote criou e mantém os formulários e os dados de referência. Os plugins oferecem Remove. Uma versão antiga de plugin instalada pode oferecer Rollback. Estas opções dependem do tipo selecionado e das versões instaladas.
 
 Um pacote cujos detalhes não carregam mantém a instalação desativada. Verifique a disponibilidade do registo antes de repetir. O teste documentado exercitou o percurso de plugin. Não aplicou pacotes de conteúdo nem reverteu uma versão antiga de plugin.
 

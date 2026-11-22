@@ -18,7 +18,7 @@ function layoutError(err: unknown, reply: FastifyReply): { error: string } {
   throw err;
 }
 
-export function registerLayoutRoutes(app: FastifyInstance<any, any, any, any>, ctx: Pick<AppContext, 'cfg' | 'internalDb' | 'audit' | 'logger' | 'users' | 'roles'>): void {
+export function registerLayoutRoutes(app: FastifyInstance<any, any, any, any>, ctx: Pick<AppContext, 'cfg' | 'internalDb' | 'audit' | 'logger' | 'users' | 'roles' | 'packItems'>): void {
   // The caller's role slugs, for picking their role's default layout. From user_roles, which the
   // Roles page writes and capabilities come from. Not req.user.roles: those are the sign-in token's
   // roles, empty on an OIDC install and stale on Keycloak once roles change in studio
@@ -34,7 +34,11 @@ export function registerLayoutRoutes(app: FastifyInstance<any, any, any, any>, c
 
   app.get('/api/layouts', async (req, reply) => {
     if (!req.user) { reply.code(401); return { error: 'authentication required' }; }
-    return { ...(await listLayouts(ctx.internalDb)), myRoles: await myRoles(req, req.user) };
+    const list = await listLayouts(ctx.internalDb);
+    // ownerPack names the content pack that made the layout (profile packs design 5.2).
+    const owners = await ctx.packItems.owners('layout');
+    const layouts = list.layouts.map((l) => ({ ...l, ownerPack: owners.get(l.id) ?? null }));
+    return { ...list, layouts, myRoles: await myRoles(req, req.user) };
   });
 
   app.post('/api/layouts', EDIT, async (req, reply) => {

@@ -1,15 +1,15 @@
 import { basename, join } from 'node:path';
 import { readFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { CE_VERSION, readPluginSites, updatePluginSite, PluginSitesError, PluginStillStopping, ActiveVersionRemoval, REMOVE_KEEPS, type RemoveKeep } from '@openldr/bootstrap';
+import { CE_VERSION, readPluginSites, updatePluginSite, PluginSitesError, PluginStillStopping, ActiveVersionRemoval, PackRemovalError, REMOVE_NEEDS_ROLES_MANAGE, REMOVE_KEEPS, type RemoveKeep } from '@openldr/bootstrap';
 import {
   verifyBundle, readGrant, isCompatible, readBundle,
   LocalRegistrySource, HttpRegistrySource, type RegistrySource, type Capability,
   openBundlePr, fetchRepoIndexJson, repoPathExists, mergeIndexEntry, parseIndex,
-  payloadFileName, type RepoCoords, PublishError,
+  payloadFileName, type RepoCoords, PublishError, parseContentPack, type Bundle, type ContentPackStep,
 } from '@openldr/marketplace';
 import { createRegistryStore, type RegistryRecord } from '@openldr/db';
 import { redact } from '@openldr/core';
@@ -17,6 +17,31 @@ import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 
 const VIEW = { preHandler: requireCapability('marketplace.view') };
+
+/** The steps of a content pack's pack.json, read for the install screen. The signed step summary
+ *  carries only counts. A pack.json that fails its hash or does not parse gives no steps: the install
+ *  itself refuses that pack with the real reason. */
+function packSteps(b: Bundle): ContentPackStep[] {
+  const sha = (b.manifest.payload as { packSha256?: string }).packSha256;
+  if (createHash('sha256').update(b.wasm).digest('hex') !== sha) return [];
+  try {
+    return parseContentPack(JSON.parse(new TextDecoder().decode(b.wasm))).steps;
+  } catch {
+    return [];
+  }
+}
+
+/** The role steps, with their capability keys. The admin must see every capability before
+ *  confirming (profile packs design 5.1a). */
+function packRoles(steps: ContentPackStep[]): { slug: string; name: string; capabilities: string[] }[] {
+  return steps.flatMap((s) => (s.kind === 'role' ? [{ slug: s.slug, name: s.name, capabilities: s.capabilities }] : []));
+}
+
+/** The layout steps, with their page paths and the slugs of the roles they are the default for
+ *  (design 5.4). */
+function packLayouts(steps: ContentPackStep[]): { key: string; name: string; pages: string[]; roles: string[] }[] {
+  return steps.flatMap((s) => (s.kind === 'layout' ? [{ key: s.key, name: s.name, pages: s.pages, roles: s.roles }] : []));
+}
 const MANAGE = { preHandler: requireCapability('marketplace.manage') };
 
 function actor(req: FastifyRequest): { id?: string | null; name: string } {
@@ -150,6 +175,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     try {
       const b = await (await sourceFor(reg)).getBundle(ref);
       const v = verifyBundle(b);
+      const steps = b.manifest.type === 'content-pack' ? packSteps(b) : null;
       return {
         ref: packRef(reg.id, ref), id: b.manifest.id, version: b.manifest.version, type: b.manifest.type,
         description: b.manifest.description, readme: b.manifest.readme, license: b.manifest.license,
@@ -158,6 +184,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
         compatible: isCompatible(b.manifest.compatibility.ceVersion, CE_VERSION),
         ceVersion: CE_VERSION, payload: b.manifest.payload, valid: v.valid,
         ...(v.reason ? { invalidReason: v.reason } : {}),
+        ...(steps ? { roles: packRoles(steps), layouts: packLayouts(steps) } : {}),
         registryId: reg.id, registryName: reg.name,
       };
     } catch {
@@ -206,7 +233,9 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
       const a = actor(req);
       const acknowledgedCapabilities = (body.acknowledgedCapabilities as Capability[] | undefined) ?? b.manifest.capabilities;
       if (b.manifest.type === 'content-pack') {
-        return await ctx.marketplacePacks.install(b, { actor: a, sourceRef: ref });
+        // The caller's capabilities, as requireCapability reads them. A pack cannot grant more than
+        // its installer holds (profile packs design 5.1a). Never 'all' from a request.
+        return await ctx.marketplacePacks.install(b, { actor: { ...a, capabilities: req.user?.capabilities ?? [] }, sourceRef: ref });
       }
       if (b.manifest.type === 'form-template') {
         const installed = await ctx.marketplaceForms.install(b, {
@@ -409,11 +438,29 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     }
   });
 
-  app.post('/api/marketplace/:id/detach', MANAGE, async (req) => {
+  const isInstalledPack = async (id: string): Promise<boolean> =>
+    (await ctx.marketplacePacks.list()).some((r) => r.artifactId === id);
+
+  app.post('/api/marketplace/:id/detach', MANAGE, async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    const isPack = (await ctx.marketplacePacks.list()).some((r) => r.artifactId === id);
-    if (isPack) await ctx.marketplacePacks.detach(id, { actor: actor(req) });
-    else await ctx.marketplaceForms.detach(id, { actor: actor(req) });
+    if (await isInstalledPack(id)) {
+      try {
+        // As on install: a pack that owns a role needs roles.manage to remove it.
+        await ctx.marketplacePacks.detach(id, { actor: { ...actor(req), capabilities: req.user?.capabilities ?? [] } });
+      } catch (err) {
+        if (err instanceof PackRemovalError) {
+          reply.code(409);
+          return { error: err.message, holders: err.holders };
+        }
+        if (err instanceof Error && err.message === REMOVE_NEEDS_ROLES_MANAGE) {
+          reply.code(403);
+          return { error: err.message };
+        }
+        throw err;
+      }
+    } else {
+      await ctx.marketplaceForms.detach(id, { actor: actor(req) });
+    }
     return { ok: true };
   });
 
@@ -436,8 +483,11 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     return removeWhole(id, 'all', req, reply).then((r) => ('error' in r ? r : { ok: true }));
   });
 
+  // A content pack id answers with what detach would remove and who holds its roles. A plugin id
+  // answers with what a plugin removal would stop.
   app.get('/api/marketplace/:id/removal', MANAGE, async (req) => {
     const { id } = req.params as { id: string };
+    if (await isInstalledPack(id)) return ctx.marketplacePacks.removal(id);
     return ctx.pluginRemoval.plan(id);
   });
 

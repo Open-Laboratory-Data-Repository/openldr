@@ -4,7 +4,7 @@ import '@/i18n';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, getAvailableArtifact: vi.fn(), getInstalledArtifact: vi.fn(async () => ({})), getPluginSites: vi.fn() };
+  return { ...actual, getAvailableArtifact: vi.fn(), getInstalledArtifact: vi.fn(async () => ({})), getPluginSites: vi.fn(), getRoleCatalog: vi.fn(async () => ({ groups: [] })) };
 });
 import * as api from '@/api';
 import { PackageDetail } from './PackageDetail';
@@ -289,7 +289,16 @@ describe('PackageDetail', () => {
       expect(onInstall).toHaveBeenCalledWith(expect.objectContaining({ ref: 'reg/pack-1' }), []);
     });
 
-    it('a failed install shows the step and error, with Install again and Detach', async () => {
+    it('shows no Permissions block, because a content pack declares no capabilities', async () => {
+      mockPackDetail();
+      const ok: CardEntry = { ...packEntry, installed: true, status: 'installed' };
+      render(<PackageDetail entry={ok} onBack={vi.fn()} onInstall={vi.fn()} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={vi.fn()} onDetach={vi.fn()} />);
+      expect(await screen.findByText('Specimen types')).toBeTruthy();
+      expect(screen.queryByText('Permissions')).toBeNull();
+      expect(screen.queryByText('No special permissions requested.')).toBeNull();
+    });
+
+    it('a failed install shows the step and error, with Install again and Remove', async () => {
       mockPackDetail();
       const failed: CardEntry = { ...packEntry, installed: true, active: true, enabled: true, status: 'failed', failedStep: 2, error: 'boom' };
       const onInstall = vi.fn();
@@ -298,9 +307,42 @@ describe('PackageDetail', () => {
       expect(await screen.findByText('Failed at step 2: boom')).toBeTruthy();
       await openMenu();
       expect(screen.queryByTestId('detail-install')).toBeNull();
-      expect(screen.getByText('Detach')).toBeTruthy();
+      expect(screen.getByTestId('detail-remove-pack')).toBeTruthy();
+      expect(screen.queryByText('Detach')).toBeNull();
       fireEvent.click(await screen.findByTestId('detail-install-again'));
       expect(onInstall).toHaveBeenCalledWith(expect.objectContaining({ ref: 'reg/pack-1' }), []);
+    });
+
+    it('Remove on an installed pack hands the pack to onRemove', async () => {
+      mockPackDetail();
+      const onRemove = vi.fn();
+      const ok: CardEntry = { ...packEntry, installed: true, status: 'installed' };
+      render(<PackageDetail entry={ok} onBack={vi.fn()} onInstall={vi.fn()} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={onRemove} onDetach={vi.fn()} />);
+      await openMenu();
+      fireEvent.click(await screen.findByTestId('detail-remove-pack'));
+      expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ id: 'pack-1', type: 'content-pack' }));
+    });
+
+    it('hands the role capability keys from the detail to Install, with the signed steps', async () => {
+      (api.getAvailableArtifact as any).mockResolvedValue({
+        ref: 'reg/pack-1', id: 'pack-1', version: '1.0.0', type: 'content-pack',
+        description: 'A pack', publisher: { id: 'p', name: 'Pub' }, capabilities: [],
+        compatibility: { ceVersion: '*' }, compatible: true, ceVersion: '0.1.0',
+        payload: { kind: 'content-pack', packSha256: 'a'.repeat(64), steps: [{ kind: 'role', label: 'Sample Clerk', count: 1 }] },
+        roles: [{ slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view'] }],
+        valid: true,
+      });
+      const onInstall = vi.fn();
+      render(<PackageDetail entry={packEntry} onBack={vi.fn()} onInstall={onInstall} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={vi.fn()} />);
+      await screen.findByText('Sample Clerk');
+      await openMenu();
+      fireEvent.click(await screen.findByTestId('detail-install'));
+      expect(onInstall).toHaveBeenCalledWith(expect.objectContaining({
+        payload: expect.objectContaining({
+          steps: [{ kind: 'role', label: 'Sample Clerk', count: 1 }],
+          roles: [{ slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view'] }],
+        }),
+      }), []);
     });
 
     it('offers Install again on a healthy installed pack, and no step 0 without a step', async () => {

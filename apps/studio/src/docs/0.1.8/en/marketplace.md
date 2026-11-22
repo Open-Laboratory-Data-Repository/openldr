@@ -250,11 +250,11 @@ Read details above the package description, then scroll for the remaining sectio
 
 ## Content packs and other package types
 
-A content pack applies its declared reference-data steps in order. Review its list and counts before installing. Pack installation can update code systems, value sets, facilities, mappings and named queries. A retry can overwrite a query changed locally.
+A content pack applies its declared steps in order. Review its list and counts before installing. Pack installation can update code systems, value sets, facilities, mappings and named queries. A retry can overwrite a query changed locally. A pack can also make a role, a sidebar layout and forms. The [Profile packs](/docs/profile-packs) guide covers those steps.
 
 If a pack fails during application, earlier steps can remain written. Read Failed at step N and its error, correct the cause, then choose Install again. A pack refuses invalid signatures and failed preflight checks before writing.
 
-**Detach** forgets an installed pack or form-template record while retaining its created data. It is not an uninstall. Plugins offer Remove. An older installed plugin version can offer Rollback. These alternatives depend on the selected package type and installed versions.
+**Detach** forgets an installed form-template record while retaining its created data. It is not an uninstall. An installed content pack offers **Remove** instead. It deletes the roles and layouts the pack made and keeps its forms and reference data. Plugins offer Remove. An older installed plugin version can offer Rollback. These alternatives depend on the selected package type and installed versions.
 
 A package whose details cannot load keeps installation disabled. Check registry availability before retrying. The documented test exercised the plugin path. It did not apply a content pack or roll back an older plugin.
 

@@ -34,6 +34,13 @@ describe('docs registry', () => {
     expect(guide?.content).toContain('/docs/users');
     expect(searchDocs(buildIndex(list(locale)), guide!.title).map((hit) => hit.slug)).toContain('sign-in');
   });
+  it.each(LOCALES)('authors and indexes the profile packs guide in %s', (locale) => {
+    const guide = resolve(locale, 'profile-packs');
+    expect(guide?.localeUsed).toBe(locale);
+    expect(guide?.content).toContain('/docs/marketplace');
+    expect(guide?.content).toContain('installing this pack needs the roles.manage capability');
+    expect(searchDocs(buildIndex(list(locale)), guide!.title).map((hit) => hit.slug)).toContain('profile-packs');
+  });
   it.each(LOCALES)('authors and indexes the data exposure guide in %s', (locale) => {
     const guide = resolve(locale, 'data-exposure');
     expect(guide?.localeUsed).toBe(locale);
@@ -82,6 +89,7 @@ describe('docs registry', () => {
       'connector-diagnose',
       'marketplace',
       'plugin-sites',
+      'profile-packs',
       'auth-providers',
       'environment',
       'upgrading',
@@ -126,6 +134,7 @@ describe('docs registry', () => {
       'connector-diagnose': ['connectors'],
       marketplace: ['settings', 'connectors', 'forms'],
       'plugin-sites': ['marketplace', 'dashboard'],
+      'profile-packs': ['marketplace', 'roles', 'layouts', 'forms'],
       'auth-providers': ['environment', 'users', 'sync'],
       environment: ['settings', 'connectors'],
       upgrading: ['settings', 'environment', 'workflows'],

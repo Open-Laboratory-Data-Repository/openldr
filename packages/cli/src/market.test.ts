@@ -15,6 +15,8 @@ const mockPacks = vi.hoisted(() => ({
   check: vi.fn(),
   install: vi.fn(),
   list: vi.fn(),
+  removal: vi.fn(),
+  detach: vi.fn(),
 }));
 
 const mockForms = vi.hoisted(() => ({
@@ -41,10 +43,27 @@ vi.mock('@openldr/db', () => ({
   createMarketplaceInstallStore: vi.fn(() => ({ list: mockInstallList })),
 }));
 
+const PackRemovalError = vi.hoisted(() => class PackRemovalError extends Error {
+  constructor(readonly holders: { role: string; users: string[] }[]) {
+    super('users still hold a role this pack made');
+  }
+});
+
 vi.mock('@openldr/bootstrap', () => ({
   createIngestContext: vi.fn(async () => mockCtx),
   createAppContext: vi.fn(async () => mockCtx),
+  PackRemovalError,
 }));
+
+// The signed-in caller of a served command. 'local' is a run on the box, as in a test.
+const mockServedCaller = vi.hoisted(() => vi.fn(async (): Promise<unknown> => 'local'));
+vi.mock('./served-caller', () => ({ servedCaller: mockServedCaller }));
+
+const mockPluginRemoval = vi.hoisted(() => ({
+  runWholePluginRemove: vi.fn(async () => 0),
+  runPluginVersionRemove: vi.fn(async () => 0),
+}));
+vi.mock('./plugin-removal', () => mockPluginRemoval);
 
 // Mock readBundle / verifyBundle from @openldr/marketplace
 const mockBundle = vi.hoisted(() => ({
@@ -75,7 +94,9 @@ import {
   runMarketEnable,
   runMarketDisable,
   runMarketRemove,
+  runMarketRemoveCommand,
 } from './market';
+import { setActorOverride } from './cli-actor';
 
 describe('market commands', () => {
   let writeSpy: ReturnType<typeof vi.fn>;
@@ -259,8 +280,18 @@ describe('market commands', () => {
     expect(mockPacks.install).toHaveBeenCalledTimes(1);
     const [bundle, opts] = mockPacks.install.mock.calls[0];
     expect(bundle).toBe(packBundle);
-    expect(opts.actor).toEqual({ id: null, name: 'cli' });
+    expect(opts.actor).toEqual({ id: null, name: 'cli', capabilities: 'all' });
     expect(mockCtx.close).toHaveBeenCalled();
+  });
+
+  it('install pack: the audit names the CLI actor', async () => {
+    setActorOverride('tester');
+    await useBundle(packBundle);
+    mockPacks.install.mockResolvedValueOnce({ id: 'demo-pack', version: '1.0.0', status: 'installed' });
+    const code = await runMarketInstall('/some/dir', { json: false });
+    setActorOverride(undefined);
+    expect(code).toBe(0);
+    expect(mockPacks.install.mock.calls[0][1].auditActor).toEqual({ actorType: 'cli', actorId: null, actorName: 'tester' });
   });
 
   it('install pack --dry-run: calls check only and prints the steps', async () => {
@@ -495,5 +526,142 @@ describe('market commands', () => {
     expect(text).toContain('demo-pack');
     expect(text).toContain('failed');
     expect(text).toContain('content-pack');
+  });
+
+  // ------------------------------------------------------------------
+  // capabilities passed to the pack installer
+  // ------------------------------------------------------------------
+  it('install pack: a local run passes every capability', async () => {
+    await useBundle(packBundle);
+    mockPacks.install.mockResolvedValueOnce({ id: 'demo-pack', version: '1.0.0', status: 'installed' });
+    expect(await runMarketInstall('/some/dir', { json: false })).toBe(0);
+    expect(mockPacks.install.mock.calls[0][1].actor.capabilities).toBe('all');
+  });
+
+  it('install pack: a served run passes the signed-in caller\'s capabilities', async () => {
+    await useBundle(packBundle);
+    mockServedCaller.mockResolvedValueOnce({ id: 'u1', roleIds: ['r1'], capabilities: ['marketplace.manage'], dataScope: {} });
+    mockPacks.install.mockResolvedValueOnce({ id: 'demo-pack', version: '1.0.0', status: 'installed' });
+    expect(await runMarketInstall('/some/dir', { json: false })).toBe(0);
+    expect(mockPacks.install.mock.calls[0][1].actor.capabilities).toEqual(['marketplace.manage']);
+  });
+
+  it('install pack: a served caller who cannot be found passes no capabilities, never all', async () => {
+    await useBundle(packBundle);
+    mockServedCaller.mockResolvedValueOnce(null);
+    mockPacks.install.mockResolvedValueOnce({ id: 'demo-pack', version: '1.0.0', status: 'installed' });
+    expect(await runMarketInstall('/some/dir', { json: false })).toBe(0);
+    expect(mockPacks.install.mock.calls[0][1].actor.capabilities).toEqual([]);
+  });
+
+  // ------------------------------------------------------------------
+  // remove of a content pack
+  // ------------------------------------------------------------------
+  const installedPack = [{ artifactId: 'demo-pack', version: '1.0.0', status: 'installed' }];
+  const plan = { roles: ['Sample Clerk'], layouts: ['Clerk home'], formsKept: ['Sample intake'], holders: [] };
+  const OPEN_TO_ALL = "If these forms were limited to the pack's roles, anyone who may view forms can open them after removal.";
+
+  it('remove pack without --force: prints what it would remove, exits 1 and changes nothing', async () => {
+    mockPacks.list.mockResolvedValueOnce(installedPack);
+    mockPacks.removal.mockResolvedValueOnce(plan);
+    const { code, err } = await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: false, json: false }));
+    expect(code).toBe(1);
+    expect(err).toContain('roles: Sample Clerk');
+    expect(err).toContain('layouts: Clerk home');
+    expect(err).toContain('forms kept: Sample intake');
+    expect(err).toContain(`forms kept: Sample intake\n  ${OPEN_TO_ALL}\n`);
+    expect(err).toContain('use --force to remove it');
+    expect(mockPacks.detach).not.toHaveBeenCalled();
+    expect(mockPluginRemoval.runWholePluginRemove).not.toHaveBeenCalled();
+    expect(mockCtx.close).toHaveBeenCalled();
+  });
+
+  it('remove pack without --force: says nothing about form access when the pack removes no role or keeps no form', async () => {
+    mockPacks.list.mockResolvedValueOnce(installedPack);
+    mockPacks.removal.mockResolvedValueOnce({ ...plan, roles: [] });
+    expect((await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: false, json: false }))).err).not.toContain(OPEN_TO_ALL);
+    mockPacks.list.mockResolvedValueOnce(installedPack);
+    mockPacks.removal.mockResolvedValueOnce({ ...plan, formsKept: [] });
+    expect((await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: false, json: false }))).err).not.toContain(OPEN_TO_ALL);
+  });
+
+  it('remove pack without --force: names who holds a role', async () => {
+    mockPacks.list.mockResolvedValueOnce(installedPack);
+    mockPacks.removal.mockResolvedValueOnce({ ...plan, holders: [{ role: 'Sample Clerk', users: ['Ann', 'Ben'] }] });
+    const { code, err } = await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: false, json: false }));
+    expect(code).toBe(1);
+    expect(err).toContain('Sample Clerk: Ann, Ben');
+    expect(mockPacks.detach).not.toHaveBeenCalled();
+  });
+
+  it('remove pack --force: detaches it, audited through cliActor', async () => {
+    setActorOverride('tester');
+    mockPacks.list.mockResolvedValueOnce(installedPack);
+    mockPacks.removal.mockResolvedValueOnce(plan);
+    const code = await runMarketRemoveCommand('demo-pack', undefined, { force: true, json: false });
+    setActorOverride(undefined);
+    expect(code).toBe(0);
+    expect(mockPacks.detach).toHaveBeenCalledWith('demo-pack', {
+      actor: { id: null, name: 'tester', capabilities: 'all' },
+      auditActor: { actorType: 'cli', actorId: null, actorName: 'tester' },
+    });
+    expect(writeSpy.mock.calls.map((c) => String(c[0])).join('')).toContain('removed demo-pack');
+  });
+
+  it('remove pack --force: a served caller without roles.manage exits 1 with the message', async () => {
+    mockServedCaller.mockResolvedValueOnce({ id: 'u1', roleIds: ['r1'], capabilities: ['marketplace.manage'], dataScope: {} });
+    mockPacks.list.mockResolvedValueOnce(installedPack);
+    mockPacks.removal.mockResolvedValueOnce(plan);
+    // The real installer refuses before it deletes anything (bootstrap content-pack-install.test.ts).
+    mockPacks.detach.mockRejectedValueOnce(new Error('removing this pack needs the roles.manage capability'));
+    const { code, err } = await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: true, json: false }));
+    expect(code).toBe(1);
+    expect(err).toContain('market remove failed: removing this pack needs the roles.manage capability');
+    expect(mockPacks.detach.mock.calls[0][1].actor.capabilities).toEqual(['marketplace.manage']);
+    expect(writeSpy.mock.calls.map((c) => String(c[0])).join('')).not.toContain('removed demo-pack');
+  });
+
+  it('remove pack --force --json: prints the removal as JSON', async () => {
+    mockPacks.list.mockResolvedValueOnce(installedPack);
+    mockPacks.removal.mockResolvedValueOnce(plan);
+    expect(await runMarketRemoveCommand('demo-pack', undefined, { force: true, json: true })).toBe(0);
+    const out = JSON.parse(writeSpy.mock.calls.map((c) => String(c[0])).join(''));
+    expect(out).toEqual({ removed: 'demo-pack', roles: ['Sample Clerk'], layouts: ['Clerk home'], formsKept: ['Sample intake'] });
+  });
+
+  it('remove pack --force: a held role exits 1, names the users and does not detach', async () => {
+    mockPacks.list.mockResolvedValueOnce(installedPack);
+    mockPacks.removal.mockResolvedValueOnce({ ...plan, holders: [{ role: 'Sample Clerk', users: ['Ann'] }] });
+    const { code, err } = await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: true, json: false }));
+    expect(code).toBe(1);
+    expect(err).toContain('Sample Clerk: Ann');
+    expect(mockPacks.detach).not.toHaveBeenCalled();
+  });
+
+  it('remove pack --force: a role taken between the check and the detach still exits 1', async () => {
+    mockPacks.list.mockResolvedValueOnce(installedPack);
+    mockPacks.removal.mockResolvedValueOnce(plan);
+    mockPacks.detach.mockRejectedValueOnce(new PackRemovalError([{ role: 'Sample Clerk', users: ['Cy'] }]));
+    const { code, err } = await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: true, json: false }));
+    expect(code).toBe(1);
+    expect(err).toContain('Sample Clerk: Cy');
+  });
+
+  it('remove pack with a version: refuses', async () => {
+    mockPacks.list.mockResolvedValueOnce(installedPack);
+    const { code, err } = await stderrOf(() => runMarketRemoveCommand('demo-pack', '1.0.0', { force: true, json: false }));
+    expect(code).toBe(1);
+    expect(err).toContain('market remove failed: a content pack is removed whole, without a version');
+    expect(mockPacks.detach).not.toHaveBeenCalled();
+    expect(mockPluginRemoval.runPluginVersionRemove).not.toHaveBeenCalled();
+  });
+
+  it('remove of an id that is not a pack: keeps the plugin removal', async () => {
+    const opts = { keep: 'settings', force: true, json: false };
+    expect(await runMarketRemoveCommand('cdr-source', undefined, opts)).toBe(0);
+    expect(mockPluginRemoval.runWholePluginRemove).toHaveBeenCalledWith('cdr-source', opts);
+    expect(await runMarketRemoveCommand('cdr-source', '0.1.4', opts)).toBe(0);
+    expect(mockPluginRemoval.runPluginVersionRemove).toHaveBeenCalledWith('cdr-source', '0.1.4', opts);
+    expect(mockPacks.removal).not.toHaveBeenCalled();
   });
 });

@@ -4,8 +4,8 @@ import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { CE_VERSION, PluginStillStopping, ActiveVersionRemoval, type AppContext } from '@openldr/bootstrap';
-import { generatePublisherKeypair, packBundle, signManifest, keyFingerprint } from '@openldr/marketplace';
+import { CE_VERSION, PluginStillStopping, ActiveVersionRemoval, PackRemovalError, createContentPackInstaller, type AppContext } from '@openldr/bootstrap';
+import { generatePublisherKeypair, packBundle, signManifest, keyFingerprint, parseContentPack, summarizeContentPack } from '@openldr/marketplace';
 import { createPluginRuntime } from '@openldr/plugins';
 import { createRegistryStore, createAppSettingsStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
@@ -16,6 +16,8 @@ import { registerPluginUiRoutes } from './plugin-ui-routes';
 let registryDir: string;
 let formRegistryDir: string;
 let packRegistryDir: string;
+/** Registry dir with one signed content pack whose only step makes a role. */
+let rolePackRegistryDir: string;
 /** Registry dir containing a ui-bearing plugin bundle (ui.html included, signed). */
 let uiRegistryDir: string;
 beforeAll(async () => {
@@ -45,6 +47,19 @@ beforeAll(async () => {
     const packSha = createHash('sha256').update(packBytes).digest('hex');
     const packManifest = { schemaVersion: 1, type: 'content-pack', id: 'demo-pack', version: '1.0.0', publisher: { id: 'acme', name: 'Acme', keyFingerprint: '0'.repeat(64) }, compatibility: { ceVersion: '*' }, capabilities: [], payload: { kind: 'content-pack', packSha256: packSha, steps: [{ kind: 'query', label: 'Queries', count: 2 }] } };
     await packBundle({ manifest: packManifest, payload: packBytes, outDir: join(packRegistryDir, 'demo-pack-1'), privateKeyDer: pkp.privateKeyDer, publicKeyDer: pkp.publicKeyDer });
+  }
+
+  rolePackRegistryDir = await mkdtemp(join(tmpdir(), 'mkt-role-pack-registry-'));
+  {
+    const rkp = generatePublisherKeypair();
+    const pack = { formatVersion: 1, steps: [
+      { kind: 'role', slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view'] },
+      { kind: 'layout', key: 'collection-site', name: 'Collection site', startPage: '/forms', pages: ['/forms', '/patients'], roles: ['sample-clerk'] },
+    ] };
+    const packBytes = new TextEncoder().encode(JSON.stringify(pack));
+    const packSha = createHash('sha256').update(packBytes).digest('hex');
+    const manifest = { schemaVersion: 1, type: 'content-pack', id: 'role-pack', version: '1.0.0', publisher: { id: 'acme', name: 'Acme', keyFingerprint: '0'.repeat(64) }, compatibility: { ceVersion: '*' }, capabilities: [], payload: { kind: 'content-pack', packSha256: packSha, steps: summarizeContentPack(parseContentPack(pack)) } };
+    await packBundle({ manifest, payload: packBytes, outDir: join(rolePackRegistryDir, 'role-pack-1'), privateKeyDer: rkp.privateKeyDer, publicKeyDer: rkp.publicKeyDer });
   }
 
   // Build a ui-bearing bundle manually (packBundle doesn't handle payload.ui).
@@ -77,6 +92,7 @@ afterAll(async () => {
   await rm(registryDir, { recursive: true, force: true });
   await rm(formRegistryDir, { recursive: true, force: true });
   await rm(packRegistryDir, { recursive: true, force: true });
+  await rm(rolePackRegistryDir, { recursive: true, force: true });
   await rm(uiRegistryDir, { recursive: true, force: true });
 });
 
@@ -154,6 +170,38 @@ async function appWith(
 const REG: SeedRegistry = { id: 'reg-local', name: 'Local Bundles', kind: 'local', location: '' };
 function localReg(): SeedRegistry { return { ...REG, location: registryDir }; }
 function packReg(): SeedRegistry { return { id: 'reg-packs', name: 'Pack Bundles', kind: 'local', location: packRegistryDir }; }
+function rolePackReg(): SeedRegistry { return { id: 'reg-role-packs', name: 'Role Packs', kind: 'local', location: rolePackRegistryDir }; }
+
+/** The real content pack installer over fakes that make nothing. Only the profile check matters here.
+ *  `owned` installs role-pack with these pack items, so detach has something to remove. */
+function realPackInstaller(owned: { kind: 'role' | 'layout' | 'form'; key: string; itemId: string }[] | null = null) {
+  const none = async () => { throw new Error('not used'); };
+  const row = owned && { artifactId: 'role-pack', kind: 'content-pack', version: '1.0.0', status: 'installed' };
+  const items = (owned ?? []).map((i) => ({ packId: 'role-pack', ...i }));
+  return createContentPackInstaller({
+    installStore: { upsert: async () => undefined, get: async () => row, list: async () => (row ? [row] : []), remove: async () => undefined },
+    trustStore: { get: async () => undefined, pin: async () => undefined },
+    audit: { record: async () => undefined }, logger: { error() {}, warn() {}, info() {}, debug() {} },
+    ceVersion: CE_VERSION,
+    loadResource: none, checkResource: () => undefined, checkQueries: () => undefined, importQueries: none,
+    register: none, linkMatching: none, previewLinkMatching: none, checkDatasets: async () => undefined, installDatasets: none,
+    planTestMappings: none, applyTestMappings: none,
+    profile: {
+      packItems: { list: async () => items, owners: async () => new Map(), put: async () => undefined, remove: async () => undefined },
+      roles: {
+        get: async (id: string) => (items.some((i) => i.kind === 'role' && i.itemId === id) ? { id, slug: 'sample-clerk', name: 'Sample Clerk' } : null),
+        getBySlug: async () => null, create: async (i: { slug?: string }) => ({ id: 'r1', slug: i.slug, name: 'Sample Clerk' }), update: none,
+        remove: async () => undefined,
+      },
+      roleMembers: async () => [],
+      layouts: { list: async () => ({ layouts: [], roleOrder: [] }), save: async (id: string | null, input: object) => ({ id: id ?? 'l1', ...input }), remove: none },
+      forms: { install: none, check: () => undefined, setAccess: none, name: async () => null },
+      installedVersion: async () => null,
+      capabilityKeys: ['forms.view', 'roles.manage', 'marketplace.manage'],
+    },
+  } as never);
+}
+
 function formReg(): SeedRegistry { return { id: 'reg-forms', name: 'Form Bundles', kind: 'local', location: formRegistryDir }; }
 
 describe('marketplace routes', () => {
@@ -520,8 +568,75 @@ describe('marketplace routes', () => {
     const { app } = await appWith({}, runtime, { marketplaceForms, marketplacePacks, seed: [localReg()] });
     const res = await app.inject({ method: 'POST', url: '/api/marketplace/demo-pack/detach' });
     expect(res.statusCode).toBe(200);
-    expect(packCalls).toEqual([{ id: 'demo-pack', o: { actor: { id: 'admin', name: 'admin' } } }]);
+    expect(packCalls).toEqual([{ id: 'demo-pack', o: { actor: { id: 'admin', name: 'admin', capabilities: ['marketplace.view', 'marketplace.manage'] } } }]);
     expect(formCalls).toEqual([]);
+  });
+
+  it('install of a role pack by a caller without roles.manage is refused with 400', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, { marketplacePacks: realPackInstaller(), seed: [rolePackReg()] });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'reg-role-packs::role-pack-1' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'installing this pack needs the roles.manage capability' });
+  });
+
+  it('install of a role pack by a caller who holds every capability it grants succeeds', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, {
+      marketplacePacks: realPackInstaller(), seed: [rolePackReg()],
+      capabilities: ['marketplace.view', 'marketplace.manage', 'roles.manage', 'forms.view'],
+    });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'reg-role-packs::role-pack-1' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ id: 'role-pack', version: '1.0.0', status: 'installed' });
+  });
+
+  it('detach of a role pack by a caller without roles.manage gives 403 with the message', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, { marketplacePacks: realPackInstaller([{ kind: 'role', key: 'sample-clerk', itemId: 'r1' }]), seed: [localReg()] });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/role-pack/detach' });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: 'removing this pack needs the roles.manage capability' });
+  });
+
+  it('detach of a role pack by a caller with roles.manage succeeds', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, {
+      marketplacePacks: realPackInstaller([{ kind: 'role', key: 'sample-clerk', itemId: 'r1' }]), seed: [localReg()],
+      capabilities: ['marketplace.view', 'marketplace.manage', 'roles.manage'],
+    });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/role-pack/detach' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+  });
+
+  it('install passes the caller capabilities to the pack installer', async () => {
+    const { runtime } = fakePlugins();
+    const seen: unknown[] = [];
+    const marketplacePacks = { check: async () => ({ steps: [] }), install: async (_b: unknown, o: { actor: unknown }) => { seen.push(o.actor); return { id: 'demo-pack', version: '1.0.0', status: 'installed' }; }, detach: async () => {}, list: async () => [] };
+    const { app } = await appWith({}, runtime, { marketplacePacks, seed: [packReg()] });
+    await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'reg-packs::demo-pack-1' } });
+    expect(seen).toEqual([{ id: 'admin', name: 'admin', capabilities: ['marketplace.view', 'marketplace.manage'] }]);
+  });
+
+  it('detach of a pack whose role users still hold gives 409 and the holders', async () => {
+    const { runtime } = fakePlugins();
+    const holders = [{ role: 'Sample Clerk', users: ['Ann', 'Bob'] }];
+    const marketplacePacks = { check: async () => ({ steps: [] }), install: async () => ({}), detach: async () => { throw new PackRemovalError(holders); }, list: async () => [{ artifactId: 'demo-pack', version: '1.0.0', kind: 'content-pack', status: 'installed' }] };
+    const { app } = await appWith({}, runtime, { marketplacePacks, seed: [localReg()] });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/demo-pack/detach' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: new PackRemovalError(holders).message, holders });
+  });
+
+  it('GET removal of a pack id returns the pack removal preview, not the plugin plan', async () => {
+    const r = fakeRemoval();
+    const preview = { roles: ['Sample Clerk'], layouts: ['Collection site'], formsKept: ['Lab request'], holders: [] };
+    const marketplacePacks = { check: async () => ({ steps: [] }), install: async () => ({}), detach: async () => {}, removal: async (id: string) => (id === 'demo-pack' ? preview : null), list: async () => [{ artifactId: 'demo-pack', version: '1.0.0', kind: 'content-pack', status: 'installed' }] };
+    const { app } = await appWith({}, fakePlugins().runtime, { marketplacePacks, seed: [localReg()], pluginRemoval: r.removal });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/demo-pack/removal' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(preview);
   });
 
   it('available detail of a pack returns payload.steps', async () => {
@@ -530,6 +645,40 @@ describe('marketplace routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/' + encodeURIComponent('reg-packs::demo-pack-1') });
     expect(res.statusCode).toBe(200);
     expect(res.json().payload.steps).toEqual([{ kind: 'query', label: 'Queries', count: 2 }]);
+  });
+
+  it('available detail of a pack lists each role step with its capability keys', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, { seed: [rolePackReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/' + encodeURIComponent('reg-role-packs::role-pack-1') });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().roles).toEqual([{ slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view'] }]);
+  });
+
+  it('available detail of a pack lists each layout step with its pages and role slugs', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, { seed: [rolePackReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/' + encodeURIComponent('reg-role-packs::role-pack-1') });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().layouts).toEqual([{ key: 'collection-site', name: 'Collection site', pages: ['/forms', '/patients'], roles: ['sample-clerk'] }]);
+  });
+
+  it('available detail of a pack whose pack.json does not parse lists no roles and no layouts', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, { seed: [packReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/' + encodeURIComponent('reg-packs::demo-pack-1') });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().roles).toEqual([]);
+    expect(res.json().layouts).toEqual([]);
+  });
+
+  it('available detail of a plugin carries no roles or layouts field', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/reg-local::demo-1' });
+    expect(res.statusCode).toBe(200);
+    expect('roles' in res.json()).toBe(false);
+    expect('layouts' in res.json()).toBe(false);
   });
 
   // ── Registries CRUD ──

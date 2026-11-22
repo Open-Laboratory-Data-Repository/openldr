@@ -12,6 +12,7 @@ import {
   type AvailableArtifact, type InstalledArtifact,
 } from '@/api';
 import { RemovePluginSheet } from './marketplace/RemovePluginSheet';
+import { RemovePackDialog } from './marketplace/RemovePackDialog';
 import { MarketplaceTabs } from './marketplace/MarketplaceTabs';
 import { capabilityLine, packFailureText, type CardEntry } from './marketplace/util';
 import { notifyPluginsChanged } from '@/plugins/pluginEvents';
@@ -33,6 +34,10 @@ export function Marketplace() {
   const [installed, setInstalled] = useState<InstalledArtifact[]>([]);
   const [consent, setConsent] = useState<{ entry: CardEntry; capabilities: unknown[] } | null>(null);
   const [pendingRemove, setPendingRemove] = useState<CardEntry | null>(null);
+  // The pack the remove prompt last showed. It outlives pendingRemove, so the prompt's title keeps
+  // the id while it closes.
+  const [removePackId, setRemovePackId] = useState('');
+  if (pendingRemove?.type === 'content-pack' && pendingRemove.id !== removePackId) setRemovePackId(pendingRemove.id);
   const [pendingDetach, setPendingDetach] = useState<CardEntry | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -151,10 +156,12 @@ export function Marketplace() {
         <DialogContent className="sm:max-w-lg">
           <DialogTitle>{t('settings.marketplace.consentTitle', { id: consent?.entry.id ?? '' })}</DialogTitle>
           {consent ? (
-            <div className="grid gap-3 text-sm">
+            // `min-h-0 overflow-y-auto`: DialogContent caps at 95vh and clips. A pack's step list with
+            // its role capabilities open can outgrow a phone, and the Approve button must stay reachable.
+            <div className="grid min-h-0 gap-3 overflow-y-auto text-sm">
               <div><span className="font-medium">{t('settings.marketplace.version')}:</span> {consent.entry.version}</div>
               {consent.entry.type === 'content-pack' ? (
-                <PayloadPreview payload={consent.entry.payload ?? null} />
+                <PayloadPreview payload={consent.entry.payload ?? null} expandRoles />
               ) : (
               <div>
                 <div className="mb-1 font-medium">{t('settings.marketplace.requestedCapabilities')}</div>
@@ -192,8 +199,22 @@ export function Marketplace() {
         }}
       />
 
+      {/* A content pack's removal deletes its roles and layouts and keeps its forms (profile packs
+          design 5.3). Someone still holding one of its roles blocks it. */}
+      <RemovePackDialog
+        packId={removePackId}
+        open={pendingRemove?.type === 'content-pack'}
+        onOpenChange={(o) => { if (!o) setPendingRemove(null); }}
+        onRemoved={() => {
+          const id = pendingRemove?.id ?? '';
+          setPendingRemove(null);
+          toast.success(t('settings.marketplace.removePack.removed', { id }));
+          void load();
+        }}
+      />
+
       <ConfirmDialog
-        open={pendingRemove !== null && (pendingRemove.type !== 'plugin' || isOlderVersion(pendingRemove))}
+        open={pendingRemove !== null && pendingRemove.type !== 'content-pack' && (pendingRemove.type !== 'plugin' || isOlderVersion(pendingRemove))}
         onOpenChange={(o) => { if (!o) setPendingRemove(null); }}
         title={pendingRemove && isOlderVersion(pendingRemove)
           ? t('settings.marketplace.removeVersionTitle', { id: pendingRemove.id, version: pendingRemove.version })

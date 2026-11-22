@@ -76,7 +76,15 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
   const declaresSites = entry.type === 'plugin' && Boolean(pluginUi?.sites?.widget || pluginUi?.sites?.panel);
   const [sitesOpen, setSitesOpen] = useState(false);
   const isPack = entry.type === 'content-pack';
-  const packPayload = detail?.payload ?? entry.payload ?? null;
+  // The detail's `roles` and `layouts` (read from pack.json) ride along on the payload, so the
+  // install prompt can list every capability the pack grants and every page a layout shows.
+  const packPayload = detail?.payload
+    ? {
+        ...detail.payload,
+        ...('roles' in detail && detail.roles ? { roles: detail.roles } : {}),
+        ...('layouts' in detail && detail.layouts ? { layouts: detail.layouts } : {}),
+      }
+    : entry.payload ?? null;
   // For registry items, detail must be loaded so the acknowledged capabilities are the real,
   // signed set. Installed/local items (no ref) carry their capabilities on the entry already.
   const detailReadyForInstall = entry.ref ? detail !== null && permissionsKnown : true;
@@ -179,8 +187,10 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                           </DropdownMenuItem>
                         )
                       )}
-                      <DropdownMenuItem className="text-destructive" onSelect={() => onDetach?.(entry)}>
-                        {t('settings.marketplace.detach')}
+                      {/* Remove deletes the roles and layouts the pack made and keeps its forms. Its
+                          prompt is RemovePackDialog, opened by the page through onRemove. */}
+                      <DropdownMenuItem data-testid="detail-remove-pack" className="text-destructive" onSelect={() => onRemove(entry)}>
+                        {t('settings.marketplace.remove')}
                       </DropdownMenuItem>
                     </>
                   ) : entry.type === 'form-template' ? (
@@ -294,6 +304,9 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
               ) : null}
             </section>
 
+            {/* Permissions are a plugin's capabilities. A content pack declares none, and the roles it
+                makes are listed with their capabilities in its steps. */}
+            {isPack ? null : (
             <section>
               <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">{t('settings.marketplace.permissions')}</p>
               {!permissionsKnown ? (
@@ -313,6 +326,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 </ul>
               )}
             </section>
+            )}
 
             {detail ? (
               <section>

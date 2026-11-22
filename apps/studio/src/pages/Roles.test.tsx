@@ -43,6 +43,18 @@ beforeEach(() => {
 });
 
 describe('Roles page', () => {
+  it('shows the owning pack under the name of a role a pack made, and nothing under one an admin made', async () => {
+    (api.listRoles as ReturnType<typeof vi.fn>).mockResolvedValue([
+      ...roles,
+      { id: 'r4', slug: 'sample-clerk', name: 'Sample Clerk', description: null, isSystem: false, locked: false, capabilities: ['forms.view'], memberCount: 0, ownerPack: 'collection-site' },
+    ]);
+    render(<MemoryRouter><Roles /></MemoryRouter>);
+    const clerkRow = (await screen.findByText('Sample Clerk')).closest('tr')!;
+    expect(within(clerkRow).getByTestId('owner-pack').textContent).toBe('From pack collection-site');
+    const reviewerRow = screen.getByText('Reviewer').closest('tr')!;
+    expect(within(reviewerRow).queryByTestId('owner-pack')).toBeNull();
+  });
+
   it('lists roles with name, description, member count, and a System badge', async () => {
     render(<MemoryRouter><Roles /></MemoryRouter>);
     expect(await screen.findByText('Administrator')).toBeTruthy();

@@ -84,6 +84,7 @@ export const NAV_SECTIONS: Array<{ id: string; label: Record<DocLocale, string>;
       { slug: 'cli', children: ['cli-access'] },
       { slug: 'standalone' },
       { slug: 'development' },
+      { slug: 'profile-packs' },
     ],
   },
 ];

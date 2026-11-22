@@ -28,6 +28,15 @@ async function openMenu(trigger: HTMLElement) {
 }
 
 describe('Settings, Layouts', () => {
+  it('shows the owning pack under the name of a layout a pack made', async () => {
+    vi.mocked(api.listLayouts).mockResolvedValue({ layouts: [bench, { ...bench, id: 'l2', name: 'Collection site', ownerPack: 'collection-site' }], roleOrder: ['tech'] });
+    page();
+    const row = (await screen.findByText('Collection site')).closest('tr')!;
+    expect(within(row).getByTestId('owner-pack').textContent).toBe('From pack collection-site');
+    const benchRow = screen.getByText('Bench').closest('tr')!;
+    expect(within(benchRow).queryByTestId('owner-pack')).toBeNull();
+  });
+
   it('lists layouts with their pages, start page and roles, with pagination', async () => {
     vi.mocked(api.listLayouts).mockResolvedValue({ layouts: [bench], roleOrder: ['tech'] });
     page();
