@@ -285,7 +285,7 @@ describe('runProfileStep', () => {
     const [role] = [...m.roles.values()];
     expect(m.deps.roles.create).toHaveBeenCalledWith({ slug: 'sample-clerk', name: 'Sample Clerk', description: 'Takes samples', capabilities: ['forms.view', 'forms.submit', 'patients.view'] });
     expect(m.items).toEqual([{ packId: PACK, kind: 'role', key: 'sample-clerk', itemId: role.id }]);
-    expect(out).toEqual({ action: 'role.create', entityType: 'role', entityId: role.id });
+    expect(out).toEqual({ action: 'role.create', entityType: 'role', entityId: role.id, before: null, after: expect.objectContaining({ id: role.id, name: 'Sample Clerk' }) });
   });
 
   it('a role step with no description passes null', async () => {
@@ -297,6 +297,7 @@ describe('runProfileStep', () => {
   it('the same role step run twice leaves one role, updated from the step', async () => {
     const m = memDeps();
     await runProfileStep(m.deps, PACK, '1.0.0', STEPS[1], 'admin');
+    const first = [...m.roles.values()][0];
     const changed: ContentPackStep = { kind: 'role', slug: 'sample-clerk', name: 'Clerk', description: 'New', capabilities: ['forms.view'] };
     const out = await runProfileStep(m.deps, PACK, '1.0.1', changed, 'admin');
     expect(m.roles.size).toBe(1);
@@ -304,7 +305,11 @@ describe('runProfileStep', () => {
     expect(m.deps.roles.update).toHaveBeenCalledWith(role.id, { name: 'Clerk', description: 'New', capabilities: ['forms.view'] });
     expect(role).toMatchObject({ name: 'Clerk', description: 'New', capabilities: ['forms.view'] });
     expect(m.items).toHaveLength(1);
-    expect(out).toEqual({ action: 'role.update', entityType: 'role', entityId: role.id });
+    expect(out).toEqual({
+      action: 'role.update', entityType: 'role', entityId: first.id,
+      before: expect.objectContaining({ id: first.id, name: 'Sample Clerk', capabilities: ['forms.view', 'forms.submit', 'patients.view'] }),
+      after: expect.objectContaining({ id: first.id, name: 'Clerk', description: 'New', capabilities: ['forms.view'] }),
+    });
   });
 
   it('creates the role again when the role the pack made is gone', async () => {
@@ -333,11 +338,15 @@ describe('runProfileStep', () => {
     const first = await runAll(m.deps, STEPS.slice(1, 3));
     expect(m.deps.layouts.save).toHaveBeenCalledWith(null, { name: 'Collection site', startPage: '/forms', pages: ['/forms', '/patients', '/docs'], roles: ['sample-clerk'] }, 'admin');
     const [layout] = [...m.layouts.values()];
-    expect(first[1]).toEqual({ action: 'layout.create', entityType: 'layout', entityId: layout.id });
-    const again = await runProfileStep(m.deps, PACK, '1.0.0', STEPS[2], 'admin');
+    expect(first[1]).toEqual({ action: 'layout.create', entityType: 'layout', entityId: layout.id, before: null, after: expect.objectContaining({ id: layout.id, name: 'Collection site' }) });
+    const again = await runProfileStep(m.deps, PACK, '1.0.0', { ...STEPS[2], startPage: '/patients' } as ContentPackStep, 'admin');
     expect(m.deps.layouts.save).toHaveBeenLastCalledWith(layout.id, expect.objectContaining({ roles: ['sample-clerk'] }), 'admin');
     expect(m.layouts.size).toBe(1);
-    expect(again).toEqual({ action: 'layout.update', entityType: 'layout', entityId: layout.id });
+    expect(again).toEqual({
+      action: 'layout.update', entityType: 'layout', entityId: layout.id,
+      before: expect.objectContaining({ id: layout.id, startPage: '/forms' }),
+      after: expect.objectContaining({ id: layout.id, startPage: '/patients' }),
+    });
   });
 
   it('creates the layout again when the layout the pack made is gone', async () => {
@@ -356,7 +365,7 @@ describe('runProfileStep', () => {
     expect(m.deps.forms.install).toHaveBeenCalledWith(null, { resourceType: 'Questionnaire' }, '2.3.4', 'admin');
     expect(m.access.get(form.id)).toEqual({ open: ['sample-clerk', 'nurse'], submit: ['sample-clerk'] });
     expect(m.items).toEqual([{ packId: PACK, kind: 'form', key: 'lab-request', itemId: form.id }]);
-    expect(out).toEqual({ action: 'form.install', entityType: 'form', entityId: form.id });
+    expect(out).toEqual({ action: 'form.install', entityType: 'form', entityId: form.id, before: null, after: null });
     await runProfileStep(m.deps, PACK, '2.3.5', step, 'admin');
     expect(m.deps.forms.install).toHaveBeenLastCalledWith(form.id, { resourceType: 'Questionnaire' }, '2.3.5', 'admin');
     expect(m.forms.size).toBe(1);

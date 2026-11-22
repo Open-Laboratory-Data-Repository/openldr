@@ -14,7 +14,7 @@ const PLUGIN_BUNDLE = {
 
 const mocks = vi.hoisted(() => ({
   plugins: { install: vi.fn(), remove: vi.fn() },
-  marketplacePacks: { list: vi.fn(), install: vi.fn() },
+  marketplacePacks: { list: vi.fn(), install: vi.fn(), removal: vi.fn(), detach: vi.fn() },
   featureFlags: { get: vi.fn(), set: vi.fn() },
   imports: { allow: vi.fn() },
   jobs: { insertRunning: vi.fn() },
@@ -52,7 +52,7 @@ vi.mock('@openldr/bootstrap', async (orig) => {
 });
 vi.mock('node:fs', async (orig) => ({ ...(await orig<typeof import('node:fs')>()), createReadStream: vi.fn(() => 'stream') }));
 
-import { runMarketInstall } from './market';
+import { runMarketInstall, runMarketRemoveCommand } from './market';
 import { runDistributionImport } from './terminology';
 import { runSettingsFlagsSet } from './settings';
 import { runUserSetStatus } from './user';
@@ -132,7 +132,13 @@ describe('names recorded in served mode', () => {
     });
     mocks.readBundle.mockResolvedValueOnce({ ...PLUGIN_BUNDLE, manifest: { ...PLUGIN_BUNDLE.manifest, id: 'pack', type: 'content-pack' } });
     await runMarketInstall('/srv/run1/pack', { json: false });
-    expect(mocks.marketplacePacks.install.mock.calls[0]![1]).toEqual({ actor: { ...ALICE_REF, capabilities: ['marketplace.manage'] } });
+    expect(mocks.marketplacePacks.install.mock.calls[0]![1]).toEqual({ actor: { ...ALICE_REF, capabilities: ['marketplace.manage'] }, auditActor: ALICE });
+
+    // Removing the pack audits the same signed-in caller.
+    mocks.marketplacePacks.list.mockResolvedValueOnce([{ artifactId: 'pack', version: '1.0.0', status: 'installed' }]);
+    mocks.marketplacePacks.removal.mockResolvedValueOnce({ roles: [], layouts: [], formsKept: [], holders: [] });
+    await runMarketRemoveCommand('pack', undefined, { force: true, json: false });
+    expect(mocks.marketplacePacks.detach.mock.calls[0]![1]).toEqual({ actor: { ...ALICE_REF, capabilities: ['marketplace.manage'] }, auditActor: ALICE });
 
     await runSyncEnroll('s1', { centralUrl: 'https://central.example', json: true });
     expect(mocks.enrollSite).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ actor: 'u-1' }));
@@ -158,7 +164,10 @@ describe('names recorded in served mode', () => {
     expect(mocks.plugins.remove.mock.calls[0]).toEqual(['demo', undefined]);
     mocks.readBundle.mockResolvedValueOnce({ ...PLUGIN_BUNDLE, manifest: { ...PLUGIN_BUNDLE.manifest, id: 'pack', type: 'content-pack' } });
     await runMarketInstall('/x/pack', { json: false });
-    expect(mocks.marketplacePacks.install.mock.calls[0]![1]).toEqual({ actor: { id: null, name: 'cli', capabilities: 'all' } });
+    expect(mocks.marketplacePacks.install.mock.calls[0]![1]).toEqual({
+      actor: { id: null, name: 'cli', capabilities: 'all' },
+      auditActor: expect.objectContaining({ actorType: 'cli', actorId: null }),
+    });
     await runSyncEnroll('s1', { centralUrl: 'https://central.example', json: true });
     expect(mocks.enrollSite).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ actor: null }));
   });

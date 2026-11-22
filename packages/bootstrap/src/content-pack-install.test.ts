@@ -66,7 +66,8 @@ function fakeProfile(items: Array<{ packId: string; kind: string; key: string; i
       get: vi.fn(async (id: string) => { const i = items.find((x) => x.kind === 'role' && x.itemId === id); return i ? role(id, i.key) : null; }),
       getBySlug: vi.fn(async () => null),
       create: vi.fn(async (input: { slug: string }) => role('r-new', input.slug)),
-      update: vi.fn(async () => undefined), remove: vi.fn(async (_id: string): Promise<void> => undefined),
+      update: vi.fn(async (id: string, patch: { name?: string }) => ({ ...role(id, items.find((x) => x.itemId === id)?.key ?? id), ...patch })),
+      remove: vi.fn(async (_id: string): Promise<void> => undefined),
     },
     roleMembers: vi.fn(async () => []),
     layouts: {
@@ -691,5 +692,102 @@ describe('content pack installer: detach takes out what the pack made', () => {
     await expect(s.installer.removal('nope')).rejects.toThrow('not installed');
     await expect(s.installer.removal('f1')).rejects.toThrow('not installed');
     await expect(s.installer.detach('f1', { actor })).rejects.toThrow('not installed');
+  });
+});
+
+describe('content pack installer: who the audit names, and what a role or layout step changed', () => {
+  const pack = {
+    formatVersion: 1,
+    steps: [
+      { kind: 'role', slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view'] },
+      { kind: 'layout', key: 'collection-site', name: 'Collection site', startPage: '/forms', pages: ['/forms'], roles: ['sample-clerk'] },
+      { kind: 'form', key: 'lab-request', questionnaire: { resourceType: 'Questionnaire' }, open: ['sample-clerk'], submit: [] },
+    ],
+  };
+  const owned = [
+    { packId: 'test-pack', kind: 'role', key: 'sample-clerk', itemId: 'r1' },
+    { packId: 'test-pack', kind: 'layout', key: 'collection-site', itemId: 'l1' },
+    { packId: 'test-pack', kind: 'form', key: 'lab-request', itemId: 'f1' },
+  ];
+  const CLI = { actorType: 'cli' as const, actorId: null, actorName: 'ops' };
+  const SERVED = { actorType: 'user' as const, actorId: 'u-1', actorName: 'alice', origin: { via: 'cli' as const, keyName: 'ci' } };
+  const installed = async (s: ReturnType<typeof setup>) => {
+    await s.installs.store.upsert({ artifactId: 'test-pack', kind: 'content-pack', version: '1.0.0', payloadSha256: 'y' });
+  };
+
+  it('without an audit actor, every row names a user, as the routes record it', async () => {
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup();
+    await s.installer.install(bundle, { actor });
+    expect(events(s.audit).map((e) => [e.actorType, e.actorId, e.actorName])).toEqual(
+      Array(4).fill(['user', 'admin', 'admin']));
+    await cleanup();
+  });
+
+  it('a CLI install names the CLI actor on every row', async () => {
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup();
+    await s.installer.install(bundle, { actor: { id: null, name: 'cli' }, auditActor: CLI });
+    const rows = events(s.audit);
+    expect(rows.map((e) => e.action)).toEqual(['role.create', 'layout.create', 'form.install', 'marketplace.install']);
+    for (const e of rows) expect(e).toMatchObject(CLI);
+    await cleanup();
+  });
+
+  it('a served CLI install names the signed-in user and keeps the CLI origin', async () => {
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup();
+    await s.installer.install(bundle, { actor: { id: 'u-1', name: 'alice' }, auditActor: SERVED });
+    const rows = events(s.audit);
+    expect(rows).toHaveLength(4);
+    for (const e of rows) expect(e).toMatchObject(SERVED);
+    await cleanup();
+  });
+
+  it('a CLI removal names the CLI actor on each delete and on the detach', async () => {
+    const s = setup({ profile: fakeProfile(owned) });
+    await installed(s);
+    await s.installer.detach('test-pack', { actor: { id: null, name: 'ops' }, auditActor: CLI });
+    const rows = events(s.audit);
+    expect(rows.map((e) => e.action)).toEqual(['layout.delete', 'role.delete', 'marketplace.detach']);
+    for (const e of rows) expect(e).toMatchObject(CLI);
+  });
+
+  it('a served CLI removal names the signed-in user and keeps the CLI origin', async () => {
+    const s = setup({ profile: fakeProfile(owned) });
+    await installed(s);
+    await s.installer.detach('test-pack', { actor: { id: 'u-1', name: 'alice' }, auditActor: SERVED });
+    const rows = events(s.audit);
+    expect(rows).toHaveLength(3);
+    for (const e of rows) expect(e).toMatchObject(SERVED);
+  });
+
+  it('a role or layout create records no before and the new row after; a form keeps its row', async () => {
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup();
+    await s.installer.install(bundle, { actor });
+    const [role, layout, form] = events(s.audit);
+    expect(role).toMatchObject({ action: 'role.create', before: null, after: expect.objectContaining({ id: 'r-new', slug: 'sample-clerk' }) });
+    expect(layout).toMatchObject({ action: 'layout.create', before: null, after: expect.objectContaining({ id: 'l-new', name: 'Collection site' }) });
+    expect(form).toMatchObject({ action: 'form.install', before: null, after: null });
+    await cleanup();
+  });
+
+  it('a role or layout update records the row before and after', async () => {
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup({ profile: fakeProfile(owned) });
+    await s.installer.install(bundle, { actor });
+    const [role, layout] = events(s.audit);
+    expect(role).toMatchObject({
+      action: 'role.update', entityId: 'r1',
+      before: expect.objectContaining({ id: 'r1', name: 'sample-clerk' }),
+      after: expect.objectContaining({ id: 'r1', name: 'Sample Clerk' }),
+    });
+    expect(layout).toMatchObject({
+      action: 'layout.update', entityId: 'l1',
+      before: expect.objectContaining({ id: 'l1', name: 'collection-site' }),
+      after: expect.objectContaining({ id: 'l1', name: 'Collection site' }),
+    });
+    await cleanup();
   });
 });

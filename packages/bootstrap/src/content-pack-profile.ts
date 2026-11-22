@@ -148,11 +148,14 @@ async function findHolders(deps: ProfileDeps, items: PackItem[]): Promise<{ role
   return holders;
 }
 
-/** What runStep records in the audit for one profile step. */
+/** What runStep records in the audit for one profile step. A role or layout carries its row before
+ *  (null on a create) and after, as the roles and layouts routes record them. A form carries neither. */
 export interface ProfileStepAudit {
   action: 'role.create' | 'role.update' | 'layout.create' | 'layout.update' | 'form.install';
   entityType: 'role' | 'layout' | 'form';
   entityId: string;
+  before: unknown;
+  after: unknown;
 }
 
 /** Runs one role, layout or form step. Safe to run again. Returns what to audit. A needs step writes nothing. */
@@ -167,31 +170,33 @@ export async function runProfileStep(
       const fields = { name: step.name, description: step.description ?? null, capabilities: step.capabilities };
       const itemId = await owned('role', step.slug);
       // A row whose role an admin deleted counts as not found, so the role is made again.
-      if (itemId && (await deps.roles.get(itemId))) {
-        await deps.roles.update(itemId, fields);
-        return { action: 'role.update', entityType: 'role', entityId: itemId };
+      const before = itemId ? await deps.roles.get(itemId) : null;
+      if (itemId && before) {
+        const after = await deps.roles.update(itemId, fields);
+        return { action: 'role.update', entityType: 'role', entityId: itemId, before, after };
       }
       const role = await deps.roles.create({ slug: step.slug, ...fields });
       await deps.packItems.put({ packId, kind: 'role', key: step.slug, itemId: role.id });
-      return { action: 'role.create', entityType: 'role', entityId: role.id };
+      return { action: 'role.create', entityType: 'role', entityId: role.id, before: null, after: role };
     }
     case 'layout': {
       // The trimmed name, the one the check phase compared.
       const input = { name: step.name.trim(), startPage: step.startPage, pages: step.pages, roles: step.roles };
       const itemId = await owned('layout', step.key);
-      if (itemId && (await deps.layouts.list()).layouts.some((l) => l.id === itemId)) {
-        await deps.layouts.save(itemId, input, actorId);
-        return { action: 'layout.update', entityType: 'layout', entityId: itemId };
+      const before = itemId ? (await deps.layouts.list()).layouts.find((l) => l.id === itemId) : undefined;
+      if (itemId && before) {
+        const after = await deps.layouts.save(itemId, input, actorId);
+        return { action: 'layout.update', entityType: 'layout', entityId: itemId, before, after };
       }
       const layout = await deps.layouts.save(null, input, actorId);
       await deps.packItems.put({ packId, kind: 'layout', key: step.key, itemId: layout.id });
-      return { action: 'layout.create', entityType: 'layout', entityId: layout.id };
+      return { action: 'layout.create', entityType: 'layout', entityId: layout.id, before: null, after: layout };
     }
     case 'form': {
       const formId = await deps.forms.install(await owned('form', step.key), step.questionnaire, version, actorId);
       await deps.packItems.put({ packId, kind: 'form', key: step.key, itemId: formId });
       await deps.forms.setAccess(formId, { open: step.open, submit: step.submit });
-      return { action: 'form.install', entityType: 'form', entityId: formId };
+      return { action: 'form.install', entityType: 'form', entityId: formId, before: null, after: null };
     }
     default:
       return null;

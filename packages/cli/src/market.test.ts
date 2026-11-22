@@ -284,6 +284,16 @@ describe('market commands', () => {
     expect(mockCtx.close).toHaveBeenCalled();
   });
 
+  it('install pack: the audit names the CLI actor', async () => {
+    setActorOverride('tester');
+    await useBundle(packBundle);
+    mockPacks.install.mockResolvedValueOnce({ id: 'demo-pack', version: '1.0.0', status: 'installed' });
+    const code = await runMarketInstall('/some/dir', { json: false });
+    setActorOverride(undefined);
+    expect(code).toBe(0);
+    expect(mockPacks.install.mock.calls[0][1].auditActor).toEqual({ actorType: 'cli', actorId: null, actorName: 'tester' });
+  });
+
   it('install pack --dry-run: calls check only and prints the steps', async () => {
     await useBundle(packBundle);
     mockPacks.check.mockResolvedValueOnce({
@@ -591,7 +601,10 @@ describe('market commands', () => {
     const code = await runMarketRemoveCommand('demo-pack', undefined, { force: true, json: false });
     setActorOverride(undefined);
     expect(code).toBe(0);
-    expect(mockPacks.detach).toHaveBeenCalledWith('demo-pack', { actor: { id: null, name: 'tester', capabilities: 'all' } });
+    expect(mockPacks.detach).toHaveBeenCalledWith('demo-pack', {
+      actor: { id: null, name: 'tester', capabilities: 'all' },
+      auditActor: { actorType: 'cli', actorId: null, actorName: 'tester' },
+    });
     expect(writeSpy.mock.calls.map((c) => String(c[0])).join('')).toContain('removed demo-pack');
   });
 

@@ -187,6 +187,7 @@ async function installPack(
     }
     const result = await ctx.marketplacePacks.install(bundle, {
       actor: { ...(servedCaller() ?? { id: null, name: 'cli' }), capabilities: await installerCapabilities(ctx) },
+      auditActor: cliActor(),
     });
     if (result.status === 'failed') {
       if (opts.json) emit(true, result, '');
@@ -407,7 +408,10 @@ async function removePack(ctx: AppContext, id: string, version: string | undefin
   }
   const a = cliActor();
   try {
-    await ctx.marketplacePacks.detach(id, { actor: { id: a.actorId ?? null, name: a.actorName, capabilities: await installerCapabilities(ctx) } });
+    await ctx.marketplacePacks.detach(id, {
+      actor: { id: a.actorId ?? null, name: a.actorName, capabilities: await installerCapabilities(ctx) },
+      auditActor: a,
+    });
   } catch (err) {
     // A user was given one of the roles after the check above.
     if (err instanceof PackRemovalError) {

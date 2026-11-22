@@ -12,8 +12,11 @@ import {
   checkProfileSteps, dropLeftOut, previewRemoval, removeProfileItems, runProfileStep,
   type InstallerCapabilities, type ProfileDeps, type Removed,
 } from './content-pack-profile';
+import type { AuditActor } from './record-audit';
 
 type Actor = { id: string | null; name: string };
+/** Who the audit rows name. Absent means a user with the actor's id and name, as the routes record. */
+type Audited = AuditActor | undefined;
 type StepOutcome = { ok: true } | { ok: false; error: string };
 
 /** One custom query a pack created or replaced, with its row before and after. */
@@ -65,6 +68,9 @@ export interface ContentPackDeps {
 export interface ContentPackInstallOptions {
   /** `capabilities` absent means 'all': nothing limits what the installer may grant. */
   actor: { id?: string | null; name: string; capabilities?: InstallerCapabilities };
+  /** Who the audit rows name, as cliActor() gives it: type cli, or the signed-in user in served mode.
+   *  Absent means a user with `actor`'s id and name. */
+  auditActor?: AuditActor;
   sourceRef?: string;
 }
 
@@ -83,10 +89,11 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
 
   /** Best effort. A failed audit write is logged and never fails a step that already wrote. */
   const record = (e: AuditEventInput): Promise<void> => safeRecord(deps.audit as AuditStore, deps.logger, e);
-  const who = (actor: Actor) => ({ actorType: 'user' as const, actorId: actor.id, actorName: actor.name });
+  const who = (actor: Actor, audited: Audited): AuditActor =>
+    audited ?? { actorType: 'user', actorId: actor.id, actorName: actor.name };
   /** Audits one role or layout a pack update or removal deleted, the way the roles and layouts routes audit a delete. */
-  const recordRemoved = (actor: Actor, pack: string) => (r: Removed): Promise<void> => record({
-    ...who(actor), action: `${r.kind}.delete`, entityType: r.kind, entityId: r.itemId,
+  const recordRemoved = (actor: Actor, audited: Audited, pack: string) => (r: Removed): Promise<void> => record({
+    ...who(actor, audited), action: `${r.kind}.delete`, entityType: r.kind, entityId: r.itemId,
     before: r.before, after: null, metadata: { source: 'content-pack', pack, key: r.key, name: r.name },
   });
 
@@ -173,14 +180,16 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     return { pack, steps, linkPreview, testMapPreview };
   }
 
-  async function runStep(step: ContentPackStep, actor: Actor, at: { pack: string; step: number; packId: string; version: string }): Promise<void> {
+  async function runStep(
+    step: ContentPackStep, actor: Actor, audited: Audited, at: { pack: string; step: number; packId: string; version: string },
+  ): Promise<void> {
     const source = { source: 'content-pack', pack: at.pack, step: at.step };
     switch (step.kind) {
       case 'code-system':
       case 'value-set': {
         const result = await deps.loadResource(step.resource, at.pack);
         await record({
-          ...who(actor), action: 'term.import', entityType: 'term', entityId: result.resourceUrl,
+          ...who(actor, audited), action: 'term.import', entityType: 'term', entityId: result.resourceUrl,
           metadata: { ...source, result },
         });
         return;
@@ -195,7 +204,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
         const out = await deps.linkMatching(step.registerUrl, actor);
         if (!out.ok) throw new Error(out.error);
         await record({
-          ...who(actor), action: 'facility.link-matching', entityType: 'facility',
+          ...who(actor, audited), action: 'facility.link-matching', entityType: 'facility',
           entityId: `facility-register:${step.registerUrl}`, before: null, after: null,
           metadata: { ...source, registerUrl: step.registerUrl, counts: out.counts },
         });
@@ -211,7 +220,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
         for (const c of changes) {
           // A pack replaces a query by name, so the before row keeps the SQL it overwrote.
           await record({
-            ...who(actor), action: c.outcome === 'created' ? 'customQuery.create' : 'customQuery.update',
+            ...who(actor, audited), action: c.outcome === 'created' ? 'customQuery.create' : 'customQuery.update',
             entityType: 'customQuery', entityId: c.id,
             before: c.outcome === 'created' ? null : c.before, after: c.after, metadata: source,
           });
@@ -222,7 +231,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
         // Owned by the pack's id, without its version, so the next version replaces its own datasets.
         await deps.installDatasets(at.packId, step.tables);
         await record({
-          ...who(actor), action: 'dataset.install', entityType: 'dataset', entityId: at.packId,
+          ...who(actor, audited), action: 'dataset.install', entityType: 'dataset', entityId: at.packId,
           before: null, after: null,
           metadata: { ...source, names: step.tables.map((t) => t.name) },
         });
@@ -233,7 +242,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
         const level: MapLevel = step.kind === 'test-mappings' ? 'test' : 'result';
         const plan = await deps.applyTestMappings(step.mappings, level);
         await record({
-          ...who(actor), action: 'test_mapping.pack', entityType: 'test_mapping', entityId: `pack:${at.pack}`,
+          ...who(actor, audited), action: 'test_mapping.pack', entityType: 'test_mapping', entityId: `pack:${at.pack}`,
           before: null, after: null,
           metadata: {
             ...source,
@@ -251,7 +260,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
       case 'form': {
         // Owned by the pack's id, without its version, so a second run updates what the first made.
         const out = await runProfileStep(deps.profile, at.packId, at.version, step, actor.id);
-        if (out) await record({ ...who(actor), ...out, before: null, after: null, metadata: source });
+        if (out) await record({ ...who(actor, audited), ...out, metadata: source });
         return;
       }
     }
@@ -280,7 +289,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     let error: string | undefined;
     for (let i = 0; i < pack.steps.length; i++) {
       try {
-        await runStep(pack.steps[i], actor, { pack: `${artifactId}@${version}`, step: i + 1, packId: artifactId, version });
+        await runStep(pack.steps[i], actor, opts.auditActor, { pack: `${artifactId}@${version}`, step: i + 1, packId: artifactId, version });
       } catch (err) {
         failedStep = i + 1;
         // The text reaches the install row, the audit and the UI. Mask secrets a driver error may echo.
@@ -293,7 +302,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
       // Only after every step wrote: a failed run must not delete what the next run would update.
       try {
         // Audited one by one inside dropLeftOut.
-        await dropLeftOut(deps.profile, artifactId, pack.steps, recordRemoved(actor, `${artifactId}@${version}`));
+        await dropLeftOut(deps.profile, artifactId, pack.steps, recordRemoved(actor, opts.auditActor, `${artifactId}@${version}`));
       } catch (err) {
         error = redact(messageOf(err));
       }
@@ -308,7 +317,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
       status, failedStep: failedStep ?? null, error: error ?? null,
     });
     await record({
-      ...who(actor),
+      ...who(actor, opts.auditActor),
       action: 'marketplace.install', entityType: 'marketplace.artifact', entityId: `${artifactId}@${version}`,
       metadata: { type: 'content-pack', status, steps: pack.steps.length, ...(status === 'failed' ? { failedStep, error } : {}) },
     });
@@ -328,16 +337,17 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
    *  a role and the caller lacks roles.manage, and with PackRemovalError while a user holds one of its
    *  roles. Its forms stay published (design 5.3). `capabilities` absent means 'all', as on install. */
   async function detach(
-    artifactId: string, opts: { actor: { id?: string | null; name: string; capabilities?: InstallerCapabilities } },
+    artifactId: string,
+    opts: { actor: { id?: string | null; name: string; capabilities?: InstallerCapabilities }; auditActor?: AuditActor },
   ): Promise<void> {
     const row = await installedPack(artifactId);
     const actor: Actor = { id: opts.actor.id ?? null, name: opts.actor.name };
     const removed = await removeProfileItems(
-      deps.profile, artifactId, recordRemoved(actor, `${artifactId}@${row.version}`), opts.actor.capabilities ?? 'all',
+      deps.profile, artifactId, recordRemoved(actor, opts.auditActor, `${artifactId}@${row.version}`), opts.actor.capabilities ?? 'all',
     );
     await installStore.remove(artifactId);
     await record({
-      ...who(actor),
+      ...who(actor, opts.auditActor),
       action: 'marketplace.detach', entityType: 'marketplace.artifact', entityId: artifactId,
       metadata: { type: 'content-pack', ...removed },
     });
