@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
-  ReceptionError, TEST_CATALOG_SYSTEM, type AppContext, type RegisterPatientInput,
+  ReceptionError, TEST_CATALOG_SYSTEM, isCalendarDate, type AppContext, type RegisterPatientInput,
 } from '@openldr/bootstrap';
 import { FACILITY_REGISTRY_SYSTEM } from '@openldr/db';
 import { z, type ZodError } from 'zod';
@@ -27,9 +27,8 @@ const code = z.string().min(1).max(CODE_MAX);
 const system = z.string().min(1).max(URI_MAX);
 const requisition = z.string().trim().min(1).max(NUMBER_MAX);
 const name = z.string().max(NAME_MAX);
-const FULL_DATE = /^\d{4}-\d{2}-\d{2}$/;
-// A blank date is no date: the service reads '' as left out.
-const isDate = (v: string): boolean => v === '' || (FULL_DATE.test(v) && !Number.isNaN(Date.parse(v)));
+// A blank date is no date: the service reads '' as left out. A date must name a real day.
+const isDate = (v: string): boolean => v === '' || isCalendarDate(v);
 // A FHIR dateTime with a time: a date, a time and a zone, which Specimen.receivedTime needs.
 const isDateTime = (v: string): boolean => v === '' ||
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(v) && !Number.isNaN(Date.parse(v));
@@ -58,6 +57,11 @@ const correctOrderBody = z.object({
     note: z.string().max(TEXT_MAX).nullable().optional(),
     patientId: code.optional(),
   }).passthrough(),
+  reason: z.string().max(TEXT_MAX),
+});
+const cancelOrderBody = z.object({
+  requisition,
+  facilityCode: code.nullable(),
   reason: z.string().max(TEXT_MAX),
 });
 const patientsQuery = z.object({
@@ -170,6 +174,24 @@ export function registerLabRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       await recordAudit(ctx, req, {
         action: 'lab.order.correct', entityType: 'lab_order', entityId: order.requisition,
         metadata: { facility: order.facility?.code ?? null, fields: Object.keys(body.changes) },
+      });
+      return reply.send(order);
+    } catch (err) {
+      return replyReceptionError(err, reply);
+    }
+  });
+
+  app.post('/api/lab/orders/cancel', RECEIVE, async (req, reply) => {
+    const who = actor(req, reply);
+    if (!who) return reply;
+    const body = parse(cancelOrderBody, req.body, reply);
+    if (!body) return reply;
+    try {
+      const order = await desk.cancelOrder(body, who);
+      // The reason stays out of the audit, as a correction's values do. The Provenance holds it.
+      await recordAudit(ctx, req, {
+        action: 'lab.order.cancel', entityType: 'lab_order', entityId: order.requisition,
+        metadata: { facility: order.facility?.code ?? null },
       });
       return reply.send(order);
     } catch (err) {

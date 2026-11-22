@@ -29,6 +29,7 @@ function fakeCtx(over: Record<string, Impl> = {}) {
       findOrders: spy('findOrders', over.findOrders ?? (async () => [ORDER])),
       registerOrder: spy('registerOrder', over.registerOrder ?? (async () => ORDER)),
       correctOrder: spy('correctOrder', over.correctOrder ?? (async () => ORDER)),
+      cancelOrder: spy('cancelOrder', over.cancelOrder ?? (async () => ORDER)),
       searchPatients: spy('searchPatients', over.searchPatients ?? (async () => [PATIENT])),
       registerPatient: spy('registerPatient', over.registerPatient ?? (async () => ({ id: 'p9', display: 'Ana Banda' }))),
       receiveSample: spy('receiveSample', over.receiveSample ?? (async () => ORDER)),
@@ -77,6 +78,7 @@ const ROUTES: Array<{ method: 'GET' | 'POST'; url: string; payload?: unknown }> 
   { method: 'GET', url: '/api/lab/orders?requisition=REQ-1' },
   { method: 'POST', url: '/api/lab/orders', payload: ORDER_BODY },
   { method: 'POST', url: '/api/lab/orders/correct', payload: { requisition: 'REQ-1', facilityCode: 'F1', changes: { priority: 'stat' }, reason: 'typo' } },
+  { method: 'POST', url: '/api/lab/orders/cancel', payload: { requisition: 'REQ-1', facilityCode: 'F1', reason: 'wrong test list' } },
   { method: 'GET', url: '/api/lab/patients?identifier=M1' },
   { method: 'POST', url: '/api/lab/patients', payload: { given: 'Ana', family: 'Banda', gender: 'female', birthDate: '1990-01-02' } },
   { method: 'POST', url: '/api/lab/samples', payload: { requisition: 'REQ-1', facilityCode: 'F1', type: { system: 'urn:t', code: 'BLD' } } },
@@ -229,6 +231,35 @@ describe('lab reception routes', () => {
     });
   });
 
+  describe('POST /api/lab/orders/cancel', () => {
+    const body = { requisition: 'REQ-1', facilityCode: 'F1', reason: 'wrong test list' };
+
+    it('cancels, and audits the order without the reason', async () => {
+      const { ctx, calls, audit } = fakeCtx();
+      const res = await appWith(ctx, CAP).inject({ method: 'POST', url: '/api/lab/orders/cancel', payload: body });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual(ORDER);
+      expect(calls).toEqual([{ method: 'cancelOrder', args: [body, 'Desk One'] }]);
+      expect(audit.map((a) => [a.action, a.entityType, a.entityId, a.metadata])).toEqual([
+        ['lab.order.cancel', 'lab_order', 'REQ-1', { facility: 'F1' }],
+      ]);
+    });
+
+    it('maps the service refusal of a form order to 400 and audits nothing', async () => {
+      const { ctx, audit } = fakeCtx({ cancelOrder: async () => { throw new ReceptionError('invalid', 'void it from its form entry'); } });
+      const res = await appWith(ctx, CAP).inject({ method: 'POST', url: '/api/lab/orders/cancel', payload: body });
+      expect([res.statusCode, res.json()]).toEqual([400, { error: 'void it from its form entry', reason: 'invalid' }]);
+      expect(audit).toEqual([]);
+    });
+
+    it('refuses a body with no reason field with 400', async () => {
+      const { ctx, calls } = fakeCtx();
+      const res = await appWith(ctx, CAP).inject({ method: 'POST', url: '/api/lab/orders/cancel', payload: { requisition: 'REQ-1', facilityCode: 'F1' } });
+      expect(res.statusCode).toBe(400);
+      expect(calls).toEqual([]);
+    });
+  });
+
   describe('GET /api/lab/patients', () => {
     it('searches and pins the patient search wire shape', async () => {
       const { ctx, calls, audit } = fakeCtx();
@@ -376,6 +407,9 @@ describe('lab reception routes', () => {
       ['POST', '/api/lab/patients', { given: 'g'.repeat(101), family: 'Banda', gender: 'female', birthDate: '1990-01-02' }],
       ['POST', '/api/lab/patients', { given: 'Ana', family: 'Banda', gender: 'female', birthDate: '02/01/1990' }],
       ['POST', '/api/lab/patients', { given: 'Ana', family: 'Banda', gender: 'female', birthDate: '1990-02-31x' }],
+      ['POST', '/api/lab/patients', { given: 'Ana', family: 'Banda', gender: 'female', birthDate: '1990-02-31' }],
+      ['GET', '/api/lab/patients?name=Ana%20Banda&birthDate=1990-02-31', undefined],
+      ['POST', '/api/lab/orders/cancel', { requisition: 'REQ-1', facilityCode: 'F1', reason: 'r'.repeat(501) }],
       ['GET', '/api/lab/patients?name=Ana%20Banda&birthDate=1990', undefined],
       ['POST', '/api/lab/samples', { requisition: 'REQ-1', type: { system: 'urn:t', code: 'BLD' }, receivedTime: 'yesterday' }],
       ['POST', '/api/lab/samples', { requisition: 'REQ-1', type: { system: 'urn:t', code: 'B'.repeat(101) } }],
