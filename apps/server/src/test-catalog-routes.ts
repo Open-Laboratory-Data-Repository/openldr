@@ -5,7 +5,7 @@ import {
 } from '@openldr/bootstrap';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
-import { requireCapability } from './rbac';
+import { holdsCapability, requireCapability } from './rbac';
 
 // Test catalog S1 (docs/superpowers/specs/2026-09-15-test-catalog-design.md, 4.6): terminology.view
 // to read, terminology.manage to change anything, central edits and lab settings alike.
@@ -17,6 +17,9 @@ const IMPORT_STEP = { ...MANAGE, bodyLimit: 16 * 1024 * 1024 };
 // holds forms.view and forms.submit only (packages/rbac/src/presets.ts:52). So that route takes the gate
 // reference search takes (reference-search-routes.ts:9), not terminology.view.
 const FORMS_VIEW = { preHandler: requireCapability('forms.view') };
+// A test's section and whether it needs review are lab settings (lab module design 5.1), so a lab
+// settings save that names either also needs lab.settings. The other lab fields keep terminology.manage.
+const LAB_SETTINGS = 'lab.settings';
 // Must equal the urls migration 106 seeds.
 const ORDER_REJECT_VALUE_SET = 'urn:openldr:valueset:order-reject-reason';
 const TEST_REJECT_VALUE_SET = 'urn:openldr:valueset:test-reject-reason';
@@ -67,6 +70,9 @@ const labInput = z.object({
   enabled: z.boolean(),
   specimenTypes: z.array(coding).nullable(),
   localDisplay: z.string().nullable(),
+  // Left out keeps what is stored. A null section clears it.
+  section: z.string().nullable().optional(),
+  needsReview: z.boolean().optional(),
 });
 const enabledInput = z.object({ enabled: z.boolean() });
 const activeInput = z.object({ active: z.boolean() });
@@ -174,6 +180,10 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     const { code } = req.params as { code: string };
     const parsed = labInput.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
+    const namesLabSetting = parsed.data.section !== undefined || parsed.data.needsReview !== undefined;
+    if (namesLabSetting && !holdsCapability(req.user!, LAB_SETTINGS)) {
+      return reply.code(403).send({ error: 'insufficient capability' });
+    }
     try {
       const before = (await ctx.testCatalog.get(code))?.lab ?? null;
       const saved = await ctx.testCatalog.setLabSettings(code, parsed.data);

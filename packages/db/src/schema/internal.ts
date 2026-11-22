@@ -1132,6 +1132,10 @@ export interface TestCatalogLabSettingsTable {
   // jsonb: a list of { system, code } specimen codings, or null for "use the catalog's own list".
   specimen_types: unknown | null;
   local_display: string | null;
+  // Migration 137: a code from the lab's own section list (urn:openldr:cs:lab-section), or null.
+  section: string | null;
+  // Migration 137: whether results of this test need review. True unless the lab says otherwise.
+  needs_review: Generated<boolean>;
   updated_at: Generated<Date>;
 }
 

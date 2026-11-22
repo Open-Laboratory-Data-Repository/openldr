@@ -1655,6 +1655,9 @@ export const fr: EnShape = {
       enabled: 'Activé ici',
       labSpecimens: 'Prélèvements acceptés',
       localName: 'Nom local',
+      section: 'Section',
+      noSection: 'Aucune section',
+      needsReview: 'Vérification requise',
       saved: '{{code}} enregistré.',
     },
     col: {

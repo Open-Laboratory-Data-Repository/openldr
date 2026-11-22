@@ -9,7 +9,7 @@ import './auth-plugin';
 const TEST: CatalogTest = {
   code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
   specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD' }], resultParams: [], loinc: '25836-8', active: true,
-  lab: { enabled: false, specimenTypes: null, localDisplay: null },
+  lab: { enabled: false, specimenTypes: null, localDisplay: null, section: null, needsReview: true },
 };
 
 const OPTIONS: CatalogOptions = {
@@ -18,6 +18,7 @@ const OPTIONS: CatalogOptions = {
   resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', display: 'Haemoglobin' }],
   loinc: null,
   sexes: [{ code: 'female', labels: { en: 'Female', fr: 'Femme', pt: 'Feminino' } }],
+  sections: [],
 };
 
 const REPORT: CatalogImportReport = {
@@ -175,6 +176,37 @@ describe('test catalog routes', () => {
       { method: 'setLabSettings', args: ['HIVVL', body] },
     ]);
     expect(audit).toMatchObject([{ action: 'test_catalog.lab_settings', entityType: 'test_catalog', entityId: 'HIVVL', before: TEST.lab, after: TEST.lab }]);
+  });
+
+  it('PUT /:code/lab hands a section and the review setting to the store when the caller holds lab.settings', async () => {
+    const { ctx, calls } = fakeCtx();
+    const body = { enabled: true, specimenTypes: null, localDisplay: null, section: 'HAEM', needsReview: false };
+    const res = await appWith(ctx, ['terminology.view', 'terminology.manage', 'lab.settings'])
+      .inject({ method: 'PUT', url: '/api/test-catalog/HIVVL/lab', payload: body });
+    expect(res.statusCode).toBe(200);
+    expect(calls.find((c) => c.method === 'setLabSettings')?.args).toEqual(['HIVVL', body]);
+  });
+
+  it('PUT /:code/lab passes a null section on, to clear it', async () => {
+    const { ctx, calls } = fakeCtx();
+    const body = { enabled: true, specimenTypes: null, localDisplay: null, section: null };
+    const res = await appWith(ctx, ['terminology.manage', 'lab.settings'])
+      .inject({ method: 'PUT', url: '/api/test-catalog/HIVVL/lab', payload: body });
+    expect(res.statusCode).toBe(200);
+    expect(calls.find((c) => c.method === 'setLabSettings')?.args).toEqual(['HIVVL', body]);
+  });
+
+  it('PUT /:code/lab refuses a section or review setting from a caller without lab.settings, and saves nothing', async () => {
+    for (const extra of [{ section: 'HAEM' }, { section: null }, { needsReview: false }]) {
+      const { ctx, calls, audit } = fakeCtx();
+      const res = await appWith(ctx).inject({
+        method: 'PUT', url: '/api/test-catalog/HIVVL/lab', payload: { enabled: true, specimenTypes: null, localDisplay: null, ...extra },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({ error: 'insufficient capability' });
+      expect(calls).toEqual([]);
+      expect(audit).toEqual([]);
+    }
   });
 
   it('GET /api/test-catalog/options returns the picker choices and needs terminology.view', async () => {

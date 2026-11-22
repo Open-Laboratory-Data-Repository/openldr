@@ -1667,6 +1667,9 @@ export const en = {
       enabled: 'On at this lab',
       labSpecimens: 'Specimens taken',
       localName: 'Local name',
+      section: 'Section',
+      noSection: 'No section',
+      needsReview: 'Needs review',
       saved: '{{code}} saved.',
     },
     col: {

@@ -2641,7 +2641,14 @@ export interface CatalogTest {
   /** false when the test is retired. */
   active: boolean;
   /** This install's own settings. specimenTypes null means "use the catalog's list". */
-  lab: { enabled: boolean; specimenTypes: CatalogSpecimenCoding[] | null; localDisplay: string | null };
+  lab: {
+    enabled: boolean;
+    specimenTypes: CatalogSpecimenCoding[] | null;
+    localDisplay: string | null;
+    /** A code from the lab's section list, or null. */
+    section: string | null;
+    needsReview: boolean;
+  };
 }
 export interface TestCatalogListResult { rows: CatalogTest[]; total: number; ownedHere: boolean }
 export interface TestCatalogListParams {
@@ -2668,6 +2675,10 @@ export interface CatalogLabSettingsInput {
   enabled: boolean;
   specimenTypes: CatalogSpecimenCoding[] | null;
   localDisplay: string | null;
+  /** Left out keeps what is stored; null clears it. Sending it needs lab.settings. */
+  section?: string | null;
+  /** Left out keeps what is stored. Sending it needs lab.settings. */
+  needsReview?: boolean;
 }
 export interface TestCatalogOptions {
   categories: { code: string; display: string | null }[];
@@ -2678,6 +2689,8 @@ export interface TestCatalogOptions {
   loinc: { systemId: string; system: string } | null;
   /** The sexes a range may name, with labels by language, so the studio names no code. */
   sexes: CatalogSexOption[];
+  /** The lab's own sections. Empty until the lab adds one. */
+  sections: { code: string; display: string | null }[];
 }
 
 export function listTestCatalog(p: TestCatalogListParams = {}): Promise<TestCatalogListResult> {

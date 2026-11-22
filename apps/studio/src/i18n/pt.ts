@@ -1655,6 +1655,9 @@ export const pt: EnShape = {
       enabled: 'Ativado aqui',
       labSpecimens: 'Amostras aceites',
       localName: 'Nome local',
+      section: 'Secção',
+      noSection: 'Sem secção',
+      needsReview: 'Requer revisão',
       saved: '{{code}} guardado.',
     },
     col: {
